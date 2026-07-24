@@ -74,6 +74,7 @@ entries = load_vault_selection()
 
 # 2. Barcode-PNGs erzeugen
 from scripts.barcode_utils import generate_isbn_barcode, build_pickup_sheets
+
 barcode_paths = {}
 for entry in entries:
     isbn = entry.get("isbn")

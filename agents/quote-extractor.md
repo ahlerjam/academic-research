@@ -53,18 +53,24 @@ file_id = vault.ensure_file(paper_id)  # MCP-Tool-Call
 
 client.beta.messages.create(
     model="claude-sonnet-4-6",
-    system=[{
-        "type": "text",
-        "text": AGENT_SYSTEM_PROMPT,
-        "cache_control": {"type": "ephemeral", "ttl": "1h"},
-    }],
-    documents=[{
-        "type": "document",
-        "source": {"type": "file", "file_id": file_id},
-        "citations": {"enabled": True},
-    }],
+    system=[
+        {
+            "type": "text",
+            "text": AGENT_SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral", "ttl": "1h"},
+        }
+    ],
+    documents=[
+        {
+            "type": "document",
+            "source": {"type": "file", "file_id": file_id},
+            "citations": {"enabled": True},
+        }
+    ],
     extra_headers={"anthropic-beta": "files-api-2025-04-14"},
-    messages=[{"role": "user", "content": f"Extrahiere 2 Zitate zur Query '<query>', max 25 Woerter."}],
+    messages=[
+        {"role": "user", "content": f"Extrahiere 2 Zitate zur Query '<query>', max 25 Woerter."}
+    ],
 )
 ```
 
@@ -165,11 +171,11 @@ Nach der Extraktion **jeden** Quote via `vault.add_quote()` persistieren:
 
 ```python
 quote_id = vault.add_quote(
-    paper_id=paper_id,               # aus dem Input-Objekt
-    verbatim=quote["text"],          # exakter Wortlaut
+    paper_id=paper_id,  # aus dem Input-Objekt
+    verbatim=quote["text"],  # exakter Wortlaut
     extraction_method="citations-api",
-    api_response_id=response.id,     # Anthropic Request-ID aus der API-Antwort
-    pdf_page=quote["page"],          # aus citations[].start_page_number
+    api_response_id=response.id,  # Anthropic Request-ID aus der API-Antwort
+    pdf_page=quote["page"],  # aus citations[].start_page_number
     section=quote["section"],
     context_before=quote["context_before"],
     context_after=quote["context_after"],
@@ -251,7 +257,13 @@ client.beta.messages.create(
     ],
     # Cache-Breakpoint ist VOR documents[] — der Agent-Prompt wird gecacht,
     # das PDF-Dokument variiert pro Call ohne Cache-Invalidierung.
-    documents=[{"type": "document", "source": {"type": "file", "file_id": file_id}, "citations": {"enabled": true}}],
+    documents=[
+        {
+            "type": "document",
+            "source": {"type": "file", "file_id": file_id},
+            "citations": {"enabled": true},
+        }
+    ],
     extra_headers={"anthropic-beta": "files-api-2025-04-14"},
     messages=[{"role": "user", "content": f"Extrahiere 2 Zitate zur Query '{query}'"}],
 )
