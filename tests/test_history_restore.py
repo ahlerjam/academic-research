@@ -9,12 +9,11 @@ CLAUDE_PROJECT_DIR).
 Diese Tests pruefen die Vault-seitige export_snapshot-Funktion direkt
 (nicht den history-Command-Parser, der Markdown ist).
 """
-import json
-import os
+
 import sys
 import tarfile
-import time
 from pathlib import Path
+
 import pytest
 
 WORKTREE_ROOT = Path(__file__).parent.parent
@@ -26,6 +25,7 @@ sys.path.insert(0, str(WORKTREE_ROOT))
 def vault_db(tmp_path):
     """Erstellt eine leere Vault-DB mit Schema."""
     from academic_vault.db import VaultDB
+
     db_path = str(tmp_path / "test.db")
     db = VaultDB(db_path)
     db.init_schema()
@@ -104,8 +104,9 @@ def test_export_snapshot_tarball_contains_state_files(tmp_path, vault_db):
 
 def test_export_snapshot_ts_in_filename(tmp_path, vault_db):
     """Dateiname enthaelt Timestamp (YYYYMMDD-HHMM Format)."""
-    from academic_vault.server import export_snapshot
     import re
+
+    from academic_vault.server import export_snapshot
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -123,7 +124,7 @@ def test_export_snapshot_ts_in_filename(tmp_path, vault_db):
     assert len(tarballs) == 1
     filename = tarballs[0].name
     # Format: YYYYMMDD-HHMM.tgz oder YYYY-MM-DD-HHMM.tgz
-    assert re.search(r'\d{4}', filename), f"Kein Timestamp-Format in Dateiname: {filename}"
+    assert re.search(r"\d{4}", filename), f"Kein Timestamp-Format in Dateiname: {filename}"
 
 
 def test_export_snapshot_failopen_when_dir_missing(tmp_path, vault_db):
@@ -182,6 +183,7 @@ def test_restore_snapshot_extracts_files(tmp_path, vault_db):
 # Security: Path-Traversal / Symlink-Escape (Issue #192, CVE-2007-4559)
 # ---------------------------------------------------------------------------
 
+
 def _build_malicious_tar(tar_path: Path, build_members) -> None:
     """Hilfsfunktion: erstellt einen .tgz mit den von build_members(tar)
     hinzugefuegten Mitgliedern (umgeht den export_snapshot-Pfad, um boese
@@ -195,6 +197,7 @@ def test_restore_snapshot_rejects_symlink_escape(tmp_path):
     """restore_snapshot extrahiert KEINE Symlink-Member, die aus dem
     Zielverzeichnis herauszeigen (Symlink-Path-Traversal, CVE-2007-4559)."""
     import io
+
     from academic_vault.server import restore_snapshot
 
     # Ziel ausserhalb des Extraktionsverzeichnisses, das angegriffen wird
@@ -240,6 +243,7 @@ def test_restore_snapshot_rejects_absolute_and_dotdot_paths(tmp_path):
     """restore_snapshot extrahiert KEINE Member mit '..'-Komponenten,
     die aus dem Zielverzeichnis herauszeigen (klassischer Path-Traversal)."""
     import io
+
     from academic_vault.server import restore_snapshot
 
     snapshots_dir = tmp_path / "snapshots"
@@ -274,6 +278,7 @@ def test_restore_snapshot_rejects_absolute_and_dotdot_paths(tmp_path):
 def test_restore_snapshot_still_extracts_benign_files(tmp_path):
     """Sanity-Check: harmlose, regulaere Dateien werden weiterhin extrahiert."""
     import io
+
     from academic_vault.server import restore_snapshot
 
     snapshots_dir = tmp_path / "snapshots"

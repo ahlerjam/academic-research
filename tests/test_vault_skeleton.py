@@ -1,7 +1,8 @@
 """Smoke-Tests fuer den academic_vault MCP-Server (TDD-First Skelett)."""
+
 import os
-import sys
 import sqlite3
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -17,18 +18,21 @@ if str(_WORKTREE_ROOT) not in sys.path:
 # Modul-Imports mit Guard: fehlen noch bis zur Implementierung
 try:
     from academic_vault.db import VaultDB
+
     _DB_AVAILABLE = True
 except ImportError:
     _DB_AVAILABLE = False
 
 try:
     from academic_vault.files_api import FilesAPIClient
+
     _FILES_API_AVAILABLE = True
 except ImportError:
     _FILES_API_AVAILABLE = False
 
 try:
     from academic_vault import server as vault_server
+
     _SERVER_AVAILABLE = True
 except ImportError:
     _SERVER_AVAILABLE = False
@@ -37,6 +41,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
+
 
 def make_temp_db() -> tuple[str, "VaultDB"]:
     """Erstellt eine temporaere In-Memory-DB oder Datei-DB."""
@@ -50,6 +55,7 @@ def make_temp_db() -> tuple[str, "VaultDB"]:
 # ---------------------------------------------------------------------------
 # Task 2 aktiviert: test_schema_creates_tables
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_schema_creates_tables():
@@ -81,6 +87,7 @@ def test_schema_creates_tables():
 # Task 4 aktiviert: test_add_paper_and_get
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_add_paper_and_get():
     """add_paper + get_paper Round-Trip."""
@@ -103,10 +110,12 @@ def test_add_paper_and_get():
 # Task 7 aktiviert: test_search_returns_results
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_search_returns_results():
     """vault.search(query) gibt >= 1 Ergebnis zurueck und liegt unter 500ms (AC #62)."""
     import time
+
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
     try:
@@ -121,6 +130,7 @@ def test_search_returns_results():
             db.add_paper("p-search-%d" % i, csl)
 
         from academic_vault.server import search_papers
+
         start = time.perf_counter()
         results = search_papers(db_path, "DevOps Governance", k=5)
         elapsed = time.perf_counter() - start
@@ -137,6 +147,7 @@ def test_search_returns_results():
 # Task 6 aktiviert: test_add_quote_requires_api_response_id
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_add_quote_requires_api_response_id():
     """vault.add_quote mit citations-api + kein api_response_id wirft ValueError."""
@@ -149,6 +160,7 @@ def test_add_quote_requires_api_response_id():
         db.add_paper("p-quote", csl)
 
         from academic_vault.server import add_quote
+
         with pytest.raises(ValueError, match="api_response_id"):
             add_quote(
                 db_path=db_path,
@@ -165,6 +177,7 @@ def test_add_quote_requires_api_response_id():
 # Task 6 aktiviert: test_add_quote_manual_no_api_id
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_add_quote_manual_no_api_id():
     """vault.add_quote mit manual + kein api_response_id ist OK."""
@@ -177,6 +190,7 @@ def test_add_quote_manual_no_api_id():
         db.add_paper("p-manual", csl)
 
         from academic_vault.server import add_quote
+
         quote_id = add_quote(
             db_path=db_path,
             paper_id="p-manual",
@@ -193,6 +207,7 @@ def test_add_quote_manual_no_api_id():
 # ---------------------------------------------------------------------------
 # Task 5 aktiviert: test_ensure_file_caches
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _FILES_API_AVAILABLE, reason="files_api.py noch nicht implementiert")
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
@@ -229,6 +244,7 @@ def test_ensure_file_caches():
 # Task 8 aktiviert: test_find_quotes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_find_quotes():
     """find_quotes(paper_id) gibt vorher eingefuegte Quotes zurueck."""
@@ -240,6 +256,7 @@ def test_find_quotes():
         db.add_paper("p-fq", '{"title": "Find Quotes Paper"}')
 
         from academic_vault.server import add_quote, find_quotes
+
         add_quote(
             db_path=db_path,
             paper_id="p-fq",
@@ -257,6 +274,7 @@ def test_find_quotes():
 # Task 8 aktiviert: test_get_quote
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_get_quote():
     """get_quote(quote_id) gibt vollstaendigen Record zurueck."""
@@ -268,6 +286,7 @@ def test_get_quote():
         db.add_paper("p-gq", '{"title": "Get Quote Paper"}')
 
         from academic_vault.server import add_quote, get_quote
+
         quote_id = add_quote(
             db_path=db_path,
             paper_id="p-gq",
@@ -287,6 +306,7 @@ def test_get_quote():
 # Task 9 aktiviert: test_stats
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not _FILES_API_AVAILABLE, reason="files_api.py noch nicht implementiert")
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_stats():
@@ -301,6 +321,7 @@ def test_stats():
         db.set_file_id("p-stats", "file-xyz", expires_at=int(time.time()) + 3600)
 
         from academic_vault.server import add_quote
+
         add_quote(
             db_path=db_path,
             paper_id="p-stats",
@@ -309,6 +330,7 @@ def test_stats():
         )
 
         from academic_vault.files_api import FilesAPIClient
+
         stats = FilesAPIClient.get_stats(db_path)
 
         assert "paper_count" in stats
@@ -326,6 +348,7 @@ def test_stats():
 # ---------------------------------------------------------------------------
 # Task 3 aktiviert: test_vec_fallback
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_vec_fallback():
@@ -360,9 +383,11 @@ def test_vec_fallback():
 # Task 10 aktiviert: test_migrate_help
 # ---------------------------------------------------------------------------
 
+
 def test_migrate_help():
     """migrate.py --help muss mit exit 0 laufen."""
     import subprocess
+
     migrate_path = str(_WORKTREE_ROOT / "academic_vault" / "migrate.py")
     result = subprocess.run(
         [sys.executable, migrate_path, "--help"],

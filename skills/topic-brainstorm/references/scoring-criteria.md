@@ -108,7 +108,7 @@ und den Novelty-Score entsprechend anzupassen.
 Beispiel (optional, für zukünftige Erweiterung):
 ```python
 recent = vault.search(topic_keywords, date_filter="2020-2024")
-older  = vault.search(topic_keywords, date_filter="2000-2019")
+older = vault.search(topic_keywords, date_filter="2000-2019")
 gap_ratio = max(0, 1 - len(recent) / max(1, len(older)))
 novelty = base_novelty + gap_ratio * 2.0
 ```

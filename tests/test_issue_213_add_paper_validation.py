@@ -4,13 +4,14 @@ vault.add_paper darf bei malformed-JSON oder fehlendem Pflichtfeld 'type'
 NICHT still einen Default 'article-journal' setzen, sondern muss einen
 ValueError werfen (Halluzinationsschutz / Security Round-2 M3).
 """
+
 import json
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from academic_vault import server as vault_server
@@ -35,6 +36,7 @@ def _make_db_path() -> str:
 # ---------------------------------------------------------------------------
 # Entry-Point: server.add_paper (das ist der MCP-Eingang fuer Skills)
 # ---------------------------------------------------------------------------
+
 
 def test_server_add_paper_missing_type_raises():
     """Fehlendes Pflichtfeld 'type' -> ValueError, kein silent insert."""
@@ -77,6 +79,7 @@ def test_server_add_paper_valid_chapter_still_works():
 # ---------------------------------------------------------------------------
 # DB-Layer: malformed JSON darf nicht mehr stillschweigend defaulten
 # ---------------------------------------------------------------------------
+
 
 def test_db_add_paper_malformed_json_raises():
     """db.add_paper: kaputtes JSON -> ValueError statt silent article-journal."""

@@ -6,13 +6,12 @@ Der Hook schreibt academic_context.md, literature_state.md, writing_state.md
 und einen Vault-Tarball nach ~/.academic-research/snapshots/<slug>/<ts>.tgz.
 Exit 0 immer (fail-open).
 """
+
 import json
 import os
 import subprocess
-import sys
 import tarfile
 from pathlib import Path
-import pytest
 
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "pre-compact.mjs"
 WORKTREE_ROOT = Path(__file__).parent.parent
@@ -117,9 +116,15 @@ def test_hook_tarball_contains_state_files(tmp_path):
         names = tar.getnames()
 
     # Mindestens state-Dateien muessen vorhanden sein
-    assert any("academic_context.md" in n for n in names), f"academic_context.md nicht in Tarball: {names}"
-    assert any("literature_state.md" in n for n in names), f"literature_state.md nicht in Tarball: {names}"
-    assert any("writing_state.md" in n for n in names), f"writing_state.md nicht in Tarball: {names}"
+    assert any("academic_context.md" in n for n in names), (
+        f"academic_context.md nicht in Tarball: {names}"
+    )
+    assert any("literature_state.md" in n for n in names), (
+        f"literature_state.md nicht in Tarball: {names}"
+    )
+    assert any("writing_state.md" in n for n in names), (
+        f"writing_state.md nicht in Tarball: {names}"
+    )
 
 
 def test_hook_failopen_when_project_dir_missing(tmp_path):
@@ -134,4 +139,6 @@ def test_hook_failopen_when_project_dir_missing(tmp_path):
 
     result = run_hook(payload, env_overrides=env_overrides)
     # Immer fail-open
-    assert result.returncode == 0, f"Erwartet 0 (fail-open), got {result.returncode}. stderr: {result.stderr}"
+    assert result.returncode == 0, (
+        f"Erwartet 0 (fail-open), got {result.returncode}. stderr: {result.stderr}"
+    )

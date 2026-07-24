@@ -12,10 +12,9 @@ TDD: Diese Tests schlagen gegen den Zustand auf origin/main fehl, weil dort
 weder .gitignore noch das Fragment *.db ignorieren und es keine zentrale
 default_db_path()-Funktion gibt (server.py:19 nutzt hart "vault.db" im CWD).
 """
+
 from __future__ import annotations
 
-import os
-import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -24,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 # (a) .gitignore — vault.db / *.db duerfen nicht ins Repo gelangen
 # ---------------------------------------------------------------------------
+
 
 def _matches_db_pattern(lines: list[str]) -> bool:
     """True, wenn irgendeine .gitignore-Zeile vault.db bzw. *.db erfasst."""
@@ -54,6 +54,7 @@ def test_bootstrap_gitignore_fragment_ignores_db_files():
 # ---------------------------------------------------------------------------
 # (b) Single Source of Truth fuer den DB-Default
 # ---------------------------------------------------------------------------
+
 
 def test_canonical_resolver_exists():
     from academic_vault import db

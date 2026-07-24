@@ -16,6 +16,7 @@ Ausgabe von render_cluster():
     "note": str | None
   }
 """
+
 from __future__ import annotations
 
 import json
@@ -26,10 +27,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
+
 
 def _sanitize_label(title: str, year: int) -> str:
     """Erstellt ein Mermaid-sicheres Node-Label (Titel Jahr).
@@ -62,7 +63,7 @@ def _infer_edges(papers: list[dict]) -> list[dict]:
     edges: dict[tuple[str, str], int] = {}
     paper_ids = list(cit_map.keys())
     for i, a in enumerate(paper_ids):
-        for b in paper_ids[i + 1:]:
+        for b in paper_ids[i + 1 :]:
             shared = len(cit_map[a] & cit_map[b])
             if shared > 0:
                 edges[(a, b)] = shared
@@ -77,6 +78,7 @@ def _stroke_width(weight: int) -> int:
 # ---------------------------------------------------------------------------
 # Kern-Konverter
 # ---------------------------------------------------------------------------
+
 
 def cluster_to_mermaid(cluster: dict[str, Any]) -> str:
     """Konvertiert ein Cluster-Dict in Mermaid-graph-LR-Quelltext."""
@@ -110,6 +112,7 @@ def cluster_to_mermaid(cluster: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # Render-Einstiegspunkt
 # ---------------------------------------------------------------------------
+
 
 def render_cluster(
     cluster: dict[str, Any],

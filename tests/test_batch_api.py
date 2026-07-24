@@ -1,10 +1,10 @@
 """Tests for Batch-API (#94):
-  - scripts/batch_api.py module exists and is importable
-  - submit_batch() creates a batch from paper list and returns job_id
-  - save_batch_job() writes batch.json to session_dir
-  - load_batch_job() reads batch.json back
-  - threshold: only triggered for >= 50 papers
-  - --batch flag documented in commands/search.md
+- scripts/batch_api.py module exists and is importable
+- submit_batch() creates a batch from paper list and returns job_id
+- save_batch_job() writes batch.json to session_dir
+- load_batch_job() reads batch.json back
+- threshold: only triggered for >= 50 papers
+- --batch flag documented in commands/search.md
 """
 
 import json
@@ -20,6 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 # Import tests
 # ---------------------------------------------------------------------------
 
+
 def test_batch_api_importable():
     """scripts/batch_api.py must be importable."""
     import batch_api  # noqa: F401
@@ -28,6 +29,7 @@ def test_batch_api_importable():
 def test_batch_api_has_submit_batch():
     """batch_api must expose submit_batch()."""
     import batch_api
+
     assert hasattr(batch_api, "submit_batch"), "submit_batch missing from batch_api"
     assert callable(batch_api.submit_batch)
 
@@ -35,6 +37,7 @@ def test_batch_api_has_submit_batch():
 def test_batch_api_has_save_batch_job():
     """batch_api must expose save_batch_job()."""
     import batch_api
+
     assert hasattr(batch_api, "save_batch_job")
     assert callable(batch_api.save_batch_job)
 
@@ -42,6 +45,7 @@ def test_batch_api_has_save_batch_job():
 def test_batch_api_has_load_batch_job():
     """batch_api must expose load_batch_job()."""
     import batch_api
+
     assert hasattr(batch_api, "load_batch_job")
     assert callable(batch_api.load_batch_job)
 
@@ -50,9 +54,11 @@ def test_batch_api_has_load_batch_job():
 # Threshold test
 # ---------------------------------------------------------------------------
 
+
 def test_batch_threshold_constant():
     """BATCH_THRESHOLD must be 50."""
     import batch_api
+
     assert batch_api.BATCH_THRESHOLD == 50
 
 
@@ -60,9 +66,11 @@ def test_batch_threshold_constant():
 # save/load round-trip
 # ---------------------------------------------------------------------------
 
+
 def test_save_and_load_batch_job(tmp_path):
     """save_batch_job writes, load_batch_job reads back the same data."""
     import batch_api
+
     job_data = {
         "batch_id": "msgbatch_abc123",
         "query": "DevOps",
@@ -82,6 +90,7 @@ def test_save_and_load_batch_job(tmp_path):
 def test_save_batch_job_writes_batch_json(tmp_path):
     """save_batch_job must write to <session_dir>/batch.json."""
     import batch_api
+
     job_data = {"batch_id": "test_id", "status": "submitted"}
     batch_api.save_batch_job(str(tmp_path), job_data)
     batch_json = tmp_path / "batch.json"
@@ -94,14 +103,14 @@ def test_save_batch_job_writes_batch_json(tmp_path):
 # submit_batch with mocked Anthropic client
 # ---------------------------------------------------------------------------
 
+
 def test_submit_batch_returns_job_id():
     """submit_batch() returns a dict with batch_id and status."""
     import batch_api
 
     # Build 50 minimal paper dicts
     papers = [
-        {"title": f"Paper {i}", "abstract": f"Abstract {i}", "doi": f"10.1/{i}"}
-        for i in range(50)
+        {"title": f"Paper {i}", "abstract": f"Abstract {i}", "doi": f"10.1/{i}"} for i in range(50)
     ]
 
     mock_response = MagicMock()
@@ -122,6 +131,7 @@ def test_submit_batch_returns_job_id():
 def test_submit_batch_skips_when_below_threshold():
     """submit_batch raises ValueError when fewer than BATCH_THRESHOLD papers."""
     import batch_api
+
     papers = [{"title": f"Paper {i}", "abstract": ""} for i in range(49)]
     try:
         batch_api.submit_batch(papers, query="test")
@@ -134,9 +144,11 @@ def test_submit_batch_skips_when_below_threshold():
 # Batch-Abholung (#228): get_batch_status / fetch_batch_results
 # ---------------------------------------------------------------------------
 
+
 def test_batch_api_has_get_batch_status():
     """batch_api must expose get_batch_status() for --batch pickup."""
     import batch_api
+
     assert hasattr(batch_api, "get_batch_status")
     assert callable(batch_api.get_batch_status)
 
@@ -144,6 +156,7 @@ def test_batch_api_has_get_batch_status():
 def test_batch_api_has_fetch_batch_results():
     """batch_api must expose fetch_batch_results() for --batch pickup."""
     import batch_api
+
     assert hasattr(batch_api, "fetch_batch_results")
     assert callable(batch_api.fetch_batch_results)
 
@@ -187,7 +200,7 @@ def test_fetch_batch_results_parses_scores():
     entries = [
         _entry("paper_0", '{"score": 0.9}'),
         _entry("paper_1", '{"score": 0.1}'),
-        _entry("paper_2", "not json"),          # unparsable -> skipped
+        _entry("paper_2", "not json"),  # unparsable -> skipped
         _entry("paper_3", '{"score": 0.5}', rtype="errored"),  # failed -> skipped
     ]
 
@@ -204,6 +217,7 @@ def test_fetch_batch_results_parses_scores():
 # ---------------------------------------------------------------------------
 # commands/search.md contains --batch flag
 # ---------------------------------------------------------------------------
+
 
 def test_search_md_has_batch_flag():
     """commands/search.md must document the --batch flag."""

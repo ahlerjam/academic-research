@@ -49,6 +49,7 @@ def _parse_frontmatter(path: Path) -> dict:
 # Command-Dateien existieren
 # ---------------------------------------------------------------------------
 
+
 def test_pickup_file_exists():
     assert PICKUP_FILE.exists(), f"Missing: {PICKUP_FILE}"
 
@@ -61,19 +62,19 @@ def test_setup_file_exists():
 # pickup.md — allowed-tools vorhanden mit Read/Write/Bash(python3 *)
 # ---------------------------------------------------------------------------
 
+
 def test_pickup_allowed_tools_present():
     fm = _parse_frontmatter(PICKUP_FILE)
     allowed = str(fm.get("allowed-tools", ""))
     assert allowed, "pickup.md: allowed-tools fehlt oder leer"
     for tool in ("Read", "Write", "Bash(python3 *)"):
-        assert tool in allowed, (
-            f"pickup.md: '{tool}' nicht in allowed-tools: {allowed!r}"
-        )
+        assert tool in allowed, f"pickup.md: '{tool}' nicht in allowed-tools: {allowed!r}"
 
 
 # ---------------------------------------------------------------------------
 # pickup.md — argument-hint vorhanden mit --filter / --output
 # ---------------------------------------------------------------------------
+
 
 def test_pickup_argument_hint_present():
     fm = _parse_frontmatter(PICKUP_FILE)
@@ -87,6 +88,7 @@ def test_pickup_argument_hint_present():
 # pickup.md — bestehende Felder bleiben erhalten
 # ---------------------------------------------------------------------------
 
+
 def test_pickup_description_nonempty():
     fm = _parse_frontmatter(PICKUP_FILE)
     desc = str(fm.get("description", "")).strip()
@@ -97,26 +99,24 @@ def test_pickup_description_nonempty():
 # setup.md — argument-hint vorhanden mit --uni / --skip-browser / --enable-scihub
 # ---------------------------------------------------------------------------
 
+
 def test_setup_argument_hint_present():
     fm = _parse_frontmatter(SETUP_FILE)
     hint = str(fm.get("argument-hint", ""))
     assert hint, "setup.md: argument-hint fehlt oder leer"
     for token in ("--uni", "--skip-browser", "--enable-scihub"):
-        assert token in hint, (
-            f"setup.md: '{token}' fehlt in argument-hint: {hint!r}"
-        )
+        assert token in hint, f"setup.md: '{token}' fehlt in argument-hint: {hint!r}"
 
 
 # ---------------------------------------------------------------------------
 # setup.md — bestehende Felder bleiben erhalten
 # ---------------------------------------------------------------------------
 
+
 def test_setup_allowed_tools_preserved():
     fm = _parse_frontmatter(SETUP_FILE)
     allowed = str(fm.get("allowed-tools", ""))
-    assert "Bash(python3 *)" in allowed, (
-        f"setup.md: allowed-tools verloren: {allowed!r}"
-    )
+    assert "Bash(python3 *)" in allowed, f"setup.md: allowed-tools verloren: {allowed!r}"
 
 
 def test_setup_description_nonempty():

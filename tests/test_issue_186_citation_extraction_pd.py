@@ -8,6 +8,7 @@ Akzeptanzkriterien (siehe Issue #186):
 - Frontmatter (name + description + Trigger) bleibt intakt.
 - SKILL.md verlinkt die ausgelagerten Referenz-Dateien.
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -36,9 +37,7 @@ def test_citation_examples_reference_exists() -> None:
     assert "Few-Shot" in content or "APA7" in content, (
         "citation-examples.md enthaelt die Few-Shot-Beispiele nicht"
     )
-    assert "Müller" in content, (
-        "citation-examples.md enthaelt das APA7-Beispiel (Müller) nicht"
-    )
+    assert "Müller" in content, "citation-examples.md enthaelt das APA7-Beispiel (Müller) nicht"
 
 
 def test_output_formats_reference_exists() -> None:

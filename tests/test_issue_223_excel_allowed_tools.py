@@ -43,7 +43,7 @@ def _frontmatter_field(path: Path, field: str) -> str:
     prefix = f"{field}:"
     for line in _frontmatter_lines(path):
         if line.startswith(prefix):
-            return line[len(prefix):].strip()
+            return line[len(prefix) :].strip()
     return ""
 
 
@@ -56,8 +56,7 @@ def test_frontmatter_has_bash_sessions_permission():
     allowed = _frontmatter_field(COMMAND_FILE, "allowed-tools")
     # Schritt 1 ruft `ls -t ~/.academic-research/sessions/` ueber Bash auf.
     assert re.search(r"Bash\([^)]*sessions", allowed), (
-        f"Keine Bash-Permission fuer ~/.academic-research/sessions/ "
-        f"in allowed-tools: {allowed!r}"
+        f"Keine Bash-Permission fuer ~/.academic-research/sessions/ in allowed-tools: {allowed!r}"
     )
 
 
@@ -65,9 +64,7 @@ def test_frontmatter_has_skill_xlsx_permission():
     """allowed-tools muss Skill(xlsx) fuer die Excel-Generierung enthalten."""
     allowed = _frontmatter_field(COMMAND_FILE, "allowed-tools")
     # Schritt 3 aktiviert den vendorierten xlsx-Skill.
-    assert "Skill(xlsx)" in allowed, (
-        f"'Skill(xlsx)' nicht in allowed-tools: {allowed!r}"
-    )
+    assert "Skill(xlsx)" in allowed, f"'Skill(xlsx)' nicht in allowed-tools: {allowed!r}"
 
 
 def test_frontmatter_keeps_read_and_write():
@@ -80,6 +77,4 @@ def test_frontmatter_keeps_read_and_write():
 def test_frontmatter_description_nonempty():
     """description bleibt vorhanden und nicht leer (CI-Frontmatter-Coverage)."""
     desc = _frontmatter_field(COMMAND_FILE, "description")
-    assert desc and len(desc.strip()) > 10, (
-        f"description fehlt oder zu kurz: {desc!r}"
-    )
+    assert desc and len(desc.strip()) > 10, f"description fehlt oder zu kurz: {desc!r}"

@@ -127,8 +127,7 @@ Datei mehrmals upgeloadet.
    aufrufen, `file_id` in `pdf_status.json` schreiben.
 2. Folgenden Calls nur noch:
    ```python
-   {"type": "document", "source": {"type": "file", "file_id": fid},
-    "citations": {"enabled": True}}
+   {"type": "document", "source": {"type": "file", "file_id": fid}, "citations": {"enabled": True}}
    ```
 3. TTL-Tracking: file_ids ablaufen lassen wenn älter als Plugin-Konfig
    (`~/.academic-research/files_ttl_days`, Default 30).
@@ -870,19 +869,22 @@ file_id = ensure_uploaded(pdf_path)  # cached in pdf_status.json
 
 client.beta.messages.create(
     model="claude-sonnet-4-7",
-    system=[{
-        "type": "text",
-        "text": AGENT_SYSTEM_PROMPT,
-        "cache_control": {"type": "ephemeral", "ttl": "1h"},
-    }],
-    documents=[{
-        "type": "document",
-        "source": {"type": "file", "file_id": file_id},
-        "citations": {"enabled": True},
-    }],
+    system=[
+        {
+            "type": "text",
+            "text": AGENT_SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral", "ttl": "1h"},
+        }
+    ],
+    documents=[
+        {
+            "type": "document",
+            "source": {"type": "file", "file_id": file_id},
+            "citations": {"enabled": True},
+        }
+    ],
     extra_headers={"anthropic-beta": "files-api-2025-04-14"},
-    messages=[{"role": "user",
-        "content": f"Extrahiere {n} Zitate zu '{query}', je ≤ 25 Wörter."}],
+    messages=[{"role": "user", "content": f"Extrahiere {n} Zitate zu '{query}', je ≤ 25 Wörter."}],
 )
 ```
 

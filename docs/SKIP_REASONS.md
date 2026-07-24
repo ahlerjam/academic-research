@@ -43,13 +43,13 @@ Neue Zeilen oben einsortieren und mit `permanent` bzw. `todo:<…>` klassifizier
 ```python
 import pytest
 
+
 @pytest.mark.skip(reason="permanent: optionale Dependency fehlt")
-def test_optional():
-    ...
+def test_optional(): ...
+
 
 @pytest.mark.skipif(not _FEATURE, reason="todo:#123 — Feature noch nicht da")
-def test_feature():
-    ...
+def test_feature(): ...
 ```
 
 **Beim lokalen Lauf gezielt auslassen** (ohne Code-Änderung):

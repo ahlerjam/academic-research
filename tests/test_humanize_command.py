@@ -32,6 +32,7 @@ def _parse_frontmatter(path: Path) -> dict:
 # Pure-logic helpers (inline — no import dependency on command markdown)
 # ---------------------------------------------------------------------------
 
+
 def derive_output_paths(input_path: str, mode: str) -> tuple[str, str]:
     """Return (humanized_path, diff_path) for a given input path."""
     p = Path(input_path)
@@ -83,6 +84,7 @@ def generate_diff_md(input_file: str, mode: str, voice_calibrated: bool) -> str:
 # Test 1 — command file exists
 # ---------------------------------------------------------------------------
 
+
 def test_command_file_exists():
     assert COMMAND_FILE.exists(), f"Missing: {COMMAND_FILE}"
 
@@ -90,6 +92,7 @@ def test_command_file_exists():
 # ---------------------------------------------------------------------------
 # Test 2 — frontmatter contains Skill(humanizer-de) in allowed-tools
 # ---------------------------------------------------------------------------
+
 
 def test_command_frontmatter_has_skill():
     fm = _parse_frontmatter(COMMAND_FILE)
@@ -102,6 +105,7 @@ def test_command_frontmatter_has_skill():
 # ---------------------------------------------------------------------------
 # Test 3 — frontmatter has argument-hint
 # ---------------------------------------------------------------------------
+
 
 def test_command_frontmatter_argument_hint():
     fm = _parse_frontmatter(COMMAND_FILE)
@@ -116,6 +120,7 @@ def test_command_frontmatter_argument_hint():
 # Test 4 — output filenames for normal mode
 # ---------------------------------------------------------------------------
 
+
 def test_output_filenames_normal():
     humanized, diff = derive_output_paths("kapitel/3.md", "normal")
     assert humanized == "kapitel/3.humanized.md"
@@ -125,6 +130,7 @@ def test_output_filenames_normal():
 # ---------------------------------------------------------------------------
 # Test 5 — output filenames for deep mode
 # ---------------------------------------------------------------------------
+
 
 def test_output_filenames_deep():
     humanized, diff = derive_output_paths("kapitel/3.md", "deep")
@@ -136,6 +142,7 @@ def test_output_filenames_deep():
 # Test 6 — diff markdown contains all four severity sections
 # ---------------------------------------------------------------------------
 
+
 def test_diff_md_structure():
     content = generate_diff_md("kapitel/3.md", "normal", False)
     for section in SEVERITY_SECTIONS:
@@ -145,6 +152,7 @@ def test_diff_md_structure():
 # ---------------------------------------------------------------------------
 # Test 7 — voice samples path derivation
 # ---------------------------------------------------------------------------
+
 
 def test_voice_samples_path():
     expected = Path.home() / ".academic-research/projects/meine-diss/voice-samples"
@@ -156,6 +164,7 @@ def test_voice_samples_path():
 # Test 8 — default mode is 'normal'
 # ---------------------------------------------------------------------------
 
+
 def test_mode_default_is_normal():
     assert parse_mode(["kapitel/3.md"]) == "normal"
 
@@ -163,6 +172,7 @@ def test_mode_default_is_normal():
 # ---------------------------------------------------------------------------
 # Test 9 — command file documents default mode = normal
 # ---------------------------------------------------------------------------
+
 
 def test_command_documents_default_normal():
     text = COMMAND_FILE.read_text(encoding="utf-8")

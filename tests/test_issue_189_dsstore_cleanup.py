@@ -7,6 +7,7 @@ Akzeptanzkriterien (siehe Issue #189):
   `forbid-new-submodules`, `detect-private-key`.
 - README enthält einen Hinweis, dass pre-commit empfohlen wird.
 """
+
 import subprocess
 from pathlib import Path
 
@@ -50,11 +51,7 @@ def test_pre_commit_config_exists_with_required_hooks():
     assert isinstance(data, dict) and data.get("repos"), (
         ".pre-commit-config.yaml muss einen 'repos'-Block haben"
     )
-    hook_ids = {
-        hook.get("id")
-        for repo in data["repos"]
-        for hook in repo.get("hooks", [])
-    }
+    hook_ids = {hook.get("id") for repo in data["repos"] for hook in repo.get("hooks", [])}
     for required in ("check-added-large-files", "forbid-new-submodules", "detect-private-key"):
         assert required in hook_ids, f"pre-commit hook '{required}' fehlt"
 

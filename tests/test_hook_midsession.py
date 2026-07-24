@@ -6,12 +6,12 @@ Liest Top-5 aktive Decisions aus Vault und erinnert Modell als System-Hint.
 Max 1× pro 20 Messages.
 Exit 0 immer.
 """
+
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-import pytest
 
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "mid-session-reinforcement.mjs"
 WORKTREE_ROOT = Path(__file__).parent.parent
@@ -60,8 +60,18 @@ def test_hook_outputs_hint_at_message_20(tmp_path):
     db = VaultDB(db_path)
     db.init_schema()
 
-    add_decision(db_path, category="Zitierstil", text="APA 7th Edition verwenden", rationale="Fachbereich-Standard")
-    add_decision(db_path, category="Methodik", text="Systematisches Review nach PRISMA", rationale="Qualitaetsanforderung")
+    add_decision(
+        db_path,
+        category="Zitierstil",
+        text="APA 7th Edition verwenden",
+        rationale="Fachbereich-Standard",
+    )
+    add_decision(
+        db_path,
+        category="Methodik",
+        text="Systematisches Review nach PRISMA",
+        rationale="Qualitaetsanforderung",
+    )
 
     state_file = tmp_path / "reinforcement_state.json"
 
@@ -80,8 +90,9 @@ def test_hook_outputs_hint_at_message_20(tmp_path):
     # Hook soll Reminder ausgeben (stdout oder stderr)
     combined = result.stdout + result.stderr
     # Hint soll Decisions enthalten
-    assert "APA" in combined or "PRISMA" in combined or "Decision" in combined or "Aktive" in combined, \
-        f"Kein Decision-Hint in Ausgabe: stdout={result.stdout!r}, stderr={result.stderr!r}"
+    assert (
+        "APA" in combined or "PRISMA" in combined or "Decision" in combined or "Aktive" in combined
+    ), f"Kein Decision-Hint in Ausgabe: stdout={result.stdout!r}, stderr={result.stderr!r}"
 
 
 def test_hook_no_output_at_message_10(tmp_path):
@@ -175,8 +186,9 @@ def test_hook_triggers_after_compaction(tmp_path):
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
 
     combined = result.stdout + result.stderr
-    assert "Qualitative" in combined or "Aktive" in combined or "Decision" in combined, \
+    assert "Qualitative" in combined or "Aktive" in combined or "Decision" in combined, (
         f"Kein Hint nach Compaction: stdout={result.stdout!r}, stderr={result.stderr!r}"
+    )
 
 
 def test_hook_failopen_when_vault_missing():
@@ -190,4 +202,6 @@ def test_hook_failopen_when_vault_missing():
         "ACADEMIC_REINFORCEMENT_STATE": "/tmp/test_state_nonexistent.json",
     }
     result = run_hook(payload, env_overrides=env_overrides)
-    assert result.returncode == 0, f"Erwartet 0 (fail-open), got {result.returncode}. stderr: {result.stderr}"
+    assert result.returncode == 0, (
+        f"Erwartet 0 (fail-open), got {result.returncode}. stderr: {result.stderr}"
+    )

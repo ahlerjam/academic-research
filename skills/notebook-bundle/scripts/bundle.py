@@ -13,6 +13,7 @@ Rückgabe von build_bundle():
         "total_pages": N,
     }
 """
+
 from __future__ import annotations
 
 import io
@@ -22,12 +23,11 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import (
     DecodedStreamObject,
-    DictionaryObject,
     NameObject,
 )
 
@@ -35,7 +35,7 @@ from pypdf.generic import (
 _SCRIPTS_DIR = Path(__file__).parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
-from cover_pdf import generate_cover, _add_font_resources, _safe_pdf_string  # noqa: E402
+from cover_pdf import _add_font_resources, _safe_pdf_string, generate_cover  # noqa: E402
 
 # Standard-Größenlimit: 500 MB
 DEFAULT_SIZE_LIMIT_MB = 500
@@ -45,12 +45,13 @@ DEFAULT_SIZE_LIMIT_MB = 500
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
 
+
 def _timestamp() -> str:
     """Gibt aktuellen Zeitstempel im Format YYYYMMDDTHHmmss zurück."""
     return datetime.now().strftime("%Y%m%dT%H%M%S")
 
 
-def _make_toc_bytes(papers: List[Dict[str, Any]], page_numbers: List[int]) -> bytes:
+def _make_toc_bytes(papers: list[dict[str, Any]], page_numbers: list[int]) -> bytes:
     """Erzeugt TOC-Seite als PDF-Bytes.
 
     Args:
@@ -117,12 +118,13 @@ def _flush_writer(writer: PdfWriter, path: str) -> None:
 # Haupt-API
 # ---------------------------------------------------------------------------
 
+
 def build_bundle(
     selection_json: str,
-    output_path: Optional[str] = None,
-    output_dir: Optional[str] = None,
+    output_path: str | None = None,
+    output_dir: str | None = None,
     size_limit_mb: float = DEFAULT_SIZE_LIMIT_MB,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Erzeugt NotebookLM-Bundle-PDF(s) aus einer Paper-Selektion.
 
     Args:
@@ -146,10 +148,10 @@ def build_bundle(
 
     selection_text = Path(selection_json).read_text(encoding="utf-8")
     selection = json.loads(selection_text)
-    papers: List[Dict[str, Any]] = selection.get("papers", [])
+    papers: list[dict[str, Any]] = selection.get("papers", [])
 
-    valid_papers: List[Dict[str, Any]] = []
-    skipped_ids: List[str] = []
+    valid_papers: list[dict[str, Any]] = []
+    skipped_ids: list[str] = []
     for paper in papers:
         pdf_path = paper.get("pdf_path", "")
         if pdf_path and Path(pdf_path).exists():
@@ -157,7 +159,7 @@ def build_bundle(
         else:
             skipped_ids.append(paper.get("id", "unknown"))
 
-    output_files: List[str] = []
+    output_files: list[str] = []
     total_pages = 0
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -167,7 +169,7 @@ def build_bundle(
         cover_reader = PdfReader(tmp_cover_path)
         cover_pages_count = len(cover_reader.pages)
 
-        paper_readers: List[tuple[Dict[str, Any], PdfReader]] = []
+        paper_readers: list[tuple[dict[str, Any], PdfReader]] = []
         for paper in valid_papers:
             try:
                 reader = PdfReader(paper["pdf_path"])
@@ -176,7 +178,7 @@ def build_bundle(
                 skipped_ids.append(paper.get("id", "unknown"))
 
         # Seite 1 = TOC, Seiten 2..(1+cover_pages_count) = Cover, dann Paper
-        page_numbers: List[int] = []
+        page_numbers: list[int] = []
         current_page = 2 + cover_pages_count  # 1 (TOC) + cover_pages
         for _, reader in paper_readers:
             page_numbers.append(current_page)
@@ -186,7 +188,7 @@ def build_bundle(
         toc_bytes = _make_toc_bytes(toc_papers, page_numbers)
         toc_reader = PdfReader(io.BytesIO(toc_bytes))
 
-        def _make_out_path(part: Optional[int] = None) -> str:
+        def _make_out_path(part: int | None = None) -> str:
             if part is None:
                 if output_path is not None:
                     return output_path
@@ -257,6 +259,7 @@ def build_bundle(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """CLI-Einstiegspunkt für notebook-bundle."""
     import argparse
@@ -295,10 +298,7 @@ def main() -> None:
         num_pages = len(PdfReader(f).pages)
         print(f"  {f}  ({size_mb:.2f} MB, {num_pages} Seiten)")
     if result["skipped_ids"]:
-        print(
-            f"Übersprungen ({result['skipped_count']}): "
-            f"{', '.join(result['skipped_ids'])}"
-        )
+        print(f"Übersprungen ({result['skipped_count']}): {', '.join(result['skipped_ids'])}")
     print()
     print(
         "⚠️  Erinnerung: NotebookLM-Antworten sind NICHT verbatim-garantiert.\n"

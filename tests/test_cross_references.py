@@ -1,4 +1,5 @@
 """Regression guard: Keine Title-Case-Skill-Namen in Prosa."""
+
 import re
 from pathlib import Path
 

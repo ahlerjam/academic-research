@@ -117,18 +117,24 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: ruff + mypy installieren
+        # Versionen gepinnt (flowkit Stufe 0): ruff format --check ist blockierend —
+        # ungepinnte Tool-Releases wuerden das Gate sonst ohne Code-Aenderung brechen.
+        # Beim Bump: lokal mit derselben Version nachformatieren.
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          pip install "ruff==0.16.0" "mypy==2.3.0"
       - name: ruff check
-        # Schrittweise Einfuehrung: vorerst nicht-blockierend, damit bestehender
-        # Code die CI nicht sofort rot faerbt. Spaeter auf blockierend umstellen.
+        # Nicht-blockierend mit Begruendung (flowkit Stufe 0, 2026-07-24): nach 327
+        # Auto-Fixes verbleiben 60 Findings. Blockierend schalten, sobald #340
+        # abgearbeitet ist.
         continue-on-error: true
         run: ruff check .
       - name: ruff format --check
-        continue-on-error: true
+        # Blockierend seit Stufe-0-Hygiene (flowkit): Format-Stand ist sauber.
         run: ruff format --check .
       - name: mypy
+        # Nicht-blockierend mit Begruendung (flowkit Stufe 0): 33 Fehler offen.
+        # Blockierend schalten, sobald #341 abgearbeitet ist.
         continue-on-error: true
         run: mypy
 

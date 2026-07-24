@@ -6,9 +6,9 @@ CLI:
 Parst YAML-Frontmatter-aehnliche Bloecke aus Markdown-Listeneintraegen.
 Idempotent (INSERT OR REPLACE via add_paper-Upsert).
 """
+
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -164,6 +164,7 @@ def add_book_columns(db_path: str) -> None:
     Aufruf-Sicher: Kann mehrfach auf derselben DB ausgefuehrt werden.
     """
     import sqlite3 as _sqlite3
+
     new_cols = [
         ("editor", "TEXT"),
         ("chapter", "TEXT"),
@@ -189,12 +190,12 @@ def add_parent_paper_id_column(db_path: str) -> None:
     Aufruf-Sicher: Kann mehrfach auf derselben DB ausgefuehrt werden.
     """
     import sqlite3 as _sqlite3
+
     conn = _sqlite3.connect(db_path)
     try:
         try:
             conn.execute(
-                "ALTER TABLE papers ADD COLUMN "
-                "parent_paper_id TEXT REFERENCES papers(paper_id)"
+                "ALTER TABLE papers ADD COLUMN parent_paper_id TEXT REFERENCES papers(paper_id)"
             )
         except _sqlite3.OperationalError:
             pass  # Spalte existiert bereits -- idempotent
@@ -211,12 +212,11 @@ def add_provenance_column(db_path: str) -> None:
     derselben DB ausgefuehrt werden.
     """
     import sqlite3 as _sqlite3
+
     conn = _sqlite3.connect(db_path)
     try:
         try:
-            conn.execute(
-                "ALTER TABLE papers ADD COLUMN provenance TEXT DEFAULT NULL"
-            )
+            conn.execute("ALTER TABLE papers ADD COLUMN provenance TEXT DEFAULT NULL")
         except _sqlite3.OperationalError:
             pass  # Spalte existiert bereits -- idempotent
         conn.commit()
@@ -230,6 +230,7 @@ def add_figures_table(db_path: str) -> None:
     Aufruf-Sicher: Kann mehrfach auf derselben DB ausgefuehrt werden.
     """
     import sqlite3 as _sqlite3
+
     conn = _sqlite3.connect(db_path)
     try:
         conn.execute("""
@@ -255,6 +256,7 @@ def add_v64_tables(db_path: str) -> None:
               risk_of_bias_assessments, score_history, vault_locked_status.
     """
     import sqlite3 as _sqlite3
+
     conn = _sqlite3.connect(db_path)
     try:
         conn.execute("""

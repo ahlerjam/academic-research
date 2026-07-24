@@ -8,6 +8,7 @@ CLI:
 
 Verwendbar auch als Modul (fuer Tests und den Skill selbst).
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,6 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Optional-Dependencies (graceful fallback)
@@ -23,12 +23,14 @@ from typing import Optional
 
 try:
     import requests
+
     _REQUESTS_AVAILABLE = True
 except ImportError:
     _REQUESTS_AVAILABLE = False
 
 try:
     import anthropic as _anthropic_module
+
     _ANTHROPIC_AVAILABLE = True
 except ImportError:
     _ANTHROPIC_AVAILABLE = False
@@ -42,6 +44,7 @@ if str(_REPO_SCRIPTS) not in sys.path:
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
     from academic_vault.server import add_paper as _vault_add_paper_native
+
     _VAULT_NATIVE = True
 except ImportError:
     _VAULT_NATIVE = False
@@ -51,12 +54,13 @@ except ImportError:
 # Oeffentliche Interfaces (werden in Tests gemockt)
 # ---------------------------------------------------------------------------
 
+
 def vault_add_paper(
     db_path: str,
     paper_id: str,
     csl_json: str,
-    doi: Optional[str] = None,
-    isbn: Optional[str] = None,
+    doi: str | None = None,
+    isbn: str | None = None,
 ) -> None:
     """Wrapper um academic_vault.server.add_paper.
 
@@ -94,13 +98,14 @@ def ask_user_question(question: str, options: list[str]) -> int:
         return 0
 
 
-def book_resolve_isbn(isbn: str) -> Optional[str]:
+def book_resolve_isbn(isbn: str) -> str | None:
     """Delegiert ISBN-Aufloesung an scripts/book_resolve.py.
 
     Wird in Tests via patch() ersetzt.
     """
     try:
         from book_resolve import resolve_isbn as _br_resolve
+
         return _br_resolve(isbn)
     except Exception:
         return None
@@ -109,6 +114,7 @@ def book_resolve_isbn(isbn: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Format-Erkennung
 # ---------------------------------------------------------------------------
+
 
 def detect_format(file_path: str) -> str:
     """Gibt 'pdf', 'md', oder 'txt' zurueck. Wirft ValueError bei Unbekanntem."""
@@ -126,10 +132,12 @@ def detect_format(file_path: str) -> str:
 # Text-Extraktion
 # ---------------------------------------------------------------------------
 
+
 def _extract_pdf(file_path: str) -> str:
     """Extrahiert Text aus PDF via pypdf oder pdfminer als Fallback."""
     try:
         import pypdf  # type: ignore
+
         with open(file_path, "rb") as fh:
             reader = pypdf.PdfReader(fh)
             pages = []
@@ -140,6 +148,7 @@ def _extract_pdf(file_path: str) -> str:
         pass
     try:
         from pdfminer.high_level import extract_text as _pdfminer_extract  # type: ignore
+
         return _pdfminer_extract(file_path)
     except ImportError:
         raise ImportError(
@@ -202,6 +211,7 @@ def llm_parse(text: str, client=None) -> list[dict]:
         if not _ANTHROPIC_AVAILABLE:
             raise ImportError("anthropic-SDK benoetigt: pip install anthropic")
         import anthropic
+
         client = anthropic.Anthropic()
 
     response = client.messages.create(
@@ -284,7 +294,7 @@ def _crossref_message_to_csl(msg: dict) -> str:
     return json.dumps(csl, ensure_ascii=False)
 
 
-def resolve_doi(doi: str) -> Optional[str]:
+def resolve_doi(doi: str) -> str | None:
     """Holt CSL-JSON fuer einen DOI via Crossref.
 
     Gibt None zurueck falls nicht gefunden oder Netz-Fehler.
@@ -317,7 +327,8 @@ def resolve_doi(doi: str) -> Optional[str]:
 # ISBN-Resolution
 # ---------------------------------------------------------------------------
 
-def resolve_isbn(isbn: str) -> Optional[str]:
+
+def resolve_isbn(isbn: str) -> str | None:
     """Delegiert an book_resolve_isbn() (mockar in Tests)."""
     if not isbn:
         return None
@@ -327,6 +338,7 @@ def resolve_isbn(isbn: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Haupt-Import-Pipeline
 # ---------------------------------------------------------------------------
+
 
 def _make_fallback_csl(entry: dict) -> str:
     """Erstellt minimales CSL-JSON aus einem geparsten Eintrag ohne Resolution."""
@@ -376,18 +388,15 @@ def _generate_paper_id(entry: dict) -> str:
     return f"rli-{uuid.uuid4().hex[:12]}"
 
 
-def _handle_ambiguous(entry: dict) -> Optional[dict]:
+def _handle_ambiguous(entry: dict) -> dict | None:
     """Fragt User bei ambiguem Eintrag. Gibt gewahlten Kandidaten zurueck oder None."""
     candidates = entry.get("_candidates", [])
     if not candidates:
         return None
 
-    options = [
-        f"{c.get('title', '?')} (DOI: {c.get('doi', 'kein DOI')})"
-        for c in candidates
-    ]
+    options = [f"{c.get('title', '?')} (DOI: {c.get('doi', 'kein DOI')})" for c in candidates]
     question = (
-        f"Mehrdeutiger Eintrag: \"{entry.get('title', '?')}\" von {entry.get('author', '?')}.\n"
+        f'Mehrdeutiger Eintrag: "{entry.get("title", "?")}" von {entry.get("author", "?")}.\n'
         f"Welche Quelle ist gemeint?"
     )
 
@@ -436,7 +445,7 @@ def import_reading_list(
             isbn = entry.get("isbn") or None
 
             # Resolution versuchen
-            csl_json: Optional[str] = None
+            csl_json: str | None = None
             if doi:
                 csl_json = resolve_doi(doi)
             if not csl_json and isbn:
@@ -473,12 +482,11 @@ def import_reading_list(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def _cli():
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Reading-List-Import: Bibliographie → Vault"
-    )
+    parser = argparse.ArgumentParser(description="Reading-List-Import: Bibliographie → Vault")
     parser.add_argument("--file", required=True, help="Pfad zur Referenzliste (.pdf/.md/.txt)")
     parser.add_argument("--db", default="vault.db", help="Vault-DB-Pfad (default: vault.db)")
     args = parser.parse_args()

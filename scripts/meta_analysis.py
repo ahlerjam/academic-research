@@ -9,6 +9,7 @@ Input JSON format:
 
 Output: Markdown with statistical summary + Mermaid Forest-Plot.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,22 +25,24 @@ log = logging.getLogger(__name__)
 @dataclass
 class Study:
     """A single study with effect size and variance."""
+
     name: str
-    yi: float   # Effect size estimate
-    vi: float   # Within-study variance
+    yi: float  # Effect size estimate
+    vi: float  # Within-study variance
 
 
 @dataclass
 class MetaAnalysisResult:
     """Result of a DerSimonian-Laird random-effects meta-analysis."""
-    k: int                  # Number of studies
-    Q: float                # Cochran's Q statistic
-    tau2: float             # Between-study variance (τ²)
-    i2: float               # Heterogeneity index I² (%)
-    pooled_es: float        # Pooled effect size (random-effects)
-    se_pool: float          # Standard error of pooled ES
-    ci_lo: float            # 95% CI lower bound
-    ci_hi: float            # 95% CI upper bound
+
+    k: int  # Number of studies
+    Q: float  # Cochran's Q statistic
+    tau2: float  # Between-study variance (τ²)
+    i2: float  # Heterogeneity index I² (%)
+    pooled_es: float  # Pooled effect size (random-effects)
+    se_pool: float  # Standard error of pooled ES
+    ci_lo: float  # 95% CI lower bound
+    ci_hi: float  # 95% CI upper bound
 
 
 def dersimonianlaird(studies: list[Study]) -> MetaAnalysisResult:
@@ -143,7 +146,7 @@ def build_forest_plot_mermaid(studies: list[Study], result: MetaAnalysisResult) 
         hi_i = study.yi + 1.96 * se_i
         node_id = f"S{i}"
         label = f"{study.name}<br/>{study.yi:.2f} ({lo_i:.2f}–{hi_i:.2f})"
-        lines.append(f"  {node_id}[\"{label}\"] --> Pool")
+        lines.append(f'  {node_id}["{label}"] --> Pool')
 
     # Pool node
     pool_label = (
@@ -162,11 +165,13 @@ def _load_studies(path: str) -> list[Study]:
         raw = json.load(fh)
     studies = []
     for item in raw:
-        studies.append(Study(
-            name=item["name"],
-            yi=float(item["yi"]),
-            vi=float(item["vi"]),
-        ))
+        studies.append(
+            Study(
+                name=item["name"],
+                yi=float(item["yi"]),
+                vi=float(item["vi"]),
+            )
+        )
     return studies
 
 
@@ -201,6 +206,7 @@ def _render_markdown(studies: list[Study], result: MetaAnalysisResult) -> str:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

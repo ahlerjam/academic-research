@@ -84,12 +84,14 @@ Nach erfolgreichem Vault-Eintrag dem User anbieten:
 
 ```python
 from pdf import detect_needs_ocr
+
 if detect_needs_ocr(pdf_path):
     # User fragen:
     # "Scan-PDF erkannt: wenig Text auf Stichproben-Seiten.
     #  OCR ausführen? (~30 s/Seite, lokal via ocrmypdf) [j/n]"
     # Bei Zustimmung:
     from ocr import run_ocrmypdf
+
     run_ocrmypdf(pdf_path, pdf_path_ocr)
     vault.set_ocr_done(paper_id)
     vault.update_pdf_path(paper_id, pdf_path_ocr)

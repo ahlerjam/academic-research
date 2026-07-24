@@ -71,9 +71,7 @@ def test_l2_dependabot_exists_and_valid_yaml():
     data = yaml.safe_load(dep.read_text(encoding="utf-8"))
     assert isinstance(data, dict), "dependabot.yml ist kein YAML-Mapping"
     assert data.get("version") == 2, "dependabot version muss 2 sein"
-    ecosystems = {
-        u.get("package-ecosystem") for u in data.get("updates", [])
-    }
+    ecosystems = {u.get("package-ecosystem") for u in data.get("updates", [])}
     assert "pip" in ecosystems, "dependabot deckt kein pip-Oekosystem ab"
     # npm fuer Node-/hooks-Deps ODER github-actions (Workflows) muss abgedeckt sein
     assert ecosystems & {"npm", "github-actions"}, (
@@ -98,21 +96,15 @@ def test_m4_release_workflow_exists_and_valid_yaml():
 def test_m4_release_checks_marketplace_version_match():
     rel = ROOT / ".github" / "workflows" / "release.yml"
     text = rel.read_text(encoding="utf-8")
-    assert "marketplace.json" in text, (
-        "release.yml prueft marketplace.json-Version nicht (M4)"
-    )
+    assert "marketplace.json" in text, "release.yml prueft marketplace.json-Version nicht (M4)"
     # plugin.json-Tag-Check muss weiterhin existieren
     assert "plugin.json" in text, "release.yml prueft plugin.json-Version nicht mehr"
 
 
 def test_m4_manifest_versions_currently_match():
     """Sanity: marketplace.plugins[0].version == plugin.json.version."""
-    plugin = json.loads(
-        (ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
-    )
-    market = json.loads(
-        (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
-    )
+    plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
     assert plugin["version"] == market["plugins"][0]["version"], (
         "plugin.json und marketplace.json Versionen weichen ab"
     )

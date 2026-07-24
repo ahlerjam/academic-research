@@ -1,10 +1,8 @@
 """Unit-Tests fuer neue PDF-Tier-Funktionen (Tiers 6-8) — Chunk J v6.2."""
-import json
+
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
@@ -12,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_httpx_response(json_data: dict | list, status_code: int = 200) -> MagicMock:
     resp = MagicMock()
@@ -31,17 +30,15 @@ def _mock_httpx_client(response: MagicMock) -> MagicMock:
 # Tier 6: OpenAccessButton
 # ---------------------------------------------------------------------------
 
+
 class TestTierOpenAccessButton:
     def test_success_returns_pdf_url(self):
         """Erfolgsfall: API gibt Treffer zurueck, URL wird extrahiert."""
         from pdf import tier_openaccessbutton
 
-        resp = _mock_httpx_response({
-            "data": {
-                "url": "https://example.org/paper.pdf",
-                "type": "article"
-            }
-        })
+        resp = _mock_httpx_response(
+            {"data": {"url": "https://example.org/paper.pdf", "type": "article"}}
+        )
         client = _mock_httpx_client(resp)
 
         result = tier_openaccessbutton(client, "10.1371/journal.pbio.1002055")
@@ -168,17 +165,19 @@ class TestTierDoab:
         """Bugfix-Regression: PDF-Bitstream mit leerem retrieveLink gibt None zurueck."""
         from pdf import tier_doab
 
-        resp = _mock_httpx_response([
-            {
-                "uuid": "xyz-000",
-                "bitstreams": [
-                    {
-                        "mimeType": "application/pdf",
-                        "retrieveLink": "",
-                    }
-                ],
-            }
-        ])
+        resp = _mock_httpx_response(
+            [
+                {
+                    "uuid": "xyz-000",
+                    "bitstreams": [
+                        {
+                            "mimeType": "application/pdf",
+                            "retrieveLink": "",
+                        }
+                    ],
+                }
+            ]
+        )
         client = _mock_httpx_client(resp)
 
         result = tier_doab(client, "some title")
@@ -218,11 +217,7 @@ EUROPEPMC_HIT_RESPONSE = {
     }
 }
 
-EUROPEPMC_EMPTY_RESPONSE = {
-    "resultList": {
-        "result": []
-    }
-}
+EUROPEPMC_EMPTY_RESPONSE = {"resultList": {"result": []}}
 
 EUROPEPMC_NO_OA_PDF = {
     "resultList": {
@@ -282,13 +277,11 @@ class TestTierEuropePMC:
 # resolve_pdf_url() — ordering tests
 # ---------------------------------------------------------------------------
 
+
 class TestResolvePdfUrlOrdering:
     """Prueft die Tier-Reihenfolge in resolve_pdf_url()."""
 
-    _EMPTY_ARXIV_XML = (
-        '<?xml version="1.0"?>'
-        '<feed xmlns="http://www.w3.org/2005/Atom"></feed>'
-    )
+    _EMPTY_ARXIV_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
 
     def _empty_resp(self, json_data=None):
         """Hilfsmethode: leere Mock-Response fuer nicht-relevante Tiers."""

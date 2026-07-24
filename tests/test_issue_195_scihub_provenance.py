@@ -7,14 +7,12 @@ Akzeptanzkriterien (siehe Issue #195):
 - vault.list_papers_by_provenance("scihub") fuer Audit
 - Persistenz-Check: Provenance-Tag wird gespeichert und wieder ausgelesen
 """
+
 import json
 import os
 import sqlite3
-import tempfile
-
-import pytest
-
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -27,6 +25,7 @@ SCHEMA_PATH = os.path.join(REPO_ROOT, "academic_vault", "schema.sql")
 # ---------------------------------------------------------------------------
 # Schema-Ebene: provenance-Spalte existiert
 # ---------------------------------------------------------------------------
+
 
 class TestProvenanceSchema:
     def setup_method(self):
@@ -66,6 +65,7 @@ class TestProvenanceSchema:
 # ---------------------------------------------------------------------------
 # Persistenz: add_paper(provenance=...) speichert + liest aus
 # ---------------------------------------------------------------------------
+
 
 class TestProvenancePersistence:
     def setup_method(self):
@@ -110,6 +110,7 @@ class TestProvenancePersistence:
 # ---------------------------------------------------------------------------
 # Audit: list_papers_by_provenance
 # ---------------------------------------------------------------------------
+
 
 class TestListPapersByProvenance:
     def setup_method(self):
@@ -161,6 +162,7 @@ class TestListPapersByProvenance:
 # ---------------------------------------------------------------------------
 # Migration: bestehende DB ohne provenance-Spalte
 # ---------------------------------------------------------------------------
+
 
 class TestProvenanceMigration:
     def setup_method(self):

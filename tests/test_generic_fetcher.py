@@ -12,14 +12,9 @@ Output schema (OQ9 canonical):
 
 import os
 import re
-import pytest
 
-AGENT_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "agents", "generic-fetcher.md"
-)
-FIXTURES_DIR = os.path.join(
-    os.path.dirname(__file__), "fixtures", "dom_heuristics"
-)
+AGENT_FILE = os.path.join(os.path.dirname(__file__), "..", "agents", "generic-fetcher.md")
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "dom_heuristics")
 
 # Parsed once at module load to avoid repeated disk reads across test methods.
 _AGENT_FM: dict = {}
@@ -29,6 +24,7 @@ _AGENT_BODY: str = ""
 # ---------------------------------------------------------------------------
 # Helper: parse frontmatter + body from agent markdown
 # ---------------------------------------------------------------------------
+
 
 def _parse_agent_md(path: str) -> tuple[dict, str]:
     """Return (frontmatter_dict, body_text) from a --- fenced markdown file."""
@@ -91,13 +87,12 @@ def _validate_output_schema(output: dict) -> list[str]:
 # Task 2.1 — Frontmatter validation
 # ---------------------------------------------------------------------------
 
+
 class TestFrontmatter:
     """agents/generic-fetcher.md must have all required frontmatter fields."""
 
     def test_agent_file_exists(self):
-        assert os.path.isfile(AGENT_FILE), (
-            f"agents/generic-fetcher.md not found at {AGENT_FILE}"
-        )
+        assert os.path.isfile(AGENT_FILE), f"agents/generic-fetcher.md not found at {AGENT_FILE}"
 
     def test_frontmatter_name(self):
         fm, _ = _agent()
@@ -115,9 +110,7 @@ class TestFrontmatter:
         fm, _ = _agent()
         tools = fm.get("tools", [])
         tool_str = " ".join(str(t) for t in tools)
-        assert "browser-use" in tool_str, (
-            f"tools must reference browser-use, got: {tools}"
-        )
+        assert "browser-use" in tool_str, f"tools must reference browser-use, got: {tools}"
 
     def test_frontmatter_tools_contains_read_write(self):
         fm, _ = _agent()
@@ -131,6 +124,7 @@ class TestFrontmatter:
 # ---------------------------------------------------------------------------
 # Task 2.2 — DOM heuristic keyword checks in system prompt
 # ---------------------------------------------------------------------------
+
 
 class TestDOMHeuristics:
     """System prompt must contain all required DOM heuristic keywords."""
@@ -161,23 +155,17 @@ class TestDOMHeuristics:
     def test_positive_pdf_indicators_present(self):
         _, body = _agent()
         missing = [kw for kw in self.POSITIVE_PDF_INDICATORS if kw not in body]
-        assert not missing, (
-            f"System prompt missing positive PDF indicators: {missing}"
-        )
+        assert not missing, f"System prompt missing positive PDF indicators: {missing}"
 
     def test_negative_pdf_indicators_present(self):
         _, body = _agent()
         missing = [kw for kw in self.NEGATIVE_PDF_INDICATORS if kw not in body]
-        assert not missing, (
-            f"System prompt missing negative PDF indicators: {missing}"
-        )
+        assert not missing, f"System prompt missing negative PDF indicators: {missing}"
 
     def test_paywall_signals_present(self):
         _, body = _agent()
         missing = [kw for kw in self.PAYWALL_SIGNALS if kw not in body]
-        assert not missing, (
-            f"System prompt missing paywall signals: {missing}"
-        )
+        assert not missing, f"System prompt missing paywall signals: {missing}"
 
     def test_captcha_detection_present(self):
         _, body = _agent()
@@ -208,6 +196,7 @@ class TestDOMHeuristics:
 # ---------------------------------------------------------------------------
 # Task 2.3 — Output schema validation (3 simulated cases)
 # ---------------------------------------------------------------------------
+
 
 class TestOutputSchema:
     """Three simulated agent outputs must conform to canonical output schema."""
@@ -273,7 +262,7 @@ class TestOutputSchema:
         ]
         for i, case in enumerate(cases):
             errors = _validate_output_schema(case)
-            assert not errors, f"Case {i+1} ({case['status']}) schema errors: {errors}"
+            assert not errors, f"Case {i + 1} ({case['status']}) schema errors: {errors}"
 
     def test_invalid_status_rejected(self):
         """Unknown status values must be rejected by schema validator."""
@@ -299,6 +288,7 @@ class TestOutputSchema:
 # ---------------------------------------------------------------------------
 # Task 2.4 — HTML fixture content checks
 # ---------------------------------------------------------------------------
+
 
 class TestHTMLFixtures:
     """HTML fixtures must exist and contain expected DOM patterns."""

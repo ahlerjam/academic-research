@@ -2,14 +2,11 @@
 
 TDD: Tests werden zuerst geschrieben (RED), dann Implementierung (GREEN).
 """
+
 import json
 import sqlite3
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -22,6 +19,7 @@ def _make_db(tmp_path: Path) -> str:
     """Erstellt eine Vault-DB mit Schema und gibt den Pfad zurueck."""
     db_path = str(tmp_path / "vault.db")
     from academic_vault.db import VaultDB
+
     db = VaultDB(db_path)
     db.init_schema()
     return db_path
@@ -30,6 +28,7 @@ def _make_db(tmp_path: Path) -> str:
 def _add_paper(db_path: str, paper_id: str, title: str, abstract: str) -> None:
     """Hilfsfunktion: fuegt ein Paper in den Vault ein."""
     from academic_vault.server import add_paper
+
     csl = {"type": "article-journal", "title": title, "abstract": abstract}
     add_paper(db_path, paper_id, json.dumps(csl))
 
@@ -37,6 +36,7 @@ def _add_paper(db_path: str, paper_id: str, title: str, abstract: str) -> None:
 # ---------------------------------------------------------------------------
 # Tests: Schema-Erweiterung (context_sentence Spalte)
 # ---------------------------------------------------------------------------
+
 
 class TestContextSentenceSchema:
     """Schema muss context_sentence-Spalte in chunk_embeddings-Tabelle haben."""
@@ -80,6 +80,7 @@ class TestContextSentenceSchema:
 # Tests: VaultDB.add_chunk_embedding / get_chunk_embeddings
 # ---------------------------------------------------------------------------
 
+
 class TestChunkEmbeddingsCRUD:
     """CRUD-Tests fuer chunk_embeddings."""
 
@@ -89,6 +90,7 @@ class TestChunkEmbeddingsCRUD:
         _add_paper(db_path, "p001", "Test Paper", "Test Abstract")
 
         from academic_vault.db import VaultDB
+
         db = VaultDB(db_path)
         chunk_id = db.add_chunk_embedding(
             paper_id="p001",
@@ -106,6 +108,7 @@ class TestChunkEmbeddingsCRUD:
         _add_paper(db_path, "p001", "Test Paper", "Test Abstract")
 
         from academic_vault.db import VaultDB
+
         db = VaultDB(db_path)
         db.add_chunk_embedding(
             paper_id="p001",
@@ -133,6 +136,7 @@ class TestChunkEmbeddingsCRUD:
         _add_paper(db_path, "p001", "Test Paper", "Test Abstract")
 
         from academic_vault.db import VaultDB
+
         db = VaultDB(db_path)
         ctx = "Dieser Chunk diskutiert X im Kontext von Y aus Paper Z."
         db.add_chunk_embedding(
@@ -151,6 +155,7 @@ class TestChunkEmbeddingsCRUD:
 # Tests: Contextual Embedding Generation
 # ---------------------------------------------------------------------------
 
+
 class TestContextualEmbeddingGeneration:
     """Tests fuer embeddings.py — Kontext-Satz-Generierung."""
 
@@ -160,7 +165,11 @@ class TestContextualEmbeddingGeneration:
 
         # Mock-Anthropic-Client — keine echte API noetig
         mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Dieser Chunk diskutiert Transformer im Kontext von Attention aus Paper p001.")]
+        mock_response.content = [
+            MagicMock(
+                text="Dieser Chunk diskutiert Transformer im Kontext von Attention aus Paper p001."
+            )
+        ]
 
         with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
             mock_instance = MagicMock()
@@ -241,16 +250,25 @@ class TestContextualEmbeddingGeneration:
 # Tests: Hybrid Retrieval (FTS5 BM25)
 # ---------------------------------------------------------------------------
 
+
 class TestHybridRetrievalFTS5:
     """Tests fuer BM25-Suche via FTS5."""
 
     def test_search_papers_fts5_returns_results(self, tmp_path):
         """search_papers gibt Ergebnisse mit paper_id und score zurueck."""
         db_path = _make_db(tmp_path)
-        _add_paper(db_path, "p001", "Transformer Neural Networks", "Self-attention mechanism for NLP tasks.")
-        _add_paper(db_path, "p002", "Convolutional Networks", "Image classification with deep learning.")
+        _add_paper(
+            db_path,
+            "p001",
+            "Transformer Neural Networks",
+            "Self-attention mechanism for NLP tasks.",
+        )
+        _add_paper(
+            db_path, "p002", "Convolutional Networks", "Image classification with deep learning."
+        )
 
         from academic_vault.server import search_papers
+
         results = search_papers(db_path, "transformer attention", k=5)
 
         assert len(results) > 0
@@ -261,12 +279,21 @@ class TestHybridRetrievalFTS5:
     def test_search_papers_bm25_ranking(self, tmp_path):
         """Hoher-relevantes Paper rankt vor niedrig-relevantem Paper."""
         db_path = _make_db(tmp_path)
-        _add_paper(db_path, "p_high", "Transformer Self-Attention Architecture",
-                   "Attention mechanism transformer transformer transformer attention.")
-        _add_paper(db_path, "p_low", "Unrelated Paper About Cats",
-                   "Cats are domestic animals that like to sleep.")
+        _add_paper(
+            db_path,
+            "p_high",
+            "Transformer Self-Attention Architecture",
+            "Attention mechanism transformer transformer transformer attention.",
+        )
+        _add_paper(
+            db_path,
+            "p_low",
+            "Unrelated Paper About Cats",
+            "Cats are domestic animals that like to sleep.",
+        )
 
         from academic_vault.server import search_papers
+
         results = search_papers(db_path, "transformer attention", k=5)
 
         result_ids = [r["paper_id"] for r in results]
@@ -280,6 +307,7 @@ class TestHybridRetrievalFTS5:
 # Tests: vault.search mit rerank-Parameter
 # ---------------------------------------------------------------------------
 
+
 class TestVaultSearchWithRerank:
     """Tests fuer vault.search(query, rerank=True) API."""
 
@@ -289,6 +317,7 @@ class TestVaultSearchWithRerank:
         _add_paper(db_path, "p001", "Retrieval Systems", "Dense and sparse retrieval methods.")
 
         from academic_vault.server import search_papers
+
         results = search_papers(db_path, "retrieval methods", k=5, rerank=False)
 
         assert isinstance(results, list)
@@ -301,10 +330,12 @@ class TestVaultSearchWithRerank:
         with patch.dict("os.environ", {}, clear=False):
             # VOYAGE_API_KEY und COHERE_API_KEY nicht gesetzt
             import os
+
             os.environ.pop("VOYAGE_API_KEY", None)
             os.environ.pop("COHERE_API_KEY", None)
 
             from academic_vault.server import search_papers
+
             results = search_papers(db_path, "hybrid retrieval", k=5, rerank=True)
 
         assert isinstance(results, list)
@@ -313,8 +344,10 @@ class TestVaultSearchWithRerank:
     def test_search_papers_signature_accepts_rerank(self, tmp_path):
         """search_papers akzeptiert rerank-Parameter ohne TypeError."""
         db_path = _make_db(tmp_path)
-        from academic_vault.server import search_papers
         import inspect
+
+        from academic_vault.server import search_papers
+
         sig = inspect.signature(search_papers)
         assert "rerank" in sig.parameters, "search_papers muss rerank-Parameter haben"
 
@@ -322,6 +355,7 @@ class TestVaultSearchWithRerank:
 # ---------------------------------------------------------------------------
 # Tests: Eval-Set laden
 # ---------------------------------------------------------------------------
+
 
 class TestEvalSet:
     """Eval-Set ist valides JSON mit 50 Queries und 200 Papers."""
@@ -348,7 +382,9 @@ class TestEvalSet:
         eval_path = FIXTURES / "retrieval_eval_set.json"
         data = json.loads(eval_path.read_text(encoding="utf-8"))
         for q in data["queries"]:
-            assert len(q["relevant_paper_ids"]) >= 1, f"Query {q['query_id']} hat keine relevanten Papers"
+            assert len(q["relevant_paper_ids"]) >= 1, (
+                f"Query {q['query_id']} hat keine relevanten Papers"
+            )
 
     def test_eval_set_relevant_paper_ids_exist(self):
         """Alle relevanten Paper-IDs in Queries existieren im Papers-Set."""

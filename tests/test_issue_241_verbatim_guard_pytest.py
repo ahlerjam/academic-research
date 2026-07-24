@@ -11,6 +11,7 @@ Sicherstellt, dass der verbatim-guard-Eval-Runner ueber pytest erreichbar ist:
 Die fachlichen Per-Case-Asserts liegen in der Integrationsdatei; dieser Test
 verriegelt die strukturelle AC (verbatim-guard wird ueber pytest erreicht).
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -53,7 +54,5 @@ def test_runner_executes_ten_cases_and_passes():
     assert len(results["details"]) == 10, (
         f"Erwartet 10 Cases, ausgefuehrt: {len(results['details'])}"
     )
-    assert results["failed"] == 0, (
-        f"verbatim-guard-Eval fehlgeschlagen: {results['details']}"
-    )
+    assert results["failed"] == 0, f"verbatim-guard-Eval fehlgeschlagen: {results['details']}"
     assert results["fpr"] < 5.0, f"FPR {results['fpr']:.1f}% verletzt AC (< 5 %)."

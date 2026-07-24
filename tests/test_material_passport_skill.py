@@ -8,6 +8,7 @@ Test 2: methodik.md hat neuen "## Reproduzierbarkeit"-Block
 Test 3: vault.lock_passport schaltet auf read-only
 Test 4: post-lock try vault.add_paper → Exception
 """
+
 from __future__ import annotations
 
 import json
@@ -16,21 +17,19 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 _WORKTREE_ROOT = Path(__file__).parent.parent
 if str(_WORKTREE_ROOT) not in sys.path:
     sys.path.insert(0, str(_WORKTREE_ROOT))
 
 _SCRIPT = _WORKTREE_ROOT / "skills" / "material-passport" / "scripts" / "build_passport.py"
 
-from academic_vault.db import VaultDB
 from academic_vault import server as vault_server
-
+from academic_vault.db import VaultDB
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_db() -> tuple[str, VaultDB]:
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -47,8 +46,7 @@ def _seed_vault(db_path: str) -> None:
         db = VaultDB(db_path)
         db.add_paper(
             f"p{i}",
-            json.dumps({"title": f"Paper {i}", "type": "article-journal",
-                        "DOI": f"10.1234/p{i}"}),
+            json.dumps({"title": f"Paper {i}", "type": "article-journal", "DOI": f"10.1234/p{i}"}),
             doi=f"10.1234/p{i}",
         )
 
@@ -79,6 +77,7 @@ def _seed_vault(db_path: str) -> None:
 # Test 1: build_passport.py erzeugt material-passport.json
 # ---------------------------------------------------------------------------
 
+
 class TestBuildPassportScript:
     """build_passport.py CLI erzeugt material-passport.json im output-dir."""
 
@@ -95,11 +94,16 @@ class TestBuildPassportScript:
 
             result = subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "test-projekt",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "test-projekt",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                 ],
                 capture_output=True,
                 text=True,
@@ -125,11 +129,16 @@ class TestBuildPassportScript:
 
             subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "test-projekt",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "test-projekt",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                 ],
                 capture_output=True,
                 text=True,
@@ -155,11 +164,16 @@ class TestBuildPassportScript:
 
             subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "test-projekt",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "test-projekt",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                 ],
                 capture_output=True,
                 text=True,
@@ -173,6 +187,7 @@ class TestBuildPassportScript:
 # ---------------------------------------------------------------------------
 # Test 2: methodik.md bekommt "## Reproduzierbarkeit"-Block
 # ---------------------------------------------------------------------------
+
 
 class TestMethdikUpdate:
     """build_passport.py ergaenzt kapitel/methodik.md um Reproduzierbarkeits-Block."""
@@ -190,11 +205,16 @@ class TestMethdikUpdate:
 
             subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "mein-projekt",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "mein-projekt",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                 ],
                 capture_output=True,
                 text=True,
@@ -219,11 +239,16 @@ class TestMethdikUpdate:
 
             subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "mein-projekt",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "mein-projekt",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                 ],
                 capture_output=True,
                 text=True,
@@ -249,20 +274,23 @@ class TestMethdikUpdate:
             for _ in range(2):
                 subprocess.run(
                     [
-                        sys.executable, str(_SCRIPT),
-                        "--db", db_path,
-                        "--slug", "mein-projekt",
-                        "--output-dir", str(tmp_path),
-                        "--methodik", str(methodik),
+                        sys.executable,
+                        str(_SCRIPT),
+                        "--db",
+                        db_path,
+                        "--slug",
+                        "mein-projekt",
+                        "--output-dir",
+                        str(tmp_path),
+                        "--methodik",
+                        str(methodik),
                     ],
                     capture_output=True,
                     text=True,
                 )
             content = methodik.read_text(encoding="utf-8")
             count = content.count("## Reproduzierbarkeit")
-            assert count == 1, (
-                f"'## Reproduzierbarkeit' erscheint {count}x — erwartet: 1x"
-            )
+            assert count == 1, f"'## Reproduzierbarkeit' erscheint {count}x — erwartet: 1x"
         finally:
             os.unlink(db_path)
 
@@ -279,11 +307,16 @@ class TestMethdikUpdate:
 
             subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "mein-projekt",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "mein-projekt",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                 ],
                 capture_output=True,
                 text=True,
@@ -298,6 +331,7 @@ class TestMethdikUpdate:
 # ---------------------------------------------------------------------------
 # Test 3: vault.lock_passport schaltet auf read-only
 # ---------------------------------------------------------------------------
+
 
 class TestLockPassport:
     """vault.lock_passport macht den Vault read-only."""
@@ -324,11 +358,16 @@ class TestLockPassport:
 
             result = subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "locked-proj",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "locked-proj",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                     "--lock",
                 ],
                 capture_output=True,
@@ -345,6 +384,7 @@ class TestLockPassport:
 # ---------------------------------------------------------------------------
 # Test 4: build_passport.py mit --lock, danach erneut aufrufen → Fehler
 # ---------------------------------------------------------------------------
+
 
 class TestLockedVaultRefusesWrites:
     """Nach Lock verweigert build_passport.py weitere Exports (Vault read-only)."""
@@ -363,11 +403,16 @@ class TestLockedVaultRefusesWrites:
             # Erst mit --lock sperren
             subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "sealed-proj",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "sealed-proj",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                     "--lock",
                 ],
                 capture_output=True,
@@ -379,11 +424,16 @@ class TestLockedVaultRefusesWrites:
             # Erneuter Aufruf ohne --lock auf gesperrtem Vault sollte Fehler geben
             result2 = subprocess.run(
                 [
-                    sys.executable, str(_SCRIPT),
-                    "--db", db_path,
-                    "--slug", "sealed-proj",
-                    "--output-dir", str(tmp_path),
-                    "--methodik", str(methodik),
+                    sys.executable,
+                    str(_SCRIPT),
+                    "--db",
+                    db_path,
+                    "--slug",
+                    "sealed-proj",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--methodik",
+                    str(methodik),
                 ],
                 capture_output=True,
                 text=True,
@@ -402,6 +452,7 @@ class TestLockedVaultRefusesWrites:
 # ---------------------------------------------------------------------------
 # Test 5: skill_sizes.json enthaelt material-passport
 # ---------------------------------------------------------------------------
+
 
 class TestSkillSizes:
     """tests/baselines/skill_sizes.json enthaelt 'material-passport'."""

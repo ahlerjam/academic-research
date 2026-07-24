@@ -11,6 +11,7 @@ kodiert die Akzeptanzkriterien:
 2. Trigger-Phrasen in der description bieten weiterhin beide Schreibweisen an
    (vorhandenes "X / Y"-Umlaut-Paar-Muster bleibt erhalten).
 """
+
 import re
 from pathlib import Path
 
@@ -33,23 +34,70 @@ AFFECTED_SKILLS = [
 # damit legitime ue/oe/ae-Sequenzen (Quelle, neue, bauen, manuell, ...) bleiben.
 FORBIDDEN_ASCII_WORDS = {
     # ue -> ü
-    "Abhaengigkeiten", "Ausfaelle", "Einschraenkungen", "Eintraege",
-    "fortfaehrst", "fuehren", "fuehrt", "Fuer", "fuer", "koennen",
-    "moechte", "moegliche", "moeglich", "Pruefe", "prueft", "Pruefung",
-    "Prueft", "ueber", "ueberprueft", "uebersprungen", "uebersprungener",
-    "uebertragen", "uebrigen", "Unterstuetzt", "Unterstuetzte",
-    "unterstuetzt", "verfuegbar", "Verfuegbarkeit", "vervollstaendigt",
-    "Buecher", "ausfuehren", "ausgefuehrt", "duerfen", "gewuenschte",
-    "Groesse", "Abkuerzungsregeln", "zurueck", "zurueckgegeben",
-    "ausgewaehlten", "Quelltext",  # Quelltext -> Quelltext bleibt, s. unten
+    "Abhaengigkeiten",
+    "Ausfaelle",
+    "Einschraenkungen",
+    "Eintraege",
+    "fortfaehrst",
+    "fuehren",
+    "fuehrt",
+    "Fuer",
+    "fuer",
+    "koennen",
+    "moechte",
+    "moegliche",
+    "moeglich",
+    "Pruefe",
+    "prueft",
+    "Pruefung",
+    "Prueft",
+    "ueber",
+    "ueberprueft",
+    "uebersprungen",
+    "uebersprungener",
+    "uebertragen",
+    "uebrigen",
+    "Unterstuetzt",
+    "Unterstuetzte",
+    "unterstuetzt",
+    "verfuegbar",
+    "Verfuegbarkeit",
+    "vervollstaendigt",
+    "Buecher",
+    "ausfuehren",
+    "ausgefuehrt",
+    "duerfen",
+    "gewuenschte",
+    "Groesse",
+    "Abkuerzungsregeln",
+    "zurueck",
+    "zurueckgegeben",
+    "ausgewaehlten",
+    "Quelltext",  # Quelltext -> Quelltext bleibt, s. unten
     # ae -> ä
-    "Fehlerfaelle", "ergaenzt", "enthaelt", "erhaelt", "Klaere",
-    "bestaetigen", "Bestaetigung", "bestaetigt", "repraesentieren",
-    "Vollstaendige", "vollstaendige", "vollstaendigen", "persoenliches",
+    "Fehlerfaelle",
+    "ergaenzt",
+    "enthaelt",
+    "erhaelt",
+    "Klaere",
+    "bestaetigen",
+    "Bestaetigung",
+    "bestaetigt",
+    "repraesentieren",
+    "Vollstaendige",
+    "vollstaendige",
+    "vollstaendigen",
+    "persoenliches",
     # oe -> ö
-    "Bloecke", "ermoeglicht", "Loeschen", "Loest", "aufloesen",
-    "zusaetzlich", "Aufloesung",
-    "Uebersicht", "Ueberblick",
+    "Bloecke",
+    "ermoeglicht",
+    "Loeschen",
+    "Loest",
+    "aufloesen",
+    "zusaetzlich",
+    "Aufloesung",
+    "Uebersicht",
+    "Ueberblick",
     "Laedt",
 }
 # "Quelltext" enthaelt KEIN Substitut (Quell+text). Wieder entfernen:

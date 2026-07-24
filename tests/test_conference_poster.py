@@ -11,13 +11,12 @@ Abdeckung:
 - vault.list_figures fuer Top-Figures Workflow beschrieben
 - Skill-Eintrag in skill_sizes.json vorhanden
 """
+
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
-
-import pytest
 
 _ROOT = Path(__file__).parent.parent
 _SKILL_DIR = _ROOT / "skills" / "conference-poster"
@@ -30,6 +29,7 @@ _PREAMBLE_PATTERN = "> **Gemeinsames Preamble laden:**"
 # ---------------------------------------------------------------------------
 # SKILL.md Struktur
 # ---------------------------------------------------------------------------
+
 
 class TestConferencePosterSkillMd:
     def test_skill_md_exists(self):
@@ -97,14 +97,13 @@ class TestConferencePosterSkillMd:
     def test_tikzposter_and_powerpoint_mentioned(self):
         text = _SKILL_MD.read_text().lower()
         assert "tikzposter" in text, "SKILL.md erwaehnt tikzposter nicht"
-        assert "powerpoint" in text or "pptx" in text, (
-            "SKILL.md erwaehnt PowerPoint-Export nicht"
-        )
+        assert "powerpoint" in text or "pptx" in text, "SKILL.md erwaehnt PowerPoint-Export nicht"
 
 
 # ---------------------------------------------------------------------------
 # tikzposter-Template Referenz
 # ---------------------------------------------------------------------------
+
 
 class TestTikzposterTemplate:
     def test_template_file_exists(self):
@@ -140,6 +139,7 @@ class TestTikzposterTemplate:
 # ---------------------------------------------------------------------------
 # skill_sizes.json Eintrag
 # ---------------------------------------------------------------------------
+
 
 class TestConferencePosterBaseline:
     def test_skill_sizes_contains_conference_poster(self):

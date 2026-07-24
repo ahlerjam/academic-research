@@ -19,8 +19,9 @@ import os
 import sys
 import time
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
@@ -65,6 +66,7 @@ def save_prisma_counters(session_dir: str, counters: dict[str, int]) -> None:
 # ---------------------------------------------------------------------------
 # Interactive Phase 1
 # ---------------------------------------------------------------------------
+
 
 def run_interactive_phase1(
     papers: list[dict[str, Any]],
@@ -130,6 +132,7 @@ log = logging.getLogger(__name__)
 # Retry helper
 # ---------------------------------------------------------------------------
 
+
 def _retry_on_429(fn: Callable, max_retries: int = 3, base_delay: float = 2.0) -> Any:
     """Call fn(), retrying on HTTP 429 with exponential backoff."""
     for attempt in range(max_retries):
@@ -138,14 +141,17 @@ def _retry_on_429(fn: Callable, max_retries: int = 3, base_delay: float = 2.0) -
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 429 or attempt == max_retries - 1:
                 raise
-            delay = base_delay * (2 ** attempt)
-            log.warning("429 rate limit — retrying in %.0fs (%d/%d)", delay, attempt + 1, max_retries)
+            delay = base_delay * (2**attempt)
+            log.warning(
+                "429 rate limit — retrying in %.0fs (%d/%d)", delay, attempt + 1, max_retries
+            )
             time.sleep(delay)
 
 
 # ---------------------------------------------------------------------------
 # Search modules
 # ---------------------------------------------------------------------------
+
 
 def search_crossref(query: str, limit: int) -> list[dict[str, Any]]:
     """Search CrossRef works endpoint."""
@@ -165,10 +171,9 @@ def search_crossref(query: str, limit: int) -> list[dict[str, Any]]:
             if full_name:
                 authors.append(full_name)
         year = None
-        date_parts = (
-            item.get("published-print", {}).get("date-parts")
-            or item.get("published-online", {}).get("date-parts")
-        )
+        date_parts = item.get("published-print", {}).get("date-parts") or item.get(
+            "published-online", {}
+        ).get("date-parts")
         if date_parts and date_parts[0]:
             year = int(date_parts[0][0])
         results.append(
@@ -248,10 +253,12 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
     if api_key := os.environ.get("SS_API_KEY"):
         headers["x-api-key"] = api_key
     with httpx.Client(timeout=TIMEOUT) as client:
+
         def _get() -> httpx.Response:
             r = client.get(url, params=params, headers=headers)
             r.raise_for_status()
             return r
+
         resp = _retry_on_429(_get)
         items = resp.json().get("data", [])
     time.sleep(0.5)
@@ -268,7 +275,9 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
                 "abstract": item.get("abstract"),
                 "venue": item.get("venue"),
                 "citations": item.get("citationCount", 0),
-                "url": f"https://www.semanticscholar.org/paper/{item.get('paperId')}" if item.get("paperId") else None,
+                "url": f"https://www.semanticscholar.org/paper/{item.get('paperId')}"
+                if item.get("paperId")
+                else None,
                 "open_access_pdf": oa_pdf.get("url"),
             },
             "semantic_scholar",
@@ -289,6 +298,7 @@ def search_base(query: str, limit: int) -> list[dict[str, Any]]:
     items = payload.get("response", {}).get("docs", []) or []
     results: list[dict[str, Any]] = []
     for item in items[:limit]:
+
         def dc(fld: str) -> str | None:
             val = item.get(fld)
             return val[0] if isinstance(val, list) and val else val
@@ -339,7 +349,9 @@ def search_econbiz(query: str, limit: int) -> list[dict[str, Any]]:
                     "doi": item.get("doi"),
                     "title": item.get("title"),
                     "authors": item.get("authors") or [],
-                    "year": int(item["year"]) if item.get("year") and str(item.get("year")).isdigit() else None,
+                    "year": int(item["year"])
+                    if item.get("year") and str(item.get("year")).isdigit()
+                    else None,
                     "abstract": item.get("abstract"),
                     "venue": item.get("source") or item.get("venue"),
                     "citations": item.get("citationCount", 0),
@@ -359,7 +371,9 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
             "https://www.econstor.eu/rest/items/find-by-metadata-field",
             params={"value": query, "key": "dc.title", "limit": limit},
         )
-        if rest_resp.status_code == 200 and rest_resp.headers.get("content-type", "").startswith("application/json"):
+        if rest_resp.status_code == 200 and rest_resp.headers.get("content-type", "").startswith(
+            "application/json"
+        ):
             items = rest_resp.json()
         else:
             # Fallback: OAI-PMH harvest with client-side keyword filtering.
@@ -415,10 +429,21 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
                     item_url = None
                     for id_el in dc_el.findall(f"{{{OAI_DC_NS}}}identifier"):
                         if id_el.text and "doi.org" in id_el.text:
-                            doi = id_el.text.replace("https://doi.org/", "").replace("http://doi.org/", "")
+                            doi = id_el.text.replace("https://doi.org/", "").replace(
+                                "http://doi.org/", ""
+                            )
                         elif id_el.text and id_el.text.startswith("http"):
                             item_url = id_el.text
-                    items.append({"title": title, "authors": creators, "year": year, "abstract": desc, "doi": doi, "url": item_url})
+                    items.append(
+                        {
+                            "title": title,
+                            "authors": creators,
+                            "year": year,
+                            "abstract": desc,
+                            "doi": doi,
+                            "url": item_url,
+                        }
+                    )
                     if len(items) >= limit:
                         page_done = True
                         break
@@ -474,8 +499,7 @@ def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
         title = (entry.findtext(f"{{{ARXIV_NS}}}title") or "").strip().replace("\n", " ")
         abstract = (entry.findtext(f"{{{ARXIV_NS}}}summary") or "").strip()
         authors = [
-            a.findtext(f"{{{ARXIV_NS}}}name") or ""
-            for a in entry.findall(f"{{{ARXIV_NS}}}author")
+            a.findtext(f"{{{ARXIV_NS}}}name") or "" for a in entry.findall(f"{{{ARXIV_NS}}}author")
         ]
         published = entry.findtext(f"{{{ARXIV_NS}}}published") or ""
         year = int(published[:4]) if len(published) >= 4 else None
@@ -525,6 +549,7 @@ MODULES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
 # Parallel execution
 # ---------------------------------------------------------------------------
 
+
 def _run_module(module_name: str, query: str, limit: int) -> tuple[str, list[dict[str, Any]], bool]:
     """Run one search module, return (name, papers, failed)."""
     max_attempts = 3 if module_name == "semantic_scholar" else 1
@@ -533,7 +558,7 @@ def _run_module(module_name: str, query: str, limit: int) -> tuple[str, list[dic
             return module_name, MODULES[module_name](query, limit), False
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < max_attempts - 1:
-                delay = 2 ** attempt * 2
+                delay = 2**attempt * 2
                 log.warning("Module '%s' rate-limited, retry in %ds", module_name, delay)
                 time.sleep(delay)
                 continue
@@ -581,6 +606,7 @@ def run_search(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Search multiple academic APIs")
     parser.add_argument("--query", required=True)
@@ -603,7 +629,7 @@ def main() -> int:
     queries_map = None
     if args.queries_file:
         try:
-            with open(args.queries_file, "r", encoding="utf-8") as fh:
+            with open(args.queries_file, encoding="utf-8") as fh:
                 queries_map = json.load(fh)
         except Exception:
             log.exception("Failed to load queries file")

@@ -1,6 +1,8 @@
 """Pytest-Fixtures für notebook-bundle Tests."""
+
 import io
 import json
+
 import pytest
 from pypdf import PdfWriter
 

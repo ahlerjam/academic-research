@@ -17,8 +17,9 @@ Zwei Test-Ebenen:
   ``tools/list``-Antwort des frisch gebauten FastMCP-Servers, sofern das
   ``mcp``-SDK installiert ist (sonst ``skip``).
 """
-import asyncio
+
 import ast
+import asyncio
 import importlib
 import inspect
 import sys

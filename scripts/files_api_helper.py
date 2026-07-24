@@ -16,9 +16,8 @@ Feature-Flag:
 import hashlib
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Union
 
 # Beta-Header fuer die Anthropic Files-API (beta seit 2025-04-14)
 _FILES_API_BETA_HEADER = "files-api-2025-04-14"
@@ -79,18 +78,18 @@ def _is_expired(uploaded_at_iso: str, ttl_days: int) -> bool:
         uploaded_at = datetime.fromisoformat(uploaded_at_iso)
         # Timezone-naive Timestamps als UTC behandeln
         if uploaded_at.tzinfo is None:
-            uploaded_at = uploaded_at.replace(tzinfo=timezone.utc)
+            uploaded_at = uploaded_at.replace(tzinfo=UTC)
         expiry = uploaded_at + timedelta(days=ttl_days)
-        return datetime.now(timezone.utc) > expiry
+        return datetime.now(UTC) > expiry
     except (ValueError, TypeError):
         # Unbekanntes Format -> als abgelaufen behandeln
         return True
 
 
 def ensure_uploaded(
-    pdf_path: Union[str, Path],
+    pdf_path: str | Path,
     client,
-    cache_file: Union[str, Path] = _DEFAULT_CACHE_FILE,
+    cache_file: str | Path = _DEFAULT_CACHE_FILE,
     ttl_days: int = 30,
 ) -> "str | None":
     """
@@ -134,7 +133,7 @@ def ensure_uploaded(
     # Cache aktualisieren
     cache[sha] = {
         "file_id": file_id,
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": datetime.now(UTC).isoformat(),
     }
     _save_cache(cache_file, cache)
 

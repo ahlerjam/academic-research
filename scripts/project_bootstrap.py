@@ -5,6 +5,7 @@ should be initialized as a facharbeit workspace, and if so, lays down the
 minimal project structure and optionally migrates existing memory-based
 context into project-local files.
 """
+
 from __future__ import annotations
 
 import shutil

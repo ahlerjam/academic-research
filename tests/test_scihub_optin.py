@@ -11,12 +11,10 @@ Tests fuer SciHub-Tier Opt-in (Chunk D, v6.5 #97).
 
 import json
 import os
-import sqlite3
 import sys
 import tempfile
 from pathlib import Path
 
-import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,6 +29,7 @@ README = REPO_ROOT / "README.md"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _read_active_template() -> dict:
     with open(ACTIVE_YAML_TEMPLATE) as f:
@@ -73,6 +72,7 @@ def _format_source_line(entry: dict) -> str:
 # Test 1: Default-Template hat scihub_optin: false
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultOptinFalse:
     def test_active_yaml_template_exists(self):
         assert ACTIVE_YAML_TEMPLATE.exists(), (
@@ -90,6 +90,7 @@ class TestDefaultOptinFalse:
 # ---------------------------------------------------------------------------
 # Test 2: Opt-in setzt Flag auf true (Parsing-Logik)
 # ---------------------------------------------------------------------------
+
 
 class TestOptinParsing:
     def test_optin_true_recognized(self, tmp_path):
@@ -121,6 +122,7 @@ class TestOptinParsing:
 # Test 3: Dispatch-Logik — alle Tiers fail + opt-in = true → scihub aufgerufen
 # ---------------------------------------------------------------------------
 
+
 class TestDispatchLogic:
     def test_scihub_dispatched_when_tiers_fail_and_optin(self):
         result = _simulate_scihub_dispatch(scihub_optin=True, tiers_all_fail=True)
@@ -132,7 +134,9 @@ class TestDispatchLogic:
 
     def test_scihub_not_dispatched_when_tiers_succeed(self):
         result = _simulate_scihub_dispatch(scihub_optin=True, tiers_all_fail=False)
-        assert result is False, "scihub-fetcher soll nicht aufgerufen werden wenn Tiers Erfolg haben"
+        assert result is False, (
+            "scihub-fetcher soll nicht aufgerufen werden wenn Tiers Erfolg haben"
+        )
 
     def test_scihub_not_dispatched_when_both_false(self):
         result = _simulate_scihub_dispatch(scihub_optin=False, tiers_all_fail=False)
@@ -142,6 +146,7 @@ class TestDispatchLogic:
 # ---------------------------------------------------------------------------
 # Test 4: Vault-Entry hat provenance=scihub Tag
 # ---------------------------------------------------------------------------
+
 
 class TestVaultProvenance:
     def test_vault_entry_has_scihub_tag(self):
@@ -163,6 +168,7 @@ class TestVaultProvenance:
 # ---------------------------------------------------------------------------
 # Test 4b: DB-Persistenz des provenance-Tags (Issue #195)
 # ---------------------------------------------------------------------------
+
 
 class TestVaultProvenancePersistence:
     """Persistenz-Check: provenance:scihub muss im DB-Schema gespeichert werden."""
@@ -210,6 +216,7 @@ class TestVaultProvenancePersistence:
 # Test 5: Output-Disclaimer erscheint bei provenance=scihub
 # ---------------------------------------------------------------------------
 
+
 class TestOutputDisclaimer:
     def test_disclaimer_shown_for_scihub_provenance(self):
         entry = _build_vault_entry(provenance="scihub")
@@ -232,6 +239,7 @@ class TestOutputDisclaimer:
 # Artefakt-Existenz-Tests (Sanity)
 # ---------------------------------------------------------------------------
 
+
 class TestArtifactExistence:
     def test_scihub_agent_exists(self):
         assert SCIHUB_AGENT.exists(), f"Agent nicht gefunden: {SCIHUB_AGENT}"
@@ -245,6 +253,6 @@ class TestArtifactExistence:
     def test_readme_has_ethics_disclaimer(self):
         content = README.read_text(encoding="utf-8")
         assert "SciHub" in content, "README muss SciHub-Ethik-Disclaimer enthalten"
-        assert "rechtlich" in content.lower() or "Rechtlich" in content or "legal" in content.lower(), (
-            "README-Disclaimer muss auf rechtliche Situation hinweisen"
-        )
+        assert (
+            "rechtlich" in content.lower() or "Rechtlich" in content or "legal" in content.lower()
+        ), "README-Disclaimer muss auf rechtliche Situation hinweisen"

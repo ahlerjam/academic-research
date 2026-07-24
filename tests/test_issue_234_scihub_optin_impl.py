@@ -12,12 +12,12 @@ Tests pruefen das *reale* Verhalten:
 4. setup.sh ruft den Opt-in-Helper auf (setup.md und setup.sh stimmen ueberein)
    und die Kommentar-Nummerierung springt nicht mehr 5 -> 7 ohne 6.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -31,6 +31,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 # ---------------------------------------------------------------------------
 # 1. Helper existiert und ist importierbar
 # ---------------------------------------------------------------------------
+
 
 def test_scihub_optin_script_exists():
     assert OPTIN_SCRIPT.exists(), (
@@ -49,6 +50,7 @@ def test_scihub_optin_importable():
 # ---------------------------------------------------------------------------
 # 2. set_optin schreibt das Flag korrekt
 # ---------------------------------------------------------------------------
+
 
 def test_set_optin_creates_file_with_false_default(tmp_path):
     import scihub_optin
@@ -111,6 +113,7 @@ def test_set_optin_overwrites_existing_value(tmp_path):
 # 3. Prompt-Default ist sicher (False) bei nicht-interaktivem stdin
 # ---------------------------------------------------------------------------
 
+
 def test_prompt_optin_defaults_false_non_interactive(monkeypatch):
     import scihub_optin
 
@@ -126,6 +129,7 @@ def test_prompt_optin_defaults_false_non_interactive(monkeypatch):
 # ---------------------------------------------------------------------------
 # 4. setup.sh stimmt mit setup.md ueberein
 # ---------------------------------------------------------------------------
+
 
 def test_setup_sh_invokes_scihub_optin():
     content = SETUP_SH.read_text(encoding="utf-8")

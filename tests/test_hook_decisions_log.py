@@ -5,11 +5,11 @@ Bei Write-Events mit *.md im Projekt-Verzeichnis schreibt er eine Zeile in decis
 Format: ISO-Timestamp + Skill/Tool-Name + Δ-Summary
 Exit 0 immer (fail-open, kein Block).
 """
+
 import json
 import os
 import subprocess
 from pathlib import Path
-import pytest
 
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "post-tool-use-decisions.mjs"
 WORKTREE_ROOT = Path(__file__).parent.parent
@@ -124,9 +124,12 @@ def test_hook_log_line_format(tmp_path):
     # Log-Zeile soll ISO-Timestamp enthalten (Format: YYYY-MM-DD)
     first_line = lines[0]
     import re
-    assert re.search(r'\d{4}-\d{2}-\d{2}', first_line), f"Kein Timestamp in: {first_line}"
+
+    assert re.search(r"\d{4}-\d{2}-\d{2}", first_line), f"Kein Timestamp in: {first_line}"
     # Und den Dateinamen
-    assert "kap1.md" in first_line or "Write" in first_line, f"Dateiname/Tool fehlt in: {first_line}"
+    assert "kap1.md" in first_line or "Write" in first_line, (
+        f"Dateiname/Tool fehlt in: {first_line}"
+    )
 
 
 def test_hook_appends_multiple_writes(tmp_path):

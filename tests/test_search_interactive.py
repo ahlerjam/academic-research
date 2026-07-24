@@ -1,10 +1,10 @@
 """Tests for Two-Phase Research Mode / Human-in-the-Loop (#105):
-  - scripts/search.py exposes PRISMA counters
-  - search.py --interactive flag handling via run_interactive_phase1()
-  - Phase 1 returns preview dict with top papers + approval_options
-  - --interactive=off behaves like today (no gate)
-  - commands/search.md documents --interactive flag
-  - skills/chapter-writer/SKILL.md documents Approval-Gate
+- scripts/search.py exposes PRISMA counters
+- search.py --interactive flag handling via run_interactive_phase1()
+- Phase 1 returns preview dict with top papers + approval_options
+- --interactive=off behaves like today (no gate)
+- commands/search.md documents --interactive flag
+- skills/chapter-writer/SKILL.md documents Approval-Gate
 """
 
 import sys
@@ -18,17 +18,25 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 # PRISMA counter tracking in search.py
 # ---------------------------------------------------------------------------
 
+
 def test_search_has_prisma_counter_keys():
     """search.py must expose PRISMA_COUNTER_KEYS list."""
     from search import PRISMA_COUNTER_KEYS
-    required = {"n_identified", "n_after_dedup", "n_excluded_screening",
-                "n_excluded_eligibility", "n_included"}
+
+    required = {
+        "n_identified",
+        "n_after_dedup",
+        "n_excluded_screening",
+        "n_excluded_eligibility",
+        "n_included",
+    }
     assert required.issubset(set(PRISMA_COUNTER_KEYS))
 
 
 def test_build_prisma_counters_basic():
     """build_prisma_counters() returns dict with all required keys and correct values."""
     from search import build_prisma_counters
+
     counters = build_prisma_counters(
         n_identified=100,
         n_after_dedup=60,
@@ -46,23 +54,34 @@ def test_build_prisma_counters_basic():
 def test_build_prisma_counters_defaults_zero():
     """build_prisma_counters() defaults missing values to 0."""
     from search import build_prisma_counters
+
     counters = build_prisma_counters()
-    for key in ("n_identified", "n_after_dedup", "n_excluded_screening",
-                "n_excluded_eligibility", "n_included"):
+    for key in (
+        "n_identified",
+        "n_after_dedup",
+        "n_excluded_screening",
+        "n_excluded_eligibility",
+        "n_included",
+    ):
         assert counters[key] == 0
 
 
 def test_save_prisma_counters(tmp_path):
     """save_prisma_counters() writes counters.json to session_dir."""
     from search import build_prisma_counters, save_prisma_counters
+
     counters = build_prisma_counters(
-        n_identified=100, n_after_dedup=60,
-        n_excluded_screening=30, n_excluded_eligibility=12, n_included=8,
+        n_identified=100,
+        n_after_dedup=60,
+        n_excluded_screening=30,
+        n_excluded_eligibility=12,
+        n_included=8,
     )
     save_prisma_counters(str(tmp_path), counters)
     counters_file = tmp_path / "prisma_counters.json"
     assert counters_file.exists()
     import json
+
     loaded = json.loads(counters_file.read_text())
     assert loaded["n_identified"] == 100
     assert loaded["n_included"] == 8
@@ -72,9 +91,11 @@ def test_save_prisma_counters(tmp_path):
 # Interactive Phase 1
 # ---------------------------------------------------------------------------
 
+
 def test_search_has_run_interactive_phase1():
     """search.py must expose run_interactive_phase1()."""
     from search import run_interactive_phase1
+
     assert callable(run_interactive_phase1)
 
 
@@ -128,6 +149,7 @@ def test_run_interactive_phase1_top_papers_ordered():
 def test_run_interactive_phase1_no_papers():
     """Phase 1 handles empty paper list gracefully."""
     from search import run_interactive_phase1
+
     result = run_interactive_phase1(papers=[], query="test")
     assert "top_papers" in result
     assert result["top_papers"] == []
@@ -136,6 +158,7 @@ def test_run_interactive_phase1_no_papers():
 # ---------------------------------------------------------------------------
 # commands/search.md documentation
 # ---------------------------------------------------------------------------
+
 
 def test_search_md_has_interactive_flag():
     """commands/search.md must document --interactive flag."""
@@ -148,13 +171,15 @@ def test_search_md_interactive_off_documented():
     """commands/search.md must mention --interactive=off default."""
     search_md = REPO_ROOT / "commands" / "search.md"
     content = search_md.read_text(encoding="utf-8")
-    assert "--interactive=off" in content or "interactive=off" in content.lower(), \
+    assert "--interactive=off" in content or "interactive=off" in content.lower(), (
         "commands/search.md must document --interactive=off as default"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Regression #227: relevance-scorer darf nur einmal pro Suchlauf aufgerufen werden
 # ---------------------------------------------------------------------------
+
 
 def test_search_md_relevance_scorer_invoked_once():
     """commands/search.md darf den relevance-scorer-Agent nur EINMAL als
@@ -182,13 +207,12 @@ def test_search_md_no_duplicate_step_numbers():
     Schritte lückenlos und eindeutig nummeriert sein.
     """
     import re
+
     search_md = REPO_ROOT / "commands" / "search.md"
     content = search_md.read_text(encoding="utf-8")
     numbers = [int(m) for m in re.findall(r"^### Schritt (\d+):", content, re.MULTILINE)]
     assert numbers, "Keine '### Schritt N:'-Überschriften gefunden"
-    assert len(numbers) == len(set(numbers)), (
-        f"Doppelte Schritt-Nummern gefunden: {numbers}"
-    )
+    assert len(numbers) == len(set(numbers)), f"Doppelte Schritt-Nummern gefunden: {numbers}"
     # Lückenlos von 1 aufsteigend
     assert numbers == list(range(1, len(numbers) + 1)), (
         f"Schritt-Nummern nicht lückenlos aufsteigend: {numbers}"
@@ -199,17 +223,20 @@ def test_search_md_no_duplicate_step_numbers():
 # chapter-writer SKILL.md approval gate
 # ---------------------------------------------------------------------------
 
+
 def test_chapter_writer_has_approval_gate():
     """skills/chapter-writer/SKILL.md must reference Approval-Gate."""
     skill_md = REPO_ROOT / "skills" / "chapter-writer" / "SKILL.md"
     content = skill_md.read_text(encoding="utf-8")
-    assert "Approval" in content or "approval" in content, \
+    assert "Approval" in content or "approval" in content, (
         "chapter-writer/SKILL.md missing Approval-Gate documentation"
+    )
 
 
 def test_chapter_writer_has_interactive_section():
     """skills/chapter-writer/SKILL.md must mention --interactive or interactive mode."""
     skill_md = REPO_ROOT / "skills" / "chapter-writer" / "SKILL.md"
     content = skill_md.read_text(encoding="utf-8")
-    assert "interactive" in content.lower(), \
+    assert "interactive" in content.lower(), (
         "chapter-writer/SKILL.md missing interactive mode documentation"
+    )

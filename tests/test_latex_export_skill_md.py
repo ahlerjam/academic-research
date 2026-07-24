@@ -33,6 +33,7 @@ class TestSkriptPfade:
         """Kein bare 'skills/latex-export/scripts/' ohne ${CLAUDE_PLUGIN_ROOT}."""
         # Wenn 'skills/latex-export/scripts/' vorkommt ohne vorangehendes ${CLAUDE_PLUGIN_ROOT}
         import re
+
         bare_relative = re.search(
             r"(?<!\$\{CLAUDE_PLUGIN_ROOT\}/)skills/latex-export/scripts/",
             skill_text,
@@ -57,10 +58,7 @@ class TestAbgrenzungCitationExtraction:
         """SKILL.md muss einen Abgrenzungshinweis zu citation-extraction enthalten."""
         lower = skill_text.lower()
         has_abgrenzung = (
-            "abgrenzung" in lower
-            or "nicht triggern" in lower
-            or "vs." in lower
-            or "statt" in lower
+            "abgrenzung" in lower or "nicht triggern" in lower or "vs." in lower or "statt" in lower
         ) and "citation-extraction" in skill_text
         assert has_abgrenzung, (
             "SKILL.md: Kein Abgrenzungshinweis zu citation-extraction gefunden. "
@@ -79,7 +77,9 @@ class TestFehlerpfade:
             or "pandoc fehlt" in lower
             or "pandoc nicht" in lower
             or "pandoc-not-found" in lower
-            or ("pandoc" in lower and ("fallback" in lower or "fehler" in lower or "error" in lower))
+            or (
+                "pandoc" in lower and ("fallback" in lower or "fehler" in lower or "error" in lower)
+            )
         )
         assert has_pandoc_error, (
             "SKILL.md: Kein Pandoc-not-found-Fehlerpfad dokumentiert. "
@@ -111,7 +111,10 @@ class TestFehlerpfade:
             or "template fehlt" in lower
             or "template nicht" in lower
             or "vorlage nicht" in lower
-            or ("template" in lower and ("fehlt" in lower or "nicht" in lower or "missing" in lower or "error" in lower))
+            or (
+                "template" in lower
+                and ("fehlt" in lower or "nicht" in lower or "missing" in lower or "error" in lower)
+            )
         )
         assert has_template_error, (
             "SKILL.md: Kein Template-not-found-Fehlerpfad dokumentiert. "

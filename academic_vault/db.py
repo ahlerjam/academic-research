@@ -2,15 +2,15 @@
 
 Context-Manager-Klasse mit sqlite-vec-Fallback und FTS5-Volltext-Suche.
 """
+
 import contextlib
 import json
 import os
 import sqlite3
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Optional
 from uuid import uuid4
-
 
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
@@ -36,7 +36,7 @@ def escape_like(value: str) -> str:
     )
 
 
-def project_slug(cwd: Optional[str] = None) -> str:
+def project_slug(cwd: str | None = None) -> str:
     """Kanonischer Projekt-Slug fuer den DB-Pfad: basename(CWD).
 
     Eine einzige Quelle der Wahrheit (Issue #190). Hooks und MCP-Server
@@ -62,13 +62,7 @@ def default_db_path() -> str:
     env = os.environ.get("VAULT_DB_PATH")
     if env:
         return env
-    return str(
-        Path.home()
-        / ".academic-research"
-        / "projects"
-        / project_slug()
-        / "vault.db"
-    )
+    return str(Path.home() / ".academic-research" / "projects" / project_slug() / "vault.db")
 
 
 class VaultDB:
@@ -77,7 +71,7 @@ class VaultDB:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         self.vec_available: bool = False
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
 
     # ------------------------------------------------------------------
     # Context-Manager
@@ -142,7 +136,7 @@ class VaultDB:
             if own_conn:
                 conn.close()
 
-    def load_vec_extension(self, conn: Optional[sqlite3.Connection] = None) -> bool:
+    def load_vec_extension(self, conn: sqlite3.Connection | None = None) -> bool:
         """Versucht sqlite_vec Extension zu laden. Gibt True bei Erfolg zurueck.
 
         Python-Builds ohne ``--enable-loadable-sqlite-extensions`` (z.B. das
@@ -207,17 +201,17 @@ class VaultDB:
         self,
         paper_id: str,
         csl_json: str,
-        doi: Optional[str] = None,
-        isbn: Optional[str] = None,
-        pdf_path: Optional[str] = None,
+        doi: str | None = None,
+        isbn: str | None = None,
+        pdf_path: str | None = None,
         page_offset: int = 0,
-        editor: Optional[str] = None,
-        chapter: Optional[str] = None,
-        page_first: Optional[int] = None,
-        page_last: Optional[int] = None,
-        container_title: Optional[str] = None,
-        parent_paper_id: Optional[str] = None,
-        provenance: Optional[str] = None,
+        editor: str | None = None,
+        chapter: str | None = None,
+        page_first: int | None = None,
+        page_last: int | None = None,
+        container_title: str | None = None,
+        parent_paper_id: str | None = None,
+        provenance: str | None = None,
     ) -> None:
         """Upsert eines Papers in die papers-Tabelle.
 
@@ -233,9 +227,7 @@ class VaultDB:
         try:
             csl = json.loads(csl_json)
         except (json.JSONDecodeError, TypeError) as exc:
-            raise ValueError(
-                f"csl_json ist kein valides JSON: {exc}"
-            ) from exc
+            raise ValueError(f"csl_json ist kein valides JSON: {exc}") from exc
         if not isinstance(csl, dict):
             raise ValueError("csl_json muss ein JSON-Objekt sein.")
         paper_type = csl.get("type", "article-journal")
@@ -272,26 +264,34 @@ class VaultDB:
                   updated_at      = excluded.updated_at
                 """,
                 (
-                    paper_id, paper_type, csl_json, doi, isbn, pdf_path, page_offset,
-                    editor, chapter, page_first, page_last, container_title,
-                    parent_paper_id, provenance,
-                    now, now,
+                    paper_id,
+                    paper_type,
+                    csl_json,
+                    doi,
+                    isbn,
+                    pdf_path,
+                    page_offset,
+                    editor,
+                    chapter,
+                    page_first,
+                    page_last,
+                    container_title,
+                    parent_paper_id,
+                    provenance,
+                    now,
+                    now,
                 ),
             )
 
-    def get_paper(self, paper_id: str) -> Optional[dict]:
+    def get_paper(self, paper_id: str) -> dict | None:
         """Gibt Paper-Record als dict zurueck oder None."""
         with self._connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM papers WHERE paper_id = ?", (paper_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM papers WHERE paper_id = ?", (paper_id,)).fetchone()
         if row is None:
             return None
         return dict(row)
 
-    def set_file_id(
-        self, paper_id: str, file_id: str, expires_at: int
-    ) -> None:
+    def set_file_id(self, paper_id: str, file_id: str, expires_at: int) -> None:
         """Setzt file_id und file_id_expires_at fuer ein Paper."""
         with self._connection(commit=True) as conn:
             conn.execute(
@@ -341,12 +341,12 @@ class VaultDB:
         paper_id: str,
         verbatim: str,
         extraction_method: str,
-        api_response_id: Optional[str] = None,
-        pdf_page: Optional[int] = None,
-        printed_page: Optional[int] = None,
-        section: Optional[str] = None,
-        context_before: Optional[str] = None,
-        context_after: Optional[str] = None,
+        api_response_id: str | None = None,
+        pdf_page: int | None = None,
+        printed_page: int | None = None,
+        section: str | None = None,
+        context_before: str | None = None,
+        context_after: str | None = None,
     ) -> None:
         """INSERT eines Quotes in die quotes-Tabelle."""
         now = int(time.time())
@@ -360,18 +360,24 @@ class VaultDB:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    quote_id, paper_id, verbatim, pdf_page, printed_page,
-                    section, context_before, context_after,
-                    extraction_method, api_response_id, now,
+                    quote_id,
+                    paper_id,
+                    verbatim,
+                    pdf_page,
+                    printed_page,
+                    section,
+                    context_before,
+                    context_after,
+                    extraction_method,
+                    api_response_id,
+                    now,
                 ),
             )
 
-    def get_quote(self, quote_id: str) -> Optional[dict]:
+    def get_quote(self, quote_id: str) -> dict | None:
         """Gibt Quote-Record als dict zurueck oder None."""
         with self._connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM quotes WHERE quote_id = ?", (quote_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM quotes WHERE quote_id = ?", (quote_id,)).fetchone()
         return dict(row) if row is not None else None
 
     def search_quote_text(self, verbatim: str, k: int = 5) -> list[dict]:
@@ -387,7 +393,7 @@ class VaultDB:
     def find_quotes(
         self,
         paper_id: str,
-        query: Optional[str] = None,
+        query: str | None = None,
         k: int = 10,
     ) -> list[dict]:
         """Suche Quotes fuer ein Paper, optional per verbatim-LIKE-Filter."""
@@ -428,10 +434,10 @@ class VaultDB:
     def add_figure(
         self,
         paper_id: str,
-        page: Optional[int],
-        caption: Optional[str],
-        vlm_description: Optional[str],
-        data_extracted_json: Optional[str],
+        page: int | None,
+        caption: str | None,
+        vlm_description: str | None,
+        data_extracted_json: str | None,
     ) -> str:
         """INSERT einer Figure. Gibt figure_id (UUID) zurueck."""
         figure_id = str(uuid4())
@@ -447,12 +453,10 @@ class VaultDB:
             )
         return figure_id
 
-    def get_figure(self, figure_id: str) -> Optional[dict]:
+    def get_figure(self, figure_id: str) -> dict | None:
         """Gibt Figure-Record als dict zurueck oder None."""
         with self._connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM figures WHERE figure_id = ?", (figure_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM figures WHERE figure_id = ?", (figure_id,)).fetchone()
         return dict(row) if row is not None else None
 
     def list_figures(self, paper_id: str) -> list[dict]:
@@ -467,7 +471,7 @@ class VaultDB:
     def find_figures_by_caption(
         self,
         caption_fragment: str,
-        paper_id: Optional[str] = None,
+        paper_id: str | None = None,
     ) -> list[dict]:
         """LIKE-Suche in figures.caption. Optionaler paper_id-Filter."""
         with self._connection() as conn:
@@ -489,9 +493,9 @@ class VaultDB:
 
     def add_decision(
         self,
-        category: Optional[str],
+        category: str | None,
         text: str,
-        rationale: Optional[str] = None,
+        rationale: str | None = None,
     ) -> str:
         """INSERT einer Decision. Gibt decision_id (UUID) zurueck."""
         decision_id = str(uuid4())
@@ -516,7 +520,7 @@ class VaultDB:
 
     def list_decisions(
         self,
-        category: Optional[str] = None,
+        category: str | None = None,
         active_only: bool = True,
     ) -> list[dict]:
         """Gibt Decisions zurueck, optional nach Kategorie und/oder active gefiltert."""
@@ -539,7 +543,7 @@ class VaultDB:
     # Excluded Sources (v6.4)
     # ------------------------------------------------------------------
 
-    def add_excluded_source(self, paper_id: str, reason: Optional[str] = None) -> None:
+    def add_excluded_source(self, paper_id: str, reason: str | None = None) -> None:
         """INSERT or REPLACE eines excluded_source-Eintrags."""
         now = int(time.time())
         with self._connection(commit=True) as conn:
@@ -593,7 +597,7 @@ class VaultDB:
 
     def list_risk_of_bias(
         self,
-        paper_id: Optional[str] = None,
+        paper_id: str | None = None,
     ) -> list[dict]:
         """Gibt RoB-Assessments zurueck, optional nach paper_id gefiltert."""
         with self._connection() as conn:
@@ -634,7 +638,7 @@ class VaultDB:
     def get_score_history(
         self,
         paper_id: str,
-        k: Optional[int] = None,
+        k: int | None = None,
     ) -> list[dict]:
         """Gibt Score-History fuer ein Paper zurueck, nach ts DESC sortiert."""
         with self._connection() as conn:
@@ -664,7 +668,7 @@ class VaultDB:
         chunk_text: str,
         context_sentence: str,
         embedding_text: str,
-        embedding_vector: Optional[bytes],
+        embedding_vector: bytes | None,
     ) -> str:
         """INSERT eines Chunk-Embeddings. Gibt chunk_id (UUID) zurueck.
 
@@ -685,8 +689,15 @@ class VaultDB:
                    embedding_vector, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (chunk_id, paper_id, chunk_text, context_sentence, embedding_text,
-                 embedding_vector, now),
+                (
+                    chunk_id,
+                    paper_id,
+                    chunk_text,
+                    context_sentence,
+                    embedding_text,
+                    embedding_vector,
+                    now,
+                ),
             )
         return chunk_id
 

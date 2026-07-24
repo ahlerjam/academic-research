@@ -44,9 +44,7 @@ gespeichert:
 import json, pathlib
 
 session_dir = "$SESSION_DIR"  # aus /search Session
-counters = json.loads(
-    pathlib.Path(f"{session_dir}/prisma_counters.json").read_text()
-)
+counters = json.loads(pathlib.Path(f"{session_dir}/prisma_counters.json").read_text())
 ```
 
 Alternativ: Wenn kein `prisma_counters.json` vorhanden, den User um die
@@ -69,8 +67,10 @@ Oder per Python-API:
 
 ```python
 import sys
+
 sys.path.insert(0, "${CLAUDE_PLUGIN_ROOT}/skills/prisma-flow/scripts")
 from render_flow import render_prisma_flow
+
 mermaid = render_prisma_flow(counters, output_path="kapitel/methodik.md")
 ```
 

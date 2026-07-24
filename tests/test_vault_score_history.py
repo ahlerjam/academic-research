@@ -2,20 +2,19 @@
 
 TDD-First: Tests definieren das erwuenschte Verhalten.
 """
+
 import os
-import sys
 import sqlite3
+import sys
 import tempfile
 from pathlib import Path
-
-import pytest
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
 if str(_WORKTREE_ROOT) not in sys.path:
     sys.path.insert(0, str(_WORKTREE_ROOT))
 
-from academic_vault.db import VaultDB
 from academic_vault import server as vault_server
+from academic_vault.db import VaultDB
 
 
 def make_temp_db() -> tuple[str, VaultDB]:
@@ -35,6 +34,7 @@ def _seed_paper(db_path: str, paper_id: str = "p1") -> None:
 # Schema-Tests
 # ---------------------------------------------------------------------------
 
+
 def test_score_history_table_exists():
     """Nach init_schema() muss score_history-Tabelle vorhanden sein."""
     db_path, db = make_temp_db()
@@ -42,9 +42,7 @@ def test_score_history_table_exists():
         conn = sqlite3.connect(db_path)
         names = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "score_history" in names
@@ -57,12 +55,7 @@ def test_score_history_columns():
     db_path, db = make_temp_db()
     try:
         conn = sqlite3.connect(db_path)
-        cols = {
-            row[1]
-            for row in conn.execute(
-                "PRAGMA table_info(score_history)"
-            ).fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(score_history)").fetchall()}
         conn.close()
         assert "paper_id" in cols
         assert "session_id" in cols
@@ -75,6 +68,7 @@ def test_score_history_columns():
 # ---------------------------------------------------------------------------
 # add_score_snapshot
 # ---------------------------------------------------------------------------
+
 
 def test_add_score_snapshot_returns_snapshot_id():
     """add_score_snapshot gibt non-empty snapshot_id zurueck."""
@@ -113,6 +107,7 @@ def test_add_score_snapshot_persists_all_fields():
         assert h["session_id"] == "sess-abc"
         assert h["ts"] > 0
         import json
+
         stored_scores = json.loads(h["scores_json"])
         assert stored_scores == scores
     finally:
@@ -135,9 +130,9 @@ def test_add_score_snapshot_accepts_dict_or_json():
 # get_score_history
 # ---------------------------------------------------------------------------
 
+
 def test_get_score_history_returns_most_recent_first():
     """get_score_history gibt Snapshots nach ts DESC sortiert zurueck."""
-    import time
     db_path, db = make_temp_db()
     try:
         _seed_paper(db_path)

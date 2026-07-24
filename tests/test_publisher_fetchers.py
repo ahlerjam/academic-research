@@ -2,6 +2,7 @@
 Frontmatter-Validierung und Output-Schema-Check fuer Publisher-Fetcher-Agents.
 Keine Live-Browser-Calls. Prueft nur Struktur der Agent-Dateien.
 """
+
 import re
 from pathlib import Path
 
@@ -120,9 +121,7 @@ def test_body_documents_auth_method(agent_name):
     _, body = _parse_agent_frontmatter(agent_name)
     auth_methods = ["HAN", "Shibboleth", "EZproxy", "DFN-AAI", "oa-only"]
     found = any(method in body for method in auth_methods)
-    assert found, (
-        f"{agent_name}: Body nennt keine Auth-Methode. Erwartet eines von: {auth_methods}"
-    )
+    assert found, f"{agent_name}: Body nennt keine Auth-Methode. Erwartet eines von: {auth_methods}"
 
 
 @pytest.mark.parametrize("agent_name", AGENTS)
@@ -173,6 +172,7 @@ def test_eval_cases_file_exists():
 def test_eval_cases_structure():
     """evals.json muss valide Struktur haben."""
     import json
+
     if not EVALS_PATH.exists():
         pytest.skip("evals.json noch nicht vorhanden")
     data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))

@@ -60,7 +60,7 @@ def normalize_doi(doi: str | None) -> str | None:
     value = doi.strip().lower()
     for prefix in ("https://doi.org/", "http://doi.org/"):
         if value.startswith(prefix):
-            value = value[len(prefix):]
+            value = value[len(prefix) :]
     return value or None
 
 
@@ -78,7 +78,7 @@ def safe_filename(text: str, max_length: int = 80) -> str:
 
 def load_json(path: str | Path) -> Any:
     """Load JSON from file."""
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         return json.load(fh)
 
 
@@ -92,5 +92,5 @@ def load_yaml(path: str | Path) -> Any:
     """Load YAML from file."""
     import yaml
 
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         return yaml.safe_load(fh)

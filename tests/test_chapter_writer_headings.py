@@ -1,4 +1,5 @@
 """Regression guard: chapter-writer/SKILL.md ### N. Überschriften sind eindeutig und fortlaufend."""
+
 import re
 from pathlib import Path
 
@@ -17,9 +18,7 @@ def test_chapter_writer_headings_unique():
     """Keine ### N.-Nummer darf doppelt vorkommen."""
     text = SKILL_MD.read_text(encoding="utf-8")
     numbers = _extract_numbers(text)
-    assert len(numbers) == len(set(numbers)), (
-        f"Doppelte ### N.-Nummern in {SKILL_MD}: {numbers}"
-    )
+    assert len(numbers) == len(set(numbers)), f"Doppelte ### N.-Nummern in {SKILL_MD}: {numbers}"
 
 
 def test_chapter_writer_headings_sequential():

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +29,7 @@ _BATCH_JSON = "batch.json"
 _SCORING_SYSTEM = (
     "Du bist ein Relevanz-Bewerter für akademische Literatur. "
     "Bewerte die Relevanz eines Papers für eine Suchanfrage auf einer Skala von 0.0 bis 1.0. "
-    "Antworte ausschließlich mit einem JSON-Objekt: {\"score\": <float>}"
+    'Antworte ausschließlich mit einem JSON-Objekt: {"score": <float>}'
 )
 
 
@@ -83,10 +83,7 @@ def submit_batch(
     key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     client = anthropic.Anthropic(api_key=key)
 
-    requests = [
-        _build_request(paper, query, f"paper_{i}", model)
-        for i, paper in enumerate(papers)
-    ]
+    requests = [_build_request(paper, query, f"paper_{i}", model) for i, paper in enumerate(papers)]
 
     response = client.beta.messages.batches.create(requests=requests)
 
@@ -96,7 +93,7 @@ def submit_batch(
         "query": query,
         "model": model,
         "status": "submitted",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
 

@@ -3,18 +3,19 @@
 Sicherheits-Labels: security, v6, credentials
 Alle pyzotero-Calls werden vollstaendig gemockt — keine echten API-Calls.
 """
+
 import json
 import os
-import stat
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 # Pfad fuer Import setzen
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "zotero-import" / "scripts"))
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent.parent / "skills" / "zotero-import" / "scripts")
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 LIBRARY_JSON = FIXTURES / "zotero_library.json"
@@ -25,9 +26,11 @@ ATTACHMENT_A = FIXTURES / "zotero_attachments" / "paper_a.pdf"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_config(tmp_path: Path, data: dict, mode: int = 0o600) -> Path:
     """Schreibt Test-Config-YAML mit angegebenem Dateimodus."""
     import yaml
+
     cfg = tmp_path / "config.yaml"
     cfg.write_text(yaml.dump(data), encoding="utf-8")
     os.chmod(cfg, mode)
@@ -35,11 +38,15 @@ def _write_config(tmp_path: Path, data: dict, mode: int = 0o600) -> Path:
 
 
 def _minimal_config(tmp_path: Path, mode: int = 0o600) -> Path:
-    return _write_config(tmp_path, {
-        "zotero_api_key": "zotero_test_key_MOCK",
-        "zotero_library_id": "123456",
-        "zotero_library_type": "group",
-    }, mode=mode)
+    return _write_config(
+        tmp_path,
+        {
+            "zotero_api_key": "zotero_test_key_MOCK",
+            "zotero_library_id": "123456",
+            "zotero_library_type": "group",
+        },
+        mode=mode,
+    )
 
 
 def _load_library() -> list:
@@ -58,6 +65,7 @@ def _make_zotero_mock(items: list) -> MagicMock:
 # Test 1: Smoke — 1 Item wird importiert
 # ---------------------------------------------------------------------------
 
+
 class TestSmokeImport:
     def test_smoke_import_single_item(self, tmp_path):
         """1 Item ohne PDF → 1 Paper im Vault, keine Fehler."""
@@ -66,20 +74,24 @@ class TestSmokeImport:
         cfg_path = _minimal_config(tmp_path)
         db_path = str(tmp_path / "vault.db")
 
-        single_item = [{
-            "key": "SMOKE001",
-            "version": 1,
-            "data": {
+        single_item = [
+            {
                 "key": "SMOKE001",
-                "itemType": "journalArticle",
-                "title": "Smoke Test Paper",
-                "creators": [{"creatorType": "author", "firstName": "Test", "lastName": "Author"}],
-                "date": "2023",
-                "DOI": "10.9999/smoke.001",
-                "ISBN": "",
-                "abstractNote": "Smoke test abstract",
+                "version": 1,
+                "data": {
+                    "key": "SMOKE001",
+                    "itemType": "journalArticle",
+                    "title": "Smoke Test Paper",
+                    "creators": [
+                        {"creatorType": "author", "firstName": "Test", "lastName": "Author"}
+                    ],
+                    "date": "2023",
+                    "DOI": "10.9999/smoke.001",
+                    "ISBN": "",
+                    "abstractNote": "Smoke test abstract",
+                },
             }
-        }]
+        ]
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(single_item)
@@ -94,6 +106,7 @@ class TestSmokeImport:
 # ---------------------------------------------------------------------------
 # Test 2: 50 Items — alle importiert
 # ---------------------------------------------------------------------------
+
 
 class TestBulkImport:
     def test_50_items_all_imported(self, tmp_path):
@@ -119,6 +132,7 @@ class TestBulkImport:
 # Test 3: Re-Run → keine Duplikate
 # ---------------------------------------------------------------------------
 
+
 class TestDedup:
     def test_rerun_no_duplicates(self, tmp_path):
         """Zweiter Pull mit identischen Items → nur Items ohne DOI/ISBN nochmals importiert.
@@ -134,10 +148,7 @@ class TestDedup:
         items = _load_library()
 
         # Zaehle Items mit und ohne DOI/ISBN in der Fixture
-        items_with_id = sum(
-            1 for it in items
-            if it["data"].get("DOI") or it["data"].get("ISBN")
-        )
+        items_with_id = sum(1 for it in items if it["data"].get("DOI") or it["data"].get("ISBN"))
         items_without_id = len(items) - items_with_id
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
@@ -163,6 +174,7 @@ class TestDedup:
 # Test 4: Item ohne DOI/ISBN wird trotzdem importiert
 # ---------------------------------------------------------------------------
 
+
 class TestMissingIdentifier:
     def test_missing_doi_always_imported(self, tmp_path):
         """Item ohne DOI und ISBN wird nicht dedupliziert, sondern importiert."""
@@ -171,20 +183,24 @@ class TestMissingIdentifier:
         cfg_path = _minimal_config(tmp_path)
         db_path = str(tmp_path / "vault.db")
 
-        no_id_item = [{
-            "key": "NODOI001",
-            "version": 1,
-            "data": {
+        no_id_item = [
+            {
                 "key": "NODOI001",
-                "itemType": "journalArticle",
-                "title": "Paper ohne DOI oder ISBN",
-                "creators": [{"creatorType": "author", "firstName": "Dana", "lastName": "Braun"}],
-                "date": "2021",
-                "DOI": "",
-                "ISBN": "",
-                "abstractNote": "Kein Identifier",
+                "version": 1,
+                "data": {
+                    "key": "NODOI001",
+                    "itemType": "journalArticle",
+                    "title": "Paper ohne DOI oder ISBN",
+                    "creators": [
+                        {"creatorType": "author", "firstName": "Dana", "lastName": "Braun"}
+                    ],
+                    "date": "2021",
+                    "DOI": "",
+                    "ISBN": "",
+                    "abstractNote": "Kein Identifier",
+                },
             }
-        }]
+        ]
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(no_id_item)
@@ -199,6 +215,7 @@ class TestMissingIdentifier:
 # Test 5: PDF-Attachment → ensure_file aufgerufen, file_id gecacht
 # ---------------------------------------------------------------------------
 
+
 class TestPDFAttachment:
     def test_pdf_attachment_uploaded_file_id_cached(self, tmp_path):
         """Item mit PDF-Attachment → ensure_file wird aufgerufen."""
@@ -207,33 +224,39 @@ class TestPDFAttachment:
         cfg_path = _minimal_config(tmp_path)
         db_path = str(tmp_path / "vault.db")
 
-        item = [{
-            "key": "ATTACH001",
-            "version": 1,
-            "data": {
+        item = [
+            {
                 "key": "ATTACH001",
-                "itemType": "journalArticle",
-                "title": "Paper mit Attachment",
-                "creators": [{"creatorType": "author", "firstName": "Franz", "lastName": "Weber"}],
-                "date": "2023",
-                "DOI": "10.9999/attach.001",
-                "ISBN": "",
-                "abstractNote": "Hat PDF",
+                "version": 1,
+                "data": {
+                    "key": "ATTACH001",
+                    "itemType": "journalArticle",
+                    "title": "Paper mit Attachment",
+                    "creators": [
+                        {"creatorType": "author", "firstName": "Franz", "lastName": "Weber"}
+                    ],
+                    "date": "2023",
+                    "DOI": "10.9999/attach.001",
+                    "ISBN": "",
+                    "abstractNote": "Hat PDF",
+                },
             }
-        }]
+        ]
 
-        attachment_record = [{
-            "key": "ATT0001A",
-            "version": 1,
-            "data": {
+        attachment_record = [
+            {
                 "key": "ATT0001A",
-                "itemType": "attachment",
-                "linkMode": "linked_file",
-                "contentType": "application/pdf",
-                "filename": "paper_a.pdf",
-                "title": "paper_a.pdf",
+                "version": 1,
+                "data": {
+                    "key": "ATT0001A",
+                    "itemType": "attachment",
+                    "linkMode": "linked_file",
+                    "contentType": "application/pdf",
+                    "filename": "paper_a.pdf",
+                    "title": "paper_a.pdf",
+                },
             }
-        }]
+        ]
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             zot_mock = _make_zotero_mock(item)
@@ -254,6 +277,7 @@ class TestPDFAttachment:
 # ---------------------------------------------------------------------------
 # Test 6: 0600-Permission-Check
 # ---------------------------------------------------------------------------
+
 
 class TestConfigPermissions:
     def test_config_perm_check_0644_raises(self, tmp_path):

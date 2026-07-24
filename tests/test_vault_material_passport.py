@@ -2,21 +2,19 @@
 
 TDD-First: Tests definieren das erwuenschte Verhalten.
 """
-import hashlib
+
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 _WORKTREE_ROOT = Path(__file__).parent.parent
 if str(_WORKTREE_ROOT) not in sys.path:
     sys.path.insert(0, str(_WORKTREE_ROOT))
 
-from academic_vault.db import VaultDB
 from academic_vault import server as vault_server
+from academic_vault.db import VaultDB
 
 
 def make_temp_db() -> tuple[str, VaultDB]:
@@ -40,17 +38,17 @@ def _seed_paper(db_path: str, paper_id: str = "p1", doi: str = "10.1234/test") -
 # Schema-Tests: vault_locked_status
 # ---------------------------------------------------------------------------
 
+
 def test_vault_locked_status_table_exists():
     """Nach init_schema() muss vault_locked_status-Tabelle vorhanden sein."""
     db_path, db = make_temp_db()
     try:
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         names = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "vault_locked_status" in names
@@ -61,6 +59,7 @@ def test_vault_locked_status_table_exists():
 # ---------------------------------------------------------------------------
 # lock_passport / is_locked
 # ---------------------------------------------------------------------------
+
 
 def test_is_locked_returns_false_by_default():
     """is_locked(slug) gibt False zurueck wenn kein Lock gesetzt wurde."""
@@ -107,6 +106,7 @@ def test_lock_is_per_slug():
 # ---------------------------------------------------------------------------
 # export_material_passport
 # ---------------------------------------------------------------------------
+
 
 def test_export_material_passport_creates_file(tmp_path):
     """export_material_passport schreibt material-passport.json in output_dir."""
@@ -230,6 +230,7 @@ def test_export_material_passport_schema_validates(tmp_path):
             output_dir=str(tmp_path),
         )
         from academic_vault.material_passport import validate_passport
+
         data = json.loads((tmp_path / "material-passport.json").read_text())
         # validate_passport wirft bei Fehler
         validate_passport(data)
@@ -241,11 +242,13 @@ def test_export_material_passport_schema_validates(tmp_path):
 # Migration-Idempotenz
 # ---------------------------------------------------------------------------
 
+
 def test_v64_migration_idempotent_for_passport():
     """add_v64_tables() ist idempotent bezueglich vault_locked_status."""
     db_path, db = make_temp_db()
     try:
         from academic_vault.migrate import add_v64_tables
+
         add_v64_tables(db_path)
         add_v64_tables(db_path)
     finally:

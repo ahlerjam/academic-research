@@ -8,10 +8,10 @@ CLI:
 
 Output: CSL-JSON auf stdout. Fehler auf stderr. Exit-Code 0/1.
 """
+
 import argparse
 import json
 import sys
-from typing import Optional
 
 try:
     import requests
@@ -32,7 +32,7 @@ _MARC_NS = "http://www.loc.gov/MARC21/slim"
 _SRW_NS = "http://www.loc.gov/zing/srw/"
 
 
-def _marc_field(record_el, tag: str, subfield_code: str, ns: str) -> Optional[str]:
+def _marc_field(record_el, tag: str, subfield_code: str, ns: str) -> str | None:
     """Extrahiert Inhalt eines MARC-Subfelds aus einem lxml-Element."""
     for df in record_el.findall(f".//{{{ns}}}datafield[@tag='{tag}']"):
         for sf in df.findall(f"{{{ns}}}subfield[@code='{subfield_code}']"):
@@ -109,7 +109,7 @@ def _dnb_record_to_csl(record_el) -> dict:
     return csl
 
 
-def resolve_dnb(isbn: Optional[str] = None, title: Optional[str] = None) -> Optional[dict]:
+def resolve_dnb(isbn: str | None = None, title: str | None = None) -> dict | None:
     """Loest ISBN oder Titel via DNB SRU auf. Gibt CSL-Dict oder None zurueck."""
     if isbn:
         query = f"isbn+%3D+{isbn.replace('-', '')}"
@@ -154,7 +154,7 @@ def resolve_dnb(isbn: Optional[str] = None, title: Optional[str] = None) -> Opti
 OL_API_URL = "https://openlibrary.org/api/books"
 
 
-def resolve_openlibrary(isbn: Optional[str] = None) -> Optional[dict]:
+def resolve_openlibrary(isbn: str | None = None) -> dict | None:
     """ISBN -> CSL-Dict via OpenLibrary JSON-API. Gibt None bei Fehler/leer."""
     if not isbn:
         return None
@@ -205,7 +205,7 @@ def resolve_openlibrary(isbn: Optional[str] = None) -> Optional[dict]:
 GB_API_URL = "https://www.googleapis.com/books/v1/volumes"
 
 
-def resolve_googlebooks(isbn: Optional[str] = None, title: Optional[str] = None) -> Optional[dict]:
+def resolve_googlebooks(isbn: str | None = None, title: str | None = None) -> dict | None:
     """ISBN oder Titel -> CSL-Dict via GoogleBooks JSON-API."""
     if isbn:
         query = f"isbn:{isbn.replace('-', '')}"
@@ -259,7 +259,7 @@ def resolve_googlebooks(isbn: Optional[str] = None, title: Optional[str] = None)
 DOAB_API_URL = "https://directory.doabooks.org/rest/search"
 
 
-def check_doab(isbn: Optional[str] = None, doi: Optional[str] = None) -> Optional[dict]:
+def check_doab(isbn: str | None = None, doi: str | None = None) -> dict | None:
     """Prueft DOAB auf OA-Verfuegbarkeit. Gibt {open_access: True, download_url: ...} oder None."""
     if isbn:
         query = f"isbn:{isbn.replace('-', '')}"
@@ -291,9 +291,7 @@ def check_doab(isbn: Optional[str] = None, doi: Optional[str] = None) -> Optiona
                 link = bs.get("retrieveLink", "")
                 if link:
                     result["download_url"] = (
-                        f"https://directory.doabooks.org{link}"
-                        if link.startswith("/")
-                        else link
+                        f"https://directory.doabooks.org{link}" if link.startswith("/") else link
                     )
                     break
         if "download_url" in result:
@@ -318,10 +316,11 @@ def check_doab(isbn: Optional[str] = None, doi: Optional[str] = None) -> Optiona
 # Hauptfunktion: resolve() — Fallback-Kette
 # ---------------------------------------------------------------------------
 
+
 def resolve(
-    isbn: Optional[str] = None,
-    title: Optional[str] = None,
-    doi: Optional[str] = None,
+    isbn: str | None = None,
+    title: str | None = None,
+    doi: str | None = None,
 ) -> dict:
     """Loest Buch-Metadaten auf: DNB -> OL -> GoogleBooks. DOAB als OA-Ergaenzung.
 
@@ -330,7 +329,7 @@ def resolve(
     # ISBN einmalig normalisieren (Bindestriche entfernen)
     norm_isbn = isbn.replace("-", "") if isbn else None
 
-    csl: Optional[dict] = None
+    csl: dict | None = None
 
     # 1. DNB SRU
     csl = resolve_dnb(isbn=norm_isbn, title=title)
@@ -362,6 +361,7 @@ def resolve(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _cli_main() -> None:
     parser = argparse.ArgumentParser(

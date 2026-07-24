@@ -14,14 +14,13 @@ Akzeptanzkriterien (aus dem Issue):
 - Rotation: max 10 MB pro Logfile, dann `decisions.log.1`
 - README-Sektion "Privacy/Logs" anlegen
 """
+
 import json
 import os
 import re
 import stat
 import subprocess
 from pathlib import Path
-
-import pytest
 
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "post-tool-use-decisions.mjs"
 README_PATH = Path(__file__).parent.parent / "README.md"
@@ -67,9 +66,7 @@ def test_log_does_not_leak_content_snippet(tmp_path):
     assert result.returncode == 0, f"stderr: {result.stderr}"
 
     log_content = log_file.read_text()
-    assert secret not in log_content, (
-        f"Content-Snippet im Klartext geleakt: {log_content!r}"
-    )
+    assert secret not in log_content, f"Content-Snippet im Klartext geleakt: {log_content!r}"
 
 
 def test_log_contains_sha256_hash(tmp_path):
@@ -80,9 +77,7 @@ def test_log_contains_sha256_hash(tmp_path):
 
     line = log_file.read_text().strip().splitlines()[0]
     # 64 Hex-Zeichen irgendwo in der Zeile (SHA-256)
-    assert re.search(r"[0-9a-f]{64}", line), (
-        f"Kein SHA-256-Hash in Log-Zeile: {line!r}"
-    )
+    assert re.search(r"[0-9a-f]{64}", line), f"Kein SHA-256-Hash in Log-Zeile: {line!r}"
 
 
 def test_log_hash_is_stable_for_same_content(tmp_path):

@@ -11,13 +11,12 @@ Abdeckung:
 - 5-Kommentar-Beispiel-Struktur in Referenz beschrieben
 - Skill-Eintrag in skill_sizes.json vorhanden
 """
+
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
-
-import pytest
 
 _ROOT = Path(__file__).parent.parent
 _SKILL_DIR = _ROOT / "skills" / "reviewer-response"
@@ -30,6 +29,7 @@ _PREAMBLE_PATTERN = "> **Gemeinsames Preamble laden:**"
 # ---------------------------------------------------------------------------
 # SKILL.md Struktur
 # ---------------------------------------------------------------------------
+
 
 class TestReviewerResponseSkillMd:
     def test_skill_md_exists(self):
@@ -80,9 +80,9 @@ class TestReviewerResponseSkillMd:
 
     def test_point_by_point_described(self):
         text = _SKILL_MD.read_text().lower()
-        assert "point-by-point" in text or "punkt für punkt" in text or "punkt-fuer-punkt" in text, (
-            "SKILL.md beschreibt point-by-point Format nicht"
-        )
+        assert (
+            "point-by-point" in text or "punkt für punkt" in text or "punkt-fuer-punkt" in text
+        ), "SKILL.md beschreibt point-by-point Format nicht"
 
     def test_vault_add_quote_workflow_described(self):
         assert "vault.add_quote" in _SKILL_MD.read_text(), (
@@ -99,6 +99,7 @@ class TestReviewerResponseSkillMd:
 # ---------------------------------------------------------------------------
 # Response-Letter-Structure Referenz
 # ---------------------------------------------------------------------------
+
 
 class TestResponseLetterStructure:
     def test_structure_file_exists(self):
@@ -138,6 +139,7 @@ class TestResponseLetterStructure:
 # ---------------------------------------------------------------------------
 # skill_sizes.json Eintrag
 # ---------------------------------------------------------------------------
+
 
 class TestReviewerResponseBaseline:
     def test_skill_sizes_contains_reviewer_response(self):

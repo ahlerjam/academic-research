@@ -3,10 +3,11 @@
 Nutzt pypdf-Stream-Injection (kein reportlab, kein fpdf).
 Jede Zeile wird als PDF-Content-Stream in eine Blank-Page injiziert.
 """
+
 from __future__ import annotations
 
 import io
-from typing import Any, Dict, List
+from typing import Any
 
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import (
@@ -97,7 +98,7 @@ def _make_text_page_bytes(text_entries: list[tuple[str, int, int, int]]) -> byte
     return buf.getvalue()
 
 
-def generate_cover(papers: List[Dict[str, Any]], output_path: str) -> None:
+def generate_cover(papers: list[dict[str, Any]], output_path: str) -> None:
     """Erzeugt Bibliographie-Cover-PDF mit allen Paper-Einträgen.
 
     Args:

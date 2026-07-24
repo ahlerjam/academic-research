@@ -28,7 +28,12 @@ def test_normalize_doi_empty():
 def test_dedup_by_doi():
     papers = [
         {"doi": "10.1109/TEST", "title": "Paper A", "authors": ["Alice"], "citations": 5},
-        {"doi": "https://doi.org/10.1109/test", "title": "Paper A (copy)", "authors": ["Bob"], "citations": 10},
+        {
+            "doi": "https://doi.org/10.1109/test",
+            "title": "Paper A (copy)",
+            "authors": ["Bob"],
+            "citations": 10,
+        },
     ]
     result = deduplicate(papers)
     assert len(result) == 1
@@ -39,8 +44,18 @@ def test_dedup_by_doi():
 
 def test_dedup_by_title_similarity():
     papers = [
-        {"doi": None, "title": "DevOps Governance in Large Organizations", "authors": ["Alice"], "citations": 5},
-        {"doi": None, "title": "DevOps Governance in Large Organisations", "authors": ["Alice"], "citations": 5},
+        {
+            "doi": None,
+            "title": "DevOps Governance in Large Organizations",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "title": "DevOps Governance in Large Organisations",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
     ]
     result = deduplicate(papers)
     assert len(result) == 1
@@ -58,7 +73,13 @@ def test_dedup_different_papers():
 def test_merge_group_oa_urls():
     group = [
         {"title": "Paper", "authors": [], "oa_url": None, "open_access_pdf": None, "citations": 5},
-        {"title": "Paper", "authors": [], "oa_url": "https://test.pdf", "open_access_pdf": None, "citations": 3},
+        {
+            "title": "Paper",
+            "authors": [],
+            "oa_url": "https://test.pdf",
+            "open_access_pdf": None,
+            "citations": 3,
+        },
     ]
     merged = merge_group(group)
     assert merged["oa_url"] == "https://test.pdf"

@@ -11,14 +11,13 @@ import os
 import tempfile
 from pathlib import Path
 
-import pytest
-
 FIXTURES = Path(__file__).parent / "fixtures" / "pickup"
 
 
 # ---------------------------------------------------------------------------
 # Barcode-Generierung
 # ---------------------------------------------------------------------------
+
 
 def test_barcode_generates_png():
     """generate_isbn_barcode() erzeugt eine lesbare PNG-Datei."""
@@ -53,6 +52,7 @@ def test_barcode_none_isbn():
 # ---------------------------------------------------------------------------
 # Sheet-Zuordnung
 # ---------------------------------------------------------------------------
+
 
 def test_sheet_assignment_vor_ort():
     """availability_status=vor_ort_verfuegbar -> Sheet 'Vor Ort verfuegbar'."""
@@ -98,6 +98,7 @@ def test_no_status_defaults_to_lizenz():
 # ---------------------------------------------------------------------------
 # Integration: build_pickup_sheets()
 # ---------------------------------------------------------------------------
+
 
 def _load_all_fixtures():
     """Laedt alle 5 Fixture-Dateien."""

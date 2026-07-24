@@ -38,6 +38,7 @@ def _parse_frontmatter(path: Path) -> dict:
 # Test 1 — Datei existiert
 # ---------------------------------------------------------------------------
 
+
 def test_command_file_exists():
     assert COMMAND_FILE.exists(), f"commands/latex.md fehlt: {COMMAND_FILE}"
 
@@ -45,6 +46,7 @@ def test_command_file_exists():
 # ---------------------------------------------------------------------------
 # Test 2 — Datei beginnt mit --- (Frontmatter vorhanden)
 # ---------------------------------------------------------------------------
+
 
 def test_frontmatter_starts_with_dashes():
     text = COMMAND_FILE.read_text(encoding="utf-8")
@@ -58,6 +60,7 @@ def test_frontmatter_starts_with_dashes():
 # Test 3 — schliessendes --- vorhanden
 # ---------------------------------------------------------------------------
 
+
 def test_frontmatter_has_closing_dashes():
     text = COMMAND_FILE.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -70,46 +73,43 @@ def test_frontmatter_has_closing_dashes():
 # Test 4 — nicht-leeres description-Feld
 # ---------------------------------------------------------------------------
 
+
 def test_frontmatter_description_not_empty():
     fm = _parse_frontmatter(COMMAND_FILE)
     desc = fm.get("description", "")
-    assert desc, (
-        f"commands/latex.md: description fehlt oder ist leer (Frontmatter: {fm!r})"
-    )
+    assert desc, f"commands/latex.md: description fehlt oder ist leer (Frontmatter: {fm!r})"
 
 
 # ---------------------------------------------------------------------------
 # Test 5 — argument-hint vorhanden
 # ---------------------------------------------------------------------------
 
+
 def test_frontmatter_argument_hint():
     fm = _parse_frontmatter(COMMAND_FILE)
     hint = fm.get("argument-hint", "")
-    assert hint, (
-        f"commands/latex.md: argument-hint fehlt oder ist leer (Frontmatter: {fm!r})"
-    )
+    assert hint, f"commands/latex.md: argument-hint fehlt oder ist leer (Frontmatter: {fm!r})"
 
 
 # ---------------------------------------------------------------------------
 # Test 6 — allowed-tools vorhanden (Issue #167 Akzeptanzkriterium)
 # ---------------------------------------------------------------------------
 
+
 def test_frontmatter_allowed_tools():
     fm = _parse_frontmatter(COMMAND_FILE)
     allowed = fm.get("allowed-tools", "")
-    assert allowed, (
-        f"commands/latex.md: allowed-tools fehlt oder ist leer (Frontmatter: {fm!r})"
-    )
+    assert allowed, f"commands/latex.md: allowed-tools fehlt oder ist leer (Frontmatter: {fm!r})"
 
 
 # ---------------------------------------------------------------------------
 # Test 7 — disable-model-invocation: true (Issue #167 Akzeptanzkriterium)
 # ---------------------------------------------------------------------------
 
+
 def test_frontmatter_disable_model_invocation():
     """Gold-Standard commands/excel.md setzt disable-model-invocation: true."""
     fm = _parse_frontmatter(COMMAND_FILE)
     assert fm.get("disable-model-invocation") is True, (
-        "commands/latex.md: disable-model-invocation: true fehlt "
-        f"(Frontmatter: {fm!r})"
+        f"commands/latex.md: disable-model-invocation: true fehlt (Frontmatter: {fm!r})"
     )

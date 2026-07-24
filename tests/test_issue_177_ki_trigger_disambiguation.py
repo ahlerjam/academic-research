@@ -9,6 +9,7 @@ Dieser Test fixiert die Disambiguierung in beiden SKILL.md-Descriptions:
 - humanizer-de: inkludiert Korrektur; fuer reine Detektion -> style-evaluator;
   triggert auf "humanisieren" / "umschreiben" / "weniger KI-haft".
 """
+
 from __future__ import annotations
 
 import re
@@ -23,9 +24,7 @@ def _description(skill: str) -> str:
     m = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
     assert m, f"{skill}: kein YAML-Frontmatter"
     fm = m.group(1)
-    desc_m = re.search(
-        r"^description:\s*\|?>?\s*(.+?)(?=^[a-zA-Z_-]+:|\Z)", fm, re.M | re.S
-    )
+    desc_m = re.search(r"^description:\s*\|?>?\s*(.+?)(?=^[a-zA-Z_-]+:|\Z)", fm, re.M | re.S)
     assert desc_m, f"{skill}: kein description-Feld"
     # Mehrzeilige Block-Scalars zu einer Zeile zusammenfuehren.
     return re.sub(r"\s+", " ", desc_m.group(1)).strip()
@@ -34,9 +33,7 @@ def _description(skill: str) -> str:
 def test_style_evaluator_detektion_only_verweis_auf_humanizer() -> None:
     desc = _description("style-evaluator").lower()
     assert "detektion" in desc, "style-evaluator: 'Detektion' fehlt in description"
-    assert "humanizer-de" in desc, (
-        "style-evaluator: Verweis auf humanizer-de fuer Korrektur fehlt"
-    )
+    assert "humanizer-de" in desc, "style-evaluator: Verweis auf humanizer-de fuer Korrektur fehlt"
 
 
 def test_style_evaluator_score_und_audit_trigger() -> None:
@@ -55,12 +52,6 @@ def test_humanizer_inkludiert_korrektur_verweis_auf_style_evaluator() -> None:
 
 def test_humanizer_humanisieren_und_umschreiben_trigger() -> None:
     desc = _description("humanizer-de").lower()
-    assert "humanisieren" in desc, (
-        "humanizer-de: Trigger 'humanisieren' fehlt in description"
-    )
-    assert "umschreiben" in desc, (
-        "humanizer-de: Trigger 'umschreiben' fehlt in description"
-    )
-    assert "weniger ki-haft" in desc, (
-        "humanizer-de: Trigger 'weniger KI-haft' fehlt in description"
-    )
+    assert "humanisieren" in desc, "humanizer-de: Trigger 'humanisieren' fehlt in description"
+    assert "umschreiben" in desc, "humanizer-de: Trigger 'umschreiben' fehlt in description"
+    assert "weniger ki-haft" in desc, "humanizer-de: Trigger 'weniger KI-haft' fehlt in description"

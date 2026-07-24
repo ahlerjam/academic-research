@@ -17,8 +17,6 @@ CI-Matrix und setup.sh.
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -37,6 +35,7 @@ def _ver_tuple(s: str) -> tuple[int, int]:
 # 1. README
 # ---------------------------------------------------------------------------
 
+
 def test_readme_no_stale_310():
     text = README.read_text(encoding="utf-8")
     assert "3.10+" not in text, "README nennt weiterhin das veraltete 'Python 3.10+'."
@@ -53,6 +52,7 @@ def test_readme_states_min_311():
 # ---------------------------------------------------------------------------
 # 2. pyproject.toml mit requires-python
 # ---------------------------------------------------------------------------
+
 
 def test_pyproject_exists():
     assert PYPROJECT.exists(), "pyproject.toml fehlt im Repo-Root."
@@ -72,6 +72,7 @@ def test_pyproject_requires_python_311():
 # 3. CI-Matrix
 # ---------------------------------------------------------------------------
 
+
 def test_ci_matrix_covers_311_312_313():
     text = CI_WORKFLOW.read_text(encoding="utf-8")
     for v in ("3.11", "3.12", "3.13"):
@@ -81,6 +82,7 @@ def test_ci_matrix_covers_311_312_313():
 # ---------------------------------------------------------------------------
 # 4. setup.sh prueft Python-Version
 # ---------------------------------------------------------------------------
+
 
 def test_setup_sh_checks_python_version():
     text = SETUP_SH.read_text(encoding="utf-8")
@@ -100,6 +102,7 @@ def test_setup_sh_checks_python_version():
 # 5. Konsistenz README/pyproject <-> CI-Mindestversion
 # ---------------------------------------------------------------------------
 
+
 def test_min_version_consistent_across_readme_pyproject_ci():
     readme = README.read_text(encoding="utf-8")
     m_readme = re.search(r"Python\s*3\.(\d+)\+", readme)
@@ -112,9 +115,7 @@ def test_min_version_consistent_across_readme_pyproject_ci():
     py_min = _ver_tuple(m_py.group(1))
 
     ci = CI_WORKFLOW.read_text(encoding="utf-8")
-    ci_versions = sorted(
-        {_ver_tuple(v) for v in re.findall(r'python-version:\s*"?(3\.\d+)"?', ci)}
-    )
+    ci_versions = sorted({_ver_tuple(v) for v in re.findall(r'python-version:\s*"?(3\.\d+)"?', ci)})
     assert ci_versions, "CI-Workflow nennt keine python-version-Eintraege."
     ci_min = ci_versions[0]
 

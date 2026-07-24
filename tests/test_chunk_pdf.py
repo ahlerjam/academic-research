@@ -1,4 +1,5 @@
 """Tests fuer scripts/chunk_pdf.py"""
+
 import importlib.util
 import json
 import os
@@ -6,8 +7,6 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-
-import pytest
 
 # Skript direkt laden (kein Package)
 _SCRIPT = Path(__file__).parent.parent / "scripts" / "chunk_pdf.py"
@@ -56,6 +55,7 @@ class TestWriteChapter:
     def test_write_single_chapter_creates_pdf(self):
         """write_chapter schreibt ein gueltiges PDF."""
         from pypdf import PdfReader
+
         m = _get_module()
         chapters = m.extract_chapters(str(FIXTURE_PDF))
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -69,9 +69,7 @@ class TestWriteChapter:
         """write_all_chapters erzeugt 4 Dateien."""
         m = _get_module()
         with tempfile.TemporaryDirectory() as tmpdir:
-            paths = m.write_all_chapters(
-                str(FIXTURE_PDF), tmpdir, isbn="test-isbn"
-            )
+            paths = m.write_all_chapters(str(FIXTURE_PDF), tmpdir, isbn="test-isbn")
             assert len(paths) == 4
             for p in paths:
                 assert os.path.exists(p)
@@ -82,6 +80,7 @@ class TestTOCFallback:
     def test_toc_fallback_for_pdf_without_outline(self, tmp_path):
         """PDF ohne Outline-Tree: Fallback liefert leere Liste oder SystemExit(2)."""
         from pypdf import PdfWriter
+
         m = _get_module()
         writer = PdfWriter()
         writer.add_blank_page(width=595, height=842)
@@ -102,11 +101,18 @@ class TestCLI:
     def test_cli_toc_mode_returns_json(self):
         """--chapter toc gibt JSON-TOC auf stdout aus."""
         result = subprocess.run(
-            [sys.executable, str(_SCRIPT),
-             "--input", str(FIXTURE_PDF),
-             "--chapter", "toc",
-             "--output", "/dev/null"],
-            capture_output=True, text=True
+            [
+                sys.executable,
+                str(_SCRIPT),
+                "--input",
+                str(FIXTURE_PDF),
+                "--chapter",
+                "toc",
+                "--output",
+                "/dev/null",
+            ],
+            capture_output=True,
+            text=True,
         )
         assert result.returncode == 0, result.stderr
         toc = json.loads(result.stdout)
@@ -117,11 +123,18 @@ class TestCLI:
         """--chapter 1 schreibt eine Datei."""
         out_path = str(tmp_path / "ch1.pdf")
         result = subprocess.run(
-            [sys.executable, str(_SCRIPT),
-             "--input", str(FIXTURE_PDF),
-             "--chapter", "1",
-             "--output", out_path],
-            capture_output=True, text=True
+            [
+                sys.executable,
+                str(_SCRIPT),
+                "--input",
+                str(FIXTURE_PDF),
+                "--chapter",
+                "1",
+                "--output",
+                out_path,
+            ],
+            capture_output=True,
+            text=True,
         )
         assert result.returncode == 0, result.stderr
         assert os.path.exists(out_path)
@@ -129,12 +142,20 @@ class TestCLI:
     def test_cli_chapter_all(self, tmp_path):
         """--chapter all schreibt alle 4 Kapitel."""
         result = subprocess.run(
-            [sys.executable, str(_SCRIPT),
-             "--input", str(FIXTURE_PDF),
-             "--chapter", "all",
-             "--output", str(tmp_path),
-             "--isbn", "978-3-test"],
-            capture_output=True, text=True
+            [
+                sys.executable,
+                str(_SCRIPT),
+                "--input",
+                str(FIXTURE_PDF),
+                "--chapter",
+                "all",
+                "--output",
+                str(tmp_path),
+                "--isbn",
+                "978-3-test",
+            ],
+            capture_output=True,
+            text=True,
         )
         assert result.returncode == 0, result.stderr
         pdfs = list(tmp_path.glob("*.pdf"))
@@ -143,11 +164,18 @@ class TestCLI:
     def test_cli_missing_input_returns_error(self, tmp_path):
         """Nicht-existente Eingabedatei -> returncode 1."""
         result = subprocess.run(
-            [sys.executable, str(_SCRIPT),
-             "--input", str(tmp_path / "nope.pdf"),
-             "--chapter", "1",
-             "--output", str(tmp_path / "out.pdf")],
-            capture_output=True, text=True
+            [
+                sys.executable,
+                str(_SCRIPT),
+                "--input",
+                str(tmp_path / "nope.pdf"),
+                "--chapter",
+                "1",
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ],
+            capture_output=True,
+            text=True,
         )
         assert result.returncode == 1
 
@@ -163,9 +191,7 @@ class TestLargeBook:
         m = _get_module()
         with tempfile.TemporaryDirectory() as tmpdir:
             isbn = "978-3-large-test"
-            paths = m.write_all_chapters(
-                str(LARGE_BOOK_PDF), tmpdir, isbn=isbn
-            )
+            paths = m.write_all_chapters(str(LARGE_BOOK_PDF), tmpdir, isbn=isbn)
             # Genau 8 Output-Dateien
             assert len(paths) == 8, f"Erwartet 8 Kapitel, erhalten: {len(paths)}"
 
@@ -173,15 +199,9 @@ class TestLargeBook:
             safe_isbn = "978-3-large-test"
             for i, p in enumerate(paths, start=1):
                 basename = os.path.basename(p)
-                assert basename == f"{safe_isbn}-ch{i}.pdf", (
-                    f"Unerwarteter Dateiname: {basename}"
-                )
+                assert basename == f"{safe_isbn}-ch{i}.pdf", f"Unerwarteter Dateiname: {basename}"
                 assert os.path.exists(p), f"Datei existiert nicht: {p}"
 
             # Gesamtseitenanzahl >= 400
-            total_pages = sum(
-                len(PdfReader(p).pages) for p in paths
-            )
-            assert total_pages >= 400, (
-                f"Gesamtseitenanzahl zu niedrig: {total_pages}"
-            )
+            total_pages = sum(len(PdfReader(p).pages) for p in paths)
+            assert total_pages >= 400, f"Gesamtseitenanzahl zu niedrig: {total_pages}"

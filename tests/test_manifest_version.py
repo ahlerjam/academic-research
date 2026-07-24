@@ -40,9 +40,7 @@ def test_plugin_json_description_mentions_28_skills():
     """plugin.json description soll '28' Skills nennen, nicht '13'."""
     data = json.loads(PLUGIN_JSON.read_text())
     description = data["description"]
-    assert "28" in description, (
-        f"plugin.json description enthält nicht '28': '{description}'"
-    )
+    assert "28" in description, f"plugin.json description enthält nicht '28': '{description}'"
 
 
 def test_plugin_json_version_matches_marketplace():
@@ -61,18 +59,14 @@ def test_plugin_json_keywords_contain_vault():
     """plugin.json keywords sollen 'vault' enthalten (Issue #166 AC)."""
     data = json.loads(PLUGIN_JSON.read_text())
     keywords = data.get("keywords", [])
-    assert "vault" in keywords, (
-        f"'vault' fehlt in plugin.json keywords: {keywords}"
-    )
+    assert "vault" in keywords, f"'vault' fehlt in plugin.json keywords: {keywords}"
 
 
 def test_plugin_json_keywords_contain_latex():
     """plugin.json keywords sollen 'latex' enthalten (Issue #166 AC)."""
     data = json.loads(PLUGIN_JSON.read_text())
     keywords = data.get("keywords", [])
-    assert "latex" in keywords, (
-        f"'latex' fehlt in plugin.json keywords: {keywords}"
-    )
+    assert "latex" in keywords, f"'latex' fehlt in plugin.json keywords: {keywords}"
 
 
 def test_plugin_json_valid_json():

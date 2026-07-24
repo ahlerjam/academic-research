@@ -3,10 +3,11 @@
 Aufruf: python tests/fixtures/page_offset/create_fixtures.py
 Benoetigt: reportlab (pip install reportlab)
 """
-from pathlib import Path
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 
+from pathlib import Path
+
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 OUT = Path(__file__).parent
 

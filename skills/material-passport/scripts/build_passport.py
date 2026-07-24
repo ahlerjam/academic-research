@@ -18,6 +18,7 @@ Flags:
     --methodik   Pfad zu kapitel/methodik.md (Standard: kapitel/methodik.md)
     --lock       Sperrt den Vault nach Export (Repro-Lock)
 """
+
 from __future__ import annotations
 
 import argparse

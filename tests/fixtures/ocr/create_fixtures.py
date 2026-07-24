@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Erzeugt minimale Test-Fixture-PDFs fuer OCR-Tests."""
+
 import os
-import sys
 
 from pypdf import PdfWriter
 
@@ -19,6 +19,7 @@ def create_text_pdf(path: str) -> None:
     """PDF mit Text-Inhalt via reportlab (Fallback: leeres PDF wenn reportlab fehlt)."""
     try:
         from reportlab.pdfgen import canvas
+
         c = canvas.Canvas(path)
         c.drawString(100, 750, "Dies ist ein Test-Dokument mit ausreichend Text-Inhalt.")
         c.drawString(100, 700, "Zweite Zeile mit weiterem Text fuer die OCR-Erkennung.")

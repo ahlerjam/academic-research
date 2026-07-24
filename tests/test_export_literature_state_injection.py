@@ -13,6 +13,7 @@ dass diese Datei NICHT entsteht (kein injizierter Befehl wird ausgefuehrt).
 Gegen die verwundbare Version schlaegt der Test fehl (Sentinel wird angelegt),
 nach dem Fix ist er gruen.
 """
+
 import os
 import shutil
 import subprocess
@@ -24,9 +25,7 @@ import pytest
 
 SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "export-literature-state.mjs"
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("node") is None, reason="node nicht verfuegbar"
-)
+pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node nicht verfuegbar")
 
 
 def _run_export(vault_db_path: str, cwd: Path) -> subprocess.CompletedProcess:
@@ -91,6 +90,4 @@ def test_node_syntax_check_passes():
         text=True,
         timeout=30,
     )
-    assert result.returncode == 0, (
-        f"node --check fehlgeschlagen: {result.stderr}"
-    )
+    assert result.returncode == 0, f"node --check fehlgeschlagen: {result.stderr}"

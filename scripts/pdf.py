@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import collections
-import json
 import logging
 import math
 import os
@@ -31,7 +30,7 @@ from typing import Any
 
 import httpx
 
-from text_utils import normalize_doi, safe_filename, load_json, save_json
+from text_utils import load_json, normalize_doi, safe_filename, save_json
 
 try:
     from pypdf import PdfReader
@@ -42,10 +41,10 @@ TIMEOUT = 30.0
 PDF_MAGIC = b"%PDF"
 
 BIOMED_DOI_PREFIXES: list[str] = [
-    "10.1016/j.",   # Elsevier Biomedical
-    "10.1186/",     # BMC
-    "10.1371/",     # PLOS
-    "10.3390/",     # MDPI Biology
+    "10.1016/j.",  # Elsevier Biomedical
+    "10.1186/",  # BMC
+    "10.1371/",  # PLOS
+    "10.3390/",  # MDPI Biology
 ]
 
 log = logging.getLogger(__name__)
@@ -55,6 +54,7 @@ log = logging.getLogger(__name__)
 # PDF validation
 # ---------------------------------------------------------------------------
 
+
 def is_valid_pdf(content: bytes) -> bool:
     """Return True if content starts with PDF magic bytes."""
     return len(content) >= 4 and content[:4] == PDF_MAGIC
@@ -63,6 +63,7 @@ def is_valid_pdf(content: bytes) -> bool:
 # ---------------------------------------------------------------------------
 # Download
 # ---------------------------------------------------------------------------
+
 
 def download_pdf(client: httpx.Client, pdf_url: str, output_path: str) -> None:
     """Stream-download PDF. Raises ValueError if not valid PDF."""
@@ -89,9 +90,12 @@ def download_pdf(client: httpx.Client, pdf_url: str, output_path: str) -> None:
 # Tier-based PDF resolution
 # ---------------------------------------------------------------------------
 
+
 def tier_unpaywall(client: httpx.Client, doi: str, email: str) -> str | None:
     """Tier 1: Resolve via Unpaywall."""
-    resp = client.get(f"https://api.unpaywall.org/v2/{doi}", params={"email": email}, timeout=TIMEOUT)
+    resp = client.get(
+        f"https://api.unpaywall.org/v2/{doi}", params={"email": email}, timeout=TIMEOUT
+    )
     resp.raise_for_status()
     return (resp.json().get("best_oa_location") or {}).get("url_for_pdf")
 
@@ -99,16 +103,21 @@ def tier_unpaywall(client: httpx.Client, doi: str, email: str) -> str | None:
 def tier_core(client: httpx.Client, doi: str) -> str | None:
     """Tier 2: Resolve via CORE."""
     import time
+
     for attempt in range(3):
         try:
-            resp = client.get("https://api.core.ac.uk/v3/search/works", params={"q": f"doi:{doi}"}, timeout=TIMEOUT)
+            resp = client.get(
+                "https://api.core.ac.uk/v3/search/works",
+                params={"q": f"doi:{doi}"},
+                timeout=TIMEOUT,
+            )
             resp.raise_for_status()
             results = resp.json().get("results", [])
             return results[0].get("downloadUrl") if results else None
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 429 or attempt == 2:
                 raise
-            time.sleep(2.0 * (2 ** attempt))
+            time.sleep(2.0 * (2**attempt))
     return None
 
 
@@ -209,10 +218,7 @@ def tier_europepmc(client: httpx.Client, doi: str) -> str | None:
     for article in results:
         urls = (article.get("fullTextUrlList") or {}).get("fullTextUrl") or []
         for entry in urls:
-            if (
-                entry.get("documentStyle") == "pdf"
-                and entry.get("availability") == "Open access"
-            ):
+            if entry.get("documentStyle") == "pdf" and entry.get("availability") == "Open access":
                 return entry.get("url")
     return None
 
@@ -335,10 +341,20 @@ def action_resolve(papers_path: str, output_dir: str, output_path: str, email: s
             pdf_path = os.path.join(output_dir, f"{fname}.pdf")
             try:
                 download_pdf(client, url, pdf_path)
-                status[key] = {"success": True, "pdf_path": pdf_path, "source": source, "error": None}
+                status[key] = {
+                    "success": True,
+                    "pdf_path": pdf_path,
+                    "source": source,
+                    "error": None,
+                }
             except Exception as exc:
                 log.exception("PDF download failed: %s", key)
-                status[key] = {"success": False, "pdf_path": None, "source": source, "error": str(exc)}
+                status[key] = {
+                    "success": False,
+                    "pdf_path": None,
+                    "source": source,
+                    "error": str(exc),
+                }
 
     save_json(status, output_path)
     success = sum(1 for s in status.values() if s["success"])
@@ -349,6 +365,7 @@ def action_resolve(papers_path: str, output_dir: str, output_path: str, email: s
 # ---------------------------------------------------------------------------
 # Text extraction
 # ---------------------------------------------------------------------------
+
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extract text from PDF using pypdf."""
@@ -387,6 +404,7 @@ def action_extract(pdf_dir: str, output_path: str) -> int:
 # ---------------------------------------------------------------------------
 # TF-IDF fulltext index
 # ---------------------------------------------------------------------------
+
 
 def _tokenize_for_index(text: str) -> list[str]:
     """Tokenize text for indexing."""
@@ -457,6 +475,7 @@ def action_search(query: str, index_path: str, limit: int = 10) -> int:
 # OCR-Detection
 # ---------------------------------------------------------------------------
 
+
 def detect_needs_ocr(
     pdf_path: str,
     sample_pages: int = 5,
@@ -495,9 +514,12 @@ def detect_needs_ocr(
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="PDF resolution, extraction, and indexing")
-    parser.add_argument("--action", required=True, choices=["resolve", "extract", "index", "search"])
+    parser.add_argument(
+        "--action", required=True, choices=["resolve", "extract", "index", "search"]
+    )
     parser.add_argument("--papers", help="Papers JSON (for resolve)")
     parser.add_argument("--output-dir", help="PDF output directory (for resolve)")
     parser.add_argument("--output", help="Output file path")
@@ -506,7 +528,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--index-path", help="Index file path (for search)")
     parser.add_argument("--query", help="Search query (for search)")
     parser.add_argument("--limit", type=int, default=10, help="Search result limit")
-    parser.add_argument("--email", default=os.environ.get("UNPAYWALL_EMAIL", "academic-research@example.com"))
+    parser.add_argument(
+        "--email", default=os.environ.get("UNPAYWALL_EMAIL", "academic-research@example.com")
+    )
     return parser.parse_args()
 
 

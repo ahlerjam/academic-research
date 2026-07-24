@@ -16,9 +16,7 @@ from pathlib import Path
 
 import pytest
 
-MARKETPLACE_PATH = (
-    Path(__file__).parent.parent / ".claude-plugin" / "marketplace.json"
-)
+MARKETPLACE_PATH = Path(__file__).parent.parent / ".claude-plugin" / "marketplace.json"
 
 EXPECTED_SCHEMA = "https://anthropic.com/claude-code/marketplace.schema.json"
 EXPECTED_CATEGORY = "research"
@@ -48,9 +46,7 @@ def test_top_level_schema_present(manifest: dict) -> None:
 
 def test_top_level_description_present_and_nonempty(manifest: dict) -> None:
     desc = manifest.get("description")
-    assert isinstance(desc, str) and desc.strip(), (
-        "Top-Level 'description' fehlt oder ist leer"
-    )
+    assert isinstance(desc, str) and desc.strip(), "Top-Level 'description' fehlt oder ist leer"
 
 
 def test_first_plugin_category_is_research(manifest: dict) -> None:

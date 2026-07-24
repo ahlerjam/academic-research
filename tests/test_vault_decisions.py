@@ -3,25 +3,24 @@
 TDD-First: Tests definieren das erwuenschte Verhalten bevor die Implementierung
 in db.py / server.py hinzugefuegt wird.
 """
+
 import os
-import sys
 import sqlite3
+import sys
 import tempfile
 from pathlib import Path
-
-import pytest
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
 if str(_WORKTREE_ROOT) not in sys.path:
     sys.path.insert(0, str(_WORKTREE_ROOT))
 
-from academic_vault.db import VaultDB
 from academic_vault import server as vault_server
-
+from academic_vault.db import VaultDB
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_temp_db() -> tuple[str, VaultDB]:
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -35,6 +34,7 @@ def make_temp_db() -> tuple[str, VaultDB]:
 # Schema-Tests
 # ---------------------------------------------------------------------------
 
+
 def test_decisions_table_exists():
     """Nach init_schema() muss decisions-Tabelle vorhanden sein."""
     db_path, db = make_temp_db()
@@ -42,9 +42,7 @@ def test_decisions_table_exists():
         conn = sqlite3.connect(db_path)
         names = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "decisions" in names
@@ -59,9 +57,7 @@ def test_glossary_table_exists():
         conn = sqlite3.connect(db_path)
         names = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "glossary" in names
@@ -76,9 +72,7 @@ def test_style_overrides_table_exists():
         conn = sqlite3.connect(db_path)
         names = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "style_overrides" in names
@@ -93,9 +87,7 @@ def test_excluded_sources_table_exists():
         conn = sqlite3.connect(db_path)
         names = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "excluded_sources" in names
@@ -106,6 +98,7 @@ def test_excluded_sources_table_exists():
 # ---------------------------------------------------------------------------
 # add_decision / list_decisions
 # ---------------------------------------------------------------------------
+
 
 def test_add_decision_returns_id():
     """add_decision gibt non-empty decision_id zurueck."""
@@ -200,6 +193,7 @@ def test_list_decisions_no_args_returns_all_active():
 # excluded_sources
 # ---------------------------------------------------------------------------
 
+
 def test_add_excluded_source_persists():
     """add_excluded_source speichert paper_id und reason."""
     db_path, db = make_temp_db()
@@ -232,11 +226,13 @@ def test_is_excluded_returns_true_for_excluded_paper():
 # Migration-Idempotenz
 # ---------------------------------------------------------------------------
 
+
 def test_add_v64_tables_idempotent():
     """add_v64_tables() kann mehrfach aufgerufen werden ohne Fehler."""
     db_path, db = make_temp_db()
     try:
         from academic_vault.migrate import add_v64_tables
+
         # Zweiter Aufruf (erster ist implizit via init_schema in make_temp_db)
         add_v64_tables(db_path)
         add_v64_tables(db_path)

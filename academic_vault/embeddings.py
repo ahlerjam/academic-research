@@ -3,10 +3,11 @@
 Generiert 1-Satz-Kontext pro Chunk via Anthropic API mit Prompt-Caching.
 Baut embedding_text = context_sentence + chunk_text fuer bessere Retrieval-Qualitaet.
 """
-import os
-from typing import Optional
 
-def _get_anthropic_client(api_key: Optional[str] = None):
+import os
+
+
+def _get_anthropic_client(api_key: str | None = None):
     """Erstellt einen Anthropic-Client.
 
     Kein Singleton — api_key kann pro Aufruf uebergeben werden.
@@ -14,10 +15,13 @@ def _get_anthropic_client(api_key: Optional[str] = None):
     """
     try:
         import anthropic
+
         key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         return anthropic.Anthropic(api_key=key)
     except ImportError:
-        raise ImportError("anthropic SDK nicht installiert. Bitte 'pip install anthropic' ausfuehren.")
+        raise ImportError(
+            "anthropic SDK nicht installiert. Bitte 'pip install anthropic' ausfuehren."
+        )
 
 
 def generate_context_sentence(
@@ -25,7 +29,7 @@ def generate_context_sentence(
     paper_title: str,
     paper_abstract: str,
     paper_id: str,
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
 ) -> str:
     """Generiert 1-Satz-Kontext fuer einen Chunk via Anthropic API.
 
@@ -56,11 +60,7 @@ def generate_context_sentence(
         )
 
         # Paper-Kontext als user-Message mit cache_control (wird gecacht)
-        paper_context = (
-            f"Paper-ID: {paper_id}\n"
-            f"Titel: {paper_title}\n"
-            f"Abstract: {paper_abstract}"
-        )
+        paper_context = f"Paper-ID: {paper_id}\nTitel: {paper_title}\nAbstract: {paper_abstract}"
 
         response = client.messages.create(
             model="claude-3-haiku-20240307",

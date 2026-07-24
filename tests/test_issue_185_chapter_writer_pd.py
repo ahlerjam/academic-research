@@ -12,6 +12,7 @@ Akzeptanzkriterien (aus dem Issue):
 - SKILL.md < 8 KB
 - Frontmatter (name/description) + Trigger intakt
 """
+
 from pathlib import Path
 
 import yaml
@@ -37,9 +38,7 @@ def _frontmatter() -> dict:
 
 
 def test_references_dir_exists() -> None:
-    assert REFERENCES_DIR.is_dir(), (
-        f"references/-Verzeichnis fehlt: {REFERENCES_DIR}"
-    )
+    assert REFERENCES_DIR.is_dir(), f"references/-Verzeichnis fehlt: {REFERENCES_DIR}"
 
 
 def test_expected_reference_files_exist_and_nonempty() -> None:
@@ -54,9 +53,7 @@ def test_expected_reference_files_exist_and_nonempty() -> None:
 def test_skill_md_links_to_references() -> None:
     text = SKILL_MD.read_text(encoding="utf-8")
     for name in EXPECTED_REFERENCES:
-        assert f"references/{name}" in text, (
-            f"SKILL.md verlinkt nicht auf references/{name}"
-        )
+        assert f"references/{name}" in text, f"SKILL.md verlinkt nicht auf references/{name}"
 
 
 def test_skill_md_under_8kb() -> None:
@@ -85,6 +82,4 @@ def test_detail_content_moved_out_of_skill_md() -> None:
         "Few-Shot-Beispiel noch inline in SKILL.md"
     )
     # Quality-Review-Kriterien-JSON darf nicht mehr inline sein.
-    assert "count_per_1000" not in text, (
-        "Quality-Review-JSON noch inline in SKILL.md"
-    )
+    assert "count_per_1000" not in text, "Quality-Review-JSON noch inline in SKILL.md"

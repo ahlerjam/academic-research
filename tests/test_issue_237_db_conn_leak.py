@@ -10,6 +10,7 @@ Akzeptanzkriterium (Issue #237):
 - Bei Exception in einer write-Methode wird die Verbindung garantiert
   geschlossen (Regressionstest mit erzwungenem IntegrityError).
 """
+
 import os
 import sqlite3
 import sys
@@ -111,8 +112,7 @@ def test_add_score_snapshot_fk_violation_closes_connection(monkeypatch):
 
         assert tracker.opened
         assert tracker.open_count == 0, (
-            "Connection-Leak nach Exception in add_score_snapshot: %d offen"
-            % tracker.open_count
+            "Connection-Leak nach Exception in add_score_snapshot: %d offen" % tracker.open_count
         )
     finally:
         os.unlink(db_path)
@@ -134,8 +134,7 @@ def test_add_risk_of_bias_fk_violation_closes_connection(monkeypatch):
 
         assert tracker.opened
         assert tracker.open_count == 0, (
-            "Connection-Leak nach Exception in add_risk_of_bias: %d offen"
-            % tracker.open_count
+            "Connection-Leak nach Exception in add_risk_of_bias: %d offen" % tracker.open_count
         )
     finally:
         os.unlink(db_path)
@@ -153,8 +152,7 @@ def test_successful_write_also_closes_connection(monkeypatch):
 
         assert tracker.opened
         assert tracker.open_count == 0, (
-            "Connection-Leak im Erfolgsfall von add_paper: %d offen"
-            % tracker.open_count
+            "Connection-Leak im Erfolgsfall von add_paper: %d offen" % tracker.open_count
         )
     finally:
         os.unlink(db_path)
@@ -169,9 +167,7 @@ def test_shared_connection_not_closed_on_exception(monkeypatch):
         with VaultDB(db_path) as db:
             db.init_schema()
             tracker = _ConnTracker()
-            monkeypatch.setattr(
-                "academic_vault.db.sqlite3.connect", tracker.connect
-            )
+            monkeypatch.setattr("academic_vault.db.sqlite3.connect", tracker.connect)
             with pytest.raises(sqlite3.IntegrityError):
                 db.add_quote(
                     quote_id="q-shared",

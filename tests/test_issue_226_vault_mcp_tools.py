@@ -9,6 +9,7 @@ Gegenpaar ``vault.add_excluded_source`` / ``vault.is_excluded``.
 Dieser Test kodiert das Akzeptanzkriterium: beide Operationen muessen via
 MCP ``tools/list`` sichtbar (und damit aufrufbar) sein.
 """
+
 import asyncio
 import importlib
 import sys

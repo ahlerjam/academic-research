@@ -5,12 +5,12 @@ add_quote/find_quotes/get_quote/stats bereit.
 
 Start via: python -m academic_vault.server
 """
+
 import json
 import os
 import re
 from pathlib import Path
 from uuid import uuid4
-from typing import Optional
 
 from .db import VALID_PAPER_TYPES, VaultDB, default_db_path
 from .files_api import FilesAPIClient
@@ -53,13 +53,11 @@ def validate_csl_json(csl_json: str) -> dict:
             raise ValueError("csl_json muss ein JSON-Objekt sein.")
         if "type" not in data:
             raise ValueError(
-                "csl_json: Pflichtfeld 'type' fehlt -- "
-                f"erlaubt: {sorted(VALID_PAPER_TYPES)}"
+                f"csl_json: Pflichtfeld 'type' fehlt -- erlaubt: {sorted(VALID_PAPER_TYPES)}"
             )
         if data["type"] not in VALID_PAPER_TYPES:
             raise ValueError(
-                f"Ungueltiger type '{data['type']}' -- "
-                f"erlaubt: {sorted(VALID_PAPER_TYPES)}"
+                f"Ungueltiger type '{data['type']}' -- erlaubt: {sorted(VALID_PAPER_TYPES)}"
             )
         return data
 
@@ -74,17 +72,18 @@ def validate_csl_json(csl_json: str) -> dict:
 # Reine Funktionen (testbar ohne MCP-Framework)
 # ---------------------------------------------------------------------------
 
+
 def add_quote(
     db_path: str,
     paper_id: str,
     verbatim: str,
     extraction_method: str,
-    api_response_id: Optional[str] = None,
-    pdf_page: Optional[int] = None,
-    printed_page: Optional[int] = None,
-    section: Optional[str] = None,
-    context_before: Optional[str] = None,
-    context_after: Optional[str] = None,
+    api_response_id: str | None = None,
+    pdf_page: int | None = None,
+    printed_page: int | None = None,
+    section: str | None = None,
+    context_before: str | None = None,
+    context_after: str | None = None,
 ) -> str:
     """Fuegt Quote in Vault ein. Gibt quote_id zurueck.
 
@@ -112,7 +111,7 @@ def add_quote(
     return quote_id
 
 
-def get_quote(db_path: str, quote_id: str) -> Optional[dict]:
+def get_quote(db_path: str, quote_id: str) -> dict | None:
     """Gibt vollstaendigen Quote-Record als dict zurueck oder None."""
     db = VaultDB(db_path)
     return db.get_quote(quote_id)
@@ -121,7 +120,7 @@ def get_quote(db_path: str, quote_id: str) -> Optional[dict]:
 def search_papers(
     db_path: str,
     query: str,
-    type_filter: Optional[str] = None,
+    type_filter: str | None = None,
     k: int = 5,
     rerank: bool = False,
 ) -> list[dict]:
@@ -175,7 +174,8 @@ def search_papers(
     if not rerank:
         return fts_results
 
-    from .retrieval import reciprocal_rank_fusion, apply_reranker
+    from .retrieval import apply_reranker, reciprocal_rank_fusion
+
     fused = reciprocal_rank_fusion(_vec0_search(db_path, query, k=k), fts_results, k=60, top_n=k)
 
     voyage_key = os.environ.get("VOYAGE_API_KEY") or None
@@ -192,7 +192,7 @@ def search_papers(
     return fused
 
 
-_FTS5_OPERATOR_KEYWORDS = re.compile(r'\b(?:NEAR|AND|OR|NOT)\b')
+_FTS5_OPERATOR_KEYWORDS = re.compile(r"\b(?:NEAR|AND|OR|NOT)\b")
 
 
 def _sanitize_fts5_query(query: str) -> str:
@@ -211,11 +211,11 @@ def _sanitize_fts5_query(query: str) -> str:
     operatorwirksamen Grossschreibungen werden entfernt.
     """
     # FTS5-Sonderzeichen entfernen/ersetzen: -, ^, /, *, (, ), ", :
-    sanitized = re.sub(r'[-^/*():"]', ' ', query)
+    sanitized = re.sub(r'[-^/*():"]', " ", query)
     # Boolesche Operator-Keywords (Grossschreibung) neutralisieren
-    sanitized = _FTS5_OPERATOR_KEYWORDS.sub(' ', sanitized)
+    sanitized = _FTS5_OPERATOR_KEYWORDS.sub(" ", sanitized)
     # Mehrfache Leerzeichen zusammenfassen
-    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+    sanitized = re.sub(r"\s+", " ", sanitized).strip()
     return sanitized if sanitized else query
 
 
@@ -238,7 +238,7 @@ def search_quote_text(db_path: str, verbatim: str, k: int = 5) -> list[dict]:
 def find_quotes(
     db_path: str,
     paper_id: str,
-    query: Optional[str] = None,
+    query: str | None = None,
     k: int = 10,
 ) -> list[dict]:
     """Gibt Quotes fuer ein Paper zurueck, optional per verbatim-Filter."""
@@ -250,13 +250,14 @@ def find_quotes(
 # Figure-Funktionen (rein, testbar ohne MCP-Framework)
 # ---------------------------------------------------------------------------
 
+
 def add_figure(
     db_path: str,
     paper_id: str,
-    page: Optional[int],
-    caption: Optional[str],
-    vlm_description: Optional[str],
-    data_extracted: Optional[str],
+    page: int | None,
+    caption: str | None,
+    vlm_description: str | None,
+    data_extracted: str | None,
 ) -> str:
     """Fuegt Figure in Vault ein. Gibt figure_id zurueck."""
     db = VaultDB(db_path)
@@ -269,7 +270,7 @@ def add_figure(
     )
 
 
-def get_figure(db_path: str, figure_id: str) -> Optional[dict]:
+def get_figure(db_path: str, figure_id: str) -> dict | None:
     """Gibt vollstaendigen Figure-Record als dict oder None."""
     db = VaultDB(db_path)
     return db.get_figure(figure_id)
@@ -284,7 +285,7 @@ def list_figures(db_path: str, paper_id: str) -> list[dict]:
 def find_figure_by_caption(
     db_path: str,
     caption_fragment: str,
-    paper_id: Optional[str] = None,
+    paper_id: str | None = None,
 ) -> list[dict]:
     """LIKE-Suche in figures.caption. Kein MCP-Tool-Dekorator.
 
@@ -299,17 +300,17 @@ def add_paper(
     db_path: str,
     paper_id: str,
     csl_json: str,
-    pdf_path: Optional[str] = None,
-    doi: Optional[str] = None,
-    isbn: Optional[str] = None,
+    pdf_path: str | None = None,
+    doi: str | None = None,
+    isbn: str | None = None,
     page_offset: int = 0,
-    editor: Optional[str] = None,
-    chapter: Optional[str] = None,
-    page_first: Optional[int] = None,
-    page_last: Optional[int] = None,
-    container_title: Optional[str] = None,
-    parent_paper_id: Optional[str] = None,
-    provenance: Optional[str] = None,
+    editor: str | None = None,
+    chapter: str | None = None,
+    page_first: int | None = None,
+    page_last: int | None = None,
+    container_title: str | None = None,
+    parent_paper_id: str | None = None,
+    provenance: str | None = None,
 ) -> None:
     """Upsert eines Papers in den Vault. Unterstuetzt type=book|chapter.
 
@@ -322,10 +323,16 @@ def add_paper(
     db = VaultDB(db_path)
     db.init_schema()
     db.add_paper(
-        paper_id, csl_json,
-        doi=doi, isbn=isbn, pdf_path=pdf_path, page_offset=page_offset,
-        editor=editor, chapter=chapter,
-        page_first=page_first, page_last=page_last,
+        paper_id,
+        csl_json,
+        doi=doi,
+        isbn=isbn,
+        pdf_path=pdf_path,
+        page_offset=page_offset,
+        editor=editor,
+        chapter=chapter,
+        page_first=page_first,
+        page_last=page_last,
         container_title=container_title,
         parent_paper_id=parent_paper_id,
         provenance=provenance,
@@ -337,10 +344,10 @@ def add_chapter(
     parent_paper_id: str,
     chapter_number: int,
     csl_json: str,
-    paper_id: Optional[str] = None,
-    pdf_path: Optional[str] = None,
-    page_first: Optional[int] = None,
-    page_last: Optional[int] = None,
+    paper_id: str | None = None,
+    pdf_path: str | None = None,
+    page_first: int | None = None,
+    page_last: int | None = None,
 ) -> str:
     """Legt ein Kapitel als Kind-Paper in den Vault. Gibt paper_id zurueck.
 
@@ -370,7 +377,7 @@ def add_chapter(
     return paper_id
 
 
-def get_paper(db_path: str, paper_id: str) -> Optional[dict]:
+def get_paper(db_path: str, paper_id: str) -> dict | None:
     """Gibt Paper-Metadata als dict zurueck oder None."""
     db = VaultDB(db_path)
     return db.get_paper(paper_id)
@@ -425,11 +432,12 @@ def set_page_offset(db_path: str, paper_id: str, offset: int) -> None:
 # Decision-Log Funktionen (v6.4, #90)
 # ---------------------------------------------------------------------------
 
+
 def add_decision(
     db_path: str,
-    category: Optional[str],
+    category: str | None,
     text: str,
-    rationale: Optional[str] = None,
+    rationale: str | None = None,
 ) -> str:
     """Fuegt Decision in Vault ein. Gibt decision_id zurueck."""
     db = VaultDB(db_path)
@@ -439,7 +447,7 @@ def add_decision(
 
 def list_decisions(
     db_path: str,
-    category: Optional[str] = None,
+    category: str | None = None,
     active_only: bool = True,
 ) -> list[dict]:
     """Gibt Decisions zurueck. Optionaler Kategorie-Filter und active_only-Flag."""
@@ -458,7 +466,7 @@ def supersede_decision(db_path: str, decision_id: str, superseded_by: str) -> No
 def add_excluded_source(
     db_path: str,
     paper_id: str,
-    reason: Optional[str] = None,
+    reason: str | None = None,
 ) -> None:
     """Fuegt paper_id zu excluded_sources hinzu."""
     db = VaultDB(db_path)
@@ -483,6 +491,7 @@ def is_excluded(db_path: str, paper_id: str) -> bool:
 # ---------------------------------------------------------------------------
 # Risk-of-Bias Funktionen (v6.4, #100)
 # ---------------------------------------------------------------------------
+
 
 def add_risk_of_bias(
     db_path: str,
@@ -509,7 +518,7 @@ def add_risk_of_bias(
 
 def list_risk_of_bias(
     db_path: str,
-    paper_id: Optional[str] = None,
+    paper_id: str | None = None,
 ) -> list[dict]:
     """Gibt RoB-Assessments zurueck, optional nach paper_id gefiltert."""
     db = VaultDB(db_path)
@@ -520,6 +529,7 @@ def list_risk_of_bias(
 # ---------------------------------------------------------------------------
 # Score-History Funktionen (v6.4, #102)
 # ---------------------------------------------------------------------------
+
 
 def add_score_snapshot(
     db_path: str,
@@ -547,7 +557,7 @@ def add_score_snapshot(
 def get_score_history(
     db_path: str,
     paper_id: str,
-    k: Optional[int] = None,
+    k: int | None = None,
 ) -> list[dict]:
     """Gibt Score-History fuer ein Paper zurueck (neueste zuerst)."""
     db = VaultDB(db_path)
@@ -558,6 +568,7 @@ def get_score_history(
 # ---------------------------------------------------------------------------
 # Material Passport / Vault Lock Funktionen (v6.4, #104)
 # ---------------------------------------------------------------------------
+
 
 def lock_passport(db_path: str, slug: str) -> None:
     """Setzt Vault-Lock fuer Slug. Vault wird read-only."""
@@ -579,8 +590,8 @@ def export_material_passport(
     output_dir: str = ".",
     score_algo_version: str = "1.0",
     plugin_version: str = "6.4",
-    model_versions: Optional[dict] = None,
-    per_uni_profile_hash: Optional[str] = None,
+    model_versions: dict | None = None,
+    per_uni_profile_hash: str | None = None,
 ) -> str:
     """Exportiert Material-Passport als material-passport.json.
 
@@ -627,15 +638,14 @@ def export_material_passport(
     validate_passport(passport)
 
     out_path = str(Path(output_dir) / "material-passport.json")
-    Path(out_path).write_text(
-        json.dumps(passport, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    Path(out_path).write_text(json.dumps(passport, ensure_ascii=False, indent=2), encoding="utf-8")
     return out_path
 
 
 def _compute_pdf_hashes(db_path: str) -> dict:
     """SHA-256-Hashes aller vorhandenen PDFs. Gibt {paper_id: hex_hash} zurueck."""
     import hashlib
+
     conn = VaultDB._open(db_path)
     try:
         rows = conn.execute(
@@ -660,12 +670,13 @@ def _compute_pdf_hashes(db_path: str) -> dict:
 # Snapshot-Export / Restore Funktionen (v6.4, #91)
 # ---------------------------------------------------------------------------
 
+
 def export_snapshot(
     db_path: str,
     slug: str,
     project_dir: str = ".",
-    snapshots_dir: Optional[str] = None,
-) -> Optional[str]:
+    snapshots_dir: str | None = None,
+) -> str | None:
     """Exportiert State-Dateien + Vault-DB als .tgz-Snapshot.
 
     Schreibt: <snapshots_dir>/<slug>/<YYYYMMDD-HHMM>.tgz
@@ -681,7 +692,6 @@ def export_snapshot(
     """
     import tarfile
     import tempfile
-    import time
     from datetime import datetime
 
     if snapshots_dir is None:
@@ -736,7 +746,7 @@ def export_snapshot(
 def restore_snapshot(
     slug: str,
     ts: str,
-    snapshots_dir: Optional[str] = None,
+    snapshots_dir: str | None = None,
     target_dir: str = ".",
 ) -> bool:
     """Stellt Snapshot zurueck: Entpackt <slug>/<ts>.tgz in target_dir.
@@ -815,6 +825,7 @@ def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
 # MCP-Server (optional: nur wenn mcp-SDK verfuegbar)
 # ---------------------------------------------------------------------------
 
+
 def _build_mcp_server():
     """Erstellt FastMCP-Server-Instanz. Gibt None zurueck wenn mcp nicht installiert."""
     try:
@@ -831,7 +842,7 @@ def _build_mcp_server():
         return search_papers(db_path, query, type_filter=type, k=k, rerank=rerank)
 
     @mcp.tool(name="vault.get_paper")
-    def _vault_get_paper(paper_id: str) -> Optional[dict]:
+    def _vault_get_paper(paper_id: str) -> dict | None:
         """Paper-Metadata + pdf_status."""
         return get_paper(db_path, paper_id)
 
@@ -861,10 +872,17 @@ def _build_mcp_server():
         provenance: Herkunfts-Tag (z.B. "scihub") fuer Provenance-Audit (#195).
         """
         add_paper(
-            db_path, paper_id, csl_json,
-            pdf_path=pdf_path, doi=doi, isbn=isbn, page_offset=page_offset,
-            editor=editor, chapter=chapter,
-            page_first=page_first, page_last=page_last,
+            db_path,
+            paper_id,
+            csl_json,
+            pdf_path=pdf_path,
+            doi=doi,
+            isbn=isbn,
+            page_offset=page_offset,
+            editor=editor,
+            chapter=chapter,
+            page_first=page_first,
+            page_last=page_last,
             container_title=container_title,
             parent_paper_id=parent_paper_id,
             provenance=provenance,
@@ -934,7 +952,7 @@ def _build_mcp_server():
         return find_quotes(db_path, paper_id, query=query, k=k)
 
     @mcp.tool(name="vault.get_quote")
-    def _vault_get_quote(quote_id: str) -> Optional[dict]:
+    def _vault_get_quote(quote_id: str) -> dict | None:
         """Gibt vollstaendigen Quote-Record zurueck."""
         return get_quote(db_path, quote_id)
 
@@ -975,7 +993,7 @@ def _build_mcp_server():
         return add_figure(db_path, paper_id, page, caption, vlm_description, data_extracted_json)
 
     @mcp.tool(name="vault.get_figure")
-    def _vault_get_figure(figure_id: str) -> Optional[dict]:
+    def _vault_get_figure(figure_id: str) -> dict | None:
         """Gibt Figure-Record zurueck oder None."""
         return get_figure(db_path, figure_id)
 
@@ -1036,7 +1054,9 @@ def _build_mcp_server():
         domain_scores: str,
     ) -> str:
         """Fuegt RoB-Assessment ein. domain_scores als JSON-String. Gibt assessment_id zurueck."""
-        return add_risk_of_bias(db_path, paper_id=paper_id, study_type=study_type, domain_scores=domain_scores)
+        return add_risk_of_bias(
+            db_path, paper_id=paper_id, study_type=study_type, domain_scores=domain_scores
+        )
 
     @mcp.tool(name="vault.list_risk_of_bias")
     def _vault_list_risk_of_bias(paper_id: str = None) -> list[dict]:
@@ -1074,8 +1094,11 @@ def _build_mcp_server():
     ) -> str:
         """Exportiert material-passport.json. Gibt Dateipfad zurueck."""
         return export_material_passport(
-            db_path, slug=slug, output_dir=output_dir,
-            score_algo_version=score_algo_version, plugin_version=plugin_version,
+            db_path,
+            slug=slug,
+            output_dir=output_dir,
+            score_algo_version=score_algo_version,
+            plugin_version=plugin_version,
         )
 
     @mcp.tool(name="vault.lock_passport")
@@ -1092,22 +1115,20 @@ def _build_mcp_server():
     def _vault_export_snapshot(
         slug: str,
         project_dir: str = ".",
-        snapshots_dir: Optional[str] = None,
-    ) -> Optional[str]:
+        snapshots_dir: str | None = None,
+    ) -> str | None:
         """Exportiert State-Dateien + Vault-DB als .tgz-Snapshot.
 
         Schreibt <snapshots_dir>/<slug>/<YYYYMMDD-HHMM>.tgz und gibt den Pfad
         zurueck (None bei Fehler). snapshots_dir default: ~/.academic-research/snapshots.
         """
-        return export_snapshot(
-            db_path, slug, project_dir=project_dir, snapshots_dir=snapshots_dir
-        )
+        return export_snapshot(db_path, slug, project_dir=project_dir, snapshots_dir=snapshots_dir)
 
     @mcp.tool(name="vault.restore_snapshot")
     def _vault_restore_snapshot(
         slug: str,
         ts: str,
-        snapshots_dir: Optional[str] = None,
+        snapshots_dir: str | None = None,
         target_dir: str = ".",
     ) -> bool:
         """Stellt einen Snapshot zurueck: entpackt <slug>/<ts>.tgz nach target_dir.
@@ -1115,9 +1136,7 @@ def _build_mcp_server():
         ts ist der Timestamp-String (Dateiname ohne .tgz). Gibt True bei Erfolg,
         False bei Fehler. snapshots_dir default: ~/.academic-research/snapshots.
         """
-        return restore_snapshot(
-            slug, ts, snapshots_dir=snapshots_dir, target_dir=target_dir
-        )
+        return restore_snapshot(slug, ts, snapshots_dir=snapshots_dir, target_dir=target_dir)
 
     return mcp
 
@@ -1127,8 +1146,5 @@ mcp = _build_mcp_server()
 
 if __name__ == "__main__":
     if mcp is None:
-        raise RuntimeError(
-            "mcp SDK nicht installiert. "
-            "Bitte 'pip install mcp>=1.0' ausfuehren."
-        )
+        raise RuntimeError("mcp SDK nicht installiert. Bitte 'pip install mcp>=1.0' ausfuehren.")
     mcp.run()

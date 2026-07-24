@@ -5,18 +5,19 @@ Sicherheits-Policy:
 - CredentialStore verwendet __repr__/__str__ mit Maskierung.
 - Profil-Dateien werden auf 0600-Perms geprueft vor dem Lesen.
 """
+
 import os
 import re
 import stat
 from dataclasses import dataclass, field
-from typing import Optional
 from urllib.parse import urlparse
-import yaml
 
+import yaml
 
 # ---------------------------------------------------------------------------
 # Custom Exceptions
 # ---------------------------------------------------------------------------
+
 
 class InsecureProfilePermissionsError(PermissionError):
     """Wird geworfen, wenn eine Profil-Datei nicht 0600 gesetzt ist."""
@@ -30,13 +31,14 @@ class ProfileSchemaError(ValueError):
 # Credential-Store (Sicherheits-Wrapper)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CredentialStore:
     """Haelt Credentials, maskiert sie in repr()/str()."""
 
     _data: dict = field(default_factory=dict, repr=False)
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         """Gibt den Wert fuer einen Credential-Schluessel zurueck."""
         return self._data.get(key)
 
@@ -52,10 +54,10 @@ class CredentialStore:
 # Auth-Typ-Erkennung
 # ---------------------------------------------------------------------------
 
-_HAN_HOSTNAME_PATTERN = re.compile(r'\.han\.')
-_WAYF_HOSTNAME_PATTERN = re.compile(r'(?:^|\.)wayf\.')
-_IDP_PATH_PATTERN = re.compile(r'/idp/')
-_EZPROXY_HOSTNAME_PATTERN = re.compile(r'ezproxy', re.IGNORECASE)
+_HAN_HOSTNAME_PATTERN = re.compile(r"\.han\.")
+_WAYF_HOSTNAME_PATTERN = re.compile(r"(?:^|\.)wayf\.")
+_IDP_PATH_PATTERN = re.compile(r"/idp/")
+_EZPROXY_HOSTNAME_PATTERN = re.compile(r"ezproxy", re.IGNORECASE)
 
 # Erlaubte auth_type-Werte (aus B-Schema-Enum)
 VALID_AUTH_TYPES = frozenset(["Shibboleth", "EZproxy", "HAN", "oa-only"])
@@ -103,6 +105,7 @@ def detect_auth_type(profile_data: dict, url: str) -> str:
 # Profil-Berechtigungs-Pruefung
 # ---------------------------------------------------------------------------
 
+
 def check_profile_permissions(profile_path: str) -> None:
     """Prueft, dass die Profil-Datei nur owner-readable (0600) und im Besitz
     des aktuellen Prozess-Owners ist.
@@ -140,6 +143,7 @@ def check_profile_permissions(profile_path: str) -> None:
 # Credential-Laden
 # ---------------------------------------------------------------------------
 
+
 def load_credentials(profile_path: str) -> CredentialStore:
     """Laedt Credentials aus einer Profil-Datei.
 
@@ -161,11 +165,7 @@ def load_credentials(profile_path: str) -> CredentialStore:
         profile = yaml.safe_load(f) or {}
 
     credentials_keys = profile.get("credentials_keys", [])
-    cred_data = {
-        key: str(profile[key])
-        for key in credentials_keys
-        if profile.get(key) is not None
-    }
+    cred_data = {key: str(profile[key]) for key in credentials_keys if profile.get(key) is not None}
     return CredentialStore(_data=cred_data)
 
 
@@ -174,12 +174,11 @@ def load_credentials(profile_path: str) -> CredentialStore:
 # ---------------------------------------------------------------------------
 
 # Muster fuer Passwort-aehnliche Werte: Sonderzeichen + Laenge > 12
-_PASSWORD_PATTERN = re.compile(r'(?=.*[A-Za-z])(?=.*[0-9!@#$%^&*()_+\-=\[\]{}|;:,.<>?]).{13,}')
+_PASSWORD_PATTERN = re.compile(r"(?=.*[A-Za-z])(?=.*[0-9!@#$%^&*()_+\-=\[\]{}|;:,.<>?]).{13,}")
 
 # Felder, die in keinem gueltigen Profil Passwort-aehnliche Werte haben sollten
 _FORBIDDEN_PASSWORD_FIELD_PATTERNS = re.compile(
-    r'(password|passwort|secret|token|credential|auth_token|api_key)',
-    re.IGNORECASE
+    r"(password|passwort|secret|token|credential|auth_token|api_key)", re.IGNORECASE
 )
 
 
@@ -204,10 +203,7 @@ def validate_profile_schema(profile_data: dict) -> None:
         if not isinstance(value, str):
             continue
         # Feldname sieht nach Credential aus UND Wert sieht nach Passwort aus
-        if (
-            _FORBIDDEN_PASSWORD_FIELD_PATTERNS.search(field_name)
-            and _PASSWORD_PATTERN.match(value)
-        ):
+        if _FORBIDDEN_PASSWORD_FIELD_PATTERNS.search(field_name) and _PASSWORD_PATTERN.match(value):
             raise ProfileSchemaError(
                 f"Profil enthaelt verdaechtiges Feld {field_name!r} mit Passwort-aehnlichem Wert. "
                 f"Credentials muessen in credentials_keys[] als Schluessel referenziert werden, "
@@ -219,11 +215,12 @@ def validate_profile_schema(profile_data: dict) -> None:
 # Auth-Flow-Ergebnis-Builder
 # ---------------------------------------------------------------------------
 
+
 def build_auth_flow_result(
     auth_type: str,
     profile_data: dict,
-    browser_success: Optional[bool],
-    failure_reason: Optional[str] = None,
+    browser_success: bool | None,
+    failure_reason: str | None = None,
 ) -> dict:
     """Baut das standardisierte Auth-Flow-Ergebnis.
 
