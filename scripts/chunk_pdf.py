@@ -13,6 +13,7 @@ Ausgabe:
     --chapter N    -> Kapitel N (1-basiert) nach <output>-Pfad
     --chapter toc  -> JSON-TOC auf stdout
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,13 +21,12 @@ import json
 import os
 import re
 import sys
-from typing import Optional
 
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import Destination
 
 
-def _outline_page_number(reader: PdfReader, item) -> Optional[int]:
+def _outline_page_number(reader: PdfReader, item) -> int | None:
     """Gibt 0-indexed Seitennummer eines Outline-Items zurueck oder None."""
     try:
         if isinstance(item, Destination):
@@ -110,10 +110,12 @@ def _extract_via_toc_text(reader: PdfReader) -> list[dict]:
                 title = m.group(2).strip()
                 page = int(m.group(3)) - 1  # 1-indexed -> 0-indexed
                 if 0 <= page < len(reader.pages):
-                    chapters.append({
-                        "title": f"Kapitel {num}: {title}",
-                        "start_page": page,
-                    })
+                    chapters.append(
+                        {
+                            "title": f"Kapitel {num}: {title}",
+                            "start_page": page,
+                        }
+                    )
             except (ValueError, IndexError):
                 pass
         if chapters:
@@ -154,8 +156,7 @@ def extract_chapters(pdf_path: str) -> list[dict]:
         chapters = _extract_via_toc_text(reader)
     if not chapters:
         print(
-            f"[chunk_pdf] Fehler: Kein Outline-Tree und kein TOC-Text in "
-            f"'{pdf_path}' gefunden.",
+            f"[chunk_pdf] Fehler: Kein Outline-Tree und kein TOC-Text in '{pdf_path}' gefunden.",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -163,9 +164,7 @@ def extract_chapters(pdf_path: str) -> list[dict]:
     return _assign_end_pages(chapters, total)
 
 
-def _write_chapter_from_reader(
-    reader: PdfReader, chapter: dict, output_path: str
-) -> None:
+def _write_chapter_from_reader(reader: PdfReader, chapter: dict, output_path: str) -> None:
     """Schreibt Seiten eines Kapitels mit vorhandenem PdfReader-Objekt."""
     writer = PdfWriter()
     start = chapter["start_page"]

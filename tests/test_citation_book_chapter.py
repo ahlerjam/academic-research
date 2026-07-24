@@ -5,6 +5,7 @@ dass die Referenz-Templates in book-chapter-de.md die korrekte Struktur
 vorgeben: NACHNAME, Vorname: Kapiteltitel. In: HRSG. (Hrsg.): Buchtitel.
 Ort : Verlag, Jahr, S. X-Y.
 """
+
 from pathlib import Path
 
 import pytest
@@ -218,10 +219,7 @@ def test_book_chapter_de_contains_apa7_section() -> None:
 
 def test_variant_selector_in_skill_md() -> None:
     """SKILL.md enthaelt Variant-Selector-Logik fuer type=chapter."""
-    skill_md = (
-        Path(__file__).parent.parent
-        / "skills" / "citation-extraction" / "SKILL.md"
-    )
+    skill_md = Path(__file__).parent.parent / "skills" / "citation-extraction" / "SKILL.md"
     assert skill_md.exists(), f"SKILL.md fehlt: {skill_md}"
     content = skill_md.read_text()
     assert "book-chapter-de.md" in content, (
@@ -253,6 +251,4 @@ def test_literature_state_schema_doc_exists() -> None:
         "Schema-Doku: container-title fehlt"
     )
     assert "editor" in content, "Schema-Doku: editor-Feld fehlt"
-    assert "page-first" in content or "page_first" in content, (
-        "Schema-Doku: page-first fehlt"
-    )
+    assert "page-first" in content or "page_first" in content, "Schema-Doku: page-first fehlt"

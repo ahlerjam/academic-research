@@ -1,7 +1,8 @@
 """Tests fuer OCR-Detection und ocrmypdf-Workflow."""
+
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -12,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 # ---------------------------------------------------------------------------
 # detect_needs_ocr
 # ---------------------------------------------------------------------------
+
 
 class TestDetectNeedsOcr:
     """Tests fuer scripts.pdf.detect_needs_ocr."""
@@ -104,6 +106,7 @@ class TestDetectNeedsOcr:
 # run_ocrmypdf
 # ---------------------------------------------------------------------------
 
+
 class TestRunOcrmypdf:
     """Tests fuer scripts.ocr.run_ocrmypdf."""
 
@@ -159,6 +162,7 @@ class TestRunOcrmypdf:
 # Vault-Setter
 # ---------------------------------------------------------------------------
 
+
 class TestVaultOcrSetters:
     """Tests fuer set_ocr_done und update_pdf_path in Vault."""
 
@@ -166,6 +170,7 @@ class TestVaultOcrSetters:
     def tmp_db(self, tmp_path):
         db_file = str(tmp_path / "vault.db")
         from academic_vault.db import VaultDB
+
         db = VaultDB(db_file)
         db.init_schema()
         db.add_paper(
@@ -177,7 +182,7 @@ class TestVaultOcrSetters:
 
     def test_set_ocr_done(self, tmp_db):
         """set_ocr_done setzt ocr_done=1 im Vault."""
-        from academic_vault.server import set_ocr_done, get_paper
+        from academic_vault.server import get_paper, set_ocr_done
 
         set_ocr_done(tmp_db, "test-paper-ocr")
         paper = get_paper(tmp_db, "test-paper-ocr")
@@ -187,7 +192,7 @@ class TestVaultOcrSetters:
 
     def test_update_pdf_path(self, tmp_db):
         """update_pdf_path aktualisiert pdf_path im Vault."""
-        from academic_vault.server import update_pdf_path, get_paper
+        from academic_vault.server import get_paper, update_pdf_path
 
         update_pdf_path(tmp_db, "test-paper-ocr", "/tmp/scan_ocr.pdf")
         paper = get_paper(tmp_db, "test-paper-ocr")

@@ -2,15 +2,13 @@
 
 TDD: Alle Tests schreiben BEVOR die Implementierung existiert.
 """
+
 import io
 import json
-import os
 import re
 import sys
-import tempfile
 from pathlib import Path
 
-import pytest
 from pypdf import PdfReader, PdfWriter
 
 # Pfad zu scripts hinzufügen
@@ -70,9 +68,7 @@ class TestCoverPage:
         generate_cover(selection["papers"], str(cover_path))
 
         reader = PdfReader(str(cover_path))
-        full_text = " ".join(
-            reader.pages[i].extract_text() or "" for i in range(len(reader.pages))
-        )
+        full_text = " ".join(reader.pages[i].extract_text() or "" for i in range(len(reader.pages)))
         for paper in selection["papers"]:
             assert paper["title"] in full_text, f"Titel '{paper['title']}' nicht im Cover"
 
@@ -86,9 +82,7 @@ class TestSplitOver500MB:
 
         selection_path = fixture_dir / "selection.json"
         output_path = tmp_path / "bundle_split.pdf"
-        result = build_bundle(
-            str(selection_path), str(output_path), size_limit_mb=0.001
-        )
+        result = build_bundle(str(selection_path), str(output_path), size_limit_mb=0.001)
 
         assert result["status"] == "split"
         assert len(result["output_files"]) > 1
@@ -96,9 +90,7 @@ class TestSplitOver500MB:
             assert Path(f).exists()
             # Split-Outputs müssen im angegebenen output_path-Verzeichnis liegen,
             # nicht im Repo-Root / cwd
-            assert Path(f).parent == tmp_path, (
-                f"Split-Output '{f}' nicht im tmp_path '{tmp_path}'"
-            )
+            assert Path(f).parent == tmp_path, f"Split-Output '{f}' nicht im tmp_path '{tmp_path}'"
 
 
 class TestMissingPDFSkipped:

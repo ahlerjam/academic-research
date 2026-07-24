@@ -1,4 +1,5 @@
 """Regression guard: Skill-Namen sind kebab-case und stimmen mit Ordnernamen überein."""
+
 import re
 from pathlib import Path
 

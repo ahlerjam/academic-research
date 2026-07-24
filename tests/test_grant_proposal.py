@@ -10,13 +10,12 @@ Abdeckung:
 - 10-Seiten-DFG-Skelett mit Bibliographie-Block in Referenz definiert
 - Skill-Eintrag in skill_sizes.json vorhanden
 """
+
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
-
-import pytest
 
 _ROOT = Path(__file__).parent.parent
 _SKILL_DIR = _ROOT / "skills" / "grant-proposal"
@@ -31,6 +30,7 @@ _PREAMBLE_PATTERN = "> **Gemeinsames Preamble laden:**"
 # ---------------------------------------------------------------------------
 # SKILL.md Struktur
 # ---------------------------------------------------------------------------
+
 
 class TestGrantProposalSkillMd:
     def test_skill_md_exists(self):
@@ -80,9 +80,7 @@ class TestGrantProposalSkillMd:
     def test_opt_in_guard_mentioned(self):
         """SKILL.md beschreibt den output_targets opt-in Guard."""
         text = _SKILL_MD.read_text()
-        assert "output_targets" in text, (
-            "SKILL.md erwaehnt 'output_targets' opt-in Guard nicht"
-        )
+        assert "output_targets" in text, "SKILL.md erwaehnt 'output_targets' opt-in Guard nicht"
 
     def test_foerderlinien_choice_described(self):
         """SKILL.md beschreibt DFG/BMBF/EU Foerderlinien-Auswahl."""
@@ -93,9 +91,7 @@ class TestGrantProposalSkillMd:
 
     def test_vault_search_workflow_described(self):
         """SKILL.md beschreibt vault.search fuer Quellen-Retrieval."""
-        assert "vault.search" in _SKILL_MD.read_text(), (
-            "SKILL.md erwaehnt vault.search nicht"
-        )
+        assert "vault.search" in _SKILL_MD.read_text(), "SKILL.md erwaehnt vault.search nicht"
 
     def test_bibliographie_mentioned(self):
         """SKILL.md erwaehnt Bibliographie als Pflichtbestandteil."""
@@ -108,6 +104,7 @@ class TestGrantProposalSkillMd:
 # ---------------------------------------------------------------------------
 # Referenz-Dateien
 # ---------------------------------------------------------------------------
+
 
 class TestDfgReference:
     def test_dfg_ref_exists(self):
@@ -164,6 +161,7 @@ class TestEuHorizonReference:
 # ---------------------------------------------------------------------------
 # skill_sizes.json Eintrag
 # ---------------------------------------------------------------------------
+
 
 class TestGrantProposalBaseline:
     def test_skill_sizes_contains_grant_proposal(self):

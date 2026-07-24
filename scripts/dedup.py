@@ -11,13 +11,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 from difflib import SequenceMatcher
 from typing import Any
 
-from text_utils import normalize_doi, load_json, save_json
+from text_utils import load_json, normalize_doi, save_json
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +75,9 @@ def merge_group(group: list[dict[str, Any]]) -> dict[str, Any]:
     return merged
 
 
-def _group_by_title(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[list[dict[str, Any]]]:
+def _group_by_title(
+    papers: list[dict[str, Any]], threshold: float = 0.85
+) -> list[list[dict[str, Any]]]:
     """Greedy grouping by fuzzy title similarity."""
     groups: list[list[dict[str, Any]]] = []
     for paper in papers:
@@ -124,6 +125,7 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Deduplicate paper list")

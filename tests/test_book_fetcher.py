@@ -4,10 +4,12 @@ Tests for book-fetcher Master-Agent routing logic.
 Tests validate the routing algorithm in tests/helpers/book_fetcher_router.py,
 which mirrors the agent prompt in agents/book-fetcher.md.
 """
+
 import json
 import pathlib
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import patch
+
 import yaml
 
 # Path to fixtures
@@ -82,8 +84,11 @@ class TestBookFetcherRouting(unittest.TestCase):
     def test_all_oa_metadata_only_then_springer_success(self):
         """OA subagents all return metadata_only; Springer (licensed) returns success."""
         router = self._make_router("active_profile_springer.yaml")
-        meta_only = {"status": "metadata_only", "source_subagent": "doabooks-fetcher",
-                     "url": "https://example.com"}
+        meta_only = {
+            "status": "metadata_only",
+            "source_subagent": "doabooks-fetcher",
+            "url": "https://example.com",
+        }
         springer_success = _load_json("springer_success.json")
 
         call_count = [0]
@@ -104,8 +109,10 @@ class TestBookFetcherRouting(unittest.TestCase):
         self.assertEqual(result["source"], "springer-book")
         # tries must show all 4 OA subagents first, then springer-book
         subagent_sequence = [t["subagent"] for t in result["tries"]]
-        self.assertEqual(subagent_sequence[:4],
-                         ["doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"])
+        self.assertEqual(
+            subagent_sequence[:4],
+            ["doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"],
+        )
         self.assertIn("springer-book", subagent_sequence)
 
     def test_auth_required_triggers_auth_helper_then_retry(self):
@@ -153,8 +160,11 @@ class TestBookFetcherRouting(unittest.TestCase):
     def test_all_fail_then_generic_fetcher_pickup_required(self):
         """All OA + no licensed publishers -> generic-fetcher -> pickup_required with hint."""
         router = self._make_router("active_profile_no_licensed.yaml")
-        no_match = {"status": "no_match", "source_subagent": "doabooks-fetcher",
-                    "reason": "0 results"}
+        no_match = {
+            "status": "no_match",
+            "source_subagent": "doabooks-fetcher",
+            "reason": "0 results",
+        }
         generic_resp = _load_json("generic_pickup.json")
         oa_subagents = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
 
@@ -198,12 +208,9 @@ class TestBookFetcherAgentMarkdown(unittest.TestCase):
         fm_text = "\n".join(lines[1:end])
         fm = yaml.safe_load(fm_text)
         self.assertEqual(fm.get("name"), "book-fetcher")
-        self.assertIn("sonnet", fm.get("model", "").lower(),
-                      "model must be sonnet")
-        self.assertIsInstance(fm.get("tools"), list,
-                              "tools must be a list")
-        self.assertGreaterEqual(fm.get("maxTurns", 0), 8,
-                                "maxTurns must be >= 8")
+        self.assertIn("sonnet", fm.get("model", "").lower(), "model must be sonnet")
+        self.assertIsInstance(fm.get("tools"), list, "tools must be a list")
+        self.assertGreaterEqual(fm.get("maxTurns", 0), 8, "maxTurns must be >= 8")
 
     def test_no_bash_in_tools(self):
         agent_path = self._agent_path()
@@ -214,8 +221,9 @@ class TestBookFetcherAgentMarkdown(unittest.TestCase):
         fm = yaml.safe_load(fm_text)
         tools = fm.get("tools", [])
         bash_tools = [t for t in tools if "Bash" in str(t)]
-        self.assertEqual(bash_tools, [],
-                         f"Master agent must NOT have Bash tools, found: {bash_tools}")
+        self.assertEqual(
+            bash_tools, [], f"Master agent must NOT have Bash tools, found: {bash_tools}"
+        )
 
 
 if __name__ == "__main__":

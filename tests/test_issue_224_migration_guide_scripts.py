@@ -7,6 +7,7 @@ verwies auf das nicht existente ``scripts/migrate_v5.py``.
 Akzeptanzkriterium: Migration-Guide referenziert nur Befehle/Skripte,
 die existieren.
 """
+
 import re
 from pathlib import Path
 
@@ -26,9 +27,8 @@ def test_migration_guide_references_only_existing_scripts():
     text = MIGRATION_GUIDE.read_text(encoding="utf-8")
     referenced = set(SCRIPT_REF_PATTERN.findall(text))
     missing = sorted(ref for ref in referenced if not (REPO_ROOT / ref).exists())
-    assert not missing, (
-        "Migration-Guide referenziert nicht existente Skripte:\n"
-        + "\n".join(missing)
+    assert not missing, "Migration-Guide referenziert nicht existente Skripte:\n" + "\n".join(
+        missing
     )
 
 

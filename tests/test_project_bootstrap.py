@@ -1,4 +1,5 @@
 """Tests for scripts/project_bootstrap.py — detection logic."""
+
 from __future__ import annotations
 
 import os
@@ -8,9 +9,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import project_bootstrap as pb  # noqa: E402
-
 import pytest  # noqa: E402
+
+import project_bootstrap as pb  # noqa: E402
 
 
 def test_detect_mode_on_code_repo(tmp_path):
@@ -228,6 +229,7 @@ def test_init_git_repo_no_git_in_path(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # main() fresh-path git-prompt
 # ---------------------------------------------------------------------------
+
 
 def test_main_fresh_git_yes(tmp_path, monkeypatch):
     """fresh-path: when user confirms git-init prompt, init_git_repo is called."""

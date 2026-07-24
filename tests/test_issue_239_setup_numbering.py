@@ -10,11 +10,10 @@ lueckenlos/konsistent (kein 5->7-Sprung).
 Die Tests pruefen das ueber den reinen Datei-Inhalt — ohne ``setup.sh``
 auszufuehren —, damit sie in CI ohne Netzwerk/venv-Seiteneffekte laufen.
 """
+
 import re
 import subprocess
 from pathlib import Path
-
-import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SETUP_SH = _REPO_ROOT / "scripts" / "setup.sh"
@@ -53,8 +52,7 @@ def test_section_numbering_has_no_gap():
 
     expected = list(range(numbers[0], numbers[0] + len(numbers)))
     assert numbers == expected, (
-        f"Abschnitts-Nummerierung ist nicht lueckenlos: {numbers} "
-        f"(erwartet {expected})"
+        f"Abschnitts-Nummerierung ist nicht lueckenlos: {numbers} (erwartet {expected})"
     )
 
 

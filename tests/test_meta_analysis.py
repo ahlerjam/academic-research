@@ -3,22 +3,23 @@
 TDD: Tests written before implementation.
 Expected values pre-computed manually for 5-study example.
 """
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
+
 import pytest
 
 # Ensure scripts/ is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from meta_analysis import (
-    dersimonianlaird,
-    build_forest_plot_mermaid,
     MetaAnalysisResult,
     Study,
+    build_forest_plot_mermaid,
+    dersimonianlaird,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixture: 5 Beispiel-Studien (yi, vi) aus Ticket-Prompt
@@ -26,9 +27,9 @@ from meta_analysis import (
 STUDIES = [
     Study(name="Smith 2020", yi=0.50, vi=0.0625),
     Study(name="Jones 2021", yi=0.30, vi=0.0900),
-    Study(name="Chen 2019",  yi=0.70, vi=0.0400),
+    Study(name="Chen 2019", yi=0.70, vi=0.0400),
     Study(name="Brown 2022", yi=0.20, vi=0.0625),
-    Study(name="Liu 2023",   yi=0.55, vi=0.0500),
+    Study(name="Liu 2023", yi=0.55, vi=0.0500),
 ]
 
 

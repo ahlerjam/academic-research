@@ -33,9 +33,7 @@ def test_registered_tool_count_is_stable() -> None:
     Bei Aenderung: README-Tabellen UND diese Zahl gemeinsam aktualisieren.
     """
     tools = _registered_tools()
-    assert len(tools) == 33, (
-        f"Erwartet 33 registrierte @mcp.tool, gefunden {len(tools)}: {tools}"
-    )
+    assert len(tools) == 33, f"Erwartet 33 registrierte @mcp.tool, gefunden {len(tools)}: {tools}"
 
 
 def test_every_registered_tool_documented_in_readme() -> None:
@@ -43,9 +41,7 @@ def test_every_registered_tool_documented_in_readme() -> None:
     readme = _readme_text()
     tools = _registered_tools()
     missing = [t for t in tools if t not in readme]
-    assert not missing, (
-        f"{len(missing)} registrierte MCP-Tools fehlen in der README: {missing}"
-    )
+    assert not missing, f"{len(missing)} registrierte MCP-Tools fehlen in der README: {missing}"
 
 
 def test_readme_links_to_server_code_reference() -> None:
@@ -64,6 +60,5 @@ def test_readme_does_not_advertise_unregistered_snapshot_tools() -> None:
     for ghost in ("vault.export_snapshot", "vault.restore_snapshot"):
         if ghost not in tools:
             assert ghost not in readme, (
-                f"README bewirbt nicht-registriertes Tool {ghost} "
-                f"(kein @mcp.tool in server.py)"
+                f"README bewirbt nicht-registriertes Tool {ghost} (kein @mcp.tool in server.py)"
             )

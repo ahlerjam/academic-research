@@ -30,8 +30,12 @@ ALL_SKILLS = sorted(
 
 _UMLAUTS = "äöüÄÖÜß"
 _TRANSLIT = [
-    ("ä", "ae"), ("ö", "oe"), ("ü", "ue"),
-    ("Ä", "Ae"), ("Ö", "Oe"), ("Ü", "Ue"),
+    ("ä", "ae"),
+    ("ö", "oe"),
+    ("ü", "ue"),
+    ("Ä", "Ae"),
+    ("Ö", "Oe"),
+    ("Ü", "Ue"),
     ("ß", "ss"),
 ]
 
@@ -77,8 +81,7 @@ def _ascii_doublings(desc: str) -> list[tuple[str, str]]:
                 continue
             # 1) ganze Segment-Doppelung
             if any(c in left for c in _UMLAUTS) and (
-                _asciify(left).lower() == right.lower()
-                and left.lower() != right.lower()
+                _asciify(left).lower() == right.lower() and left.lower() != right.lower()
             ):
                 found.append((left, right))
                 continue

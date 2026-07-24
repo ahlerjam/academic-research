@@ -8,6 +8,7 @@ Ergebnis als ``scihub_optin`` nach
 Default: ``false`` (DEAKTIVIERT). Die Aktivierung erfolgt ausschliesslich nach
 explizitem Opt-in. Bei nicht-interaktivem stdin gilt der sichere Default.
 """
+
 from __future__ import annotations
 
 import sys
@@ -76,8 +77,8 @@ def main() -> int:
     if enabled:
         print(f"✅ SciHub Opt-in: aktiviert (scihub_optin: true in {active})")
         print(
-            "   Hinweis: Bei jedem SciHub-Fund erscheint *\"Quelle via SciHub bezogen — "
-            "bitte zusätzlich legalen Zugriff klären.\"*"
+            '   Hinweis: Bei jedem SciHub-Fund erscheint *"Quelle via SciHub bezogen — '
+            'bitte zusätzlich legalen Zugriff klären."*'
         )
     else:
         print(f"ℹ️  SciHub Opt-in: deaktiviert (Default) (scihub_optin: false in {active})")

@@ -28,6 +28,7 @@ REQUIREMENTS = REPO_ROOT / "scripts" / "requirements.txt"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_requirements() -> dict[str, Requirement]:
     """Liefert {normalisierter Paketname: Requirement} aus scripts/requirements.txt."""
     parsed: dict[str, Requirement] = {}
@@ -62,6 +63,7 @@ def _min_allowed_version(spec: SpecifierSet, ceiling: str = "1000.0.0") -> Versi
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_requirements_file_exists():
     assert REQUIREMENTS.is_file(), f"{REQUIREMENTS} fehlt"

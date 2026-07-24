@@ -12,8 +12,6 @@ import re
 from datetime import date
 from pathlib import Path
 
-import pytest
-
 CHANGELOG = Path(__file__).parent.parent / "CHANGELOG.md"
 
 # Ueberschriften der Form: "## [6.4.0] — 2026-05-17"
@@ -92,6 +90,4 @@ def test_hooks_stack_has_pr_reference():
     text = CHANGELOG.read_text(encoding="utf-8")
     m = re.search(r"\*\*Hooks-Stack[^\n]*", text)
     assert m, "Kein 'Hooks-Stack'-Eintrag im CHANGELOG gefunden"
-    assert re.search(r"#\d+", m.group(0)), (
-        f"Hooks-Stack-Eintrag ohne PR-Referenz: {m.group(0)}"
-    )
+    assert re.search(r"#\d+", m.group(0)), f"Hooks-Stack-Eintrag ohne PR-Referenz: {m.group(0)}"

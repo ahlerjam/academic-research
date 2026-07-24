@@ -8,6 +8,7 @@ Deckt die drei Start-Blocker aus #217 ab:
     (#217 Ursache 2).
   - Eine ``tools/list``-Anfrage liefert die registrierten ``vault.*``-Tools.
 """
+
 import asyncio
 import importlib
 import sys

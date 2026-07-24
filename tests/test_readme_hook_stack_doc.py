@@ -38,6 +38,7 @@ def test_migration_guide_does_not_contain_session_mid():
     """MIGRATION-v5-to-v6.md darf 'SessionMid' nicht erwaehnen."""
     if not MIGRATION_GUIDE.exists():
         import pytest
+
         pytest.skip("MIGRATION-v5-to-v6.md nicht vorhanden")
     migration_text = MIGRATION_GUIDE.read_text(encoding="utf-8")
     assert "SessionMid" not in migration_text, (

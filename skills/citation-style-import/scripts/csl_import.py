@@ -7,12 +7,11 @@ Ausgabe: Markdown analog skills/citation-extraction/references/apa.md.
 Verwendung:
     python csl_import.py springer-basic-author-date.csl -o custom-springer-ad.md
 """
+
 from __future__ import annotations
 
 import argparse
 import pathlib
-import sys
-from typing import Optional
 from xml.etree import ElementTree as ET
 
 # CSL XML-Namespace
@@ -30,9 +29,21 @@ SOURCE_TYPE_LABELS: dict[str, str] = {
 
 # Relevante CSL-Variablen fuer den Parser
 RELEVANT_VARIABLES = {
-    "author", "editor", "title", "container-title", "issued",
-    "volume", "issue", "page", "page-first", "publisher",
-    "publisher-place", "DOI", "ISBN", "URL", "edition",
+    "author",
+    "editor",
+    "title",
+    "container-title",
+    "issued",
+    "volume",
+    "issue",
+    "page",
+    "page-first",
+    "publisher",
+    "publisher-place",
+    "DOI",
+    "ISBN",
+    "URL",
+    "edition",
 }
 
 
@@ -77,11 +88,7 @@ class CSLParser:
     @property
     def macros(self) -> dict[str, ET.Element]:
         """Alle <macro name="..."> als Dict name → Element."""
-        return {
-            m.get("name", ""): m
-            for m in self._root.findall("csl:macro", NS)
-            if m.get("name")
-        }
+        return {m.get("name", ""): m for m in self._root.findall("csl:macro", NS) if m.get("name")}
 
     # ------------------------------------------------------------------ #
     # Quellentypen
@@ -129,6 +136,7 @@ class CSLParser:
 # ------------------------------------------------------------------ #
 # Markdown-Generierung
 # ------------------------------------------------------------------ #
+
 
 def csl_to_markdown(parser: CSLParser) -> str:
     """
@@ -237,6 +245,7 @@ def _rule_for_type(typ: str, citation_format: str) -> str:
 # CLI-Einstiegspunkt
 # ------------------------------------------------------------------ #
 
+
 def main() -> None:
     parser_args = argparse.ArgumentParser(
         description="CSL-Datei in Prompt-Regel-Markdown umwandeln"
@@ -247,7 +256,8 @@ def main() -> None:
         help="Pfad zur .csl-Datei oder URL (lokal: Pfad; remote: URL)",
     )
     parser_args.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=pathlib.Path,
         default=None,
         help="Ausgabedatei (Standard: stdout)",

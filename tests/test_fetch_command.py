@@ -12,7 +12,7 @@ Kein LLM-Call. Alle Tests sind reine Unit-Tests:
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -25,6 +25,7 @@ EVALS_FILE = REPO_ROOT / "evals/fetch/evals.json"
 # ---------------------------------------------------------------------------
 # Pure-logic helpers (kopiert/spiegelt fetch.md-Workflow fuer testbare Isolation)
 # ---------------------------------------------------------------------------
+
 
 def _parse_frontmatter(path: Path) -> dict:
     """Parse YAML frontmatter delimited by '---' lines."""
@@ -107,7 +108,7 @@ def build_pickup_entry(
         "identifier_type": identifier_type,
         "bib_pickup_url": bib_pickup_url,
         "reason": reason,
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "source": source,
     }
 
@@ -122,7 +123,7 @@ def build_literature_state_block(
     """
     Erzeugt den Markdown-Append-Block fuer literature_state.md.
     """
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     lines = [
         f"## {title} ({year})",
         "",
@@ -140,6 +141,7 @@ def build_literature_state_block(
 # Test 1 — command file exists
 # ---------------------------------------------------------------------------
 
+
 def test_command_file_exists():
     assert COMMAND_FILE.exists(), f"Missing: {COMMAND_FILE}"
 
@@ -147,6 +149,7 @@ def test_command_file_exists():
 # ---------------------------------------------------------------------------
 # Test 2 — frontmatter: Agent(book-fetcher) in allowed-tools
 # ---------------------------------------------------------------------------
+
 
 def test_frontmatter_agent_book_fetcher():
     fm = _parse_frontmatter(COMMAND_FILE)
@@ -159,6 +162,7 @@ def test_frontmatter_agent_book_fetcher():
 # ---------------------------------------------------------------------------
 # Test 3 — frontmatter: argument-hint vorhanden
 # ---------------------------------------------------------------------------
+
 
 def test_frontmatter_argument_hint():
     fm = _parse_frontmatter(COMMAND_FILE)
@@ -175,17 +179,17 @@ def test_frontmatter_argument_hint():
 # Test 4 — frontmatter: description vorhanden und nicht leer
 # ---------------------------------------------------------------------------
 
+
 def test_frontmatter_description_nonempty():
     fm = _parse_frontmatter(COMMAND_FILE)
     desc = fm.get("description", "")
-    assert desc and len(str(desc).strip()) > 10, (
-        f"description fehlt oder zu kurz: {desc!r}"
-    )
+    assert desc and len(str(desc).strip()) > 10, f"description fehlt oder zu kurz: {desc!r}"
 
 
 # ---------------------------------------------------------------------------
 # Test 5 — Parser: ISBN-13
 # ---------------------------------------------------------------------------
+
 
 def test_parser_isbn13():
     typ, val = parse_identifier("978-3-16-148410-0")
@@ -197,6 +201,7 @@ def test_parser_isbn13():
 # Test 6 — Parser: ISBN-10
 # ---------------------------------------------------------------------------
 
+
 def test_parser_isbn10():
     typ, val = parse_identifier("0306406152")
     assert typ == "isbn"
@@ -206,6 +211,7 @@ def test_parser_isbn10():
 # ---------------------------------------------------------------------------
 # Test 7 — Parser: DOI
 # ---------------------------------------------------------------------------
+
 
 def test_parser_doi():
     typ, val = parse_identifier("10.1007/978-3-662-54347-6")
@@ -217,6 +223,7 @@ def test_parser_doi():
 # Test 8 — Parser: URL
 # ---------------------------------------------------------------------------
 
+
 def test_parser_url():
     typ, val = parse_identifier("https://link.springer.com/book/10.1007/foo")
     assert typ == "url"
@@ -226,6 +233,7 @@ def test_parser_url():
 # ---------------------------------------------------------------------------
 # Test 9 — Parser: Freitext/Titel
 # ---------------------------------------------------------------------------
+
 
 def test_parser_title():
     typ, val = parse_identifier("Advanced Machine Learning")
@@ -237,6 +245,7 @@ def test_parser_title():
 # Test 10 — Parser: isbn:-Prefix
 # ---------------------------------------------------------------------------
 
+
 def test_parser_isbn_prefix():
     typ, val = parse_identifier("isbn: 0-306-40615-2")
     assert typ == "isbn"
@@ -247,6 +256,7 @@ def test_parser_isbn_prefix():
 # Test 11 — Pfad-Sanitizer
 # ---------------------------------------------------------------------------
 
+
 def test_sanitize_output_path_isbn():
     result = sanitize_output_path("978-3-16-148410-0")
     assert result.name == "978-3-16-148410-0.pdf"
@@ -256,6 +266,7 @@ def test_sanitize_output_path_isbn():
 # ---------------------------------------------------------------------------
 # Test 12 — Pickup-Queue-Entry hat Pflichtfelder
 # ---------------------------------------------------------------------------
+
 
 def test_pickup_entry_required_fields():
     entry = build_pickup_entry(
@@ -274,6 +285,7 @@ def test_pickup_entry_required_fields():
 # ---------------------------------------------------------------------------
 # Test 13 — literature_state-Block hat Pflichtfelder
 # ---------------------------------------------------------------------------
+
 
 def test_literature_state_block_structure():
     block = build_literature_state_block(
@@ -295,6 +307,7 @@ def test_literature_state_block_structure():
 # Test 14 — Eval-Datei existiert
 # ---------------------------------------------------------------------------
 
+
 def test_evals_file_exists():
     assert EVALS_FILE.exists(), f"Missing: {EVALS_FILE}"
 
@@ -302,6 +315,7 @@ def test_evals_file_exists():
 # ---------------------------------------------------------------------------
 # Test 15 — Eval-Schema: 3 Cases mit id/input/expected
 # ---------------------------------------------------------------------------
+
 
 def test_evals_schema():
     data = json.loads(EVALS_FILE.read_text(encoding="utf-8"))

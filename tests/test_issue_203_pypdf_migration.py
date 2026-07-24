@@ -11,6 +11,7 @@ tests/) und die requirements-Dateien. Er ist bewusst inhaltsbasiert, damit er
 auf dem aktuellen (noch nicht migrierten) Stand ROT ist und nach der Migration
 GRUEN wird.
 """
+
 from __future__ import annotations
 
 import re
@@ -52,9 +53,7 @@ def test_requirements_uses_pypdf_not_pypdf2():
     assert not re.search(r"(?im)^\s*PyPDF2\b", text), (
         "scripts/requirements.txt listet noch PyPDF2 — auf pypdf umstellen."
     )
-    assert re.search(r"(?im)^\s*pypdf\b", text), (
-        "scripts/requirements.txt muss pypdf listen."
-    )
+    assert re.search(r"(?im)^\s*pypdf\b", text), "scripts/requirements.txt muss pypdf listen."
 
 
 def test_no_pypdf2_imports_remain():
@@ -63,9 +62,7 @@ def test_no_pypdf2_imports_remain():
         text = p.read_text(encoding="utf-8")
         if _IMPORT_PYPDF2.search(text):
             offenders.append(str(p.relative_to(REPO_ROOT)))
-    assert not offenders, (
-        "Noch PyPDF2-Importe vorhanden in:\n  " + "\n  ".join(offenders)
-    )
+    assert not offenders, "Noch PyPDF2-Importe vorhanden in:\n  " + "\n  ".join(offenders)
 
 
 def test_no_pypdf2_compat_helper_remains():
@@ -73,8 +70,7 @@ def test_no_pypdf2_compat_helper_remains():
     po = REPO_ROOT / "scripts" / "page_offset.py"
     text = po.read_text(encoding="utf-8")
     assert "PyPDF2" not in text, (
-        "scripts/page_offset.py darf PyPDF2 nicht mehr referenzieren "
-        "(Compat-Pattern entfernen)."
+        "scripts/page_offset.py darf PyPDF2 nicht mehr referenzieren (Compat-Pattern entfernen)."
     )
 
 
@@ -82,10 +78,7 @@ def test_pypdf_is_used_in_scripts():
     """Mindestens ein produktives scripts/-Modul nutzt pypdf direkt."""
     pat = re.compile(r"^\s*(import\s+pypdf|from\s+pypdf)\b", re.MULTILINE)
     scripts_dir = REPO_ROOT / "scripts"
-    found = any(
-        pat.search(p.read_text(encoding="utf-8"))
-        for p in scripts_dir.rglob("*.py")
-    )
+    found = any(pat.search(p.read_text(encoding="utf-8")) for p in scripts_dir.rglob("*.py"))
     assert found, "Kein scripts/-Modul importiert pypdf."
 
 

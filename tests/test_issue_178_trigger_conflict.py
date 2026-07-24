@@ -14,6 +14,7 @@ Akzeptanzkriterien (#178):
 - Beide SKILL.md: Abgrenzungs-Section, die chapter-writer = Text-Output und
   advisor = Review/Feedback ohne Neuschrieb klar trennt.
 """
+
 from __future__ import annotations
 
 import re
@@ -101,9 +102,7 @@ def test_chapter_writer_no_bare_feedback_trigger() -> None:
 def test_chapter_writer_abgrenzung_marks_text_output() -> None:
     """chapter-writer Abgrenzung muss sich als Text-Output gegen advisor abgrenzen."""
     section = _abgrenzung_section(CHAPTER_WRITER_MD)
-    assert "advisor" in section, (
-        "chapter-writer Abgrenzung verweist nicht auf 'advisor' (#178)."
-    )
+    assert "advisor" in section, "chapter-writer Abgrenzung verweist nicht auf 'advisor' (#178)."
     assert "Text" in section or "Output" in section, (
         "chapter-writer Abgrenzung beschreibt nicht den Text-Output-Charakter (#178)."
     )

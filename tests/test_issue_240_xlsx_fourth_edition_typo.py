@@ -31,9 +31,7 @@ def test_fourth_edition_directory_exists_and_typo_dir_gone():
 def test_base_py_has_no_typo():
     """base.py darf den Tippfehler 'fouth-edition' nicht mehr enthalten."""
     text = BASE_PY.read_text(encoding="utf-8")
-    assert "fouth-edition" not in text, (
-        "Tippfehler 'fouth-edition' steht noch in base.py"
-    )
+    assert "fouth-edition" not in text, "Tippfehler 'fouth-edition' steht noch in base.py"
     assert "ecma/fourth-edition/" in text, (
         "Korrigierter Pfad 'ecma/fourth-edition/' fehlt in base.py"
     )
@@ -55,8 +53,6 @@ def test_ecma_schema_mappings_resolve_to_existing_files():
     ecma_paths = _ecma_schema_paths()
     assert ecma_paths, "Keine ecma/-Schema-Pfade in base.py gefunden"
     for rel in ecma_paths:
-        assert "fouth-edition" not in rel, (
-            "Schema-Pfad enthaelt noch den Tippfehler: %s" % rel
-        )
+        assert "fouth-edition" not in rel, "Schema-Pfad enthaelt noch den Tippfehler: %s" % rel
         target = schemas_dir / rel
         assert target.is_file(), "Schema-Datei fehlt: %s" % target

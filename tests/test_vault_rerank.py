@@ -2,13 +2,10 @@
 
 TDD: Tests werden zuerst geschrieben (RED), dann Implementierung (GREEN).
 """
+
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -17,6 +14,7 @@ def _make_db(tmp_path: Path) -> str:
     """Erstellt eine Vault-DB mit Schema und gibt den Pfad zurueck."""
     db_path = str(tmp_path / "vault.db")
     from academic_vault.db import VaultDB
+
     db = VaultDB(db_path)
     db.init_schema()
     return db_path
@@ -25,6 +23,7 @@ def _make_db(tmp_path: Path) -> str:
 def _add_paper(db_path: str, paper_id: str, title: str, abstract: str) -> None:
     """Hilfsfunktion: fuegt ein Paper in den Vault ein."""
     from academic_vault.server import add_paper
+
     csl = {"type": "article-journal", "title": title, "abstract": abstract}
     add_paper(db_path, paper_id, json.dumps(csl))
 
@@ -33,12 +32,14 @@ def _add_paper(db_path: str, paper_id: str, title: str, abstract: str) -> None:
 # Tests: Reciprocal-Rank-Fusion (RRF)
 # ---------------------------------------------------------------------------
 
+
 class TestReciprocalRankFusion:
     """Unit-Tests fuer die RRF-Berechnung in retrieval.py."""
 
     def test_rrf_score_formula(self):
         """RRF-Score = 1/(k+rank_vec) + 1/(k+rank_fts) mit k=60."""
         from academic_vault.retrieval import rrf_score
+
         k = 60
         rank_vec = 1  # Rang 1 in vec0-Ergebnissen
         rank_fts = 1  # Rang 1 in FTS5-Ergebnissen
@@ -49,6 +50,7 @@ class TestReciprocalRankFusion:
     def test_rrf_score_missing_in_one_list(self):
         """RRF-Score mit None-Rang (Paper nur in einem Ergebnis): nur ein Term."""
         from academic_vault.retrieval import rrf_score
+
         k = 60
         # Nur in vec0, nicht in FTS5
         result_vec_only = rrf_score(rank_vec=1, rank_fts=None, k=k)
@@ -137,6 +139,7 @@ class TestReciprocalRankFusion:
 # ---------------------------------------------------------------------------
 # Tests: Reranker-Integration (Voyage/Cohere)
 # ---------------------------------------------------------------------------
+
 
 class TestRerankerIntegration:
     """Tests fuer Voyage- und Cohere-Reranker (hinter Feature-Flag)."""
@@ -237,9 +240,10 @@ class TestRerankerIntegration:
         mock_rerank_result = MagicMock()
         mock_rerank_result.results = [MagicMock(index=0, relevance_score=0.9)]
 
-        with patch("academic_vault.retrieval._get_voyage_client") as mock_voyage, \
-             patch("academic_vault.retrieval._get_cohere_client") as mock_cohere:
-
+        with (
+            patch("academic_vault.retrieval._get_voyage_client") as mock_voyage,
+            patch("academic_vault.retrieval._get_cohere_client") as mock_cohere,
+        ):
             mock_voyage_instance = MagicMock()
             mock_voyage_instance.rerank.return_value = mock_rerank_result
             mock_voyage.return_value = mock_voyage_instance
@@ -261,6 +265,7 @@ class TestRerankerIntegration:
 # ---------------------------------------------------------------------------
 # Tests: Fallback-Struktur-Konsistenz (#233)
 # ---------------------------------------------------------------------------
+
 
 class TestRerankerFallbackStructure:
     """Regressionstests fuer #233: Fallback liefert enriched-Struktur (inkl. text)."""
@@ -356,10 +361,13 @@ class TestRerankerFallbackStructure:
 # Tests: Recall@10 Eval-Set
 # ---------------------------------------------------------------------------
 
+
 class TestRecallEval:
     """Recall@10-Berechnung ueber Eval-Set."""
 
-    def _compute_recall_at_k(self, retrieved_ids: list[str], relevant_ids: list[str], k: int) -> float:
+    def _compute_recall_at_k(
+        self, retrieved_ids: list[str], relevant_ids: list[str], k: int
+    ) -> float:
         """Hilfs-Berechnung Recall@K."""
         top_k = set(retrieved_ids[:k])
         relevant = set(relevant_ids)
@@ -370,11 +378,13 @@ class TestRecallEval:
     def test_recall_at_10_function_exists(self):
         """compute_recall_at_k Funktion existiert in retrieval.py."""
         from academic_vault.retrieval import compute_recall_at_k
+
         assert callable(compute_recall_at_k)
 
     def test_recall_at_k_perfect_retrieval(self):
         """Recall@10 = 1.0 wenn alle relevanten Papers in Top-10."""
         from academic_vault.retrieval import compute_recall_at_k
+
         retrieved = ["p001", "p002", "p003", "p004", "p005", "p006", "p007", "p008", "p009", "p010"]
         relevant = ["p001", "p003", "p005"]
         assert compute_recall_at_k(retrieved, relevant, k=10) == 1.0
@@ -382,6 +392,7 @@ class TestRecallEval:
     def test_recall_at_k_zero_retrieval(self):
         """Recall@10 = 0.0 wenn kein relevantes Paper in Top-10."""
         from academic_vault.retrieval import compute_recall_at_k
+
         retrieved = ["p011", "p012", "p013", "p014", "p015", "p016", "p017", "p018", "p019", "p020"]
         relevant = ["p001", "p003", "p005"]
         assert compute_recall_at_k(retrieved, relevant, k=10) == 0.0
@@ -389,6 +400,7 @@ class TestRecallEval:
     def test_recall_at_k_partial_retrieval(self):
         """Recall@10 = 0.5 wenn die Haelfte der relevanten Papers in Top-10."""
         from academic_vault.retrieval import compute_recall_at_k
+
         retrieved = ["p001", "p002", "p003", "p004", "p005", "p006", "p007", "p008", "p009", "p010"]
         relevant = ["p001", "p011"]  # p001 in Top-10, p011 nicht
         assert compute_recall_at_k(retrieved, relevant, k=10) == 0.5
@@ -396,8 +408,21 @@ class TestRecallEval:
     def test_recall_at_k_cutoff_at_k(self):
         """Recall@10 beachtet k-Cutoff: Treffer ab Position k+1 zaehlen nicht."""
         from academic_vault.retrieval import compute_recall_at_k
+
         # p003 ist an Position 11 (index 10) — zaehlt nicht bei k=10
-        retrieved = ["p001", "p002", "p004", "p005", "p006", "p007", "p008", "p009", "p010", "p011", "p003"]
+        retrieved = [
+            "p001",
+            "p002",
+            "p004",
+            "p005",
+            "p006",
+            "p007",
+            "p008",
+            "p009",
+            "p010",
+            "p011",
+            "p003",
+        ]
         relevant = ["p003"]
         assert compute_recall_at_k(retrieved, relevant, k=10) == 0.0
 
@@ -410,6 +435,7 @@ class TestRecallEval:
 
         # Alle 200 Papers in DB laden
         from academic_vault.server import add_paper
+
         for p in data["papers"]:
             csl = {
                 "type": "article-journal",
@@ -418,8 +444,8 @@ class TestRecallEval:
             }
             add_paper(db_path, p["paper_id"], json.dumps(csl))
 
-        from academic_vault.server import search_papers
         from academic_vault.retrieval import compute_recall_at_k
+        from academic_vault.server import search_papers
 
         recalls = []
         for q in data["queries"]:
@@ -430,18 +456,22 @@ class TestRecallEval:
 
         mean_recall = sum(recalls) / len(recalls) if recalls else 0.0
         # Sanity: FTS5 muss minimal > 0 sein (mindestens einige richtige Treffer)
-        assert mean_recall > 0.0, f"FTS5 Recall@10 ist 0.0 — Retrieval funktioniert nicht"
+        assert mean_recall > 0.0, "FTS5 Recall@10 ist 0.0 — Retrieval funktioniert nicht"
 
     def test_rrf_improves_over_vanilla_fts_on_mock_data(self, tmp_path):
         """RRF-Retrieval schlaegt reines FTS5 auf vereinfachtem Eval-Subset."""
-        from academic_vault.retrieval import reciprocal_rank_fusion, compute_recall_at_k
+        from academic_vault.retrieval import compute_recall_at_k, reciprocal_rank_fusion
         from academic_vault.server import search_papers
 
         # Vereinfachtes Setup: 3 Papers, Query findet p001 via FTS5 und vec0
         db_path = _make_db(tmp_path)
-        _add_paper(db_path, "p001", "Hybrid Retrieval BM25 Dense", "Combining sparse and dense methods.")
+        _add_paper(
+            db_path, "p001", "Hybrid Retrieval BM25 Dense", "Combining sparse and dense methods."
+        )
         _add_paper(db_path, "p002", "Unrelated Topic Cats Dogs", "Pets and animals in households.")
-        _add_paper(db_path, "p003", "Another Unrelated Topic Music", "Classical music and composers.")
+        _add_paper(
+            db_path, "p003", "Another Unrelated Topic Music", "Classical music and composers."
+        )
 
         fts_results = search_papers(db_path, "hybrid retrieval dense sparse", k=10)
 

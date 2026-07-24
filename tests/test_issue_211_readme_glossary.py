@@ -5,6 +5,7 @@ Decision-Log, Vault-Lock, OCR-Detection, page_offset, output_targets,
 Repro-Lock, Contextual Retrieval, RRF. Jeder Begriff braucht eine eigene
 Glossar-Zeile mit Definition.
 """
+
 import re
 from pathlib import Path
 

@@ -11,6 +11,7 @@ RoB-Bewertungen in den Vault schreiben"): Jedes im Body genutzte
 vault.<tool> muss als `mcp__academic_vault__vault_<tool>` im
 tools-Frontmatter deklariert sein. Stil-Vorlage: tests/test_publisher_fetchers.py.
 """
+
 import re
 from pathlib import Path
 
@@ -76,10 +77,7 @@ def test_every_body_vault_call_is_declared():
     # Nur Tools, die der Agent selbst aufruft — list_risk_of_bias gehoert zum PRISMA-Reader.
     called.discard("list_risk_of_bias")
 
-    undeclared = sorted(
-        t for t in called if f"mcp__academic_vault__vault_{t}" not in tools_str
-    )
+    undeclared = sorted(t for t in called if f"mcp__academic_vault__vault_{t}" not in tools_str)
     assert not undeclared, (
-        f"{AGENT_NAME}: im Body genutzte, aber nicht deklarierte Vault-Tools: "
-        f"{undeclared}"
+        f"{AGENT_NAME}: im Body genutzte, aber nicht deklarierte Vault-Tools: {undeclared}"
     )

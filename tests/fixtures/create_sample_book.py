@@ -3,6 +3,7 @@
 Erzeugt ein minimales PDF mit 4 Kapiteln im Outline-Tree.
 Aufruf: python tests/fixtures/create_sample_book.py
 """
+
 import os
 import sys
 from pathlib import Path
@@ -55,13 +56,13 @@ def create_large_book(output_path: str, num_chapters: int = 8, pages_per_chapter
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     with open(output_path, "wb") as f:
         writer.write(f)
-    print(f"Erstellt: {output_path} ({os.path.getsize(output_path)} Bytes, {total_pages} Seiten, {num_chapters} Kapitel)")
+    print(
+        f"Erstellt: {output_path} ({os.path.getsize(output_path)} Bytes, {total_pages} Seiten, {num_chapters} Kapitel)"
+    )
 
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else str(
-        Path(__file__).parent / "sample_book.pdf"
-    )
+    out = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).parent / "sample_book.pdf")
     create_sample_book(out)
     large_out = str(Path(__file__).parent / "large_book.pdf")
     create_large_book(large_out)

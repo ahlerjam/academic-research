@@ -1,4 +1,5 @@
 """Frontmatter-Validierung, Output-Schema-Check und Verbots-Pruefung fuer OA-Fetcher-Subagenten."""
+
 import json
 import re
 from pathlib import Path
@@ -14,6 +15,7 @@ VALID_STATUSES = {"success", "pickup_required", "captcha", "no_match", "metadata
 
 
 # ─── Hilfsfunktion ───────────────────────────────────────────────────────────
+
 
 def parse_frontmatter(path: Path) -> tuple[dict, str]:
     """Parst YAML-Frontmatter aus einer Markdown-Datei ohne pyyaml-Abhaengigkeit.
@@ -38,6 +40,7 @@ def parse_frontmatter(path: Path) -> tuple[dict, str]:
 
 # ─── Klasse 1: Frontmatter-Validierung ───────────────────────────────────────
 
+
 class TestAgentFrontmatter:
     @pytest.mark.parametrize("agent_name", AGENT_NAMES)
     def test_agent_file_exists(self, agent_name):
@@ -61,7 +64,9 @@ class TestAgentFrontmatter:
         path = AGENTS_DIR / f"{agent_name}.md"
         fm, _ = parse_frontmatter(path)
         assert "model" in fm, f"Kein 'model'-Feld in {agent_name}.md"
-        assert fm["model"] == "sonnet", f"model='{fm['model']}' in {agent_name}.md — erwartet 'sonnet'"
+        assert fm["model"] == "sonnet", (
+            f"model='{fm['model']}' in {agent_name}.md — erwartet 'sonnet'"
+        )
 
     @pytest.mark.parametrize("agent_name", AGENT_NAMES)
     def test_frontmatter_has_max_turns(self, agent_name):
@@ -69,7 +74,9 @@ class TestAgentFrontmatter:
         path = AGENTS_DIR / f"{agent_name}.md"
         fm, _ = parse_frontmatter(path)
         assert "maxTurns" in fm, f"Kein 'maxTurns'-Feld in {agent_name}.md"
-        assert fm["maxTurns"].isdigit(), f"maxTurns='{fm['maxTurns']}' ist keine Zahl in {agent_name}.md"
+        assert fm["maxTurns"].isdigit(), (
+            f"maxTurns='{fm['maxTurns']}' ist keine Zahl in {agent_name}.md"
+        )
         assert int(fm["maxTurns"]) > 0, f"maxTurns muss > 0 sein in {agent_name}.md"
 
     def test_tib_fetcher_max_turns_is_15(self):
@@ -111,12 +118,15 @@ class TestAgentFrontmatter:
             f"von {agent_name}.md — Space-Befehle werden geblockt (Issue #222)"
         )
 
-    @pytest.mark.parametrize("agent_name, expected_guide", [
-        ("tib-fetcher", "config/browser_guides/tib.md"),
-        ("oapen-fetcher", "config/browser_guides/oapen.md"),
-        ("doabooks-fetcher", "config/browser_guides/doab.md"),
-        ("kvk-fetcher", "config/browser_guides/kvk.md"),
-    ])
+    @pytest.mark.parametrize(
+        "agent_name, expected_guide",
+        [
+            ("tib-fetcher", "config/browser_guides/tib.md"),
+            ("oapen-fetcher", "config/browser_guides/oapen.md"),
+            ("doabooks-fetcher", "config/browser_guides/doab.md"),
+            ("kvk-fetcher", "config/browser_guides/kvk.md"),
+        ],
+    )
     def test_body_references_browser_guide(self, agent_name, expected_guide):
         """Agent-Body muss den kanonischen Browser-Guide-Pfad referenzieren."""
         path = AGENTS_DIR / f"{agent_name}.md"
@@ -127,6 +137,7 @@ class TestAgentFrontmatter:
 
 
 # ─── Klasse 2: Output-Schema-Validierung ─────────────────────────────────────
+
 
 class TestOutputSchema:
     """Prueft, dass das gesperrte Output-Schema (5 Status-Werte) korrekt definiert ist."""
@@ -212,6 +223,7 @@ class TestOutputSchema:
 
 # ─── Klasse 3: Verbots-Check ─────────────────────────────────────────────────
 
+
 class TestForbiddenPatterns:
     """Prueft, dass verbotene Muster (curl, wget, direkte HTTP-Calls) nicht in Agenten vorkommen."""
 
@@ -246,13 +258,16 @@ class TestForbiddenPatterns:
         """Agent-Body sollte einen 'Verbote'- oder 'Forbidden'-Abschnitt haben."""
         path = AGENTS_DIR / f"{agent_name}.md"
         _, body = parse_frontmatter(path)
-        has_verbote = bool(re.search(r"##\s*(Verbote|Forbidden|Einschraenkungen)", body, re.IGNORECASE))
+        has_verbote = bool(
+            re.search(r"##\s*(Verbote|Forbidden|Einschraenkungen)", body, re.IGNORECASE)
+        )
         assert has_verbote, (
             f"Kein 'Verbote'-Abschnitt in {agent_name}.md — Verbote muessen explizit dokumentiert sein"
         )
 
 
 # ─── Klasse 4: Eval-Cases ────────────────────────────────────────────────────
+
 
 class TestEvalCases:
     def test_evals_file_exists(self):
@@ -273,9 +288,7 @@ class TestEvalCases:
         """Eval-IDs muessen oa-01 bis oa-04 sein."""
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
         ids = [c["id"] for c in data]
-        assert ids == ["oa-01", "oa-02", "oa-03", "oa-04"], (
-            f"Falsche IDs: {ids}"
-        )
+        assert ids == ["oa-01", "oa-02", "oa-03", "oa-04"], f"Falsche IDs: {ids}"
 
     def test_each_eval_has_required_fields(self):
         """Jeder Eval-Case muss id, description, agent und expected enthalten."""

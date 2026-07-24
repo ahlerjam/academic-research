@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from search import MODULES
-from text_utils import normalize_paper, Paper
+from text_utils import Paper, normalize_paper
 
 
 def test_all_modules_registered():

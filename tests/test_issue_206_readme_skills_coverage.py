@@ -8,6 +8,7 @@ dokumentieren. Ausserdem muessen Badge und TOC-Eintrag den korrekten Count
 Befund vor dem Fix: book-handler, cluster-visualizer, latex-export und
 notebook-bundle fehlten komplett, Badge stand auf 23+, TOC auf "23+".
 """
+
 import re
 from pathlib import Path
 
@@ -29,9 +30,7 @@ ISSUE_206_SKILLS = {
 
 def _plugin_own_skills() -> set[str]:
     return {
-        p.parent.name
-        for p in SKILLS_DIR.glob("*/SKILL.md")
-        if p.parent.name not in VENDORED_SKILLS
+        p.parent.name for p in SKILLS_DIR.glob("*/SKILL.md") if p.parent.name not in VENDORED_SKILLS
     }
 
 
@@ -39,18 +38,16 @@ def test_all_plugin_skills_documented_in_readme():
     text = README.read_text(encoding="utf-8")
     # Tabellen-Zeilen referenzieren Skills als `name` in Backticks.
     missing = sorted(s for s in _plugin_own_skills() if f"`{s}`" not in text)
-    assert not missing, (
-        "Plugin-eigene Skills fehlen in der README-Skills-Tabelle: "
-        + ", ".join(missing)
+    assert not missing, "Plugin-eigene Skills fehlen in der README-Skills-Tabelle: " + ", ".join(
+        missing
     )
 
 
 def test_issue_206_named_skills_documented():
     text = README.read_text(encoding="utf-8")
     missing = sorted(s for s in ISSUE_206_SKILLS if f"`{s}`" not in text)
-    assert not missing, (
-        "Von Issue #206 benannte Skills weiterhin undokumentiert: "
-        + ", ".join(missing)
+    assert not missing, "Von Issue #206 benannte Skills weiterhin undokumentiert: " + ", ".join(
+        missing
     )
 
 

@@ -12,12 +12,7 @@ Akzeptanzkriterien (Issue #179):
 import re
 from pathlib import Path
 
-SKILL_MD = (
-    Path(__file__).parent.parent
-    / "skills"
-    / "conference-poster"
-    / "SKILL.md"
-)
+SKILL_MD = Path(__file__).parent.parent / "skills" / "conference-poster" / "SKILL.md"
 
 
 def _description() -> str:

@@ -21,10 +21,10 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import configure_permissions  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Modul-API
 # ---------------------------------------------------------------------------
+
 
 def test_main_accepts_settings_path_override():
     """main() muss einen settings_path-Parameter akzeptieren (testbar machen)."""
@@ -40,6 +40,7 @@ def test_main_accepts_settings_path_override():
 # ---------------------------------------------------------------------------
 # Happy Path
 # ---------------------------------------------------------------------------
+
 
 def test_writes_valid_json_and_keeps_existing_settings(tmp_path):
     """Nach erfolgreichem Lauf ist die Datei valides JSON inkl. Permissions."""
@@ -77,6 +78,7 @@ def test_creates_file_when_missing(tmp_path):
 # Kern-Akzeptanzkriterium: Abbruch hinterlässt die alte gültige Datei
 # ---------------------------------------------------------------------------
 
+
 def test_interrupted_write_keeps_old_valid_file(tmp_path):
     """Bricht der Schreibvorgang ab, bleibt die ORIGINALE gültige Datei intakt."""
     target = tmp_path / "settings.local.json"
@@ -96,9 +98,7 @@ def test_interrupted_write_keeps_old_valid_file(tmp_path):
     # Die alte Datei MUSS unverändert und valide vorhanden sein.
     assert target.exists(), "Originaldatei wurde gelöscht/überschrieben"
     survived = json.loads(target.read_text(encoding="utf-8"))
-    assert survived == original, (
-        "Originalinhalt ging beim abgebrochenen Schreiben verloren"
-    )
+    assert survived == original, "Originalinhalt ging beim abgebrochenen Schreiben verloren"
 
 
 def test_no_temp_file_leftover_after_failed_write(tmp_path):

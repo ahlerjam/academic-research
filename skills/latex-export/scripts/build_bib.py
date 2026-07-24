@@ -15,11 +15,11 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Vault-Zugriff
 # ---------------------------------------------------------------------------
+
 
 def get_all_papers(db_path: str) -> list[dict]:
     """Gibt alle Papers aus dem Vault als Liste von dicts zurueck.
@@ -43,6 +43,7 @@ def get_all_papers(db_path: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Autoren-Formatierung
 # ---------------------------------------------------------------------------
+
 
 def format_authors_bibtex(authors: list[dict]) -> str:
     """Formatiert CSL-Autoren-Liste im BibTeX-Format.
@@ -70,6 +71,7 @@ def format_authors_bibtex(authors: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 # BibTeX-Entry-Generierung
 # ---------------------------------------------------------------------------
+
 
 def _get_year(csl: dict) -> str:
     """Extrahiert Jahr aus CSL issued-Feld."""
@@ -192,6 +194,7 @@ def paper_to_bibtex(paper: dict) -> str:
 # Oeffentliche Build-Funktion
 # ---------------------------------------------------------------------------
 
+
 def build_bib_from_vault(db_path: str, output_path: str) -> None:
     """Liest alle Papers aus dem Vault und schreibt .bib-Datei.
 
@@ -208,8 +211,11 @@ def build_bib_from_vault(db_path: str, output_path: str) -> None:
         except Exception as e:
             # Einzelnes fehlerhaftes Paper soll die Generierung nicht stoppen
             import sys as _sys
-            print(f"[build_bib] Warnung: Paper '{paper.get('paper_id', '?')}' uebersprungen: {e}",
-                  file=_sys.stderr)
+
+            print(
+                f"[build_bib] Warnung: Paper '{paper.get('paper_id', '?')}' uebersprungen: {e}",
+                file=_sys.stderr,
+            )
 
     bib_content = "\n\n".join(entries) + "\n" if entries else ""
 

@@ -10,29 +10,32 @@ Implementiert:
 RRF-Formel: score(d) = 1/(k + rank_vec(d)) + 1/(k + rank_fts(d))
 Standard-Konstante k=60 nach Cormack et al. 2009.
 """
-import os
-from typing import Optional
 
-def _get_voyage_client(api_key: Optional[str] = None):
+import os
+
+
+def _get_voyage_client(api_key: str | None = None):
     """Erstellt Voyage-Client.
 
     Kein Singleton — api_key kann pro Aufruf uebergeben werden.
     """
     try:
         import voyageai
+
         key = api_key or os.environ.get("VOYAGE_API_KEY", "")
         return voyageai.Client(api_key=key)
     except ImportError:
         raise ImportError("voyageai SDK nicht installiert. Bitte 'pip install voyageai'.")
 
 
-def _get_cohere_client(api_key: Optional[str] = None):
+def _get_cohere_client(api_key: str | None = None):
     """Erstellt Cohere-Client.
 
     Kein Singleton — api_key kann pro Aufruf uebergeben werden.
     """
     try:
         import cohere
+
         key = api_key or os.environ.get("COHERE_API_KEY", "")
         return cohere.Client(api_key=key)
     except ImportError:
@@ -40,8 +43,8 @@ def _get_cohere_client(api_key: Optional[str] = None):
 
 
 def rrf_score(
-    rank_vec: Optional[int],
-    rank_fts: Optional[int],
+    rank_vec: int | None,
+    rank_fts: int | None,
     k: int = 60,
 ) -> float:
     """Berechnet RRF-Score fuer ein Dokument.
@@ -68,7 +71,7 @@ def reciprocal_rank_fusion(
     vec_results: list[dict],
     fts_results: list[dict],
     k: int = 60,
-    top_n: Optional[int] = None,
+    top_n: int | None = None,
 ) -> list[dict]:
     """Kombiniert vec0- und FTS5-Ergebnisse via Reciprocal-Rank-Fusion.
 
@@ -116,7 +119,7 @@ def reciprocal_rank_fusion(
 def rerank_with_voyage(
     query: str,
     candidates: list[dict],
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
     model: str = "rerank-2",
 ) -> list[dict]:
     """Rerankt Kandidaten via Voyage-API.
@@ -153,7 +156,7 @@ def rerank_with_voyage(
 def rerank_with_cohere(
     query: str,
     candidates: list[dict],
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
     model: str = "rerank-english-v3.0",
 ) -> list[dict]:
     """Rerankt Kandidaten via Cohere-API.
@@ -189,8 +192,8 @@ def rerank_with_cohere(
 def apply_reranker(
     query: str,
     candidates: list[dict],
-    voyage_api_key: Optional[str] = None,
-    cohere_api_key: Optional[str] = None,
+    voyage_api_key: str | None = None,
+    cohere_api_key: str | None = None,
 ) -> list[dict]:
     """Wendet optionalen Reranker an.
 

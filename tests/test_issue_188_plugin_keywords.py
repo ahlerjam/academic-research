@@ -42,9 +42,7 @@ def test_plugin_json_is_valid_json() -> None:
 def test_v6_keyword_present(keyword: str) -> None:
     """Jedes geforderte v6-Keyword muss in keywords vorhanden sein."""
     keywords = _keywords()
-    assert keyword in keywords, (
-        f"v6-Keyword '{keyword}' fehlt in plugin.json keywords: {keywords}"
-    )
+    assert keyword in keywords, f"v6-Keyword '{keyword}' fehlt in plugin.json keywords: {keywords}"
 
 
 def test_legacy_core_keywords_preserved() -> None:
@@ -57,6 +55,4 @@ def test_legacy_core_keywords_preserved() -> None:
 def test_keywords_unique() -> None:
     """Keine Duplikate in keywords."""
     keywords = _keywords()
-    assert len(keywords) == len(set(keywords)), (
-        f"Duplikate in keywords: {keywords}"
-    )
+    assert len(keywords) == len(set(keywords)), f"Duplikate in keywords: {keywords}"

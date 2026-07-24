@@ -23,15 +23,15 @@ from pathlib import Path
 # Reihenfolge wichtig: Backslash zuerst, dann andere Zeichen.
 _SPECIAL_CHARS = [
     ("\\", r"\textbackslash{}"),
-    ("&",  r"\&"),
-    ("%",  r"\%"),
-    ("$",  r"\$"),
-    ("#",  r"\#"),
-    ("_",  r"\_"),
-    ("^",  r"\textasciicircum{}"),
-    ("~",  r"\textasciitilde{}"),
-    ("{",  r"\{"),
-    ("}",  r"\}"),
+    ("&", r"\&"),
+    ("%", r"\%"),
+    ("$", r"\$"),
+    ("#", r"\#"),
+    ("_", r"\_"),
+    ("^", r"\textasciicircum{}"),
+    ("~", r"\textasciitilde{}"),
+    ("{", r"\{"),
+    ("}", r"\}"),
 ]
 
 
@@ -55,12 +55,12 @@ def _escape_tex_text(text: str) -> str:
     # Selektive Zeichen — kein _ da es fuer *_kursiv_* Syntax verwendet wird
     PARA_SPECIAL = [
         ("\\", r"\textbackslash{}"),
-        ("&",  r"\&"),
-        ("%",  r"\%"),
-        ("$",  r"\$"),
-        ("#",  r"\#"),
-        ("^",  r"\textasciicircum{}"),
-        ("~",  r"\textasciitilde{}"),
+        ("&", r"\&"),
+        ("%", r"\%"),
+        ("$", r"\$"),
+        ("#", r"\#"),
+        ("^", r"\textasciicircum{}"),
+        ("~", r"\textasciitilde{}"),
     ]
     result = text
     for char, replacement in PARA_SPECIAL:
@@ -72,20 +72,22 @@ def _escape_tex_text(text: str) -> str:
 # Inline-Formatierung
 # ---------------------------------------------------------------------------
 
+
 def _apply_inline_formatting(line: str) -> str:
     """Wandelt **bold**, _italic_, [link](url) in LaTeX-Entsprechungen um."""
     # Bold: **text** -> \textbf{text}
-    line = re.sub(r'\*\*(.+?)\*\*', lambda m: r'\textbf{' + m.group(1) + '}', line)
+    line = re.sub(r"\*\*(.+?)\*\*", lambda m: r"\textbf{" + m.group(1) + "}", line)
     # Italic: _text_ -> \textit{text} (nicht bei word_boundary mit Zahl)
-    line = re.sub(r'(?<!\w)_(.+?)_(?!\w)', lambda m: r'\textit{' + m.group(1) + '}', line)
+    line = re.sub(r"(?<!\w)_(.+?)_(?!\w)", lambda m: r"\textit{" + m.group(1) + "}", line)
     # Link: [text](url) -> text (URL als Fussnote optional — hier: text behalten)
-    line = re.sub(r'\[(.+?)\]\(.*?\)', r'\1', line)
+    line = re.sub(r"\[(.+?)\]\(.*?\)", r"\1", line)
     return line
 
 
 # ---------------------------------------------------------------------------
 # Custom Renderer
 # ---------------------------------------------------------------------------
+
 
 def _custom_render(md: str) -> str:
     """Eigener Markdown-zu-LaTeX-Renderer ohne externe Abhaengigkeiten."""
@@ -154,7 +156,7 @@ def _custom_render(md: str) -> str:
             continue
 
         # Ueberschriften
-        heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+        heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
         if heading_match:
             flush_para()
             close_unordered()
@@ -162,15 +164,21 @@ def _custom_render(md: str) -> str:
             close_blockquote()
             level = len(heading_match.group(1))
             title_text = heading_match.group(2).strip()
-            tex_cmd = {1: "chapter", 2: "section", 3: "subsection",
-                       4: "subsubsection", 5: "paragraph", 6: "subparagraph"}.get(level, "paragraph")
+            tex_cmd = {
+                1: "chapter",
+                2: "section",
+                3: "subsection",
+                4: "subsubsection",
+                5: "paragraph",
+                6: "subparagraph",
+            }.get(level, "paragraph")
             output.append(f"\\{tex_cmd}{{{title_text}}}")
             output.append("")
             i += 1
             continue
 
         # Blockzitat
-        blockquote_match = re.match(r'^>\s*(.*)', line)
+        blockquote_match = re.match(r"^>\s*(.*)", line)
         if blockquote_match:
             flush_para()
             close_unordered()
@@ -186,7 +194,7 @@ def _custom_render(md: str) -> str:
             close_blockquote()
 
         # Ungeordnete Liste
-        ulist_match = re.match(r'^[-*+]\s+(.*)', line)
+        ulist_match = re.match(r"^[-*+]\s+(.*)", line)
         if ulist_match:
             flush_para()
             close_ordered()
@@ -199,7 +207,7 @@ def _custom_render(md: str) -> str:
             continue
 
         # Geordnete Liste
-        olist_match = re.match(r'^\d+\.\s+(.*)', line)
+        olist_match = re.match(r"^\d+\.\s+(.*)", line)
         if olist_match:
             flush_para()
             close_unordered()
@@ -229,6 +237,7 @@ def _custom_render(md: str) -> str:
 # ---------------------------------------------------------------------------
 # Pandoc-Versuch
 # ---------------------------------------------------------------------------
+
 
 def _pandoc_available() -> bool:
     """Gibt True zurueck wenn pandoc installiert und aufrufbar ist."""
@@ -263,6 +272,7 @@ def _pandoc_render(md: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Oeffentliche API
 # ---------------------------------------------------------------------------
+
 
 def render_markdown_to_tex(md: str, force_custom: bool = False) -> str:
     """Konvertiert Markdown-String zu LaTeX.

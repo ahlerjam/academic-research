@@ -19,12 +19,10 @@ import sys
 from pathlib import Path
 
 import httpx
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import search
-
 
 OAI_NS = "http://www.openarchives.org/OAI/2.0/"
 DC_NS = "http://purl.org/dc/elements/1.1/"
@@ -46,9 +44,7 @@ def _record_xml(idx: int) -> str:
 
 def _list_records_response(n_records: int, with_token: bool) -> str:
     records = "".join(_record_xml(i) for i in range(n_records))
-    token = (
-        "<resumptionToken>tok-next</resumptionToken>" if with_token else ""
-    )
+    token = "<resumptionToken>tok-next</resumptionToken>" if with_token else ""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
         f'<OAI-PMH xmlns="{OAI_NS}">'
@@ -96,8 +92,7 @@ def test_oai_fallback_terminates_on_endless_resumption_tokens(monkeypatch):
 
     # Schleife terminiert ueberhaupt (kein Hang) und respektiert das Runden-Limit.
     assert request_count["oai"] <= search.OAI_MAX_PAGES, (
-        f"OAI wurde {request_count['oai']}x abgefragt, "
-        f"Limit ist {search.OAI_MAX_PAGES}"
+        f"OAI wurde {request_count['oai']}x abgefragt, Limit ist {search.OAI_MAX_PAGES}"
     )
     assert isinstance(results, list)
     assert len(results) <= 5

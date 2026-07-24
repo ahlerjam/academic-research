@@ -126,13 +126,13 @@ def main() -> int:
         print(f"{head_col}{BOLD}{cat}{RESET} {DIM}({cat_pass}/{len(rows)}){RESET}")
         for name, ok, detail, dur in rows:
             status = PASS if ok else FAIL
-            print(f"  [{status}] {name} {DIM}({dur*1000:.0f} ms){RESET}")
+            print(f"  [{status}] {name} {DIM}({dur * 1000:.0f} ms){RESET}")
             if not ok and detail:
                 indented = "\n        ".join(detail.splitlines())
                 print(f"        {YELLOW}{indented}{RESET}")
         print()
 
-    print(f"{DIM}MCP-Round-Trip (1 Server-Start): {mcp_dur*1000:.0f} ms{RESET}")
+    print(f"{DIM}MCP-Round-Trip (1 Server-Start): {mcp_dur * 1000:.0f} ms{RESET}")
     print(f"{BOLD}{'─' * 48}{RESET}")
     overall_color = GREEN if failed == 0 else RED
     verdict = "PASS" if failed == 0 else "FAIL"

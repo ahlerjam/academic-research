@@ -10,6 +10,7 @@ BibTeX-Scope klar zuordnet:
 
 Offline-hermetisch: prueft ausschliesslich Datei-Inhalte, kein Netzwerk.
 """
+
 from __future__ import annotations
 
 import re
@@ -33,9 +34,7 @@ def test_citation_extraction_grenzt_vault_bibtex_ab() -> None:
         "den vollstaendigen Vault->.bib-Export (Issue #176)"
     )
     # Der Verweis muss im BibTeX-/Export-Kontext stehen, nicht irgendwo.
-    bibtex_section = re.search(
-        r"BibTeX[^\n]*\n(?:.*\n){0,12}", text, re.IGNORECASE
-    )
+    bibtex_section = re.search(r"BibTeX[^\n]*\n(?:.*\n){0,12}", text, re.IGNORECASE)
     assert bibtex_section is not None, "Kein BibTeX-Abschnitt in citation-extraction"
     assert "latex-export" in bibtex_section.group(0), (
         "Der Verweis auf latex-export steht nicht im BibTeX-Kontext "

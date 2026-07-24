@@ -11,8 +11,6 @@ Abhaengigkeit: python-barcode[images] (Pillow)
 
 import os
 import tempfile
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # Sheet-Mapping
@@ -62,7 +60,8 @@ def build_pickup_sheets(entries: list) -> dict:
 # Barcode-Generierung
 # ---------------------------------------------------------------------------
 
-def generate_isbn_barcode(isbn: Optional[str], output_path: Optional[str] = None) -> Optional[str]:
+
+def generate_isbn_barcode(isbn: str | None, output_path: str | None = None) -> str | None:
     """Erzeugt ein Code128-PNG-Barcode-Bild fuer eine ISBN.
 
     Args:
@@ -82,6 +81,7 @@ def generate_isbn_barcode(isbn: Optional[str], output_path: Optional[str] = None
 
     try:
         import importlib
+
         _barcode = importlib.import_module("barcode")
         # python-barcode loads barcode.writer lazily; access via attribute after import
         _ImageWriter = _barcode.writer.ImageWriter

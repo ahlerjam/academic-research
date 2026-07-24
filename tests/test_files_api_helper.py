@@ -20,16 +20,15 @@ Manuelle Token-Vergleichs-Doku (AC -75%):
 
 import json
 import os
-import tempfile
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_pdf_bytes() -> bytes:
     """Minimales gültiges PDF (PDF-Magie-Bytes + EOF)."""
@@ -55,6 +54,7 @@ def _make_client_mock(file_id: str = "file_abc123") -> MagicMock:
 # Test 1: Cache-Miss loest Upload aus
 # ---------------------------------------------------------------------------
 
+
 def test_cache_miss_triggers_upload(tmp_path):
     from scripts.files_api_helper import ensure_uploaded
 
@@ -72,9 +72,11 @@ def test_cache_miss_triggers_upload(tmp_path):
 # Test 2: Cache-Hit verhindert Re-Upload
 # ---------------------------------------------------------------------------
 
+
 def test_cache_hit_skips_upload(tmp_path):
-    from scripts.files_api_helper import ensure_uploaded
     import hashlib
+
+    from scripts.files_api_helper import ensure_uploaded
 
     pdf = _write_pdf(tmp_path)
     sha = hashlib.sha256(pdf.read_bytes()).hexdigest()
@@ -101,9 +103,11 @@ def test_cache_hit_skips_upload(tmp_path):
 # Test 3: TTL-Ablauf loest Re-Upload aus
 # ---------------------------------------------------------------------------
 
+
 def test_ttl_expiry_triggers_reupload(tmp_path):
-    from scripts.files_api_helper import ensure_uploaded
     import hashlib
+
+    from scripts.files_api_helper import ensure_uploaded
 
     pdf = _write_pdf(tmp_path)
     sha = hashlib.sha256(pdf.read_bytes()).hexdigest()
@@ -130,6 +134,7 @@ def test_ttl_expiry_triggers_reupload(tmp_path):
 # Test 4: Feature-Flag OFF -> None zurückgeben, kein Upload
 # ---------------------------------------------------------------------------
 
+
 def test_fallback_when_flag_off(tmp_path):
     from scripts.files_api_helper import ensure_uploaded
 
@@ -146,6 +151,7 @@ def test_fallback_when_flag_off(tmp_path):
 # ---------------------------------------------------------------------------
 # Test 5: Beta-Header wird korrekt gesetzt
 # ---------------------------------------------------------------------------
+
 
 def test_beta_header_present(tmp_path):
     from scripts.files_api_helper import ensure_uploaded
@@ -164,20 +170,22 @@ def test_beta_header_present(tmp_path):
     extra_headers = call_kwargs.kwargs.get("extra_headers") or (
         call_kwargs.args[1] if len(call_kwargs.args) > 1 else {}
     )
-    assert "anthropic-beta" in str(call_kwargs), (
-        f"Beta-Header fehlt im upload-Call: {call_kwargs}"
-    )
+    assert "anthropic-beta" in str(call_kwargs), f"Beta-Header fehlt im upload-Call: {call_kwargs}"
 
 
 # ---------------------------------------------------------------------------
 # Tests 6/7/8: Alle drei Agenten muessen cache_control ttl=1h enthalten
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("agent_name", [
-    "relevance-scorer",
-    "quote-extractor",
-    "quality-reviewer",
-])
+
+@pytest.mark.parametrize(
+    "agent_name",
+    [
+        "relevance-scorer",
+        "quote-extractor",
+        "quality-reviewer",
+    ],
+)
 def test_agent_cache_ttl_1h(agent_name):
     agent_file = Path(__file__).parent.parent / "agents" / f"{agent_name}.md"
     assert agent_file.exists(), f"Datei nicht gefunden: {agent_file}"
@@ -191,11 +199,12 @@ def test_agent_cache_ttl_1h(agent_name):
 # Test 9: quote-extractor.md dokumentiert source.type: "file"
 # ---------------------------------------------------------------------------
 
+
 def test_quote_extractor_file_source_documented():
     agent_file = Path(__file__).parent.parent / "agents" / "quote-extractor.md"
     content = agent_file.read_text()
     assert '"type": "file"' in content, (
-        "quote-extractor.md muss source.type: \"file\" als primären Pfad dokumentieren"
+        'quote-extractor.md muss source.type: "file" als primären Pfad dokumentieren'
     )
 
 
@@ -203,13 +212,12 @@ def test_quote_extractor_file_source_documented():
 # Test 10: quote-extractor.md dokumentiert base64-Fallback
 # ---------------------------------------------------------------------------
 
+
 def test_quote_extractor_base64_fallback_documented():
     agent_file = Path(__file__).parent.parent / "agents" / "quote-extractor.md"
     content = agent_file.read_text()
     # base64 als Fallback muss noch vorhanden sein
-    assert '"type": "base64"' in content, (
-        "quote-extractor.md muss base64-Fallback dokumentieren"
-    )
+    assert '"type": "base64"' in content, "quote-extractor.md muss base64-Fallback dokumentieren"
     # Und als Fallback bezeichnet
     assert "Fallback" in content or "fallback" in content, (
         "quote-extractor.md muss Fallback-Begriff enthalten"
@@ -219,6 +227,7 @@ def test_quote_extractor_base64_fallback_documented():
 # ---------------------------------------------------------------------------
 # Test 11: extract_cache_read_tokens() — AC #66 cache_read_input_tokens > 0
 # ---------------------------------------------------------------------------
+
 
 def test_cache_read_path_validates_cached_tokens():
     """

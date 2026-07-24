@@ -10,6 +10,7 @@ Akzeptanzkriterien:
 - `scripts/auth_helper_lib.py` existiert und ist als `scripts.auth_helper_lib`
   importierbar (inkl. der oeffentlichen Auth-Funktionen).
 """
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent

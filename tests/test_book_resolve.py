@@ -1,10 +1,8 @@
 """Tests fuer book_resolve.py — DNB/OL/GoogleBooks/DOAB Clients."""
-import sys
-import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
-import pytest
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Sicherstellen dass scripts/ im Pfad ist
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -14,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 # Hilfs-Fixtures
 # ---------------------------------------------------------------------------
 
-DNB_SRU_RESPONSE_ISBN = """<?xml version="1.0" encoding="UTF-8"?>
+DNB_SRU_RESPONSE_ISBN = b"""<?xml version="1.0" encoding="UTF-8"?>
 <searchRetrieveResponse xmlns="http://www.loc.gov/zing/srw/">
   <numberOfRecords>1</numberOfRecords>
   <records>
@@ -39,13 +37,13 @@ DNB_SRU_RESPONSE_ISBN = """<?xml version="1.0" encoding="UTF-8"?>
       </recordData>
     </record>
   </records>
-</searchRetrieveResponse>""".encode("utf-8")
+</searchRetrieveResponse>"""
 
-DNB_SRU_EMPTY = """<?xml version="1.0"?>
+DNB_SRU_EMPTY = b"""<?xml version="1.0"?>
 <searchRetrieveResponse xmlns="http://www.loc.gov/zing/srw/">
   <numberOfRecords>0</numberOfRecords>
   <records/>
-</searchRetrieveResponse>""".encode("utf-8")
+</searchRetrieveResponse>"""
 
 OL_RESPONSE = {
     "ISBN:9783446461031": {
@@ -81,8 +79,11 @@ DOAB_RESPONSE = [
             {"key": "dc.identifier.uri", "value": "https://oapen.org/record/12345"},
         ],
         "bitstreams": [
-            {"bundleName": "ORIGINAL", "mimeType": "application/pdf",
-             "retrieveLink": "/bitstream/handle/123/book.pdf"}
+            {
+                "bundleName": "ORIGINAL",
+                "mimeType": "application/pdf",
+                "retrieveLink": "/bitstream/handle/123/book.pdf",
+            }
         ],
     }
 ]
@@ -99,6 +100,7 @@ def _make_mock_response(content: bytes, status: int = 200):
 # ---------------------------------------------------------------------------
 # DNB SRU Tests
 # ---------------------------------------------------------------------------
+
 
 def test_dnb_isbn_hit():
     """ISBN 9783446461031 liefert DNB-Treffer mit type=book und title."""
@@ -118,6 +120,7 @@ def test_dnb_isbn_hit():
 # OpenLibrary Fallback Tests
 # ---------------------------------------------------------------------------
 
+
 def test_openlibrary_fallback():
     """DNB leer -> OpenLibrary liefert Daten."""
     import book_resolve
@@ -130,6 +133,7 @@ def test_openlibrary_fallback():
         return resp
 
     with patch("book_resolve.requests.get") as mock_get:
+
         def side_effect(url, **kwargs):
             if "dnb.de" in url:
                 return _make_mock_response(DNB_SRU_EMPTY)
@@ -151,6 +155,7 @@ def test_openlibrary_fallback():
 # GoogleBooks Fallback Tests
 # ---------------------------------------------------------------------------
 
+
 def test_googlebooks_fallback():
     """DNB + OL leer -> GoogleBooks liefert Daten."""
     import book_resolve
@@ -163,6 +168,7 @@ def test_googlebooks_fallback():
         return resp
 
     with patch("book_resolve.requests.get") as mock_get:
+
         def side_effect(url, **kwargs):
             if "dnb.de" in url:
                 return _make_mock_response(DNB_SRU_EMPTY)
@@ -185,6 +191,7 @@ def test_googlebooks_fallback():
 # ---------------------------------------------------------------------------
 # DOAB OA-Check Tests
 # ---------------------------------------------------------------------------
+
 
 def test_doab_oa_check():
     """DOAB-Check liefert OA-Flag und download_url."""

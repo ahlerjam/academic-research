@@ -4,9 +4,9 @@ BookFetcherRouter -- testbarer Python-Spiegel der Routing-Logik aus agents/book-
 Dieser Modul implementiert dieselbe Routing-Logik, die der Agent-Prompt beschreibt,
 damit wir sie mit unittest.mock testen koennen ohne echte Subagenten aufzurufen.
 """
-import re
-import datetime
 
+import datetime
+import re
 
 # Subagent-Reihenfolgen (aus L0-Notes und Spec G.md)
 OA_SUBAGENTS = ["doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"]
@@ -91,7 +91,7 @@ class BookFetcherRouter:
     # ------------------------------------------------------------------
 
     def _ts(self) -> str:
-        return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        return datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
 
     def _try_entry(self, subagent: str, status: str) -> dict:
         return {"subagent": subagent, "status": status, "ts": self._ts()}
@@ -203,8 +203,7 @@ class BookFetcherRouter:
                 result.append(subagent)
         return result
 
-    def _try_publisher(self, pub_subagent: str, payload_base: dict,
-                       tries: list):
+    def _try_publisher(self, pub_subagent: str, payload_base: dict, tries: list):
         """
         Versucht einen Verlags-Subagenten. Handhabt auth_required mit auth-helper-Retry.
 
@@ -233,10 +232,13 @@ class BookFetcherRouter:
         if status == "auth_required":
             # Auth-Helper aufrufen
             target_url = resp.get("url", "")
-            auth_resp = self.dispatch_subagent("auth-helper", {
-                "target_url": target_url,
-                "profile_path": "~/.academic-research/library-profiles/active.yaml",
-            })
+            auth_resp = self.dispatch_subagent(
+                "auth-helper",
+                {
+                    "target_url": target_url,
+                    "profile_path": "~/.academic-research/library-profiles/active.yaml",
+                },
+            )
             auth_status = auth_resp.get("status", "auth_failed")
             tries.append(self._try_entry("auth-helper", auth_status))
 

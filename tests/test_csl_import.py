@@ -4,16 +4,18 @@ Tests fuer den CSL-Import-Skill (F13).
 TDD: Diese Tests wurden VOR der Implementierung geschrieben.
 Alle Tests sind initial rot (ImportError).
 """
-import sys
+
 import pathlib
-import pytest
+import sys
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "csl_import"
 APA_CSL = FIXTURES / "apa-7th-edition.csl"
 SPRINGER_CSL = FIXTURES / "springer-basic-author-date.csl"
 
 # Pfad zum Scripts-Verzeichnis hinzufuegen (analog zotero-import-Tests)
-_SCRIPTS_DIR = str(pathlib.Path(__file__).resolve().parent.parent / "skills" / "citation-style-import" / "scripts")
+_SCRIPTS_DIR = str(
+    pathlib.Path(__file__).resolve().parent.parent / "skills" / "citation-style-import" / "scripts"
+)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
@@ -181,14 +183,21 @@ class TestCSLToMarkdownSpringer:
         """Eval: 5 Quellentypen abgedeckt."""
         parser = CSLParser(SPRINGER_CSL)
         md = csl_to_markdown(parser)
-        covered = sum(1 for t in ["article-journal", "book", "chapter", "paper-conference", "other"]
-                      if t in md or any(k in md for k in {
-                          "article-journal": ["Zeitschriftenartikel"],
-                          "book": ["Buch"],
-                          "chapter": ["Buchkapitel"],
-                          "paper-conference": ["Konferenz"],
-                          "other": ["Webseite", "Sonstige"],
-                      }[t]))
+        covered = sum(
+            1
+            for t in ["article-journal", "book", "chapter", "paper-conference", "other"]
+            if t in md
+            or any(
+                k in md
+                for k in {
+                    "article-journal": ["Zeitschriftenartikel"],
+                    "book": ["Buch"],
+                    "chapter": ["Buchkapitel"],
+                    "paper-conference": ["Konferenz"],
+                    "other": ["Webseite", "Sonstige"],
+                }[t]
+            )
+        )
         assert covered == 5, f"Nur {covered}/5 Quellentypen im Markdown gefunden"
 
 
@@ -197,13 +206,16 @@ class TestSkillSizes:
 
     def test_citation_style_import_in_skill_sizes(self):
         import json
+
         baseline = pathlib.Path(__file__).parent / "baselines" / "skill_sizes.json"
         data = json.loads(baseline.read_text())
-        assert "citation-style-import" in data, \
+        assert "citation-style-import" in data, (
             "citation-style-import fehlt in tests/baselines/skill_sizes.json"
+        )
 
     def test_citation_style_import_size_positive(self):
         import json
+
         baseline = pathlib.Path(__file__).parent / "baselines" / "skill_sizes.json"
         data = json.loads(baseline.read_text())
         assert data.get("citation-style-import", 0) > 0

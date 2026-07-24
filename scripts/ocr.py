@@ -4,6 +4,7 @@
 Optionale Abhaengigkeit: ocrmypdf muss im PATH vorhanden sein.
 Installation: brew install ocrmypdf  ODER  pip install ocrmypdf
 """
+
 from __future__ import annotations
 
 import shutil
@@ -34,6 +35,4 @@ def run_ocrmypdf(input_pdf: str, output_pdf: str) -> None:
     )
     if result.returncode != 0:
         stderr = result.stderr.decode(errors="replace").strip()
-        raise RuntimeError(
-            f"ocrmypdf fehlgeschlagen (Exit {result.returncode}): {stderr}"
-        )
+        raise RuntimeError(f"ocrmypdf fehlgeschlagen (Exit {result.returncode}): {stderr}")

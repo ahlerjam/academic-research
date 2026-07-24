@@ -16,15 +16,14 @@ Ausgabe (--output-mode full):
 Optionen:
   --write-context <pfad>  Top-Topic in academic_context.md schreiben (erstellen falls noetig)
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Topic-Datenbank (heuristisch, deterministisch)
@@ -49,7 +48,13 @@ _TOPIC_DB: list[dict[str, Any]] = [
     },
     {
         "title": "Ransomware-Resilienz in Kritischen Infrastrukturen",
-        "keywords": ["ransomware", "kritische infrastruktur", "resilience", "kritis", "cyber attack"],
+        "keywords": [
+            "ransomware",
+            "kritische infrastruktur",
+            "resilience",
+            "kritis",
+            "cyber attack",
+        ],
         "research_questions": [
             "Welche technischen und organisatorischen Maßnahmen erhöhen die Ransomware-Resilienz in KRITIS-Betreibern?",
             "Wie unterscheiden sich Incident-Response-Strategien nach Ransomware-Angriffen in deutschen Energieversorgern?",
@@ -80,7 +85,13 @@ _TOPIC_DB: list[dict[str, Any]] = [
     },
     {
         "title": "Phishing-Erkennung mittels Machine Learning",
-        "keywords": ["phishing", "machine learning", "email security", "social engineering", "detection"],
+        "keywords": [
+            "phishing",
+            "machine learning",
+            "email security",
+            "social engineering",
+            "detection",
+        ],
         "research_questions": [
             "Welche ML-Algorithmen erzielen die höchste Erkennungsrate bei Phishing-E-Mails in deutschen Unternehmensumgebungen?",
             "Wie entwickelt sich die Umgehung automatisierter Phishing-Filter durch adversarielle Methoden?",
@@ -167,24 +178,20 @@ def score_topics(
 
     results = []
     for topic in _TOPIC_DB:
-        feasibility = _clamp(
-            topic["base_feasibility"] + budget_mod + data_mod
-        )
-        novelty = _clamp(
-            topic["base_novelty"] + _keyword_overlap(interests, topic["keywords"])
-        )
-        career_fit = _clamp(
-            topic["base_career_fit"].get(normalized_field, 7.0)
-        )
+        feasibility = _clamp(topic["base_feasibility"] + budget_mod + data_mod)
+        novelty = _clamp(topic["base_novelty"] + _keyword_overlap(interests, topic["keywords"]))
+        career_fit = _clamp(topic["base_career_fit"].get(normalized_field, 7.0))
 
-        results.append({
-            "title": topic["title"],
-            "feasibility": feasibility,
-            "novelty": novelty,
-            "career_fit": career_fit,
-            "research_questions": topic["research_questions"][:3],
-            "pilot_papers": topic["pilot_papers"],
-        })
+        results.append(
+            {
+                "title": topic["title"],
+                "feasibility": feasibility,
+                "novelty": novelty,
+                "career_fit": career_fit,
+                "research_questions": topic["research_questions"][:3],
+                "pilot_papers": topic["pilot_papers"],
+            }
+        )
 
     return results
 
@@ -200,6 +207,7 @@ def find_top_topic(topics: list[dict[str, Any]]) -> str:
 # ---------------------------------------------------------------------------
 # academic_context.md schreiben
 # ---------------------------------------------------------------------------
+
 
 def write_to_context(ctx_path: Path, top_title: str) -> None:
     """Schreibt das Top-Topic in academic_context.md (erstellt Datei falls noetig)."""
@@ -235,6 +243,7 @@ def write_to_context(ctx_path: Path, top_title: str) -> None:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Topic-Brainstorm Scorer")

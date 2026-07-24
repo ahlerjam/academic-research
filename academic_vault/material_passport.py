@@ -3,13 +3,14 @@
 Erstellt einen Material-Passport-Dict und validiert ihn gegen das JSON-Schema
 in material-passport.schema.json.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 _SCHEMA_FILE = Path(__file__).parent / "material-passport.schema.json"
 
@@ -22,7 +23,7 @@ def build_passport(
     score_algo_version: str,
     plugin_version: str,
     model_versions: dict[str, str],
-    per_uni_profile_hash: Optional[str],
+    per_uni_profile_hash: str | None,
     decisions_snapshot: list[dict],
     pdf_hashes: dict[str, str],
 ) -> dict:

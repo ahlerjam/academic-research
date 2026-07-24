@@ -10,13 +10,12 @@ Test 4: Top-Topic (hoechste Score-Summe) wird korrekt identifiziert
 Test 5: Top-Topic wird in academic_context.md (mock file) geschrieben
 Test 6: skill_sizes.json enthaelt 'topic-brainstorm'
 """
+
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
-
-import pytest
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
 if str(_WORKTREE_ROOT) not in sys.path:
@@ -29,6 +28,7 @@ _SCORER = _WORKTREE_ROOT / "skills" / "topic-brainstorm" / "scripts" / "scorer.p
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _run_scorer(interests: list[str], field: str, budget: str, data_access: str):
     """Fuehrt scorer.py als Subprocess aus und gibt geparste JSON-Ausgabe zurueck."""
     import subprocess
@@ -37,10 +37,14 @@ def _run_scorer(interests: list[str], field: str, budget: str, data_access: str)
         [
             sys.executable,
             str(_SCORER),
-            "--interests", ",".join(interests),
-            "--field", field,
-            "--budget", budget,
-            "--data-access", data_access,
+            "--interests",
+            ",".join(interests),
+            "--field",
+            field,
+            "--budget",
+            budget,
+            "--data-access",
+            data_access,
         ],
         capture_output=True,
         text=True,
@@ -54,6 +58,7 @@ def _run_scorer(interests: list[str], field: str, budget: str, data_access: str)
 # ---------------------------------------------------------------------------
 # Test 1: scorer.py gibt 3-5 Topic-Kandidaten zurueck (Szenario: 5 erwartet)
 # ---------------------------------------------------------------------------
+
 
 class TestScorerOutput:
     """scorer.py gibt fuer Cyber Security + WI-Bachelor 5 Topic-Kandidaten zurueck."""
@@ -87,6 +92,7 @@ class TestScorerOutput:
 # ---------------------------------------------------------------------------
 # Test 2: Alle 3 Scores pro Kandidat, Bereich 0-10
 # ---------------------------------------------------------------------------
+
 
 class TestScoreRanges:
     """Feasibility, Novelty, Career-Fit sind normiert auf 0-10."""
@@ -126,6 +132,7 @@ class TestScoreRanges:
 # Test 3: 2-3 Forschungsfragen + 1 Pilot-Paper-Set pro Kandidat
 # ---------------------------------------------------------------------------
 
+
 class TestResearchQuestionsAndPapers:
     """Jeder Kandidat hat 2-3 Forschungsfragen und ein Pilot-Paper-Set."""
 
@@ -162,21 +169,18 @@ class TestResearchQuestionsAndPapers:
             data_access="Public Datasets",
         )
         for t in topics:
-            assert "pilot_papers" in t, (
-                f"Kandidat '{t.get('title')}' fehlt 'pilot_papers'"
-            )
+            assert "pilot_papers" in t, f"Kandidat '{t.get('title')}' fehlt 'pilot_papers'"
             pp = t["pilot_papers"]
             assert isinstance(pp, list), (
                 f"'pilot_papers' von '{t.get('title')}' muss eine Liste sein"
             )
-            assert len(pp) >= 1, (
-                f"'{t.get('title')}' hat kein Pilot-Paper"
-            )
+            assert len(pp) >= 1, f"'{t.get('title')}' hat kein Pilot-Paper"
 
 
 # ---------------------------------------------------------------------------
 # Test 4: Top-Topic wird korrekt identifiziert (hoechste Score-Summe)
 # ---------------------------------------------------------------------------
+
 
 class TestTopTopicIdentification:
     """Das Top-Topic ist das mit der hoechsten Summe der drei Scores."""
@@ -189,11 +193,16 @@ class TestTopTopicIdentification:
             [
                 sys.executable,
                 str(_SCORER),
-                "--interests", "Cyber Security",
-                "--field", "Wirtschaftsinformatik-Bachelor",
-                "--budget", "6 Monate",
-                "--data-access", "Public Datasets",
-                "--output-mode", "full",
+                "--interests",
+                "Cyber Security",
+                "--field",
+                "Wirtschaftsinformatik-Bachelor",
+                "--budget",
+                "6 Monate",
+                "--data-access",
+                "Public Datasets",
+                "--output-mode",
+                "full",
             ],
             capture_output=True,
             text=True,
@@ -207,13 +216,9 @@ class TestTopTopicIdentification:
         topics = data["topics"]
         top_title = data["top_topic"]
         top_candidate = next((t for t in topics if t["title"] == top_title), None)
-        assert top_candidate is not None, (
-            f"top_topic '{top_title}' nicht in topics gefunden"
-        )
+        assert top_candidate is not None, f"top_topic '{top_title}' nicht in topics gefunden"
         top_score = (
-            top_candidate["feasibility"]
-            + top_candidate["novelty"]
-            + top_candidate["career_fit"]
+            top_candidate["feasibility"] + top_candidate["novelty"] + top_candidate["career_fit"]
         )
         for t in topics:
             t_score = t["feasibility"] + t["novelty"] + t["career_fit"]
@@ -225,6 +230,7 @@ class TestTopTopicIdentification:
 # ---------------------------------------------------------------------------
 # Test 5: Top-Topic wird in academic_context.md (mock file) geschrieben
 # ---------------------------------------------------------------------------
+
 
 class TestAcademicContextWrite:
     """scorer.py --write-context schreibt das Top-Topic in academic_context.md."""
@@ -243,12 +249,18 @@ class TestAcademicContextWrite:
             [
                 sys.executable,
                 str(_SCORER),
-                "--interests", "Cyber Security",
-                "--field", "Wirtschaftsinformatik-Bachelor",
-                "--budget", "6 Monate",
-                "--data-access", "Public Datasets",
-                "--output-mode", "full",
-                "--write-context", str(ctx_file),
+                "--interests",
+                "Cyber Security",
+                "--field",
+                "Wirtschaftsinformatik-Bachelor",
+                "--budget",
+                "6 Monate",
+                "--data-access",
+                "Public Datasets",
+                "--output-mode",
+                "full",
+                "--write-context",
+                str(ctx_file),
             ],
             capture_output=True,
             text=True,
@@ -277,12 +289,18 @@ class TestAcademicContextWrite:
             [
                 sys.executable,
                 str(_SCORER),
-                "--interests", "Cyber Security",
-                "--field", "Wirtschaftsinformatik-Bachelor",
-                "--budget", "6 Monate",
-                "--data-access", "Public Datasets",
-                "--output-mode", "full",
-                "--write-context", str(ctx_file),
+                "--interests",
+                "Cyber Security",
+                "--field",
+                "Wirtschaftsinformatik-Bachelor",
+                "--budget",
+                "6 Monate",
+                "--data-access",
+                "Public Datasets",
+                "--output-mode",
+                "full",
+                "--write-context",
+                str(ctx_file),
             ],
             capture_output=True,
             text=True,
@@ -299,6 +317,7 @@ class TestAcademicContextWrite:
 # Test 6b: SKILL.md dupliziert KEINE Scoring-Tabellen (Issue #180)
 # ---------------------------------------------------------------------------
 
+
 class TestNoScoringTableDuplication:
     """SKILL.md darf die Scoring-Tabellen nicht duplizieren (Progressive Disclosure).
 
@@ -308,11 +327,7 @@ class TestNoScoringTableDuplication:
 
     _SKILL_MD = _WORKTREE_ROOT / "skills" / "topic-brainstorm" / "SKILL.md"
     _SCORING_REF = (
-        _WORKTREE_ROOT
-        / "skills"
-        / "topic-brainstorm"
-        / "references"
-        / "scoring-criteria.md"
+        _WORKTREE_ROOT / "skills" / "topic-brainstorm" / "references" / "scoring-criteria.md"
     )
 
     def test_skill_md_has_no_data_access_table_rows(self):
@@ -361,14 +376,13 @@ class TestNoScoringTableDuplication:
         assert "| Public Datasets | +1.0 |" in ref, (
             "Datenverfuegbarkeit-Tabelle fehlt in scoring-criteria.md"
         )
-        assert "| 3 Monate | -1.0 |" in ref, (
-            "Zeitbudget-Tabelle fehlt in scoring-criteria.md"
-        )
+        assert "| 3 Monate | -1.0 |" in ref, "Zeitbudget-Tabelle fehlt in scoring-criteria.md"
 
 
 # ---------------------------------------------------------------------------
 # Test 6: skill_sizes.json enthaelt 'topic-brainstorm'
 # ---------------------------------------------------------------------------
+
 
 class TestSkillSizes:
     """tests/baselines/skill_sizes.json enthaelt 'topic-brainstorm'."""

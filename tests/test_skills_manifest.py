@@ -78,9 +78,7 @@ def _readme_skill_triggers() -> dict[str, list[str]]:
 # (skill, trigger)-Paare flach fuer parametrize, damit jede Drift einzeln
 # als Test-Failure sichtbar wird (Issue #208).
 README_TRIGGER_CASES = [
-    (skill, trig)
-    for skill, phrases in _readme_skill_triggers().items()
-    for trig in phrases
+    (skill, trig) for skill, phrases in _readme_skill_triggers().items() for trig in phrases
 ]
 
 
@@ -128,7 +126,6 @@ def test_frontmatter_valid(skill_path: Path) -> None:
     fm = _frontmatter(skill_path)
     assert fm.get("name"), f"{skill_path}: name fehlt"
     assert fm.get("description"), f"{skill_path}: description fehlt"
-
 
 
 @pytest.mark.parametrize("skill_path", ALL_SKILLS, ids=lambda p: p.parent.name)

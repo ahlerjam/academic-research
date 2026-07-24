@@ -1,11 +1,12 @@
 """Tests fuer Vault add_paper mit type=book und type=chapter."""
+
 import json
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from academic_vault.db import VaultDB
@@ -25,12 +26,14 @@ def test_add_paper_type_book():
     """add_paper mit type=book, editor -> get_paper gibt alle Felder zurueck."""
     db_path, db = _make_db()
     editors = json.dumps([{"family": "Mueller", "given": "Hans"}])
-    csl = json.dumps({
-        "type": "book",
-        "title": "Testbuch",
-        "editor": [{"family": "Mueller", "given": "Hans"}],
-        "publisher": "Hanser",
-    })
+    csl = json.dumps(
+        {
+            "type": "book",
+            "title": "Testbuch",
+            "editor": [{"family": "Mueller", "given": "Hans"}],
+            "publisher": "Hanser",
+        }
+    )
     db.add_paper(
         paper_id="testbuch_2024",
         csl_json=csl,
@@ -45,11 +48,13 @@ def test_add_paper_type_book():
 def test_add_paper_type_chapter():
     """add_paper mit type=chapter, container_title, page_first, page_last."""
     db_path, db = _make_db()
-    csl = json.dumps({
-        "type": "chapter",
-        "title": "Kapitel 3: Methoden",
-        "container-title": "Handbuch der Forschung",
-    })
+    csl = json.dumps(
+        {
+            "type": "chapter",
+            "title": "Kapitel 3: Methoden",
+            "container-title": "Handbuch der Forschung",
+        }
+    )
     db.add_paper(
         paper_id="kapitel3_2024",
         csl_json=csl,
@@ -77,6 +82,7 @@ def test_add_paper_invalid_type():
 def test_migration_idempotent():
     """add_book_columns() kann mehrfach aufgerufen werden ohne Fehler."""
     from academic_vault.migrate import add_book_columns
+
     db_path, _ = _make_db()
     add_book_columns(db_path)  # Erster Aufruf
     add_book_columns(db_path)  # Zweiter Aufruf -- darf nicht scheitern

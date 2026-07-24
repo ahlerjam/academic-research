@@ -3,16 +3,15 @@
 Gibt file_id zurueck (gecacht mit 1h-TTL in papers-Tabelle).
 Fallback: bei fehlendem Upload wird Exception nach oben durchgereicht.
 """
-import sqlite3
+
 import time
 from pathlib import Path
-from typing import Optional
 
 from .db import VaultDB
 
 _TTL = 3600  # 1 Stunde in Sekunden
-_AVG_BASE64_TOKENS_PER_PDF = 80_000   # Heuristik (Audit §4.1: 60–100k)
-_FILE_ID_OVERHEAD = 20                # Token fuer file_id-Referenz
+_AVG_BASE64_TOKENS_PER_PDF = 80_000  # Heuristik (Audit §4.1: 60–100k)
+_FILE_ID_OVERHEAD = 20  # Token fuer file_id-Referenz
 
 
 class FilesAPIClient:
@@ -27,6 +26,7 @@ class FilesAPIClient:
         """Lazy-Init des Anthropic-Clients."""
         if self._client is None:
             import anthropic
+
             self._client = anthropic.Anthropic(api_key=self.api_key)
         return self._client
 
@@ -71,9 +71,7 @@ class FilesAPIClient:
         # Cache-Miss: hochladen
         file_id = self._upload_file(pdf_path)
         if paper_row is not None:
-            VaultDB(self.cache_db_path).set_file_id(
-                paper_row["paper_id"], file_id, now + _TTL
-            )
+            VaultDB(self.cache_db_path).set_file_id(paper_row["paper_id"], file_id, now + _TTL)
         return file_id
 
     @staticmethod
@@ -88,8 +86,7 @@ class FilesAPIClient:
         paper_count = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
         quote_count = conn.execute("SELECT COUNT(*) FROM quotes").fetchone()[0]
         cached_files = conn.execute(
-            "SELECT COUNT(*) FROM papers "
-            "WHERE file_id IS NOT NULL AND file_id_expires_at > ?",
+            "SELECT COUNT(*) FROM papers WHERE file_id IS NOT NULL AND file_id_expires_at > ?",
             (now,),
         ).fetchone()[0]
         conn.close()

@@ -12,23 +12,21 @@ Kein LLM-Aufruf. Deterministisch und schnell.
 
 CLI: python scripts/page_offset.py <pdf_path> [--sample-pages N]
 """
+
 import re
-from typing import Optional
 
 
 def _get_pdf_reader():
     """Gibt die pypdf-PdfReader-Klasse zurueck."""
     try:
         from pypdf import PdfReader
+
         return PdfReader
     except ImportError:
-        raise ImportError(
-            "Kein PDF-Lesemodul verfuegbar. "
-            "Bitte 'pip install pypdf' ausfuehren."
-        )
+        raise ImportError("Kein PDF-Lesemodul verfuegbar. Bitte 'pip install pypdf' ausfuehren.")
 
 
-def _extract_page_number(text: str) -> Optional[int]:
+def _extract_page_number(text: str) -> int | None:
     """Extrahiert arabische Seitenzahl aus Seiten-Text.
 
     Sucht nach einer isolierten arabischen Ziffer als erste oder letzte
@@ -46,7 +44,7 @@ def _extract_page_number(text: str) -> Optional[int]:
 
     # Roemische Ziffern (kleine und grosse) ausschliessen
     roman_pattern = re.compile(
-        r'^(i{1,3}|iv|v?i{0,3}|ix|xl|l?x{0,3}|xc|cd|d?c{0,3}|cm|m{0,4})$',
+        r"^(i{1,3}|iv|v?i{0,3}|ix|xl|l?x{0,3}|xc|cd|d?c{0,3}|cm|m{0,4})$",
         re.IGNORECASE,
     )
 
@@ -58,7 +56,7 @@ def _extract_page_number(text: str) -> Optional[int]:
         if roman_pattern.match(candidate):
             continue
         # Nur reine arabische Zahl akzeptieren
-        if re.match(r'^\d+$', candidate):
+        if re.match(r"^\d+$", candidate):
             num = int(candidate)
             if 1 <= num <= 9999:
                 return num
@@ -99,7 +97,7 @@ def detect_page_offset(pdf_path: str, sample_pages: int = 30) -> int:
 def validate_offset(
     pdf_path: str,
     offset: int,
-    check_pages: Optional[list] = None,
+    check_pages: list | None = None,
 ) -> bool:
     """Validiert den page_offset anhand von Stichproben.
 
@@ -139,16 +137,17 @@ def validate_offset(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Ermittelt page_offset fuer ein Buch-PDF."
-    )
+    parser = argparse.ArgumentParser(description="Ermittelt page_offset fuer ein Buch-PDF.")
     parser.add_argument("pdf_path", help="Pfad zur PDF-Datei")
     parser.add_argument(
-        "--sample-pages", type=int, default=30,
+        "--sample-pages",
+        type=int,
+        default=30,
         help="Anzahl der zu scannenden Seiten (Standard: 30)",
     )
     parser.add_argument(
-        "--validate", action="store_true",
+        "--validate",
+        action="store_true",
         help="Offset zusaetzlich anhand von Stichproben validieren",
     )
     args = parser.parse_args()

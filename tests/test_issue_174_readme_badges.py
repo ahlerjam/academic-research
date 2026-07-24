@@ -7,6 +7,7 @@ Akzeptanzkriterien:
 - Sektion "Entwicklung und Evals" nennt nicht mehr "~60 Tests" und weist auf
   Network/External-abhängige Tests hin.
 """
+
 import re
 from pathlib import Path
 
@@ -65,6 +66,7 @@ def test_dev_section_no_stale_sixty_and_mentions_external():
     assert "~60 Tests" not in section, "Sektion nennt noch '~60 Tests'."
     # Hinweis auf Network/External-abhängige Tests muss vorhanden sein.
     lowered = section.lower()
-    assert any(token in lowered for token in ("network", "netzwerk", "external", "extern", "api-key", "api_key")), (
-        "Kein Hinweis auf Network/External-abhängige Tests in 'Entwicklung und Evals'."
-    )
+    assert any(
+        token in lowered
+        for token in ("network", "netzwerk", "external", "extern", "api-key", "api_key")
+    ), "Kein Hinweis auf Network/External-abhängige Tests in 'Entwicklung und Evals'."

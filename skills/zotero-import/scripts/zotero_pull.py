@@ -13,6 +13,7 @@ Sicherheit:
     - config.yaml muss Permissions 0600 haben.
     - Netz-Zugriff: ausschliesslich api.zotero.org (via pyzotero).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,7 +25,6 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 from uuid import uuid4
 
 import yaml
@@ -40,14 +40,15 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 from academic_vault.server import add_paper, ensure_file  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Datenklassen
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ImportResult:
     """Ergebnis eines Zotero-Import-Laufs."""
+
     imported: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
@@ -57,6 +58,7 @@ class ImportResult:
 # ---------------------------------------------------------------------------
 # Config-Laden mit 0600-Check
 # ---------------------------------------------------------------------------
+
 
 def load_config(config_path: str) -> dict:
     """Laedt config.yaml und prueft 0600-Permissions.
@@ -85,18 +87,19 @@ def load_config(config_path: str) -> dict:
 # DOI/ISBN Normalisierung
 # ---------------------------------------------------------------------------
 
-def _normalize_doi(doi: str) -> Optional[str]:
+
+def _normalize_doi(doi: str) -> str | None:
     """Normalisiert DOI: lowercase, strip https://doi.org/ Prefix."""
     if not doi or not doi.strip():
         return None
     doi = doi.strip().lower()
     for prefix in ("https://doi.org/", "http://doi.org/", "doi.org/", "doi:"):
         if doi.startswith(prefix):
-            doi = doi[len(prefix):]
+            doi = doi[len(prefix) :]
     return doi or None
 
 
-def _normalize_isbn(isbn: str) -> Optional[str]:
+def _normalize_isbn(isbn: str) -> str | None:
     """Normalisiert ISBN: entfernt Leerzeichen und Bindestriche, lowercase."""
     if not isbn or not isbn.strip():
         return None
@@ -107,7 +110,8 @@ def _normalize_isbn(isbn: str) -> Optional[str]:
 # Vault-Dedup-Pruefung
 # ---------------------------------------------------------------------------
 
-def _paper_exists_in_vault(db_path: str, doi: Optional[str], isbn: Optional[str]) -> bool:
+
+def _paper_exists_in_vault(db_path: str, doi: str | None, isbn: str | None) -> bool:
     """Prueft ob ein Paper mit diesem DOI oder ISBN bereits im Vault ist."""
     if not doi and not isbn:
         return False  # Kein Identifier → immer importieren
@@ -117,8 +121,7 @@ def _paper_exists_in_vault(db_path: str, doi: Optional[str], isbn: Optional[str]
     try:
         if doi:
             row = conn.execute(
-                "SELECT paper_id FROM papers WHERE lower(doi) = ?",
-                (doi,)
+                "SELECT paper_id FROM papers WHERE lower(doi) = ?", (doi,)
             ).fetchone()
             if row:
                 return True
@@ -157,16 +160,20 @@ def _zotero_item_to_csl(item_data: dict) -> dict:
     authors = []
     for creator in item_data.get("creators", []):
         if creator.get("creatorType") in ("author", "editor"):
-            authors.append({
-                "family": creator.get("lastName", ""),
-                "given": creator.get("firstName", ""),
-            })
+            authors.append(
+                {
+                    "family": creator.get("lastName", ""),
+                    "given": creator.get("firstName", ""),
+                }
+            )
 
     csl = {
         "type": item_type,
         "title": item_data.get("title", ""),
         "author": authors,
-        "issued": {"date-parts": [[item_data.get("date", "")[:4] if item_data.get("date") else ""]]},
+        "issued": {
+            "date-parts": [[item_data.get("date", "")[:4] if item_data.get("date") else ""]]
+        },
         "abstract": item_data.get("abstractNote", ""),
         "publisher": item_data.get("publisher", ""),
         "container-title": item_data.get("publicationTitle", ""),
@@ -184,7 +191,10 @@ def _zotero_item_to_csl(item_data: dict) -> dict:
 # Attachment-Download (gemockt in Tests)
 # ---------------------------------------------------------------------------
 
-def _download_attachment(zot_client, item_key: str, attachment_key: str, dest_dir: str) -> Optional[str]:
+
+def _download_attachment(
+    zot_client, item_key: str, attachment_key: str, dest_dir: str
+) -> str | None:
     """Laedt ein PDF-Attachment herunter. Gibt lokalen Pfad zurueck oder None bei Fehler.
 
     Diese Funktion wird in Tests via patch('zotero_pull._download_attachment') ersetzt.
@@ -202,6 +212,7 @@ def _download_attachment(zot_client, item_key: str, attachment_key: str, dest_di
 # ---------------------------------------------------------------------------
 # Haupt-Import-Funktion
 # ---------------------------------------------------------------------------
+
 
 def run_import(
     config_path: str,
@@ -235,8 +246,7 @@ def run_import(
     # 2. pyzotero-Client erstellen
     if zotero is None:
         raise ImportError(
-            "pyzotero ist nicht installiert. "
-            "Bitte ausfuehren: pip install 'pyzotero>=1.5'"
+            "pyzotero ist nicht installiert. Bitte ausfuehren: pip install 'pyzotero>=1.5'"
         )
 
     zot = zotero.Zotero(library_id, library_type, api_key)
@@ -248,6 +258,7 @@ def run_import(
 
     # Vault-Schema initialisieren falls DB neu
     from academic_vault.db import VaultDB
+
     VaultDB(db_path).init_schema()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -289,8 +300,10 @@ def run_import(
                 children = zot.children(item_key)
                 for child in children:
                     child_data = child.get("data", {})
-                    if (child_data.get("itemType") == "attachment"
-                            and child_data.get("contentType") == "application/pdf"):
+                    if (
+                        child_data.get("itemType") == "attachment"
+                        and child_data.get("contentType") == "application/pdf"
+                    ):
                         att_key = child_data.get("key", "")
                         local_path = _download_attachment(zot, item_key, att_key, tmp_dir)
                         if local_path:
@@ -329,6 +342,7 @@ def run_import(
 # ---------------------------------------------------------------------------
 # CLI-Einstiegspunkt
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """CLI fuer manuellen Aufruf."""

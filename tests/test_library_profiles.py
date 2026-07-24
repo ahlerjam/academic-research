@@ -30,6 +30,7 @@ def load_profile(slug: str) -> dict:
 
 # ── Positiv-Tests ────────────────────────────────────────────────────────────
 
+
 class TestProfilesValidPositiv:
     """Alle 5 Profile muessen gegen _schema.json valide sein."""
 
@@ -50,6 +51,7 @@ class TestProfilesValidPositiv:
 
 
 # ── Negativ-Tests ────────────────────────────────────────────────────────────
+
 
 class TestSchemaValidierungNegativ:
     """Schema muss bei fehlenden/falschen Pflichtfeldern ValidationError werfen."""
@@ -148,9 +150,7 @@ class TestReadmeKonsistenz:
 
     def test_readme_listet_tatsaechliche_profile(self):
         """Die Profile die README in der Per-Uni-Profile-Tabelle listet muessen mit den tatsaechlichen Dateien uebereinstimmen."""
-        actual_slugs = {
-            p.stem for p in PROFILES_DIR.glob("*.yaml")
-        }
+        actual_slugs = {p.stem for p in PROFILES_DIR.glob("*.yaml")}
         # Erwartete tatsaechliche Slugs gemaess Dateisystem
         expected_slugs = set(PROFILE_SLUGS)
         assert actual_slugs == expected_slugs, (
@@ -162,9 +162,7 @@ class TestReadmeKonsistenz:
         """Profil-Dateien die README im Per-Uni-Profile-Abschnitt erwaehnt muessen existieren."""
         readme = self._readme_text()
         # Suche nach dem Abschnitt '## Per-Uni-Profile' und lese die Tabelle
-        section_match = re.search(
-            r"## Per-Uni-Profile.*?(?=\n## |\Z)", readme, re.DOTALL
-        )
+        section_match = re.search(r"## Per-Uni-Profile.*?(?=\n## |\Z)", readme, re.DOTALL)
         assert section_match, "Abschnitt '## Per-Uni-Profile' nicht im README gefunden"
         section = section_match.group(0)
         # Nur einfache Dateinamen ohne Pfad-Separator und ohne Platzhalter (<>) extrahieren
@@ -172,10 +170,7 @@ class TestReadmeKonsistenz:
         mentioned_yamls = re.findall(r"`([a-z0-9_-]+\.yaml)`", section)
         # Templates herausfiltern (template-*.yaml sind Vorlagen und existieren ggf. nicht)
         non_template_yamls = [y for y in mentioned_yamls if not y.startswith("template-")]
-        missing = [
-            y for y in non_template_yamls
-            if not (PROFILES_DIR / y).exists()
-        ]
+        missing = [y for y in non_template_yamls if not (PROFILES_DIR / y).exists()]
         assert missing == [], (
             f"README erwaehnt Profile die nicht in config/library-profiles/ existieren: {missing}"
         )
@@ -183,9 +178,7 @@ class TestReadmeKonsistenz:
     def test_readme_per_uni_pfad_ist_config_library_profiles(self):
         """Der Per-Uni-Profile Abschnitt muss 'config/library-profiles/' als Pfad dokumentieren."""
         readme = self._readme_text()
-        section_match = re.search(
-            r"## Per-Uni-Profile.*?(?=\n## |\Z)", readme, re.DOTALL
-        )
+        section_match = re.search(r"## Per-Uni-Profile.*?(?=\n## |\Z)", readme, re.DOTALL)
         assert section_match, "Abschnitt '## Per-Uni-Profile' nicht im README gefunden"
         section = section_match.group(0)
         assert "config/library-profiles/" in section, (
@@ -195,6 +188,7 @@ class TestReadmeKonsistenz:
 
 
 # ── Onboard-Hook-Tests ───────────────────────────────────────────────────────
+
 
 class TestOnboardHook:
     """Hook schreibt active.yaml korrekt."""

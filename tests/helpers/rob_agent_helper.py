@@ -7,10 +7,8 @@ In Produktion wuerde der risk-of-bias.md-Agent denselben Workflow ausfuehren,
 aber mit echtem LLM-Inference. Dieser Helper enthaelt regelbasierte Logik,
 die auf Schluesselwoertern im PDF-Text basiert — ausreichend fuer Test-Coverage.
 """
-import json
-import re
-from typing import Optional
 
+import re
 
 # ---------------------------------------------------------------------------
 # Domain-Definitionen
@@ -50,7 +48,10 @@ CASP_DOMAINS = [
 # Gueltiger Studientyp → (Domains-Liste, Score-Vokabular)
 STUDY_TYPE_MAP = {
     "rct": (RCT_DOMAINS, ("low", "some concerns", "high")),
-    "observational": (ROBINS_I_DOMAINS, ("low", "moderate", "serious", "critical", "no information")),
+    "observational": (
+        ROBINS_I_DOMAINS,
+        ("low", "moderate", "serious", "critical", "no information"),
+    ),
     "review": (ROBINS_I_DOMAINS, ("low", "moderate", "serious", "critical", "no information")),
     "qualitative": (CASP_DOMAINS, ("yes", "no", "can't tell")),
 }
@@ -275,18 +276,17 @@ def assess_risk_of_bias(
     """
     import sys
     from pathlib import Path
+
     _root = Path(__file__).parent.parent.parent
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
 
     from academic_vault import server as vault_server
-    from academic_vault.db import VaultDB
 
     study_key = study_type.lower()
     if study_key not in STUDY_TYPE_MAP:
         raise ValueError(
-            f"Unbekannter study_type '{study_type}'. "
-            f"Erlaubt: {list(STUDY_TYPE_MAP.keys())}"
+            f"Unbekannter study_type '{study_type}'. Erlaubt: {list(STUDY_TYPE_MAP.keys())}"
         )
 
     domains, vocab = STUDY_TYPE_MAP[study_key]
@@ -356,7 +356,8 @@ def assess_risk_of_bias(
         lines.append(f"| **overall** | **{overall_val}** | Aggregated |")
 
     lines.append("")
-    lines.append(f"_Assessment gespeichert via vault.add_risk_of_bias. "
-                 f"{len(quote_ids)} Quotes gespeichert._")
+    lines.append(
+        f"_Assessment gespeichert via vault.add_risk_of_bias. {len(quote_ids)} Quotes gespeichert._"
+    )
 
     return "\n".join(lines)

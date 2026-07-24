@@ -361,9 +361,9 @@ def _run_node_hook(
 def check_mcp_lifecycle(state: dict[str, Any]) -> None:
     """Server startet, initialize + list_tools liefern exakt 33 Tools."""
     names = state["tool_names"]
-    assert (
-        len(names) == EXPECTED_TOOL_COUNT
-    ), f"Erwartet {EXPECTED_TOOL_COUNT} Tools via list_tools, erhielt {len(names)}: {names}"
+    assert len(names) == EXPECTED_TOOL_COUNT, (
+        f"Erwartet {EXPECTED_TOOL_COUNT} Tools via list_tools, erhielt {len(names)}: {names}"
+    )
     for required in (
         "vault.add_paper",
         "vault.search",
@@ -378,26 +378,26 @@ def check_mcp_papers(state: dict[str, Any]) -> None:
     """add_paper -> get_paper -> search -> stats round-trip."""
     assert state["add_paper_error"] is False, "add_paper meldete unerwartet isError"
     paper = state["get_paper"]
-    assert (
-        isinstance(paper, dict) and paper.get("paper_id") == "smoke-p1"
-    ), f"get_paper lieferte unplausibles Ergebnis: {paper}"
+    assert isinstance(paper, dict) and paper.get("paper_id") == "smoke-p1", (
+        f"get_paper lieferte unplausibles Ergebnis: {paper}"
+    )
     assert paper.get("type") == "article-journal"
     search = state["search"]
-    assert isinstance(search, list) and any(
-        h.get("paper_id") == "smoke-p1" for h in search
-    ), f"search fand das eingefügte Paper nicht: {search}"
+    assert isinstance(search, list) and any(h.get("paper_id") == "smoke-p1" for h in search), (
+        f"search fand das eingefügte Paper nicht: {search}"
+    )
     stats = state["stats"]
-    assert (
-        isinstance(stats, dict) and stats.get("paper_count", 0) >= 1
-    ), f"stats unplausibel: {stats}"
+    assert isinstance(stats, dict) and stats.get("paper_count", 0) >= 1, (
+        f"stats unplausibel: {stats}"
+    )
 
 
 def check_mcp_provenance(state: dict[str, Any]) -> None:
     """list_papers_by_provenance findet das getaggte Paper."""
     prov = state["provenance"]
-    assert isinstance(prov, list) and any(
-        p.get("paper_id") == "smoke-p1" for p in prov
-    ), f"Provenance-Audit fand smoke-p1 nicht: {prov}"
+    assert isinstance(prov, list) and any(p.get("paper_id") == "smoke-p1" for p in prov), (
+        f"Provenance-Audit fand smoke-p1 nicht: {prov}"
+    )
 
 
 def check_mcp_chapter(state: dict[str, Any]) -> None:
@@ -412,13 +412,13 @@ def check_mcp_quotes(state: dict[str, Any]) -> None:
     sqt = state["search_quote_text"]
     assert isinstance(sqt, list) and len(sqt) >= 1, f"search_quote_text fand nichts: {sqt}"
     fq = state["find_quotes"]
-    assert isinstance(fq, list) and any(
-        q.get("quote_id") == state["quote_id"] for q in fq
-    ), f"find_quotes lieferte das Zitat nicht: {fq}"
+    assert isinstance(fq, list) and any(q.get("quote_id") == state["quote_id"] for q in fq), (
+        f"find_quotes lieferte das Zitat nicht: {fq}"
+    )
     gq = state["get_quote"]
-    assert (
-        isinstance(gq, dict) and gq.get("quote_id") == state["quote_id"]
-    ), f"get_quote unplausibel: {gq}"
+    assert isinstance(gq, dict) and gq.get("quote_id") == state["quote_id"], (
+        f"get_quote unplausibel: {gq}"
+    )
 
 
 def check_mcp_figures(state: dict[str, Any]) -> None:
@@ -428,16 +428,16 @@ def check_mcp_figures(state: dict[str, Any]) -> None:
     gf = state["get_figure"]
     assert isinstance(gf, dict) and gf.get("figure_id") == fid, f"get_figure unplausibel: {gf}"
     lf = state["list_figures"]
-    assert isinstance(lf, list) and any(
-        f.get("figure_id") == fid for f in lf
-    ), f"list_figures lieferte die Figure nicht: {lf}"
+    assert isinstance(lf, list) and any(f.get("figure_id") == fid for f in lf), (
+        f"list_figures lieferte die Figure nicht: {lf}"
+    )
 
 
 def check_mcp_page_offset(state: dict[str, Any]) -> None:
     """set_page_offset + get_printed_page: 20 - 12 = 8."""
-    assert (
-        state["printed_page"] == 8
-    ), f"get_printed_page erwartete 8 (20-12), erhielt {state['printed_page']}"
+    assert state["printed_page"] == 8, (
+        f"get_printed_page erwartete 8 (20-12), erhielt {state['printed_page']}"
+    )
 
 
 def check_mcp_decisions(state: dict[str, Any]) -> None:
@@ -447,18 +447,18 @@ def check_mcp_decisions(state: dict[str, Any]) -> None:
     texts = {d.get("text") for d in ld}
     # Die superseded Decision (Nur DACH-Quellen) darf bei active_only nicht erscheinen.
     assert "Auch EU-Quellen" in texts, f"Nachfolge-Decision fehlt: {texts}"
-    assert (
-        "Nur DACH-Quellen" not in texts
-    ), f"Superseded Decision noch in active_only-Liste: {texts}"
+    assert "Nur DACH-Quellen" not in texts, (
+        f"Superseded Decision noch in active_only-Liste: {texts}"
+    )
 
 
 def check_mcp_excluded(state: dict[str, Any]) -> None:
     """add_excluded_source -> is_excluded -> list_excluded_sources."""
     assert state["is_excluded"] is True, f"is_excluded sollte True sein: {state['is_excluded']}"
     le = state["list_excluded"]
-    assert isinstance(le, list) and any(
-        e.get("paper_id") == "smoke-bad" for e in le
-    ), f"list_excluded_sources fand den Eintrag nicht: {le}"
+    assert isinstance(le, list) and any(e.get("paper_id") == "smoke-bad" for e in le), (
+        f"list_excluded_sources fand den Eintrag nicht: {le}"
+    )
 
 
 def check_mcp_risk_of_bias(state: dict[str, Any]) -> None:
@@ -477,27 +477,27 @@ def check_mcp_scores(state: dict[str, Any]) -> None:
 
 def check_mcp_passport(state: dict[str, Any]) -> None:
     """export_material_passport -> lock_passport -> is_locked."""
-    assert state[
-        "passport_exists"
-    ], f"material-passport.json wurde nicht erzeugt: {state['passport_path']}"
+    assert state["passport_exists"], (
+        f"material-passport.json wurde nicht erzeugt: {state['passport_path']}"
+    )
     assert state["is_locked"] is True, f"is_locked sollte True sein: {state['is_locked']}"
 
 
 def check_mcp_snapshot(state: dict[str, Any]) -> None:
     """export_snapshot -> restore_snapshot (Datei wiederhergestellt)."""
-    assert (
-        isinstance(state["snapshot_tgz"], str) and state["snapshot_tgz"]
-    ), "export_snapshot gab keinen Pfad zurück"
-    assert (
-        state["snapshot_restored"] is True
-    ), "restore_snapshot stellte academic_context.md nicht wieder her"
+    assert isinstance(state["snapshot_tgz"], str) and state["snapshot_tgz"], (
+        "export_snapshot gab keinen Pfad zurück"
+    )
+    assert state["snapshot_restored"] is True, (
+        "restore_snapshot stellte academic_context.md nicht wieder her"
+    )
 
 
 def check_mcp_malformed_csl(state: dict[str, Any]) -> None:
     """Negativtest: malformed csl_json MUSS einen Fehler liefern (#213/#232)."""
-    assert (
-        state["malformed_csl_error"] is True
-    ), "add_paper mit malformed csl_json hätte fehlschlagen müssen (strikte Validierung)"
+    assert state["malformed_csl_error"] is True, (
+        "add_paper mit malformed csl_json hätte fehlschlagen müssen (strikte Validierung)"
+    )
 
 
 # ===========================================================================
@@ -620,12 +620,12 @@ def check_plugin_marketplace_consistency() -> None:
     plugin = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
     market = json.loads(MARKETPLACE_JSON.read_text(encoding="utf-8"))
 
-    assert (
-        plugin.get("name") == "academic-research"
-    ), f"plugin.json name unerwartet: {plugin.get('name')}"
-    assert (
-        market.get("name") == "academic-research"
-    ), f"marketplace.json name unerwartet: {market.get('name')}"
+    assert plugin.get("name") == "academic-research", (
+        f"plugin.json name unerwartet: {plugin.get('name')}"
+    )
+    assert market.get("name") == "academic-research", (
+        f"marketplace.json name unerwartet: {market.get('name')}"
+    )
 
     p_ver = plugin.get("version", "")
     assert re.match(r"^6\.5\.\d+$", p_ver), f"plugin.json Version nicht 6.5.x: {p_ver}"
@@ -633,12 +633,12 @@ def check_plugin_marketplace_consistency() -> None:
     plugins = market.get("plugins", [])
     assert plugins, "marketplace.json hat keine plugins-Liste"
     mp_plugin = plugins[0]
-    assert (
-        mp_plugin.get("name") == "academic-research"
-    ), f"marketplace-Plugin-Name unerwartet: {mp_plugin.get('name')}"
-    assert (
-        mp_plugin.get("version") == p_ver
-    ), f"Version-Drift: plugin.json={p_ver} vs marketplace.json={mp_plugin.get('version')}"
+    assert mp_plugin.get("name") == "academic-research", (
+        f"marketplace-Plugin-Name unerwartet: {mp_plugin.get('name')}"
+    )
+    assert mp_plugin.get("version") == p_ver, (
+        f"Version-Drift: plugin.json={p_ver} vs marketplace.json={mp_plugin.get('version')}"
+    )
 
 
 def _iter_entrypoint_dirs(base: Path):
@@ -702,9 +702,9 @@ def check_hooks_json_integrity() -> None:
 def check_tool_three_way_consistency(state: dict[str, Any]) -> None:
     """Drei-Wege-Konsistenz: @mcp.tool (server.py) == README == list_tools."""
     server_tools = TOOL_NAME_RE.findall(SERVER_PY.read_text(encoding="utf-8"))
-    assert (
-        len(server_tools) == EXPECTED_TOOL_COUNT
-    ), f"server.py hat {len(server_tools)} @mcp.tool, erwartet {EXPECTED_TOOL_COUNT}"
+    assert len(server_tools) == EXPECTED_TOOL_COUNT, (
+        f"server.py hat {len(server_tools)} @mcp.tool, erwartet {EXPECTED_TOOL_COUNT}"
+    )
     readme = README.read_text(encoding="utf-8")
     not_in_readme = [t for t in server_tools if t not in readme]
     assert not not_in_readme, f"Tools fehlen in README: {not_in_readme}"

@@ -11,6 +11,7 @@ Deckt die beiden offenen Sub-Items ab:
 L1 (Hook execFileSync) und L2 (tar-Portabilitaet) wurden laut Scope-Update
 2026-06-03 bereits behoben und sind hier nicht erneut Gegenstand.
 """
+
 import re
 import sys
 import uuid
@@ -37,6 +38,7 @@ except ImportError:
 # Hilfsfunktionen
 # ---------------------------------------------------------------------------
 
+
 def _seed_quote(db: VaultDB, verbatim: str) -> tuple[str, str]:
     """Legt ein Paper + Quote mit gegebenem verbatim an. Gibt (paper_id, quote_id)."""
     paper_id = "p_" + uuid.uuid4().hex[:8]
@@ -54,6 +56,7 @@ def _seed_quote(db: VaultDB, verbatim: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 # L3 — escape_like-Helper + ESCAPE-Klausel
 # ---------------------------------------------------------------------------
+
 
 def test_escape_like_helper_exists_and_escapes_wildcards():
     """Es gibt einen importierbaren escape_like-Helper, der %, _ und \\ escaped."""
@@ -146,6 +149,7 @@ def test_find_figures_by_caption_treats_wildcards_literally(tmp_path):
 # Doc LOW — README-Pfade
 # ---------------------------------------------------------------------------
 
+
 def test_readme_test_paths_have_tests_prefix():
     """README erwaehnt Test-Dateien mit tests/-Prefix (nicht nackt)."""
     text = _README_PATH.read_text(encoding="utf-8")
@@ -163,6 +167,4 @@ def test_readme_test_paths_have_tests_prefix():
 def test_readme_output_paths_marked_as_project_output():
     """README markiert User-Output-Pfade als <projekt>/... (nicht als Repo-Files)."""
     text = _README_PATH.read_text(encoding="utf-8")
-    assert "<projekt>/" in text, (
-        "README sollte User-Output-Pfade klar als <projekt>/... markieren"
-    )
+    assert "<projekt>/" in text, "README sollte User-Output-Pfade klar als <projekt>/... markieren"

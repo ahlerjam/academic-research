@@ -121,14 +121,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff mypy
       - name: ruff check
-        # Schrittweise Einfuehrung: vorerst nicht-blockierend, damit bestehender
-        # Code die CI nicht sofort rot faerbt. Spaeter auf blockierend umstellen.
+        # Nicht-blockierend mit Begruendung (flowkit Stufe 0, 2026-07-24): nach 327
+        # Auto-Fixes verbleiben 60 Findings. Blockierend schalten, sobald #340
+        # abgearbeitet ist.
         continue-on-error: true
         run: ruff check .
       - name: ruff format --check
-        continue-on-error: true
+        # Blockierend seit Stufe-0-Hygiene (flowkit): Format-Stand ist sauber.
         run: ruff format --check .
       - name: mypy
+        # Nicht-blockierend mit Begruendung (flowkit Stufe 0): 33 Fehler offen.
+        # Blockierend schalten, sobald #341 abgearbeitet ist.
         continue-on-error: true
         run: mypy
 

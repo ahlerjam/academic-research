@@ -43,12 +43,12 @@ def _parse_frontmatter(path: Path) -> dict:
 # Voraussetzung: search.md verweist tatsaechlich auf /history --batch
 # ---------------------------------------------------------------------------
 
+
 def test_search_md_references_history_batch():
     """search.md verweist Nutzer auf /history --batch <id> (Quelle des Issues)."""
     content = SEARCH_MD.read_text(encoding="utf-8")
     assert "/history --batch" in content, (
-        "search.md sollte weiterhin auf /history --batch verweisen "
-        "(Grundlage von Issue #228)"
+        "search.md sollte weiterhin auf /history --batch verweisen (Grundlage von Issue #228)"
     )
 
 
@@ -56,13 +56,12 @@ def test_search_md_references_history_batch():
 # Akzeptanzkriterium: --batch in history.md dokumentiert
 # ---------------------------------------------------------------------------
 
+
 def test_history_md_argument_hint_documents_batch():
     """`--batch <id>` muss im argument-hint-Frontmatter von history.md stehen."""
     fm = _parse_frontmatter(HISTORY_MD)
     hint = fm.get("argument-hint", "")
-    assert "--batch" in hint, (
-        f"argument-hint von history.md dokumentiert --batch nicht: {hint!r}"
-    )
+    assert "--batch" in hint, f"argument-hint von history.md dokumentiert --batch nicht: {hint!r}"
 
 
 def test_history_md_body_documents_batch_workflow():
@@ -73,9 +72,7 @@ def test_history_md_body_documents_batch_workflow():
     assert "batch_id" in content or "Batch-Job" in content, (
         "history.md --batch-Workflow referenziert keine batch_id/Batch-Job"
     )
-    assert "ended" in content, (
-        "history.md --batch-Workflow prueft den Batch-Status 'ended' nicht"
-    )
+    assert "ended" in content, "history.md --batch-Workflow prueft den Batch-Status 'ended' nicht"
 
 
 def test_history_md_batch_uses_batch_api_module():
@@ -84,6 +81,4 @@ def test_history_md_batch_uses_batch_api_module():
     assert "batch_api" in content, (
         "history.md --batch-Workflow importiert das batch_api-Modul nicht"
     )
-    assert "load_batch_job" in content, (
-        "history.md --batch-Workflow nutzt load_batch_job nicht"
-    )
+    assert "load_batch_job" in content, "history.md --batch-Workflow nutzt load_batch_job nicht"

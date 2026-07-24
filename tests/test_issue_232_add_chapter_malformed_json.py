@@ -8,18 +8,18 @@ landete so mit falschem Typ im Vault und die Typ-Validierung war unterlaufen.
 Akzeptanzkriterium: Malformed csl_json an add_chapter fuehrt zu einem klaren
 Error statt stiller Fehlklassifikation.
 """
+
 import json
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from academic_vault import server
 from academic_vault.db import VaultDB
-
 
 PARENT_ID = "buch_2024"
 

@@ -36,7 +36,7 @@ def _commands_section() -> str:
     text = README.read_text(encoding="utf-8")
     start = text.index("## Commands / Slash-Commands")
     # Die naechste Top-Level-Sektion beendet den Block.
-    rest = text[start + len("## Commands / Slash-Commands"):]
+    rest = text[start + len("## Commands / Slash-Commands") :]
     m = re.search(r"\n## ", rest)
     end = m.start() if m else len(rest)
     return rest[:end]
@@ -75,8 +75,7 @@ def test_command_has_readme_subsection(name: str) -> None:
     section = _commands_section()
     heading = f"### `/academic-research:{name}`"
     assert heading in section, (
-        f"README Commands-Sektion fehlt Subsektion fuer '{name}' "
-        f"(erwartet Heading: {heading})"
+        f"README Commands-Sektion fehlt Subsektion fuer '{name}' (erwartet Heading: {heading})"
     )
 
 
@@ -104,8 +103,7 @@ def test_command_subsection_has_example(name: str) -> None:
     # Mindestens zwei Vorkommen des Slugs: einmal Syntax, einmal Beispiel.
     occurrences = sub.count(f"/academic-research:{name}")
     assert occurrences >= 2, (
-        f"'{name}': zu wenige Aufruf-Beispiele "
-        f"({occurrences} Vorkommen, erwartet >= 2)"
+        f"'{name}': zu wenige Aufruf-Beispiele ({occurrences} Vorkommen, erwartet >= 2)"
     )
     assert ("Beispiel" in sub) or ("```" in sub), (
         f"'{name}': weder 'Beispiel'-Hinweis noch Codeblock gefunden"
@@ -127,6 +125,4 @@ def test_latex_section_present_priority() -> None:
     sub = _command_subsection(_commands_section(), "latex")
     assert sub, "README: `/academic-research:latex`-Sektion fehlt (v6.5-Feature)"
     assert "Syntax:" in sub, "latex: Syntax-Zeile fehlt"
-    assert ".tex" in sub and ".bib" in sub, (
-        "latex: Verweis auf .tex/.bib-Ausgabe fehlt"
-    )
+    assert ".tex" in sub and ".bib" in sub, "latex: Verweis auf .tex/.bib-Ausgabe fehlt"

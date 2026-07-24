@@ -26,11 +26,7 @@ SKILLS_DIR = REPO_ROOT / "skills"
 # _common ist kein Skill (nur geteilte Fragmente).
 EXEMPT = {"xlsx", "_common"}
 
-NON_EXEMPT_SKILLS = sorted(
-    p
-    for p in SKILLS_DIR.glob("*/SKILL.md")
-    if p.parent.name not in EXEMPT
-)
+NON_EXEMPT_SKILLS = sorted(p for p in SKILLS_DIR.glob("*/SKILL.md") if p.parent.name not in EXEMPT)
 
 # Issue benennt diese beiden Skills explizit fuer die triggers-Entfernung.
 TRIGGERS_TO_REMOVE = ["reading-list-import", "material-passport"]
@@ -48,17 +44,13 @@ def test_non_exempt_skills_found() -> None:
     assert len(NON_EXEMPT_SKILLS) >= 26, NON_EXEMPT_SKILLS
 
 
-@pytest.mark.parametrize(
-    "skill_md", NON_EXEMPT_SKILLS, ids=lambda p: p.parent.name
-)
+@pytest.mark.parametrize("skill_md", NON_EXEMPT_SKILLS, ids=lambda p: p.parent.name)
 def test_license_present(skill_md: Path) -> None:
     fm = _load_frontmatter(skill_md)
     assert fm.get("license"), f"{skill_md}: Pflichtfeld 'license' fehlt"
 
 
-@pytest.mark.parametrize(
-    "skill_md", NON_EXEMPT_SKILLS, ids=lambda p: p.parent.name
-)
+@pytest.mark.parametrize("skill_md", NON_EXEMPT_SKILLS, ids=lambda p: p.parent.name)
 def test_allowed_tools_is_list(skill_md: Path) -> None:
     fm = _load_frontmatter(skill_md)
     at = fm.get("allowed-tools")
