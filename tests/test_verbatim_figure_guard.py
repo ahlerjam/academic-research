@@ -7,7 +7,6 @@ Exit-Code 0 = allow, Exit-Code 2 = block.
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -48,7 +47,6 @@ def run_hook(
 @pytest.fixture
 def vault_with_figure(tmp_path):
     """Erstellt temporaere Vault-DB mit einem Figure-Eintrag."""
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_figure, add_paper
 
@@ -96,7 +94,6 @@ def test_hook_non_write_tool_ignored():
 
 def test_hook_blocks_unknown_figure_reference(tmp_path):
     """Hook blockiert bei Abb.-Referenz die nicht im Vault ist (Vault existiert, kein Eintrag)."""
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_paper
 
@@ -138,7 +135,6 @@ def test_hook_allows_when_figure_in_vault(vault_with_figure):
 
 def test_existing_quote_check_still_works(tmp_path):
     """Regression: bestehende Quote-Pruefung blockiert weiterhin bei unverifizierten Zitaten."""
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_paper
 
@@ -186,7 +182,6 @@ def run_hook_raw(payload: dict, env_overrides: dict = None) -> subprocess.Comple
 
 
 def _empty_vault(tmp_path, name="empty_vault.db"):
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_paper
 

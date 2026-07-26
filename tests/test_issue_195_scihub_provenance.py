@@ -11,10 +11,7 @@ Akzeptanzkriterien (siehe Issue #195):
 import json
 import os
 import sqlite3
-import sys
 import tempfile
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from academic_vault.db import VaultDB
 

@@ -6,13 +6,11 @@ extrahierten Textes (reportlab: y=40 = unten, aber pypdf liest
 aufsteigend nach y, also erscheint y=40 zuerst).
 """
 
-import sys
 from pathlib import Path
 
 import pytest
 
 # scripts/ zum Python-Pfad hinzufuegen
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 FIXTURES = Path(__file__).parent / "fixtures" / "page_offset"
 
@@ -111,7 +109,6 @@ def test_vault_db_set_get_page_offset():
     import json
     import tempfile
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
     from academic_vault.db import VaultDB
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
@@ -131,7 +128,6 @@ def test_vault_db_get_page_offset_missing_returns_zero():
     """get_page_offset gibt 0 zurueck fuer unbekanntes paper_id."""
     import tempfile
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
     from academic_vault.db import VaultDB
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
@@ -153,7 +149,6 @@ def test_server_set_and_get_printed_page():
     import json
     import tempfile
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
     from academic_vault.server import (
         add_paper,
         get_printed_page,
@@ -179,7 +174,6 @@ def test_server_get_printed_page_zero_offset():
     import json
     import tempfile
 
-    sys.path.insert(0, str(Path(__file__).parent.parent))
     from academic_vault.server import add_paper, get_printed_page
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:

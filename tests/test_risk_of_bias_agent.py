@@ -16,14 +16,11 @@ Pro Test wird geprueft:
 """
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 _ROOT = Path(__file__).parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
 
 
 # ---------------------------------------------------------------------------
@@ -31,21 +28,10 @@ if str(_ROOT) not in sys.path:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def db_path(tmp_path):
-    """Temporaere SQLite-DB mit vollstaendigem Schema."""
+def _seed_paper(temp_vault_db: str, paper_id: str, pdf_path: str = "/tmp/test.pdf") -> None:
     from academic_vault.db import VaultDB
 
-    path = str(tmp_path / "test_rob.db")
-    db = VaultDB(path)
-    db.init_schema()
-    return path
-
-
-def _seed_paper(db_path: str, paper_id: str, pdf_path: str = "/tmp/test.pdf") -> None:
-    from academic_vault.db import VaultDB
-
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     db.add_paper(
         paper_id,
         json.dumps({"title": f"Test Paper {paper_id}", "type": "article-journal"}),
@@ -133,14 +119,14 @@ def _expected_qual_domains():
 # ---------------------------------------------------------------------------
 
 
-def test_rct_calls_add_risk_of_bias_with_correct_domains(db_path, tmp_path):
+def test_rct_calls_add_risk_of_bias_with_correct_domains(temp_vault_db, tmp_path):
     """RCT-Assessment muss alle 5 Cochrane-RoB-2-Domains in vault speichern."""
-    _seed_paper(db_path, "paper_rct")
+    _seed_paper(temp_vault_db, "paper_rct")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     result = assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_rct",
         study_type="RCT",
         pdf_text=MOCK_PDF_TEXT,
@@ -148,7 +134,7 @@ def test_rct_calls_add_risk_of_bias_with_correct_domains(db_path, tmp_path):
 
     from academic_vault import server as vault_server
 
-    assessments = vault_server.list_risk_of_bias(db_path, paper_id="paper_rct")
+    assessments = vault_server.list_risk_of_bias(temp_vault_db, paper_id="paper_rct")
     assert len(assessments) >= 1, "add_risk_of_bias muss aufgerufen worden sein"
 
     stored_scores = json.loads(assessments[0]["domain_scores_json"])
@@ -161,14 +147,14 @@ def test_rct_calls_add_risk_of_bias_with_correct_domains(db_path, tmp_path):
         )
 
 
-def test_rct_overall_score_present(db_path):
+def test_rct_overall_score_present(temp_vault_db):
     """RCT-Assessment muss ein 'overall'-Feld in domain_scores enthalten."""
-    _seed_paper(db_path, "paper_rct_overall")
+    _seed_paper(temp_vault_db, "paper_rct_overall")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_rct_overall",
         study_type="RCT",
         pdf_text=MOCK_PDF_TEXT,
@@ -176,20 +162,20 @@ def test_rct_overall_score_present(db_path):
 
     from academic_vault import server as vault_server
 
-    assessments = vault_server.list_risk_of_bias(db_path, paper_id="paper_rct_overall")
+    assessments = vault_server.list_risk_of_bias(temp_vault_db, paper_id="paper_rct_overall")
     stored = json.loads(assessments[0]["domain_scores_json"])
     assert "overall" in stored, "'overall'-Eintrag fehlt im RCT-Assessment"
     assert stored["overall"] in ("low", "some concerns", "high")
 
 
-def test_rct_adds_quote_per_domain(db_path):
+def test_rct_adds_quote_per_domain(temp_vault_db):
     """Pro RCT-Domain muss mindestens ein vault.add_quote aufgerufen werden."""
-    _seed_paper(db_path, "paper_rct_quotes")
+    _seed_paper(temp_vault_db, "paper_rct_quotes")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_rct_quotes",
         study_type="RCT",
         pdf_text=MOCK_PDF_TEXT,
@@ -197,7 +183,7 @@ def test_rct_adds_quote_per_domain(db_path):
 
     from academic_vault.db import VaultDB
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     quotes = db.find_quotes(paper_id="paper_rct_quotes")
     assert len(quotes) >= len(_expected_rct_domains()), (
         f"Erwartet >={len(_expected_rct_domains())} Quotes, gefunden: {len(quotes)}"
@@ -209,14 +195,14 @@ def test_rct_adds_quote_per_domain(db_path):
 # ---------------------------------------------------------------------------
 
 
-def test_observational_calls_add_risk_of_bias_with_correct_domains(db_path):
+def test_observational_calls_add_risk_of_bias_with_correct_domains(temp_vault_db):
     """Observational-Assessment muss alle 7 ROBINS-I-Domains in vault speichern."""
-    _seed_paper(db_path, "paper_obs")
+    _seed_paper(temp_vault_db, "paper_obs")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_obs",
         study_type="observational",
         pdf_text=MOCK_PDF_TEXT_OBS,
@@ -224,7 +210,7 @@ def test_observational_calls_add_risk_of_bias_with_correct_domains(db_path):
 
     from academic_vault import server as vault_server
 
-    assessments = vault_server.list_risk_of_bias(db_path, paper_id="paper_obs")
+    assessments = vault_server.list_risk_of_bias(temp_vault_db, paper_id="paper_obs")
     assert len(assessments) >= 1
 
     stored_scores = json.loads(assessments[0]["domain_scores_json"])
@@ -239,14 +225,14 @@ def test_observational_calls_add_risk_of_bias_with_correct_domains(db_path):
         )
 
 
-def test_observational_adds_quote_per_domain(db_path):
+def test_observational_adds_quote_per_domain(temp_vault_db):
     """Pro ROBINS-I-Domain muss mindestens ein Quote gespeichert werden."""
-    _seed_paper(db_path, "paper_obs_q")
+    _seed_paper(temp_vault_db, "paper_obs_q")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_obs_q",
         study_type="observational",
         pdf_text=MOCK_PDF_TEXT_OBS,
@@ -254,7 +240,7 @@ def test_observational_adds_quote_per_domain(db_path):
 
     from academic_vault.db import VaultDB
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     quotes = db.find_quotes(paper_id="paper_obs_q")
     assert len(quotes) >= len(_expected_obs_domains())
 
@@ -264,14 +250,14 @@ def test_observational_adds_quote_per_domain(db_path):
 # ---------------------------------------------------------------------------
 
 
-def test_qualitative_calls_add_risk_of_bias_with_correct_domains(db_path):
+def test_qualitative_calls_add_risk_of_bias_with_correct_domains(temp_vault_db):
     """Qualitative-Assessment muss alle 10 CASP-Items in vault speichern."""
-    _seed_paper(db_path, "paper_qual")
+    _seed_paper(temp_vault_db, "paper_qual")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_qual",
         study_type="qualitative",
         pdf_text=MOCK_PDF_TEXT_QUAL,
@@ -279,7 +265,7 @@ def test_qualitative_calls_add_risk_of_bias_with_correct_domains(db_path):
 
     from academic_vault import server as vault_server
 
-    assessments = vault_server.list_risk_of_bias(db_path, paper_id="paper_qual")
+    assessments = vault_server.list_risk_of_bias(temp_vault_db, paper_id="paper_qual")
     assert len(assessments) >= 1
 
     stored_scores = json.loads(assessments[0]["domain_scores_json"])
@@ -288,14 +274,14 @@ def test_qualitative_calls_add_risk_of_bias_with_correct_domains(db_path):
         assert stored_scores[domain]["score"] in ("yes", "no", "can't tell")
 
 
-def test_qualitative_adds_quote_per_domain(db_path):
+def test_qualitative_adds_quote_per_domain(temp_vault_db):
     """Pro CASP-Domain muss mindestens ein Quote gespeichert werden."""
-    _seed_paper(db_path, "paper_qual_q")
+    _seed_paper(temp_vault_db, "paper_qual_q")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_qual_q",
         study_type="qualitative",
         pdf_text=MOCK_PDF_TEXT_QUAL,
@@ -303,7 +289,7 @@ def test_qualitative_adds_quote_per_domain(db_path):
 
     from academic_vault.db import VaultDB
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     quotes = db.find_quotes(paper_id="paper_qual_q")
     assert len(quotes) >= len(_expected_qual_domains())
 
@@ -313,14 +299,14 @@ def test_qualitative_adds_quote_per_domain(db_path):
 # ---------------------------------------------------------------------------
 
 
-def test_output_contains_markdown_table_rct(db_path):
+def test_output_contains_markdown_table_rct(temp_vault_db):
     """assess_risk_of_bias gibt Markdown-Tabelle mit RoB-Scores zurueck (RCT)."""
-    _seed_paper(db_path, "paper_md_rct")
+    _seed_paper(temp_vault_db, "paper_md_rct")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     result = assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_md_rct",
         study_type="RCT",
         pdf_text=MOCK_PDF_TEXT,
@@ -332,14 +318,14 @@ def test_output_contains_markdown_table_rct(db_path):
     assert "|" in result, "Kein Pipe-Character in Output — keine Markdown-Tabelle"
 
 
-def test_output_contains_markdown_table_qualitative(db_path):
+def test_output_contains_markdown_table_qualitative(temp_vault_db):
     """assess_risk_of_bias gibt Markdown-Tabelle mit RoB-Scores zurueck (qualitativ)."""
-    _seed_paper(db_path, "paper_md_qual")
+    _seed_paper(temp_vault_db, "paper_md_qual")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     result = assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_md_qual",
         study_type="qualitative",
         pdf_text=MOCK_PDF_TEXT_QUAL,
@@ -353,14 +339,14 @@ def test_output_contains_markdown_table_qualitative(db_path):
 # ---------------------------------------------------------------------------
 
 
-def test_review_study_type_falls_back_to_robins_i(db_path):
+def test_review_study_type_falls_back_to_robins_i(temp_vault_db):
     """study_type='review' wird wie 'observational' behandelt (ROBINS-I)."""
-    _seed_paper(db_path, "paper_review")
+    _seed_paper(temp_vault_db, "paper_review")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_review",
         study_type="review",
         pdf_text=MOCK_PDF_TEXT_OBS,
@@ -368,50 +354,50 @@ def test_review_study_type_falls_back_to_robins_i(db_path):
 
     from academic_vault import server as vault_server
 
-    assessments = vault_server.list_risk_of_bias(db_path, paper_id="paper_review")
+    assessments = vault_server.list_risk_of_bias(temp_vault_db, paper_id="paper_review")
     assert len(assessments) >= 1
     stored = json.loads(assessments[0]["domain_scores_json"])
     # ROBINS-I-Domains erwartet
     assert "confounding" in stored or len(stored) >= 5
 
 
-def test_invalid_study_type_raises(db_path):
+def test_invalid_study_type_raises(temp_vault_db):
     """Unbekannter study_type muss ValueError werfen."""
-    _seed_paper(db_path, "paper_invalid")
+    _seed_paper(temp_vault_db, "paper_invalid")
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     with pytest.raises(ValueError, match="study_type"):
         assess_risk_of_bias(
-            db_path=db_path,
+            db_path=temp_vault_db,
             paper_id="paper_invalid",
             study_type="unknown_type",
             pdf_text="some text",
         )
 
 
-def test_consistent_scores_rct_same_paper(db_path):
+def test_consistent_scores_rct_same_paper(temp_vault_db):
     """Gleicher PDF-Text + RCT fuehrt zu konsistenten Domain-Schluesseln."""
-    _seed_paper(db_path, "paper_cons")
+    _seed_paper(temp_vault_db, "paper_cons")
 
     from academic_vault import server as vault_server
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_cons",
         study_type="RCT",
         pdf_text=MOCK_PDF_TEXT,
     )
     assess_risk_of_bias(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="paper_cons",
         study_type="RCT",
         pdf_text=MOCK_PDF_TEXT,
     )
 
-    assessments = vault_server.list_risk_of_bias(db_path, paper_id="paper_cons")
+    assessments = vault_server.list_risk_of_bias(temp_vault_db, paper_id="paper_cons")
     assert len(assessments) == 2
     keys_0 = set(json.loads(assessments[0]["domain_scores_json"]).keys())
     keys_1 = set(json.loads(assessments[1]["domain_scores_json"]).keys())

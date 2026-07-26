@@ -6,14 +6,9 @@ Expected values pre-computed manually for 5-study example.
 
 from __future__ import annotations
 
-import os
-import sys
-
 import pytest
 
 # Ensure scripts/ is importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-
 from meta_analysis import (
     MetaAnalysisResult,
     Study,

@@ -5,13 +5,10 @@ TDD-First: Tests definieren das erwuenschte Verhalten.
 
 import os
 import sqlite3
-import sys
 import tempfile
 from pathlib import Path
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
-if str(_WORKTREE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE_ROOT))
 
 from academic_vault import server as vault_server
 from academic_vault.db import VaultDB

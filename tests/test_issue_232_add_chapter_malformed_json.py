@@ -10,14 +10,9 @@ Error statt stiller Fehlklassifikation.
 """
 
 import json
-import sys
 import tempfile
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from academic_vault import server
 from academic_vault.db import VaultDB
 

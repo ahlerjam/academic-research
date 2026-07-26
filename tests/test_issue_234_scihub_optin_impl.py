@@ -25,8 +25,6 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 SETUP_SH = SCRIPTS_DIR / "setup.sh"
 OPTIN_SCRIPT = SCRIPTS_DIR / "scihub_optin.py"
 
-sys.path.insert(0, str(SCRIPTS_DIR))
-
 
 # ---------------------------------------------------------------------------
 # 1. Helper existiert und ist importierbar

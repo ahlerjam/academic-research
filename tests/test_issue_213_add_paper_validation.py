@@ -6,14 +6,9 @@ ValueError werfen (Halluzinationsschutz / Security Round-2 M3).
 """
 
 import json
-import sys
 import tempfile
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from academic_vault import server as vault_server
 from academic_vault.db import VaultDB
 
