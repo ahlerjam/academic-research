@@ -1,7 +1,7 @@
 # Academic Research v6.5
 
-[![CI](https://github.com/jamski105/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/jamski105/academic-research/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/jamski105/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/jamski105/academic-research)
+[![CI](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ahlerjam/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/ahlerjam/academic-research)
 [![Version](https://img.shields.io/badge/version-6.5.0-blue.svg)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-28-orange.svg)](#skills-übersicht)
 [![Tests](https://img.shields.io/badge/tests-963%20passing%20%2F%201111%20collected-success.svg)](#entwicklung-und-evals)
@@ -143,7 +143,7 @@ Das Plugin kommt mit vorkonfigurierten **Per-Uni-Profilen** für ETH Zürich, FU
 ### Schritt 1 — Plugin-Marketplace registrieren
 
 ```
-/plugin marketplace add jamski105/academic-research
+/plugin marketplace add ahlerjam/academic-research
 ```
 
 Dieser Schritt ist einmalig pro System.
@@ -877,10 +877,11 @@ cp config/library-profiles/tum.yaml \
 ### Tests ausführen
 
 ```bash
-~/.academic-research/venv/bin/python -m pytest tests/ -v
+uv sync --extra dev            # einmalig je Arbeitskopie
+uv run pytest tests/ -v
 ```
 
-Aktuell: **1111 Tests gesammelt**, davon **963 bestanden** und 148 übersprungen (`pytest --collect-only` für die Gesamtzahl). Enthalten sind Regression-Guards (`tests/test_skill_naming.py`, `tests/test_cross_references.py`, `tests/test_skills_manifest.py`).
+Aktuell rund **1800 Tests**. Die exakte Zahl hängt von Plattform und installierten optionalen Paketen ab — im CI (Ubuntu, py3.12) sind es **1771 gesammelt**, davon **1624 bestanden** und 148 übersprungen; unter macOS liegt sie etwas höher. Maßgeblich für die eigene Umgebung ist `uv run pytest --collect-only -q`. Enthalten sind Regression-Guards (`tests/test_skill_naming.py`, `tests/test_cross_references.py`, `tests/test_skills_manifest.py`).
 
 Die Kern-Suite ist **offline-hermetisch** und läuft ohne Netzwerk. Übersprungen werden Tests, die externe Abhängigkeiten brauchen: API-basierte Evals unter `tests/evals/` setzen einen `ANTHROPIC_API_KEY` voraus (Network/External), und einige Integrations-Tests werden ohne installierte optionale Pakete (z.B. `requests`, `sqlite-vec`) automatisch geskippt.
 
@@ -910,14 +911,14 @@ pre-commit install            # installiert den Git-Hook
 pre-commit run --all-files
 
 # Einzelne Tools direkt
-ruff check .                  # Linter
-ruff format .                 # Formatter
-mypy                          # Typpruefung (Pfade aus pyproject.toml)
+uv run ruff check .           # Linter
+uv run ruff format .          # Formatter
+uv run mypy                   # Typpruefung (Pfade aus pyproject.toml)
 ```
 
 Die pre-commit-Hooks umfassen `ruff` (Lint + Format), `mypy`,
 `end-of-file-fixer`, `check-yaml` und `check-json`. Reproduzierbare Installs
-liefert der gepinnte `requirements.lock` (`pip install -r requirements.lock`).
+liefert der gepinnte `uv.lock` (`uv sync --extra dev`).
 
 ### Evals
 
@@ -937,9 +938,9 @@ Kein CI-Trigger — Evals laufen lokal vor jedem Release. Reports unter `docs/ev
 
 **Lizenz:** MIT (siehe [LICENSE](LICENSE))
 
-**Plugin auf GitHub:** [github.com/jamski105/academic-research](https://github.com/jamski105/academic-research)
+**Plugin auf GitHub:** [github.com/ahlerjam/academic-research](https://github.com/ahlerjam/academic-research)
 
-**Bug melden / Feature anfragen:** [GitHub Issues](https://github.com/jamski105/academic-research/issues)
+**Bug melden / Feature anfragen:** [GitHub Issues](https://github.com/ahlerjam/academic-research/issues)
 
 **Referenzen:**
 
