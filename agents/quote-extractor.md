@@ -22,7 +22,7 @@ description: |
   Im deep-Modus läuft quote-extractor nach dem relevance-scorer für die besten Papers, um Zitat-Kandidaten in die Session einzusammeln.
   </commentary>
   </example>
-tools: [Read, mcp__academic_vault__vault_ensure_file, mcp__academic_vault__vault_add_quote]
+tools: [Read, mcp__academic-vault__vault_ensure_file, mcp__academic-vault__vault_add_quote]
 maxTurns: 5
 ---
 

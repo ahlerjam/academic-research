@@ -10,9 +10,9 @@ model: sonnet
 color: purple
 tools:
   - Read
-  - mcp__academic_vault__vault_ensure_file
-  - mcp__academic_vault__vault_add_figure
-  - mcp__academic_vault__vault_list_figures
+  - mcp__academic-vault__vault_ensure_file
+  - mcp__academic-vault__vault_add_figure
+  - mcp__academic-vault__vault_list_figures
 maxTurns: 8
 ---
 
