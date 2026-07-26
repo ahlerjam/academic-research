@@ -17,6 +17,15 @@ _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 
+
+class VaultLockedError(RuntimeError):
+    """Material-Passport ist gesperrt -- Schreiboperation wurde verweigert.
+
+    Wird geworfen sobald ein Eintrag in ``vault_locked_status`` existiert
+    (siehe ``VaultDB._raise_if_locked``, Issue #380).
+    """
+
+
 # Typ-Alias-Map fuer Figure-Referenzen (Issue #379): alle Schreibweisen
 # normalisieren auf "figure" bzw. "table", damit In-Text-Label
 # ("Abb. 3.4") und Caption ("Abbildung 3.4: ...") strukturiert statt per
@@ -303,6 +312,7 @@ class VaultDB:
 
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT INTO papers
@@ -415,6 +425,7 @@ class VaultDB:
         """INSERT eines Quotes in die quotes-Tabelle."""
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT INTO quotes
@@ -507,6 +518,7 @@ class VaultDB:
         figure_id = str(uuid4())
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT INTO figures
@@ -606,6 +618,7 @@ class VaultDB:
         decision_id = str(uuid4())
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT INTO decisions (decision_id, category, text, rationale, created_at)
@@ -618,6 +631,7 @@ class VaultDB:
     def supersede_decision(self, decision_id: str, superseded_by: str) -> None:
         """Setzt superseded_by fuer eine Decision."""
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 "UPDATE decisions SET superseded_by = ? WHERE decision_id = ?",
                 (superseded_by, decision_id),
@@ -652,6 +666,7 @@ class VaultDB:
         """INSERT or REPLACE eines excluded_source-Eintrags."""
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT OR REPLACE INTO excluded_sources (paper_id, reason, excluded_at)
@@ -690,6 +705,7 @@ class VaultDB:
         assessment_id = str(uuid4())
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT INTO risk_of_bias_assessments
@@ -731,6 +747,7 @@ class VaultDB:
         snapshot_id = str(uuid4())
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT INTO score_history (snapshot_id, paper_id, session_id, ts, scores_json)
@@ -762,6 +779,31 @@ class VaultDB:
     # ------------------------------------------------------------------
     # Vault Lock (v6.4)
     # ------------------------------------------------------------------
+
+    def _raise_if_locked(self, conn: sqlite3.Connection) -> None:
+        """Wirft ``VaultLockedError``, falls der Material-Passport gesperrt ist.
+
+        Bewusst *unscoped* (Issue #380): geprueft wird nur, ob ueberhaupt ein
+        Eintrag in ``vault_locked_status`` existiert -- nicht slug-genau. Eine
+        ``vault.db`` bedient in der Praxis genau ein Projekt (``db_path`` wird
+        ueber ``project_slug()``/``--slug`` beim Anlegen fest verdrahtet) und
+        die Schreib-Tools in ``server.py`` fuehren aktuell keinen
+        ``slug``-Parameter. Das slug-scoped ``is_locked(slug)``/
+        ``lock_vault(slug)`` bleibt fuer diesen Zweck unveraendert; dieser
+        Guard ist ein separater, bewusst grober Mechanismus.
+
+        Wird als erste Anweisung innerhalb des jeweiligen
+        ``with self._connection(commit=True) as conn:``-Blocks der
+        betroffenen Schreib-Methoden aufgerufen, damit Pruefung und
+        INSERT/UPDATE atomar in derselben SQLite-Transaktion liegen (kein
+        TOCTOU-Fenster, keine Teil-Schreibung bei Verstoss).
+        """
+        row = conn.execute("SELECT slug FROM vault_locked_status LIMIT 1").fetchone()
+        if row is not None:
+            raise VaultLockedError(
+                f"Vault ist gesperrt (Material-Passport-Lock fuer Slug "
+                f"'{row['slug']}') -- Schreiboperationen sind nicht mehr erlaubt."
+            )
 
     # ------------------------------------------------------------------
     # Chunk Embeddings (v6.5 — Contextual Retrieval #109)

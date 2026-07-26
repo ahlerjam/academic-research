@@ -96,6 +96,7 @@ def add_quote(
         )
     quote_id = str(uuid4())
     db = VaultDB(db_path)
+    db.init_schema()
     db.add_quote(
         quote_id=quote_id,
         paper_id=paper_id,
@@ -261,6 +262,7 @@ def add_figure(
 ) -> str:
     """Fuegt Figure in Vault ein. Gibt figure_id zurueck."""
     db = VaultDB(db_path)
+    db.init_schema()
     return db.add_figure(
         paper_id=paper_id,
         page=page,
