@@ -4,7 +4,8 @@ Testet:
   (a) README enthaelt NICHT den erfundenen "SessionMid"-Event.
   (b) Die im README genannten Hook-Events stimmen mit den real in hooks/hooks.json
       konfigurierten Events ueberein.
-  (c) MIGRATION-v5-to-v6.md enthaelt ebenfalls kein "SessionMid".
+
+(Der fruehere Teil (c) pruefte docs/MIGRATION-v5-to-v6.md — Datei mit #346 entfernt.)
 """
 
 import json
@@ -14,7 +15,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
 HOOKS_JSON = REPO_ROOT / "hooks" / "hooks.json"
-MIGRATION_GUIDE = REPO_ROOT / "docs" / "MIGRATION-v5-to-v6.md"
 
 
 def _readme_hooks_section() -> str:
@@ -31,18 +31,6 @@ def test_readme_does_not_contain_session_mid():
     assert "SessionMid" not in readme_text, (
         "README enthaelt den nicht-existierenden Claude-Code-Event 'SessionMid'. "
         "Der echte Event-Name ist 'Notification' (und 'PostCompact')."
-    )
-
-
-def test_migration_guide_does_not_contain_session_mid():
-    """MIGRATION-v5-to-v6.md darf 'SessionMid' nicht erwaehnen."""
-    if not MIGRATION_GUIDE.exists():
-        import pytest
-
-        pytest.skip("MIGRATION-v5-to-v6.md nicht vorhanden")
-    migration_text = MIGRATION_GUIDE.read_text(encoding="utf-8")
-    assert "SessionMid" not in migration_text, (
-        "MIGRATION-v5-to-v6.md enthaelt den nicht-existierenden Event 'SessionMid'."
     )
 
 
