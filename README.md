@@ -189,7 +189,8 @@ Ohne Profil funktioniert das Plugin vollständig — nur die lizenzpflichtigen B
 
 ## Update auf v6.5 — Migration von v5
 
-Vollständiger Guide: [docs/MIGRATION-v5-to-v6.md](docs/MIGRATION-v5-to-v6.md)
+Der ausführliche Migrations-Guide (`docs/MIGRATION-v5-to-v6.md`) wurde mit #346
+entfernt (versionsgebundenes Altdokument); bei Bedarf in der Git-Historie abrufbar.
 
 **Kurzversion (von v5.x):**
 
@@ -205,7 +206,7 @@ Vollständiger Guide: [docs/MIGRATION-v5-to-v6.md](docs/MIGRATION-v5-to-v6.md)
 # → Fragt: "literature_state.md in Vault migrieren?" → y
 ```
 
-**Von v4.x oder älter:** Erst vollständig deinstallieren, dann neu installieren (v5.0 war Breaking — Browser-Automation und Excel-Generierung wurden komplett umgestellt). Details im [Migration-Guide](docs/MIGRATION-v5-to-v6.md).
+**Von v4.x oder älter:** Erst vollständig deinstallieren, dann neu installieren (v5.0 war Breaking — Browser-Automation und Excel-Generierung wurden komplett umgestellt). Details im früheren Migration-Guide (Git-Historie, bis v6.6 unter `docs/MIGRATION-v5-to-v6.md`).
 
 ---
 
