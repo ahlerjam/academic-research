@@ -4,7 +4,19 @@
 # damit nicht mehr manuell getrackt.
 version: 2
 updates:
-  # Python-Abhaengigkeiten (scripts/requirements.txt + requirements-dev.txt)
+  # Dev-/CI-Abhaengigkeiten: pyproject.toml + uv.lock (seit #344)
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+      - "python"
+
+  # Python-Endnutzer-Abhaengigkeiten (scripts/requirements.txt, via scripts/setup.sh)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:

@@ -95,16 +95,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup-python-uv
         with:
           python-version: "3.11"
-          cache: pip
-      - name: Python-Deps installieren
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r scripts/requirements.txt pytest
       - name: pytest (Skills)
-        run: pytest tests/test_skills_manifest.py tests/test_skill_naming.py -v
+        run: uv run pytest tests/test_skills_manifest.py tests/test_skill_naming.py -v
 
   # 4b. Lint + Typpruefung (ruff + mypy) — Konfig in pyproject.toml (#202, vgl. #184)
   lint-types:
@@ -112,31 +107,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      # Versionen gepinnt (flowkit Stufe 0): ruff format --check ist blockierend —
+      # ungepinnte Tool-Releases wuerden das Gate sonst ohne Code-Aenderung brechen.
+      # Pins liegen seit #344 in pyproject.toml [project.optional-dependencies].dev
+      # + uv.lock. Beim Bump: lokal mit derselben Version nachformatieren.
+      - uses: ./.github/actions/setup-python-uv
         with:
           python-version: "3.12"
-          cache: pip
-      - name: ruff + mypy installieren
-        # Versionen gepinnt (flowkit Stufe 0): ruff format --check ist blockierend —
-        # ungepinnte Tool-Releases wuerden das Gate sonst ohne Code-Aenderung brechen.
-        # Beim Bump: lokal mit derselben Version nachformatieren.
-        run: |
-          python -m pip install --upgrade pip
-          pip install "ruff==0.16.0" "mypy==2.3.0"
       - name: ruff check
         # Nicht-blockierend mit Begruendung (flowkit Stufe 0, 2026-07-24): nach 327
         # Auto-Fixes verbleiben 60 Findings. Blockierend schalten, sobald #340
         # abgearbeitet ist.
         continue-on-error: true
-        run: ruff check .
+        run: uv run ruff check .
       - name: ruff format --check
         # Blockierend seit Stufe-0-Hygiene (flowkit): Format-Stand ist sauber.
-        run: ruff format --check .
+        run: uv run ruff format --check .
       - name: mypy
         # Nicht-blockierend mit Begruendung (flowkit Stufe 0): 33 Fehler offen.
         # Blockierend schalten, sobald #341 abgearbeitet ist.
         continue-on-error: true
-        run: mypy
+        run: uv run mypy
 
   # 4c. flowkit-Hook-Harness: testet die DEPLOYTE Blocker-Datei, nicht das Template (#343)
   flowkit-hook-harness:
@@ -160,23 +151,18 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup-python-uv
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
       # Hook-Tests starten .mjs-Hooks per `node` — daher zwingend noetig
       - uses: actions/setup-node@v7
         with:
           node-version: "20"
-      - name: Python-Deps installieren (erster Step, vgl. #197)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
       - name: Smoke-Test der Kern-Importe
-        run: python -c "import requests, httpx, anthropic, yaml, barcode, lxml"
+        run: uv run python -c "import requests, httpx, anthropic, yaml, barcode, lxml"
       - name: pytest mit Coverage
         run: |
-          pytest tests/ -p no:cacheprovider \
+          uv run pytest tests/ -p no:cacheprovider \
             --cov=scripts --cov=academic_vault \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml

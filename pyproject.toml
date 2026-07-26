@@ -19,6 +19,38 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Jonas Ahler", email = "jam@ahler.org" }]
+# Runtime-Deps: Single Source fuer Dev/CI (uv). Der Endnutzer-Installationsweg
+# (scripts/setup.sh -> scripts/requirements.txt) bleibt bewusst pip-basiert (#344);
+# beim Aendern von Runtime-Deps BEIDE Stellen pflegen.
+dependencies = [
+    "anthropic>=0.40",
+    "httpx>=0.28.1",
+    "pypdf>=4.0.0",
+    "pyyaml>=6.0.3",
+    # requests>=2.32.4: CVE-2024-35195 (cert verification bypass), CVE-2024-47081 (.netrc credential leak)
+    "requests>=2.32.4",
+    # lxml>=5.2.0: CVE-2022-2309 (NULL pointer deref)
+    "lxml>=5.2.0",
+    "python-barcode[images]>=0.16.1",
+    "mcp>=1.0",
+    "sqlite-vec>=0.1.0",
+    "jsonschema>=4.0",
+    "pyzotero>=1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    # CI-Pins (blockierendes Format-Gate): Bump nur mit Nachformatierung, vgl. ci.yml
+    "ruff==0.16.0",
+    "mypy==2.3.0",
+]
+
+# uv: Repo ist kein installierbares Package (lose gekoppelte Skripte) —
+# uv sync installiert nur die Dependencies, baut das Projekt nicht.
+[tool.uv]
+package = false
 
 # ---------------------------------------------------------------------------
 # pytest

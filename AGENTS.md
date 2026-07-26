@@ -5,13 +5,12 @@ Claude-Code-Plugin für akademisches Arbeiten: 28 Skills, 19 Agents,
 Details: README.md (lang!), CHANGELOG.md.
 
 ## Commands
-- Setup (frischer Worktree, vor dem ersten Gate): `python3 -m venv .venv &&
-  .venv/bin/pip install -r requirements-dev.txt "ruff==0.16.0" "mypy==2.3.0"`
-  (CI-gepinnte Tool-Versionen; wird mit #344 durch `uv sync --extra dev` ersetzt)
-- Tests: `pytest tests/` (Matrix-CI: Ubuntu+macOS, py3.11-3.13)
-- Lint: `ruff check .` und `ruff format --check .` (format ist CI-blockierend;
-  check wird blockierend, sobald #340 abgearbeitet ist)
-- Types: `mypy` (Konfig in pyproject.toml; blockierend nach #341)
+- Setup (frischer Worktree, vor dem ersten Gate): `uv sync --extra dev`
+  (Pins in pyproject.toml + uv.lock; Endnutzer-Weg bleibt scripts/setup.sh + pip)
+- Tests: `uv run pytest tests/` (Matrix-CI: Ubuntu+macOS, py3.11-3.13)
+- Lint: `uv run ruff check .` und `uv run ruff format --check .` (format ist
+  CI-blockierend; check wird blockierend, sobald #340 abgearbeitet ist)
+- Types: `uv run mypy` (Konfig in pyproject.toml; blockierend nach #341)
 - Hooks-Syntax: `node --check hooks/*.mjs`
 - Hook-Harness: `bash scripts/dev/test-pretooluse-blocker.sh` (testet die
   DEPLOYTE Datei `.claude/hooks/pretooluse-blocker.sh`; CI-blockierend)
