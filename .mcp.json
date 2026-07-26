@@ -4,8 +4,7 @@
       "command": "${HOME}/.academic-research/venv/bin/python",
       "args": ["-m", "academic_vault.server"],
       "env": {
-        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}",
-        "SQLITE_VEC_PATH": ""
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}"
       }
     }
   }

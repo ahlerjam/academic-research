@@ -193,10 +193,17 @@ def test_mcp_json_has_no_manual_vault_db_path_env():
 
 def test_mcp_json_default_academic_vault_only_env_stays_valid_json():
     """.mcp.json bleibt nach dem Entfernen von VAULT_DB_PATH valides JSON
-    mit den verbleibenden erwarteten Env-Keys."""
+    mit den verbleibenden erwarteten Env-Keys.
+
+    SQLITE_VEC_PATH wurde als leere Vorbelegung entfernt (Issue #371): ein
+    leerer String verhinderte den Default-Ladepfad ueber
+    sqlite_vec.loadable_path() in VaultDB.load_vec_extension(). Der Key
+    bleibt ein reiner Override und ist im Default-.mcp.json daher nicht mehr
+    gesetzt.
+    """
     import json as jsonlib
 
     mcp_json = REPO_ROOT / ".mcp.json"
     config = jsonlib.loads(mcp_json.read_text(encoding="utf-8"))
     env = config["mcpServers"]["academic-vault"]["env"]
-    assert set(env.keys()) == {"PYTHONPATH", "SQLITE_VEC_PATH"}
+    assert set(env.keys()) == {"PYTHONPATH"}
