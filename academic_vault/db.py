@@ -37,13 +37,22 @@ def escape_like(value: str) -> str:
 
 
 def project_slug(cwd: str | None = None) -> str:
-    """Kanonischer Projekt-Slug fuer den DB-Pfad: basename(CWD).
+    """Kanonischer Projekt-Slug fuer den DB-Pfad: basename(CLAUDE_PROJECT_DIR || CWD).
 
-    Eine einzige Quelle der Wahrheit (Issue #190). Hooks und MCP-Server
-    muessen denselben Algorithmus verwenden, damit alle Komponenten gegen
-    dieselbe vault.db schreiben.
+    Eine einzige Quelle der Wahrheit (Issue #190). Hooks (hooks/verbatim-guard.mjs)
+    und MCP-Server muessen denselben Algorithmus verwenden, damit alle
+    Komponenten gegen dieselbe vault.db schreiben.
+
+    Praezedenz (Issue #365 -- muss mit hooks/verbatim-guard.mjs:34 uebereinstimmen):
+      1. Expliziter ``cwd``-Parameter (Escape-Hatch fuer bestehende Aufrufer/Tests).
+      2. ``CLAUDE_PROJECT_DIR``-Umgebungsvariable, falls gesetzt.
+      3. ``Path.cwd()``.
     """
-    base = Path(cwd) if cwd is not None else Path.cwd()
+    if cwd is not None:
+        base = Path(cwd)
+    else:
+        env_project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+        base = Path(env_project_dir) if env_project_dir else Path.cwd()
     return base.name or "default"
 
 
@@ -97,7 +106,20 @@ class VaultDB:
 
     @staticmethod
     def _open(db_path: str) -> sqlite3.Connection:
-        """Oeffnet eine neue Verbindung mit Standard-Pragmas."""
+        """Oeffnet eine neue Verbindung mit Standard-Pragmas.
+
+        Legt das Elternverzeichnis von ``db_path`` an, falls es noch nicht
+        existiert (Issue #365): ``~/.academic-research/projects/<slug>/``
+        wird von keiner anderen Komponente vorab erzeugt, daher scheiterte
+        jeder erste Schreibzugriff eines neuen Projekt-Slugs bislang mit
+        ``sqlite3.OperationalError: unable to open database file``.
+        In-Memory-DBs (":memory:") haben kein Elternverzeichnis und werden
+        uebersprungen.
+        """
+        if db_path != ":memory:":
+            parent = Path(db_path).parent
+            if str(parent) not in ("", "."):
+                parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")

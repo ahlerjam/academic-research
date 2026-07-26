@@ -94,6 +94,47 @@ def test_canonical_resolver_default_is_under_home_projects(monkeypatch, tmp_path
     assert REPO_ROOT not in Path(resolved).parents
 
 
+def test_project_slug_prefers_claude_project_dir_over_cwd(monkeypatch, tmp_path):
+    """project_slug() (parameterlos) bevorzugt CLAUDE_PROJECT_DIR vor Path.cwd(),
+    genau wie hooks/verbatim-guard.mjs (Issue #365)."""
+    from academic_vault import db
+
+    project_dir = tmp_path / "mein-claude-projekt"
+    project_dir.mkdir()
+    other_cwd = tmp_path / "irgendein-anderes-verzeichnis"
+    other_cwd.mkdir()
+
+    monkeypatch.chdir(other_cwd)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project_dir))
+
+    assert db.project_slug() == "mein-claude-projekt"
+
+
+def test_project_slug_falls_back_to_cwd_without_claude_project_dir(monkeypatch, tmp_path):
+    """Ohne CLAUDE_PROJECT_DIR bleibt project_slug() beim bisherigen
+    Path.cwd()-Verhalten (Rueckwaertskompatibilitaet)."""
+    from academic_vault import db
+
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    workdir = tmp_path / "nur-cwd-projekt"
+    workdir.mkdir()
+    monkeypatch.chdir(workdir)
+
+    assert db.project_slug() == "nur-cwd-projekt"
+
+
+def test_project_slug_explicit_cwd_param_beats_env(monkeypatch, tmp_path):
+    """Ein explizit uebergebener cwd-Parameter gewinnt weiterhin gegen
+    CLAUDE_PROJECT_DIR (Escape-Hatch fuer bestehende Aufrufer/Tests, #365)."""
+    from academic_vault import db
+
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path / "env-projekt"))
+    explicit = tmp_path / "explizit-projekt"
+    explicit.mkdir()
+
+    assert db.project_slug(str(explicit)) == "explizit-projekt"
+
+
 def test_server_default_derives_from_canonical_resolver(monkeypatch):
     """server.py darf den Default nicht mehr hart als 'vault.db' (CWD) setzen,
     sondern muss ihn aus dem kanonischen Resolver ableiten."""
@@ -106,3 +147,56 @@ def test_server_default_derives_from_canonical_resolver(monkeypatch):
     assert "default_db_path" in src, (
         "server.py muss die kanonische default_db_path()-Funktion verwenden."
     )
+
+
+# ---------------------------------------------------------------------------
+# (c) .mcp.json -- keine kaputte Bash-Substring-Expansion mehr (Issue #365)
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_json_has_no_broken_pwd_substring_expansion():
+    """`.mcp.json` darf ${PWD##*/} nicht mehr enthalten.
+
+    Claude Code loest Bash-Substring-Expansion in env-Werten nicht auf; der
+    gespawnte Server-Prozess erhielt den Platzhalter woertlich im Pfad und
+    scheiterte bei jedem Schreibzugriff mit sqlite3.OperationalError, weil
+    das Verzeichnis nie existiert (Issue #365).
+    """
+    mcp_json = REPO_ROOT / ".mcp.json"
+    assert mcp_json.exists(), ".mcp.json fehlt in der Repo-Wurzel"
+    raw = mcp_json.read_text(encoding="utf-8")
+    assert "${PWD##*/}" not in raw, (
+        ".mcp.json enthaelt noch die kaputte Bash-Substring-Expansion "
+        "${PWD##*/} -- Claude Code loest das nicht auf, der Server-Prozess "
+        "bekommt den Platzhalter woertlich in VAULT_DB_PATH (#365)."
+    )
+
+
+def test_mcp_json_has_no_manual_vault_db_path_env():
+    """.mcp.json setzt VAULT_DB_PATH nicht mehr manuell.
+
+    Der Server soll ohne gesetzte Env-Variable ueber
+    academic_vault.db.default_db_path() automatisch auf
+    ~/.academic-research/projects/<slug>/vault.db zurueckfallen (#365).
+    """
+    import json as jsonlib
+
+    mcp_json = REPO_ROOT / ".mcp.json"
+    config = jsonlib.loads(mcp_json.read_text(encoding="utf-8"))
+    env = config["mcpServers"]["academic-vault"]["env"]
+    assert "VAULT_DB_PATH" not in env, (
+        ".mcp.json darf VAULT_DB_PATH nicht mehr manuell setzen -- der Server "
+        "soll ueber default_db_path() automatisch den kanonischen Pfad "
+        "verwenden (#365)."
+    )
+
+
+def test_mcp_json_default_academic_vault_only_env_stays_valid_json():
+    """.mcp.json bleibt nach dem Entfernen von VAULT_DB_PATH valides JSON
+    mit den verbleibenden erwarteten Env-Keys."""
+    import json as jsonlib
+
+    mcp_json = REPO_ROOT / ".mcp.json"
+    config = jsonlib.loads(mcp_json.read_text(encoding="utf-8"))
+    env = config["mcpServers"]["academic-vault"]["env"]
+    assert set(env.keys()) == {"PYTHONPATH", "SQLITE_VEC_PATH"}
