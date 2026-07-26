@@ -6,6 +6,7 @@ Context-Manager-Klasse mit sqlite-vec-Fallback und FTS5-Volltext-Suche.
 import contextlib
 import json
 import os
+import re
 import sqlite3
 import time
 from collections.abc import Iterator
@@ -23,6 +24,40 @@ class VaultLockedError(RuntimeError):
     Wird geworfen sobald ein Eintrag in ``vault_locked_status`` existiert
     (siehe ``VaultDB._raise_if_locked``, Issue #380).
     """
+
+
+# Typ-Alias-Map fuer Figure-Referenzen (Issue #379): alle Schreibweisen
+# normalisieren auf "figure" bzw. "table", damit In-Text-Label
+# ("Abb. 3.4") und Caption ("Abbildung 3.4: ...") strukturiert statt per
+# Freitext-Teilstring verglichen werden koennen.
+_FIGURE_REF_TYPE_ALIASES = {
+    "abb": "figure",
+    "abbildung": "figure",
+    "fig": "figure",
+    "figure": "figure",
+    "tab": "table",
+    "tabelle": "table",
+}
+
+_FIGURE_REF_RE = re.compile(
+    r"\b(Abb|Abbildung|Fig|Figure|Tab|Tabelle)\.?\s*(\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+
+
+def _parse_figure_reference(text: str) -> tuple[str, str] | None:
+    """Parst Referenz-/Caption-Text in ``(kind, number)``.
+
+    ``kind`` ist ``"figure"`` oder ``"table"`` (normalisiert ueber die
+    Typ-Alias-Map), ``number`` das Nummern-Label als String (z. B. ``"3.4"``).
+    Gibt ``None`` zurueck, wenn kein Typ+Nummer-Muster gefunden wird.
+    """
+    match = _FIGURE_REF_RE.search(text)
+    if match is None:
+        return None
+    kind = _FIGURE_REF_TYPE_ALIASES[match.group(1).lower()]
+    number = match.group(2)
+    return (kind, number)
 
 
 # Escape-Zeichen fuer LIKE-Patterns (siehe escape_like / ESCAPE-Klauseln unten).
@@ -527,6 +562,47 @@ class VaultDB:
                     (f"%{escape_like(caption_fragment)}%",),
                 ).fetchall()
         return [dict(r) for r in rows]
+
+    def find_figures_by_reference(
+        self,
+        reference_text: str,
+        paper_id: str | None = None,
+    ) -> list[dict]:
+        """Matcht ein In-Text-Referenz-Label (z. B. ``"Abb. 3.4"``) gegen
+        Figure-Captions per Typ+Nummer-Vergleich (Issue #379).
+
+        Anders als :meth:`find_figures_by_caption` (Freitext-LIKE-Suche,
+        unveraendert fuer bestehende Aufrufer) parst diese Methode sowohl
+        ``reference_text`` als auch jede Kandidaten-Caption strukturiert in
+        ``(kind, number)`` und vergleicht diese Tupel. Das In-Text-Label ist
+        selten wortidentischer Teilstring der vollen Caption (z. B. ist
+        ``"Abb. 3.4"`` kein Teilstring von ``"Abbildung 3.4: ..."``), daher
+        schlaegt reines LIKE-Matching hier praktisch immer fehl.
+
+        Liefert ``[]`` wenn ``reference_text`` kein Typ+Nummer-Muster enthaelt
+        oder kein Kandidat mit uebereinstimmendem Tupel existiert.
+        """
+        reference = _parse_figure_reference(reference_text)
+        if reference is None:
+            return []
+
+        with self._connection() as conn:
+            if paper_id is not None:
+                rows = conn.execute(
+                    "SELECT * FROM figures WHERE paper_id = ?", (paper_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM figures").fetchall()
+
+        matches = []
+        for row in rows:
+            record = dict(row)
+            caption = record.get("caption")
+            if caption is None:
+                continue
+            if _parse_figure_reference(caption) == reference:
+                matches.append(record)
+        return matches
 
     # ------------------------------------------------------------------
     # Decisions CRUD (v6.4)

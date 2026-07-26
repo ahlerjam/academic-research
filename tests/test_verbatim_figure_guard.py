@@ -133,6 +133,66 @@ def test_hook_allows_when_figure_in_vault(vault_with_figure):
     assert result.returncode == 0
 
 
+@pytest.fixture
+def vault_with_divergent_caption(tmp_path):
+    """Vault-DB mit einer Caption in ausgeschriebenem Format (Kern-Bug #379:
+    Referenz-Label 'Abb. 3.4' ist KEIN Teilstring von 'Abbildung 3.4: ...')."""
+    from academic_vault.db import VaultDB
+    from academic_vault.server import add_figure, add_paper
+
+    db_path = str(tmp_path / "divergent_vault.db")
+    db = VaultDB(db_path)
+    db.init_schema()
+    add_paper(
+        db_path=db_path,
+        paper_id="test-paper",
+        csl_json=json.dumps({"title": "Test", "type": "article-journal"}),
+    )
+    add_figure(
+        db_path=db_path,
+        paper_id="test-paper",
+        page=3,
+        caption="Abbildung 3.4: Übersicht der Systemarchitektur der Cloud-Plattform",
+        vlm_description="Blockdiagramm der Architektur.",
+        data_extracted=None,
+    )
+    return db_path
+
+
+def test_hook_allows_divergent_label_with_matching_vault_entry(vault_with_divergent_caption):
+    """Regression #379 (AC1+AC3): In-Text-Label 'Abb. 3.4' referenziert einen Vault-Eintrag
+    mit Caption 'Abbildung 3.4: ...' — muss trotz Formatabweichung NICHT blockiert werden.
+    Mit dem alten LIKE-Freitext-Matching haette dies faelschlich geblockt."""
+    content = "Wie in Abb. 3.4 gezeigt, ist der Effekt signifikant."
+    result = run_hook(
+        "Write",
+        "kapitel/kap1.md",
+        content,
+        env_overrides={"VAULT_DB_PATH": vault_with_divergent_caption},
+    )
+    assert "[Figure-Guard] BLOCKIERT" not in result.stderr
+    assert result.returncode == 0, (
+        f"Erwartet 0 (Figure-Match trotz Formatabweichung), got {result.returncode}. "
+        f"stderr: {result.stderr}"
+    )
+
+
+def test_hook_blocks_unrelated_reference_despite_vault_entry(vault_with_divergent_caption):
+    """AC2: Referenz ohne passenden Eintrag bleibt blockiert (kein Fail-open durch den Fix)."""
+    content = "Wie in Abb. 9.9 gezeigt, ist der Effekt signifikant."
+    result = run_hook(
+        "Write",
+        "kapitel/kap1.md",
+        content,
+        env_overrides={"VAULT_DB_PATH": vault_with_divergent_caption},
+    )
+    assert result.returncode == 2, (
+        f"Erwartet 2 (Block, kein passender Eintrag), got {result.returncode}. "
+        f"stderr: {result.stderr}"
+    )
+    assert "[Figure-Guard] BLOCKIERT" in result.stderr
+
+
 def test_existing_quote_check_still_works(tmp_path):
     """Regression: bestehende Quote-Pruefung blockiert weiterhin bei unverifizierten Zitaten."""
     from academic_vault.db import VaultDB

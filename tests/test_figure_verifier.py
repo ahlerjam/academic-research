@@ -245,6 +245,140 @@ def test_server_find_figure_by_caption(temp_vault_db, paper_id):
     assert no_hits == []
 
 
+# ---------------------------------------------------------------------------
+# Regression #379: Figure-Guard matcht In-Text-Label statt Caption
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Abb. 3.4", ("figure", "3.4")),
+        ("Abbildung 3.4", ("figure", "3.4")),
+        ("Fig. 2.1", ("figure", "2.1")),
+        ("Figure 2.1", ("figure", "2.1")),
+        ("Tab. 5", ("table", "5")),
+        ("Tabelle 5.1", ("table", "5.1")),
+        ("kein Treffer hier", None),
+    ],
+)
+def test_parse_figure_reference(text, expected):
+    """_parse_figure_reference() extrahiert (kind, number) aus Referenztext."""
+    from academic_vault.db import _parse_figure_reference
+
+    assert _parse_figure_reference(text) == expected
+
+
+def test_find_figures_by_reference_matches_divergent_caption_format(temp_vault_db, paper_id):
+    """Kern-Bug #379: Referenz 'Abb. 3.4' ist KEIN Teilstring von Caption
+    'Abbildung 3.4: ...', muss aber trotzdem matchen (Typ+Nummer-Vergleich)."""
+    from academic_vault.db import VaultDB
+
+    db = VaultDB(temp_vault_db)
+    db.add_figure(
+        paper_id=paper_id,
+        page=1,
+        caption="Abbildung 3.4: Übersicht der Systemarchitektur der Cloud-Plattform",
+        vlm_description="Desc",
+        data_extracted_json=None,
+    )
+
+    # Beweis, dass der alte LIKE-Ansatz hier scheitern würde:
+    assert "Abb. 3.4" not in "Abbildung 3.4: Übersicht der Systemarchitektur der Cloud-Plattform"
+
+    hits = db.find_figures_by_reference("Abb. 3.4")
+    assert len(hits) == 1
+    assert hits[0]["caption"].startswith("Abbildung 3.4")
+
+
+def test_find_figures_by_reference_no_hit_for_unknown_number(temp_vault_db, paper_id):
+    """AC2: Referenz ohne passenden Vault-Eintrag bleibt ohne Treffer (kein Fail-open)."""
+    from academic_vault.db import VaultDB
+
+    db = VaultDB(temp_vault_db)
+    db.add_figure(
+        paper_id=paper_id,
+        page=1,
+        caption="Abbildung 3.4: Übersicht der Systemarchitektur",
+        vlm_description="Desc",
+        data_extracted_json=None,
+    )
+
+    hits = db.find_figures_by_reference("Abb. 9.9")
+    assert hits == []
+
+
+def test_find_figures_by_reference_type_mismatch_no_hit(temp_vault_db, paper_id):
+    """Robustheit: 'Tab. 3.4' matcht NICHT einen 'Abbildung 3.4'-Eintrag (Cross-Type)."""
+    from academic_vault.db import VaultDB
+
+    db = VaultDB(temp_vault_db)
+    db.add_figure(
+        paper_id=paper_id,
+        page=1,
+        caption="Abbildung 3.4: Übersicht der Systemarchitektur",
+        vlm_description="Desc",
+        data_extracted_json=None,
+    )
+
+    hits = db.find_figures_by_reference("Tab. 3.4")
+    assert hits == []
+
+
+def test_find_figures_by_reference_respects_paper_id_filter(temp_vault_db, paper_id):
+    """find_figures_by_reference respektiert optionalen paper_id-Filter."""
+    from academic_vault.db import VaultDB
+    from academic_vault.server import add_paper
+
+    db = VaultDB(temp_vault_db)
+    add_paper(
+        db_path=temp_vault_db,
+        paper_id="other-paper",
+        csl_json=json.dumps({"title": "Other", "type": "article-journal"}),
+    )
+    db.add_figure(
+        paper_id=paper_id,
+        page=1,
+        caption="Abbildung 3.4: Gemeinsam",
+        vlm_description="D1",
+        data_extracted_json=None,
+    )
+    db.add_figure(
+        paper_id="other-paper",
+        page=1,
+        caption="Abbildung 3.4: Gemeinsam",
+        vlm_description="D2",
+        data_extracted_json=None,
+    )
+
+    hits_all = db.find_figures_by_reference("Abb. 3.4")
+    assert len(hits_all) == 2
+
+    hits_filtered = db.find_figures_by_reference("Abb. 3.4", paper_id=paper_id)
+    assert len(hits_filtered) == 1
+    assert hits_filtered[0]["paper_id"] == paper_id
+
+
+def test_server_find_figure_by_caption_matches_divergent_label(temp_vault_db, paper_id):
+    """server.find_figure_by_caption() nutzt intern die neue Typ+Nummer-Matching-Logik."""
+    from academic_vault import server
+
+    server.add_figure(
+        db_path=temp_vault_db,
+        paper_id=paper_id,
+        page=3,
+        caption="Abbildung 3.4: Übersicht der Systemarchitektur der Cloud-Plattform",
+        vlm_description="Grafik",
+        data_extracted=None,
+    )
+
+    hits = server.find_figure_by_caption(db_path=temp_vault_db, caption_fragment="Abb. 3.4")
+    assert len(hits) == 1
+
+    no_hits = server.find_figure_by_caption(db_path=temp_vault_db, caption_fragment="Abb. 9.9")
+    assert no_hits == []
+
+
 def test_data_extracted_json_valid(temp_vault_db, paper_id):
     """data_extracted_json wird als valides JSON gespeichert und zurueckgelesen."""
     from academic_vault import server
