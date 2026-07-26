@@ -8,7 +8,7 @@ RoB-Persistenz in den Vault ist blockiert.
 
 Dieser Test kodiert das Akzeptanzkriterium ("risk-of-bias-Agent kann
 RoB-Bewertungen in den Vault schreiben"): Jedes im Body genutzte
-vault.<tool> muss als `mcp__academic_vault__vault_<tool>` im
+vault.<tool> muss als `mcp__academic-vault__vault_<tool>` im
 tools-Frontmatter deklariert sein. Stil-Vorlage: tests/test_publisher_fetchers.py.
 """
 
@@ -21,14 +21,14 @@ REPO_ROOT = Path(__file__).parent.parent
 AGENT_NAME = "risk-of-bias"
 
 # Vault-Tools, die der Agent im Workflow aktiv aufruft (Schritte 1, 2, 4, 5).
-# Mapping vault.<tool>  ->  mcp__academic_vault__vault_<tool>
+# Mapping vault.<tool>  ->  mcp__academic-vault__vault_<tool>
 # (Server-Name 'academic-vault' aus .mcp.json, Tool-Namen via @mcp.tool in
 #  academic_vault/server.py).
 REQUIRED_VAULT_TOOLS = [
-    "mcp__academic_vault__vault_get_paper",
-    "mcp__academic_vault__vault_search_quote_text",
-    "mcp__academic_vault__vault_add_quote",
-    "mcp__academic_vault__vault_add_risk_of_bias",
+    "mcp__academic-vault__vault_get_paper",
+    "mcp__academic-vault__vault_search_quote_text",
+    "mcp__academic-vault__vault_add_quote",
+    "mcp__academic-vault__vault_add_risk_of_bias",
 ]
 
 
@@ -77,7 +77,7 @@ def test_every_body_vault_call_is_declared():
     # Nur Tools, die der Agent selbst aufruft — list_risk_of_bias gehoert zum PRISMA-Reader.
     called.discard("list_risk_of_bias")
 
-    undeclared = sorted(t for t in called if f"mcp__academic_vault__vault_{t}" not in tools_str)
+    undeclared = sorted(t for t in called if f"mcp__academic-vault__vault_{t}" not in tools_str)
     assert not undeclared, (
         f"{AGENT_NAME}: im Body genutzte, aber nicht deklarierte Vault-Tools: {undeclared}"
     )

@@ -22,7 +22,7 @@ description: |
   Agent liefert sofort Interpretation der I²-Werte nach Higgins-Konvention (0–25%: niedrig, 25–50%: moderat, >50%: hoch).
   </commentary>
   </example>
-tools: [Read, Write, mcp__academic_vault__vault_search, mcp__academic_vault__vault_get_paper, Bash]
+tools: [Read, Write, mcp__academic-vault__vault_search, mcp__academic-vault__vault_get_paper, Bash]
 maxTurns: 5
 ---
 
