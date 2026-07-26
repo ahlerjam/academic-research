@@ -881,7 +881,7 @@ uv sync --extra dev            # einmalig je Arbeitskopie
 uv run pytest tests/ -v
 ```
 
-Aktuell: **1796 Tests gesammelt**, davon **1649 bestanden** und 147 übersprungen (`uv run pytest --collect-only -q` für die Gesamtzahl). Enthalten sind Regression-Guards (`tests/test_skill_naming.py`, `tests/test_cross_references.py`, `tests/test_skills_manifest.py`).
+Aktuell rund **1800 Tests**. Die exakte Zahl hängt von Plattform und installierten optionalen Paketen ab — im CI (Ubuntu, py3.12) sind es **1771 gesammelt**, davon **1624 bestanden** und 148 übersprungen; unter macOS liegt sie etwas höher. Maßgeblich für die eigene Umgebung ist `uv run pytest --collect-only -q`. Enthalten sind Regression-Guards (`tests/test_skill_naming.py`, `tests/test_cross_references.py`, `tests/test_skills_manifest.py`).
 
 Die Kern-Suite ist **offline-hermetisch** und läuft ohne Netzwerk. Übersprungen werden Tests, die externe Abhängigkeiten brauchen: API-basierte Evals unter `tests/evals/` setzen einen `ANTHROPIC_API_KEY` voraus (Network/External), und einige Integrations-Tests werden ohne installierte optionale Pakete (z.B. `requests`, `sqlite-vec`) automatisch geskippt.
 
