@@ -1,0 +1,44 @@
+{
+  "enabledPlugins": {
+    "plugin-dev@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "flowkit@flowkit": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status*)", "Bash(git log*)", "Bash(git diff*)", "Bash(git branch*)",
+      "Bash(git fetch*)", "Bash(git worktree*)", "Bash(git add*)", "Bash(git commit*)",
+      "Bash(gh issue view*)", "Bash(gh issue list*)", "Bash(gh issue comment*)",
+      "Bash(gh issue edit*)", "Bash(gh issue create*)", "Bash(gh issue close*)",
+      "Bash(gh pr view*)", "Bash(gh pr list*)", "Bash(gh pr diff*)", "Bash(gh pr checks*)",
+      "Bash(gh pr comment*)", "Bash(gh pr create*)", "Bash(gh pr merge*)", "Bash(gh pr ready*)",
+      "Bash(gh milestone list*)", "Bash(gh sub-issue*)", "Bash(gh run list*)", "Bash(gh run view*)",
+      "Bash(gh label list*)", "Bash(gh api repos/*/branches/*/protection)",
+      "Bash(git push*)", "Bash(git switch*)", "Bash(git merge*)",
+      "Bash(jq *)", "Bash(mktemp*)", "Bash(codex exec*)",
+      "Bash(python3 *)", "Bash(pytest*)", "Bash(pip install*)",
+      "Bash(ruff *)", "Bash(mypy*)", "Bash(node --check*)", "Bash(.venv/bin/*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /*)", "Bash(sudo *)", "Bash(chmod 777 *)",
+      "Read(/.env)", "Read(/.env.*)", "Read(/**/.env)", "Read(/**/.env.*)",
+      "Read(/**/secrets*)", "Read(/**/*credentials*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "[ -x \"$CLAUDE_PROJECT_DIR/.claude/hooks/inject-context.sh\" ] && \"$CLAUDE_PROJECT_DIR/.claude/hooks/inject-context.sh\" || exit 0" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [
+        { "type": "command", "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-blocker.sh\"; if [ -x \"$f\" ]; then \"$f\"; else echo '[flowkit-hook] pretooluse-blocker.sh missing or not executable - blocking as precaution' >&2; exit 2; fi" },
+        { "type": "command", "command": "[ -x \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushci-guard.sh\" ] && \"$CLAUDE_PROJECT_DIR/.claude/hooks/pushci-guard.sh\" || exit 0" }
+      ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write|MultiEdit", "hooks": [
+        { "type": "command", "command": "jq -r '.tool_input.file_path // .tool_response.filePath // \"\"' | { read -r f; case \"$f\" in *.py) (cd \"$CLAUDE_PROJECT_DIR\" && ruff format \"$f\") 2>&1 || true ;; esac; }" }
+      ] }
+    ]
+  }
+}

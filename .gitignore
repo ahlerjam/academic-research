@@ -16,8 +16,15 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude Code local settings (user-specific, not part of plugin)
-.claude/
+# Claude Code: flowkit-Konfiguration ist versioniert (settings, hooks, workflow-config),
+# Nutzer-Spezifisches (settings.local.json, worktrees/, agents/) bleibt lokal (#343)
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/workflow.config.json
+
+# flowkit-Laufzeitdaten (Drafts, Runner-State)
+.flowkit/
 
 # Runtime data (stored in ~/.academic-research/)
 sessions/
