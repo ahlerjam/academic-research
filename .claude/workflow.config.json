@@ -3,8 +3,8 @@
   "defaultBranch": "main",
   "pushCommand": "git push",
   "commands": {
-    "test": "python3 -m pytest tests/",
-    "lint": "ruff format --check .",
+    "test": "uv run pytest tests/",
+    "lint": "uv run ruff format --check .",
     "typecheck": "",
     "smoke": ""
   },

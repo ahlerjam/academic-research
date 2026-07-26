@@ -16,6 +16,7 @@
       "Bash(gh label list*)", "Bash(gh api repos/*/branches/*/protection)",
       "Bash(git push*)", "Bash(git switch*)", "Bash(git merge*)",
       "Bash(jq *)", "Bash(mktemp*)", "Bash(codex exec*)",
+      "Bash(uv run *)", "Bash(uv sync*)", "Bash(uv lock*)", "Bash(uv python*)", "Bash(uv tree*)",
       "Bash(python3 *)", "Bash(pytest*)", "Bash(pip install*)",
       "Bash(ruff *)", "Bash(mypy*)", "Bash(node --check*)", "Bash(.venv/bin/*)"
     ],

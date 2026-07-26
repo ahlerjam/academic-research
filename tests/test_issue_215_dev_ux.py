@@ -4,7 +4,8 @@ Prueft die vier Akzeptanzkriterien aus dem Issue konkret als Datei-Existenz,
 Datei-Inhalt und valides YAML:
 
 - M1: docs/SKIP_REASONS.md mit Reason-Tabelle (Test -> Reason -> permanent/todo).
-- L1: pytest-cov in requirements-dev.txt; CI emittet coverage.xml; Codecov-Badge in README.
+- L1: pytest-cov in den dev-Extras (pyproject.toml, seit #344 statt requirements-dev.txt);
+      CI emittet coverage.xml; Codecov-Badge in README.
 - L2: .github/dependabot.yml fuer pip + npm/github-actions, valides YAML.
 - M4: .github/workflows/release.yml prueft plugin.json==Tag UND
       marketplace.json.plugins[0].version == plugin.json.version, valides YAML.
@@ -43,11 +44,16 @@ def test_m1_skip_reasons_has_reason_table():
 # --------------------------------------------------------------------------- #
 # L1 — Coverage / Codecov
 # --------------------------------------------------------------------------- #
-def test_l1_requirements_dev_has_pytest_cov():
-    req = ROOT / "requirements-dev.txt"
-    assert req.is_file(), "requirements-dev.txt fehlt (L1)"
-    text = req.read_text(encoding="utf-8")
-    assert "pytest-cov" in text, "pytest-cov nicht in requirements-dev.txt"
+def test_l1_dev_extras_have_pytest_cov():
+    import tomllib
+
+    pyproject = ROOT / "pyproject.toml"
+    assert pyproject.is_file(), "pyproject.toml fehlt (L1)"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    dev = data["project"]["optional-dependencies"]["dev"]
+    assert any(d.startswith("pytest-cov") for d in dev), (
+        "pytest-cov nicht in [project.optional-dependencies].dev (L1, seit #344)"
+    )
 
 
 def test_l1_ci_emits_coverage_xml():
