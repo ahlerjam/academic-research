@@ -1,7 +1,7 @@
 # Academic Research v6.5
 
-[![CI](https://github.com/jamski105/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/jamski105/academic-research/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/jamski105/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/jamski105/academic-research)
+[![CI](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ahlerjam/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/ahlerjam/academic-research)
 [![Version](https://img.shields.io/badge/version-6.5.0-blue.svg)](CHANGELOG.md)
 [![Skills](https://img.shields.io/badge/skills-28-orange.svg)](#skills-übersicht)
 [![Tests](https://img.shields.io/badge/tests-963%20passing%20%2F%201111%20collected-success.svg)](#entwicklung-und-evals)
@@ -143,7 +143,7 @@ Das Plugin kommt mit vorkonfigurierten **Per-Uni-Profilen** für ETH Zürich, FU
 ### Schritt 1 — Plugin-Marketplace registrieren
 
 ```
-/plugin marketplace add jamski105/academic-research
+/plugin marketplace add ahlerjam/academic-research
 ```
 
 Dieser Schritt ist einmalig pro System.
@@ -938,9 +938,9 @@ Kein CI-Trigger — Evals laufen lokal vor jedem Release. Reports unter `docs/ev
 
 **Lizenz:** MIT (siehe [LICENSE](LICENSE))
 
-**Plugin auf GitHub:** [github.com/jamski105/academic-research](https://github.com/jamski105/academic-research)
+**Plugin auf GitHub:** [github.com/ahlerjam/academic-research](https://github.com/ahlerjam/academic-research)
 
-**Bug melden / Feature anfragen:** [GitHub Issues](https://github.com/jamski105/academic-research/issues)
+**Bug melden / Feature anfragen:** [GitHub Issues](https://github.com/ahlerjam/academic-research/issues)
 
 **Referenzen:**
 
