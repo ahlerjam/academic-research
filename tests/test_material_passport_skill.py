@@ -18,8 +18,6 @@ import tempfile
 from pathlib import Path
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
-if str(_WORKTREE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE_ROOT))
 
 _SCRIPT = _WORKTREE_ROOT / "skills" / "material-passport" / "scripts" / "build_passport.py"
 

@@ -8,33 +8,22 @@ import pytest
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    """Temporaere SQLite-DB mit vollstaendigem Schema."""
-    from academic_vault.db import VaultDB
-
-    path = str(tmp_path / "test_vault.db")
-    db = VaultDB(path)
-    db.init_schema()
-    return path
-
-
-@pytest.fixture
-def paper_id(db_path):
+def paper_id(temp_vault_db):
     """Legt Test-Paper an und gibt paper_id zurueck."""
     from academic_vault.server import add_paper
 
     pid = "test-paper-001"
     add_paper(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id=pid,
         csl_json=json.dumps({"title": "Test Paper", "type": "article-journal"}),
     )
     return pid
 
 
-def test_figures_table_exists(db_path):
+def test_figures_table_exists(temp_vault_db):
     """figures-Tabelle muss nach init_schema() existieren."""
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(temp_vault_db)
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='figures'"
     ).fetchone()
@@ -64,11 +53,11 @@ def test_add_figures_table_idempotent(tmp_path):
     assert row is not None
 
 
-def test_add_and_get_figure(db_path, paper_id):
+def test_add_and_get_figure(temp_vault_db, paper_id):
     """add_figure() legt Eintrag an; get_figure() gibt ihn zurueck."""
     from academic_vault.db import VaultDB
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     figure_id = db.add_figure(
         paper_id=paper_id,
         page=5,
@@ -85,20 +74,20 @@ def test_add_and_get_figure(db_path, paper_id):
     assert record["page"] == 5
 
 
-def test_list_figures_empty(db_path):
+def test_list_figures_empty(temp_vault_db):
     """list_figures gibt leere Liste fuer unbekannte paper_id."""
     from academic_vault.db import VaultDB
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     result = db.list_figures("unknown-paper-xyz")
     assert result == []
 
 
-def test_list_figures_ordered_by_page(db_path, paper_id):
+def test_list_figures_ordered_by_page(temp_vault_db, paper_id):
     """list_figures gibt Eintraege nach page sortiert zurueck."""
     from academic_vault.db import VaultDB
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     db.add_figure(
         paper_id=paper_id, page=10, caption="Abb. 2", vlm_description="B", data_extracted_json=None
     )
@@ -111,11 +100,11 @@ def test_list_figures_ordered_by_page(db_path, paper_id):
     assert figures[1]["page"] == 10
 
 
-def test_find_figures_by_caption(db_path, paper_id):
+def test_find_figures_by_caption(temp_vault_db, paper_id):
     """find_figures_by_caption findet passende Caption-Fragmente."""
     from academic_vault.db import VaultDB
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
     db.add_figure(
         paper_id=paper_id,
         page=1,
@@ -140,16 +129,16 @@ def test_find_figures_by_caption(db_path, paper_id):
     assert no_hits == []
 
 
-def test_find_figures_by_caption_with_paper_id_filter(db_path, paper_id):
+def test_find_figures_by_caption_with_paper_id_filter(temp_vault_db, paper_id):
     """find_figures_by_caption respektiert optionalen paper_id-Filter."""
     from academic_vault.db import VaultDB
     from academic_vault.server import add_paper
 
-    db = VaultDB(db_path)
+    db = VaultDB(temp_vault_db)
 
     # Zweites Paper anlegen
     add_paper(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id="other-paper",
         csl_json=json.dumps({"title": "Other", "type": "article-journal"}),
     )
@@ -176,12 +165,12 @@ def test_find_figures_by_caption_with_paper_id_filter(db_path, paper_id):
     assert hits_filtered[0]["paper_id"] == paper_id
 
 
-def test_server_add_figure_returns_figure_id(db_path, paper_id):
+def test_server_add_figure_returns_figure_id(temp_vault_db, paper_id):
     """server.add_figure() gibt figure_id-String zurueck."""
     from academic_vault import server
 
     fig_id = server.add_figure(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id=paper_id,
         page=7,
         caption="Fig. 2.3: Systemarchitektur",
@@ -191,32 +180,32 @@ def test_server_add_figure_returns_figure_id(db_path, paper_id):
     assert isinstance(fig_id, str) and len(fig_id) > 0
 
 
-def test_server_get_figure(db_path, paper_id):
+def test_server_get_figure(temp_vault_db, paper_id):
     """server.get_figure() gibt Record oder None zurueck."""
     from academic_vault import server
 
     fig_id = server.add_figure(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id=paper_id,
         page=1,
         caption="Abb. 1.1: Einleitung",
         vlm_description="Foto eines Labors mit Messgeraeten.",
         data_extracted=None,
     )
-    record = server.get_figure(db_path=db_path, figure_id=fig_id)
+    record = server.get_figure(db_path=temp_vault_db, figure_id=fig_id)
     assert record is not None
     assert record["caption"] == "Abb. 1.1: Einleitung"
 
-    missing = server.get_figure(db_path=db_path, figure_id="does-not-exist")
+    missing = server.get_figure(db_path=temp_vault_db, figure_id="does-not-exist")
     assert missing is None
 
 
-def test_server_list_figures(db_path, paper_id):
+def test_server_list_figures(temp_vault_db, paper_id):
     """server.list_figures() gibt Liste aller Figures fuer ein Paper."""
     from academic_vault import server
 
     server.add_figure(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id=paper_id,
         page=2,
         caption="Abb. A",
@@ -224,24 +213,24 @@ def test_server_list_figures(db_path, paper_id):
         data_extracted=None,
     )
     server.add_figure(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id=paper_id,
         page=1,
         caption="Abb. B",
         vlm_description="Y",
         data_extracted=None,
     )
-    figures = server.list_figures(db_path=db_path, paper_id=paper_id)
+    figures = server.list_figures(db_path=temp_vault_db, paper_id=paper_id)
     assert len(figures) == 2
     assert figures[0]["page"] == 1  # sortiert nach page
 
 
-def test_server_find_figure_by_caption(db_path, paper_id):
+def test_server_find_figure_by_caption(temp_vault_db, paper_id):
     """server.find_figure_by_caption() gibt Vault-Lookup-Ergebnis."""
     from academic_vault import server
 
     server.add_figure(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id=paper_id,
         page=3,
         caption="Abb. 3.4: Messwerte",
@@ -249,27 +238,27 @@ def test_server_find_figure_by_caption(db_path, paper_id):
         data_extracted=None,
     )
 
-    hits = server.find_figure_by_caption(db_path=db_path, caption_fragment="Abb. 3.4")
+    hits = server.find_figure_by_caption(db_path=temp_vault_db, caption_fragment="Abb. 3.4")
     assert len(hits) == 1
 
-    no_hits = server.find_figure_by_caption(db_path=db_path, caption_fragment="Abb. 99")
+    no_hits = server.find_figure_by_caption(db_path=temp_vault_db, caption_fragment="Abb. 99")
     assert no_hits == []
 
 
-def test_data_extracted_json_valid(db_path, paper_id):
+def test_data_extracted_json_valid(temp_vault_db, paper_id):
     """data_extracted_json wird als valides JSON gespeichert und zurueckgelesen."""
     from academic_vault import server
 
     table_data = json.dumps([{"col1": "A", "val": 1}, {"col1": "B", "val": 2}])
     fig_id = server.add_figure(
-        db_path=db_path,
+        db_path=temp_vault_db,
         paper_id=paper_id,
         page=9,
         caption="Tab. 2.1: Ergebnisse",
         vlm_description="Tabelle mit zwei Spalten und zwei Zeilen.",
         data_extracted=table_data,
     )
-    record = server.get_figure(db_path=db_path, figure_id=fig_id)
+    record = server.get_figure(db_path=temp_vault_db, figure_id=fig_id)
     assert record is not None
     parsed = json.loads(record["data_extracted_json"])
     assert isinstance(parsed, list)

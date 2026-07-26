@@ -1,10 +1,5 @@
 """Tests for dedup.py — paper deduplication."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-
 from dedup import deduplicate, merge_group
 from text_utils import normalize_doi
 

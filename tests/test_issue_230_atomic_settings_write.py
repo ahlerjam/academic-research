@@ -10,14 +10,12 @@ Akzeptanzkriterium (#230):
 """
 
 import json
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import configure_permissions  # noqa: E402
 

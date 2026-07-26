@@ -15,12 +15,7 @@ Konkret abgesichert:
    vollstaendiger Repo-Dump im Speicher).
 """
 
-import sys
-from pathlib import Path
-
 import httpx
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import search
 

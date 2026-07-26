@@ -13,15 +13,12 @@ L1 (Hook execFileSync) und L2 (tar-Portabilitaet) wurden laut Scope-Update
 """
 
 import re
-import sys
 import uuid
 from pathlib import Path
 
 import pytest
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
-if str(_WORKTREE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE_ROOT))
 
 _DB_SRC_PATH = _WORKTREE_ROOT / "academic_vault" / "db.py"
 _README_PATH = _WORKTREE_ROOT / "README.md"

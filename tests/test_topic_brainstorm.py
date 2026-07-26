@@ -18,8 +18,6 @@ import sys
 from pathlib import Path
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
-if str(_WORKTREE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE_ROOT))
 
 _SCORER = _WORKTREE_ROOT / "skills" / "topic-brainstorm" / "scripts" / "scorer.py"
 

@@ -15,15 +15,12 @@ Voraussetzungen (in CI gegeben):
 """
 
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
 # Repo-Root + helpers importierbar machen.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 
 from tests.helpers import smoke_core  # noqa: E402
 

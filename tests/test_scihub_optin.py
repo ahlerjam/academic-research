@@ -11,13 +11,10 @@ Tests fuer SciHub-Tier Opt-in (Chunk D, v6.5 #97).
 
 import json
 import os
-import sys
 import tempfile
 from pathlib import Path
 
 import yaml
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 REPO_ROOT = Path(__file__).parent.parent
 ACTIVE_YAML_TEMPLATE = REPO_ROOT / "library-profiles" / "active.yaml.template"

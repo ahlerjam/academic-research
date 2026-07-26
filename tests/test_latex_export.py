@@ -409,7 +409,8 @@ class TestVerbatimGuardTex:
 
     def test_hook_tex_quote_blocked_with_vault(self, tmp_path):
         """Hook blockiert .tex bei unverifiziiertem Quote-Span wenn Vault existiert."""
-        sys.path.insert(0, str(WORKTREE))
+        # Repo-Root ist bereits ueber tests/conftest.py auf sys.path (Issue #183);
+        # kein lokales sys.path.insert(0, str(WORKTREE)) mehr noetig.
         from academic_vault.db import VaultDB
         from academic_vault.server import add_paper
 

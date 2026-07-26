@@ -12,8 +12,6 @@ import pytest
 
 # Worktree-Root zum PYTHONPATH hinzufuegen damit academic_vault importierbar ist
 _WORKTREE_ROOT = Path(__file__).parent.parent
-if str(_WORKTREE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE_ROOT))
 
 # Modul-Imports mit Guard: fehlen noch bis zur Implementierung
 try:

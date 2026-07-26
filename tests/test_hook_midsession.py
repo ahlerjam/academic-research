@@ -10,7 +10,6 @@ Exit 0 immer.
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "mid-session-reinforcement.mjs"
@@ -52,7 +51,6 @@ def test_hook_exits_zero_on_notification_event():
 def test_hook_outputs_hint_at_message_20(tmp_path):
     """Hook gibt System-Hint aus wenn message_count == 20."""
     # Erstelle Vault mit Decisions
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 
@@ -97,7 +95,6 @@ def test_hook_outputs_hint_at_message_20(tmp_path):
 
 def test_hook_no_output_at_message_10(tmp_path):
     """Hook gibt keinen Hint aus wenn message_count < 20."""
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 
@@ -126,7 +123,6 @@ def test_hook_no_output_at_message_10(tmp_path):
 
 def test_hook_fires_max_once_per_20_messages(tmp_path):
     """Hook loest max 1× pro 20 Messages aus (State-Datei verhindert Duplikate)."""
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 
@@ -162,7 +158,6 @@ def test_hook_fires_max_once_per_20_messages(tmp_path):
 
 def test_hook_triggers_after_compaction(tmp_path):
     """Hook gibt Hint aus nach Compaction-Event unabhaengig von message_count."""
-    sys.path.insert(0, str(WORKTREE_ROOT))
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 

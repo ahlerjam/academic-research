@@ -1,10 +1,5 @@
 """Tests for search.py — module registry and utilities."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-
 from search import MODULES
 from text_utils import Paper, normalize_paper
 

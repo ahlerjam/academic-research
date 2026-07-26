@@ -1,11 +1,8 @@
 """Tests fuer book_resolve.py — DNB/OL/GoogleBooks/DOAB Clients."""
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # Sicherstellen dass scripts/ im Pfad ist
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 
 # ---------------------------------------------------------------------------
