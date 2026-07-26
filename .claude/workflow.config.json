@@ -1,0 +1,42 @@
+{
+  "repoSlug": "jamski105/academic-research",
+  "defaultBranch": "main",
+  "pushCommand": "git push",
+  "commands": {
+    "test": "python3 -m pytest tests/",
+    "lint": "ruff format --check .",
+    "typecheck": "",
+    "smoke": ""
+  },
+  "extraGates": [],
+  "protectedAreas": ["vault", "hooks", "security", "ci"],
+  "areas": ["vault", "skills", "agents", "commands", "hooks", "scripts", "evals", "ci", "docs", "security"],
+  "parallelism": 1,
+  "caps": { "maxParallel": 4, "issuesPerRun": 10, "groomingIssuesPerWeek": 15 },
+  "budgets": {
+    "S": { "turns": 20, "tokens": 200000 },
+    "M": { "turns": 60, "tokens": 500000 },
+    "L": { "turns": 120, "tokens": 1100000 }
+  },
+  "opusTurnWeight": 3,
+  "models": {
+    "grooming": "haiku",
+    "planner": { "SM": "sonnet", "L": "opus" },
+    "builder": { "SM": "sonnet", "L": "opus" },
+    "verifier": "sonnet",
+    "critic": "opus",
+    "escalation": "opus"
+  },
+  "autoReady": { "impulse": "P2", "gapScan": "off" },
+  "maxFixRounds": 3,
+  "mergeCheck": "coordinator",
+  "overrideLabel": "override-claude-review",
+  "markers": { "plan": "<!-- plan:v1 -->", "acVerify": "<!-- ac-verify:v1 -->", "critic": "<!-- critic:v1 -->" },
+  "milestoneExcludeRegex": "",
+  "excludeLabels": ["type/operator", "type/epic", "epic"],
+  "issueLimit": 300,
+  "browserProof": false,
+  "notify": false,
+  "critic": { "enabled": true, "fallback": "claude" },
+  "onSmokeFailure": "revert"
+}
