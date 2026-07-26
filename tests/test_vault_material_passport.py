@@ -8,10 +8,12 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 _WORKTREE_ROOT = Path(__file__).parent.parent
 
 from academic_vault import server as vault_server
-from academic_vault.db import VaultDB
+from academic_vault.db import VaultDB, VaultLockedError
 
 
 def make_temp_db() -> tuple[str, VaultDB]:
@@ -29,6 +31,16 @@ def _seed_paper(db_path: str, paper_id: str = "p1", doi: str = "10.1234/test") -
         f'{{"title": "Test Paper", "type": "article-journal", "DOI": "{doi}"}}',
         doi=doi,
     )
+
+
+def _row_count(db_path: str, table: str) -> int:
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +108,203 @@ def test_lock_is_per_slug():
         vault_server.lock_passport(db_path=db_path, slug="proj-A")
         assert vault_server.is_locked(db_path=db_path, slug="proj-A") is True
         assert vault_server.is_locked(db_path=db_path, slug="proj-B") is False
+    finally:
+        os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# Lock-Enforcement bei Schreiboperationen (#380)
+#
+# Der Lock war bislang nur ein reines Flag -- keine Schreib-Methode pruefte
+# ihn. Jede der folgenden Methoden bekommt ein Testpaar: "unlocked -> Schreib-
+# operation gelingt wie zuvor" (AC2) und "locked -> Schreiboperation schlaegt
+# mit VaultLockedError fehl, kein Teil-Schreibvorgang" (AC1/AC3).
+# ---------------------------------------------------------------------------
+
+
+def test_add_paper_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        vault_server.add_paper(
+            db_path,
+            "p1",
+            '{"title": "T", "type": "article-journal"}',
+        )
+        assert vault_server.get_paper(db_path, "p1") is not None
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_paper_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.add_paper(
+                db_path,
+                "p1",
+                '{"title": "T", "type": "article-journal"}',
+            )
+        assert vault_server.get_paper(db_path, "p1") is None
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_quote_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        quote_id = vault_server.add_quote(db_path, "p1", "Zitat", "manual")
+        assert vault_server.get_quote(db_path, quote_id) is not None
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_quote_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.add_quote(db_path, "p1", "Zitat", "manual")
+        assert _row_count(db_path, "quotes") == 0
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_figure_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        figure_id = vault_server.add_figure(db_path, "p1", 1, "Caption", None, None)
+        assert vault_server.get_figure(db_path, figure_id) is not None
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_figure_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.add_figure(db_path, "p1", 1, "Caption", None, None)
+        assert _row_count(db_path, "figures") == 0
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_decision_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        decision_id = vault_server.add_decision(db_path, "scope", "Text", "Reason")
+        assert decision_id is not None
+        assert _row_count(db_path, "decisions") == 1
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_decision_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.add_decision(db_path, "scope", "Text", "Reason")
+        assert _row_count(db_path, "decisions") == 0
+    finally:
+        os.unlink(db_path)
+
+
+def test_supersede_decision_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        id1 = vault_server.add_decision(db_path, "scope", "Old", "R1")
+        id2 = vault_server.add_decision(db_path, "scope", "New", "R2")
+        vault_server.supersede_decision(db_path=db_path, decision_id=id1, superseded_by=id2)
+        active = vault_server.list_decisions(db_path=db_path, active_only=True)
+        assert all(d["decision_id"] != id1 for d in active)
+    finally:
+        os.unlink(db_path)
+
+
+def test_supersede_decision_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        id1 = vault_server.add_decision(db_path, "scope", "Old", "R1")
+        id2 = vault_server.add_decision(db_path, "scope", "New", "R2")
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.supersede_decision(db_path=db_path, decision_id=id1, superseded_by=id2)
+        active = vault_server.list_decisions(db_path=db_path, active_only=True)
+        assert any(d["decision_id"] == id1 for d in active)
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_excluded_source_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        vault_server.add_excluded_source(db_path, "p1", reason="off-topic")
+        assert vault_server.is_excluded(db_path, "p1") is True
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_excluded_source_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.add_excluded_source(db_path, "p1", reason="off-topic")
+        assert vault_server.is_excluded(db_path, "p1") is False
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_risk_of_bias_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        assessment_id = vault_server.add_risk_of_bias(
+            db_path, "p1", "RCT", {"randomization": "low"}
+        )
+        assert assessment_id is not None
+        assert len(vault_server.list_risk_of_bias(db_path, paper_id="p1")) == 1
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_risk_of_bias_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.add_risk_of_bias(db_path, "p1", "RCT", {"randomization": "low"})
+        assert vault_server.list_risk_of_bias(db_path, paper_id="p1") == []
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_score_snapshot_succeeds_when_unlocked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        snapshot_id = vault_server.add_score_snapshot(db_path, "p1", "session-1", {"total": 5})
+        assert snapshot_id is not None
+        assert len(vault_server.get_score_history(db_path, "p1")) == 1
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_score_snapshot_fails_when_locked():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.lock_passport(db_path=db_path, slug="proj")
+        with pytest.raises(VaultLockedError):
+            vault_server.add_score_snapshot(db_path, "p1", "session-1", {"total": 5})
+        assert vault_server.get_score_history(db_path, "p1") == []
     finally:
         os.unlink(db_path)
 
