@@ -108,7 +108,7 @@ jobs:
           pattern: pr-*
           path: ${{ runner.temp }}
           merge-multiple: true
-      - uses: anthropics/claude-code-action@41ea7642c1436fa0ee57aae58347904b71a5af27 # v1.0.137
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         id: review
         with:
           claude_code_oauth_token: ${{ env.CLAUDE_TOKEN }}
@@ -255,7 +255,7 @@ jobs:
         with:
           primary_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           backup_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP }}
-      - uses: anthropics/claude-code-action@41ea7642c1436fa0ee57aae58347904b71a5af27 # v1.0.137
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         id: review
         with:
           claude_code_oauth_token: ${{ env.CLAUDE_TOKEN }}
@@ -327,7 +327,7 @@ jobs:
           pattern: pr-*
           path: ${{ runner.temp }}
           merge-multiple: true
-      - uses: anthropics/claude-code-action@41ea7642c1436fa0ee57aae58347904b71a5af27 # v1.0.137
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         id: review
         with:
           claude_code_oauth_token: ${{ env.CLAUDE_TOKEN }}
@@ -400,7 +400,7 @@ jobs:
           pattern: pr-*
           path: ${{ runner.temp }}
           merge-multiple: true
-      - uses: anthropics/claude-code-action@41ea7642c1436fa0ee57aae58347904b71a5af27 # v1.0.137
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         id: review
         with:
           claude_code_oauth_token: ${{ env.CLAUDE_TOKEN }}
@@ -495,7 +495,7 @@ jobs:
           count=$(jq 'length' "$p0p1")
           echo "count=$count" >> "$GITHUB_OUTPUT"
           echo "Found $count P0/P1 finding(s) to verify"
-      - uses: anthropics/claude-code-action@41ea7642c1436fa0ee57aae58347904b71a5af27 # v1.0.137
+      - uses: anthropics/claude-code-action@be7b93b1907a4abad570368f3c74b6fe3807510b # v1.0.183
         id: verify
         if: steps.gather.outputs.count != '0'
         with:
