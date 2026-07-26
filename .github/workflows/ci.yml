@@ -19,7 +19,7 @@ jobs:
     name: Manifest-Validierung (JSON)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: jq empty auf allen Manifesten
         run: |
           set -euo pipefail
@@ -34,7 +34,7 @@ jobs:
     name: Hook-Syntax (node --check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7
         with:
           node-version: "20"
@@ -51,7 +51,7 @@ jobs:
     name: Frontmatter-Coverage (commands + agents)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
@@ -94,7 +94,7 @@ jobs:
     name: Skill-Manifest- & Naming-Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/setup-python-uv
         with:
           python-version: "3.11"
@@ -106,7 +106,7 @@ jobs:
     name: Lint + Typen (ruff + mypy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       # Versionen gepinnt (flowkit Stufe 0): ruff format --check ist blockierend —
       # ungepinnte Tool-Releases wuerden das Gate sonst ohne Code-Aenderung brechen.
       # Pins liegen seit #344 in pyproject.toml [project.optional-dependencies].dev
@@ -134,7 +134,7 @@ jobs:
     name: flowkit-Hook-Harness (bash)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: PreToolUse-Blocker Regression-Harness
         run: bash scripts/dev/test-pretooluse-blocker.sh
 
@@ -150,7 +150,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/setup-python-uv
         with:
           python-version: ${{ matrix.python-version }}
