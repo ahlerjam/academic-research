@@ -33,7 +33,7 @@ dependencies = [
     "lxml>=5.2.0",
     "python-barcode[images]>=0.16.1",
     "mcp>=1.0",
-    "sqlite-vec>=0.1.0",
+    "sqlite-vec==0.1.10a4",
     "jsonschema>=4.0",
     "pyzotero>=1.5",
 ]

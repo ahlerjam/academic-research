@@ -161,6 +161,11 @@ class VaultDB:
     def load_vec_extension(self, conn: sqlite3.Connection | None = None) -> bool:
         """Versucht sqlite_vec Extension zu laden. Gibt True bei Erfolg zurueck.
 
+        Default-Ladepfad ist ``sqlite_vec.loadable_path()`` (das pip-installierte
+        Wheel liefert die Dylib an einem Paketpfad aus, den ein Bare-Name-Load
+        ``load_extension("sqlite_vec")`` nie findet, Issue #371).
+        ``SQLITE_VEC_PATH`` ist nur noch ein Override fuer Custom-Builds.
+
         Python-Builds ohne ``--enable-loadable-sqlite-extensions`` (z.B. das
         macOS-System-Python und die macOS-Builds von actions/setup-python)
         haben ``enable_load_extension`` nicht bzw. werfen beim Aufruf. Dann ist
@@ -184,7 +189,9 @@ class VaultDB:
             if vec_path:
                 target.load_extension(vec_path)
             else:
-                target.load_extension("sqlite_vec")
+                import sqlite_vec
+
+                target.load_extension(sqlite_vec.loadable_path())
             self.vec_available = True
         except Exception:
             self.vec_available = False

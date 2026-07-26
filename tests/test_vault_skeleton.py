@@ -1,10 +1,12 @@
 """Smoke-Tests fuer den academic_vault MCP-Server (TDD-First Skelett)."""
 
+import json
 import os
 import sqlite3
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -348,18 +350,72 @@ def test_stats():
 # ---------------------------------------------------------------------------
 
 
+def _vec_extension_loadable() -> bool:
+    """Probe: kann diese Python-Runtime ueberhaupt SQLite-Extensions laden?
+
+    Manche Python-Builds (z.B. macOS-System-Python, actions/setup-python auf
+    macOS) sind ohne ``--enable-loadable-sqlite-extensions`` gebaut. Dort ist
+    ``enable_load_extension`` entweder nicht vorhanden oder wirft beim Aufruf
+    -- die Vektor-Suche ist dann strukturell nicht verfuegbar (Issue #371,
+    Risiko 1), unabhaengig vom Bugfix. Tests, die eine ladbare Extension
+    voraussetzen, muessen dort skippen statt failen.
+    """
+    conn = sqlite3.connect(":memory:")
+    try:
+        if not hasattr(conn, "enable_load_extension"):
+            return False
+        conn.enable_load_extension(True)
+        conn.enable_load_extension(False)
+        return True
+    except (AttributeError, sqlite3.OperationalError, sqlite3.NotSupportedError):
+        return False
+    finally:
+        conn.close()
+
+
+@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
+@pytest.mark.skipif(
+    not _vec_extension_loadable(),
+    reason="Python-Build ohne --enable-loadable-sqlite-extensions (z.B. macOS-CI)",
+)
+def test_vec_extension_loads_by_default():
+    """AC1: load_vec_extension() liefert ohne SQLITE_VEC_PATH True (frische DB).
+
+    Regression fuer Issue #371: der Bare-Name-Load ``load_extension("sqlite_vec")``
+    findet die pip-installierte Dylib nie. Der Default muss stattdessen
+    ``sqlite_vec.loadable_path()`` verwenden.
+    """
+    env_backup = os.environ.pop("SQLITE_VEC_PATH", None)
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    try:
+        with VaultDB(tmp.name) as db:
+            result = db.load_vec_extension()
+        assert result is True
+    finally:
+        if env_backup is not None:
+            os.environ["SQLITE_VEC_PATH"] = env_backup
+        os.unlink(tmp.name)
+
+
 @pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_vec_fallback():
-    """Wenn sqlite-vec nicht geladen -> vec_available=False, FTS5 funktioniert."""
+    """Wenn sqlite-vec nicht ladbar ist (kaputter Override) -> vec_available=False,
+    FTS5 funktioniert trotzdem.
+
+    Simuliert ueber einen bewusst kaputten ``SQLITE_VEC_PATH``-Override eine
+    Umgebung ohne ladbare Extension (statt "kein Env gesetzt" -- das liefert
+    nach Fix #371 i.d.R. True, siehe test_vec_extension_loads_by_default).
+    """
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
     try:
-        # VaultDB ohne vec-Extension initialisieren (kein SQLITE_VEC_PATH gesetzt)
-        env_backup = os.environ.pop("SQLITE_VEC_PATH", None)
+        env_backup = os.environ.get("SQLITE_VEC_PATH")
+        os.environ["SQLITE_VEC_PATH"] = "/nonexistent/path/to/sqlite_vec_override.so"
         try:
             db = VaultDB(db_path)
             db.init_schema()
-            # vec_available muss False sein (keine Extension im Test-Env)
+            # vec_available muss False sein (Override zeigt auf nichts Ladbares)
             assert db.vec_available is False
             # FTS5 muss trotzdem funktionieren
             csl = '{"title": "Fallback Test Paper", "abstract": "Testing FTS5 fallback."}'
@@ -373,8 +429,51 @@ def test_vec_fallback():
         finally:
             if env_backup is not None:
                 os.environ["SQLITE_VEC_PATH"] = env_backup
+            else:
+                os.environ.pop("SQLITE_VEC_PATH", None)
     finally:
         os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# Issue #371: sqlite-vec-Pin-Drift + .mcp.json-Default
+# ---------------------------------------------------------------------------
+
+
+def _sqlite_vec_pin_from_pyproject() -> str:
+    data = tomllib.loads((_WORKTREE_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    for dep in data["project"]["dependencies"]:
+        if dep.startswith("sqlite-vec"):
+            return dep
+    raise AssertionError("sqlite-vec nicht in pyproject.toml[project.dependencies] gefunden")
+
+
+def _sqlite_vec_pin_from_requirements() -> str:
+    text = (_WORKTREE_ROOT / "academic_vault" / "requirements.txt").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("sqlite-vec"):
+            return stripped
+    raise AssertionError("sqlite-vec nicht in academic_vault/requirements.txt gefunden")
+
+
+def test_sqlite_vec_pin_matches_across_pyproject_and_requirements():
+    """AC2: pyproject.toml und academic_vault/requirements.txt duerfen bei der
+    sqlite-vec-Version nicht driften; die Version muss exakt gepinnt sein
+    (kein Range mehr wie ``>=0.1.0``)."""
+    pyproject_pin = _sqlite_vec_pin_from_pyproject()
+    requirements_pin = _sqlite_vec_pin_from_requirements()
+    assert pyproject_pin == requirements_pin
+    assert "==" in pyproject_pin
+
+
+def test_mcp_json_has_no_empty_sqlite_vec_path():
+    """AC3: .mcp.json darf SQLITE_VEC_PATH nicht leer vorbelegen -- ein leerer
+    String verhindert den neuen Default-Ladepfad ueber
+    sqlite_vec.loadable_path()."""
+    data = json.loads((_WORKTREE_ROOT / ".mcp.json").read_text(encoding="utf-8"))
+    env = data["mcpServers"]["academic-vault"].get("env", {})
+    assert env.get("SQLITE_VEC_PATH", "not-empty-if-absent") != ""
 
 
 # ---------------------------------------------------------------------------
