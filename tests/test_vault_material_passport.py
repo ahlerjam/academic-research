@@ -310,6 +310,55 @@ def test_add_score_snapshot_fails_when_locked():
 
 
 # ---------------------------------------------------------------------------
+# Fix-Runde PR #407: Guard bricht auf Vaults ohne vault_locked_status-Tabelle
+# hart ab (verletzt AC2).
+#
+# Root cause: server.add_quote() und server.add_figure() rufen -- anders als
+# alle anderen guarded Schreib-Wrapper (add_paper, add_decision,
+# supersede_decision, add_excluded_source, add_risk_of_bias,
+# add_score_snapshot) -- kein db.init_schema() auf, bevor sie die DB-Methode
+# aufrufen. Auf einem Vault, der vor v6.4 angelegt und nie migriert wurde
+# (vault_locked_status fehlt), liest _raise_if_locked() daher gegen eine
+# nicht existierende Tabelle und wirft sqlite3.OperationalError statt die
+# Schreiboperation wie vor diesem PR unveraendert durchzulassen.
+# ---------------------------------------------------------------------------
+
+
+def _drop_vault_locked_status_table(db_path: str) -> None:
+    """Simuliert einen Vault, der vor v6.4 angelegt und nie migriert wurde."""
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("DROP TABLE vault_locked_status")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_add_quote_succeeds_on_vault_without_locked_status_table():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        _drop_vault_locked_status_table(db_path)
+        quote_id = vault_server.add_quote(db_path, "p1", "Zitat", "manual")
+        assert vault_server.get_quote(db_path, quote_id) is not None
+    finally:
+        os.unlink(db_path)
+
+
+def test_add_figure_succeeds_on_vault_without_locked_status_table():
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        _drop_vault_locked_status_table(db_path)
+        figure_id = vault_server.add_figure(db_path, "p1", 1, "Caption", None, None)
+        assert vault_server.get_figure(db_path, figure_id) is not None
+    finally:
+        os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
 # export_material_passport
 # ---------------------------------------------------------------------------
 
