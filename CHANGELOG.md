@@ -267,16 +267,16 @@ Der akademische Kontext wandert von Claude-Memory (`~/.claude/projects/<hash>/me
 
 Erstes getracktes Release. Monolithische 7-Phasen-Pipeline → 13 modulare Skills. Siehe Git-Historie für frühere Änderungen.
 
-[6.5.0]: https://github.com/jamski105/academic-research/compare/v6.4.0...v6.5.0
-[6.4.0]: https://github.com/jamski105/academic-research/compare/v6.3.0...v6.4.0
-[6.3.0]: https://github.com/jamski105/academic-research/compare/v6.2.0...v6.3.0
-[6.2.0]: https://github.com/jamski105/academic-research/compare/v6.1.0...v6.2.0
-[6.1.0]: https://github.com/jamski105/academic-research/compare/v6.0.0...v6.1.0
-[6.0.0]: https://github.com/jamski105/academic-research/compare/v5.4.0...v6.0.0
-[5.4.0]: https://github.com/jamski105/academic-research/compare/v5.3.0...v5.4.0
-[5.3.0]: https://github.com/jamski105/academic-research/compare/v5.2.0...v5.3.0
-[5.2.0]: https://github.com/jamski105/academic-research/compare/v5.1.1...v5.2.0
-[5.1.1]: https://github.com/jamski105/academic-research/compare/v5.1.0...v5.1.1
-[5.1.0]: https://github.com/jamski105/academic-research/compare/v5.0.1...v5.1.0
-[5.0.1]: https://github.com/jamski105/academic-research/compare/v5.0.0...v5.0.1
-[5.0.0]: https://github.com/jamski105/academic-research/compare/v4.0.0...v5.0.0
+[6.5.0]: https://github.com/ahlerjam/academic-research/compare/v6.4.0...v6.5.0
+[6.4.0]: https://github.com/ahlerjam/academic-research/compare/v6.3.0...v6.4.0
+[6.3.0]: https://github.com/ahlerjam/academic-research/compare/v6.2.0...v6.3.0
+[6.2.0]: https://github.com/ahlerjam/academic-research/compare/v6.1.0...v6.2.0
+[6.1.0]: https://github.com/ahlerjam/academic-research/compare/v6.0.0...v6.1.0
+[6.0.0]: https://github.com/ahlerjam/academic-research/compare/v5.4.0...v6.0.0
+[5.4.0]: https://github.com/ahlerjam/academic-research/compare/v5.3.0...v5.4.0
+[5.3.0]: https://github.com/ahlerjam/academic-research/compare/v5.2.0...v5.3.0
+[5.2.0]: https://github.com/ahlerjam/academic-research/compare/v5.1.1...v5.2.0
+[5.1.1]: https://github.com/ahlerjam/academic-research/compare/v5.1.0...v5.1.1
+[5.1.0]: https://github.com/ahlerjam/academic-research/compare/v5.0.1...v5.1.0
+[5.0.1]: https://github.com/ahlerjam/academic-research/compare/v5.0.0...v5.0.1
+[5.0.0]: https://github.com/ahlerjam/academic-research/compare/v4.0.0...v5.0.0
