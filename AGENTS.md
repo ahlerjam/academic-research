@@ -43,3 +43,24 @@ der coordinator-Check und die Permission-Allowlist in `.claude/settings.json`.
 ## Ground truth
 „merged/grün/fertig" zählt erst nach gh-Verifikation (`gh pr view`, `gh pr checks`,
 `gh run view`), nie aus Agent-Output.
+
+## PR-Review-Pipeline (flowkit)
+Jeder nicht-Draft-PR durchläuft `.github/workflows/pr-deep-review.yml`
+(prep → code-review/dead-code/doc-sync/iac-safety → verifier → coordinator,
+ubuntu-latest; Konfiguration in `.github/flowkit-review.json`). `coordinator`
+ist das Merge-Gate (Required Check, sobald Branch-Protection aktiv). Benötigt
+Repo-Secret `CLAUDE_CODE_OAUTH_TOKEN` (Operator-Pflege); ohne Secret laufen die
+Reviewer-Jobs rot.
+
+Self-Change-Ablauf (PRs, die `pr-deep-review.yml` selbst anlegen oder ändern):
+claude-code-action verweigert Workflow-Dateien, die vom main-Stand abweichen.
+Daher: PR als Draft erstellen → der OPERATOR setzt das Label
+`override-claude-review` (nie der Agent selbst, Red line) → PR auf ready
+stellen (das ready_for_review-Event trägt das Label im Payload). Merge bei
+UNSTABLE ist dann legitim, wenn nur Reviewer-Jobs rot und alle übrigen Checks
+grün sind (Referenzfall: scalablemc PR #2286).
+
+Konvergenz-Regel: Meldet die Pipeline mehr als 3 Runden in Folge nur noch
+Mikro-Findings am selben Artefakt (flowkit ≥0.2.0 zeigt dafür einen
+Convergence-Alert im Sticky-Comment), stoppen und Operator fragen statt
+weiter zu iterieren.
