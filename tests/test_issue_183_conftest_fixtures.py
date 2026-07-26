@@ -11,6 +11,7 @@ Diese Datei darf KEINE eigenen Fixtures definieren -- sie konsumiert nur die
 zentralen conftest-Fixtures, um die Akzeptanzkriterien konkret zu belegen.
 """
 
+import ast
 import sqlite3
 from pathlib import Path
 
@@ -90,40 +91,110 @@ def test_library_profile_tum_shape(library_profile_tum):
 # ---------------------------------------------------------------------------
 # AC2: keine Repo-Root-sys.path-Boilerplate mehr außerhalb von conftest.py
 # ---------------------------------------------------------------------------
+#
+# Fix-Runde PR #359 (Issue #183): die urspruengliche Fassung dieses Guards
+# hat ganze Dateien mit legitimem skill-spezifischem scripts/-Pfad
+# (skills/<name>/scripts, z.B. test_latex_export.py) komplett von der Pruefung
+# ausgenommen. Das hat NICHT nur die legitime Zeile verdeckt, sondern JEDE
+# weitere sys.path.insert-Zeile in derselben Datei -- inklusive liegen
+# gebliebener Repo-Root-Boilerplate (test_latex_export.py:412, per
+# WORKTREE-Variable, inhaltlich identisch zur Boilerplate, die conftest.py
+# zentralisiert). Der Guard prueft daher jetzt pro sys.path.insert-Aufruf
+# (call-/zeilenweise) statt pro Datei: legitim ist ein Aufruf nur, wenn sein
+# Ziel -- direkt oder ueber eine referenzierte Variablenzuweisung -- eine
+# "skills"-Pfadkomponente enthaelt.
 
 
-# Dateien mit skill-spezifischem scripts/-Pfad (skills/<name>/scripts) -- das
-# sind KEINE Duplikate der generischen Repo-Root/scripts-Boilerplate (jede
-# zeigt auf ein anderes Skill-Verzeichnis) und bleiben bewusst unangetastet.
-_SKILL_SPECIFIC_SYS_PATH_FILES = {
-    "test_cluster_visualizer.py",
-    "test_csl_import.py",
-    "test_latex_export.py",
-    "test_notebook_bundle.py",
-    "test_prisma_flow.py",
-    "test_reading_list_import.py",
-    "test_zotero_import.py",
-}
+def _sys_path_insert_offenders(path: Path) -> list[int]:
+    """Zeilennummern von sys.path.insert(...)-Aufrufen in `path`, die NICHT auf
+    einen skill-spezifischen scripts/-Pfad (".../skills/<name>/scripts") zeigen.
+
+    Prueft pro Aufruf (nicht pro Datei): eine Datei darf sowohl eine legitime
+    skill-spezifische Zeile als auch -- separat zu erkennende -- liegen
+    gebliebene Repo-Root-Boilerplate enthalten.
+    """
+    text = path.read_text(encoding="utf-8")
+    if "sys.path.insert" not in text:
+        return []
+
+    tree = ast.parse(text, filename=str(path))
+    assigns = [node for node in ast.walk(tree) if isinstance(node, ast.Assign)]
+
+    def _is_skill_specific(call: ast.Call) -> bool:
+        call_src = ast.get_source_segment(text, call) or ""
+        if "skills" in call_src:
+            return True
+        referenced = {n.id for arg in call.args for n in ast.walk(arg) if isinstance(n, ast.Name)}
+        if not referenced:
+            return False
+        for assign in assigns:
+            targets = {t.id for t in assign.targets if isinstance(t, ast.Name)}
+            if targets & referenced:
+                assign_src = ast.get_source_segment(text, assign) or ""
+                if "skills" in assign_src:
+                    return True
+        return False
+
+    offenders = []
+    for node in ast.walk(tree):
+        is_sys_path_insert = (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "insert"
+            and isinstance(node.func.value, ast.Attribute)
+            and node.func.value.attr == "path"
+            and isinstance(node.func.value.value, ast.Name)
+            and node.func.value.value.id == "sys"
+        )
+        if is_sys_path_insert and not _is_skill_specific(node):
+            offenders.append(node.lineno)
+    return offenders
+
+
+def test_sys_path_boilerplate_guard_is_call_wise_not_file_wise(tmp_path):
+    """Regression fuer die Fix-Runde zu PR #359: eine Datei mit legitimer
+    skill-spezifischer sys.path.insert-Zeile UND einer liegengebliebenen
+    Repo-Root-Zeile (per Variable, wie in test_latex_export.py:412 vor dem
+    Fix) muss die Repo-Root-Zeile weiterhin melden -- eine dateiweite
+    Ausnahme wuerde beide gleichermassen ausblenden."""
+    sample = tmp_path / "test_sample_mixed.py"
+    sample.write_text(
+        "import sys\n"
+        "from pathlib import Path\n"
+        "\n"
+        "WORKTREE = Path(__file__).parent.parent\n"
+        "SCRIPTS_DIR = WORKTREE / 'skills' / 'sample-skill' / 'scripts'\n"
+        "sys.path.insert(0, str(SCRIPTS_DIR))\n"
+        "\n"
+        "\n"
+        "def test_something():\n"
+        "    sys.path.insert(0, str(WORKTREE))\n"
+        "    assert True\n",
+        encoding="utf-8",
+    )
+    offenders = _sys_path_insert_offenders(sample)
+    assert offenders == [10], (
+        f"Erwartet genau die Repo-Root-Zeile (10) als Offender, erhalten: {offenders}"
+    )
 
 
 def test_no_duplicated_repo_root_sys_path_boilerplate():
     """Reine Repo-Root-/scripts-sys.path.insert-Boilerplate darf nur noch in
     conftest.py stehen -- test_*.py-Dateien beziehen das ueber die zentrale
-    Fixture-Datei (pytest laedt conftest.py vor jedem Testmodul).
+    Fixture-Datei (pytest laedt conftest.py vor jedem Testmodul). Prueft
+    zeilenweise (siehe _sys_path_insert_offenders), damit Dateien mit
+    legitimem skill-spezifischem Pfad nicht komplett ausgenommen werden.
     """
     tests_dir = Path(__file__).parent
     offenders = []
     for path in sorted(tests_dir.glob("test_*.py")):
         if path.name == "test_issue_183_conftest_fixtures.py":
             continue
-        if path.name in _SKILL_SPECIFIC_SYS_PATH_FILES:
-            continue
-        text = path.read_text(encoding="utf-8")
-        if "sys.path.insert" in text:
-            offenders.append(path.name)
+        for lineno in _sys_path_insert_offenders(path):
+            offenders.append(f"{path.name}:{lineno}")
     assert not offenders, (
         "Dateien mit verbliebener Repo-Root/scripts-sys.path-Boilerplate "
-        f"(sollte via conftest.py entfallen): {offenders}"
+        f"(sollte via conftest.py entfallen, zeilenweise geprueft): {offenders}"
     )
 
 
