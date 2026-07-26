@@ -103,7 +103,7 @@ jobs:
         with:
           primary_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           backup_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP }}
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           pattern: pr-*
           path: ${{ runner.temp }}
@@ -322,7 +322,7 @@ jobs:
         with:
           primary_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           backup_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP }}
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           pattern: pr-*
           path: ${{ runner.temp }}
@@ -395,7 +395,7 @@ jobs:
         with:
           primary_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           backup_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP }}
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           pattern: pr-*
           path: ${{ runner.temp }}
@@ -468,10 +468,10 @@ jobs:
         with:
           primary_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           backup_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP }}
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           path: ${{ runner.temp }}/findings
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           pattern: pr-*
           path: ${{ runner.temp }}
@@ -545,7 +545,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: ./.github/actions/setup-python-uv
-      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           path: ${{ runner.temp }}/findings
 
@@ -622,7 +622,7 @@ jobs:
             --output "$RUNNER_TEMP/findings.json"
 
       - name: Download verifier verdicts
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         continue-on-error: true
         with:
           name: verdicts
