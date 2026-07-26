@@ -877,10 +877,11 @@ cp config/library-profiles/tum.yaml \
 ### Tests ausführen
 
 ```bash
-~/.academic-research/venv/bin/python -m pytest tests/ -v
+uv sync --extra dev            # einmalig je Arbeitskopie
+uv run pytest tests/ -v
 ```
 
-Aktuell: **1111 Tests gesammelt**, davon **963 bestanden** und 148 übersprungen (`pytest --collect-only` für die Gesamtzahl). Enthalten sind Regression-Guards (`tests/test_skill_naming.py`, `tests/test_cross_references.py`, `tests/test_skills_manifest.py`).
+Aktuell: **1796 Tests gesammelt**, davon **1649 bestanden** und 147 übersprungen (`uv run pytest --collect-only -q` für die Gesamtzahl). Enthalten sind Regression-Guards (`tests/test_skill_naming.py`, `tests/test_cross_references.py`, `tests/test_skills_manifest.py`).
 
 Die Kern-Suite ist **offline-hermetisch** und läuft ohne Netzwerk. Übersprungen werden Tests, die externe Abhängigkeiten brauchen: API-basierte Evals unter `tests/evals/` setzen einen `ANTHROPIC_API_KEY` voraus (Network/External), und einige Integrations-Tests werden ohne installierte optionale Pakete (z.B. `requests`, `sqlite-vec`) automatisch geskippt.
 
@@ -910,14 +911,14 @@ pre-commit install            # installiert den Git-Hook
 pre-commit run --all-files
 
 # Einzelne Tools direkt
-ruff check .                  # Linter
-ruff format .                 # Formatter
-mypy                          # Typpruefung (Pfade aus pyproject.toml)
+uv run ruff check .           # Linter
+uv run ruff format .          # Formatter
+uv run mypy                   # Typpruefung (Pfade aus pyproject.toml)
 ```
 
 Die pre-commit-Hooks umfassen `ruff` (Lint + Format), `mypy`,
 `end-of-file-fixer`, `check-yaml` und `check-json`. Reproduzierbare Installs
-liefert der gepinnte `requirements.lock` (`pip install -r requirements.lock`).
+liefert der gepinnte `uv.lock` (`uv sync --extra dev`).
 
 ### Evals
 

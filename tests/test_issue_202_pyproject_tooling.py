@@ -7,7 +7,7 @@ Prueft die Akzeptanzkriterien aus dem Issue konkret gegen den Dateiinhalt:
 - ``[tool.pytest.ini_options]`` bricht die Discovery NICHT (testpaths == tests).
 - ``.pre-commit-config.yaml`` enthaelt ruff, mypy, end-of-file-fixer,
   check-yaml und check-json.
-- ``requirements.lock`` existiert (verwandt #194).
+- ``uv.lock`` existiert (verwandt #194, seit #344 statt des pip-tools-Lockfiles).
 - CI (``.github/workflows/ci.yml``) fuehrt ruff + mypy aus (verwandt #184).
 - README enthaelt eine CONTRIBUTING-Sektion mit pre-commit-Setup.
 """
@@ -20,7 +20,7 @@ import pytest
 ROOT = Path(__file__).parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 PRECOMMIT = ROOT / ".pre-commit-config.yaml"
-REQ_LOCK = ROOT / "requirements.lock"
+UV_LOCK = ROOT / "uv.lock"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 README = ROOT / "README.md"
 
@@ -86,8 +86,8 @@ def test_precommit_enthaelt_hook(hook_id):
     assert f"id: {hook_id}" in text, f"pre-commit-Hook '{hook_id}' fehlt"
 
 
-def test_requirements_lock_existiert():
-    assert REQ_LOCK.is_file(), "requirements.lock fehlt (verwandt #194)"
+def test_uv_lock_existiert():
+    assert UV_LOCK.is_file(), "uv.lock fehlt (verwandt #194)"
 
 
 def test_ci_fuehrt_ruff_und_mypy():
