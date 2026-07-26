@@ -287,13 +287,17 @@ def find_figure_by_caption(
     caption_fragment: str,
     paper_id: str | None = None,
 ) -> list[dict]:
-    """LIKE-Suche in figures.caption. Kein MCP-Tool-Dekorator.
+    """Matcht ein In-Text-Referenz-Label gegen Figure-Captions. Kein MCP-Tool-Dekorator.
 
     Wird ausschliesslich aus dem verbatim-guard-Hook via Python-Subprocess
-    aufgerufen (analog zu search_quote_text).
+    aufgerufen (analog zu search_quote_text). Trotz des Namens (stabil
+    gehalten fuer den Hook-Aufrufer) delegiert diese Funktion seit Issue #379
+    an ``VaultDB.find_figures_by_reference()`` (Typ+Nummer-Vergleich statt
+    Freitext-LIKE-Suche), da das uebergebene ``caption_fragment`` tatsaechlich
+    ein In-Text-Referenz-Label ist (z. B. ``"Abb. 3.4"``), kein Caption-Fragment.
     """
     db = VaultDB(db_path)
-    return db.find_figures_by_caption(caption_fragment, paper_id=paper_id)
+    return db.find_figures_by_reference(caption_fragment, paper_id=paper_id)
 
 
 def add_paper(
