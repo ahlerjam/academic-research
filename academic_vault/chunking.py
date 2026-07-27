@@ -23,12 +23,15 @@ ist als 512-Wort-Fenster umgesetzt.
 
 from __future__ import annotations
 
+import logging
 import re
 from bisect import bisect_right
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from .embeddings import build_contextual_embedding_text
+
+logger = logging.getLogger(__name__)
 
 # ~512 Tokens (wortbasierte Naeherung, siehe Modul-Docstring).
 TARGET_TOKENS = 512
@@ -260,7 +263,8 @@ def extract_pages(pdf_path: str) -> list[tuple[int, str]]:
     for i, page in enumerate(reader.pages, start=1):
         try:
             text = page.extract_text() or ""
-        except Exception:  # pragma: no cover - defekte Einzelseite
+        except Exception:
+            logger.warning("Seite %d in %s nicht extrahierbar", i, pdf_path, exc_info=True)
             text = ""
         pages.append((i, text))
     return pages

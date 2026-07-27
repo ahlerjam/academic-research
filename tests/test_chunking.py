@@ -263,3 +263,35 @@ class TestChunkPagesAcceptsExplicitContextProvider:
         chunks = chunk_pages([(1, text)])
         assert chunks[0].context_sentence.strip() != ""
         assert chunks[0].embedding_text != chunks[0].chunk_text
+
+
+class TestExtractPagesLogsCorruptedPage:
+    """extract_pages() darf eine defekte Einzelseite nicht stillschweigend
+    verschlucken: Verhalten (leerer String, kein Abbruch) bleibt gleich,
+    aber der Fehler muss auf dem Produktionspfad geloggt werden (analog zu
+    academic_vault/fulltext.py::extract_pypdf)."""
+
+    def test_corrupted_page_logs_warning_and_keeps_empty_text(self, monkeypatch, caplog):
+        import logging
+
+        import pypdf
+        from academic_vault.chunking import extract_pages
+
+        class _BrokenPage:
+            def extract_text(self):
+                raise ValueError("defekte Einzelseite")
+
+        class _FakeReader:
+            def __init__(self, path):
+                self.pages = [_BrokenPage()]
+
+        monkeypatch.setattr(pypdf, "PdfReader", _FakeReader)
+
+        with caplog.at_level(logging.WARNING, logger="academic_vault.chunking"):
+            pages = extract_pages("dummy.pdf")
+
+        assert pages == [(1, "")]
+        assert any(
+            record.levelno == logging.WARNING and "nicht extrahierbar" in record.message
+            for record in caplog.records
+        )
