@@ -88,6 +88,20 @@ _UMLAUT_FOLD = {
 }
 
 
+# Namenspartikel. Muss mit hooks/citation-parse.mjs::NAME_PARTICLES uebereinstimmen.
+_NAME_PARTICLES = frozenset(
+    {"von", "van", "de", "del", "della", "di", "du", "da", "le", "la", "ten", "ter"}
+)
+
+
+def _strip_leading_particles(lowered: str) -> str:
+    """Entfernt fuehrende Namenspartikel; der letzte Token bleibt immer stehen."""
+    tokens = lowered.split()
+    while len(tokens) > 1 and "".join(c for c in tokens[0] if c.isalpha()) in _NAME_PARTICLES:
+        tokens = tokens[1:]
+    return " ".join(tokens)
+
+
 def normalize_family_name(name: str) -> set[str]:
     """Normalisiert einen Familiennamen zu einer Menge von Vergleichsvarianten.
 
@@ -95,17 +109,27 @@ def normalize_family_name(name: str) -> set[str]:
       * Umlaut-Faltung  ("Müller" -> "mueller")
       * Diakritika-Strip ("Müller" -> "muller", "Sørensen" -> "sorensen")
 
+    Beide werden zusaetzlich OHNE fuehrendes Namenspartikel gebildet: im
+    Kapiteltext steht ``(von Neumann 1945)``, CSL-JSON fuehrt das Partikel
+    dagegen in ``non-dropping-particle`` und laesst ``family`` auf ``Neumann``.
+    Ohne diese Variante fand der Lookup ein eingepflegtes Paper nicht wieder.
+
     Zwei Namen gelten als gleich, wenn sich ihre Variantenmengen schneiden.
+    Die Partikel-Variante macht den Vergleich bewusst etwas weiter (``De
+    Angelis`` trifft ``Angelis``) — ein zu weiter Vergleich laesst durch, ein zu
+    enger blockt korrekte Belege.
     """
     lowered = (name or "").strip().lower()
     if not lowered:
         return set()
-    folded = "".join(_UMLAUT_FOLD.get(ch, ch) for ch in lowered)
-    stripped = "".join(
-        ch for ch in unicodedata.normalize("NFD", lowered) if not unicodedata.combining(ch)
-    )
-    variants = {v for v in (folded, stripped) if v}
-    return {re.sub(r"[^a-z]", "", v) for v in variants} - {""}
+    variants: set[str] = set()
+    for form in {lowered, _strip_leading_particles(lowered)}:
+        folded = "".join(_UMLAUT_FOLD.get(ch, ch) for ch in form)
+        stripped = "".join(
+            ch for ch in unicodedata.normalize("NFD", form) if not unicodedata.combining(ch)
+        )
+        variants |= {re.sub(r"[^a-z]", "", v) for v in (folded, stripped)}
+    return variants - {""}
 
 
 def family_names_match(left: str, right: str) -> bool:

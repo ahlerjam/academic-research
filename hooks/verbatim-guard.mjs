@@ -359,7 +359,12 @@ async function runCitationCheck(toolName, toolInput, content) {
   for (const citation of unresolved) {
     const result = cascade.get(citation.raw) || { status: 'no-match', score: 0 };
     if (result.status === 'confirmed') continue;
-    if (result.status === 'no-match') {
+    // Ein sauberes Negativ rechtfertigt den Hard-Block nur bei eindeutiger
+    // Zitierabsicht. Die nackte Form "(Wort Jahr)" ist von Prosa nicht zu
+    // trennen ("(Fukushima 2011)"), dort bleibt es bei [UNVERIFIED] —
+    // dieselbe Logik wie bei "unavailable": eine Form, die wir nicht
+    // eindeutig lesen koennen, ist kein Halluzinations-Nachweis.
+    if (result.status === 'no-match' && citation.confidence === 'strong') {
       blockCitation(
         citation,
         config.enabled

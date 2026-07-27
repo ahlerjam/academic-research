@@ -225,6 +225,34 @@ def vault_with_mueller(tmp_path):
 
 
 @pytest.fixture
+def vault_with_particle_name(tmp_path):
+    """Vault mit einem Paper, dessen Autor ein Namenspartikel traegt.
+
+    CSL-JSON modelliert das Partikel als eigenes Feld (``non-dropping-particle``),
+    der Familienname bleibt ``Neumann``. Im Kapiteltext steht dagegen die im
+    Deutschen uebliche Zitierform ``(von Neumann 1945)``.
+    """
+    from academic_vault.server import add_paper
+
+    db_path = _make_vault(tmp_path, "particle_378.db")
+    add_paper(
+        db_path=db_path,
+        paper_id="neumann-1945",
+        csl_json=json.dumps(
+            {
+                "title": "First Draft of a Report on the EDVAC",
+                "type": "book",
+                "author": [{"family": "Neumann", "given": "John", "non-dropping-particle": "von"}],
+                "issued": {"date-parts": [[1945]]},
+            }
+        ),
+        page_first=1,
+        page_last=101,
+    )
+    return db_path
+
+
+@pytest.fixture
 def vault_with_quote_page_only(tmp_path):
     """Vault mit Buch OHNE page_first/page_last, aber mit einem Zitat von S. 45.
 
@@ -446,7 +474,7 @@ def test_citation_page_beyond_quote_sample_allows(vault_with_quote_page_only):
 
 def test_cascade_off_without_vault_hit_blocks(empty_vault):
     """Kill-Switch: ACADEMIC_CITATION_CASCADE=off ist Vault-only -> Block ohne Netz."""
-    content = "Der Befund (Fantasius 1999) belegt die These eindeutig."
+    content = "Der Befund (Fantasius 1999, S. 12) belegt die These eindeutig."
     result = run_hook(
         write_payload(content),
         env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
@@ -571,10 +599,14 @@ def test_cascade_empty_but_valid_answers_still_block(empty_vault):
 
 
 def test_cascade_connection_refused_soft_fails(empty_vault):
-    """AC3: Kaskaden-Endpunkte nicht erreichbar (ECONNREFUSED) -> [UNVERIFIED]."""
+    """AC3: Kaskaden-Endpunkte nicht erreichbar (ECONNREFUSED) -> [UNVERIFIED].
+
+    Der Beleg traegt eine Seitenangabe und waere damit bei sauberem Negativ ein
+    Hard-Block — nur so belegt der Test wirklich den unavailable-Pfad.
+    """
     port = _closed_port()
     base = f"http://127.0.0.1:{port}"
-    content = "Der Befund (Fantasius 1999) belegt die These eindeutig."
+    content = "Der Befund (Fantasius 1999, S. 12) belegt die These eindeutig."
     result = run_hook(
         write_payload(content),
         env_overrides={
@@ -600,7 +632,7 @@ def test_soft_fail_marks_edit_new_string(empty_vault):
         "tool_input": {
             "file_path": "kapitel/kap1.md",
             "old_string": "Platzhalter",
-            "new_string": "Der Befund (Fantasius 1999) belegt die These.",
+            "new_string": "Der Befund (Fantasius 1999, S. 12) belegt die These.",
         },
     }
     result = run_hook(
@@ -630,7 +662,10 @@ def test_soft_fail_marks_multiedit_edits(empty_vault):
             "file_path": "kapitel/kap1.md",
             "edits": [
                 {"old_string": "a", "new_string": "Ein harmloser Absatz."},
-                {"old_string": "b", "new_string": "Der Befund (Fantasius 1999) belegt die These."},
+                {
+                    "old_string": "b",
+                    "new_string": "Der Befund (Fantasius 1999, S. 12) belegt die These.",
+                },
             ],
         },
     }
@@ -674,7 +709,7 @@ PROBABLE_STUB = {
 
 def test_thresholds_default_yields_unverified(empty_vault):
     """AC4: Score 70 liegt bei Defaults (confirmed 80 / probable 65) im probable-Band."""
-    content = "Der Befund (Müller 2021) ist umstritten."
+    content = "Der Befund (Müller 2021, S. 45) ist umstritten."
     with CascadeStub(PROBABLE_STUB) as stub:
         env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
         env.update(stub.env())
@@ -686,7 +721,7 @@ def test_thresholds_default_yields_unverified(empty_vault):
 def test_thresholds_env_configurable(empty_vault):
     """AC4: Derselbe Input wird mit ACADEMIC_CITATION_CONFIRMED_MIN=65 sauber
     durchgelassen — der Verhaltensunterschied belegt die Konfigurierbarkeit."""
-    content = "Der Befund (Müller 2021) ist umstritten."
+    content = "Der Befund (Müller 2021, S. 45) ist umstritten."
     with CascadeStub(PROBABLE_STUB) as stub:
         env = {
             "VAULT_DB_PATH": empty_vault,
@@ -702,7 +737,7 @@ def test_thresholds_env_configurable(empty_vault):
 def test_probable_min_env_configurable(empty_vault):
     """AC4: Wird probable_min ueber den Score gehoben, faellt derselbe Kandidat
     unter 'kein Treffer' und wird geblockt."""
-    content = "Der Befund (Müller 2021) ist umstritten."
+    content = "Der Befund (Müller 2021, S. 45) ist umstritten."
     with CascadeStub(PROBABLE_STUB) as stub:
         env = {
             "VAULT_DB_PATH": empty_vault,
@@ -774,7 +809,9 @@ def test_bypass_marker_skips_citation_check(empty_vault):
 def test_unprotected_path_skips_citation_check(empty_vault):
     """Nicht-Kapitel-Pfade bleiben unangetastet."""
     result = run_hook(
-        write_payload("Der Befund (Fantasius 1999) belegt die These.", file_path="README.md"),
+        write_payload(
+            "Der Befund (Fantasius 1999, S. 12) belegt die These.", file_path="README.md"
+        ),
         env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
     )
     assert result.returncode == 0
@@ -782,7 +819,7 @@ def test_unprotected_path_skips_citation_check(empty_vault):
 
 def test_missing_vault_db_fails_open():
     """Fail-open bleibt erhalten: ohne Vault-DB kein Block."""
-    result = run_hook(write_payload("Der Befund (Fantasius 1999) belegt die These."))
+    result = run_hook(write_payload("Der Befund (Fantasius 1999, S. 12) belegt die These."))
     assert result.returncode == 0, f"stderr: {result.stderr}"
 
 
@@ -798,4 +835,181 @@ def test_hooks_json_timeout_covers_cascade_budget():
     guard = next(h for h in entries if "verbatim-guard" in h["command"])
     assert guard["timeout"] >= 30, (
         f"verbatim-guard-Timeout {guard['timeout']}s reicht fuer die Kaskade nicht aus."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde: Namenspartikel (von/van/de) duerfen den Vault-Treffer nicht kosten
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_family_name_ignores_leading_particle():
+    """``von Neumann`` und ``Neumann`` muessen als derselbe Name gelten.
+
+    Der Parser liest das Partikel aus dem Kapiteltext mit, CSL-JSON haelt es in
+    einem eigenen Feld. Ohne Partikel-Variante treffen die beiden Schreibweisen
+    nie aufeinander.
+    """
+    from academic_vault.db import family_names_match, normalize_family_name
+
+    assert "neumann" in normalize_family_name("von Neumann")
+    assert family_names_match("von Neumann", "Neumann")
+    assert family_names_match("Neumann", "von Neumann")
+    assert family_names_match("de la Cruz", "Cruz")
+    # Gegenprobe: das Partikel allein darf nicht zu einem leeren Namen
+    # kollabieren und damit auf alles passen.
+    assert not family_names_match("von", "Neumann")
+
+
+def test_find_papers_by_author_year_matches_particle_family(vault_with_particle_name):
+    """Vault-Lookup findet das Paper auch, wenn nur der Beleg das Partikel traegt."""
+    from academic_vault.db import VaultDB
+
+    db = VaultDB(vault_with_particle_name)
+    assert db.find_papers_by_author_year("von Neumann", 1945), (
+        "Paper liegt im Vault, wird aber wegen des Partikels nicht gefunden"
+    )
+    assert db.find_papers_by_author_year("Neumann", 1945)
+
+
+def test_citation_with_particle_name_in_vault_allows(vault_with_particle_name):
+    """AC1: ``(von Neumann 1945, S. 12)`` ist eingepflegt -> kein Hard-Block."""
+    content = "Wie (von Neumann 1945, S. 12) zeigt, war die Architektur neu."
+    result = run_hook(
+        write_payload(content),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_particle_name,
+            "ACADEMIC_CITATION_CASCADE": "off",
+        },
+    )
+    assert result.returncode == 0, (
+        f"AC1 verletzt: eingepflegtes Paper blockiert. exit {result.returncode}. {result.stderr}"
+    )
+    assert "BLOCKIERT" not in result.stderr
+
+
+def test_cascade_matches_particle_name(empty_vault):
+    """Auch die JS-Seite (Score-Modell der Kaskade) muss das Partikel tolerieren.
+
+    CrossRef/arXiv liefern ``Neumann`` als Familiennamen; der Beleg im Text
+    lautet ``von Neumann``. Ohne Partikel-Normalisierung faellt der Score auf 0.
+    """
+    content = "Der Entwurf (von Neumann 1945) praegte die Rechnerarchitektur."
+    with CascadeStub(
+        {
+            "arxiv": {
+                "status": 200,
+                "entries": [
+                    {
+                        "title": "First Draft of a Report on the EDVAC",
+                        "year": 1945,
+                        "authors": ["John Neumann"],
+                    }
+                ],
+            }
+        }
+    ) as stub:
+        env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
+        env.update(stub.env())
+        result = run_hook(write_payload(content), env_overrides=env)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "[UNVERIFIED]" not in result.stdout, (
+        "Kaskaden-Treffer wurde wegen des Namenspartikels nicht als confirmed gewertet"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde: (Wort Jahr) ohne Signalwort ist kein Halluzinations-Nachweis
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Die Erhebung lief im ersten Quartal (Januar 2021) ohne Ausfaelle.",
+        "Der Zeitraum (März 2020) war besonders volatil.",
+        "Die Zahlen (Stand 2021) stammen aus der amtlichen Statistik.",
+        "Die Norm (Fassung 2019) gilt unveraendert weiter.",
+        "Der Bericht (May 2018) wurde spaeter zurueckgezogen.",
+    ],
+)
+def test_date_and_status_words_are_not_citations(empty_vault, content):
+    """Datums- und Standangaben sind keine Belege: kein Block UND keine Markierung.
+
+    ``(Januar 2021)`` hat exakt die Form ``(Wort Jahr)``, ist aber ein Datum.
+    Ein ``[UNVERIFIED]`` im Fliesstext waere hier bereits eine Textverfaelschung.
+    """
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 0, (
+        f"Datumsangabe {content!r} blockiert: exit {result.returncode}. {result.stderr}"
+    )
+    assert "[UNVERIFIED]" not in result.stdout, (
+        f"Datumsangabe {content!r} wurde als unbelegtes Zitat markiert"
+    )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Der Reaktorunfall (Fukushima 2011) veraenderte die Energiedebatte.",
+        "Die Pandemie (Corona 2020) traf den Einzelhandel hart.",
+        "Der Beschluss (Bologna 1999) reformierte die Studienstruktur.",
+    ],
+)
+def test_bare_word_year_never_hard_blocks(empty_vault, content):
+    """``(Wort Jahr)`` ohne Signalwort, Seite oder Co-Autor ist mehrdeutig.
+
+    Ereignis- und Ortsnamen sind von Autorennamen lexikalisch nicht zu
+    unterscheiden. Ein Hard-Block auf dieser Evidenzlage stoppt legitime Prosa;
+    hoechstens eine ``[UNVERIFIED]``-Markierung ist angemessen.
+    """
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 0, (
+        f"Prosa {content!r} hart geblockt: exit {result.returncode}. {result.stderr}"
+    )
+
+
+def test_bare_citation_without_match_marks_unverified(empty_vault):
+    """Gegenprobe: der schwache Fall verschwindet nicht, er wird markiert."""
+    content = "Der Befund (Fantasius 1999) belegt die These eindeutig."
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 0, f"Erwartet 0 (Soft-Fail), got {result.returncode}."
+    assert "(Fantasius 1999) [UNVERIFIED]" in updated_content(result)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        # Seitenangabe
+        "Der Befund (Fantasius 1999, S. 12) belegt die These.",
+        # Signalwort in der Klammer
+        "Der Befund (vgl. Fantasius 1999) belegt die These.",
+        # Signalwort narrativ
+        "Der Befund ist belegt, vgl. Fantasius 1999 in der Fachliteratur.",
+        # Co-Autoren-Kette
+        "Der Befund (Fantasius/Zweitautor 1999) belegt die These.",
+        "Der Befund (Fantasius u. a. 1999) belegt die These.",
+    ],
+)
+def test_strong_citation_shapes_still_block(empty_vault, content):
+    """Eindeutige Beleg-Formen bleiben ein Hard-Block (AC2).
+
+    Seitenangabe, Signalwort und Co-Autoren-Kette kommen in Prosa nicht
+    versehentlich vor — hier ist die Zitierabsicht unstrittig.
+    """
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 2, (
+        f"Erfundener Beleg {content!r} nicht geblockt: exit {result.returncode}. {result.stderr}"
     )

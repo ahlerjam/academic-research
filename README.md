@@ -817,6 +817,10 @@ oder `vgl. Schmidt 2019` werden extrahiert und gegen den Vault geprüft:
 Familienname und Jahr gegen `papers.csl_json` (Umlaut-Faltung und
 Diakritika-Strip, `Müller`/`Mueller`/`Muller` treffen denselben Eintrag), die
 Seitenzahl gegen `papers.page_first`/`page_last` bzw. `quotes.printed_page`.
+Führende **Namenspartikel** werden dabei zusätzlich weggefaltet: im Text steht
+`(von Neumann 1945)`, CSL-JSON führt das Partikel dagegen separat in
+`non-dropping-particle` und `family` bleibt `Neumann` — ohne diese Variante
+blockte der Guard Belege, deren Paper längst im Vault liegt.
 Die beiden Seitenquellen wiegen unterschiedlich: nur der vollständige
 Seitenumfang aus `page_first`/`page_last` kann eine Seite **widerlegen**.
 `quotes.printed_page` ist eine punktuelle Stichprobe der bereits extrahierten
@@ -826,9 +830,23 @@ extrahiert wurde, sagt nichts darüber aus, ob das Werk eine S. 47 hat.
 **Nicht geprüft** (bewusst, gegen False Positives): Code-Fences und
 Inline-Code, LaTeX-Makros (`\cite{…}`, `\ref{…}`), nackte Jahresklammern
 (`(2021)`), Struktur-Verweise (`(siehe Kapitel 2)`, `(vgl. Abb. 3)`),
-`ebd.`/`a.a.O.` sowie alles ab der Überschrift des Literaturverzeichnisses.
-Hat der Vault zu einem Paper **keinen vollständigen Seitenumfang**, gilt die
-Seitenzahl als nicht widerlegbar (dokumentierter Soft-Pass).
+Datums- und Standangaben (`(Januar 2021)`, `(März 2020)`, `(Stand 2021)`,
+`(Fassung 2019)`), `ebd.`/`a.a.O.` sowie alles ab der Überschrift des
+Literaturverzeichnisses. Hat der Vault zu einem Paper **keinen vollständigen
+Seitenumfang**, gilt die Seitenzahl als nicht widerlegbar (dokumentierter
+Soft-Pass).
+
+**Belegstärke entscheidet über die Härte der Reaktion.** Eine Seitenangabe
+(`, S. 45`), ein Signalwort (`vgl.`, `siehe`, `zit. nach`) oder ein
+Co-Autoren-Marker (`/`, `&`, `u. a.`, `et al.`) machen die Zitierabsicht
+eindeutig — solche Belege blockieren bei sauberem Negativ. Die nackte Form
+`(Wort Jahr)` ist dagegen von Fließtext lexikalisch nicht zu trennen
+(`(Fukushima 2011)`, `(Corona 2020)`, `(Bologna 1999)`) und führt deshalb
+höchstens zu `[UNVERIFIED]`, nie zu einem Hard-Block. Das ist dieselbe Regel
+wie bei `unavailable`: eine Evidenzlage, die wir nicht eindeutig lesen können,
+ist kein Halluzinations-Nachweis. Der Preis ist ein bekannter False Negative —
+ein frei erfundenes `(Fantasius 1999)` ohne Seitenangabe wird markiert statt
+geblockt.
 
 Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
 Falschtreffer produziert: die narrative Form ohne Signalwort
@@ -857,7 +875,8 @@ Belege) → CrossRef → Semantic Scholar (Fuzzy, Gate: Autoren-Überlapp
 | `confirmed` | Vault-Treffer **oder** Score ≥ `ACADEMIC_CITATION_CONFIRMED_MIN` (80) | allow |
 | `probable` | Score ≥ `ACADEMIC_CITATION_PROBABLE_MIN` (65) | allow + `[UNVERIFIED]` |
 | `unavailable` | Timeout / `ECONNREFUSED` / abgebrochener Body / **jeder** Nicht-2xx-Status (5xx, 429, aber auch 403-Drosselung und 404) / HTTP 200 mit unlesbarem Body | allow + `[UNVERIFIED]` |
-| `no-match` | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer | **Block** (exit 2) |
+| `no-match` | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer — **und** der Beleg ist eindeutig (Seite, Signalwort oder Co-Autor) | **Block** (exit 2) |
+| `no-match` bei nackter Form `(Wort Jahr)` | wie oben, aber ohne Seite/Signalwort/Co-Autor | allow + `[UNVERIFIED]` |
 | `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2) |
 
 Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein

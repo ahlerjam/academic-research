@@ -11,8 +11,14 @@
  * Bewusst NICHT erkannt (False-Positive-Schutz, siehe SKIP-Regeln unten):
  *   Code-Fences und Inline-Code, LaTeX-Makros (\cite{...}, \ref{...}),
  *   nackte Jahresklammern "(2021)", Verweise wie "(siehe Kapitel 2)" oder
- *   "(vgl. Abb. 3)", "ebd."/"a.a.O." (kein eigener Autor/Jahr-Beleg) und
- *   der Literaturverzeichnis-Abschnitt.
+ *   "(vgl. Abb. 3)", Datums- und Standangaben ("(Januar 2021)", "(Stand 2021)"),
+ *   "ebd."/"a.a.O." (kein eigener Autor/Jahr-Beleg) und der
+ *   Literaturverzeichnis-Abschnitt.
+ *
+ * Jeder Beleg traegt ein Feld ``confidence``: "strong" bei Seitenangabe,
+ * Signalwort oder Co-Autoren-Marker, sonst "weak". Die nackte Form
+ * "(Wort Jahr)" ist von Prosa wie "(Fukushima 2011)" nicht zu unterscheiden
+ * und darf deshalb nie zu einem Hard-Block fuehren.
  */
 
 // Deutsche Umlaut-/Ligatur-Faltung — muss mit academic_vault/db.py::_UMLAUT_FOLD
@@ -21,20 +27,50 @@ const UMLAUT_FOLD = {
   ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss', æ: 'ae', ø: 'oe', å: 'aa',
 };
 
+// Namenspartikel. Muss mit academic_vault/db.py::_NAME_PARTICLES uebereinstimmen.
+// Doppelrolle: Baustein des NAME-Musters (unten) UND Strip-Liste in
+// normalizeFamily. Beides aus derselben Quelle, damit das Muster nie ein
+// Partikel liest, das der Vergleich anschliessend nicht kennt.
+export const NAME_PARTICLES = [
+  'von', 'van', 'de', 'del', 'della', 'di', 'du', 'da', 'le', 'la', 'ten', 'ter',
+];
+
+/** Entfernt fuehrende Namenspartikel; der letzte Token bleibt immer stehen. */
+function stripLeadingParticles(lowered) {
+  let tokens = lowered.split(/\s+/).filter(Boolean);
+  while (tokens.length > 1 && NAME_PARTICLES.includes(tokens[0].replace(/[^\p{L}]/gu, ''))) {
+    tokens = tokens.slice(1);
+  }
+  return tokens.join(' ');
+}
+
 /**
  * Normalisiert einen Familiennamen zu einer Menge von Vergleichsvarianten
- * (Umlaut-Faltung UND Diakritika-Strip). Zwei Namen gelten als gleich, wenn
- * sich ihre Variantenmengen schneiden.
+ * (Umlaut-Faltung UND Diakritika-Strip), jeweils mit UND ohne fuehrendes
+ * Namenspartikel. Zwei Namen gelten als gleich, wenn sich ihre Variantenmengen
+ * schneiden.
+ *
+ * Die Partikel-Variante ist noetig, weil beide Seiten des Vergleichs das
+ * Partikel unterschiedlich fuehren: im Kapiteltext steht ``(von Neumann 1945)``,
+ * CSL-JSON und die externen APIs liefern ``family: "Neumann"`` mit dem Partikel
+ * in ``non-dropping-particle`` oder gar nicht. Ohne diese Variante blockte der
+ * Guard Belege, deren Paper im Vault liegt.
+ *
+ * Die zusaetzliche Variante kann einen Treffer erzeugen, wo strenggenommen zwei
+ * verschiedene Namen vorliegen (``De Angelis``/``Angelis``). Das ist die
+ * gewollte Richtung: ein zu weiter Vergleich laesst durch, ein zu enger blockt.
  */
 export function normalizeFamily(name) {
   const lowered = (name || '').trim().toLowerCase();
   if (!lowered) return new Set();
-  const folded = [...lowered].map((ch) => UMLAUT_FOLD[ch] ?? ch).join('');
-  const stripped = lowered.normalize('NFD').replace(/\p{M}/gu, '');
   const variants = new Set();
-  for (const variant of [folded, stripped]) {
-    const cleaned = variant.replace(/[^a-z]/g, '');
-    if (cleaned) variants.add(cleaned);
+  for (const form of new Set([lowered, stripLeadingParticles(lowered)])) {
+    const folded = [...form].map((ch) => UMLAUT_FOLD[ch] ?? ch).join('');
+    const stripped = form.normalize('NFD').replace(/\p{M}/gu, '');
+    for (const variant of [folded, stripped]) {
+      const cleaned = variant.replace(/[^a-z]/g, '');
+      if (cleaned) variants.add(cleaned);
+    }
   }
   return variants;
 }
@@ -91,8 +127,10 @@ export function maskSkipRegions(text) {
 // ---------------------------------------------------------------------------
 
 // Ein Familienname: beginnt mit Grossbuchstabe, danach Buchstaben/Bindestrich/
-// Apostroph. Namenspartikel ("von", "van", "de") duerfen vorangehen.
-const NAME = String.raw`(?:(?:von|van|de|del|della|di|du|da|le|la|ten|ter)\s+)?\p{Lu}[\p{L}'’-]+`;
+// Apostroph. Namenspartikel ("von", "van", "de") duerfen vorangehen — laengste
+// Alternative zuerst, damit "della" nicht als "de" + "lla" zerfaellt.
+const PARTICLE_ALT = [...NAME_PARTICLES].sort((a, b) => b.length - a.length).join('|');
+const NAME = String.raw`(?:(?:${PARTICLE_ALT})\s+)?\p{Lu}[\p{L}'’-]+`;
 
 // Co-Autoren-Kette: "/Schmidt", " & Schmidt", ", Schmidt", " und Schmidt",
 // " u. a.", " et al." — der Name ist optional, damit "u. a." allein greift.
@@ -117,13 +155,37 @@ const NARRATIVE_CITATION = new RegExp(
 );
 
 // Woerter, die zwar gross geschrieben sind, aber nie ein Autorname eines
-// Belegs sind (Struktur-Verweise). "Abb."/"Tab." deckt bereits der
-// Figure-Check im verbatim-guard ab.
+// Belegs sind. Der Vergleich laeuft ueber die umlautgefaltete Kleinschreibung
+// (siehe nonAuthorToken), deshalb steht hier "maerz" und nicht "März".
 const NON_AUTHOR_TOKENS = new Set([
+  // Struktur-Verweise. "Abb."/"Tab." deckt bereits der Figure-Check ab.
   'kapitel', 'abschnitt', 'anhang', 'tabelle', 'abbildung', 'abb', 'tab',
   'gleichung', 'formel', 'seite', 'fig', 'figure', 'table', 'chapter',
   'section', 'appendix', 'equation', 'ebd', 'ebenda', 'ibid', 'ders', 'dies',
+  // Monate (de/en, inkl. Abkuerzungen): "(Januar 2021)" hat exakt die Form
+  // eines Belegs, ist aber ein Datum.
+  'januar', 'februar', 'maerz', 'april', 'mai', 'juni', 'juli', 'august',
+  'september', 'oktober', 'november', 'dezember',
+  'jan', 'feb', 'mrz', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'okt',
+  'nov', 'dez',
+  'january', 'february', 'march', 'may', 'june', 'july', 'october', 'december',
+  'mar', 'oct', 'dec',
+  // Jahreszeiten und Zeitraeume
+  'fruehjahr', 'sommer', 'herbst', 'winter', 'quartal', 'stichtag',
+  // Stand-/Ausgabe-Angaben: "(Stand 2021)", "(Fassung 2019)"
+  'stand', 'fassung', 'version', 'ausgabe', 'auflage', 'jahrgang', 'band',
+  'heft', 'nr', 'hrsg', 'zugriff', 'abgerufen',
 ]);
+
+/** Vergleichsform eines Tokens fuer NON_AUTHOR_TOKENS (klein, umlautgefaltet). */
+function nonAuthorToken(token) {
+  return [...token.toLowerCase().replace(/[^\p{L}]/gu, '')]
+    .map((ch) => UMLAUT_FOLD[ch] ?? ch)
+    .join('');
+}
+
+// Ein Signalwort am Anfang des Belegs (mit oder ohne oeffnende Klammer).
+const SIGNAL_PREFIX = new RegExp(String.raw`^\(?\s*(?:${SIGNAL})`, 'u');
 
 function parsePage(match) {
   const raw = match[4] ?? match[5];
@@ -138,27 +200,36 @@ function parsePage(match) {
 
 function buildCitation(match, raw) {
   const family = match[1].trim();
-  const lastToken = family.split(/\s+/).pop().toLowerCase();
-  if (NON_AUTHOR_TOKENS.has(lastToken.replace(/[^\p{L}]/gu, ''))) return null;
+  if (NON_AUTHOR_TOKENS.has(nonAuthorToken(family.split(/\s+/).pop()))) return null;
   const year = Number.parseInt(match[3], 10);
   if (!Number.isFinite(year) || year < 1400 || year > 2200) return null;
   const coauthors = (match[2] || '')
     .split(/\/|&|,|\bund\b|u\.\s?a\.|et\s+al\./u)
     .map((part) => part.trim())
     .filter(Boolean);
+  const page = parsePage(match);
+  // Belegstaerke: Seitenangabe, Signalwort oder Co-Autoren-Marker ("/", "&",
+  // "u. a.", "et al.") kommen in Fliesstext nicht versehentlich vor — dort ist
+  // die Zitierabsicht eindeutig. Die nackte Form "(Wort Jahr)" ist dagegen
+  // lexikalisch nicht von Prosa zu trennen: "(Fukushima 2011)",
+  // "(Corona 2020)". Der Aufrufer darf daraus deshalb keinen Hard-Block
+  // ableiten (siehe verbatim-guard.mjs::runCitationCheck).
+  const strong = page !== null || SIGNAL_PREFIX.test(raw) || (match[2] || '').trim().length > 0;
   return {
     raw,
     family,
     authors: [family, ...coauthors],
     year,
-    page: parsePage(match),
+    page,
+    confidence: strong ? 'strong' : 'weak',
   };
 }
 
 /**
  * Extrahiert alle Klammer-/Paraphrase-Belege aus einem Kapiteltext.
- * Gibt ein Array von {raw, family, authors, year, page} zurueck; ``raw`` ist
- * der Originaltext des Belegs (fuer die [UNVERIFIED]-Markierung).
+ * Gibt ein Array von {raw, family, authors, year, page, confidence} zurueck;
+ * ``raw`` ist der Originaltext des Belegs (fuer die [UNVERIFIED]-Markierung),
+ * ``confidence`` ist ``"strong"`` oder ``"weak"`` (siehe buildCitation).
  */
 export function extractCitations(content) {
   if (!content) return [];
