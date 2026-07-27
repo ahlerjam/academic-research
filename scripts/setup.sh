@@ -8,9 +8,32 @@
 #   4. Check: globaler browser-use Claude-Skill
 #   5. Claude-Code-Permissions via configure_permissions.py
 #   6. Projekt-Bootstrap (Auto-Detect) via project_bootstrap.py
-#   7. SciHub Opt-in (F18) via scihub_optin.py
+#   7. Uni-Profil-Setup (F16.5) via uni_profile_setup.py
+#   8. SciHub Opt-in (F18) via scihub_optin.py
 
 set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Argumente parsen (--uni <profil>; sonstige deklarierte, aber (noch) nicht
+# eigenstaendig implementierte Flags wie --skip-browser/--enable-scihub
+# werden toleriert statt hart abzubrechen, vgl. commands/setup.md).
+# ---------------------------------------------------------------------------
+
+UNI_PROFILE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --uni)
+      UNI_PROFILE="$2"
+      shift 2
+      ;;
+    --skip-browser|--enable-scihub)
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 # Unter 'set -u' (nounset) bricht jede Referenz auf eine unbelegte Variable ab.
 # Externe Variablen daher defensiv absichern: $HOME muss gesetzt sein, sonst
@@ -128,7 +151,24 @@ python3 "$SCRIPT_DIR/configure_permissions.py"
 echo ""
 
 # ---------------------------------------------------------------------------
-# 7. SciHub Opt-in (F18)
+# 7. Uni-Profil-Setup (F16.5)
+# ---------------------------------------------------------------------------
+# Mit --uni <profil>: kopiert config/library-profiles/<profil>.yaml nicht-
+# interaktiv nach ~/.academic-research/library-profiles/active.yaml.
+# Ohne --uni: fragt interaktiv (Opt-in), ob jetzt ein Hochschul-Profil gewaehlt
+# werden soll. Bei Opt-out oder nicht-interaktivem stdin (z.B. CI) bleibt das
+# aktive Profil leer/Default, ohne Fehler.
+
+if [ -n "$UNI_PROFILE" ]; then
+  "$BASE/venv/bin/python" "$SCRIPT_DIR/uni_profile_setup.py" --uni "$UNI_PROFILE"
+else
+  "$BASE/venv/bin/python" "$SCRIPT_DIR/uni_profile_setup.py"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 8. SciHub Opt-in (F18)
 # ---------------------------------------------------------------------------
 # Fragt interaktiv, ob der rechtlich umstrittene SciHub-Last-Resort-Tier
 # aktiviert werden soll, und schreibt das Ergebnis als scihub_optin nach
