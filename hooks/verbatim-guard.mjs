@@ -12,11 +12,22 @@
  *   - Exit 2: block (Zitat nicht verifiziert)
  *
  * Bypass: Content enthält <!-- vault-guard: skip --> → immer allow.
- * Fail-open: Bei fehlender Python/Vault-Umgebung → Warnung + allow.
+ * Jede Bypass-Nutzung wird nach stderr gewarnt UND in eine Logdatei
+ * angehängt (siehe VAULT_GUARD_BYPASS_LOG, Issue #381).
+ *
+ * Fail-open (zwei unterschiedliche, bewusst getrennt formulierte Fälle,
+ * Issue #381 — Vermischung war Ursache des ursprünglichen Bugs):
+ *   1. "DB fehlt" — erwartbar bei einem frischen Projekt ohne Vault-DB.
+ *      Wortlaut: "Vault-DB nicht gefunden ... Bypass aktiv."
+ *   2. "Lookup-Fehler bei vorhandener DB" — unerwartet (z. B. korrupte
+ *      Datei, kaputte Query). Bleibt fail-open (kein Regressionsverlust
+ *      für Scope "Out"), aber sichtbar anderer Wortlaut, damit ein
+ *      stiller Bypass bei kaputter DB nicht mit dem harmlosen
+ *      "frisches Projekt"-Fall verwechselt wird.
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, appendFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
@@ -34,6 +45,10 @@ const VAULT_SRC = REPO_ROOT;
 const SLUG = basename(process.env.CLAUDE_PROJECT_DIR || process.cwd()) || 'default';
 const VAULT_DB = process.env.VAULT_DB_PATH
   || join(os.homedir(), '.academic-research', 'projects', SLUG, 'vault.db');
+// Logdatei fuer Bypass-Marker-Nutzung (Issue #381). Env-Override, Default-Muster
+// analog ACADEMIC_DECISIONS_LOG in post-tool-use-decisions.mjs.
+const VAULT_GUARD_BYPASS_LOG = process.env.VAULT_GUARD_BYPASS_LOG
+  || join(os.homedir(), '.academic-research', 'vault-guard-bypass.log');
 // Mindestlänge eines Zitat-Spans (in Zeichen). Muss mit den Regex-Quantifizierern übereinstimmen.
 const MIN_QUOTE_LEN = 10;
 // Pattern fuer Figure-Referenzen (Abb., Abbildung, Tab., Tabelle, Fig., Figure + Nummer)
@@ -130,6 +145,30 @@ function extractQuoteSpans(content) {
 }
 
 // ---------------------------------------------------------------------------
+// Fail-open-Warnung (gemeinsamer Helper, Issue #381)
+// ---------------------------------------------------------------------------
+
+/**
+ * Schreibt eine fail-open-Warnung nach stderr und gibt true (Bypass) zurueck.
+ * Zwei Faelle werden bewusst unterschiedlich formuliert, damit sie beim Lesen
+ * von stderr nicht verwechselt werden koennen:
+ *   - kind === 'missing-db'   → "DB fehlt" (erwartbar, frisches Projekt).
+ *   - kind === 'lookup-error' → DB existiert, Python-Subprocess wirft trotzdem
+ *                               (z. B. korrupte Datei) — unerwartet.
+ *
+ * @param {string} context - Label fuer die Ausgabe, z. B. 'Vault-Guard'/'Figure-Guard'.
+ * @param {'missing-db'|'lookup-error'} kind
+ * @param {string} detail - DB-Pfad (missing-db) oder Fehlermeldung (lookup-error).
+ */
+function warnFailOpen(context, kind, detail) {
+  const message = kind === 'missing-db'
+    ? `Vault-DB nicht gefunden (${detail}). Bypass aktiv.`
+    : `Vault-Lookup-Fehler trotz vorhandener DB (${detail}). Bypass aktiv — bitte DB pruefen.`;
+  process.stderr.write(`[${context}] Warnung: ${message}\n`);
+  return true; // fail-open (Scope #381: Mechanismus selbst bleibt bestehen)
+}
+
+// ---------------------------------------------------------------------------
 // Vault-Lookup via Python-Subprocess
 // ---------------------------------------------------------------------------
 
@@ -138,12 +177,9 @@ function extractQuoteSpans(content) {
  * Bei fehlender Python/Vault-Umgebung: Warnung + true (fail-open).
  */
 function lookupInVault(verbatim) {
-  // Vault-DB muss existieren (sonst fail-open)
+  // Vault-DB muss existieren (sonst fail-open, Fall 1: "DB fehlt")
   if (!existsSync(VAULT_DB)) {
-    process.stderr.write(
-      `[Vault-Guard] Warnung: Vault-DB nicht gefunden (${VAULT_DB}). Bypass aktiv.\n`
-    );
-    return true; // fail-open
+    return warnFailOpen('Vault-Guard', 'missing-db', VAULT_DB);
   }
 
   const pyCode = [
@@ -163,10 +199,8 @@ function lookupInVault(verbatim) {
     const hits = JSON.parse(output.trim());
     return Array.isArray(hits) && hits.length > 0;
   } catch (err) {
-    process.stderr.write(
-      `[Vault-Guard] Warnung: Vault-Lookup fehlgeschlagen (${err.message}). Bypass aktiv.\n`
-    );
-    return true; // fail-open
+    // Fall 2: DB vorhanden, aber Exception (z. B. korrupte Datei/Query) — unerwartet.
+    return warnFailOpen('Vault-Guard', 'lookup-error', err.message);
   }
 }
 
@@ -180,10 +214,7 @@ function lookupInVault(verbatim) {
  */
 function lookupFigureInVault(captionFragment) {
   if (!existsSync(VAULT_DB)) {
-    process.stderr.write(
-      `[Figure-Guard] Warnung: Vault-DB nicht gefunden (${VAULT_DB}). Bypass aktiv.\n`
-    );
-    return true; // fail-open
+    return warnFailOpen('Figure-Guard', 'missing-db', VAULT_DB);
   }
 
   const pyCode = [
@@ -203,10 +234,33 @@ function lookupFigureInVault(captionFragment) {
     const hits = JSON.parse(output.trim());
     return Array.isArray(hits) && hits.length > 0;
   } catch (err) {
-    process.stderr.write(
-      `[Figure-Guard] Warnung: Figure-Lookup fehlgeschlagen (${err.message}). Bypass aktiv.\n`
-    );
-    return true; // fail-open
+    return warnFailOpen('Figure-Guard', 'lookup-error', err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bypass-Nutzung loggen (Issue #381)
+// ---------------------------------------------------------------------------
+
+/**
+ * Protokolliert die Nutzung des Bypass-Markers <!-- vault-guard: skip -->.
+ * Best-effort: Schreibfehler duerfen den Guard nie blockierend machen.
+ * Analog zu writeLogLine() in post-tool-use-decisions.mjs (0600-Rechte,
+ * Env-Var-Override der Logdatei).
+ */
+function logBypassUsage(filePath) {
+  const ts = new Date().toISOString();
+  const line = `${ts} | vault-guard: skip | ${filePath || '(unbekannter Pfad)'}\n`;
+  try {
+    const logDir = dirname(VAULT_GUARD_BYPASS_LOG);
+    if (!existsSync(logDir)) {
+      mkdirSync(logDir, { recursive: true, mode: 0o700 });
+    }
+    appendFileSync(VAULT_GUARD_BYPASS_LOG, line, 'utf-8');
+    chmodSync(VAULT_GUARD_BYPASS_LOG, 0o600);
+  } catch (err) {
+    // Best-effort — das Loggen selbst darf keinen neuen Blocker erzeugen.
+    process.stderr.write(`[Vault-Guard] Bypass-Log-Fehler (ignoriert): ${err.message}\n`);
   }
 }
 
@@ -239,8 +293,12 @@ async function main() {
     process.exit(0);
   }
 
-  // Bypass-Flag
+  // Bypass-Flag — Nutzung wird sichtbar gemacht (Issue #381: kein stiller Bypass mehr).
   if (content.includes('<!-- vault-guard: skip -->')) {
+    process.stderr.write(
+      `[Vault-Guard] Warnung: Bypass-Marker verwendet (${filePath || '(unbekannter Pfad)'}) — Zitate/Figures werden NICHT geprueft.\n`
+    );
+    logBypassUsage(filePath);
     process.exit(0);
   }
 
@@ -254,7 +312,6 @@ async function main() {
         `[Vault-Guard] BLOCKIERT: Zitat nicht im Vault verifiziert.`,
         `Zitat: "${truncated}"`,
         `Bitte Zitat über vault.add_quote() oder den quote-extractor einpflegen.`,
-        `Bypass: <!-- vault-guard: skip --> im Content ergänzen (nur für Ausnahmefälle).`,
       ].join('\n');
       process.stderr.write(msg + '\n');
 
@@ -279,7 +336,6 @@ async function main() {
         `[Figure-Guard] BLOCKIERT: Figure-Referenz nicht im Vault verifiziert.`,
         `Referenz: "${refText}"`,
         `Bitte Figure via figure-verifier oder vault.add_figure einpflegen.`,
-        `Bypass: <!-- vault-guard: skip --> im Content ergaenzen (nur fuer Ausnahmefaelle).`,
       ].join('\n');
       process.stderr.write(msg + '\n');
       console.log(JSON.stringify({

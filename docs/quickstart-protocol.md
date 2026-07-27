@@ -189,7 +189,6 @@ $ node hooks/verbatim-guard.mjs   # Write auf kapitel/01-einleitung.md
 [Vault-Guard] BLOCKIERT: Zitat nicht im Vault verifiziert.
 Zitat: "Transformer sind das Ende der Rekurrenz"
 Bitte Zitat über vault.add_quote() oder den quote-extractor einpflegen.
-Bypass: <!-- vault-guard: skip --> im Content ergänzen (nur für Ausnahmefälle).
 -> exit 2 (blockiert)
 ```
 
