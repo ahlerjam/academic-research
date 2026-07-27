@@ -242,14 +242,83 @@ class TestEdgeCases:
         assert chunks[0].page_start == 1
         assert chunks[0].page_end == 2
 
-    def test_heading_line_is_detected_and_not_counted_as_body_word(self):
+    def test_heading_line_is_detected_and_still_part_of_the_body(self):
+        """Eine Ueberschrift setzt den ``section_title`` UND bleibt im Chunk-Text.
+
+        Die Heading-Erkennung ist eine reine Metadaten-Annotation: sie darf
+        Zeilen markieren, aber niemals aus dem Wortstrom entfernen (siehe
+        :class:`TestHeadingHeuristicIsNonDestructive`)."""
         from academic_vault.chunking import chunk_pages
 
         text = "1 Introduction\n" + " ".join(f"word{i}" for i in range(20))
         chunks = chunk_pages([(1, text)])
         assert len(chunks) == 1
         assert chunks[0].section_title == "1 Introduction"
-        assert "Introduction" not in chunks[0].chunk_text.split()
+        assert chunks[0].chunk_text.split()[:2] == ["1", "Introduction"]
+
+
+class TestHeadingHeuristicIsNonDestructive:
+    """Die Heading-Heuristik darf NIE Inhalt verschlucken.
+
+    Sie ist zwangslaeufig unscharf: PDF-Textextraktion bricht Zeilen nach
+    Layout, weshalb ganz normale Fliesstext-Zeilen aus ein bis zwei
+    grossgeschriebenen Woertern ohne Satzzeichen bestehen koennen ("Smith",
+    "However", "Deep Learning" -- Absatzende, umbrochener Eigenname,
+    Literaturliste). Ein False Positive darf deshalb hoechstens das Label
+    ``section_title`` verfaelschen, niemals Woerter aus dem Retrieval-Body
+    entfernen: verlorener Text ist in keinem spaeteren Schritt rekonstruierbar.
+    """
+
+    def test_false_positive_lines_keep_their_words_in_the_body(self):
+        from academic_vault.chunking import chunk_pages
+
+        text = (
+            "Die Ergebnisse wurden mehrfach repliziert, unter anderem von\n"
+            "Smith\n"
+            "und Kollegen im selben Zeitraum. Der Effekt blieb stabil.\n"
+            "However\n"
+            "the sample size remained small. Vergleiche dazu auch\n"
+            "Deep Learning\n"
+            "als methodischen Gegenentwurf.\n"
+        )
+        body = chunk_pages([(1, text)])[0].chunk_text.split()
+        for token in ("Smith", "However", "Deep", "Learning"):
+            assert token in body, f"'{token}' wurde stillschweigend verworfen: {body}"
+
+    def test_every_input_word_survives_into_the_chunk_stream(self):
+        """Verlustfreiheit als Invariante: der aus den Chunks rekonstruierte
+        Wortstrom ist exakt der Eingabe-Wortstrom -- inklusive aller Zeilen,
+        welche die Heuristik (zu Recht oder zu Unrecht) als Heading einstuft."""
+        from academic_vault.chunking import chunk_pages
+
+        lines = ["1 Introduction"]
+        for i in range(600):
+            lines.append(f"word{i}")
+            if i % 97 == 0:
+                # Zeilen, die wie eine Ueberschrift aussehen, aber Fliesstext sind.
+                lines.append(f"However{i}")
+        text = "\n".join(lines)
+        expected = text.split()
+
+        chunks = chunk_pages([(1, text)])
+        assert len(chunks) > 1, "Testdokument muss mehrere Chunks erzeugen"
+
+        reconstructed = chunks[0].chunk_text.split()
+        for previous, current in zip(chunks, chunks[1:], strict=False):
+            overlap = _shared_word_run(previous.chunk_text.split(), current.chunk_text.split())
+            reconstructed.extend(current.chunk_text.split()[overlap:])
+        assert reconstructed == expected
+
+    def test_false_positive_only_affects_the_section_label(self):
+        """Ein False Positive bleibt folgenlos fuer den Inhalt und wirkt sich
+        ausschliesslich auf das Metadatenfeld ``section_title`` aus."""
+        from academic_vault.chunking import chunk_pages
+
+        text = "1 Introduction\nSmith\n" + " ".join(f"word{i}" for i in range(20))
+        chunks = chunk_pages([(1, text)])
+        assert len(chunks) == 1
+        assert chunks[0].section_title == "1 Introduction"
+        assert chunks[0].chunk_text.split()[:3] == ["1", "Introduction", "Smith"]
 
 
 class TestChunkPagesAcceptsExplicitContextProvider:

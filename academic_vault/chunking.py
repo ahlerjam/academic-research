@@ -45,9 +45,12 @@ DEFAULT_SECTION_TITLE = "Unbenannter Abschnitt"
 # Section-Heading-Heuristik: eine Zeile gilt als Ueberschrift, wenn sie
 # (a) optional mit einer Nummerierung ("1", "2.3", "1.") beginnt und
 # (b) danach ausschliesslich aus 1-7 Woertern besteht, die jeweils mit einem
-#     Grossbuchstaben starten (Title Case) -- normale Fliesstext-Saetze
-#     beginnen zwar auch grossgeschrieben, aber nicht mehrere Woerter in
-#     Folge. Kein Satzzeichen am Ende (Ueberschriften enden selten mit ".").
+#     Grossbuchstaben starten (Title Case), ohne Satzzeichen am Ende.
+# Bekannte False Positives: PDF-Textextraktion bricht Zeilen nach Layout um,
+# daher passen auch Fliesstext-Reste auf dieses Muster ("Smith", "However",
+# "Deep Learning" -- Absatzende, umbrochener Eigenname, Literaturliste).
+# Das ist akzeptiert, weil die Erkennung folgenlos fuer den Inhalt ist: sie
+# vergibt nur ein Label, siehe :func:`_split_words_with_metadata`.
 _HEADING_RE = re.compile(
     r"^(?:\d+(?:\.\d+)*\.?\s+)?"
     r"[A-ZÄÖÜ][\w\-]*(?:\s+[A-ZÄÖÜ][\w\-]*){0,6}$"
@@ -65,7 +68,11 @@ def count_tokens(text: str) -> int:
 
 
 def _detect_heading(line: str) -> str | None:
-    """Erkennt eine Section-Ueberschrift per Regex-Heuristik. ``None`` sonst."""
+    """Erkennt eine Section-Ueberschrift per Regex-Heuristik. ``None`` sonst.
+
+    Reine Label-Vergabe: der Rueckgabewert entscheidet NICHT darueber, ob die
+    Zeile in den Wortstrom aufgenommen wird (das tut sie immer).
+    """
     stripped = line.strip()
     if not stripped or len(stripped) > _MAX_HEADING_LEN:
         return None
@@ -141,11 +148,23 @@ def _split_words_with_metadata(
 ) -> tuple[list[str], list[int], list[tuple[int, str]]]:
     """Baut den globalen Wortstrom samt Seiten- und Heading-Metadaten.
 
+    Der Wortstrom ist VERLUSTFREI: jede nicht-leere Zeile landet vollstaendig
+    in ``words`` -- auch eine als Ueberschrift erkannte. Die Heading-Erkennung
+    ist bewusst nur eine additive Annotation (sie merkt sich den Wortindex),
+    kein Filter. Grund: die Heuristik ist zwangslaeufig unscharf, weil
+    PDF-Textextraktion Zeilen nach Layout umbricht und dabei ganz normale
+    Fliesstext-Zeilen aus ein bis zwei grossgeschriebenen Woertern ohne
+    Satzzeichen entstehen ("Smith", "However", "Deep Learning"). Wuerde eine
+    solche Zeile aus dem Wortstrom fallen, waere der Text in keinem spaeteren
+    Schritt rekonstruierbar -- stiller Inhaltsverlust. So kostet ein False
+    Positive hoechstens ein falsches ``section_title``-Label.
+
     Returns:
         ``(words, word_pages, headings)`` -- ``word_pages[i]`` ist die
         Seitenzahl von ``words[i]``; ``headings`` ist eine aufsteigend nach
-        Wortindex sortierte Liste ``(word_index, title)`` fuer jede erkannte
-        Ueberschrift (Ueberschriftenzeilen selbst zaehlen NICHT als Body-Wort).
+        Wortindex sortierte Liste ``(word_index, title)``, wobei
+        ``word_index`` auf das ERSTE Wort der Ueberschrift zeigt (die
+        Ueberschrift gehoert damit selbst zu ihrem Abschnitt).
     """
     words: list[str] = []
     word_pages: list[int] = []
@@ -159,7 +178,6 @@ def _split_words_with_metadata(
             heading = _detect_heading(line)
             if heading is not None:
                 headings.append((len(words), heading))
-                continue
             line_words = line.split()
             words.extend(line_words)
             word_pages.extend([page_number] * len(line_words))
