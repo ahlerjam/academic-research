@@ -36,7 +36,7 @@ def test_no_title_case_skill_names_in_prose():
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
-        for name, pattern in zip(TITLE_CASE_NAMES, patterns):
+        for name, pattern in zip(TITLE_CASE_NAMES, patterns, strict=False):
             for match in pattern.finditer(text):
                 line_num = text[: match.start()].count("\n") + 1
                 violations.append(f"{path.relative_to(REPO_ROOT)}:{line_num}: '{name}'")

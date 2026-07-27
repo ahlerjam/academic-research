@@ -11,6 +11,7 @@ Verwendbar auch als Modul (fuer Tests und den Skill selbst).
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import sys
@@ -28,12 +29,7 @@ try:
 except ImportError:
     _REQUESTS_AVAILABLE = False
 
-try:
-    import anthropic as _anthropic_module
-
-    _ANTHROPIC_AVAILABLE = True
-except ImportError:
-    _ANTHROPIC_AVAILABLE = False
+_ANTHROPIC_AVAILABLE = importlib.util.find_spec("anthropic") is not None
 
 # book_resolve ist im scripts/-Verzeichnis des Repos
 _REPO_SCRIPTS = Path(__file__).resolve().parent.parent.parent.parent / "scripts"
@@ -173,11 +169,11 @@ def _extract_pdf(file_path: str) -> str:
         from pdfminer.high_level import extract_text as _pdfminer_extract  # type: ignore
 
         return _pdfminer_extract(file_path)
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "PDF-Extraktion benoetigt pypdf oder pdfminer.six: "
             "pip install pypdf  ODER  pip install pdfminer.six"
-        )
+        ) from err
 
 
 def extract_text(file_path: str) -> str:

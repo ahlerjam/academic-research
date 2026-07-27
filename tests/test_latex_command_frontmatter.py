@@ -65,7 +65,7 @@ def test_frontmatter_has_closing_dashes():
     text = COMMAND_FILE.read_text(encoding="utf-8")
     lines = text.splitlines()
     assert lines[0].strip() == "---", "Kein oeffnendes ---"
-    closing = next((i for i, l in enumerate(lines[1:], start=1) if l.strip() == "---"), None)
+    closing = next((i for i, line in enumerate(lines[1:], start=1) if line.strip() == "---"), None)
     assert closing is not None, "commands/latex.md hat kein schliessendes --- im Frontmatter"
 
 

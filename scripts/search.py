@@ -304,7 +304,7 @@ def search_base(query: str, limit: int) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for item in items[:limit]:
 
-        def dc(fld: str) -> str | None:
+        def dc(fld: str, item=item) -> str | None:
             val = item.get(fld)
             return val[0] if isinstance(val, list) and val else val
 

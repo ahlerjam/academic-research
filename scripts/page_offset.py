@@ -22,8 +22,10 @@ def _get_pdf_reader():
         from pypdf import PdfReader
 
         return PdfReader
-    except ImportError:
-        raise ImportError("Kein PDF-Lesemodul verfuegbar. Bitte 'pip install pypdf' ausfuehren.")
+    except ImportError as err:
+        raise ImportError(
+            "Kein PDF-Lesemodul verfuegbar. Bitte 'pip install pypdf' ausfuehren."
+        ) from err
 
 
 def _extract_page_number(text: str) -> int | None:

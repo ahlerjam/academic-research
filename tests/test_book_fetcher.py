@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 import yaml
 
+from tests.helpers.book_fetcher_router import BookFetcherRouter
+
 # Path to fixtures
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "book_fetcher_mocks"
 
@@ -22,10 +24,6 @@ def _load_json(name):
 
 def _load_yaml(name):
     return yaml.safe_load((FIXTURES / name).read_text())
-
-
-# Import will fail until Task 3 creates the module -- that's expected (RED)
-from tests.helpers.book_fetcher_router import BookFetcherRouter
 
 
 class TestBookFetcherInputParsing(unittest.TestCase):

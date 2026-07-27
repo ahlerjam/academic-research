@@ -74,7 +74,7 @@ def test_plugin_json_valid_json():
     try:
         json.loads(PLUGIN_JSON.read_text())
     except json.JSONDecodeError as e:
-        raise AssertionError(f"plugin.json ist kein valides JSON: {e}")
+        raise AssertionError(f"plugin.json ist kein valides JSON: {e}") from e
 
 
 def test_marketplace_json_valid_json():
@@ -82,4 +82,4 @@ def test_marketplace_json_valid_json():
     try:
         json.loads(MARKETPLACE_JSON.read_text())
     except json.JSONDecodeError as e:
-        raise AssertionError(f"marketplace.json ist kein valides JSON: {e}")
+        raise AssertionError(f"marketplace.json ist kein valides JSON: {e}") from e

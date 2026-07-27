@@ -95,7 +95,7 @@ class TestSmokeImport:
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(single_item)
-            with patch("zotero_pull.ensure_file") as mock_ensure:
+            with patch("zotero_pull.ensure_file"):
                 result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1

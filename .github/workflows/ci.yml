@@ -115,10 +115,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: ruff check
-        # Nicht-blockierend mit Begruendung (flowkit Stufe 0, 2026-07-24): nach 327
-        # Auto-Fixes verbleiben 60 Findings. Blockierend schalten, sobald #340
-        # abgearbeitet ist.
-        continue-on-error: true
+        # Blockierend seit #340: 0 Findings lokal verifiziert.
         run: uv run ruff check .
       - name: ruff format --check
         # Blockierend seit Stufe-0-Hygiene (flowkit): Format-Stand ist sauber.

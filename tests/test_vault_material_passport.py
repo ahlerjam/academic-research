@@ -6,12 +6,8 @@ TDD-First: Tests definieren das erwuenschte Verhalten.
 import json
 import os
 import tempfile
-from pathlib import Path
 
 import pytest
-
-_WORKTREE_ROOT = Path(__file__).parent.parent
-
 from academic_vault import server as vault_server
 from academic_vault.db import VaultDB, VaultLockedError
 
