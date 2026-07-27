@@ -29,6 +29,9 @@
  *   VAULT_DB_PATH                 — Pfad zur Vault-DB
  *   ACADEMIC_REINFORCEMENT_STATE  — Pfad zur State-Datei (default: ~/.academic-research/reinforcement-state.json)
  *   ACADEMIC_REINFORCEMENT_N      — Trigger-Interval (default: 20)
+ *   ACADEMIC_PYTHON               — Interpreter fuer den Vault-Lookup (siehe pythonCandidates)
+ *
+ * Live-Nachweis der Kontext-Injection: scripts/dev/verify_reinforcement_context.py
  */
 
 import { execFileSync } from 'node:child_process';
@@ -113,6 +116,37 @@ function saveState(state) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Liefert die Interpreter-Kandidaten fuer den Vault-Lookup, in Prioritaets-
+ * reihenfolge und dedupliziert.
+ *
+ * Hintergrund (#382, AC1): Hooks erben in einer echten Claude-Code-Session die
+ * PATH des Nutzers — dort steht in aller Regel das System-Python (macOS:
+ * /usr/bin/python3 == 3.9), das `academic_vault` mangels PEP-604-Syntax nicht
+ * einmal importieren kann. Ein blosses `python3` liess den Lookup deshalb
+ * scheitern und der Hook injizierte nur die leere Huelle
+ * "(keine aktiven Decisions)". In der Testsuite fiel das nie auf, weil
+ * `uv run pytest` das venv-Python an den PATH-Anfang stellt.
+ *
+ *   1. ACADEMIC_PYTHON        — expliziter Override (conda/pyenv/Systempakete)
+ *   2. $VIRTUAL_ENV/bin/python — aktives venv (uv run, aktivierte Shell, CI)
+ *   3. ~/.academic-research/venv/bin/python — kanonisches Setup-venv, dasselbe,
+ *      das hooks.json im SessionStart-Block prueft (/academic-research:setup)
+ *   4. python3                 — PATH-Fallback (bisheriges Verhalten)
+ */
+function pythonCandidates() {
+  const candidates = [];
+  if (process.env.ACADEMIC_PYTHON) {
+    candidates.push(process.env.ACADEMIC_PYTHON);
+  }
+  if (process.env.VIRTUAL_ENV) {
+    candidates.push(join(process.env.VIRTUAL_ENV, 'bin', 'python'));
+  }
+  candidates.push(join(os.homedir(), '.academic-research', 'venv', 'bin', 'python'));
+  candidates.push('python3');
+  return [...new Set(candidates)];
+}
+
+/**
  * Laedt Top-N aktive Decisions aus dem Vault.
  * Gibt leeres Array bei Fehler oder fehlendem Vault (fail-open).
  */
@@ -130,17 +164,29 @@ function loadTopDecisions() {
     `print(json.dumps(decisions[:${MAX_DECISIONS}]))`,
   ].join('; ');
 
-  try {
-    const output = execFileSync('python3', ['-c', pyCode, VAULT_DB], {
-      encoding: 'utf-8',
-      timeout: 10000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    return JSON.parse(output.trim()) || [];
-  } catch (err) {
-    process.stderr.write(`[Reinforcement] Vault-Lookup fehlgeschlagen: ${err.message}\n`);
-    return [];
+  const failures = [];
+  for (const python of pythonCandidates()) {
+    // Absolute Kandidaten vorab pruefen; 'python3' bleibt eine PATH-Aufloesung.
+    if (python.includes(path.sep) && !existsSync(python)) {
+      failures.push(`${python}: nicht vorhanden`);
+      continue;
+    }
+    try {
+      const output = execFileSync(python, ['-c', pyCode, VAULT_DB], {
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      return JSON.parse(output.trim()) || [];
+    } catch (err) {
+      failures.push(`${python}: ${err.message.split('\n')[0]}`);
+    }
   }
+
+  process.stderr.write(
+    `[Reinforcement] Vault-Lookup mit keinem Interpreter moeglich: ${failures.join(' | ')}\n`
+  );
+  return [];
 }
 
 // ---------------------------------------------------------------------------

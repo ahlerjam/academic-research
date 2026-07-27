@@ -11,8 +11,12 @@ Exit 0 immer.
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "mid-session-reinforcement.mjs"
 WORKTREE_ROOT = Path(__file__).parent.parent
@@ -32,6 +36,47 @@ def run_hook(payload: dict, env_overrides: dict = None) -> subprocess.CompletedP
         env=env,
         timeout=15,
     )
+
+
+def make_unusable_python3_path(tmp_path) -> str:
+    """PATH, dessen `python3` den Vault-Import nicht leisten kann.
+
+    Bildet die reale Endnutzer-Situation nach: in einer echten Claude-Code-Session
+    erbt der Hook die Shell-PATH des Nutzers, dort steht typischerweise das
+    System-Python (macOS: /usr/bin/python3 == 3.9), das `academic_vault` mangels
+    PEP-604-Syntax gar nicht importieren kann. Der Stub scheitert wie dieses
+    Interpreter-Exemplar: Exit != 0 mit Traceback auf stderr.
+
+    Der PATH enthaelt zusaetzlich das Verzeichnis von `node`, damit der Hook
+    ueberhaupt startbar bleibt.
+    """
+    bin_dir = tmp_path / "fakebin"
+    bin_dir.mkdir()
+    stub = bin_dir / "python3"
+    stub.write_text(
+        "#!/bin/sh\n"
+        "echo 'Traceback (most recent call last):' >&2\n"
+        "echo \"TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'\" >&2\n"
+        "exit 1\n"
+    )
+    stub.chmod(0o755)
+
+    node_bin = shutil.which("node")
+    if node_bin is None:  # pragma: no cover - node ist Testvoraussetzung
+        pytest.skip("node nicht im PATH")
+    return f"{bin_dir}:{Path(node_bin).parent}"
+
+
+def make_vault_with_decision(tmp_path, text: str) -> str:
+    """Legt eine Vault-DB mit genau einer aktiven Decision an und gibt den Pfad zurueck."""
+    from academic_vault.db import VaultDB
+    from academic_vault.server import add_decision
+
+    db_path = str(tmp_path / "test_vault.db")
+    db = VaultDB(db_path)
+    db.init_schema()
+    add_decision(db_path, category="Zitierstil", text=text, rationale=None)
+    return db_path
 
 
 def test_hook_exits_zero_always():
@@ -292,6 +337,118 @@ def test_hook_no_trigger_on_sessionstart_without_compact_source(tmp_path):
     combined = result.stdout + result.stderr
     assert "Aktive Decisions" not in combined, (
         f"Unerwarteter Hint bei SessionStart/startup: {combined}"
+    )
+
+
+def test_hook_injects_real_decisions_when_path_python3_cannot_import_vault(tmp_path):
+    """Der injizierte Hinweis muss die ECHTEN Decisions enthalten (AC1, #382).
+
+    Regression-Test fuer die Luecke aus dem PR-#420-Review: dass der Hook auf
+    einem Context-Injection-Event haengt, garantiert noch nicht, dass beim Modell
+    etwas Brauchbares ankommt. Der Vault-Lookup laeuft als Subprozess ueber
+    `python3` aus dem PATH — in einer echten Session ist das das System-Python
+    (macOS 3.9), das `academic_vault` nicht importieren kann. Folge: der Hook
+    injiziert zwar Text, aber nur die leere Huelle "(keine aktiven Decisions)",
+    obwohl der Vault gefuellt ist. Der Reinforcement-Hinweis waere damit
+    faktisch weiterhin wirkungslos.
+
+    Erwartung: der Hook faellt auf den kanonischen Setup-Interpreter
+    `~/.academic-research/venv/bin/python` zurueck (dasselbe venv, das
+    hooks.json im SessionStart-Block prueft) und liefert die Decision aus.
+    """
+    marker = "APA 7th Edition verwenden"
+    db_path = make_vault_with_decision(tmp_path, marker)
+
+    # HOME umbiegen: Node's os.homedir() folgt $HOME, damit bleibt der Test
+    # hermetisch und unabhaengig vom echten Setup-venv der Maschine.
+    home = tmp_path / "home"
+    venv_bin = home / ".academic-research" / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").symlink_to(sys.executable)
+
+    result = run_hook(
+        {"hook_event_name": "UserPromptSubmit"},
+        env_overrides={
+            "HOME": str(home),
+            "PATH": make_unusable_python3_path(tmp_path),
+            # Aktives venv des Testlaufs ausblenden: sonst wuerde der
+            # uv-Interpreter den Lookup retten und der Test bewiese nichts
+            # ueber den kanonischen Setup-Pfad.
+            "VIRTUAL_ENV": "",
+            "VAULT_DB_PATH": db_path,
+            "ACADEMIC_REINFORCEMENT_STATE": str(tmp_path / "state.json"),
+            "ACADEMIC_REINFORCEMENT_N": "1",
+        },
+    )
+
+    assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+    assert marker in result.stdout, (
+        "Der injizierte Kontext enthaelt die aktive Decision nicht — der Hook hat "
+        f"nur eine leere Huelle ausgegeben. stdout={result.stdout!r}, stderr={result.stderr!r}"
+    )
+    assert "(keine aktiven Decisions)" not in result.stdout, (
+        f"Leerer Reminder trotz gefuelltem Vault: {result.stdout!r}"
+    )
+
+
+def test_hook_honours_academic_python_override(tmp_path):
+    """`ACADEMIC_PYTHON` erzwingt einen bestimmten Interpreter fuer den Vault-Lookup.
+
+    Explizite Escape-Hatch fuer Setups, in denen weder PATH-`python3` noch das
+    kanonische Setup-venv passt (z. B. conda, pyenv, Systempakete).
+    """
+    marker = "Systematisches Review nach PRISMA"
+    db_path = make_vault_with_decision(tmp_path, marker)
+
+    # Kein Setup-venv unter HOME -> nur der Override kann greifen.
+    home = tmp_path / "home"
+    home.mkdir()
+
+    result = run_hook(
+        {"hook_event_name": "UserPromptSubmit"},
+        env_overrides={
+            "HOME": str(home),
+            "PATH": make_unusable_python3_path(tmp_path),
+            "VIRTUAL_ENV": "",
+            "ACADEMIC_PYTHON": sys.executable,
+            "VAULT_DB_PATH": db_path,
+            "ACADEMIC_REINFORCEMENT_STATE": str(tmp_path / "state.json"),
+            "ACADEMIC_REINFORCEMENT_N": "1",
+        },
+    )
+
+    assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+    assert marker in result.stdout, (
+        f"ACADEMIC_PYTHON-Override wurde ignoriert: stdout={result.stdout!r}, "
+        f"stderr={result.stderr!r}"
+    )
+
+
+def test_hook_failopen_when_no_python_interpreter_works(tmp_path):
+    """Faellt jeder Kandidat aus, bleibt der Hook fail-open (exit 0, kein Crash)."""
+    db_path = make_vault_with_decision(tmp_path, "Wird nicht geladen")
+
+    home = tmp_path / "home"
+    home.mkdir()
+
+    result = run_hook(
+        {"hook_event_name": "UserPromptSubmit"},
+        env_overrides={
+            "HOME": str(home),
+            "PATH": make_unusable_python3_path(tmp_path),
+            "VIRTUAL_ENV": "",
+            "ACADEMIC_PYTHON": str(tmp_path / "gibt-es-nicht" / "python"),
+            "VAULT_DB_PATH": db_path,
+            "ACADEMIC_REINFORCEMENT_STATE": str(tmp_path / "state.json"),
+            "ACADEMIC_REINFORCEMENT_N": "1",
+        },
+    )
+
+    assert result.returncode == 0, (
+        f"Erwartet 0 (fail-open), got {result.returncode}. stderr: {result.stderr}"
+    )
+    assert "(keine aktiven Decisions)" in result.stdout, (
+        f"Fail-open-Reminder fehlt: stdout={result.stdout!r}"
     )
 
 
