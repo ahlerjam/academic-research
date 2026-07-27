@@ -104,6 +104,10 @@ Fallback: minimales CSL-JSON aus geparsten Daten
     ↓
 Vault.add_paper() für jeden Eintrag (Dedup via DOI/ISBN)
     ↓
+Retraction-Check (nur bei DOI): Crossref update-type:retraction
+    ↓ (Treffer)
+Vault.add_excluded_source() markiert das Paper automatisch
+    ↓
 Ergebnis: N importiert, M übersprungen, Fehler
 ```
 
@@ -127,8 +131,11 @@ und vervollständigt das Ergebnis.
 3. LLM-Parser aufrufen (Sonnet) — extrahiert strukturierte Liste
 4. Für jeden Eintrag: DOI/ISBN resolven → CSL-JSON
 5. `vault.add_paper()` aufrufen (idempotent: Dedup via DOI/ISBN)
-6. Bei Mehrdeutigkeit (_ambiguous: true): AskUserQuestion-Tool nutzen
-7. Ergebnis melden: N importiert, M übersprungen
+6. Bei vorhandenem DOI: Retraction-Status via Crossref prüfen (`update-to`-Feld,
+   `type: retraction`) — Treffer → `vault.add_excluded_source()`, Ausfall
+   blockiert den Ingest nicht (fail-safe)
+7. Bei Mehrdeutigkeit (_ambiguous: true): AskUserQuestion-Tool nutzen
+8. Ergebnis melden: N importiert, M übersprungen
 
 ## Mehrdeutigkeiten
 
@@ -150,6 +157,8 @@ Auswahl (Nummer):
 - **Kein Schreiben in externe Systeme**: Nur Vault lokal
 - **Credentials**: Anthropic-Key nur aus `~/.academic-research/config.yaml` (0600)
 - **Keine PDFs heruntergeladen**: Nur Metadaten werden im Vault gespeichert
+- **Retraction-Check**: kostenloser Crossref-Call bei DOI (`network_allowlist`
+  bereits vorhanden); Treffer → automatisch `excluded_source`, kein Hard-Fail
 
 ## Bekannte Einschränkungen
 
