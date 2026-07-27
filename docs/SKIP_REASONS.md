@@ -19,8 +19,6 @@ Skip soll wegfallen, sobald das genannte Artefakt vorhanden ist.
 | `tests/evals/test_triggers.py` | Keine `trigger_evals.json` für Skill | `Keine trigger_evals.json fuer <skill>` | permanent |
 | `tests/evals/test_token_regression.py` | Keine Token-Baseline erfasst | `tokens.json fehlt -- noch keine Baseline` | permanent |
 | `tests/evals/test_*_evals.py` | Prompt nicht für aktiven Mode | `Prompt <id> nicht fuer Mode <mode>` | permanent |
-| `tests/test_vault_skeleton.py` | `db.py` Vault-Skeleton optional | `db.py noch nicht implementiert` | todo:vault-skeleton (#217) |
-| `tests/test_vault_skeleton.py` | `files_api.py` Vault-Skeleton optional | `files_api.py noch nicht implementiert` | todo:vault-skeleton (#217) |
 | `tests/test_ocr_detection.py` | `ocr.py` noch nicht vorhanden | `ocr.py noch nicht implementiert` | todo:ocr |
 | `tests/test_publisher_fetchers.py` | `evals.json` für Publisher fehlt | `evals.json noch nicht vorhanden` | todo:publisher-evals |
 | `tests/test_page_offset.py` | Fixture/Asset fehlt | (mehrzeilig) | todo:page-offset-fixture |

@@ -117,6 +117,7 @@ Wave 1: Universal Book Fetcher — 11 PRs (Tickets #131–#141).
 - **book-fetcher Master-Agent (#137):** Orchestriert Site-Subagenten. Strategie basiert auf Input-Typ (OA, Verlags, unbekannt) und Per-Uni-Profil. Strikt sequentiell (single Browser-Session).
 - **auth-helper Subagent (#136):** Gemeinsamer Auth-Agent für alle Site-Subagenten. Unterstützt HAN, Shibboleth-WAYF, EZproxy, DFN-AAI.
 - **Per-Uni-Profile (#133):** `library-profiles/<uni>.yaml`. Mitgelieferte Profile: Leibniz FH, TU München, RWTH Aachen, FAU Erlangen-Nürnberg. Templates: HAN, Shibboleth, EZproxy, OA-only. Setup fragt beim Erstaufruf nach Uni.
+  > Anmerkung (#387, nachträglich): Das damalige Profil-Set wurde seither ersetzt. Unter `config/library-profiles/` liegen heute `eth-zurich`, `fu-berlin`, `tum`, `uni-hamburg`, `uni-wien` — dieser historische Log-Eintrag bleibt unverändert stehen, beschreibt aber nicht mehr den aktuellen Bestand.
 - **`/academic-research:fetch` Command (#140):** Parst ISBN/DOI/URL/Freitext, startet `book-fetcher`, schreibt Ergebnis in Vault. Bei `captcha`: Screenshot + User-Handoff. Bei `pickup_required`: Eintrag in Pickup-Liste.
 - **`/academic-research:pickup` Command (#141):** Erzeugt Bibliotheks-Pickup-Excel aus nicht-OA-Quellen. 4 Sheets: Vor-Ort / Fernleihe / OA / Lizenz. OPAC-Standort + Code128-Barcode.
 - **OA-Site-Subagenten (#134):** TIB, OAPEN, DOAB, KVK mit Tests und Evals.
