@@ -75,6 +75,72 @@ def test_large_offset_twenty_five():
 
 
 # ---------------------------------------------------------------------------
+# /PageLabels-Baum Tests (#384)
+# ---------------------------------------------------------------------------
+
+
+def test_page_labels_arabic_start_offset():
+    """PDF mit /PageLabels-Baum (3 Roemisch-Vorseiten + Decimal ab Index 3,
+    Start 1) und OHNE extrahierbaren Seiten-Text: offset=3 muss direkt aus
+    dem Label-Baum kommen, ein Test-Erfolg ueber die Text-Heuristik ist
+    ausgeschlossen, da die Seiten keinen Text enthalten (AC1)."""
+    from page_offset import detect_page_offset
+
+    pdf = _require_fixture("page_labels.pdf")
+    offset = detect_page_offset(str(pdf))
+    assert offset == 3, f"Erwartet offset=3 aus /PageLabels-Baum, erhalten {offset}"
+
+
+def test_detect_offset_from_page_labels_direct():
+    """_detect_offset_from_page_labels() liefert den Offset direkt (ohne
+    Umweg ueber detect_page_offset) fuer ein PDF mit Label-Baum."""
+    from page_offset import _detect_offset_from_page_labels
+
+    pdf = _require_fixture("page_labels.pdf")
+    result = _detect_offset_from_page_labels(str(pdf))
+    assert result == 3, f"Erwartet 3, erhalten {result}"
+
+
+def test_no_page_labels_falls_back_without_error():
+    """PDF ohne /PageLabels-Baum: _detect_offset_from_page_labels() liefert
+    None (kein Fehler), detect_page_offset() faellt auf die bestehende
+    Text-Heuristik zurueck (AC2)."""
+    from page_offset import _detect_offset_from_page_labels, detect_page_offset
+
+    pdf = _require_fixture("no_preface.pdf")
+    assert _detect_offset_from_page_labels(str(pdf)) is None
+    offset = detect_page_offset(str(pdf))
+    assert offset == 0, f"Erwartet offset=0 (Fallback-Heuristik), erhalten {offset}"
+
+
+def test_page_labels_to_vault_get_printed_page():
+    """Label-Fixture end-to-end: detect_page_offset() -> add_paper() ->
+    server.set_page_offset() -> server.get_printed_page() liefert die
+    korrekte gedruckte Seite (AC3)."""
+    import json
+    import tempfile
+
+    from academic_vault.server import add_paper, get_printed_page
+    from academic_vault.server import set_page_offset as srv_set_offset
+    from page_offset import detect_page_offset
+
+    pdf = _require_fixture("page_labels.pdf")
+    offset = detect_page_offset(str(pdf))
+    assert offset == 3
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        db_path = tf.name
+
+    csl = json.dumps({"type": "book", "title": "PageLabels Test"})
+    add_paper(db_path, "page_labels_test_2024", csl)
+    srv_set_offset(db_path, "page_labels_test_2024", offset)
+
+    # pdf_page=6 (1-basiert) -> printed_page = 6 - 3 = 3
+    result = get_printed_page(db_path, "page_labels_test_2024", pdf_page=6)
+    assert result == 3, f"Erwartet 3, erhalten {result}"
+
+
+# ---------------------------------------------------------------------------
 # validate_offset Tests
 # ---------------------------------------------------------------------------
 

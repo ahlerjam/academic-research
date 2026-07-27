@@ -1,11 +1,14 @@
-"""Erzeugt 5 synthetische PDF-Fixtures fuer page_offset-Tests.
+"""Erzeugt synthetische PDF-Fixtures fuer page_offset-Tests.
 
 Aufruf: python tests/fixtures/page_offset/create_fixtures.py
-Benoetigt: reportlab (pip install reportlab)
+Benoetigt: reportlab (pip install reportlab) fuer die Text-Heuristik-Fixtures,
+pypdf (bereits im Stack) fuer die /PageLabels-Fixture.
 """
 
 from pathlib import Path
 
+from pypdf import PdfWriter
+from pypdf.constants import PageLabelStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
@@ -82,6 +85,25 @@ def create_large_offset(path: Path) -> None:
     c.save()
 
 
+def create_page_labels(path: Path) -> None:
+    """PDF mit eingebettetem /PageLabels-Baum (#384): 3 Roemisch-Vorseiten
+    (Label-Stil lowercase-roman, Start 1) + Decimal-Segment ab Index 3
+    (Start 1), macht 10 Seiten gesamt.
+
+    Seiten sind bewusst leer (kein drawString/extrahierbarer Text), damit ein
+    Test-Erfolg nur ueber den /PageLabels-Baum moeglich ist -- kein
+    Zufallstreffer der Text-Heuristik. Erwarteter offset=3
+    (pdf_page_1basiert(4) - start_value(1) = 3).
+    """
+    writer = PdfWriter()
+    for _ in range(10):
+        writer.add_blank_page(width=595, height=842)  # A4 in pt
+    writer.set_page_label(0, 2, style=PageLabelStyle.LOWERCASE_ROMAN, start=1)
+    writer.set_page_label(3, 9, style=PageLabelStyle.DECIMAL, start=1)
+    with open(path, "wb") as f:
+        writer.write(f)
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     create_no_preface(OUT / "no_preface.pdf")
@@ -89,4 +111,5 @@ if __name__ == "__main__":
     create_roman_numerals(OUT / "roman_numerals.pdf")
     create_double_pagination(OUT / "double_pagination.pdf")
     create_large_offset(OUT / "large_offset.pdf")
-    print(f"5 Fixtures erstellt in {OUT}")
+    create_page_labels(OUT / "page_labels.pdf")
+    print(f"6 Fixtures erstellt in {OUT}")
