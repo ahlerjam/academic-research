@@ -124,9 +124,7 @@ jobs:
         # Blockierend seit Stufe-0-Hygiene (flowkit): Format-Stand ist sauber.
         run: uv run ruff format --check .
       - name: mypy
-        # Nicht-blockierend mit Begruendung (flowkit Stufe 0): 33 Fehler offen.
-        # Blockierend schalten, sobald #341 abgearbeitet ist.
-        continue-on-error: true
+        # Blockierend seit #341: 0 Fehler lokal verifiziert.
         run: uv run mypy
 
   # 4c. flowkit-Hook-Harness: testet die DEPLOYTE Blocker-Datei, nicht das Template (#343)

@@ -1030,7 +1030,9 @@ def _build_mcp_server():
     db_path = _DEFAULT_DB
 
     @mcp.tool(name="vault.search")
-    def _vault_search(query: str, type: str = None, k: int = 5, rerank: bool = False) -> list[dict]:
+    def _vault_search(
+        query: str, type: str | None = None, k: int = 5, rerank: bool = False
+    ) -> list[dict]:
         """Hybrid-Suche in papers. rerank=True aktiviert RRF + optionalen Voyage/Cohere-Reranker."""
         return search_papers(db_path, query, type_filter=type, k=k, rerank=rerank)
 
@@ -1048,17 +1050,17 @@ def _build_mcp_server():
     def _vault_add_paper(
         paper_id: str,
         csl_json: str,
-        pdf_path: str = None,
-        doi: str = None,
-        isbn: str = None,
+        pdf_path: str | None = None,
+        doi: str | None = None,
+        isbn: str | None = None,
         page_offset: int = 0,
-        editor: str = None,
-        chapter: str = None,
-        page_first: int = None,
-        page_last: int = None,
-        container_title: str = None,
-        parent_paper_id: str = None,
-        provenance: str = None,
+        editor: str | None = None,
+        chapter: str | None = None,
+        page_first: int | None = None,
+        page_last: int | None = None,
+        container_title: str | None = None,
+        parent_paper_id: str | None = None,
+        provenance: str | None = None,
     ) -> None:
         """Upsert eines Papers. type aus csl_json; book|chapter|article-journal erlaubt.
 
@@ -1086,10 +1088,10 @@ def _build_mcp_server():
         parent_paper_id: str,
         chapter_number: int,
         csl_json: str,
-        paper_id: str = None,
-        pdf_path: str = None,
-        page_first: int = None,
-        page_last: int = None,
+        paper_id: str | None = None,
+        pdf_path: str | None = None,
+        page_first: int | None = None,
+        page_last: int | None = None,
     ) -> str:
         """Legt Kapitel als Kind-Paper an. Gibt paper_id zurueck."""
         return add_chapter(
@@ -1113,12 +1115,12 @@ def _build_mcp_server():
         paper_id: str,
         verbatim: str,
         extraction_method: str,
-        api_response_id: str = None,
-        pdf_page: int = None,
-        printed_page: int = None,
-        section: str = None,
-        context_before: str = None,
-        context_after: str = None,
+        api_response_id: str | None = None,
+        pdf_page: int | None = None,
+        printed_page: int | None = None,
+        section: str | None = None,
+        context_before: str | None = None,
+        context_after: str | None = None,
     ) -> str:
         """Fuegt Quote ein. extraction_method='citations-api' erfordert api_response_id."""
         return add_quote(
@@ -1140,7 +1142,7 @@ def _build_mcp_server():
         return search_quote_text(db_path, verbatim, k)
 
     @mcp.tool(name="vault.find_quotes")
-    def _vault_find_quotes(paper_id: str, query: str = None, k: int = 10) -> list[dict]:
+    def _vault_find_quotes(paper_id: str, query: str | None = None, k: int = 10) -> list[dict]:
         """Gibt Quotes fuer ein Paper zurueck."""
         return find_quotes(db_path, paper_id, query=query, k=k)
 
@@ -1185,10 +1187,10 @@ def _build_mcp_server():
     @mcp.tool(name="vault.add_figure")
     def _vault_add_figure(
         paper_id: str,
-        page: int = None,
-        caption: str = None,
-        vlm_description: str = None,
-        data_extracted_json: str = None,
+        page: int | None = None,
+        caption: str | None = None,
+        vlm_description: str | None = None,
+        data_extracted_json: str | None = None,
     ) -> str:
         """Fuegt Figure/Tabelle in Vault ein. Gibt figure_id zurueck."""
         return add_figure(db_path, paper_id, page, caption, vlm_description, data_extracted_json)
@@ -1209,16 +1211,16 @@ def _build_mcp_server():
 
     @mcp.tool(name="vault.add_decision")
     def _vault_add_decision(
-        category: str = None,
+        category: str | None = None,
         text: str = "",
-        rationale: str = None,
+        rationale: str | None = None,
     ) -> str:
         """Fuegt Decision in den Vault ein. Gibt decision_id zurueck."""
         return add_decision(db_path, category=category, text=text, rationale=rationale)
 
     @mcp.tool(name="vault.list_decisions")
     def _vault_list_decisions(
-        category: str = None,
+        category: str | None = None,
         active_only: bool = True,
     ) -> list[dict]:
         """Gibt Decisions zurueck. Optionaler category-Filter, active_only-Flag."""
@@ -1230,7 +1232,7 @@ def _build_mcp_server():
         supersede_decision(db_path, decision_id=decision_id, superseded_by=superseded_by)
 
     @mcp.tool(name="vault.add_excluded_source")
-    def _vault_add_excluded_source(paper_id: str, reason: str = None) -> None:
+    def _vault_add_excluded_source(paper_id: str, reason: str | None = None) -> None:
         """Fuegt paper_id zu excluded_sources hinzu (verhindert Re-Vorschlag)."""
         add_excluded_source(db_path, paper_id=paper_id, reason=reason)
 
@@ -1260,7 +1262,7 @@ def _build_mcp_server():
         )
 
     @mcp.tool(name="vault.list_risk_of_bias")
-    def _vault_list_risk_of_bias(paper_id: str = None) -> list[dict]:
+    def _vault_list_risk_of_bias(paper_id: str | None = None) -> list[dict]:
         """Gibt RoB-Assessments zurueck, optional nach paper_id gefiltert."""
         return list_risk_of_bias(db_path, paper_id=paper_id)
 
@@ -1278,7 +1280,7 @@ def _build_mcp_server():
         return add_score_snapshot(db_path, paper_id=paper_id, session_id=session_id, scores=scores)
 
     @mcp.tool(name="vault.get_score_history")
-    def _vault_get_score_history(paper_id: str, k: int = None) -> list[dict]:
+    def _vault_get_score_history(paper_id: str, k: int | None = None) -> list[dict]:
         """Gibt Score-History fuer ein Paper zurueck (neueste zuerst)."""
         return get_score_history(db_path, paper_id=paper_id, k=k)
 
