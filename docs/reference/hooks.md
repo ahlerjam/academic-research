@@ -2,7 +2,7 @@
 
 [← zurück zur README](../../README.md)
 
-Das Plugin verdrahtet 7 Claude-Code-Events in `hooks/hooks.json`. Maßgeblich ist immer
+Das Plugin verdrahtet 6 Claude-Code-Events in `hooks/hooks.json`. Maßgeblich ist immer
 diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 `tests/test_readme_hook_stack_doc.py` dagegen geprüft.
 
@@ -11,14 +11,23 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `verbatim-guard.mjs` | Blockt Kapitel-Writes mit nicht-verifizierten Zitaten |
 | `PostToolUse` (`Write\|Edit\|MultiEdit`) | `post-tool-use-decisions.mjs` | Decision-Log: jede `.md`-Änderung wird protokolliert |
 | `PreCompact` | `pre-compact.mjs` | Snapshot-Backup vor Claude-Compaction |
-| `Notification` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
-| `PostCompact` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
-| `SessionStart` | *(Inline-Bash)* | Prüft, ob `~/.academic-research/venv` existiert und die Kernpakete importierbar sind |
+| `UserPromptSubmit` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
+| `SessionStart` (kein Matcher) | *(Inline-Bash)* | Prüft, ob `~/.academic-research/venv` existiert und die Kernpakete importierbar sind |
+| `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
 
 Das sind **4 Skript-Dateien** (`verbatim-guard.mjs`, `post-tool-use-decisions.mjs`,
 `pre-compact.mjs`, `mid-session-reinforcement.mjs`) plus **2 Inline-Bash-Kommandos**;
-`mid-session-reinforcement.mjs` hängt an zwei Events.
+`mid-session-reinforcement.mjs` hängt an zwei Event-Konfigurationen (`UserPromptSubmit`
+und `SessionStart`/`compact`).
+
+> **Warum nicht `Notification`/`PostCompact` (Stand vor #382)?** Laut offizieller
+> Claude-Code-Doku ([code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks))
+> wirkt stdout nur bei den Events `UserPromptSubmit`, `UserPromptExpansion` und
+> `SessionStart` tatsächlich als Modell-Kontext ("the exceptions are..."). Die
+> Anti-Fabrikations-Erinnerung lief auf `Notification`/`PostCompact` daher vollständig
+> ins Leere — sie ist jetzt auf `UserPromptSubmit` (Intervall) und `SessionStart` mit
+> `matcher: "compact"` (nach Compaction) verdrahtet.
 
 > **Nicht verdrahtet:** `hooks/onboard-project-uni-prompt.sh` liegt zwar im Repo, ist aber
 > **kein** Hook. Es ist ein eigenständiges Helferskript zur Profilauswahl, das manuell

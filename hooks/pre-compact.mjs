@@ -13,7 +13,7 @@
  *
  * Konfiguration via Umgebungsvariablen:
  *   ACADEMIC_SNAPSHOTS_DIR  — Zielverzeichnis für Snapshots (default: ~/.academic-research/snapshots)
- *   ACADEMIC_PROJECT_SLUG   — Projekt-Slug (default: "default")
+ *   ACADEMIC_PROJECT_SLUG   — Projekt-Slug (default: basename(CLAUDE_PROJECT_DIR), Issue #382)
  *   CLAUDE_PROJECT_DIR      — Projekt-Verzeichnis (default: cwd)
  *   VAULT_DB_PATH           — Pfad zur Vault-DB
  */
@@ -39,11 +39,12 @@ const REPO_ROOT = dirname(HOOK_DIR);
 
 const SNAPSHOTS_DIR = process.env.ACADEMIC_SNAPSHOTS_DIR
   || join(os.homedir(), '.academic-research', 'snapshots');
-const SLUG = process.env.ACADEMIC_PROJECT_SLUG || 'default';
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-// Kanonischer DB-Default (Single Source of Truth, Issue #190):
-// VAULT_DB_PATH aus Env, sonst ~/.academic-research/projects/<slug>/vault.db
-// mit slug=basename(CWD) — identisch zu den anderen Hooks und dem MCP-Server.
+// Kanonischer Slug-Default (Single Source of Truth, Issue #190 + #382):
+// ACADEMIC_PROJECT_SLUG aus Env, sonst basename(PROJECT_DIR) — identisch zu
+// DB_SLUG und den anderen Hooks. Vorher hatte SLUG hartkodiert 'default' als
+// Default, wodurch Snapshots verschiedener Projekte im selben Ordner landeten.
+const SLUG = process.env.ACADEMIC_PROJECT_SLUG || basename(PROJECT_DIR) || 'default';
 const DB_SLUG = basename(PROJECT_DIR) || 'default';
 const VAULT_DB = process.env.VAULT_DB_PATH
   || join(os.homedir(), '.academic-research', 'projects', DB_SLUG, 'vault.db');

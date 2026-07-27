@@ -1,7 +1,9 @@
-"""Tests fuer mid-session-reinforcement.mjs Notification-Hook.
+"""Tests fuer mid-session-reinforcement.mjs Reinforcement-Hook.
 
-Der Hook ist nicht-blockierend (Notification-Hook).
-Trigger: nach jeder 20. User-Message oder nach Compaction.
+Der Hook ist nicht-blockierend und laeuft auf zwei Events, deren stdout laut
+Claude-Code-Doku tatsaechlich als Modell-Kontext injiziert wird (#382):
+  - UserPromptSubmit: Trigger nach jeder 20. User-Message.
+  - SessionStart mit source="compact": Trigger nach Compaction.
 Liest Top-5 aktive Decisions aus Vault und erinnert Modell als System-Hint.
 Max 1× pro 20 Messages.
 Exit 0 immer.
@@ -33,15 +35,15 @@ def run_hook(payload: dict, env_overrides: dict = None) -> subprocess.CompletedP
 
 
 def test_hook_exits_zero_always():
-    """Hook ist immer exit 0 (Notification-Hook, nie blockierend)."""
+    """Hook ist immer exit 0 (nie blockierend, auch bei leerem Payload)."""
     result = run_hook({})
     assert result.returncode == 0
 
 
-def test_hook_exits_zero_on_notification_event():
-    """Hook verarbeitet Notification-Event ohne Fehler."""
+def test_hook_exits_zero_on_userpromptsubmit_event():
+    """Hook verarbeitet UserPromptSubmit-Event ohne Fehler."""
     payload = {
-        "hook_event_name": "Notification",
+        "hook_event_name": "UserPromptSubmit",
         "message_count": 20,
     }
     result = run_hook(payload)
@@ -74,7 +76,7 @@ def test_hook_outputs_hint_at_message_20(tmp_path):
     state_file = tmp_path / "reinforcement_state.json"
 
     payload = {
-        "hook_event_name": "Notification",
+        "hook_event_name": "UserPromptSubmit",
         "message_count": 20,
     }
     env_overrides = {
@@ -106,7 +108,7 @@ def test_hook_no_output_at_message_10(tmp_path):
     state_file = tmp_path / "reinforcement_state.json"
 
     payload = {
-        "hook_event_name": "Notification",
+        "hook_event_name": "UserPromptSubmit",
         "message_count": 10,
     }
     env_overrides = {
@@ -138,7 +140,7 @@ def test_hook_fires_max_once_per_20_messages(tmp_path):
     }
 
     # Erster Aufruf bei message_count=20 -> Hint
-    payload = {"hook_event_name": "Notification", "message_count": 20}
+    payload = {"hook_event_name": "UserPromptSubmit", "message_count": 20}
     result1 = run_hook(payload, env_overrides=env_overrides)
     assert result1.returncode == 0
     combined1 = result1.stdout + result1.stderr
@@ -157,7 +159,7 @@ def test_hook_fires_max_once_per_20_messages(tmp_path):
 
 
 def test_hook_triggers_after_compaction(tmp_path):
-    """Hook gibt Hint aus nach Compaction-Event unabhaengig von message_count."""
+    """Hook gibt Hint aus nach SessionStart(source=compact) unabhaengig von message_count."""
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 
@@ -169,7 +171,8 @@ def test_hook_triggers_after_compaction(tmp_path):
     state_file = tmp_path / "reinforcement_state.json"
 
     payload = {
-        "hook_event_name": "PostCompact",
+        "hook_event_name": "SessionStart",
+        "source": "compact",
         "message_count": 5,  # < 20, aber Compaction
     }
     env_overrides = {
@@ -186,10 +189,44 @@ def test_hook_triggers_after_compaction(tmp_path):
     )
 
 
+def test_hook_no_trigger_on_sessionstart_without_compact_source(tmp_path):
+    """SessionStart mit anderer source (z. B. 'startup') loest KEINEN Hint aus.
+
+    Regression-Guard: nur der explizite Compaction-Matcher darf feuern, nicht
+    jeder SessionStart (sonst wuerde der Hook bei jedem Sessionstart triggern).
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.server import add_decision
+
+    db_path = str(tmp_path / "test_vault.db")
+    db = VaultDB(db_path)
+    db.init_schema()
+    add_decision(db_path, category="Methodik", text="Sollte nicht erscheinen", rationale=None)
+
+    state_file = tmp_path / "reinforcement_state.json"
+
+    payload = {
+        "hook_event_name": "SessionStart",
+        "source": "startup",
+        "message_count": 0,
+    }
+    env_overrides = {
+        "VAULT_DB_PATH": db_path,
+        "ACADEMIC_REINFORCEMENT_STATE": str(state_file),
+    }
+
+    result = run_hook(payload, env_overrides=env_overrides)
+    assert result.returncode == 0
+    combined = result.stdout + result.stderr
+    assert "Aktive Decisions" not in combined, (
+        f"Unerwarteter Hint bei SessionStart/startup: {combined}"
+    )
+
+
 def test_hook_failopen_when_vault_missing():
     """Hook ist fail-open wenn Vault-DB nicht existiert."""
     payload = {
-        "hook_event_name": "Notification",
+        "hook_event_name": "UserPromptSubmit",
         "message_count": 20,
     }
     env_overrides = {

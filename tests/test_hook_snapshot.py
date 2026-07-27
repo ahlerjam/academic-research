@@ -127,6 +127,55 @@ def test_hook_tarball_contains_state_files(tmp_path):
     )
 
 
+def test_hook_slug_defaults_to_project_dir_basename_without_override(tmp_path):
+    """Ohne ACADEMIC_PROJECT_SLUG-Override landen Snapshots im <basename(CLAUDE_PROJECT_DIR)>-Ordner.
+
+    Regression fuer #382: SLUG (Snapshot-Ordner) und DB_SLUG (Vault-Pfad) muessen
+    fuer dasselbe Projekt denselben Wert liefern. Zwei verschiedene Projekt-
+    Verzeichnisse muessen in getrennten Snapshot-Ordnern landen.
+    """
+    snapshots_dir = tmp_path / "snapshots"
+
+    project_a = tmp_path / "project-alpha"
+    project_a.mkdir()
+    (project_a / "academic_context.md").write_text("# Alpha")
+
+    project_b = tmp_path / "project-beta"
+    project_b.mkdir()
+    (project_b / "academic_context.md").write_text("# Beta")
+
+    for project_dir in (project_a, project_b):
+        payload = {"hook_event_name": "PreCompact"}
+        # Bewusst KEIN ACADEMIC_PROJECT_SLUG -> Default muss basename(CLAUDE_PROJECT_DIR) sein
+        env_overrides = {
+            "ACADEMIC_SNAPSHOTS_DIR": str(snapshots_dir),
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+            "VAULT_DB_PATH": str(tmp_path / "nonexistent.db"),
+        }
+        result = run_hook(payload, env_overrides=env_overrides)
+        assert result.returncode == 0, (
+            f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+        )
+
+    alpha_dir = snapshots_dir / "project-alpha"
+    beta_dir = snapshots_dir / "project-beta"
+    assert alpha_dir.exists(), (
+        f"Snapshot-Ordner fuer project-alpha fehlt: {list(snapshots_dir.iterdir())}"
+    )
+    assert beta_dir.exists(), (
+        f"Snapshot-Ordner fuer project-beta fehlt: {list(snapshots_dir.iterdir())}"
+    )
+    assert list(alpha_dir.glob("*.tgz")), "Kein Tarball im project-alpha-Snapshot-Ordner"
+    assert list(beta_dir.glob("*.tgz")), "Kein Tarball im project-beta-Snapshot-Ordner"
+
+    # 'default'-Ordner darf NICHT verwendet werden, wenn CLAUDE_PROJECT_DIR gesetzt ist
+    default_dir = snapshots_dir / "default"
+    assert not default_dir.exists(), (
+        f"SLUG fiel auf 'default' zurueck statt basename(CLAUDE_PROJECT_DIR) zu nutzen: "
+        f"{list(snapshots_dir.iterdir())}"
+    )
+
+
 def test_hook_failopen_when_project_dir_missing(tmp_path):
     """Hook ist fail-open wenn CLAUDE_PROJECT_DIR nicht existiert."""
     payload = {"hook_event_name": "PreCompact"}

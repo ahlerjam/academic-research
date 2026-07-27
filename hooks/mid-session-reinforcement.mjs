@@ -2,13 +2,17 @@
 /**
  * hooks/mid-session-reinforcement.mjs — Mid-Conversation Reinforcement Hook
  *
- * Nicht-blockierender Notification-Hook.
- * Trigger: nach jeder 20. User-Message oder nach Compaction (PostCompact).
+ * Nicht-blockierender Hook auf zwei Events, deren stdout laut Claude-Code-Doku
+ * (code.claude.com/docs/en/hooks, Stand #382) tatsaechlich als Modell-Kontext
+ * injiziert wird — im Gegensatz zu Notification/PostCompact, deren stdout NICHT
+ * zu den Context-Injection-Ausnahmen zaehlt:
+ *   - UserPromptSubmit: Trigger nach jeder 20. User-Message.
+ *   - SessionStart mit source==="compact": Trigger nach Compaction.
  * Liest Top-5 aktive Decisions aus Vault und erinnert Modell als System-Hint.
  * Loest max. 1× pro 20 Messages aus (State-Datei verhindert Duplikate).
  *
  * Protokoll:
- *   - Eingabe: JSON via stdin (Claude Code Notification/PostCompact-Format)
+ *   - Eingabe: JSON via stdin (Claude Code UserPromptSubmit/SessionStart-Format)
  *   - Ausgabe: Reminder-Text auf stdout (als System-Hint fuer Modell)
  *   - Exit 0: immer (nie blockierend)
  *
@@ -167,9 +171,10 @@ async function main() {
   }
 
   const eventName = input?.hook_event_name || '';
+  const source = input?.source || '';
   const messageCount = input?.message_count ?? 0;
 
-  const isCompaction = eventName === 'PostCompact';
+  const isCompaction = eventName === 'SessionStart' && source === 'compact';
   const isNthMessage = messageCount > 0 && messageCount % TRIGGER_N === 0;
 
   if (!isCompaction && !isNthMessage) {

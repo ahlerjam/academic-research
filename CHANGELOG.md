@@ -31,6 +31,11 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **`_vec0_search` ist keine Attrappe mehr (#372):** echte KNN-Suche über die vec0-Tabelle `chunk_vectors` mit reinem Python-Fallback für Umgebungen ohne ladbare `sqlite-vec`-Extension (macOS-Matrix). Treffer werden auf Paper-Ebene aggregiert und mit Snippet an die Reciprocal-Rank-Fusion übergeben, sodass `vault.search(rerank=True)` reale Vektortreffer verarbeitet statt FTS5-Ergebnisse umzusortieren. Der Vektorpfad erhält die unsanitierte Query (FTS5-Sanitizing verfälscht die Semantik).
 - `VaultDB.add_chunk_embedding()` respektiert jetzt den Material-Passport-Lock (analog #407) und spiegelt Vektoren nach `chunk_vectors`; neu sind `VaultDB.knn_chunks()`, `VaultDB.delete_chunk_embeddings()`, `VaultDB.sync_chunk_vectors()` und die idempotente Migration `migrate.add_chunk_vectors_table()` für Bestands-DBs.
 
+### Fixed
+
+- **`mid-session-reinforcement.mjs` lief ins Leere (#382):** Der Hook war auf `Notification` und `PostCompact` verdrahtet — laut offizieller Claude-Code-Doku injizieren nur `UserPromptSubmit`, `UserPromptExpansion` und `SessionStart` ihr stdout tatsächlich als Modell-Kontext. Umgestellt auf `UserPromptSubmit` (Intervall-Trigger, alle ~20 Nachrichten) und `SessionStart` mit `matcher: "compact"` (Compaction-Trigger); `hooks/hooks.json` enthält damit 6 statt 7 Top-Level-Events.
+- **`pre-compact.mjs`: `SLUG`-Default vermischte Snapshots verschiedener Projekte (#382):** `SLUG` fiel ohne `ACADEMIC_PROJECT_SLUG` hartkodiert auf `'default'` zurück, während `DB_SLUG` bereits `basename(CLAUDE_PROJECT_DIR)` nutzte — Snapshots unterschiedlicher Projekte landeten dadurch im selben `~/.academic-research/snapshots/default/`-Ordner. `SLUG` nutzt jetzt denselben Default wie `DB_SLUG`.
+
 ---
 
 ## [6.5.1] — 2026-06-03

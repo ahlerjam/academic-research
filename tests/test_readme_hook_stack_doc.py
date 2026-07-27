@@ -38,7 +38,7 @@ def test_readme_does_not_contain_session_mid():
             continue
         assert "SessionMid" not in path.read_text(encoding="utf-8"), (
             f"{path.name} enthaelt den nicht-existierenden Claude-Code-Event 'SessionMid'. "
-            "Die echten Event-Namen sind 'Notification' und 'PostCompact'."
+            "Die echten Event-Namen sind 'UserPromptSubmit' und 'SessionStart'."
         )
 
 
@@ -57,15 +57,15 @@ def test_readme_hook_events_match_hooks_json():
 
 
 def test_readme_hook_count_not_four():
-    """Doku soll nicht 'vier Hooks' behaupten (tatsaechlich 7 Events)."""
+    """Doku soll nicht 'vier Hooks' behaupten (tatsaechlich 6 Events, #382)."""
     hooks_section = _hooks_doc()
     assert "vier Hooks" not in hooks_section, (
-        "Doku behauptet noch 'vier Hooks', aber hooks/hooks.json konfiguriert 7 Events."
+        "Doku behauptet noch 'vier Hooks', aber hooks/hooks.json konfiguriert 6 Events."
     )
 
 
 def test_hooks_json_has_expected_events():
-    """hooks/hooks.json muss alle sieben erwarteten Events enthalten."""
+    """hooks/hooks.json muss alle sechs erwarteten Events enthalten (#382: PostCompact/Notification raus)."""
     hooks_data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
     real_events = set(hooks_data["hooks"].keys())
 
@@ -73,8 +73,7 @@ def test_hooks_json_has_expected_events():
         "PreToolUse",
         "PostToolUse",
         "PreCompact",
-        "Notification",
-        "PostCompact",
+        "UserPromptSubmit",
         "SessionStart",
         "Stop",
     }
@@ -82,6 +81,26 @@ def test_hooks_json_has_expected_events():
         f"hooks.json enthaelt andere Events als erwartet.\n"
         f"Erwartet: {sorted(expected_events)}\n"
         f"Gefunden: {sorted(real_events)}"
+    )
+
+
+def test_sessionstart_has_compact_matcher_for_reinforcement():
+    """SessionStart muss einen matcher=="compact"-Eintrag fuer den Reinforcement-Hook haben (#382).
+
+    PostCompact ist als Event zwar real, sein stdout zaehlt aber laut Doku NICHT
+    zu den Context-Injection-Ausnahmen. Der korrekte Ersatz ist ein
+    SessionStart-Eintrag mit matcher=="compact", der dasselbe Skript aufruft.
+    """
+    hooks_data = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
+    session_start_entries = hooks_data["hooks"]["SessionStart"]
+
+    compact_entries = [e for e in session_start_entries if e.get("matcher") == "compact"]
+    assert compact_entries, (
+        f"Kein SessionStart-Eintrag mit matcher=='compact' gefunden: {session_start_entries}"
+    )
+    commands = [h["command"] for e in compact_entries for h in e["hooks"]]
+    assert any("mid-session-reinforcement.mjs" in c for c in commands), (
+        f"matcher=='compact'-Eintrag ruft nicht mid-session-reinforcement.mjs auf: {commands}"
     )
 
 
