@@ -646,9 +646,30 @@ Lässt sich das Backend nicht laden (Modell-Download nicht möglich, inkompatibl
 
 Bestands-Datenbanken bekommen den vec0-Spiegel per `python -c "from academic_vault.migrate import add_chunk_vectors_table; add_chunk_vectors_table('<pfad>/vault.db')"`.
 
-### MCP-Tools (alle 33)
+### PDF-Volltext-Index
 
-Der Server registriert **33 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz: [`academic_vault/server.py`](academic_vault/server.py) (Funktion `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit Default-Werten, Beschreibung und Beispiel-Call.
+`papers_fts.fulltext` wird seit v6.6 real befüllt (zuvor schrieben die FTS5-Trigger die Spalte hart auf `NULL`, die Suche sah faktisch nur Titel und Abstract). Kanonischer Speicher ist die Tabelle `paper_fulltext`; die Trigger `papers_ai`/`papers_au` ziehen den Text von dort in den Index, damit er ein `vault.set_ocr_done()` oder `vault.update_pdf_path()` überlebt.
+
+`vault.add_paper()` extrahiert den Volltext direkt beim Upsert (abschaltbar via `VAULT_AUTO_FULLTEXT=0`); bereits extrahierte Paper werden übersprungen. Nachträglich oder gezielt geht es per `vault.extract_fulltext(paper_id)`. Beide Wege nutzen dasselbe Backend:
+
+- **pypdf** (Default) — offline, ohne Zusatzinfrastruktur. Reine Scan-PDFs ohne Text-Layer liefern leeren Text; der wird bewusst **nicht** gespeichert, damit der Lauf nach einem OCR-Durchgang nachgeholt werden kann.
+- **GROBID** (opt-in) — `GROBID_URL` auf einen laufenden Server setzen (Apache-2.0, `docker run --rm -p 8070:8070 lfoppiano/grobid:0.8.1`). Der Vault ruft `POST {GROBID_URL}/api/processFulltextDocument` mit abgeschalteter Consolidation auf und indiziert den TEI-`<text>`-Baum. Jeder Fehler (kein Server, Timeout, kaputtes XML) fällt still auf pypdf zurück.
+
+| Env-Variable | Default | Wirkung |
+|---|---|---|
+| `VAULT_AUTO_FULLTEXT` | `1` | `0` schaltet die Volltext-Extraktion in `vault.add_paper()` ab. |
+| `GROBID_URL` | *(aus)* | Aktiviert den GROBID-Pfad, z. B. `http://localhost:8070`. |
+| `GROBID_TIMEOUT` | `60` | Timeout des GROBID-Requests in Sekunden. |
+
+Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers` und `quotes` bleiben unangetastet):
+
+```bash
+python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
+```
+
+### MCP-Tools (alle 34)
+
+Der Server registriert **34 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz: [`academic_vault/server.py`](academic_vault/server.py) (Funktion `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit Default-Werten, Beschreibung und Beispiel-Call.
 
 **Suche & Papers**
 
@@ -686,6 +707,7 @@ Der Server registriert **33 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referen
 | `vault.update_pdf_path(paper_id, new_path)` | Aktualisiert den PDF-Pfad nach OCR | `vault.update_pdf_path("scan2019", "/data/scan2019_ocr.pdf")` |
 | `vault.set_page_offset(paper_id, offset)` | Setzt `page_offset` (Bücher mit Vorseiten/Vorwort) | `vault.set_page_offset("book2020", 12)` |
 | `vault.get_printed_page(paper_id, pdf_page)` | Berechnet gedruckte Seite: `pdf_page - page_offset` | `vault.get_printed_page("book2020", 25)` |
+| `vault.extract_fulltext(paper_id, backend="auto")` | Extrahiert den PDF-Volltext und indiziert ihn in `papers_fts.fulltext` (#373) | `vault.extract_fulltext("vaswani2017")` |
 
 **Decision-Log & Ausschlüsse**
 

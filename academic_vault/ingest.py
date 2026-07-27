@@ -65,9 +65,9 @@ def split_text(
 def resolve_paper_text(db_path: str, paper_id: str) -> str:
     """Ermittelt den einzubettenden Text eines Papers.
 
-    Kaskade: ``papers_fts.fulltext`` (wird von #373 befuellt) -> Titel +
-    Abstract aus ``papers.csl_json``. Leerer String, wenn nichts davon
-    verfuegbar ist.
+    Kaskade: ``papers_fts.fulltext`` (seit #373 real befuellt, siehe
+    ``academic_vault/fulltext.py``) -> Titel + Abstract aus ``papers.csl_json``.
+    Leerer String, wenn nichts davon verfuegbar ist.
     """
     conn = VaultDB._open(db_path)
     try:

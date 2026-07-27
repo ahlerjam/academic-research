@@ -323,14 +323,85 @@ def add_chunk_vectors_table(db_path: str) -> int:
     return VaultDB(db_path).sync_chunk_vectors()
 
 
+def add_fulltext_support(db_path: str) -> None:
+    """Ruestet eine Bestands-DB auf den Volltext-Index um (Issue #373). Idempotent.
+
+    Legt ``paper_fulltext`` an und ersetzt die FTS5-Trigger, die ``fulltext``
+    zuvor hart auf ``NULL`` geschrieben haben, durch die Subselect-Variante aus
+    ``schema.sql``. ``papers`` bleibt unangetastet.
+    """
+    from academic_vault.db import VaultDB
+
+    VaultDB(db_path).init_schema()
+
+
+def backfill_fulltext(
+    db_path: str,
+    limit: int | None = None,
+    backend: str = "auto",
+) -> dict:
+    """Extrahiert den Volltext aller Paper, die noch keinen haben (Issue #373).
+
+    Idempotent: verarbeitet nur Paper mit ``pdf_path``, die noch keine Zeile in
+    ``paper_fulltext`` haben. Schreibt ausschliesslich nach ``paper_fulltext``
+    und ``papers_fts`` — ``papers`` (inkl. ``updated_at``) und ``quotes``
+    bleiben unveraendert.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        limit: Maximale Anzahl Paper pro Lauf (``None`` = alle).
+        backend: Extraktions-Backend, siehe ``fulltext.extract_fulltext``.
+
+    Returns:
+        ``{"filled": int, "skipped": int, "errors": int}``. ``skipped`` zaehlt
+        PDFs ohne Text-Layer (Scans), ``errors`` fehlende/defekte Dateien.
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.fulltext import extract_fulltext
+
+    db = VaultDB(db_path)
+    filled = 0
+    skipped = 0
+    errors = 0
+
+    for candidate in db.papers_missing_fulltext(limit=limit):
+        paper_id = candidate["paper_id"]
+        pdf_path = candidate["pdf_path"]
+        try:
+            text, extractor = extract_fulltext(pdf_path, backend=backend)
+        except Exception as exc:
+            print(f"[ERROR] Volltext '{paper_id}': {exc}", file=sys.stderr)
+            errors += 1
+            continue
+        if not text:
+            skipped += 1
+            continue
+        if db.set_fulltext(paper_id, text, extractor):
+            filled += 1
+        else:  # pragma: no cover - text ist hier nachweislich nicht leer
+            skipped += 1
+
+    return {"filled": filled, "skipped": skipped, "errors": errors}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed-Migration: literature_state.md -> academic_vault SQLite"
     )
     parser.add_argument(
         "--state",
-        required=True,
-        help="Pfad zur literature_state.md",
+        help="Pfad zur literature_state.md (Pflicht ausser bei --backfill-fulltext)",
+    )
+    parser.add_argument(
+        "--backfill-fulltext",
+        action="store_true",
+        help="Statt der Seed-Migration: PDF-Volltexte fuer Bestands-Paper nachtragen (#373)",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Obergrenze fuer --backfill-fulltext (default: alle)",
     )
     parser.add_argument(
         "--pdf-dir",
@@ -343,6 +414,24 @@ def main() -> None:
         help="Pfad zur SQLite-Vault-Datenbank",
     )
     args = parser.parse_args()
+
+    if args.backfill_fulltext:
+        if not Path(args.db).exists():
+            print(f"[ERROR] Vault-DB nicht gefunden: {args.db}", file=sys.stderr)
+            sys.exit(1)
+        add_fulltext_support(args.db)
+        stats = backfill_fulltext(args.db, limit=args.limit)
+        print(
+            f"Volltext-Backfill abgeschlossen: "
+            f"filled={stats['filled']}, "
+            f"skipped={stats['skipped']}, "
+            f"errors={stats['errors']}"
+        )
+        return
+
+    if not args.state:
+        print("[ERROR] --state ist ohne --backfill-fulltext Pflicht", file=sys.stderr)
+        sys.exit(1)
 
     if not Path(args.state).exists():
         print(f"[ERROR] state-Datei nicht gefunden: {args.state}", file=sys.stderr)
