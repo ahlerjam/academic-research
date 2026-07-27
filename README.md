@@ -817,13 +817,18 @@ oder `vgl. Schmidt 2019` werden extrahiert und gegen den Vault geprüft:
 Familienname und Jahr gegen `papers.csl_json` (Umlaut-Faltung und
 Diakritika-Strip, `Müller`/`Mueller`/`Muller` treffen denselben Eintrag), die
 Seitenzahl gegen `papers.page_first`/`page_last` bzw. `quotes.printed_page`.
+Die beiden Seitenquellen wiegen unterschiedlich: nur der vollständige
+Seitenumfang aus `page_first`/`page_last` kann eine Seite **widerlegen**.
+`quotes.printed_page` ist eine punktuelle Stichprobe der bereits extrahierten
+Stellen und kann eine Seite nur bestätigen — dass aus S. 47 noch nichts
+extrahiert wurde, sagt nichts darüber aus, ob das Werk eine S. 47 hat.
 
 **Nicht geprüft** (bewusst, gegen False Positives): Code-Fences und
 Inline-Code, LaTeX-Makros (`\cite{…}`, `\ref{…}`), nackte Jahresklammern
 (`(2021)`), Struktur-Verweise (`(siehe Kapitel 2)`, `(vgl. Abb. 3)`),
 `ebd.`/`a.a.O.` sowie alles ab der Überschrift des Literaturverzeichnisses.
-Hat der Vault zu einem Paper **keine** Seitendaten, gilt die Seitenzahl als
-nicht widerlegbar (dokumentierter Soft-Pass).
+Hat der Vault zu einem Paper **keinen vollständigen Seitenumfang**, gilt die
+Seitenzahl als nicht widerlegbar (dokumentierter Soft-Pass).
 
 Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
 Falschtreffer produziert: die narrative Form ohne Signalwort
@@ -851,9 +856,9 @@ Belege) → CrossRef → Semantic Scholar (Fuzzy, Gate: Autoren-Überlapp
 |---|---|---|
 | `confirmed` | Vault-Treffer **oder** Score ≥ `ACADEMIC_CITATION_CONFIRMED_MIN` (80) | allow |
 | `probable` | Score ≥ `ACADEMIC_CITATION_PROBABLE_MIN` (65) | allow + `[UNVERIFIED]` |
-| `unavailable` | Timeout / `ECONNREFUSED` / HTTP 5xx / 429 | allow + `[UNVERIFIED]` |
-| `no-match` | alle Stufen haben sauber geantwortet (HTTP 200), kein Treffer | **Block** (exit 2) |
-| `page-mismatch` | Autor/Jahr im Vault, Seite nachweislich außerhalb | **Block** (exit 2) |
+| `unavailable` | Timeout / `ECONNREFUSED` / abgebrochener Body / **jeder** Nicht-2xx-Status (5xx, 429, aber auch 403-Drosselung und 404) / HTTP 200 mit unlesbarem Body | allow + `[UNVERIFIED]` |
+| `no-match` | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer | **Block** (exit 2) |
+| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2) |
 
 Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein
 Netzausfall darf nie wie ein Halluzinations-Nachweis wirken. Bei `probable`

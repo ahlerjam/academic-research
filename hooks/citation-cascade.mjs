@@ -18,9 +18,13 @@
  *   unavailable mindestens eine Stufe technisch nicht erreichbar      -> [UNVERIFIED]
  *   no-match    alle Stufen haben sauber geantwortet, kein Treffer    -> Block
  *
- * Der Unterschied zwischen "no-match" (HTTP 200 mit leerem Ergebnis) und
- * "unavailable" (Timeout, ECONNREFUSED, 5xx, 429) ist der Kern von AC3:
- * ein Netzausfall darf niemals wie ein Halluzinations-Nachweis wirken.
+ * Der Unterschied zwischen "no-match" und "unavailable" ist der Kern von AC3:
+ * ein Netzausfall darf niemals wie ein Halluzinations-Nachweis wirken. Als
+ * "sauber beantwortet" gilt deshalb ausschliesslich ein 2xx mit vollstaendig
+ * gelesenem, im erwarteten Format parsbarem Body. Alles andere — Timeout,
+ * ECONNREFUSED, jeder Nicht-2xx-Status (5xx, 429, aber ebenso 403-Drosselung
+ * und 404), abgebrochener Body-Stream, HTML-Fehlerseite mit Status 200 — ist
+ * "unavailable".
  */
 
 import { familiesMatch, normalizeFamily } from './citation-parse.mjs';
@@ -110,13 +114,40 @@ async function fetchText(url, config, deadline) {
   } catch (err) {
     throw new UnavailableError(`Netzfehler: ${err.message}`);
   }
-  // 5xx/429 sind transiente Upstream-Fehler; 4xx (ausser 429) gelten als
-  // sauber beantwortet, liefern aber kein Ergebnis.
-  if (response.status >= 500 || response.status === 429) {
+  // Nur ein 2xx zaehlt als beantwortete Anfrage. Jeder andere Status heisst
+  // "wir haben keine Auskunft bekommen" — 5xx/429 ohnehin, aber genauso 403
+  // (Semantic Scholar drosselt ohne API-Key, Proxys blocken den Egress) und
+  // 404 (Endpunkt verlegt). Als "kein Treffer" gewertet, wuerde ausgerechnet
+  // der Netzausfall wie ein Halluzinations-Nachweis wirken — das verbietet AC3.
+  if (!response.ok) {
     throw new UnavailableError(`HTTP ${response.status}`);
   }
-  if (!response.ok) return '';
-  return response.text();
+  try {
+    return await response.text();
+  } catch (err) {
+    // Abbruch beim Body-Lesen (Timeout, Socket-Reset nach den Headern).
+    throw new UnavailableError(`Body unvollstaendig: ${err.message}`);
+  }
+}
+
+/**
+ * JSON-Body einer Stufe parsen. Ein unlesbarer oder unerwartet geformter Body
+ * (HTML-Fehlerseite eines Captive Portals, abgeschnittene Antwort, Fehler-JSON
+ * ohne Ergebnisfeld) ist KEIN sauberes Negativ — "Antwort nicht verstanden"
+ * darf nicht auf "Beleg existiert nicht" abgebildet werden.
+ */
+function parseJsonBody(body, stage, pick) {
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new UnavailableError(`${stage}: unlesbare Antwort`);
+  }
+  const items = pick(data);
+  if (!Array.isArray(items)) {
+    throw new UnavailableError(`${stage}: unerwartetes Antwortformat`);
+  }
+  return items;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +178,11 @@ async function stageArxiv(citations, config, deadline) {
   url.searchParams.set('search_query', query);
   url.searchParams.set('max_results', '50');
   const xml = await fetchText(url.toString(), config, deadline);
+  // Ein leerer Atom-Feed hat kein <entry>, aber immer ein <feed>. Fehlt das,
+  // war die Antwort kein arXiv-Feed und damit kein "kein Treffer".
+  if (!/<feed[\s>]/.test(xml)) {
+    throw new UnavailableError('arXiv: keine Atom-Antwort');
+  }
   return parseArxivFeed(xml);
 }
 
@@ -159,14 +195,7 @@ async function stageCrossref(citation, config, deadline) {
   url.searchParams.set('query.bibliographic', `${citation.family} ${citation.year}`);
   url.searchParams.set('rows', '5');
   const body = await fetchText(url.toString(), config, deadline);
-  if (!body) return [];
-  let data;
-  try {
-    data = JSON.parse(body);
-  } catch {
-    return [];
-  }
-  const items = data?.message?.items || [];
+  const items = parseJsonBody(body, 'CrossRef', (data) => data?.message?.items);
   return items.map((item) => ({
     title: Array.isArray(item.title) ? item.title[0] : item.title || '',
     year: item?.issued?.['date-parts']?.[0]?.[0] ?? null,
@@ -184,14 +213,8 @@ async function stageSemanticScholar(citation, config, deadline) {
   url.searchParams.set('fields', 'title,year,authors');
   url.searchParams.set('limit', '5');
   const body = await fetchText(url.toString(), config, deadline);
-  if (!body) return [];
-  let data;
-  try {
-    data = JSON.parse(body);
-  } catch {
-    return [];
-  }
-  return (data?.data || []).map((item) => ({
+  const items = parseJsonBody(body, 'Semantic Scholar', (data) => data?.data);
+  return items.map((item) => ({
     title: item.title || '',
     year: Number.isFinite(item.year) ? item.year : null,
     authors: (item.authors || []).map((a) => (a.name || '').trim().split(/\s+/).pop()).filter(Boolean),

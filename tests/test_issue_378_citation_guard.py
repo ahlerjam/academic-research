@@ -73,7 +73,8 @@ class CascadeStub:
 
     def __init__(self, behaviour: dict):
         # behaviour: {"arxiv": {...}, "crossref": {...}, "s2": {...}}
-        # je Stufe: {"status": 200, "entries": [...]} oder {"status": 503}
+        # je Stufe: {"status": 200, "entries": [...]}, {"status": 503} oder
+        # {"status": 200, "body": "<roher Body>"} fuer unparsbare Antworten.
         self.behaviour = behaviour
         self.hits: list[str] = []
         stub = self
@@ -89,6 +90,14 @@ class CascadeStub:
                     self.send_header("Content-Type", "text/plain")
                     self.end_headers()
                     self.wfile.write(b"upstream error")
+                    return
+                if "body" in spec:
+                    raw = spec["body"].encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", spec.get("ctype", "text/html"))
+                    self.send_header("Content-Length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
                     return
                 entries = spec.get("entries", [])
                 if route == "arxiv":
@@ -215,6 +224,39 @@ def vault_with_mueller(tmp_path):
     return db_path
 
 
+@pytest.fixture
+def vault_with_quote_page_only(tmp_path):
+    """Vault mit Buch OHNE page_first/page_last, aber mit einem Zitat von S. 45.
+
+    Der Regelfall beim Buch-Ingest: der Seitenumfang steht nicht im CSL, aus dem
+    PDF sind bisher nur einzelne Zitate erfasst. ``quotes.printed_page`` ist
+    damit eine punktuelle Stichprobe und kein Seitenbereich.
+    """
+    from academic_vault.server import add_paper, add_quote
+
+    db_path = _make_vault(tmp_path, "quotepages_378.db")
+    add_paper(
+        db_path=db_path,
+        paper_id="schmidt-2020",
+        csl_json=json.dumps(
+            {
+                "title": "Ein Buch ohne Seitenangabe",
+                "type": "book",
+                "author": [{"family": "Schmidt", "given": "Bernd"}],
+                "issued": {"date-parts": [[2020]]},
+            }
+        ),
+    )
+    add_quote(
+        db_path=db_path,
+        paper_id="schmidt-2020",
+        verbatim="Ein woertliches Zitat von Seite 45",
+        extraction_method="manual",
+        printed_page=45,
+    )
+    return db_path
+
+
 # ---------------------------------------------------------------------------
 # Python-Ebene: Vault-Lookup (Task 1)
 # ---------------------------------------------------------------------------
@@ -254,6 +296,32 @@ def test_page_coverage_states(vault_with_mueller, empty_vault):
         ),
     )
     assert VaultDB(empty_vault).page_coverage("ohne-seiten", 45) == "unknown"
+
+
+def test_page_coverage_quote_pages_never_refute(vault_with_quote_page_only):
+    """``quotes.printed_page`` bestaetigt eine Seite, widerlegt sie aber nie.
+
+    Die Quote-Seiten sind eine Stichprobe der bereits erfassten Stellen, kein
+    Seitenumfang: dass S. 47 nicht darunter ist, sagt nichts darueber aus, ob
+    das Buch eine S. 47 hat. Nur ein vollstaendiges ``[page_first, page_last]``
+    darf ``"outside"`` ergeben.
+    """
+    from academic_vault.db import VaultDB
+
+    db = VaultDB(vault_with_quote_page_only)
+    # Erfasste Stichprobe bestaetigt weiterhin.
+    assert db.page_coverage("schmidt-2020", 45) == "covered"
+    # Jede andere Seite ist mangels Seitenumfang schlicht unbekannt.
+    assert db.page_coverage("schmidt-2020", 47) == "unknown"
+    assert db.page_coverage("schmidt-2020", 3) == "unknown"
+
+
+def test_verify_citation_unsampled_page_is_verified(vault_with_quote_page_only):
+    """Kein ``page-mismatch``, solange nur Quote-Seiten bekannt sind."""
+    from academic_vault.server import verify_citation
+
+    assert verify_citation(vault_with_quote_page_only, "Schmidt", 2020, 45)["status"] == "verified"
+    assert verify_citation(vault_with_quote_page_only, "Schmidt", 2020, 47)["status"] == "verified"
 
 
 def test_verify_citation_statuses(vault_with_mueller):
@@ -355,6 +423,27 @@ def test_citation_wrong_page_blocks(vault_with_mueller):
     assert "999" in result.stderr
 
 
+def test_citation_page_beyond_quote_sample_allows(vault_with_quote_page_only):
+    """Gegenstueck zu ``wrong_page_blocks``: ohne page_first/page_last darf eine
+    nicht abgetastete Seite NICHT blocken.
+
+    Der Vault kennt von diesem Buch nur ein Zitat auf S. 45. Ein Beleg auf S. 47
+    ist damit weder bestaetigt noch widerlegt — blocken hiesse, korrekte Belege
+    allein deshalb abzulehnen, weil aus derselben Seite noch nichts extrahiert
+    wurde.
+    """
+    content = "Wie (Schmidt 2020, S. 47) zeigt, ist der Effekt stabil."
+    result = run_hook(
+        write_payload(content),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote_page_only,
+            "ACADEMIC_CITATION_CASCADE": "off",
+        },
+    )
+    assert result.returncode == 0, f"Erwartet 0 (allow), got {result.returncode}. {result.stderr}"
+    assert "BLOCKIERT" not in result.stderr
+
+
 def test_cascade_off_without_vault_hit_blocks(empty_vault):
     """Kill-Switch: ACADEMIC_CITATION_CASCADE=off ist Vault-only -> Block ohne Netz."""
     content = "Der Befund (Fantasius 1999) belegt die These eindeutig."
@@ -411,6 +500,74 @@ def test_cascade_unavailable_soft_fails(empty_vault):
     marked = updated_content(result)
     assert "[UNVERIFIED]" in marked
     assert "(Fantasius 1999, S. 12) [UNVERIFIED]" in marked
+
+
+def test_cascade_http_403_soft_fails(empty_vault):
+    """AC3: 4xx ist keine saubere Antwort -> [UNVERIFIED] statt Block.
+
+    403 ist der Regelfall, wenn Semantic Scholar ohne API-Key drosselt oder ein
+    Firmenproxy den Egress blockt. Als ``no-match`` gewertet, wuerde ausgerechnet
+    der Netzausfall wie ein Halluzinations-Nachweis wirken.
+    """
+    content = "Der Befund (Fantasius 1999, S. 12) belegt die These eindeutig."
+    with CascadeStub(
+        {
+            "arxiv": {"status": 403},
+            "crossref": {"status": 404},
+            "s2": {"status": 403},
+        }
+    ) as stub:
+        env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
+        env.update(stub.env())
+        result = run_hook(write_payload(content), env_overrides=env)
+    assert result.returncode == 0, (
+        f"Erwartet 0 (Soft-Fail), got {result.returncode}. {result.stderr}"
+    )
+    assert "(Fantasius 1999, S. 12) [UNVERIFIED]" in updated_content(result)
+
+
+def test_cascade_unparsable_body_soft_fails(empty_vault):
+    """AC3: HTTP 200 mit unlesbarem Body ist keine saubere Antwort.
+
+    Captive Portals und Proxys liefern gern 200 + HTML-Fehlerseite. „Antwort
+    nicht verstanden" darf nicht auf „Beleg existiert nicht" abgebildet werden.
+    """
+    garbage = "<html><body>502 Bad Gateway (proxy)</body></html>"
+    content = "Der Befund (Fantasius 1999, S. 12) belegt die These eindeutig."
+    with CascadeStub(
+        {
+            "arxiv": {"status": 200, "body": garbage},
+            "crossref": {"status": 200, "body": garbage},
+            "s2": {"status": 200, "body": garbage},
+        }
+    ) as stub:
+        env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
+        env.update(stub.env())
+        result = run_hook(write_payload(content), env_overrides=env)
+    assert result.returncode == 0, (
+        f"Erwartet 0 (Soft-Fail), got {result.returncode}. {result.stderr}"
+    )
+    assert "(Fantasius 1999, S. 12) [UNVERIFIED]" in updated_content(result)
+
+
+def test_cascade_empty_but_valid_answers_still_block(empty_vault):
+    """Gegenprobe: sauber beantwortete Leerergebnisse bleiben ein Hard-Block.
+
+    Der Soft-Fail darf nur greifen, wenn die Antwort ausgeblieben oder unlesbar
+    war — sonst waere der Guard wirkungslos.
+    """
+    content = "Der Befund (Fantasius 1999, S. 12) belegt die These eindeutig."
+    with CascadeStub(
+        {
+            "arxiv": {"status": 200, "entries": []},
+            "crossref": {"status": 200, "entries": []},
+            "s2": {"status": 200, "entries": []},
+        }
+    ) as stub:
+        env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
+        env.update(stub.env())
+        result = run_hook(write_payload(content), env_overrides=env)
+    assert result.returncode == 2, f"Erwartet 2 (Block), got {result.returncode}. {result.stderr}"
 
 
 def test_cascade_connection_refused_soft_fails(empty_vault):

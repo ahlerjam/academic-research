@@ -613,11 +613,21 @@ class VaultDB:
     def page_coverage(self, paper_id: str, page: int) -> str:
         """Prueft, ob ``page`` von den im Vault bekannten Seitendaten gedeckt ist.
 
+        Die beiden Quellen sind bewusst NICHT gleichwertig:
+
+        * ``papers.page_first``/``page_last`` beschreiben den vollstaendigen
+          Seitenumfang und koennen eine Seite deshalb auch widerlegen.
+        * ``quotes.printed_page`` ist eine punktuelle Stichprobe der bereits
+          extrahierten Stellen. Sie kann eine Seite nur BESTAETIGEN, niemals
+          widerlegen: dass aus S. 47 noch nichts extrahiert wurde, sagt nichts
+          darueber aus, ob das Werk eine S. 47 hat.
+
         Rueckgabe:
           ``"covered"``  — Seite liegt in ``[page_first, page_last]`` oder
                             entspricht einer ``quotes.printed_page``.
-          ``"outside"``  — Seitendaten vorhanden, Seite liegt ausserhalb.
-          ``"unknown"``  — zu diesem Paper existieren gar keine Seitendaten
+          ``"outside"``  — vollstaendiger Seitenumfang bekannt und Seite liegt
+                            ausserhalb. Nur dieser Fall ist blockierbar.
+          ``"unknown"``  — kein vollstaendiger Seitenumfang hinterlegt
                             (dokumentierter Soft-Pass; sonst waeren
                             Massen-False-Positives die Folge).
         """
@@ -635,15 +645,14 @@ class VaultDB:
             ]
         if row is None:
             return "unknown"
-        first, last = row["page_first"], row["page_last"]
-        has_range = first is not None and last is not None
-        if not has_range and not pages:
-            return "unknown"
-        if has_range and first <= page <= last:
-            return "covered"
+        # Stichprobe zuerst: eine belegte Quote-Seite bestaetigt auch dann,
+        # wenn sie ausserhalb eines (ggf. fehlerhaften) Seitenumfangs liegt.
         if page in pages:
             return "covered"
-        return "outside"
+        first, last = row["page_first"], row["page_last"]
+        if first is None or last is None:
+            return "unknown"
+        return "covered" if first <= page <= last else "outside"
 
     def set_ocr_done(self, paper_id: str, value: int = 1) -> None:
         """Setzt ocr_done-Flag fuer ein Paper."""
