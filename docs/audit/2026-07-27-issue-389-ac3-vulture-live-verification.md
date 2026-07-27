@@ -1,4 +1,4 @@
-# Issue #389 / PR #415 — AC3 Live-Verifikationsbeleg (Stand 2026-07-27)
+# Issue #389 / PR #415 — AC3+AC4 Live-Verifikationsbeleg (Stand 2026-07-27)
 
 > **Status dieses Files:** committeter Belegnachweis für einen abgeschlossenen
 > Verifikationsschritt (nicht "untracked Arbeitsdokument" wie
@@ -137,3 +137,129 @@ Test-PR mit absichtlich totem Code in einer `deadCodePaths`-Datei erzeugt im
 `Reviewer: \`dead-code\`` und `category: dead-code`, deren Evidence wörtlich
 aus vulture (100% Confidence) stammt — beide Fälle liegen außerhalb dessen,
 was `ruff F401` (0 Funde auf denselben Pfaden) abdeckt.
+
+---
+
+## AC4 — Nachtrag Fix-Runde 2 (2026-07-27): Exit-Code allein ist untauglich
+
+### Befund der Runde-2-Verifikation
+
+Die erste Fassung des Guards prüfte ausschließlich den Exit-Code
+(`VULTURE_EXIT ∉ {0, 3}` ⇒ Fehlschlag). Die Verifikation wies das als
+**verfehlt** zurück: im realen `deadCodePaths`-Scope greift diese Prüfung nie.
+
+### Root-Cause (verifiziert an vulture 2.16, nicht vermutet)
+
+`vulture/core.py::report()` setzt für **jeden** gemeldeten Fund
+bedingungslos `self.exit_code = ExitCode.DeadCode` (3):
+
+```python
+for item in self.get_unused_code(...):
+    self._log(...)
+    self.exit_code = ExitCode.DeadCode  # core.py:364
+return self.exit_code
+```
+
+Damit überschreibt `report()` ein zuvor in `scan()`/`scavenge()` gesetztes
+`ExitCode.InvalidInput` (1) — **unabhängig davon, in welcher Datei** der
+Eingabefehler auftrat. `main()` ruft `scavenge()` und danach `report()` auf,
+der Rückgabewert von `report()` ist der Prozess-Exit-Code.
+
+Der reale Scope enthält mit `academic_vault/db.py:147` dauerhaft einen Fund
+oberhalb der Schwelle. Der Exit-Code ist dadurch faktisch auf 3 festgenagelt.
+Lokal im Worktree reproduziert (identischer Aufruf wie im Workflow):
+
+```
+$ uv run vulture scripts/ academic_vault/ --min-confidence 80
+academic_vault/db.py:147: unused variable 'exc_tb' (100% confidence)
+academic_vault/db.py:147: unused variable 'exc_val' (100% confidence)
+# exit 3
+
+$ printf 'def broken(:\n    pass\n' > scripts/dev/_tmp_syntax_probe.py
+$ uv run vulture scripts/ academic_vault/ --min-confidence 80
+scripts/dev/_tmp_syntax_probe.py:1: invalid syntax at "def broken(:"   # -> stderr
+academic_vault/db.py:147: unused variable 'exc_tb' (100% confidence)   # -> stdout
+academic_vault/db.py:147: unused variable 'exc_val' (100% confidence)  # -> stdout
+# exit 3   <-- InvalidInput (1) wurde von DeadCode (3) ueberschrieben
+```
+
+### Fix
+
+vulture trennt die Kanäle sauber: Funde gehen nach **stdout**, jeder echte
+Eingabefehler nach **stderr**. In vulture 2.16 gibt es exakt vier
+`file=sys.stderr`-Stellen — Syntaxfehler (`core.py:237`), ungültiger
+Quelltext/Null-Bytes (`core.py:252`), nicht lesbare Datei (`core.py:292`) und
+Config-`InputError` (`core.py:668`). Alle vier sind Fehlerpfade; im Normalbetrieb
+bleibt stderr leer.
+
+Der Guard fängt stderr deshalb **getrennt** auf (`2> "$RUNNER_TEMP/vulture_stderr.txt"`
+statt `2>&1`) und wertet zwei unabhängige Signale aus:
+
+1. Exit-Code ∉ {0, 3} — fängt u. a. `InvalidCmdlineArguments` (2), das vor
+   `report()` per `sys.exit()` greift und deshalb nicht maskiert wird.
+2. stderr nicht leer — fängt die von `report()` maskierten Eingabefehler.
+
+Zusätzlich nötig: `uv run --quiet`. Ein **kaltes** `uv run` schreibt
+Fortschrittsmeldungen nach stderr und würde Signal 2 sonst bei jedem PR
+fälschlich auslösen. Empirisch geprüft gegen ein leeres `UV_PROJECT_ENVIRONMENT`:
+
+```
+$ UV_PROJECT_ENVIRONMENT=/tmp/cold uv run --extra dev vulture --version
+Using CPython 3.12.13                      # -> stderr
+Creating virtual environment at: /tmp/cold # -> stderr
+Installed 92 packages in 788ms             # -> stderr
+
+$ UV_PROJECT_ENVIRONMENT=/tmp/cold2 uv run --quiet --extra dev vulture --version
+# stderr: 0 Bytes
+```
+
+`--quiet` (einfach, **nicht** `-qq`) unterdrückt laut uv-CLI-Referenz nur die
+Informationsausgabe; echte uv-Fehler bleiben sichtbar — verifiziert:
+`uv run --quiet does-not-exist-cmd` → `error: Failed to spawn: …` auf stderr,
+Exit 2 (von Signal 1 gefangen).
+
+Nebeneffekt des Kanal-Splits: `vulture.txt` speist den `dead-code`-Reviewer und
+wird nach `pfad:zeile:`-Präfix gefiltert. Fehlermeldungen haben dasselbe Präfix
+und wären dem Reviewer vorher als echte Funde untergeschoben worden; jetzt
+enthält die Datei nur noch Funde.
+
+### Live-Beleg des Fixes (realer Scope, extrahierter Workflow-Block)
+
+Der vulture-Teil wurde wörtlich aus `pr-deep-review.yml` extrahiert und mit
+`DEAD_PATHS="scripts/ academic_vault/"` ausgeführt:
+
+```
+===== A) realer Scope, sauber =====
+GUARD_EXIT=0                                # kein False Positive trotz vulture-Exit 3
+
+===== B) realer Scope + injizierter Syntaxfehler =====
+::error::vulture konnte Eingaben nicht auswerten (Exit-Code 3 wurde durch regulaere Dead-Code-Funde maskiert):
+academic_vault/_tmp_probe.py:1: invalid syntax at "def broken(:"
+GUARD_EXIT=1                                # sichtbarer Fehlschlag trotz maskiertem Exit-Code
+
+===== C) Reviewer-Input (vulture.txt) nach B =====
+academic_vault/db.py:147: unused variable 'exc_tb' (100% confidence)
+academic_vault/db.py:147: unused variable 'exc_val' (100% confidence)
+# keine Kontamination durch die stderr-Meldung
+```
+
+### Warum der Defekt vorher durchrutschte — und was das jetzt verhindert
+
+Die Runde-1-Tests prüften nur den **YAML-Text** (Regex auf `::error::`,
+`exit 1`, `$?`). Ein Guard, der nie auslöst, besteht solche Tests problemlos.
+
+Die drei neuen Tests in
+`tests/test_issue_389_vulture_dead_code_dependency.py` schneiden den Block
+stattdessen wörtlich aus dem Workflow und **führen ihn aus** — gegen einen
+Fixture-Baum, der die reale Situation nachstellt (vorbestehender 100%-Fund
+plus nicht parsebare Datei). `uv` wird dabei durch einen Shim auf dem PATH
+ersetzt, der das stderr-Rauschen eines kalten `uv run` reproduziert; die
+`uv run`-Zeile selbst bleibt unverändert Prüfgegenstand.
+
+Mutationstest gegen den gefixten Stand (jede Mutation wird gefangen):
+
+| Mutation am Workflow | fehlschlagender Test |
+|---|---|
+| `--quiet` entfernt | `test_vulture_guard_stays_green_on_regular_dead_code_finding` |
+| `2>&1` statt getrenntem stderr | `test_vulture_guard_fails_when_input_error_is_masked_by_dead_code_exit_code` + `test_vulture_findings_file_is_not_contaminated_by_error_output` |
+| stderr-Guard-Block entfernt | `test_vulture_guard_fails_when_input_error_is_masked_by_dead_code_exit_code` |
