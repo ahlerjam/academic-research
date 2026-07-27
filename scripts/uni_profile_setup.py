@@ -21,6 +21,12 @@ Verhalten:
   (echtes stdin/stdout wird durchgereicht, kein capture_output).
 - Kein ``--uni`` + nicht-interaktives stdin ODER Opt-out: kein Hook-Aufruf,
   kein Fehler, aktives Profil bleibt leer/Default (Exit 0).
+- Schlaegt der interaktive Hook fehl (z.B. ungueltige Nummern-Eingabe bei der
+  Profil-Auswahl): wird wie ein Opt-out behandelt — Warnung auf stderr, aktives
+  Profil bleibt leer/Default, Exit 0. ``setup.sh`` ruft dieses Skript unter
+  ``set -euo pipefail`` auf; ein ungefiltert durchgereichter Hook-Exitcode
+  wuerde das gesamte Setup vor Schritt 8 (SciHub-Opt-in) abbrechen lassen
+  (vgl. PR #417 critic).
 """
 
 from __future__ import annotations
@@ -112,7 +118,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     result = _run_interactive_hook(output_dir=output_dir)
-    return result.returncode
+    if result.returncode != 0:
+        # Ein fehlgeschlagener interaktiver Hook (z.B. ungueltige Nummern-
+        # Eingabe, hooks/onboard-project-uni-prompt.sh:68-69) wird wie ein
+        # Opt-out behandelt: NICHT den Hook-Exitcode ungefiltert durchreichen,
+        # sonst bricht setup.sh (set -euo pipefail) vor Schritt 8 (SciHub-
+        # Opt-in) und der Abschlussmeldung ab (PR #417 critic, Issue #388 AC3).
+        print(
+            "⚠️  Uni-Profil-Setup uebersprungen (Hook-Fehler oder ungueltige "
+            "Auswahl) — aktives Profil bleibt leer/Default, Setup wird fortgesetzt.",
+            file=sys.stderr,
+        )
+    return 0
 
 
 if __name__ == "__main__":
