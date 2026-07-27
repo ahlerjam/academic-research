@@ -10,6 +10,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **PDF-Volltext im Suchindex (#373):** Neues Modul `academic_vault/fulltext.py` extrahiert den PDF-Text — pypdf als Default (offline), GROBID opt-in über `GROBID_URL` (`POST /api/processFulltextDocument`, TEI-`<text>`-Baum, Consolidation abgeschaltet) mit stillem Fallback auf pypdf. Neues MCP-Tool `vault.extract_fulltext(paper_id, backend="auto")` (jetzt 34 Tools), neue `VaultDB`-Methoden `set_fulltext()`/`get_fulltext()`/`papers_missing_fulltext()` und die idempotente Backfill-Migration `migrate.add_fulltext_support()` + `migrate.backfill_fulltext()` (CLI: `python -m academic_vault.migrate --db <pfad> --backfill-fulltext`). `vault.add_paper()` extrahiert den Volltext direkt beim Upsert (best effort, abschaltbar via `VAULT_AUTO_FULLTEXT=0`), sodass der Embedding-Ingest aus #372 den PDF-Text statt nur Titel+Abstract einbettet.
 - **Lokale Embedding-Pipeline (#372):** Neues Modul `academic_vault/embedding_model.py` kapselt `intfloat/multilingual-e5-small` (MIT, 384d) inkl. der e5-Pflichtpräfixe `passage: `/`query: `, L2-Normalisierung und float32-Serialisierung. Neues Modul `academic_vault/ingest.py` verdrahtet Textquelle → Chunks → Embedding → `chunk_embeddings`; `vault.add_paper()` triggert den Ingest best effort (abschaltbar via `VAULT_AUTO_EMBED=0`).
 
 ### Dependencies
@@ -18,6 +19,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **FTS5-Trigger schreiben `fulltext` nicht mehr hart auf `NULL` (#373):** `papers_ai`/`papers_au` ziehen den Volltext per Subselect aus der neuen Tabelle `paper_fulltext`, sodass er den Trigger-Rebuild bei jedem `UPDATE papers` (`set_ocr_done`, `update_pdf_path`, …) überlebt. Die Trigger werden in `schema.sql` per `DROP` + `CREATE` neu angelegt, damit `init_schema()` auch Bestands-DBs umstellt. `vault.search` nutzt `snippet(papers_fts, -1, …)` und zeigt damit die tatsächliche Fundstelle statt immer den Titel.
 - **`_vec0_search` ist keine Attrappe mehr (#372):** echte KNN-Suche über die vec0-Tabelle `chunk_vectors` mit reinem Python-Fallback für Umgebungen ohne ladbare `sqlite-vec`-Extension (macOS-Matrix). Treffer werden auf Paper-Ebene aggregiert und mit Snippet an die Reciprocal-Rank-Fusion übergeben, sodass `vault.search(rerank=True)` reale Vektortreffer verarbeitet statt FTS5-Ergebnisse umzusortieren. Der Vektorpfad erhält die unsanitierte Query (FTS5-Sanitizing verfälscht die Semantik).
 - `VaultDB.add_chunk_embedding()` respektiert jetzt den Material-Passport-Lock (analog #407) und spiegelt Vektoren nach `chunk_vectors`; neu sind `VaultDB.knn_chunks()`, `VaultDB.delete_chunk_embeddings()`, `VaultDB.sync_chunk_vectors()` und die idempotente Migration `migrate.add_chunk_vectors_table()` für Bestands-DBs.
 

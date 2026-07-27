@@ -47,7 +47,7 @@ README = REPO_ROOT / "README.md"
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 
-EXPECTED_TOOL_COUNT = 33
+EXPECTED_TOOL_COUNT = 34
 
 # venv-Python, das den MCP-Server beherbergt.
 VENV_PYTHON = Path.home() / ".academic-research" / "venv" / "bin" / "python"
@@ -795,7 +795,7 @@ PlainCheck = Callable[[], None]
 def stateful_checks() -> list[tuple[str, str, StateCheck]]:
     """(Kategorie, Name, Funktion) für alle State-abhängigen Checks."""
     return [
-        ("A) MCP-Lifecycle", "list_tools == 33", check_mcp_lifecycle),
+        ("A) MCP-Lifecycle", "list_tools == 34", check_mcp_lifecycle),
         ("A) MCP-Lifecycle", "papers add/get/search/stats", check_mcp_papers),
         ("A) MCP-Lifecycle", "provenance audit", check_mcp_provenance),
         ("A) MCP-Lifecycle", "chapter", check_mcp_chapter),

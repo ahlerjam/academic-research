@@ -1,5 +1,6 @@
 -- academic_vault SQLite Schema
--- Tabellen: papers, papers_fts, quotes, quote_embeddings, decisions, notes
+-- Tabellen: papers, papers_fts, paper_fulltext, quotes, quote_embeddings,
+--           decisions, notes
 -- FTS5-Trigger: papers_ai, papers_ad, papers_au
 
 CREATE TABLE IF NOT EXISTS papers (
@@ -77,29 +78,46 @@ CREATE TABLE IF NOT EXISTS notes (
   created_at INTEGER NOT NULL
 );
 
--- FTS5-Trigger: befuellen papers_fts manuell via json_extract
-CREATE TRIGGER IF NOT EXISTS papers_ai AFTER INSERT ON papers BEGIN
+-- Kanonischer Speicher des extrahierten PDF-Volltexts (Issue #373).
+-- papers_fts ist nur der Index: die FTS-Zeile wird bei jedem UPDATE auf papers
+-- vom Trigger papers_au neu aufgebaut, ein nur dort gehaltener Volltext waere
+-- nach dem naechsten set_ocr_done/update_pdf_path still verschwunden.
+CREATE TABLE IF NOT EXISTS paper_fulltext (
+  paper_id     TEXT PRIMARY KEY REFERENCES papers(paper_id) ON DELETE CASCADE,
+  text         TEXT NOT NULL,
+  extractor    TEXT NOT NULL,
+  extracted_at INTEGER NOT NULL
+);
+
+-- FTS5-Trigger: befuellen papers_fts manuell via json_extract.
+-- Bewusst DROP + CREATE statt CREATE TRIGGER IF NOT EXISTS: init_schema() fuehrt
+-- dieses Skript auch auf Bestands-DBs aus; mit IF NOT EXISTS behielten die
+-- ihre alten Trigger (fulltext hart NULL) und der Volltext-Index bliebe leer.
+DROP TRIGGER IF EXISTS papers_ai;
+CREATE TRIGGER papers_ai AFTER INSERT ON papers BEGIN
   INSERT INTO papers_fts(paper_id, title, abstract, fulltext)
   VALUES (
     new.paper_id,
     json_extract(new.csl_json, '$.title'),
     json_extract(new.csl_json, '$.abstract'),
-    NULL
+    (SELECT text FROM paper_fulltext WHERE paper_id = new.paper_id)
   );
 END;
 
-CREATE TRIGGER IF NOT EXISTS papers_ad AFTER DELETE ON papers BEGIN
+DROP TRIGGER IF EXISTS papers_ad;
+CREATE TRIGGER papers_ad AFTER DELETE ON papers BEGIN
   DELETE FROM papers_fts WHERE paper_id = old.paper_id;
 END;
 
-CREATE TRIGGER IF NOT EXISTS papers_au AFTER UPDATE ON papers BEGIN
+DROP TRIGGER IF EXISTS papers_au;
+CREATE TRIGGER papers_au AFTER UPDATE ON papers BEGIN
   DELETE FROM papers_fts WHERE paper_id = old.paper_id;
   INSERT INTO papers_fts(paper_id, title, abstract, fulltext)
   VALUES (
     new.paper_id,
     json_extract(new.csl_json, '$.title'),
     json_extract(new.csl_json, '$.abstract'),
-    NULL
+    (SELECT text FROM paper_fulltext WHERE paper_id = new.paper_id)
   );
 END;
 

@@ -157,7 +157,7 @@ def search_papers(
             rows = conn.execute(
                 """
                 SELECT f.paper_id,
-                       snippet(papers_fts, 1, '<b>', '</b>', '...', 10) AS snippet,
+                       snippet(papers_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
                        rank AS score
                 FROM papers_fts f
                 JOIN papers p ON p.paper_id = f.paper_id
@@ -172,7 +172,7 @@ def search_papers(
             rows = conn.execute(
                 """
                 SELECT paper_id,
-                       snippet(papers_fts, 1, '<b>', '</b>', '...', 10) AS snippet,
+                       snippet(papers_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
                        rank AS score
                 FROM papers_fts
                 WHERE papers_fts MATCH ?
@@ -308,6 +308,44 @@ def _auto_embed_enabled() -> bool:
     }
 
 
+def _auto_fulltext_enabled() -> bool:
+    """Ob ``add_paper`` den PDF-Volltext extrahiert (aus via ``VAULT_AUTO_FULLTEXT=0``)."""
+    return os.environ.get("VAULT_AUTO_FULLTEXT", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def _maybe_extract_fulltext(db_path: str, paper_id: str, pdf_path: str | None) -> bool:
+    """Best-effort-Volltextextraktion nach einem Paper-Upsert (Issue #373).
+
+    Laeuft VOR dem Embedding-Ingest, damit dieser den PDF-Text statt nur
+    Titel+Abstract einbettet (Textquellen-Kaskade in ``ingest.resolve_paper_text``).
+    Bereits extrahierte Paper werden uebersprungen: ``add_paper`` ist ein Upsert
+    und wird bei Metadaten-Korrekturen wiederholt aufgerufen.
+
+    Fehler werden geloggt, nie geworfen — ein fehlendes oder defektes PDF darf
+    ``vault.add_paper`` nicht scheitern lassen.
+    """
+    if not pdf_path or not _auto_fulltext_enabled():
+        return False
+    try:
+        db = VaultDB(db_path)
+        if db.get_fulltext(paper_id) is not None:
+            return False
+        from .fulltext import extract_fulltext
+
+        text, extractor = extract_fulltext(pdf_path)
+        if not text:
+            return False
+        return db.set_fulltext(paper_id, text, extractor)
+    except Exception as exc:  # Extraktion ist optional — nie fatal fuer add_paper
+        logger.warning("Volltext-Extraktion fuer '%s' fehlgeschlagen: %s", paper_id, exc)
+        return False
+
+
 def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
     """Best-effort-Ingest nach einem Paper-Upsert.
 
@@ -420,8 +458,10 @@ def add_paper(
     csl_json wird strikt validiert (Issue #213): Pflichtfeld 'type', gueltiger
     CSL-Typ, valides JSON. Bei Verstoss ValueError statt silent default.
 
-    Nach dem Upsert laeuft der Embedding-Ingest (Issue #372) best effort:
-    abschaltbar via ``VAULT_AUTO_EMBED=0``, Fehler werden geloggt statt geworfen.
+    Nach dem Upsert laufen zwei best-effort-Schritte, beide loggen Fehler statt
+    sie zu werfen: die PDF-Volltext-Extraktion (Issue #373, abschaltbar via
+    ``VAULT_AUTO_FULLTEXT=0``) und darauf aufbauend der Embedding-Ingest
+    (Issue #372, abschaltbar via ``VAULT_AUTO_EMBED=0``).
     """
     validate_csl_json(csl_json)
     db = VaultDB(db_path)
@@ -441,6 +481,7 @@ def add_paper(
         parent_paper_id=parent_paper_id,
         provenance=provenance,
     )
+    _maybe_extract_fulltext(db_path, paper_id, pdf_path)
     _maybe_ingest_embeddings(db_path, paper_id)
 
 
@@ -926,6 +967,48 @@ def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
     return max(1, printed)  # Nie kleiner als 1
 
 
+def extract_fulltext_for_paper(
+    db_path: str,
+    paper_id: str,
+    backend: str = "auto",
+) -> dict:
+    """Extrahiert den PDF-Volltext eines Papers und indiziert ihn (Issue #373).
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        paper_id: Paper mit hinterlegtem ``pdf_path``.
+        backend: ``"auto"`` (GROBID falls ``GROBID_URL`` gesetzt, sonst pypdf),
+            ``"grobid"`` oder ``"pypdf"``.
+
+    Returns:
+        ``{"paper_id", "extractor", "chars", "indexed"}``. Bei einem PDF ohne
+        Text-Layer (Scan) ist ``indexed`` False und ``chars`` 0 — dann ist erst
+        ein OCR-Lauf noetig.
+
+    Raises:
+        ValueError: Paper unbekannt oder ohne ``pdf_path``.
+        FileNotFoundError: Hinterlegter ``pdf_path`` existiert nicht.
+    """
+    from .fulltext import extract_fulltext
+
+    db = VaultDB(db_path)
+    paper = db.get_paper(paper_id)
+    if paper is None:
+        raise ValueError(f"Paper unbekannt: {paper_id}")
+    pdf_path = (paper.get("pdf_path") or "").strip()
+    if not pdf_path:
+        raise ValueError(f"Paper '{paper_id}' hat keinen pdf_path -- nichts zu extrahieren.")
+
+    text, extractor = extract_fulltext(pdf_path, backend=backend)
+    indexed = db.set_fulltext(paper_id, text, extractor) if text else False
+    return {
+        "paper_id": paper_id,
+        "extractor": extractor,
+        "chars": len(text),
+        "indexed": indexed,
+    }
+
+
 # ---------------------------------------------------------------------------
 # MCP-Server (optional: nur wenn mcp-SDK verfuegbar)
 # ---------------------------------------------------------------------------
@@ -1085,6 +1168,14 @@ def _build_mcp_server():
     def _vault_get_printed_page(paper_id: str, pdf_page: int) -> int:
         """Berechnet gedruckte Seitenzahl: printed_page = pdf_page - page_offset."""
         return get_printed_page(db_path, paper_id, pdf_page)
+
+    @mcp.tool(name="vault.extract_fulltext")
+    def _vault_extract_fulltext(paper_id: str, backend: str = "auto") -> dict:
+        """Extrahiert den PDF-Volltext und indiziert ihn in papers_fts (#373).
+
+        backend: "auto" (GROBID falls GROBID_URL gesetzt, sonst pypdf), "grobid", "pypdf".
+        """
+        return extract_fulltext_for_paper(db_path, paper_id, backend=backend)
 
     @mcp.tool(name="vault.add_figure")
     def _vault_add_figure(
