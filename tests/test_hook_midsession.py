@@ -307,6 +307,87 @@ def test_hook_triggers_on_real_userpromptsubmit_payload_without_message_count(tm
     )
 
 
+def test_hook_persists_counter_before_vault_lookup(tmp_path):
+    """Regression: ein Hook-Timeout auf dem Trigger-Pfad darf den Zaehler nicht einfrieren.
+
+    `hooks/hooks.json` gibt dem UserPromptSubmit-Hook 15 s; der Vault-Lookup
+    wartet dagegen pro Interpreter-Kandidat bis zu 10 s (bis zu vier Kandidaten).
+    Haengt der Lookup, killt Claude Code den Hook-Prozess mitten drin.
+
+    Wird der bereits inkrementierte `prompt_count` erst NACH dem Lookup
+    persistiert, steht in der State-Datei danach weiterhin TRIGGER_N-1: der
+    naechste Prompt trifft wieder den Trigger-Pfad, haengt wieder, wird wieder
+    gekillt. Der Zaehler ist damit dauerhaft auf TRIGGER_N-1 eingefroren und der
+    teure Lookup laeuft ab da bei JEDER Message statt nur bei jeder N-ten.
+
+    Erwartung: der Zaehler ist vor dem Lookup persistiert, also auch nach einem
+    SIGKILL fortgeschritten — der Folge-Aufruf triggert nicht erneut.
+    """
+    marker = "Zaehler muss vor dem Lookup persistiert sein"
+    db_path = make_vault_with_decision(tmp_path, marker)
+
+    state_file = tmp_path / "state.json"
+    trigger_n = 2
+    # Vorzustand: TRIGGER_N-1 Prompts gezaehlt -> der naechste Aufruf triggert.
+    state_file.write_text(json.dumps({"prompt_count": trigger_n - 1}), encoding="utf-8")
+
+    # Interpreter, der beim Vault-Lookup haengt (bildet den langsamen/blockierten
+    # Subprozess nach, der den 15-s-Hook-Timeout reisst).
+    hanging_python = tmp_path / "hanging-python"
+    hanging_python.write_text("#!/bin/sh\nsleep 15\n")
+    hanging_python.chmod(0o755)
+
+    home = tmp_path / "home"
+    home.mkdir()
+    base_env = os.environ.copy()
+    base_env.update(
+        {
+            "HOME": str(home),
+            "VIRTUAL_ENV": "",
+            "VAULT_DB_PATH": db_path,
+            "ACADEMIC_REINFORCEMENT_STATE": str(state_file),
+            "ACADEMIC_REINFORCEMENT_N": str(trigger_n),
+        }
+    )
+
+    killed_env = dict(base_env, ACADEMIC_PYTHON=str(hanging_python))
+    proc = subprocess.Popen(
+        ["node", str(HOOK_PATH)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=killed_env,
+    )
+    try:
+        proc.communicate(input=json.dumps({"hook_event_name": "UserPromptSubmit"}), timeout=5)
+        pytest.fail("Hook beendete sich unerwartet — der Lookup sollte blockieren")
+    except subprocess.TimeoutExpired:
+        # Entspricht dem Hook-Timeout von Claude Code: Prozess wird abgeschossen.
+        proc.kill()
+        proc.communicate()
+
+    assert state_file.exists(), "State-Datei fehlt nach dem abgeschossenen Trigger-Aufruf"
+    persisted = json.loads(state_file.read_text(encoding="utf-8"))
+    assert persisted.get("prompt_count") == trigger_n, (
+        "prompt_count wurde erst nach dem Vault-Lookup persistiert — ein Hook-Timeout "
+        f"friert den Zaehler auf TRIGGER_N-1 ein. State: {persisted!r}"
+    )
+
+    # Folgeaufruf mit funktionierendem Interpreter: der Zaehler steht jetzt auf
+    # TRIGGER_N+1, es darf also KEIN erneuter Trigger stattfinden.
+    follow_up = run_hook(
+        {"hook_event_name": "UserPromptSubmit"},
+        env_overrides=dict(killed_env, ACADEMIC_PYTHON=sys.executable),
+    )
+    assert follow_up.returncode == 0, f"Erwartet 0, got {follow_up.returncode}"
+    combined = follow_up.stdout + follow_up.stderr
+    assert "Aktive Decisions" not in combined, (
+        "Nach dem abgeschossenen Trigger-Aufruf triggert der Hook sofort erneut — "
+        f"der Zaehler haengt fest: {combined!r}"
+    )
+
+
 def test_hook_no_trigger_on_sessionstart_without_compact_source(tmp_path):
     """SessionStart mit anderer source (z. B. 'startup') loest KEINEN Hint aus.
 

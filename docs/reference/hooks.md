@@ -66,6 +66,19 @@ importieren kann. Der Hook probiert daher in dieser Reihenfolge:
 Scheitert jeder Kandidat, bleibt der Hook fail-open (Exit 0) und injiziert den Hinweis
 ohne Decision-Liste.
 
+### Intervall-Zähler und Hook-Timeout
+
+Der `UserPromptSubmit`-Payload enthält kein `message_count`; der Hook zählt seine eigenen
+Aufrufe in `~/.academic-research/reinforcement-state.json` (`prompt_count`, Pfad
+überschreibbar via `ACADEMIC_REINFORCEMENT_STATE`). Der erhöhte Zähler wird **vor** dem
+Vault-Lookup geschrieben — auch auf dem Trigger-Pfad. Grund: der Lookup blockiert pro
+Interpreter-Kandidat bis zu 10 s, das Hook-Timeout in `hooks.json` beträgt 15 s. Würde
+erst nach dem Lookup gespeichert, bliebe bei einem abgeschossenen Trigger-Aufruf
+dauerhaft `TRIGGER_N-1` in der Datei stehen und jeder folgende Prompt liefe erneut in
+denselben hängenden Lookup. Preis dieser Reihenfolge: Stirbt der Hook während des
+Lookups, entfällt die Erinnerung dieser Runde — die nächste kommt regulär nach
+`ACADEMIC_REINFORCEMENT_N` weiteren Nachrichten.
+
 > **Nicht verdrahtet:** `hooks/onboard-project-uni-prompt.sh` liegt zwar im Repo, ist aber
 > **kein** Hook. Es ist ein eigenständiges Helferskript zur Profilauswahl, das manuell
 > aufgerufen wird (`./hooks/onboard-project-uni-prompt.sh --profile tum`). Frühere

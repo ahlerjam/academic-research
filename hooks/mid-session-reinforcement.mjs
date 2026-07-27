@@ -245,9 +245,20 @@ async function main() {
     const promptCount = (Number(state.prompt_count) || 0) + 1;
     state.prompt_count = promptCount;
 
+    // Zaehler SOFORT persistieren — auf beiden Pfaden und vor dem Vault-Lookup.
+    // Der Lookup blockiert pro Interpreter-Kandidat bis zu 10 s (execFileSync-
+    // timeout, bis zu vier Kandidaten), das UserPromptSubmit-Timeout in
+    // hooks.json betraegt 15 s. Wuerde erst nach dem Lookup gespeichert, bliebe
+    // bei einem abgeschossenen Trigger-Aufruf TRIGGER_N-1 in der State-Datei
+    // stehen: der naechste Prompt traefe wieder den Trigger-Pfad, haenge wieder,
+    // wuerde wieder gekillt. Der Zaehler waere dauerhaft eingefroren und der
+    // teure Lookup liefe ab da bei jeder Message. Preis dieser Reihenfolge:
+    // stirbt der Hook waehrend des Lookups, entfaellt der Reminder dieser Runde
+    // — deutlich guenstiger als eine Endlosschleife teurer Lookups.
+    saveState(state);
+
     if (promptCount % TRIGGER_N !== 0) {
-      // Noch nicht die N-te Message dieser Runde — Zaehler trotzdem persistieren.
-      saveState(state);
+      // Noch nicht die N-te Message dieser Runde.
       process.exit(0);
     }
   }
@@ -258,10 +269,8 @@ async function main() {
   // Reminder ausgeben
   printReminder(decisions);
 
-  // State aktualisieren (prompt_count wurde fuer den Intervall-Pfad bereits
-  // oben erhoeht und persistiert; Compaction veraendert den Zaehler nicht).
-  saveState(state);
-
+  // Kein weiterer saveState: prompt_count ist oben bereits persistiert, der
+  // Compaction-Pfad veraendert den State ueberhaupt nicht.
   process.exit(0);
 }
 
