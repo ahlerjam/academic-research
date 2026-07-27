@@ -43,6 +43,7 @@ if str(_REPO_SCRIPTS) not in sys.path:
 # server.py-Funktionen fuer Vault-Zugriff (als optionale Laufzeit-Deps)
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+    from academic_vault.server import add_excluded_source as _vault_add_excluded_source_native
     from academic_vault.server import add_paper as _vault_add_paper_native
 
     _VAULT_NATIVE = True
@@ -77,6 +78,28 @@ def vault_add_paper(
     else:
         raise RuntimeError(
             "vault_add_paper: academic_vault.server nicht verfuegbar. "
+            "Stelle sicher dass der MCP-Server im PYTHONPATH ist."
+        )
+
+
+def vault_add_excluded_source(
+    db_path: str,
+    paper_id: str,
+    reason: str | None = None,
+) -> None:
+    """Wrapper um academic_vault.server.add_excluded_source.
+
+    Wird in Tests via patch() ersetzt.
+    """
+    if _VAULT_NATIVE:
+        _vault_add_excluded_source_native(
+            db_path=db_path,
+            paper_id=paper_id,
+            reason=reason,
+        )
+    else:
+        raise RuntimeError(
+            "vault_add_excluded_source: academic_vault.server nicht verfuegbar. "
             "Stelle sicher dass der MCP-Server im PYTHONPATH ist."
         )
 
@@ -323,6 +346,52 @@ def resolve_doi(doi: str) -> str | None:
     return _crossref_message_to_csl(msg)
 
 
+def _is_retraction_update(updated_by: object) -> bool:
+    """Prueft ob eine Crossref `updated-by`-Liste einen Retraction-Eintrag enthaelt.
+
+    Robust gegen fehlendes Feld und gegen explizites JSON-null: Crossref liefert
+    `updated-by` nur bei tatsaechlich aktualisierten Werken.
+    """
+    if not isinstance(updated_by, list):
+        return False
+    return any(
+        isinstance(entry, dict) and entry.get("type") == "retraction" for entry in updated_by
+    )
+
+
+def check_retraction(doi: str) -> bool:
+    """Prueft via Crossref ob ein DOI als zurueckgezogen (retracted) markiert ist.
+
+    Nutzt die seit 09/2023 in Crossref integrierten Retraction-Watch-Daten.
+
+    Ausgewertet wird `message.updated-by` mit `type == "retraction"`: Crossref
+    haengt dieses Feld an den ZURUECKGEZOGENEN Artikel. Das Gegenstueck
+    `message.update-to` gehoert zur Retraction-NOTIZ und zeigt von dieser auf den
+    Artikel — es auszuwerten drehte die Relation um und liefe fuer jedes real
+    zurueckgezogene Paper ins Leere (Regression, PR #419).
+
+    Fail-safe: Jeder Netzwerk-/Parse-Fehler oder fehlender DOI liefert False —
+    blockiert niemals den regulaeren Paper-Ingest (AC3, Issue #383).
+    """
+    if not doi:
+        return False
+    if not _REQUESTS_AVAILABLE:
+        return False
+
+    try:
+        doi_clean = _normalize_doi(doi)
+        url = _CROSSREF_API.format(doi=doi_clean)
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "academic-research/1.0"})
+
+        if resp.status_code != 200:
+            return False
+
+        msg = resp.json().get("message", {})
+        return _is_retraction_update(msg.get("updated-by"))
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # ISBN-Resolution
 # ---------------------------------------------------------------------------
@@ -465,6 +534,31 @@ def import_reading_list(
                 isbn=isbn,
             )
             imported += 1
+
+            # Retraction-Check (Issue #383): fail-safe, blockiert den Ingest nie.
+            if doi:
+                try:
+                    retracted = check_retraction(doi)
+                except Exception:
+                    # Crossref-/Netzwerk-Ausfall: darf den Ingest nie blockieren (AC3).
+                    retracted = False
+
+                if retracted:
+                    try:
+                        vault_add_excluded_source(
+                            db_path=db_path,
+                            paper_id=paper_id,
+                            reason="Crossref: update-type retraction",
+                        )
+                    except Exception as exc:
+                        # Die Retraktion wurde erkannt, konnte aber nicht in den
+                        # Vault geschrieben werden. Der Ingest selbst bleibt
+                        # erfolgreich (fail-safe), der Fehlschlag darf aber nicht
+                        # spurlos verschwinden.
+                        errors.append(
+                            f"{entry.get('title', '?')}: Retraction erkannt, aber "
+                            f"vault_add_excluded_source fehlgeschlagen: {exc}"
+                        )
 
         except Exception as exc:
             errors.append(f"{entry.get('title', '?')}: {exc}")
