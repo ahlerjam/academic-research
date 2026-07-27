@@ -5,6 +5,7 @@ Context-Manager-Klasse mit sqlite-vec-Fallback und FTS5-Volltext-Suche.
 
 import contextlib
 import json
+import logging
 import math
 import os
 import re
@@ -16,6 +17,8 @@ from uuid import uuid4
 
 from .embedding_model import EMBEDDING_DIM, deserialize_f32, serialize_f32
 
+logger = logging.getLogger(__name__)
+
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 # vec0-Spiegel der chunk_embeddings-Vektoren (Issue #372). Die DDL steht hier
@@ -26,6 +29,34 @@ _CHUNK_VECTORS_DDL = (
 )
 
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
+
+# Schema-Versions-Gate (Issue #368): ueber PRAGMA user_version verfolgt.
+# Unversionierte/Legacy-DBs haben user_version=0 (SQLite-Default) und liegen
+# damit garantiert unter diesem Wert. Hochzaehlen, sobald schema.sql um
+# Spalten/Tabellen erweitert wird, die eine Bestands-Migration brauchen --
+# und der neue migrate.py-Helfer in apply_pending_migrations() ergaenzt wird.
+CURRENT_SCHEMA_VERSION = 1
+
+# Spalten, die `migrate.apply_pending_migrations()` in `papers` nachziehen muss
+# (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
+# jeder Helfer kapselt sein `ALTER TABLE` in `except sqlite3.OperationalError:
+# pass` (migrate.py) -- das faengt nicht nur "duplicate column name", sondern
+# z. B. auch "database is locked". Vor dem Stempeln wird deshalb per
+# `PRAGMA table_info(papers)` verifiziert, dass die Migration tatsaechlich
+# gegriffen hat, statt dem Rueckgabewert (`None`, kein Erfolgssignal) blind zu
+# vertrauen -- sonst schliesst sich das Versions-Gate unwiderruflich, obwohl
+# die Spalten weiterhin fehlen.
+_LEGACY_MIGRATION_COLUMNS = frozenset(
+    {
+        "parent_paper_id",
+        "provenance",
+        "editor",
+        "chapter",
+        "page_first",
+        "page_last",
+        "container_title",
+    }
+)
 
 
 class VaultLockedError(RuntimeError):
@@ -257,11 +288,38 @@ class VaultDB:
         return self.vec_available
 
     def init_schema(self) -> None:
-        """Erstellt alle Tabellen gemaess schema.sql. Versucht vec0 zu erstellen."""
+        """Erstellt alle Tabellen gemaess schema.sql, migriert Bestands-DBs (#368).
+
+        `CREATE TABLE IF NOT EXISTS` (schema.sql) deckt neue Tabellen und
+        frische DBs bereits vollstaendig ab, kann aber bestehende Tabellen
+        nicht um neue Spalten erweitern. Ein Versions-Gate ueber
+        `PRAGMA user_version` schliesst diese Luecke: Eine DB, deren
+        `papers`-Tabelle schon vor dem DDL-Lauf existierte (Legacy-Schema,
+        z.B. prae-#195 ohne `parent_paper_id`/`provenance`) und deren
+        `user_version` noch unter `CURRENT_SCHEMA_VERSION` liegt, bekommt
+        einmalig die additiven `migrate.py`-Helfer nachgezogen -- statt bei
+        `add_paper()` mit `sqlite3.OperationalError` abzustuerzen.
+
+        Bei bereits aktueller `user_version` ist der Aufruf ein billiger
+        PRAGMA-Read ohne weitere Schreiboperation: `init_schema()` ist ein
+        Hot-Path (server.py ruft ihn ~17x auf), wiederholte Aufrufe duerfen
+        keine ALTER-Versuche o.ae. wiederholen.
+        """
         ddl = _SCHEMA_PATH.read_text(encoding="utf-8")
         with self._connection(commit=True) as conn:
             # vec-Extension auf derselben Connection laden (optional)
             self.load_vec_extension(conn)
+
+            # Fresh-DB-Erkennung *vor* dem DDL-Lauf: existierte "papers" schon,
+            # koennte es sich um ein Legacy-Schema handeln, das Migrationshelfer
+            # braucht. Eine echte Neuanlage bekommt schema.sql komplett (inkl.
+            # aller Spalten) und braucht keine Helfer.
+            papers_existed_before = (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='papers'"
+                ).fetchone()
+                is not None
+            )
 
             # Basis-Schema ausfuehren (ohne vec0-Block — der ist auskommentiert)
             conn.executescript(ddl)
@@ -276,6 +334,55 @@ class VaultDB:
                     conn.execute(_CHUNK_VECTORS_DDL)
                 except sqlite3.OperationalError:
                     self.vec_available = False
+
+        if not papers_existed_before:
+            # Echte Neuanlage: schema.sql deckt alle Spalten bereits ab,
+            # Migrationshelfer sind nicht noetig -- Version direkt setzen.
+            with self._connection(commit=True) as conn:
+                conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+            return
+
+        with self._connection() as conn:
+            current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if current_version >= CURRENT_SCHEMA_VERSION:
+            return  # bereits migriert -- kein weiterer Schreibzugriff
+
+        # Legacy-DB unter der aktuellen Schema-Version: Migrationshelfer
+        # ausserhalb jeder offenen self._connection() ausfuehren. Die Helfer
+        # oeffnen ihre eigenen kurzlebigen sqlite3-Connections (migrate.py);
+        # das darf sich nicht mit einer hier noch offenen Schreibtransaktion
+        # ueberschneiden (Issue #368, Plan-Risikonotiz).
+        from . import migrate
+
+        migrate.apply_pending_migrations(self.db_path)
+
+        # Nicht blind vertrauen: apply_pending_migrations() gibt kein
+        # Erfolgssignal zurueck, und jeder Helfer schluckt *jeden*
+        # sqlite3.OperationalError (nicht nur "duplicate column name") als
+        # vermeintliche Idempotenz. Erst per PRAGMA table_info(papers)
+        # verifizieren, dass die Migration tatsaechlich gegriffen hat, bevor
+        # der Stempel gesetzt wird -- sonst schliesst sich das Versions-Gate
+        # unwiderruflich (Review-Fund PR #427: user_version wuerde auch nach
+        # fehlgeschlagener Migration gestempelt, AC1 dauerhaft verletzt).
+        with self._connection(commit=True) as conn:
+            papers_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(papers)").fetchall()
+            }
+            if _LEGACY_MIGRATION_COLUMNS <= papers_columns:
+                conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+            else:
+                # Stempel bewusst auslassen: user_version bleibt unter
+                # CURRENT_SCHEMA_VERSION, damit der naechste init_schema()-Aufruf
+                # die Migration erneut versucht statt sie faelschlich als
+                # erledigt zu betrachten.
+                missing = sorted(_LEGACY_MIGRATION_COLUMNS - papers_columns)
+                logger.warning(
+                    "Migration auf Schema-Version %d nicht verifizierbar -- "
+                    "papers fehlen weiterhin Spalten %s. user_version bleibt "
+                    "unveraendert, naechster init_schema()-Aufruf migriert erneut (#368).",
+                    CURRENT_SCHEMA_VERSION,
+                    missing,
+                )
 
     # ------------------------------------------------------------------
     # Papers CRUD

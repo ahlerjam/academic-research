@@ -311,6 +311,27 @@ def add_v64_tables(db_path: str) -> None:
         conn.close()
 
 
+def apply_pending_migrations(db_path: str) -> None:
+    """Buendelt die bekannten additiven Bestands-Migrationshelfer (Issue #368).
+
+    Fuehrt die 5 bestehenden, jeweils fuer sich idempotenten Helfer in fester
+    Reihenfolge aus. Bisher wurden diese Helfer nur direkt von Tests
+    aufgerufen (`test_vault_parent.py`, `test_vault_book_chapter.py`) -- kein
+    Produktivpfad hat sie verdrahtet. `VaultDB.init_schema()` ruft diese
+    Funktion ueber ein `PRAGMA user_version`-Gate genau einmal pro
+    Schema-Generation auf einer Legacy-DB auf.
+
+    Jeder Helfer oeffnet/schliesst seine eigene kurzlebige `sqlite3`-Connection
+    (try/except pro ALTER bzw. `CREATE TABLE IF NOT EXISTS`), daher ist auch
+    das wiederholte Ausfuehren dieser Buendel-Funktion sicher.
+    """
+    add_parent_paper_id_column(db_path)
+    add_provenance_column(db_path)
+    add_book_columns(db_path)
+    add_figures_table(db_path)
+    add_v64_tables(db_path)
+
+
 def add_chunk_vectors_table(db_path: str) -> int:
     """Legt die vec0-Tabelle ``chunk_vectors`` an und spiegelt Bestandsvektoren.
 
