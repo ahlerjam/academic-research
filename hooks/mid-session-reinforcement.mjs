@@ -11,6 +11,15 @@
  * Liest Top-5 aktive Decisions aus Vault und erinnert Modell als System-Hint.
  * Loest max. 1× pro 20 Messages aus (State-Datei verhindert Duplikate).
  *
+ * Zaehlung der User-Messages (Fix #382 P2-Finding aus PR #420-Review):
+ * Der UserPromptSubmit-Payload von Claude Code enthaelt laut Doku KEIN
+ * `message_count`-Feld (nur session_id, prompt_id, transcript_path, cwd,
+ * permission_mode, effort, hook_event_name, optional agent_id/agent_type).
+ * Ein Trigger, der auf `input.message_count` haengt, feuert daher in echten
+ * Sessions nie. Statt eines externen Feldes zaehlt der Hook seine eigenen
+ * UserPromptSubmit-Aufrufe persistent in der State-Datei (`prompt_count`) —
+ * jeder Aufruf entspricht genau einer realen User-Message.
+ *
  * Protokoll:
  *   - Eingabe: JSON via stdin (Claude Code UserPromptSubmit/SessionStart-Format)
  *   - Ausgabe: Reminder-Text auf stdout (als System-Hint fuer Modell)
@@ -66,7 +75,7 @@ async function readStdin() {
 // ---------------------------------------------------------------------------
 
 /**
- * Laedt den State aus der State-Datei. Gibt {last_trigger_at: 0} als Default.
+ * Laedt den State aus der State-Datei. Gibt {prompt_count: 0} als Default.
  */
 function loadState() {
   try {
@@ -76,7 +85,7 @@ function loadState() {
   } catch {
     // Ignore
   }
-  return { last_trigger_at: 0 };
+  return { prompt_count: 0 };
 }
 
 /**
@@ -172,23 +181,29 @@ async function main() {
 
   const eventName = input?.hook_event_name || '';
   const source = input?.source || '';
-  const messageCount = input?.message_count ?? 0;
 
   const isCompaction = eventName === 'SessionStart' && source === 'compact';
-  const isNthMessage = messageCount > 0 && messageCount % TRIGGER_N === 0;
+  const isUserPromptSubmit = eventName === 'UserPromptSubmit';
 
-  if (!isCompaction && !isNthMessage) {
-    // Kein Trigger-Bedingung erfuellt
+  if (!isCompaction && !isUserPromptSubmit) {
+    // Kein bekanntes Trigger-Event
     process.exit(0);
   }
 
-  // State pruefen — max 1× pro 20-Messages-Runde
   const state = loadState();
-  const currentRound = Math.floor(messageCount / TRIGGER_N);
 
-  if (!isCompaction && state.last_trigger_at >= currentRound && currentRound > 0) {
-    // Bereits in dieser Runde ausgeloest
-    process.exit(0);
+  if (!isCompaction) {
+    // UserPromptSubmit: kein `message_count`-Feld im realen Payload (#382 P2).
+    // Eigener persistenter Zaehler in der State-Datei zaehlt die tatsaechlichen
+    // Hook-Aufrufe — jeder Aufruf entspricht genau einer realen User-Message.
+    const promptCount = (Number(state.prompt_count) || 0) + 1;
+    state.prompt_count = promptCount;
+
+    if (promptCount % TRIGGER_N !== 0) {
+      // Noch nicht die N-te Message dieser Runde — Zaehler trotzdem persistieren.
+      saveState(state);
+      process.exit(0);
+    }
   }
 
   // Decisions laden
@@ -197,8 +212,8 @@ async function main() {
   // Reminder ausgeben
   printReminder(decisions);
 
-  // State aktualisieren
-  state.last_trigger_at = currentRound;
+  // State aktualisieren (prompt_count wurde fuer den Intervall-Pfad bereits
+  // oben erhoeht und persistiert; Compaction veraendert den Zaehler nicht).
   saveState(state);
 
   process.exit(0);

@@ -44,14 +44,18 @@ def test_hook_exits_zero_on_userpromptsubmit_event():
     """Hook verarbeitet UserPromptSubmit-Event ohne Fehler."""
     payload = {
         "hook_event_name": "UserPromptSubmit",
-        "message_count": 20,
     }
     result = run_hook(payload)
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
 
 
-def test_hook_outputs_hint_at_message_20(tmp_path):
-    """Hook gibt System-Hint aus wenn message_count == 20."""
+def test_hook_outputs_hint_on_userpromptsubmit(tmp_path):
+    """Hook gibt System-Hint mit Decision-Inhalt aus, wenn der Intervall-Zaehler erreicht ist.
+
+    `ACADEMIC_REINFORCEMENT_N=1` macht bereits den ersten realen
+    UserPromptSubmit-Aufruf zum Trigger (kein `message_count` im Payload —
+    das Feld existiert im realen Payload nicht, siehe #382 P2-Fix).
+    """
     # Erstelle Vault mit Decisions
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
@@ -77,11 +81,11 @@ def test_hook_outputs_hint_at_message_20(tmp_path):
 
     payload = {
         "hook_event_name": "UserPromptSubmit",
-        "message_count": 20,
     }
     env_overrides = {
         "VAULT_DB_PATH": db_path,
         "ACADEMIC_REINFORCEMENT_STATE": str(state_file),
+        "ACADEMIC_REINFORCEMENT_N": "1",
     }
 
     result = run_hook(payload, env_overrides=env_overrides)
@@ -95,8 +99,8 @@ def test_hook_outputs_hint_at_message_20(tmp_path):
     ), f"Kein Decision-Hint in Ausgabe: stdout={result.stdout!r}, stderr={result.stderr!r}"
 
 
-def test_hook_no_output_at_message_10(tmp_path):
-    """Hook gibt keinen Hint aus wenn message_count < 20."""
+def test_hook_no_output_before_interval_reached(tmp_path):
+    """Hook gibt keinen Hint aus, solange der Intervall-Zaehler TRIGGER_N noch nicht erreicht hat."""
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 
@@ -109,22 +113,22 @@ def test_hook_no_output_at_message_10(tmp_path):
 
     payload = {
         "hook_event_name": "UserPromptSubmit",
-        "message_count": 10,
     }
     env_overrides = {
         "VAULT_DB_PATH": db_path,
         "ACADEMIC_REINFORCEMENT_STATE": str(state_file),
+        "ACADEMIC_REINFORCEMENT_N": "5",
     }
 
+    # Erster Aufruf (prompt_count=1) liegt weit vor TRIGGER_N=5 -> kein Reminder.
     result = run_hook(payload, env_overrides=env_overrides)
     assert result.returncode == 0
-    # Bei < 20 Messages: kein Reminder
     combined = result.stdout + result.stderr
-    assert "Aktive Decisions" not in combined, f"Unerwarteter Hint bei 10 Messages: {combined}"
+    assert "Aktive Decisions" not in combined, f"Unerwarteter Hint vor Intervall: {combined}"
 
 
-def test_hook_fires_max_once_per_20_messages(tmp_path):
-    """Hook loest max 1× pro 20 Messages aus (State-Datei verhindert Duplikate)."""
+def test_hook_fires_max_once_per_interval(tmp_path):
+    """Hook loest max 1× pro Intervall aus (persistenter Zaehler in der State-Datei)."""
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 
@@ -137,29 +141,38 @@ def test_hook_fires_max_once_per_20_messages(tmp_path):
     env_overrides = {
         "VAULT_DB_PATH": db_path,
         "ACADEMIC_REINFORCEMENT_STATE": str(state_file),
+        "ACADEMIC_REINFORCEMENT_N": "3",
     }
+    payload = {"hook_event_name": "UserPromptSubmit"}
 
-    # Erster Aufruf bei message_count=20 -> Hint
-    payload = {"hook_event_name": "UserPromptSubmit", "message_count": 20}
+    # Aufrufe 1 und 2 (prompt_count 1, 2) -> kein Hint.
     result1 = run_hook(payload, env_overrides=env_overrides)
-    assert result1.returncode == 0
-    combined1 = result1.stdout + result1.stderr
-
-    # Zweiter Aufruf bei message_count=20 (gleiche Runde) -> kein Hint
     result2 = run_hook(payload, env_overrides=env_overrides)
-    assert result2.returncode == 0
+    # Aufruf 3 (prompt_count == TRIGGER_N) -> Hint.
+    result3 = run_hook(payload, env_overrides=env_overrides)
+    # Aufruf 4 (prompt_count == TRIGGER_N + 1) -> wieder kein Hint.
+    result4 = run_hook(payload, env_overrides=env_overrides)
+
+    for i, result in enumerate([result1, result2, result3, result4], start=1):
+        assert result.returncode == 0, f"Aufruf {i}: erwartet 0, got {result.returncode}"
+
+    combined1 = result1.stdout + result1.stderr
     combined2 = result2.stdout + result2.stderr
+    combined3 = result3.stdout + result3.stderr
+    combined4 = result4.stdout + result4.stderr
 
-    # Erster Aufruf hat Hint; zweiter Aufruf nicht
-    has_hint1 = "Aktive Decisions" in combined1 or "Entscheidung" in combined1
-    has_hint2 = "Aktive Decisions" in combined2 or "Entscheidung" in combined2
-
-    assert has_hint1, f"Erster Aufruf sollte Hint haben: {combined1!r}"
-    assert not has_hint2, f"Zweiter Aufruf sollte keinen Hint haben: {combined2!r}"
+    assert "Aktive Decisions" not in combined1, f"Aufruf 1 sollte keinen Hint haben: {combined1!r}"
+    assert "Aktive Decisions" not in combined2, f"Aufruf 2 sollte keinen Hint haben: {combined2!r}"
+    assert "Entscheidung" in combined3 or "Aktive Decisions" in combined3, (
+        f"Aufruf 3 (TRIGGER_N) sollte Hint haben: {combined3!r}"
+    )
+    assert "Aktive Decisions" not in combined4, (
+        f"Aufruf 4 sollte nicht sofort erneut triggern: {combined4!r}"
+    )
 
 
 def test_hook_triggers_after_compaction(tmp_path):
-    """Hook gibt Hint aus nach SessionStart(source=compact) unabhaengig von message_count."""
+    """Hook gibt Hint aus nach SessionStart(source=compact), unabhaengig vom Intervall-Zaehler."""
     from academic_vault.db import VaultDB
     from academic_vault.server import add_decision
 
@@ -173,7 +186,6 @@ def test_hook_triggers_after_compaction(tmp_path):
     payload = {
         "hook_event_name": "SessionStart",
         "source": "compact",
-        "message_count": 5,  # < 20, aber Compaction
     }
     env_overrides = {
         "VAULT_DB_PATH": db_path,
@@ -186,6 +198,67 @@ def test_hook_triggers_after_compaction(tmp_path):
     combined = result.stdout + result.stderr
     assert "Qualitative" in combined or "Aktive" in combined or "Decision" in combined, (
         f"Kein Hint nach Compaction: stdout={result.stdout!r}, stderr={result.stderr!r}"
+    )
+
+
+def test_hook_triggers_on_real_userpromptsubmit_payload_without_message_count(tmp_path):
+    """Regression-Test fuer Issue #382 P2-Finding.
+
+    Der reale UserPromptSubmit-Payload von Claude Code enthaelt laut Doku
+    (code.claude.com/docs/en/hooks) KEIN `message_count`-Feld (nur session_id,
+    prompt_id, transcript_path, cwd, permission_mode, effort, hook_event_name,
+    optional agent_id/agent_type). Der Hook darf sich daher fuer den
+    Intervall-Trigger nicht auf ein synthetisches `message_count` verlassen —
+    sonst bleibt `messageCount` immer 0 und der Trigger feuert nie (siehe
+    flowkit-code-review P2 auf PR #420).
+
+    Simuliert TRIGGER_N reale Aufrufe (kein message_count im Payload) und
+    erwartet einen Hint erst beim TRIGGER_N-ten Aufruf.
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.server import add_decision
+
+    db_path = str(tmp_path / "test_vault.db")
+    db = VaultDB(db_path)
+    db.init_schema()
+    add_decision(
+        db_path, category="Methodik", text="Reale Payload ohne message_count", rationale=None
+    )
+
+    state_file = tmp_path / "reinforcement_state.json"
+    trigger_n = 3
+    env_overrides = {
+        "VAULT_DB_PATH": db_path,
+        "ACADEMIC_REINFORCEMENT_STATE": str(state_file),
+        "ACADEMIC_REINFORCEMENT_N": str(trigger_n),
+    }
+
+    # Realer Payload: session_id/prompt_id/transcript_path/cwd/permission_mode/
+    # hook_event_name — explizit KEIN message_count.
+    real_payload = {
+        "session_id": "sess-123",
+        "prompt_id": "prompt-1",
+        "transcript_path": str(tmp_path / "transcript.jsonl"),
+        "cwd": str(tmp_path),
+        "permission_mode": "default",
+        "hook_event_name": "UserPromptSubmit",
+    }
+
+    results = [run_hook(dict(real_payload), env_overrides=env_overrides) for _ in range(trigger_n)]
+    for i, result in enumerate(results, start=1):
+        assert result.returncode == 0, (
+            f"Aufruf {i}: erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+        )
+
+    combined_before = results[0].stdout + results[0].stderr
+    combined_last = results[-1].stdout + results[-1].stderr
+
+    assert "Aktive Decisions" not in combined_before, (
+        f"Unerwarteter Hint vor Erreichen von TRIGGER_N: {combined_before!r}"
+    )
+    assert "Reale Payload" in combined_last or "Aktive Decisions" in combined_last, (
+        f"Kein Hint beim {trigger_n}. Aufruf trotz realem Payload: stdout={results[-1].stdout!r}, "
+        f"stderr={results[-1].stderr!r}"
     )
 
 
@@ -208,7 +281,6 @@ def test_hook_no_trigger_on_sessionstart_without_compact_source(tmp_path):
     payload = {
         "hook_event_name": "SessionStart",
         "source": "startup",
-        "message_count": 0,
     }
     env_overrides = {
         "VAULT_DB_PATH": db_path,
@@ -227,11 +299,11 @@ def test_hook_failopen_when_vault_missing():
     """Hook ist fail-open wenn Vault-DB nicht existiert."""
     payload = {
         "hook_event_name": "UserPromptSubmit",
-        "message_count": 20,
     }
     env_overrides = {
         "VAULT_DB_PATH": "/nonexistent/vault.db",
         "ACADEMIC_REINFORCEMENT_STATE": "/tmp/test_state_nonexistent.json",
+        "ACADEMIC_REINFORCEMENT_N": "1",
     }
     result = run_hook(payload, env_overrides=env_overrides)
     assert result.returncode == 0, (
