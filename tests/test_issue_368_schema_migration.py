@@ -184,3 +184,64 @@ class TestMigrationIdempotency:
         with patch("academic_vault.migrate.add_parent_paper_id_column") as mock_parent:
             db.init_schema()  # zweiter Aufruf: bereits aktuell, kein erneuter Helfer-Aufruf
             mock_parent.assert_not_called()
+
+
+class TestMigrationVerificationBeforeStamping:
+    """Regression: `user_version` darf nur bei tatsaechlich verifizierter Migration
+    gestempelt werden (Review-Fund zu PR #427, `db.py:336`).
+
+    `migrate.apply_pending_migrations()` gibt `None` zurueck und jeder Helfer
+    kapselt sein `ALTER TABLE` in `except sqlite3.OperationalError: pass`
+    (migrate.py) -- das faengt nicht nur "duplicate column name", sondern z. B.
+    auch "database is locked". Stempelt `init_schema()` `user_version`
+    trotzdem unbedingt, gilt eine Legacy-DB ab dann faelschlich als vollstaendig
+    migriert und der naechste `init_schema()`-Aufruf ueberspringt jeden
+    weiteren Migrationsversuch (`current_version >= CURRENT_SCHEMA_VERSION`) --
+    obwohl `parent_paper_id`/`provenance` weiterhin fehlen.
+    """
+
+    def setup_method(self):
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.db_path = self.tmp.name
+        self.tmp.close()
+        _create_pre_195_papers_table(self.db_path)
+
+    def teardown_method(self):
+        os.unlink(self.db_path)
+
+    def test_user_version_not_stamped_when_migration_helper_silently_fails(self):
+        """Simuliert einen Helfer, dessen ALTER TABLE nie ankommt (z. B. verschluckter
+        Lock-Fehler): `parent_paper_id` bleibt nach `init_schema()` weiterhin unter
+        `papers`, also darf `user_version` NICHT auf `CURRENT_SCHEMA_VERSION` stehen --
+        sonst schliesst sich das Gate unwiderruflich (AC1 dauerhaft verletzt)."""
+        with patch("academic_vault.migrate.add_parent_paper_id_column") as mock_parent:
+            mock_parent.return_value = None  # No-op statt echtem ALTER TABLE
+            db = VaultDB(self.db_path)
+            db.init_schema()
+
+        cols = _table_info_columns(self.db_path, "papers")
+        assert "parent_paper_id" not in cols, "Testannahme verletzt: Mock hat nicht gegriffen"
+
+        assert _user_version(self.db_path) < CURRENT_SCHEMA_VERSION, (
+            "user_version wurde trotz unvollstaendiger Migration gestempelt -- "
+            "das Gate schliesst sich unwiderruflich, AC1 ist dauerhaft verletzt"
+        )
+
+    def test_failed_migration_is_retried_on_next_init_schema_call(self):
+        """Nachdem ein Helfer beim ersten Aufruf (simuliert) fehlschlaegt, muss ein
+        zweiter, ungestoerter `init_schema()`-Aufruf die Migration nachholen --
+        genau das verhindert das unwiderrufliche Gate aus Issue #368."""
+        with patch("academic_vault.migrate.add_parent_paper_id_column") as mock_parent:
+            mock_parent.return_value = None
+            db = VaultDB(self.db_path)
+            db.init_schema()
+        assert "parent_paper_id" not in _table_info_columns(self.db_path, "papers")
+
+        # Zweiter, ungestoerter Aufruf (kein Mock mehr): muss die Migration
+        # tatsaechlich nachholen statt sie wegen gestempeltem user_version zu
+        # ueberspringen.
+        db = VaultDB(self.db_path)
+        db.init_schema()
+
+        assert "parent_paper_id" in _table_info_columns(self.db_path, "papers")
+        assert _user_version(self.db_path) == CURRENT_SCHEMA_VERSION

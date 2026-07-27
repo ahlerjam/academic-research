@@ -5,6 +5,7 @@ Context-Manager-Klasse mit sqlite-vec-Fallback und FTS5-Volltext-Suche.
 
 import contextlib
 import json
+import logging
 import math
 import os
 import re
@@ -15,6 +16,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from .embedding_model import EMBEDDING_DIM, deserialize_f32, serialize_f32
+
+logger = logging.getLogger(__name__)
 
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
@@ -33,6 +36,27 @@ VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 # Spalten/Tabellen erweitert wird, die eine Bestands-Migration brauchen --
 # und der neue migrate.py-Helfer in apply_pending_migrations() ergaenzt wird.
 CURRENT_SCHEMA_VERSION = 1
+
+# Spalten, die `migrate.apply_pending_migrations()` in `papers` nachziehen muss
+# (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
+# jeder Helfer kapselt sein `ALTER TABLE` in `except sqlite3.OperationalError:
+# pass` (migrate.py) -- das faengt nicht nur "duplicate column name", sondern
+# z. B. auch "database is locked". Vor dem Stempeln wird deshalb per
+# `PRAGMA table_info(papers)` verifiziert, dass die Migration tatsaechlich
+# gegriffen hat, statt dem Rueckgabewert (`None`, kein Erfolgssignal) blind zu
+# vertrauen -- sonst schliesst sich das Versions-Gate unwiderruflich, obwohl
+# die Spalten weiterhin fehlen.
+_LEGACY_MIGRATION_COLUMNS = frozenset(
+    {
+        "parent_paper_id",
+        "provenance",
+        "editor",
+        "chapter",
+        "page_first",
+        "page_last",
+        "container_title",
+    }
+)
 
 
 class VaultLockedError(RuntimeError):
@@ -332,8 +356,33 @@ class VaultDB:
 
         migrate.apply_pending_migrations(self.db_path)
 
+        # Nicht blind vertrauen: apply_pending_migrations() gibt kein
+        # Erfolgssignal zurueck, und jeder Helfer schluckt *jeden*
+        # sqlite3.OperationalError (nicht nur "duplicate column name") als
+        # vermeintliche Idempotenz. Erst per PRAGMA table_info(papers)
+        # verifizieren, dass die Migration tatsaechlich gegriffen hat, bevor
+        # der Stempel gesetzt wird -- sonst schliesst sich das Versions-Gate
+        # unwiderruflich (Review-Fund PR #427: user_version wuerde auch nach
+        # fehlgeschlagener Migration gestempelt, AC1 dauerhaft verletzt).
         with self._connection(commit=True) as conn:
-            conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+            papers_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(papers)").fetchall()
+            }
+            if _LEGACY_MIGRATION_COLUMNS <= papers_columns:
+                conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+            else:
+                # Stempel bewusst auslassen: user_version bleibt unter
+                # CURRENT_SCHEMA_VERSION, damit der naechste init_schema()-Aufruf
+                # die Migration erneut versucht statt sie faelschlich als
+                # erledigt zu betrachten.
+                missing = sorted(_LEGACY_MIGRATION_COLUMNS - papers_columns)
+                logger.warning(
+                    "Migration auf Schema-Version %d nicht verifizierbar -- "
+                    "papers fehlen weiterhin Spalten %s. user_version bleibt "
+                    "unveraendert, naechster init_schema()-Aufruf migriert erneut (#368).",
+                    CURRENT_SCHEMA_VERSION,
+                    missing,
+                )
 
     # ------------------------------------------------------------------
     # Papers CRUD
