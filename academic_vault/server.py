@@ -134,6 +134,12 @@ def search_papers(
 ) -> list[dict]:
     """FTS5/Hybrid-Suche in papers_fts. Gibt [{paper_id, snippet, score}] zurueck.
 
+    Mit ``rerank=True`` bleiben diese Felder erhalten (fuer jeden per FTS5
+    gefundenen Treffer inklusive '<b>'-Highlighting im Snippet) und werden um
+    'rrf_score' sowie die vec0-Felder 'chunk_id'/'distance' ergaenzt. Rein
+    vektoriell gefundene Paper haben mangels FTS5-Treffer kein 'score' und ein
+    Snippet aus dem passenden Chunk-Text (ohne Highlighting).
+
     Args:
         db_path: Pfad zur Vault-DB.
         query: Suchquery.
@@ -245,8 +251,10 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
     die Vektor-Suche fehlschlaegt. Die Textsuche darf daran nie scheitern.
 
     Returns:
-        Liste aus ``{paper_id, chunk_id, snippet, distance}``, aufsteigend nach
-        Distanz (nahester Treffer zuerst), maximal ``k`` Eintraege.
+        Liste aus ``{paper_id, chunk_id, snippet, text, distance}``, aufsteigend
+        nach Distanz (nahester Treffer zuerst), maximal ``k`` Eintraege.
+        ``snippet`` ist der gekuerzte, ``text`` der volle Chunk-Text
+        (Reranker-Input).
     """
     embedder = get_embedder()
     if embedder is None:
@@ -271,6 +279,10 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
             "paper_id": paper_id,
             "chunk_id": hit["chunk_id"],
             "snippet": _vec_snippet(chunk_text),
+            # Reranker-Input explizit mitgeben: im RRF-Merge gewinnt fuer
+            # 'snippet' das FTS5-Feld (Vertrag + Highlighting), waehrend
+            # 'text' den laengeren Chunk-Text fuer apply_reranker erhaelt.
+            "text": chunk_text,
             "distance": hit["distance"],
         }
 

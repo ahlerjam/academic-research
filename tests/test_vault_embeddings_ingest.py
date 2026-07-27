@@ -630,6 +630,60 @@ class TestRerankUsesRealVectors:
         assert "p_vec_only" in by_id, "Nur-vektoriell gefundenes Paper fehlt in der RRF"
         assert by_id["p_vec_only"].get("snippet")
 
+    def test_rerank_true_keeps_fts_score_and_highlighting(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """rerank=True haelt den dokumentierten Rueckgabevertrag {paper_id, snippet, score}.
+
+        Regression (#372): das vec0-Dict verdraengte in der RRF die
+        FTS5-Metadaten — 'score' fehlte und das '<b>'-Highlighting im Snippet
+        ging verloren, sobald ein Paper ueber beide Pfade gefunden wurde.
+        """
+        from academic_vault.server import search_papers
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        _add_paper(temp_vault_db, "p_both", "Retrieval systems", "retrieval methods")
+        _store_chunk(temp_vault_db, "p_both", "Retrieval systems und Methoden", fake_embedder)
+        _use_embedder(monkeypatch, fake_embedder)
+
+        fts_only = {r["paper_id"]: r for r in search_papers(temp_vault_db, "retrieval", k=5)}
+        assert "p_both" in fts_only, "Setup-Annahme: Paper wird auch per FTS5 gefunden"
+
+        hybrid = {
+            r["paper_id"]: r for r in search_papers(temp_vault_db, "retrieval", k=5, rerank=True)
+        }
+        entry = hybrid["p_both"]
+
+        assert "score" in entry, "dokumentierter FTS5-'score' fehlt im Hybrid-Ergebnis"
+        assert entry["score"] == fts_only["p_both"]["score"]
+        assert "<b>" in entry["snippet"], "FTS5-'<b>'-Highlighting im Snippet verloren"
+        assert entry["snippet"] == fts_only["p_both"]["snippet"]
+
+    def test_rerank_true_keeps_chunk_text_for_reranker(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """Der Reranker-Input bleibt der volle Chunk-Text, nicht das 10-Token-FTS-Snippet.
+
+        Das FTS5-Snippet gewinnt fuer das Ausgabefeld 'snippet' (Vertrag +
+        Highlighting) — der Reranker soll aber weiter den laengeren
+        Chunk-Text sehen, den ``apply_reranker`` ueber 'text' konsumiert.
+        """
+        from academic_vault.server import _vec0_search, search_papers
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        chunk = "Retrieval systems und Methoden fuer dichte Passagen-Repraesentationen"
+        _add_paper(temp_vault_db, "p_both", "Retrieval systems", "retrieval methods")
+        _store_chunk(temp_vault_db, "p_both", chunk, fake_embedder)
+        _use_embedder(monkeypatch, fake_embedder)
+
+        hit = _vec0_search(temp_vault_db, "retrieval", k=5)[0]
+        assert hit["text"] == chunk, "vec0-Treffer liefert keinen Reranker-Text"
+
+        hybrid = {
+            r["paper_id"]: r for r in search_papers(temp_vault_db, "retrieval", k=5, rerank=True)
+        }
+        assert hybrid["p_both"]["text"] == chunk, "Chunk-Text durch RRF-Merge verloren"
+
     def test_vec0_search_gets_unsanitized_query(self, temp_vault_db, monkeypatch):
         """FTS5-Sanitizing verfaelscht die Semantik — der Vektorpfad bekommt das Original."""
         import academic_vault.server as server

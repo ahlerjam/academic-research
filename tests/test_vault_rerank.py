@@ -125,6 +125,52 @@ class TestReciprocalRankFusion:
         fused = reciprocal_rank_fusion(vec_results, [], k=60)
         assert len(fused) == 2
 
+    def test_rrf_fusion_merges_metadata_of_both_sources(self):
+        """Paper in beiden Listen behaelt FTS5-Metadaten UND vec0-Metadaten (#372).
+
+        Regression: vorher verdraengte das vec0-Dict das FTS5-Dict komplett —
+        der dokumentierte 'score' fiel weg und das '<b>'-Highlighting im
+        Snippet ging verloren.
+        """
+        from academic_vault.retrieval import reciprocal_rank_fusion
+
+        vec_results = [
+            {
+                "paper_id": "p001",
+                "chunk_id": "c-1",
+                "snippet": "Dense passage retrieval ohne Highlighting",
+                "distance": 0.12,
+            }
+        ]
+        fts_results = [
+            {
+                "paper_id": "p001",
+                "snippet": "Dense passage <b>retrieval</b>...",
+                "score": -1.234,
+            }
+        ]
+
+        fused = reciprocal_rank_fusion(vec_results, fts_results, k=60)
+        entry = fused[0]
+
+        assert entry["score"] == -1.234, "FTS5-'score' wurde vom vec0-Dict verdraengt"
+        assert "<b>" in entry["snippet"], "FTS5-Highlighting im Snippet verloren"
+        assert entry["chunk_id"] == "c-1", "vec0-Metadaten duerfen nicht verloren gehen"
+        assert entry["distance"] == 0.12
+
+    def test_rrf_fusion_keeps_vec_only_metadata(self):
+        """Nur-vektorielle Treffer behalten ihr Snippet (kein FTS5-Gegenstueck)."""
+        from academic_vault.retrieval import reciprocal_rank_fusion
+
+        vec_results = [{"paper_id": "p_vec", "snippet": "nur vektoriell", "distance": 0.4}]
+        fts_results = [{"paper_id": "p_fts", "snippet": "<b>fts</b>", "score": -2.0}]
+
+        by_id = {r["paper_id"]: r for r in reciprocal_rank_fusion(vec_results, fts_results, k=60)}
+
+        assert by_id["p_vec"]["snippet"] == "nur vektoriell"
+        assert "score" not in by_id["p_vec"]
+        assert by_id["p_fts"]["score"] == -2.0
+
     def test_rrf_fusion_respects_top_n(self):
         """reciprocal_rank_fusion schneidet nach top_n ab."""
         from academic_vault.retrieval import reciprocal_rank_fusion
