@@ -1,18 +1,24 @@
 """Regression-Guard für Issue #174: README-Badges dürfen nicht veralten.
 
-Akzeptanzkriterien:
+Akzeptanzkriterien (Stand nach dem README-Relaunch #402):
 - Skills-Badge zeigt die tatsächliche Anzahl der SKILL.md (Claude-Code-Discovery-Count).
-- Tests-Badge zeigt die tatsächliche Collect-Zahl statt "~60".
-- Inhaltsverzeichnis nennt dieselbe Skill-Zahl.
-- Sektion "Entwicklung und Evals" nennt nicht mehr "~60 Tests" und weist auf
-  Network/External-abhängige Tests hin.
+- Es gibt KEINEN handgepflegten Test-Zahlen-Badge mehr. Der ursprüngliche Fix von #174
+  hatte die Zahl im Badge nur aktualisiert; sie ist danach zweimal erneut veraltet
+  ("~60", dann "963 passing / 1111 collected" bei real 1809 bestandenen Tests). Die
+  Lehre daraus: eine Zahl, die niemand automatisch nachzieht, gehört nicht in ein Badge.
+  Den Status liefert jetzt der CI-Workflow-Badge, die Zahl ermittelt man selbst.
+- Die Skill-Zahl steht in der Skills-Referenz (früher: README-Inhaltsverzeichnis).
+- Die Entwickler-Doku nennt nicht mehr "~60 Tests" und weist auf Network/External-
+  abhängige Tests hin.
 """
 
 import re
 from pathlib import Path
 
+from tests.helpers import docs as D
+
 REPO_ROOT = Path(__file__).parent.parent
-README = REPO_ROOT / "README.md"
+README = D.README
 
 
 def _skill_count() -> int:
@@ -33,40 +39,44 @@ def test_skills_badge_matches_actual_skill_count():
     )
 
 
-def test_toc_entry_matches_skill_count():
-    text = README.read_text(encoding="utf-8")
+def test_skill_count_stated_in_skills_reference():
+    """Die Skills-Referenz nennt dieselbe Zahl wie das Badge."""
+    text = D.SKILLS_DOC.read_text(encoding="utf-8")
     count = _skill_count()
-    assert "Skills (23+ selbstaktivierend)" not in text, "Veralteter TOC-Eintrag 23+."
-    assert f"Skills ({count} selbstaktivierend)" in text, (
-        f"TOC-Eintrag nennt nicht 'Skills ({count} selbstaktivierend)'."
+    assert "23+" not in text, "Veraltete Skill-Zahl '23+' in der Skills-Referenz."
+    assert re.search(rf"\*\*{count} Skills\*\*", text), (
+        f"Skills-Referenz nennt nicht '**{count} Skills**'."
     )
 
 
-def test_tests_badge_not_stale():
+def test_no_handmaintained_tests_badge():
+    """Kein Test-Zahlen-Badge mehr — er veraltet schneller, als ihn jemand pflegt."""
     text = README.read_text(encoding="utf-8")
     assert "tests-~60" not in text, "Veraltetes tests-~60-Badge noch vorhanden."
     badge = re.search(r"!\[Tests\]\(https://img\.shields\.io/badge/tests-([^)]+)\)", text)
-    assert badge is not None, "Tests-Badge nicht gefunden."
-    value = badge.group(1)
-    # Stale-Form "963 passing" OHNE Collect-Angabe ist verboten.
-    assert "collected" in value.lower(), (
-        f"Tests-Badge nennt keine Collect-Zahl (veraltete Form): {value}"
-    )
-    # Badge muss die reale Collect-Zahl (vierstellig, >= 1000) enthalten.
-    assert re.search(r"1\d{3}", value), (
-        f"Tests-Badge enthält keine realistische Collect-Zahl: {value}"
+    assert badge is None, (
+        f"Handgepflegter Tests-Badge wieder eingeführt: {badge.group(0) if badge else ''}. "
+        "Der CI-Workflow-Badge zeigt den Status ohne Pflegeaufwand."
     )
 
 
-def test_dev_section_no_stale_sixty_and_mentions_external():
+def test_ci_status_badge_present():
+    """Statt der Zahl steht der automatische CI-Status im README-Kopf."""
     text = README.read_text(encoding="utf-8")
-    # Sektion isolieren.
-    start = text.index("## Entwicklung und Evals")
-    section = text[start:]
-    assert "~60 Tests" not in section, "Sektion nennt noch '~60 Tests'."
-    # Hinweis auf Network/External-abhängige Tests muss vorhanden sein.
+    assert "actions/workflows/ci.yml/badge.svg" in text, (
+        "CI-Status-Badge fehlt — ohne ihn sagt der README-Kopf nichts über die Testlage."
+    )
+
+
+def test_dev_doc_no_stale_sixty_and_mentions_external():
+    """Die Entwickler-Doku (früher README-Sektion) bleibt bei den Fakten."""
+    section = D.DEVELOPMENT_DOC.read_text(encoding="utf-8")
+    assert "~60 Tests" not in section, "Doku nennt noch '~60 Tests'."
     lowered = section.lower()
     assert any(
         token in lowered
         for token in ("network", "netzwerk", "external", "extern", "api-key", "api_key")
-    ), "Kein Hinweis auf Network/External-abhängige Tests in 'Entwicklung und Evals'."
+    ), "Kein Hinweis auf Network/External-abhängige Tests in der Entwickler-Doku."
+    assert "--collect-only" in section, (
+        "Doku sagt nicht, wie man die aktuelle Testzahl selbst ermittelt."
+    )

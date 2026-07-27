@@ -10,6 +10,8 @@ import pytest
 import yaml
 from jsonschema import ValidationError, validate
 
+from tests.helpers import docs as _docs
+
 # Pfade relativ zum Repo-Root
 REPO_ROOT = Path(__file__).parent.parent
 PROFILES_DIR = REPO_ROOT / "config" / "library-profiles"
@@ -125,11 +127,12 @@ class TestSchemaValidierungNegativ:
 
 # ── README-Konsistenz-Tests ───────────────────────────────────────────────────
 
-README_PATH = REPO_ROOT / "README.md"
+# Die Profil-Referenz liegt seit dem README-Relaunch (#402) unter docs/reference/.
+README_PATH = _docs.UNI_PROFILES_DOC
 
 
 class TestReadmeKonsistenz:
-    """README muss den tatsaechlichen Zustand von config/library-profiles/ widerspiegeln."""
+    """Doku muss den tatsaechlichen Zustand von config/library-profiles/ widerspiegeln."""
 
     def _readme_text(self) -> str:
         return README_PATH.read_text(encoding="utf-8")
@@ -185,6 +188,17 @@ class TestReadmeKonsistenz:
             "Per-Uni-Profile-Abschnitt muss 'config/library-profiles/' als Pfad enthalten, "
             "nicht 'library-profiles/'"
         )
+
+    def test_readme_verlinkt_profil_referenz(self):
+        """Die README selbst verlinkt die Profil-Referenz und nennt keine Profil-Pfade."""
+        readme = _docs.README.read_text(encoding="utf-8")
+        assert "docs/reference/uni-profiles.md" in readme, (
+            "README verlinkt die Per-Uni-Profil-Referenz nicht."
+        )
+        stale = re.findall(
+            r"(?<!config/)(?<!academic-research/)library-profiles/[^`\s]*\.yaml", readme
+        )
+        assert stale == [], f"README enthaelt Profil-Pfade ohne 'config/'-Praefix: {stale}"
 
 
 # ── Onboard-Hook-Tests ───────────────────────────────────────────────────────

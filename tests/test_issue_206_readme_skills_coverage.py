@@ -12,6 +12,8 @@ notebook-bundle fehlten komplett, Badge stand auf 23+, TOC auf "23+".
 import re
 from pathlib import Path
 
+from tests.helpers import docs as _docs
+
 REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
 SKILLS_DIR = REPO_ROOT / "skills"
@@ -35,7 +37,7 @@ def _plugin_own_skills() -> set[str]:
 
 
 def test_all_plugin_skills_documented_in_readme():
-    text = README.read_text(encoding="utf-8")
+    text = _docs.SKILLS_DOC.read_text(encoding="utf-8")
     # Tabellen-Zeilen referenzieren Skills als `name` in Backticks.
     missing = sorted(s for s in _plugin_own_skills() if f"`{s}`" not in text)
     assert not missing, "Plugin-eigene Skills fehlen in der README-Skills-Tabelle: " + ", ".join(
@@ -44,7 +46,7 @@ def test_all_plugin_skills_documented_in_readme():
 
 
 def test_issue_206_named_skills_documented():
-    text = README.read_text(encoding="utf-8")
+    text = _docs.SKILLS_DOC.read_text(encoding="utf-8")
     missing = sorted(s for s in ISSUE_206_SKILLS if f"`{s}`" not in text)
     assert not missing, "Von Issue #206 benannte Skills weiterhin undokumentiert: " + ", ".join(
         missing
@@ -58,8 +60,14 @@ def test_skills_badge_count_is_28():
     )
 
 
-def test_toc_entry_says_28_selbstaktivierend():
+def test_readme_links_skills_reference():
+    """Die README verlinkt die Skills-Referenz — sonst ist sie unauffindbar.
+
+    Ersetzt den frueheren TOC-Eintrag-Test: seit #402 hat die README kein
+    Inhaltsverzeichnis mehr, sondern eine Doku-Karte mit Links.
+    """
     text = README.read_text(encoding="utf-8")
-    assert "Skills (28 selbstaktivierend)" in text, (
-        "TOC-Eintrag muss 'Skills (28 selbstaktivierend)' lauten."
+    assert "docs/reference/skills.md" in text, "README verlinkt docs/reference/skills.md nicht."
+    assert "selbstaktivierend" in _docs.SKILLS_DOC.read_text(encoding="utf-8"), (
+        "Skills-Referenz erklaert die Selbstaktivierung nicht mehr."
     )
