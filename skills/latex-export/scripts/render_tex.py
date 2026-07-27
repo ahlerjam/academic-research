@@ -45,14 +45,38 @@ def _escape_tex(text: str) -> str:
     return result
 
 
-# Erkennt bereits vorhandene LaTeX-Kommandos im Markdown-Quelltext, z. B.
-# \cite{key}, \citep[S. 12]{key}, \ref{fig:1}. Diese Spans werden von
-# _escape_tex_text unveraendert durchgereicht statt escaped (sonst wuerde
-# \cite{key} lautlos zu \textbackslash{}cite{key}, Issue #386).
+# Erkennt bereits vorhandene LaTeX-Zitations-/Referenzkommandos im
+# Markdown-Quelltext, z. B. \cite{key}, \citep[S. 12]{key}, \ref{fig:1}.
+# Diese Spans werden von _escape_tex_text unveraendert durchgereicht statt
+# escaped (sonst wuerde \cite{key} lautlos zu \textbackslash{}cite{key},
+# Issue #386).
+#
+# Bewusst auf eine Allowlist beschraenkt (statt beliebiger Kommandonamen):
+# Issue #386/AC2 verlangt nur den Erhalt von Zitations-/Referenzkommandos,
+# deren Argumente ohnehin nur BibTeX-Keys bzw. Labels enthalten -- also
+# keine LaTeX-Sonderzeichen, die escaped werden muessten. Ein generisches
+# `\[A-Za-z]+` wuerde dagegen auch z. B. \emph{50% Anteil} matchen und den
+# kompletten Argumentinhalt (inkl. rohem %, &, $, ...) unescaped durch-
+# reichen -- das bricht den pdflatex-Build auf genau dem Pfad, den dieser
+# Fix repariert.
+#
 # Bewusste Einschraenkung (siehe Plan-Kommentar): keine verschachtelten
 # Klammern in Kommando-Argumenten (\cite{\emph{x}}) -- ausserhalb des
 # Scopes dieses Fixes.
-_LATEX_COMMAND_RE = re.compile(r"\\[A-Za-z]+\*?(?:\[[^\[\]]*\])*(?:\{[^{}]*\})+")
+_LATEX_SAFE_COMMANDS = (
+    "cite",
+    "citep",
+    "citet",
+    "parencite",
+    "footcite",
+    "ref",
+    "autoref",
+    "eqref",
+    "label",
+)
+_LATEX_COMMAND_RE = re.compile(
+    r"\\(?:" + "|".join(_LATEX_SAFE_COMMANDS) + r")\*?(?:\[[^\[\]]*\])*(?:\{[^{}]*\})+"
+)
 
 
 def _escape_tex_text(text: str) -> str:

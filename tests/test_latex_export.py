@@ -356,6 +356,39 @@ class TestEscapeExistingCommands:
         assert r"\%" in result
         assert r"\&" in result
 
+    def test_custom_renderer_escapes_special_chars_inside_non_safe_command(self):
+        """Regression (P1-Finding PR #409): Sonderzeichen IM Argument eines nicht
+        allowlisted Kommandos (z. B. \\emph{}) muessen weiterhin escaped werden.
+
+        Vor diesem Fix matchte _LATEX_COMMAND_RE jedes `\\Kommando{...}` und
+        reichte den kompletten Argumentinhalt roh durch. Ein rohes % im
+        Argument kommentiert in LaTeX den Rest der Zeile aus und bricht den
+        pdflatex-Build ("Runaway argument" / "Missing } inserted").
+        """
+        from render_tex import render_markdown_to_tex
+
+        md = "Der Rabatt liegt bei \\emph{50% Anteil} laut Studie.\n"
+        result = render_markdown_to_tex(md, force_custom=True)
+
+        # \emph ist keine Zitations-/Referenzkommando -- Argumentinhalt wird
+        # (wie vor Issue #386) weiterhin ueber escape_plain geschickt.
+        assert r"\%" in result
+        assert "{50% Anteil}" not in result
+        # Zitations-/Referenzkommandos bleiben davon unberuehrt.
+
+    def test_custom_renderer_preserves_ref_and_label_commands(self):
+        """\\ref{}, \\autoref{}, \\eqref{} und \\label{} sind Teil der Allowlist
+        und bleiben unveraendert erhalten (Issue #386/AC2 nennt Referenzkommandos
+        explizit neben \\cite{})."""
+        from render_tex import render_markdown_to_tex
+
+        md = "Siehe \\autoref{fig:1} und \\eqref{eq:2}, vgl. \\label{sec:x}.\n"
+        result = render_markdown_to_tex(md, force_custom=True)
+
+        assert r"\autoref{fig:1}" in result
+        assert r"\eqref{eq:2}" in result
+        assert r"\label{sec:x}" in result
+
 
 # ---------------------------------------------------------------------------
 # build_bib Tests
