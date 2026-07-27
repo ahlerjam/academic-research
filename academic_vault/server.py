@@ -342,6 +342,42 @@ def find_quotes(
     return db.find_quotes(paper_id, query, k)
 
 
+def verify_citation(
+    db_path: str,
+    family: str,
+    year: int,
+    page: int | None = None,
+) -> dict:
+    """Prueft einen Klammer-Beleg (Autor/Jahr/Seite) gegen den Vault (Issue #378).
+
+    Kein MCP-Tool-Dekorator: die Funktion wird ausschliesslich aus
+    ``hooks/verbatim-guard.mjs`` per ``python3 -c``-Subprozess aufgerufen
+    (analog zu :func:`search_quote_text` und :func:`find_figure_by_caption`).
+
+    Rueckgabe ``{"status": ..., "paper_ids": [...]}`` mit Status:
+      ``"verified"``      — Autor/Jahr im Vault und (falls angegeben) Seite gedeckt
+                            bzw. mangels Seitendaten nicht widerlegbar.
+      ``"page-mismatch"`` — Autor/Jahr im Vault, Seite liegt nachweislich
+                            ausserhalb aller bekannten Seitenbereiche. Der Vault
+                            ist hier autoritativ; die externe Kaskade kann
+                            Seitenzahlen nicht pruefen und wird uebersprungen.
+      ``"no-match"``      — kein Paper mit dieser Autor/Jahr-Kombination.
+    """
+    db = VaultDB(db_path)
+    papers = db.find_papers_by_author_year(family, int(year))
+    if not papers:
+        return {"status": "no-match", "paper_ids": []}
+
+    paper_ids = [p["paper_id"] for p in papers]
+    if page is None:
+        return {"status": "verified", "paper_ids": paper_ids}
+
+    coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
+    if any(c in ("covered", "unknown") for c in coverages):
+        return {"status": "verified", "paper_ids": paper_ids}
+    return {"status": "page-mismatch", "paper_ids": paper_ids}
+
+
 # ---------------------------------------------------------------------------
 # Figure-Funktionen (rein, testbar ohne MCP-Framework)
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import os
 import re
 import sqlite3
 import time
+import unicodedata
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from uuid import uuid4
@@ -68,6 +69,81 @@ def _parse_figure_reference(text: str) -> tuple[str, str] | None:
     kind = _FIGURE_REF_TYPE_ALIASES[match.group(1).lower()]
     number = match.group(2)
     return (kind, number)
+
+
+# ---------------------------------------------------------------------------
+# Autorennamen-Normalisierung (Issue #378)
+# ---------------------------------------------------------------------------
+
+# Deutsche Umlaut-/Ligatur-Faltung. Muss identisch in hooks/citation-parse.mjs
+# gepflegt werden, damit Hook und Vault denselben Vergleich anstellen.
+_UMLAUT_FOLD = {
+    "ä": "ae",
+    "ö": "oe",
+    "ü": "ue",
+    "ß": "ss",
+    "æ": "ae",
+    "ø": "oe",
+    "å": "aa",
+}
+
+
+def normalize_family_name(name: str) -> set[str]:
+    """Normalisiert einen Familiennamen zu einer Menge von Vergleichsvarianten.
+
+    Zwei Varianten sind noetig, weil beide Schreibkonventionen real vorkommen:
+      * Umlaut-Faltung  ("Müller" -> "mueller")
+      * Diakritika-Strip ("Müller" -> "muller", "Sørensen" -> "sorensen")
+
+    Zwei Namen gelten als gleich, wenn sich ihre Variantenmengen schneiden.
+    """
+    lowered = (name or "").strip().lower()
+    if not lowered:
+        return set()
+    folded = "".join(_UMLAUT_FOLD.get(ch, ch) for ch in lowered)
+    stripped = "".join(
+        ch for ch in unicodedata.normalize("NFD", lowered) if not unicodedata.combining(ch)
+    )
+    variants = {v for v in (folded, stripped) if v}
+    return {re.sub(r"[^a-z]", "", v) for v in variants} - {""}
+
+
+def family_names_match(left: str, right: str) -> bool:
+    """True, wenn zwei Familiennamen nach Normalisierung als gleich gelten."""
+    left_variants = normalize_family_name(left)
+    return bool(left_variants and left_variants & normalize_family_name(right))
+
+
+def csl_families(csl: dict) -> list[str]:
+    """Extrahiert alle Autoren-Familiennamen aus einem CSL-JSON-Objekt."""
+    families: list[str] = []
+    for author in csl.get("author") or []:
+        if not isinstance(author, dict):
+            continue
+        family = author.get("family") or author.get("literal") or author.get("name")
+        if family:
+            families.append(str(family))
+    return families
+
+
+def csl_year(csl: dict) -> int | None:
+    """Extrahiert das Erscheinungsjahr aus ``issued`` (date-parts, literal, raw)."""
+    issued = csl.get("issued")
+    if not isinstance(issued, dict):
+        return None
+    parts = issued.get("date-parts")
+    if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0]:
+        try:
+            return int(str(parts[0][0])[:4])
+        except (TypeError, ValueError):
+            pass
+    for key in ("literal", "raw"):
+        value = issued.get(key)
+        if isinstance(value, str):
+            match = re.search(r"\b(1[0-9]{3}|2[0-9]{3})\b", value)
+            if match:
+                return int(match.group(1))
+    return None
 
 
 # Escape-Zeichen fuer LIKE-Patterns (siehe escape_like / ESCAPE-Klauseln unten).
@@ -496,6 +572,78 @@ class VaultDB:
                     (paper_id, k),
                 ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Klammer-Zitat-Verifikation (Issue #378)
+    # ------------------------------------------------------------------
+
+    def find_papers_by_author_year(self, family: str, year: int) -> list[dict]:
+        """Findet Papers, deren CSL-Autorenliste ``family`` enthaelt und deren
+        Erscheinungsjahr exakt ``year`` ist.
+
+        Der Namensvergleich laeuft ueber :func:`normalize_family_name`
+        (Umlaut-Faltung + Diakritika-Strip), damit ``Müller``/``Mueller``/
+        ``Muller`` denselben Eintrag treffen. Es gibt bewusst keine
+        SQL-seitige Vorfilterung: ``csl_json`` ist ein Textblob, dessen
+        Autorenfelder sich nicht zuverlaessig per LIKE eingrenzen lassen,
+        ohne genau diese Schreibvarianten zu verlieren.
+        """
+        wanted = normalize_family_name(family)
+        if not wanted or year is None:
+            return []
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT paper_id, csl_json, page_first, page_last FROM papers"
+            ).fetchall()
+        matches: list[dict] = []
+        for row in rows:
+            record = dict(row)
+            try:
+                csl = json.loads(record["csl_json"])
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(csl, dict):
+                continue
+            if csl_year(csl) != int(year):
+                continue
+            if any(normalize_family_name(f) & wanted for f in csl_families(csl)):
+                matches.append(record)
+        return matches
+
+    def page_coverage(self, paper_id: str, page: int) -> str:
+        """Prueft, ob ``page`` von den im Vault bekannten Seitendaten gedeckt ist.
+
+        Rueckgabe:
+          ``"covered"``  — Seite liegt in ``[page_first, page_last]`` oder
+                            entspricht einer ``quotes.printed_page``.
+          ``"outside"``  — Seitendaten vorhanden, Seite liegt ausserhalb.
+          ``"unknown"``  — zu diesem Paper existieren gar keine Seitendaten
+                            (dokumentierter Soft-Pass; sonst waeren
+                            Massen-False-Positives die Folge).
+        """
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT page_first, page_last FROM papers WHERE paper_id = ?",
+                (paper_id,),
+            ).fetchone()
+            pages = [
+                r["printed_page"]
+                for r in conn.execute(
+                    "SELECT printed_page FROM quotes WHERE paper_id = ? AND printed_page IS NOT NULL",
+                    (paper_id,),
+                ).fetchall()
+            ]
+        if row is None:
+            return "unknown"
+        first, last = row["page_first"], row["page_last"]
+        has_range = first is not None and last is not None
+        if not has_range and not pages:
+            return "unknown"
+        if has_range and first <= page <= last:
+            return "covered"
+        if page in pages:
+            return "covered"
+        return "outside"
 
     def set_ocr_done(self, paper_id: str, value: int = 1) -> None:
         """Setzt ocr_done-Flag fuer ein Paper."""

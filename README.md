@@ -786,13 +786,98 @@ Das Plugin konfiguriert 7 Events in `hooks/hooks.json` (5 Skript-Dateien + 1 Inl
 
 | Hook | Event | Beschreibung |
 |------|-------|-------------|
-| `verbatim-guard.mjs` | `PreToolUse(Write)` | Blockt Kapitel-Writes mit nicht-verifizierten Zitaten |
+| `verbatim-guard.mjs` | `PreToolUse(Write)` | Blockt Kapitel-Writes mit nicht-verifizierten Zitaten (wörtlich, Abbildungen, Klammer-Belege) |
 | `post-tool-use-decisions.mjs` | `PostToolUse(Write)` | Decision-Log: jede `.md`-Änderung wird protokolliert |
 | `pre-compact.mjs` | `PreCompact` | Snapshot-Backup vor Claude-Compaction |
 | `mid-session-reinforcement.mjs` | `Notification` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
 | `mid-session-reinforcement.mjs` | `PostCompact` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `onboard-project-uni-prompt.sh` | `SessionStart` | Prüft Python-venv-Bereitschaft beim Session-Start |
 | *(Inline-Bash)* | `Stop` | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
+
+### Halluzinationsschutz im `verbatim-guard`
+
+Der Guard prüft Kapitel-Writes (`kapitel/*.md`, `*.tex`) in drei additiven
+Stufen. Jede Stufe läuft erst, wenn die vorige durchgelaufen ist:
+
+1. **Wörtliche Zitate** — Anführungszeichen-Spans (`"…"`, `„…“`, `«…»`,
+   ` ``…'' `) gegen `quotes.verbatim`.
+2. **Abbildungs-/Tabellen-Referenzen** — `Abb. 3.4` gegen `figures.caption`
+   (Typ+Nummer-Vergleich).
+3. **Klammer-Belege** — siehe nächster Abschnitt.
+
+Ein `<!-- vault-guard: skip -->` im Content deaktiviert alle drei Stufen.
+Fehlt die Vault-DB, ist der Guard komplett fail-open (Warnung auf stderr,
+kein Block).
+
+### Klammer-Zitat-Validierung
+
+Klammer- und Paraphrase-Belege wie `(Müller 2021, S. 45)`,
+`(Müller/Schmidt 2019)`, `(Müller u. a. 2021, S. 45–47)`, `(vgl. Müller 2021: 45)`
+oder `vgl. Schmidt 2019` werden extrahiert und gegen den Vault geprüft:
+Familienname und Jahr gegen `papers.csl_json` (Umlaut-Faltung und
+Diakritika-Strip, `Müller`/`Mueller`/`Muller` treffen denselben Eintrag), die
+Seitenzahl gegen `papers.page_first`/`page_last` bzw. `quotes.printed_page`.
+
+**Nicht geprüft** (bewusst, gegen False Positives): Code-Fences und
+Inline-Code, LaTeX-Makros (`\cite{…}`, `\ref{…}`), nackte Jahresklammern
+(`(2021)`), Struktur-Verweise (`(siehe Kapitel 2)`, `(vgl. Abb. 3)`),
+`ebd.`/`a.a.O.` sowie alles ab der Überschrift des Literaturverzeichnisses.
+Hat der Vault zu einem Paper **keine** Seitendaten, gilt die Seitenzahl als
+nicht widerlegbar (dokumentierter Soft-Pass).
+
+Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
+Falschtreffer produziert: die narrative Form ohne Signalwort
+(`Müller (2021) zeigt …`, kollidiert mit `Die DSGVO (2016) trat in Kraft`)
+und Körperschaftsautoren (`(Statistisches Bundesamt 2021)`). Bei Belegen mit
+Seitenbereich (`S. 45–47`) wird die erste Seite geprüft. False Positives
+blockieren den Schreibfluss und sind hier teurer als False Negatives — der
+Guard ist die letzte, nicht die einzige Verteidigungslinie.
+
+**Externe Kaskade (Fallback).** Findet der Vault den Beleg nicht, laufen drei
+Stufen mit Frühausstieg: arXiv (eine gebatchte Anfrage für alle offenen
+Belege) → CrossRef → Semantic Scholar (Fuzzy, Gate: Autoren-Überlapp
+≥ 0,6). Score-Modell pro Kandidat (0–100):
+
+| Komponente | Punkte |
+|---|---|
+| Familienname trifft | 40 |
+| Jahr exakt | 40 |
+| Jahr um genau 1 daneben | 20 |
+| Autoren-Überlapp (Jaccard) | 0–20 |
+
+**Entscheidungsmatrix.**
+
+| Ergebnis | Bedingung | Reaktion |
+|---|---|---|
+| `confirmed` | Vault-Treffer **oder** Score ≥ `ACADEMIC_CITATION_CONFIRMED_MIN` (80) | allow |
+| `probable` | Score ≥ `ACADEMIC_CITATION_PROBABLE_MIN` (65) | allow + `[UNVERIFIED]` |
+| `unavailable` | Timeout / `ECONNREFUSED` / HTTP 5xx / 429 | allow + `[UNVERIFIED]` |
+| `no-match` | alle Stufen haben sauber geantwortet (HTTP 200), kein Treffer | **Block** (exit 2) |
+| `page-mismatch` | Autor/Jahr im Vault, Seite nachweislich außerhalb | **Block** (exit 2) |
+
+Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein
+Netzausfall darf nie wie ein Halluzinations-Nachweis wirken. Bei `probable`
+und `unavailable` schreibt der Hook den Tool-Input per
+`hookSpecificOutput.updatedInput` um und hängt ` [UNVERIFIED]` an den Beleg
+(unterstützt `Write.content`, `Edit.new_string` und `MultiEdit.edits[]`).
+
+**Konfiguration (Environment).**
+
+| Variable | Default | Bedeutung |
+|---|---|---|
+| `ACADEMIC_CITATION_CASCADE` | `on` | `off` = Kill-Switch, Vault-only, kein Netzzugriff |
+| `ACADEMIC_CITATION_CONFIRMED_MIN` | `80` | Score-Schwelle für „bestätigt" (allow) |
+| `ACADEMIC_CITATION_PROBABLE_MIN` | `65` | Score-Schwelle für „wahrscheinlich" (`[UNVERIFIED]`) |
+| `ACADEMIC_CITATION_S2_MIN_OVERLAP` | `0.6` | Autoren-Überlapp-Gate für Semantic Scholar |
+| `ACADEMIC_CITATION_TIMEOUT_MS` | `2000` | Timeout je HTTP-Request |
+| `ACADEMIC_CITATION_BUDGET_MS` | `6000` | Gesamt-Wall-Clock-Budget der Kaskade |
+| `ACADEMIC_CITATION_ARXIV_URL` | arXiv-API | Base-URL, überschreibbar (Tests/Proxy) |
+| `ACADEMIC_CITATION_CROSSREF_URL` | CrossRef-API | Base-URL, überschreibbar (Tests/Proxy) |
+| `ACADEMIC_CITATION_S2_URL` | Semantic-Scholar-API | Base-URL, überschreibbar (Tests/Proxy) |
+
+Die Kaskade ist die einzige Stelle, an der ein Hook dieses Plugins ins Netz
+geht. Wer das nicht möchte, setzt `ACADEMIC_CITATION_CASCADE=off` — dann
+entscheidet allein der Vault.
 
 ---
 
