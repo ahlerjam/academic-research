@@ -320,6 +320,54 @@ class TestRerankerIntegration:
 
         mock_local.assert_not_called()
 
+    def test_rerank_fallback_when_no_reranker_available_returns_unranked(self, caplog):
+        """Kein API-Key UND kein lokales Backend -> unveraenderte RRF-Reihenfolge (Fixrunde #422).
+
+        Regression: der urspruengliche `test_rerank_fallback_when_no_api_key`
+        deckte genau diesen Degradationspfad ab (beide Cloud-Keys fehlen,
+        Reranking bleibt wirkungslos), wurde aber ersatzlos durch
+        `test_rerank_fallback_when_no_api_key_uses_local_bge` ersetzt -- das
+        mockt einen FUNKTIONIERENDEN lokalen Reranker und prueft damit einen
+        anderen Zweig. Der Pfad "kein Reranker verfuegbar" blieb dadurch ohne
+        jede Absicherung, obwohl er der Normalfall jeder `setup.sh`-Installation
+        ist: `FlagEmbedding` (Extra `rerank-local`) steht nicht in
+        `scripts/requirements.txt`, also schlaegt `_get_local_reranker()` dort
+        immer fehl.
+
+        Bewusst KEIN Patch von `_get_local_reranker`: die autouse-Fixture
+        `block_real_local_reranker_backend` (tests/conftest.py) blockiert das
+        echte Backend bereits -- genau das Verhalten, das ein fehlendes
+        `rerank-local`-Extra in der Praxis erzeugt.
+        """
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [
+            {"paper_id": "p001", "text": "Unrelated snippet.", "rrf_score": 0.02},
+            {"paper_id": "p002", "text": "Highly relevant snippet.", "rrf_score": 0.015},
+        ]
+
+        with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+            result = apply_reranker(
+                query="test query",
+                candidates=candidates,
+                voyage_api_key=None,
+                cohere_api_key=None,
+            )
+
+        assert [r["paper_id"] for r in result] == ["p001", "p002"], (
+            "RRF-Reihenfolge muss unveraendert bleiben, wenn kein Reranker verfuegbar ist"
+        )
+        assert all(r["reranked"] is False for r in result), (
+            "reranked muss False sein, wenn weder Cloud- noch lokaler Reranker verfuegbar sind"
+        )
+        assert all(r["reranker"] == "none" for r in result)
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("lokaler reranker" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Log-Hinweis fuer den blockierten lokalen Reranker: "
+            f"{[r.message for r in warnings]}"
+        )
+
     def test_rerank_voyage_preferred_over_cohere(self):
         """Voyage wird bevorzugt wenn beide API-Keys verfuegbar sind."""
         from academic_vault.retrieval import apply_reranker
