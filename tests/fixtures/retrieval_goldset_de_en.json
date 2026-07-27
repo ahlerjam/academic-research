@@ -1,0 +1,256 @@
+{
+  "description": "DE/EN-Mini-Goldset fuer Recall@k gegen ein reales Fixture-Vault (Issue #375). Anders als retrieval_eval_set.json (200 rein-englische Mock-Papers, FTS5-only) baut dieses Set ein echtes Vault via add_paper() auf und ruft search_papers(..., rerank=True) mit injiziertem fake_embedder real auf -- der komplette RRF+vec0-Pfad laeuft hermetisch, keine synthetischen ID-Listen.",
+  "version": "1.0",
+  "clusters": [
+    "transformer-attention",
+    "climate-change",
+    "hybrid-retrieval",
+    "computer-vision",
+    "quantum-computing",
+    "bibliometrics"
+  ],
+  "papers": [
+    {
+      "paper_id": "g001",
+      "lang": "en",
+      "topic": "transformer-attention",
+      "title": "Attention Is All You Need: Transformer Architectures for Sequence Modeling",
+      "abstract": "We propose the Transformer, a model architecture based entirely on self-attention mechanisms, dispensing with recurrence and convolutions for sequence transduction tasks."
+    },
+    {
+      "paper_id": "g002",
+      "lang": "de",
+      "topic": "transformer-attention",
+      "title": "Transformer-Architekturen und Selbstaufmerksamkeit in der Sprachverarbeitung",
+      "abstract": "Diese Arbeit untersucht Selbstaufmerksamkeits-Mechanismen in Transformer-Modellen fuer die maschinelle Sprachverarbeitung und vergleicht sie mit rekurrenten Netzen."
+    },
+    {
+      "paper_id": "g003",
+      "lang": "en",
+      "topic": "transformer-attention",
+      "title": "Efficient Attention Mechanisms for Long-Context Transformer Models",
+      "abstract": "We present sparse and linear attention variants that reduce the quadratic cost of self-attention, enabling transformers to process much longer input sequences efficiently."
+    },
+    {
+      "paper_id": "g004",
+      "lang": "de",
+      "topic": "transformer-attention",
+      "title": "Skalierung von Sprachmodellen mit Transformer-Decodern",
+      "abstract": "Wir analysieren, wie sich Transformer-Decoder-Modelle mit wachsender Parameterzahl und Aufmerksamkeitsschichten skalieren lassen und welche Trainingsdaten dafuer noetig sind."
+    },
+    {
+      "paper_id": "g005",
+      "lang": "de",
+      "topic": "climate-change",
+      "title": "Klimawandel und globale Erwaermung: Auswirkungen auf Oekosysteme",
+      "abstract": "Diese Studie dokumentiert, wie die globale Erwaermung Oekosysteme, Artenvielfalt und Wasserkreislaeufe in gemaessigten und tropischen Regionen veraendert."
+    },
+    {
+      "paper_id": "g006",
+      "lang": "en",
+      "topic": "climate-change",
+      "title": "Climate Change Impacts on Global Ecosystems and Biodiversity",
+      "abstract": "We assess how rising global temperatures affect ecosystem stability, species migration patterns, and biodiversity loss across multiple continents."
+    },
+    {
+      "paper_id": "g007",
+      "lang": "de",
+      "topic": "climate-change",
+      "title": "CO2-Emissionen und Klimapolitik in Europa",
+      "abstract": "Der Beitrag vergleicht europaeische Klimapolitik-Instrumente zur Reduktion von CO2-Emissionen und bewertet deren Wirksamkeit gegen den Klimawandel."
+    },
+    {
+      "paper_id": "g008",
+      "lang": "en",
+      "topic": "climate-change",
+      "title": "Carbon Emission Reduction Policies and Global Warming Mitigation",
+      "abstract": "This paper reviews carbon emission reduction policy instruments across major economies and their measured effect on mitigating global warming trends."
+    },
+    {
+      "paper_id": "g009",
+      "lang": "en",
+      "topic": "hybrid-retrieval",
+      "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+      "abstract": "We combine a neural retriever with a sequence generator so that language models can access external documents at inference time for knowledge-intensive tasks."
+    },
+    {
+      "paper_id": "g010",
+      "lang": "de",
+      "topic": "hybrid-retrieval",
+      "title": "Hybride Suchverfahren: Kombination von Volltextsuche und Vektor-Retrieval",
+      "abstract": "Wir zeigen, wie sich klassische Volltextsuche (FTS5) und dichte Vektor-Suche mittels Reciprocal-Rank-Fusion zu einem hybriden Suchverfahren kombinieren lassen."
+    },
+    {
+      "paper_id": "g011",
+      "lang": "en",
+      "topic": "hybrid-retrieval",
+      "title": "Dense Passage Retrieval for Open-Domain Question Answering",
+      "abstract": "We train dense vector encoders for passages and questions so that relevant passages can be retrieved efficiently for open-domain question answering systems."
+    },
+    {
+      "paper_id": "g012",
+      "lang": "de",
+      "topic": "hybrid-retrieval",
+      "title": "Reciprocal Rank Fusion fuer hybride Informationssuche",
+      "abstract": "Diese Arbeit beschreibt Reciprocal-Rank-Fusion als Methode, um Rangfolgen aus Volltext- und Vektor-Suchsystemen zu einer gemeinsamen Trefferliste zu verschmelzen."
+    },
+    {
+      "paper_id": "g013",
+      "lang": "de",
+      "topic": "computer-vision",
+      "title": "Convolutional Neural Networks zur Bildklassifikation",
+      "abstract": "Wir untersuchen Convolutional Neural Networks fuer die automatische Klassifikation von Bildern in grossen, gelabelten Bilddatensaetzen."
+    },
+    {
+      "paper_id": "g014",
+      "lang": "en",
+      "topic": "computer-vision",
+      "title": "Deep Convolutional Networks for Image Recognition Tasks",
+      "abstract": "We train very deep convolutional neural networks on large-scale image datasets and evaluate their accuracy on standard image recognition benchmarks."
+    },
+    {
+      "paper_id": "g015",
+      "lang": "de",
+      "topic": "computer-vision",
+      "title": "Objekterkennung in medizinischen Bildern mittels neuronaler Netze",
+      "abstract": "Diese Arbeit trainiert neuronale Netze zur Objekterkennung in radiologischen Aufnahmen und bewertet die Erkennungsgenauigkeit bei seltenen Befunden."
+    },
+    {
+      "paper_id": "g016",
+      "lang": "en",
+      "topic": "computer-vision",
+      "title": "Semantic Segmentation for Medical Image Analysis",
+      "abstract": "We propose a semantic segmentation network for medical images that delineates organ boundaries and pathological regions at the pixel level."
+    },
+    {
+      "paper_id": "g017",
+      "lang": "en",
+      "topic": "quantum-computing",
+      "title": "Quantum Computing Algorithms for Combinatorial Optimization Problems",
+      "abstract": "We survey quantum algorithms designed for combinatorial optimization and compare their theoretical speedup against classical heuristic solvers."
+    },
+    {
+      "paper_id": "g018",
+      "lang": "de",
+      "topic": "quantum-computing",
+      "title": "Quantenalgorithmen und ihre Anwendung in der Kryptographie",
+      "abstract": "Der Beitrag behandelt Quantenalgorithmen wie Shors Faktorisierungsverfahren und deren Auswirkungen auf klassische kryptographische Verfahren."
+    },
+    {
+      "paper_id": "g019",
+      "lang": "en",
+      "topic": "quantum-computing",
+      "title": "Superconducting Qubits and Quantum Error Correction Codes",
+      "abstract": "We describe superconducting qubit architectures and quantum error correction codes that protect quantum information from decoherence and gate errors."
+    },
+    {
+      "paper_id": "g020",
+      "lang": "de",
+      "topic": "quantum-computing",
+      "title": "Quantenverschraenkung als Ressource fuer Quantenkommunikation",
+      "abstract": "Diese Arbeit analysiert, wie Quantenverschraenkung als Ressource fuer sichere Quantenkommunikation und Quantenteleportation genutzt werden kann."
+    },
+    {
+      "paper_id": "g021",
+      "lang": "de",
+      "topic": "bibliometrics",
+      "title": "Bibliometrische Analyse wissenschaftlicher Zitationsnetzwerke",
+      "abstract": "Wir untersuchen Zitationsnetzwerke wissenschaftlicher Publikationen mittels bibliometrischer Methoden, um Einflussmuster zwischen Forschungsfeldern sichtbar zu machen."
+    },
+    {
+      "paper_id": "g022",
+      "lang": "en",
+      "topic": "bibliometrics",
+      "title": "Citation Network Analysis for Measuring Research Impact",
+      "abstract": "We analyze citation networks across disciplines to quantify research impact and identify influential publications and emerging research fronts."
+    },
+    {
+      "paper_id": "g023",
+      "lang": "de",
+      "topic": "bibliometrics",
+      "title": "Zitationsindizes und der Einfluss auf akademische Reputation",
+      "abstract": "Diese Studie diskutiert Zitationsindizes wie den h-Index und deren Einfluss auf die akademische Reputation und Berufungsverfahren von Forschenden."
+    },
+    {
+      "paper_id": "g024",
+      "lang": "en",
+      "topic": "bibliometrics",
+      "title": "H-Index and Alternative Metrics for Scholarly Impact Assessment",
+      "abstract": "We compare the h-index against alternative scholarly impact metrics and discuss their strengths and weaknesses for evaluating individual researchers."
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "gq01",
+      "lang": "en",
+      "query": "transformer models attention mechanism sequence processing",
+      "relevant_paper_ids": ["g001", "g002", "g003", "g004"]
+    },
+    {
+      "query_id": "gq02",
+      "lang": "de",
+      "query": "Klimawandel Auswirkungen auf Oekosysteme und CO2-Emissionen",
+      "relevant_paper_ids": ["g005", "g006", "g007", "g008"]
+    },
+    {
+      "query_id": "gq03",
+      "lang": "en",
+      "query": "retrieval methods combining vector search and full text search",
+      "relevant_paper_ids": ["g009", "g010", "g011", "g012"]
+    },
+    {
+      "query_id": "gq04",
+      "lang": "de",
+      "query": "neuronale Netze zur Bildklassifikation und Objekterkennung",
+      "relevant_paper_ids": ["g013", "g014", "g015", "g016"]
+    },
+    {
+      "query_id": "gq05",
+      "lang": "en",
+      "query": "quantum computing algorithms and qubits",
+      "relevant_paper_ids": ["g017", "g018", "g019", "g020"]
+    },
+    {
+      "query_id": "gq06",
+      "lang": "de",
+      "query": "bibliometrische Zitationsanalyse wissenschaftlicher Wirkung",
+      "relevant_paper_ids": ["g021", "g022", "g023", "g024"]
+    },
+    {
+      "query_id": "gq07",
+      "lang": "de",
+      "query": "lange Kontextfenster in Transformer-Modellen effizient verarbeiten",
+      "relevant_paper_ids": ["g003"]
+    },
+    {
+      "query_id": "gq08",
+      "lang": "en",
+      "query": "carbon emission reduction policy Europe",
+      "relevant_paper_ids": ["g007", "g008"]
+    },
+    {
+      "query_id": "gq09",
+      "lang": "de",
+      "query": "Frage-Antwort-Systeme mit dichten Retrieval-Repraesentationen",
+      "relevant_paper_ids": ["g011"]
+    },
+    {
+      "query_id": "gq10",
+      "lang": "en",
+      "query": "medical image segmentation neural networks",
+      "relevant_paper_ids": ["g015", "g016"]
+    },
+    {
+      "query_id": "gq11",
+      "lang": "de",
+      "query": "Quantenfehlerkorrektur mit supraleitenden Qubits",
+      "relevant_paper_ids": ["g019"]
+    },
+    {
+      "query_id": "gq12",
+      "lang": "en",
+      "query": "h-index and alternative metrics for research impact",
+      "relevant_paper_ids": ["g023", "g024"]
+    }
+  ]
+}
