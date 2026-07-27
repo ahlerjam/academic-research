@@ -22,6 +22,24 @@ sys.path.insert(
 
 SAMPLE_TXT = Path(__file__).resolve().parent / "fixtures" / "reading_list" / "sample.txt"
 
+# 1:1 von api.crossref.org aufgezeichnete Works-Antworten (nur `reference`/`abstract`
+# u. ae. Grossfelder entfernt). Sie sind die einzige verlaessliche Quelle dafuer, in
+# welchem Feld Crossref eine Retraktion tatsaechlich meldet — siehe Issue #383.
+CROSSREF_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "crossref"
+
+
+def load_crossref_fixture(name: str) -> dict:
+    """Laedt eine aufgezeichnete Crossref-Works-Antwort (vollstaendige Payload)."""
+    return json.loads((CROSSREF_FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def crossref_response(payload: dict, status_code: int = 200) -> MagicMock:
+    """Baut ein requests-Response-Double fuer eine Crossref-Payload."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = payload
+    return resp
+
 
 # ---------------------------------------------------------------------------
 # Deterministisches Mock-JSON vom LLM-Parser (30 Eintraege)
@@ -398,11 +416,158 @@ class TestResolveEntry:
         assert data["title"] == "Deep Learning"
 
 
+class TestCheckRetraction:
+    """Unit-Tests fuer check_retraction() (Crossref update-type:retraction, Issue #383).
+
+    Crossref-Semantik (gegen die Live-API verifiziert, Fixtures in fixtures/crossref/):
+    - Der zurueckgezogene ARTIKEL traegt `message.updated-by` mit `type == "retraction"`
+      und hat gar kein `update-to`-Feld.
+    - `message.update-to` traegt umgekehrt die RETRACTION-NOTIZ; sie zeigt auf den
+      zurueckgezogenen Artikel und ist selbst nicht zurueckgezogen.
+    check_retraction() bekommt den DOI des Papers — also ist `updated-by` das
+    richtige Feld. Auf `update-to` zu pruefen dreht die Relation um und liefert
+    fuer jedes real zurueckgezogene Paper False.
+    """
+
+    def test_true_for_real_retracted_article_payload(self):
+        """Reale Crossref-Payload eines zurueckgezogenen Artikels wird als Retraction erkannt."""
+        from parse_list import check_retraction
+
+        payload = load_crossref_fixture("retracted_article.json")
+        message = payload["message"]
+
+        # Beweist, warum die Pruefung auf `update-to` in Produktion nie greifen kann:
+        # das Feld existiert auf dem zurueckgezogenen Artikel schlicht nicht.
+        assert "update-to" not in message
+        assert any(entry["type"] == "retraction" for entry in message["updated-by"])
+
+        with patch("requests.get", return_value=crossref_response(payload)):
+            result = check_retraction(message["DOI"])
+        assert result is True
+
+    def test_false_for_real_retraction_notice_payload(self):
+        """Die Retraction-NOTIZ selbst ist nicht zurueckgezogen (nur ihr `update-to`-Ziel)."""
+        from parse_list import check_retraction
+
+        payload = load_crossref_fixture("retraction_notice.json")
+        message = payload["message"]
+
+        # Die Notiz traegt genau das Feld, das die alte Implementierung ausgewertet hat.
+        assert any(entry["type"] == "retraction" for entry in message["update-to"])
+        assert "updated-by" not in message
+
+        with patch("requests.get", return_value=crossref_response(payload)):
+            result = check_retraction(message["DOI"])
+        assert result is False
+
+    def test_false_for_real_regular_article_payload(self):
+        """Reale Crossref-Payload eines regulaeren Artikels loest keine Retraction aus."""
+        from parse_list import check_retraction
+
+        payload = load_crossref_fixture("regular_article.json")
+        message = payload["message"]
+        assert "updated-by" not in message
+
+        with patch("requests.get", return_value=crossref_response(payload)):
+            result = check_retraction(message["DOI"])
+        assert result is False
+
+    def test_true_when_updated_by_contains_retraction(self):
+        """check_retraction() gibt True zurueck wenn message.updated-by eine Retraction enthaelt."""
+        from parse_list import check_retraction
+
+        payload = {
+            "message": {
+                "DOI": "10.1234/retracted",
+                "updated-by": [
+                    {
+                        "type": "retraction",
+                        "DOI": "10.1234/retraction-notice",
+                        "label": "Retraction",
+                        "source": "retraction-watch",
+                    }
+                ],
+            }
+        }
+        with patch("requests.get", return_value=crossref_response(payload)):
+            result = check_retraction("10.1234/retracted")
+        assert result is True
+
+    def test_false_when_no_update_field(self):
+        """check_retraction() gibt False zurueck bei regulaerem Paper ohne updated-by."""
+        from parse_list import check_retraction
+
+        payload = {
+            "message": {
+                "DOI": "10.1234/regular",
+                "title": ["A Regular Paper"],
+            }
+        }
+        with patch("requests.get", return_value=crossref_response(payload)):
+            result = check_retraction("10.1234/regular")
+        assert result is False
+
+    def test_false_when_updated_by_has_other_type(self):
+        """check_retraction() gibt False zurueck wenn updated-by nur Korrekturen enthaelt."""
+        from parse_list import check_retraction
+
+        payload = {
+            "message": {
+                "DOI": "10.1234/corrected",
+                "updated-by": [{"type": "correction", "DOI": "10.1234/correction-notice"}],
+            }
+        }
+        with patch("requests.get", return_value=crossref_response(payload)):
+            result = check_retraction("10.1234/corrected")
+        assert result is False
+
+    def test_false_when_updated_by_is_json_null(self):
+        """Ein explizites JSON-null in updated-by darf keinen TypeError ausloesen."""
+        from parse_list import check_retraction
+
+        payload = {"message": {"DOI": "10.1234/null-field", "updated-by": None}}
+        with patch("requests.get", return_value=crossref_response(payload)):
+            result = check_retraction("10.1234/null-field")
+        assert result is False
+
+    def test_false_on_404(self):
+        """check_retraction() gibt False zurueck bei HTTP 404 (fail-safe)."""
+        from parse_list import check_retraction
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        with patch("requests.get", return_value=mock_resp):
+            result = check_retraction("10.9999/nonexistent")
+        assert result is False
+
+    def test_false_on_network_exception(self):
+        """check_retraction() gibt False zurueck bei Netzwerk-Fehler (fail-safe, AC3)."""
+        from parse_list import check_retraction
+
+        with patch("requests.get", side_effect=ConnectionError("network down")):
+            result = check_retraction("10.1234/whatever")
+        assert result is False
+
+    def test_false_on_empty_doi(self):
+        """check_retraction() gibt False zurueck bei leerem DOI, ohne Netzwerk-Call."""
+        from parse_list import check_retraction
+
+        with patch("requests.get") as mock_get:
+            result = check_retraction("")
+        assert result is False
+        mock_get.assert_not_called()
+
+
 class TestImportPipeline:
     """Integrationstests fuer import_reading_list() — 90%-Kriterium."""
 
-    def _run_import(self, entries, mock_vault_add, mock_ask=None):
-        """Hilfsmethode: fuehrt Import mit gemocktem LLM und Vault aus."""
+    def _run_import(self, entries, mock_vault_add, mock_ask=None, crossref_fixture=None):
+        """Hilfsmethode: fuehrt Import mit gemocktem LLM und Vault aus.
+
+        `check_retraction()` wird bewusst NICHT gemockt — gemockt wird nur die
+        HTTP-Grenze (`requests.get`), sodass die echte Retraction-Auswertung gegen
+        eine reale Crossref-Payload laeuft. Default ist ein regulaerer Artikel.
+        """
         from parse_list import import_reading_list
 
         mock_client = MagicMock()
@@ -423,11 +588,16 @@ class TestImportPipeline:
                 return json.dumps(csl)
             return None
 
+        crossref_payload = load_crossref_fixture(crossref_fixture or "regular_article.json")
+
         with (
             patch("parse_list.resolve_doi", side_effect=fake_resolve_doi),
             patch("parse_list.resolve_isbn", side_effect=fake_resolve_isbn),
             patch("parse_list.vault_add_paper", mock_vault_add),
+            patch("requests.get", return_value=crossref_response(crossref_payload)),
+            patch("parse_list.vault_add_excluded_source") as mock_excluded,
         ):
+            self._last_mock_excluded = mock_excluded
             if mock_ask:
                 with patch("parse_list.ask_user_question", mock_ask):
                     return import_reading_list(
@@ -481,7 +651,7 @@ class TestImportPipeline:
 
         ambiguous_entries = [PARSED_ENTRIES[0], AMBIGUOUS_ENTRY]
 
-        result = self._run_import(ambiguous_entries, mock_vault_add, mock_ask=mock_ask)
+        self._run_import(ambiguous_entries, mock_vault_add, mock_ask=mock_ask)
 
         mock_ask.assert_called_once()
         call_kwargs = mock_ask.call_args[1] if mock_ask.call_args[1] else {}
@@ -554,6 +724,165 @@ class TestImportPipeline:
 
         # Eintraege ohne DOI/ISBN-Resolution: Fallback-Pfad oder skipped
         assert result["total"] == 3
+
+    def test_retracted_paper_marked_as_excluded_source(self):
+        """AC1: Ein als retracted erkanntes Paper wird automatisch excluded_source.
+
+        Laeuft ueber die echte check_retraction()-Auswertung einer realen
+        Crossref-Payload — nur `requests.get` ist gemockt.
+        """
+        mock_vault_add = MagicMock()
+        entry = dict(PARSED_ENTRIES[1])  # hat DOI
+
+        self._run_import([entry], mock_vault_add, crossref_fixture="retracted_article.json")
+
+        mock_excluded = self._last_mock_excluded
+        mock_excluded.assert_called_once()
+        call_kwargs = mock_excluded.call_args[1] if mock_excluded.call_args[1] else {}
+        call_args = mock_excluded.call_args[0] if mock_excluded.call_args[0] else ()
+        paper_id = call_kwargs.get("paper_id") or (call_args[1] if len(call_args) > 1 else None)
+        assert paper_id, "paper_id darf bei vault_add_excluded_source nicht leer sein"
+
+    def test_regular_paper_not_marked_as_excluded_source(self):
+        """AC2: Ein reguläres, nicht zurückgezogenes Paper löst keine Markierung aus."""
+        mock_vault_add = MagicMock()
+        entry = dict(PARSED_ENTRIES[1])  # hat DOI
+
+        result = self._run_import([entry], mock_vault_add, crossref_fixture="regular_article.json")
+
+        mock_excluded = self._last_mock_excluded
+        mock_excluded.assert_not_called()
+        assert result["imported"] == 1
+
+    def test_retraction_notice_not_marked_as_excluded_source(self):
+        """AC2: Die Retraction-NOTIZ selbst ist kein zurueckgezogenes Paper.
+
+        Die alte Implementierung (Pruefung auf `update-to`) haette hier als
+        einzigem Fall True geliefert — genau falsch herum.
+        """
+        mock_vault_add = MagicMock()
+        entry = dict(PARSED_ENTRIES[1])  # hat DOI
+
+        result = self._run_import(
+            [entry], mock_vault_add, crossref_fixture="retraction_notice.json"
+        )
+
+        self._last_mock_excluded.assert_not_called()
+        assert result["imported"] == 1
+
+    def test_crossref_outage_does_not_block_import(self):
+        """AC3: Ein echter Crossref-Ausfall blockiert den Ingest nicht.
+
+        Gemockt wird nur `requests.get` — die Fail-safe-Logik in check_retraction()
+        laeuft dabei wirklich durch.
+        """
+        from parse_list import import_reading_list
+
+        mock_client = MagicMock()
+        entry = dict(PARSED_ENTRIES[1])  # hat DOI
+        mock_client.messages.create.return_value = MagicMock(
+            content=[MagicMock(text=json.dumps([entry]))]
+        )
+        mock_vault_add = MagicMock()
+
+        def fake_resolve_doi(doi):
+            return json.dumps({"type": "article-journal", "title": "Resolved", "DOI": doi})
+
+        with (
+            patch("parse_list.resolve_doi", side_effect=fake_resolve_doi),
+            patch("parse_list.vault_add_paper", mock_vault_add),
+            patch("requests.get", side_effect=ConnectionError("Crossref down")),
+            patch("parse_list.vault_add_excluded_source") as mock_excluded,
+        ):
+            result = import_reading_list(
+                str(SAMPLE_TXT),
+                db_path=":memory:",
+                llm_client=mock_client,
+            )
+
+        assert result["imported"] == 1
+        assert result["errors"] == []
+        mock_vault_add.assert_called_once()
+        mock_excluded.assert_not_called()
+
+    def test_retraction_check_failure_does_not_block_import(self):
+        """AC3, zweite Verteidigungslinie: wirft check_retraction() wider Erwarten
+        doch eine Exception, faengt der try/except am Call-Standort sie ab."""
+        from parse_list import import_reading_list
+
+        mock_client = MagicMock()
+        entry = dict(PARSED_ENTRIES[1])  # hat DOI
+        mock_client.messages.create.return_value = MagicMock(
+            content=[MagicMock(text=json.dumps([entry]))]
+        )
+        mock_vault_add = MagicMock()
+
+        def fake_resolve_doi(doi):
+            return json.dumps({"type": "article-journal", "title": "Resolved", "DOI": doi})
+
+        with (
+            patch("parse_list.resolve_doi", side_effect=fake_resolve_doi),
+            patch("parse_list.vault_add_paper", mock_vault_add),
+            patch("parse_list.check_retraction", side_effect=Exception("Crossref down")),
+            patch("parse_list.vault_add_excluded_source") as mock_excluded,
+        ):
+            result = import_reading_list(
+                str(SAMPLE_TXT),
+                db_path=":memory:",
+                llm_client=mock_client,
+            )
+
+        assert result["imported"] == 1
+        mock_vault_add.assert_called_once()
+        mock_excluded.assert_not_called()
+
+    def test_excluded_source_write_failure_is_surfaced(self):
+        """Schlaegt vault_add_excluded_source() nach erkannter Retraction fehl,
+        darf das nicht spurlos verschluckt werden (except Exception: pass).
+
+        Die erkannte Retraktion ginge sonst ohne jedes Signal verloren:
+        kein Eintrag in errors, kein Log, kein Test - Regression zu PR #419.
+        """
+        from parse_list import import_reading_list
+
+        mock_client = MagicMock()
+        entry = dict(PARSED_ENTRIES[1])  # hat DOI
+        mock_client.messages.create.return_value = MagicMock(
+            content=[MagicMock(text=json.dumps([entry]))]
+        )
+        mock_vault_add = MagicMock()
+
+        def fake_resolve_doi(doi):
+            return json.dumps({"type": "article-journal", "title": "Resolved", "DOI": doi})
+
+        retracted = load_crossref_fixture("retracted_article.json")
+
+        with (
+            patch("parse_list.resolve_doi", side_effect=fake_resolve_doi),
+            patch("parse_list.vault_add_paper", mock_vault_add),
+            patch("requests.get", return_value=crossref_response(retracted)),
+            patch(
+                "parse_list.vault_add_excluded_source",
+                side_effect=RuntimeError("vault locked"),
+            ) as mock_excluded,
+        ):
+            result = import_reading_list(
+                str(SAMPLE_TXT),
+                db_path=":memory:",
+                llm_client=mock_client,
+            )
+
+        # Der Ingest selbst bleibt unberuehrt (fail-safe fuer den regulaeren Import) ...
+        mock_vault_add.assert_called_once()
+        assert result["imported"] == 1
+
+        # ... aber der Fehlschlag beim Markieren als excluded_source muss sichtbar sein.
+        mock_excluded.assert_called_once()
+        assert result["errors"], (
+            "Eine erkannte Retraktion, die nicht in den Vault geschrieben werden konnte, "
+            "muss in result['errors'] auftauchen statt spurlos zu verschwinden"
+        )
+        assert any("vault locked" in e or "excluded_source" in e for e in result["errors"])
 
 
 class TestFileFormats:
