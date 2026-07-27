@@ -959,12 +959,13 @@ def test_date_and_status_words_are_not_citations(empty_vault, content):
         "Der Beschluss (Bologna 1999) reformierte die Studienstruktur.",
     ],
 )
-def test_bare_word_year_never_hard_blocks(empty_vault, content):
+def test_bare_word_year_is_neither_blocked_nor_marked(empty_vault, content):
     """``(Wort Jahr)`` ohne Signalwort, Seite oder Co-Autor ist mehrdeutig.
 
     Ereignis- und Ortsnamen sind von Autorennamen lexikalisch nicht zu
-    unterscheiden. Ein Hard-Block auf dieser Evidenzlage stoppt legitime Prosa;
-    hoechstens eine ``[UNVERIFIED]``-Markierung ist angemessen.
+    unterscheiden. Wer diese Form nicht als Beleg lesen kann, darf sie weder
+    hart blocken noch mit ``[UNVERIFIED]`` beschriften: die Markierung landet
+    sonst mitten in legitimer Prosa und veraendert den Text des Nutzers.
     """
     result = run_hook(
         write_payload(content),
@@ -973,17 +974,27 @@ def test_bare_word_year_never_hard_blocks(empty_vault, content):
     assert result.returncode == 0, (
         f"Prosa {content!r} hart geblockt: exit {result.returncode}. {result.stderr}"
     )
+    assert "[UNVERIFIED]" not in result.stdout, (
+        f"Prosa {content!r} wurde im Text markiert — Textmutation statt Beleg-Pruefung."
+    )
 
 
-def test_bare_citation_without_match_marks_unverified(empty_vault):
-    """Gegenprobe: der schwache Fall verschwindet nicht, er wird markiert."""
+def test_bare_citation_leaves_content_untouched(empty_vault):
+    """Der mehrdeutige Fall wird uebergangen, nicht umgeschrieben.
+
+    Gegenprobe zur frueheren Fassung, die hier ``[UNVERIFIED]`` anhaengte:
+    ``(Fantasius 1999)`` ist entweder ein Beleg oder Prosa — solange der Guard
+    das nicht entscheiden kann, ist Nichtstun die einzige folgenlose Reaktion.
+    """
     content = "Der Befund (Fantasius 1999) belegt die These eindeutig."
     result = run_hook(
         write_payload(content),
         env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
     )
-    assert result.returncode == 0, f"Erwartet 0 (Soft-Fail), got {result.returncode}."
-    assert "(Fantasius 1999) [UNVERIFIED]" in updated_content(result)
+    assert result.returncode == 0, f"Erwartet 0 (Durchlauf), got {result.returncode}."
+    assert "updatedInput" not in result.stdout, (
+        f"Mehrdeutiger Beleg wurde umgeschrieben: {result.stdout!r}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -1012,4 +1023,133 @@ def test_strong_citation_shapes_still_block(empty_vault, content):
     )
     assert result.returncode == 2, (
         f"Erfundener Beleg {content!r} nicht geblockt: exit {result.returncode}. {result.stderr}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde: AC2-Luecke der mehrdeutigen Form schliessen, ohne Prosa zu treffen
+# ---------------------------------------------------------------------------
+
+
+def test_bare_citation_blocks_when_author_is_cited_unambiguously(vault_with_mueller):
+    """AC2: die nackte Form ist ein Beleg, sobald das Dokument sie als solchen ausweist.
+
+    ``(Müller 2099)`` allein ist mehrdeutig. Steht im selben Dokument aber
+    ``(Müller 2021, S. 45)`` — eine unstrittige Beleg-Form mit demselben
+    Familiennamen —, dann zitiert dieser Text nachweislich einen Autor Müller.
+    Damit ist die Zitierabsicht der nackten Form belegt und ein frei erfundenes
+    Jahr wieder blockierbar, ohne die Prosa-Faelle (``(Fukushima 2011)``)
+    anzufassen.
+    """
+    content = (
+        "Der Befund (Müller 2021, S. 45) ist gut belegt.\n"
+        "Ergaenzend heisst es dort (Müller 2099) zum selben Thema.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": vault_with_mueller, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 2, (
+        f"Erfundenes Jahr trotz belegter Zitierabsicht nicht geblockt: "
+        f"exit {result.returncode}. stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "(Müller 2099)" in result.stderr, (
+        f"Block nennt den ausloesenden Beleg nicht: {result.stderr!r}"
+    )
+
+
+def test_uncorroborated_bare_form_stays_out_of_the_block(vault_with_mueller):
+    """Gegenprobe: die Aufwertung greift nur beim korroborierten Familiennamen.
+
+    Derselbe Text, aber der Prosa-Fall traegt einen anderen Namen — er darf von
+    der Zitierabsicht des Müller-Belegs nicht angesteckt werden.
+    """
+    content = (
+        "Der Befund (Müller 2021, S. 45) ist gut belegt.\n"
+        "Der Reaktorunfall (Fukushima 2011) veraenderte die Energiedebatte.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": vault_with_mueller, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 0, (
+        f"Prosa neben einem echten Beleg geblockt: exit {result.returncode}. {result.stderr}"
+    )
+    assert "[UNVERIFIED]" not in result.stdout, "Prosa neben einem echten Beleg markiert"
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde: die Mengenbegrenzung darf keinen stillen Pruef-Ausfall erzeugen
+# ---------------------------------------------------------------------------
+
+
+def _many_bare_parentheses(count: int) -> str:
+    """``count`` Saetze mit je einem eigenen ``(Name Jahr)`` in Prosa-Form."""
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    lines = []
+    for i in range(count):
+        name = f"Aar{letters[(i // 26) % 26]}{letters[i % 26]}"
+        lines.append(f"Der Ort ({name} 2011) war fuer die Region relevant.")
+    return "\n".join(lines)
+
+
+def test_ambiguous_parentheses_do_not_consume_the_citation_budget(empty_vault):
+    """AC2 darf nicht daran scheitern, wie viele Klammern vorher im Text stehen.
+
+    110 mehrdeutige ``(Wort Jahr)``-Klammern gefolgt von einem frei erfundenen
+    Beleg mit Seitenangabe: der erfundene Beleg muss blocken, sonst genuegt
+    genug harmlose Prosa, um den Guard auszuhebeln.
+    """
+    content = (
+        _many_bare_parentheses(110) + "\nDer Befund (Fantasius 1999, S. 12) belegt die These.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 2, (
+        f"Erfundener Beleg hinter 110 Klammern nicht geblockt: exit {result.returncode}. "
+        f"stdout={result.stdout[:400]!r} stderr={result.stderr[:400]!r}"
+    )
+
+
+def test_budget_overflow_is_marked_instead_of_silently_skipped(vault_with_mueller):
+    """Ueber der Obergrenze wird markiert, nicht stillschweigend durchgewinkt.
+
+    Mit ``ACADEMIC_CITATION_MAX_PER_WRITE=1`` passt nur der erste Beleg ins
+    Pruefkontingent. Der zweite ist damit *ungeprueft* — und ungeprueft ist
+    dieselbe Evidenzlage wie ein API-Ausfall: ``[UNVERIFIED]`` statt Block,
+    aber niemals ein stiller Durchlauf.
+    """
+    content = (
+        "Der Befund (Müller 2021, S. 45) ist gut belegt.\n"
+        "Der zweite Befund (Fantasius 1999, S. 12) steht daneben.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_mueller,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_MAX_PER_WRITE": "1",
+        },
+    )
+    assert result.returncode == 0, (
+        f"Ungeprueftes Kontingent-Ueberhang geblockt statt markiert: "
+        f"exit {result.returncode}. {result.stderr}"
+    )
+    assert "(Fantasius 1999, S. 12) [UNVERIFIED]" in updated_content(result), (
+        f"Ueberhang nicht markiert: {result.stdout!r}"
+    )
+    assert "ACADEMIC_CITATION_MAX_PER_WRITE" in result.stderr, (
+        f"Kappung erfolgt ohne Hinweis auf stderr: {result.stderr!r}"
+    )
+
+
+def test_readme_documents_citation_budget_limit():
+    """AC4-Analogie: die Mengenbegrenzung ist konfigurierbar UND dokumentiert."""
+    text = README.read_text(encoding="utf-8")
+    section = re.search(r"### Klammer-Zitat-Validierung.*?(?=\n### |\n## |\Z)", text, re.DOTALL)
+    assert section, "README enthaelt keine Sektion '### Klammer-Zitat-Validierung'"
+    assert "ACADEMIC_CITATION_MAX_PER_WRITE" in section.group(0), (
+        "README dokumentiert die Mengenbegrenzung nicht."
     )

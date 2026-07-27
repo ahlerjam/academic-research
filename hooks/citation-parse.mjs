@@ -16,9 +16,12 @@
  *   Literaturverzeichnis-Abschnitt.
  *
  * Jeder Beleg traegt ein Feld ``confidence``: "strong" bei Seitenangabe,
- * Signalwort oder Co-Autoren-Marker, sonst "weak". Die nackte Form
- * "(Wort Jahr)" ist von Prosa wie "(Fukushima 2011)" nicht zu unterscheiden
- * und darf deshalb nie zu einem Hard-Block fuehren.
+ * Signalwort, Co-Autoren-Marker — oder wenn derselbe Familienname im Dokument
+ * schon in einer dieser eindeutigen Formen auftaucht (siehe
+ * upgradeCorroborated). Sonst "weak": die nackte Form "(Wort Jahr)" ist von
+ * Prosa wie "(Fukushima 2011)" nicht zu unterscheiden. Der Aufrufer darf
+ * "weak" weder blocken noch markieren — beides greift in Text ein, der
+ * moeglicherweise gar kein Beleg ist.
  */
 
 // Deutsche Umlaut-/Ligatur-Faltung — muss mit academic_vault/db.py::_UMLAUT_FOLD
@@ -262,5 +265,42 @@ export function extractCitations(content) {
     push(buildCitation(match, match[0]));
   }
 
+  upgradeCorroborated(citations);
   return citations;
+}
+
+/**
+ * Hebt mehrdeutige Belege an, deren Familienname im selben Dokument bereits in
+ * einer eindeutigen Beleg-Form vorkommt.
+ *
+ * ``(Müller 2099)`` allein ist lexikalisch nicht von Prosa zu trennen. Steht im
+ * selben Text aber ``(Müller 2021, S. 45)`` oder ``vgl. Müller 2018``, dann
+ * weist das Dokument ``Müller`` selbst als zitierten Autor aus — die Klammer
+ * ist dann ein Beleg und ein erfundenes Jahr wieder blockierbar. Die
+ * Prosa-Faelle bleiben unberuehrt, weil ``Fukushima``, ``Corona`` oder
+ * ``Bologna`` in keiner eindeutigen Beleg-Form auftauchen.
+ *
+ * Mutiert ``citations`` in-place (``confidence`` ``weak`` -> ``strong``).
+ */
+function upgradeCorroborated(citations) {
+  // Vereinigung aller Vergleichsvarianten der eindeutigen Belege. Der Test
+  // "schneiden sich die Variantenmengen?" (= familiesMatch) wird damit zu
+  // einem Set-Lookup, statt jeden schwachen gegen jeden starken Beleg zu
+  // fahren — bei einem Kapitel mit hunderten Klammern der Unterschied
+  // zwischen linear und quadratisch.
+  const strongVariants = new Set();
+  for (const citation of citations) {
+    if (citation.confidence !== 'strong') continue;
+    for (const variant of normalizeFamily(citation.family)) strongVariants.add(variant);
+  }
+  if (strongVariants.size === 0) return;
+  for (const citation of citations) {
+    if (citation.confidence !== 'weak') continue;
+    for (const variant of normalizeFamily(citation.family)) {
+      if (strongVariants.has(variant)) {
+        citation.confidence = 'strong';
+        break;
+      }
+    }
+  }
 }

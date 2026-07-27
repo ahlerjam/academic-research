@@ -222,9 +222,21 @@ function lookupFigureInVault(captionFragment) {
 // Klammer-Zitat-Verifikation (Issue #378)
 // ---------------------------------------------------------------------------
 
-// Obergrenze pro Write. Verhindert, dass ein sehr grosses Kapitel den
-// Hook-Timeout sprengt; darüber hinausgehende Belege werden nicht geprüft.
-const MAX_CITATIONS_PER_WRITE = 100;
+// Obergrenze der pro Write GEPRÜFTEN Belege. Verhindert, dass ein sehr grosses
+// Kapitel den Hook-Timeout sprengt. Überzählige Belege werden NICHT still
+// übergangen — das wäre ein lautloses Loch im Guard: genug Belege vor einem
+// erfundenen, und der erfundene läuft ungeprüft durch. Stattdessen zählen sie
+// wie ein API-Ausfall als "ungeprüft" ([UNVERIFIED] statt Block) und der Hook
+// meldet die Kappung auf stderr.
+const DEFAULT_MAX_CITATIONS_PER_WRITE = 100;
+
+/** Pruefkontingent pro Write; per Env übersteuerbar (Default 100). */
+function maxCitationsPerWrite(env = process.env) {
+  const raw = env.ACADEMIC_CITATION_MAX_PER_WRITE;
+  if (raw === undefined || raw === '') return DEFAULT_MAX_CITATIONS_PER_WRITE;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_MAX_CITATIONS_PER_WRITE;
+}
 
 /**
  * Prüft alle Belege in EINEM Python-Subprozess (nicht einer pro Beleg —
@@ -327,7 +339,23 @@ function blockCitation(citation, reasonLine) {
  * die Kontrolle zurück.
  */
 async function runCitationCheck(toolName, toolInput, content) {
-  const citations = extractCitations(content).slice(0, MAX_CITATIONS_PER_WRITE);
+  const extracted = extractCitations(content);
+
+  // Mehrdeutige Formen aussortieren, bevor irgendetwas passiert. Die nackte
+  // Klammer "(Wort Jahr)" ohne Seite, Signalwort, Co-Autor und ohne einen
+  // gleichnamigen eindeutigen Beleg im selben Dokument ist von Prosa nicht zu
+  // trennen ("(Fukushima 2011)", "(Bologna 1999)"). Dafür gibt es genau eine
+  // folgenlose Reaktion: übergehen. Ein Block stoppt legitimen Fließtext, ein
+  // [UNVERIFIED] schreibt einen Marker in einen Satz, der gar kein Beleg ist —
+  // beides sind Eingriffe auf einer Evidenzlage, die keinen Eingriff trägt.
+  const citations = extracted.filter((c) => c.confidence === 'strong');
+  const ambiguous = extracted.length - citations.length;
+  if (ambiguous > 0) {
+    process.stderr.write(
+      `[Citation-Guard] Hinweis: ${ambiguous} mehrdeutige "(Wort Jahr)"-Klammer(n) `
+      + 'nicht geprüft (nicht von Fließtext unterscheidbar).\n'
+    );
+  }
   if (citations.length === 0) return;
 
   if (!existsSync(VAULT_DB)) {
@@ -337,9 +365,26 @@ async function runCitationCheck(toolName, toolInput, content) {
     return;
   }
 
-  const vaultStatus = verifyCitationsInVault(citations);
+  // Kappung: was nicht mehr ins Kontingent passt, gilt als ungeprüft — nicht
+  // als geprüft-und-in-Ordnung.
+  const limit = maxCitationsPerWrite();
+  const checked = citations.slice(0, limit);
+  const overflow = citations.slice(limit);
+  const reasons = new Map();
+  for (const citation of overflow) {
+    reasons.set(citation.raw, `ungeprüft (Kontingent ${limit} erschöpft)`);
+  }
+  if (overflow.length > 0) {
+    process.stderr.write(
+      `[Citation-Guard] Warnung: ${citations.length} Belege überschreiten das Prüfkontingent `
+      + `von ${limit} (ACADEMIC_CITATION_MAX_PER_WRITE). Die überzähligen ${overflow.length} `
+      + 'werden ungeprüft mit [UNVERIFIED] markiert.\n'
+    );
+  }
+
+  const vaultStatus = verifyCitationsInVault(checked);
   const unresolved = [];
-  for (const citation of citations) {
+  for (const citation of checked) {
     const status = vaultStatus.get(citation.raw);
     // "unavailable" = Python/Vault-Fehler → fail-open wie beim Quote-Check.
     if (status === 'verified' || status === 'unavailable') continue;
@@ -351,37 +396,35 @@ async function runCitationCheck(toolName, toolInput, content) {
     }
     unresolved.push(citation);
   }
-  if (unresolved.length === 0) return;
 
-  const config = loadConfig();
-  const cascade = await resolveCitations(unresolved, config);
-  const toMark = [];
-  for (const citation of unresolved) {
-    const result = cascade.get(citation.raw) || { status: 'no-match', score: 0 };
-    if (result.status === 'confirmed') continue;
-    // Ein sauberes Negativ rechtfertigt den Hard-Block nur bei eindeutiger
-    // Zitierabsicht. Die nackte Form "(Wort Jahr)" ist von Prosa nicht zu
-    // trennen ("(Fukushima 2011)"), dort bleibt es bei [UNVERIFIED] —
-    // dieselbe Logik wie bei "unavailable": eine Form, die wir nicht
-    // eindeutig lesen koennen, ist kein Halluzinations-Nachweis.
-    if (result.status === 'no-match' && citation.confidence === 'strong') {
-      blockCitation(
-        citation,
-        config.enabled
-          ? `Weder im Vault noch über arXiv/CrossRef/Semantic Scholar auffindbar `
-            + `(bester Score ${result.score} < ${config.probableMin}).`
-          : 'Nicht im Vault (externe Kaskade per ACADEMIC_CITATION_CASCADE=off deaktiviert).',
-      );
+  const toMark = [...overflow];
+  if (unresolved.length > 0) {
+    const config = loadConfig();
+    const cascade = await resolveCitations(unresolved, config);
+    for (const citation of unresolved) {
+      const result = cascade.get(citation.raw) || { status: 'no-match', score: 0 };
+      if (result.status === 'confirmed') continue;
+      // Sauberes Negativ auf einer eindeutigen Beleg-Form = Halluzinations-
+      // Nachweis. "unavailable" dagegen ist fehlende Evidenz, kein Gegenbeweis.
+      if (result.status === 'no-match') {
+        blockCitation(
+          citation,
+          config.enabled
+            ? `Weder im Vault noch über arXiv/CrossRef/Semantic Scholar auffindbar `
+              + `(bester Score ${result.score} < ${config.probableMin}).`
+            : 'Nicht im Vault (externe Kaskade per ACADEMIC_CITATION_CASCADE=off deaktiviert).',
+        );
+      }
+      reasons.set(citation.raw, `${result.status} (Score ${result.score})`);
+      toMark.push(citation);
     }
-    toMark.push(citation);
   }
   if (toMark.length === 0) return;
 
   const reason = [
     '[Citation-Guard] Belege konnten nicht abschließend verifiziert werden und '
       + 'wurden mit [UNVERIFIED] markiert:',
-    ...toMark.map((c) => `  ${c.raw} — ${cascade.get(c.raw).status} `
-      + `(Score ${cascade.get(c.raw).score})`),
+    ...toMark.map((c) => `  ${c.raw} — ${reasons.get(c.raw)}`),
   ].join('\n');
   process.stderr.write(`${reason}\n`);
   console.log(JSON.stringify({

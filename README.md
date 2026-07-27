@@ -836,17 +836,28 @@ Literaturverzeichnisses. Hat der Vault zu einem Paper **keinen vollständigen
 Seitenumfang**, gilt die Seitenzahl als nicht widerlegbar (dokumentierter
 Soft-Pass).
 
-**Belegstärke entscheidet über die Härte der Reaktion.** Eine Seitenangabe
+**Belegstärke entscheidet, ob überhaupt geprüft wird.** Eine Seitenangabe
 (`, S. 45`), ein Signalwort (`vgl.`, `siehe`, `zit. nach`) oder ein
 Co-Autoren-Marker (`/`, `&`, `u. a.`, `et al.`) machen die Zitierabsicht
 eindeutig — solche Belege blockieren bei sauberem Negativ. Die nackte Form
 `(Wort Jahr)` ist dagegen von Fließtext lexikalisch nicht zu trennen
-(`(Fukushima 2011)`, `(Corona 2020)`, `(Bologna 1999)`) und führt deshalb
-höchstens zu `[UNVERIFIED]`, nie zu einem Hard-Block. Das ist dieselbe Regel
-wie bei `unavailable`: eine Evidenzlage, die wir nicht eindeutig lesen können,
-ist kein Halluzinations-Nachweis. Der Preis ist ein bekannter False Negative —
-ein frei erfundenes `(Fantasius 1999)` ohne Seitenangabe wird markiert statt
-geblockt.
+(`(Fukushima 2011)`, `(Corona 2020)`, `(Bologna 1999)`) und wird deshalb
+**gar nicht geprüft**: weder geblockt noch mit `[UNVERIFIED]` markiert. Ein
+Marker mitten in `Der Reaktorunfall (Fukushima 2011) …` wäre keine Warnung,
+sondern eine Textänderung an einer Stelle, die überhaupt kein Beleg ist —
+und eine Evidenzlage, die wir nicht eindeutig lesen können, trägt keinen
+Eingriff. Der Hook meldet die Zahl übergangener Klammern auf stderr, damit
+die Lücke sichtbar bleibt.
+
+**Korroboration hebt die Mehrdeutigkeit auf.** Kommt derselbe Familienname im
+selben Dokument mindestens einmal in einer eindeutigen Beleg-Form vor, weist
+der Text ihn selbst als zitierten Autor aus — dann gilt auch die nackte Form
+als Beleg und wird voll geprüft. `(Müller 2021, S. 45)` im Kapitel macht ein
+danebenstehendes `(Müller 2099)` blockierbar; `(Fukushima 2011)` bleibt
+unangetastet, weil `Fukushima` nirgends als zitierter Autor auftritt.
+Der Rest-False-Negative ist damit eng: ein frei erfundenes `(Fantasius 1999)`
+ohne Seitenangabe **und** ohne jeden weiteren Beleg desselben Autors im
+Dokument läuft durch.
 
 Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
 Falschtreffer produziert: die narrative Form ohne Signalwort
@@ -875,9 +886,10 @@ Belege) → CrossRef → Semantic Scholar (Fuzzy, Gate: Autoren-Überlapp
 | `confirmed` | Vault-Treffer **oder** Score ≥ `ACADEMIC_CITATION_CONFIRMED_MIN` (80) | allow |
 | `probable` | Score ≥ `ACADEMIC_CITATION_PROBABLE_MIN` (65) | allow + `[UNVERIFIED]` |
 | `unavailable` | Timeout / `ECONNREFUSED` / abgebrochener Body / **jeder** Nicht-2xx-Status (5xx, 429, aber auch 403-Drosselung und 404) / HTTP 200 mit unlesbarem Body | allow + `[UNVERIFIED]` |
-| `no-match` | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer — **und** der Beleg ist eindeutig (Seite, Signalwort oder Co-Autor) | **Block** (exit 2) |
-| `no-match` bei nackter Form `(Wort Jahr)` | wie oben, aber ohne Seite/Signalwort/Co-Autor | allow + `[UNVERIFIED]` |
+| `no-match` | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer — der Beleg ist dabei immer eindeutig (Seite, Signalwort, Co-Autor oder im Dokument korroboriert) | **Block** (exit 2) |
 | `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2) |
+| nicht geprüft | nackte Form `(Wort Jahr)` ohne Korroboration | allow, Text **unverändert** (stderr-Hinweis) |
+| ungeprüft (Kontingent) | mehr eindeutige Belege als `ACADEMIC_CITATION_MAX_PER_WRITE` | allow + `[UNVERIFIED]` (stderr-Warnung) |
 
 Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein
 Netzausfall darf nie wie ein Halluzinations-Nachweis wirken. Bei `probable`
@@ -895,6 +907,7 @@ und `unavailable` schreibt der Hook den Tool-Input per
 | `ACADEMIC_CITATION_S2_MIN_OVERLAP` | `0.6` | Autoren-Überlapp-Gate für Semantic Scholar |
 | `ACADEMIC_CITATION_TIMEOUT_MS` | `2000` | Timeout je HTTP-Request |
 | `ACADEMIC_CITATION_BUDGET_MS` | `6000` | Gesamt-Wall-Clock-Budget der Kaskade |
+| `ACADEMIC_CITATION_MAX_PER_WRITE` | `100` | Prüfkontingent je Write; darüber hinausgehende Belege gelten als **ungeprüft** und werden mit `[UNVERIFIED]` markiert, nie stillschweigend durchgewinkt |
 | `ACADEMIC_CITATION_ARXIV_URL` | arXiv-API | Base-URL, überschreibbar (Tests/Proxy) |
 | `ACADEMIC_CITATION_CROSSREF_URL` | CrossRef-API | Base-URL, überschreibbar (Tests/Proxy) |
 | `ACADEMIC_CITATION_S2_URL` | Semantic-Scholar-API | Base-URL, überschreibbar (Tests/Proxy) |
