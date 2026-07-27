@@ -74,6 +74,13 @@ def _minimal_env(extra: dict[str, str] | None = None) -> dict[str, str]:
         "PATH": os.environ.get("PATH", ""),
         "HOME": os.environ.get("HOME", ""),
         "PYTHONPATH": str(REPO_ROOT),
+        # Kein Embedding-Ingest im Subprozess (#372): seit sentence-transformers
+        # eine regulaere Abhaengigkeit ist, wuerde ``vault.add_paper`` sonst das
+        # e5-Modell (~470 MB) laden, sobald das Endnutzer-venv vollstaendig
+        # installiert ist. Der autouse-Guard aus tests/conftest.py erreicht den
+        # Subprozess nicht — der Smoke-Test prueft den MCP-Roundtrip, nicht die
+        # Vektor-Pipeline (dafuer: tests/test_vault_embeddings_ingest.py).
+        "VAULT_AUTO_EMBED": "0",
     }
     if extra:
         env.update(extra)

@@ -117,6 +117,51 @@ def fake_embedder():
     return DeterministicEmbedder()
 
 
+@pytest.fixture(autouse=True)
+def block_real_embedding_backend(monkeypatch):
+    """Verhindert, dass die Suite das echte e5-Modell laedt (#372).
+
+    ``sentence-transformers`` ist seit #372 eine harte Dependency, also laeuft
+    ``get_embedder()`` in der CI nicht mehr in einen ImportError. Ohne diesen
+    Guard wuerde jeder ``add_paper``-Aufruf der Suite ``multilingual-e5-small``
+    (~470 MB) von HuggingFace ziehen — die Suite waere netzabhaengig und um
+    Groessenordnungen langsamer.
+
+    Gepatcht wird bewusst nur ``_load_backend_model`` (die unterste Schicht):
+    Tests, die ihren Embedder ueber ``get_embedder`` bzw. die Parameter von
+    ``ingest_paper_embeddings`` injizieren, bleiben unberuehrt, und der
+    Degradations-Pfad (``get_embedder() is None``) wird realistisch geprobt.
+
+    Ausnahme: mit ``VAULT_E5_LIVE_TEST=1`` greift der Guard nicht — das ist das
+    bestehende Gate des Live-Tests gegen das echte Modell.
+    """
+    import os
+
+    if os.environ.get("VAULT_E5_LIVE_TEST") == "1":
+        yield
+        return
+
+    try:
+        import academic_vault.embedding_model as em
+    except Exception:
+        yield
+        return
+
+    def _blocked(*_args, **_kwargs):
+        raise RuntimeError(
+            "Embedding-Backend im Testlauf blockiert (tests/conftest.py). "
+            "Tests injizieren den fake_embedder; fuer das echte Modell "
+            "VAULT_E5_LIVE_TEST=1 setzen."
+        )
+
+    monkeypatch.setattr(em, "_load_backend_model", _blocked)
+    em.reset_embedder_cache()
+    try:
+        yield
+    finally:
+        em.reset_embedder_cache()
+
+
 # ---------------------------------------------------------------------------
 # browser-use-Mock
 # ---------------------------------------------------------------------------

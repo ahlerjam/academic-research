@@ -9,21 +9,31 @@ schmalen ``Embedder``-Protokoll:
 Beide Praefixe sind bei der e5-Familie kein Detail, sondern Teil des
 Trainings-Setups: ohne sie sinkt die Retrieval-Qualitaet spuerbar.
 
-Backend-Politik (bewusst): Das schwere Backend (``sentence-transformers`` inkl.
-Torch, ~2,5 GB) ist **keine** harte Dependency des Plugins. Es wird erst beim
-ersten ``get_embedder()``-Aufruf lazy importiert; fehlt es, liefert
-``get_embedder()`` ``None`` und der Vault laeuft unveraendert im FTS5-only-Modus
-weiter (keine Exception, kein Funktionsverlust ausserhalb der Vektor-Suche).
-Installation des Backends: ``pip install sentence-transformers`` (siehe README
-und scripts/requirements.txt).
+Backend-Politik: ``sentence-transformers`` ist eine **harte** Dependency
+(pyproject.toml und scripts/requirements.txt) — ohne sie bliebe
+``chunk_embeddings`` in jeder realen Installation leer und die Vektor-Suche
+waere Attrappe (#372). Der Import bleibt trotzdem lazy: er zieht Torch nach und
+darf den Import von ``academic_vault`` nicht um Sekunden verzoegern.
+
+``get_embedder()`` liefert ``None``, wenn das Backend trotz Deklaration nicht
+nutzbar ist (deinstalliert, Modell-Download nicht moeglich, inkompatible
+Torch-Version). Das ist ein Degradations-, kein Absturzpfad: der Vault laeuft
+dann FTS5-only weiter. Der Grund wird geloggt, damit eine leere
+``chunk_embeddings``-Tabelle nicht wieder unbemerkt bleibt.
+
+Das Modell selbst (~470 MB) wird beim ersten Gebrauch nach
+``default_cache_dir()`` heruntergeladen und danach von dort geladen.
 """
 
+import logging
 import math
 import os
 import struct
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 # Dimensionalitaet von intfloat/multilingual-e5-small. Muss mit der vec0-Tabelle
 # chunk_vectors (FLOAT[384]) und quote_embeddings uebereinstimmen.
@@ -89,10 +99,11 @@ class Embedder(Protocol):
 
 
 def _load_backend_model(model_id: str, cache_dir: str | None = None) -> Any:
-    """Laedt das sentence-transformers-Backend. Wirft ImportError ohne Extra.
+    """Laedt das sentence-transformers-Backend (deklarierte Dependency).
 
-    Separate Funktion, damit Tests das Fehlen des Backends deterministisch
-    simulieren koennen, ohne echte Modellgewichte zu laden.
+    Separate Funktion, damit Tests das Fehlen bzw. Scheitern des Backends
+    deterministisch simulieren koennen, ohne echte Modellgewichte zu laden —
+    die autouse-Fixture in tests/conftest.py haengt sich genau hier ein.
     """
     from sentence_transformers import SentenceTransformer
 
@@ -154,8 +165,10 @@ def reset_embedder_cache() -> None:
 def get_embedder(model_id: str | None = None) -> Embedder | None:
     """Gibt den lokalen Embedder zurueck oder ``None``, wenn keiner nutzbar ist.
 
-    ``None`` ist ein regulaerer Rueckgabewert, kein Fehlerfall: ohne
-    installiertes Backend bleibt der Vault vollstaendig nutzbar (FTS5-only).
+    ``None`` ist ein Degradations-, kein Absturzpfad: der Vault bleibt auch ohne
+    nutzbares Backend vollstaendig bedienbar (FTS5-only). Der Grund landet im
+    Log — eine dauerhaft leere ``chunk_embeddings``-Tabelle soll nicht wieder
+    unbemerkt bleiben (#372).
     """
     key = model_id or os.environ.get(ENV_MODEL_ID) or DEFAULT_MODEL_ID
     if key in _EMBEDDER_CACHE:
@@ -166,9 +179,17 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
         candidate = E5SmallEmbedder(model_id=key)
         candidate.load()
         embedder = candidate
-    except Exception:
-        # ImportError (Extra fehlt), OSError (kein Modell-Download moeglich),
-        # RuntimeError (inkompatibles Backend) — alles derselbe Ausgang.
+    except Exception as exc:
+        # ImportError (Backend deinstalliert), OSError (kein Modell-Download
+        # moeglich), RuntimeError (inkompatibles Backend) — gleicher Ausgang,
+        # aber sichtbar: ohne Embedder faellt die Suche auf FTS5-only zurueck.
+        logger.warning(
+            "Embedding-Backend '%s' nicht nutzbar (%s: %s) — Vektor-Suche bleibt "
+            "aus, vault.search laeuft FTS5-only.",
+            key,
+            type(exc).__name__,
+            exc,
+        )
         embedder = None
 
     _EMBEDDER_CACHE[key] = embedder

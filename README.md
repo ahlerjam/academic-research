@@ -626,13 +626,15 @@ Der **Vault** (`academic_vault/`) ist die Kernkomponente seit v6.0. Er ersetzt d
 
 `vault.add_paper()` erzeugt seit v6.6 automatisch Chunk-Embeddings (`chunk_embeddings` + vec0-Spiegel `chunk_vectors`); `vault.search(..., rerank=True)` führt die KNN-Treffer per Reciprocal-Rank-Fusion mit dem BM25-Ranking zusammen.
 
-Das Embedding-Backend ist **optional** und bewusst keine harte Abhängigkeit (`sentence-transformers` zieht Torch mit ~2,5 GB nach):
+Das Embedding-Backend (`sentence-transformers`) ist eine **reguläre Abhängigkeit** und wird von `scripts/setup.sh` bzw. `uv sync` mitinstalliert — ohne es bliebe `chunk_embeddings` leer und die Vektor-Suche wäre wirkungslos. Die Modellgewichte (~470 MB) lädt das Plugin beim ersten `vault.add_paper()` nach `VAULT_EMBEDDING_CACHE` herunter; danach läuft alles lokal und offline.
+
+Für die Dev-Umgebung bezieht `uv` Torch aus dem CPU-Index von PyTorch (`[tool.uv.sources]` in `pyproject.toml`), damit nicht der komplette CUDA-Stack im Lockfile landet. Wer den pip-Weg nutzt und auf Linux kein CUDA-Wheel möchte, installiert Torch vorab separat:
 
 ```bash
-pip install "sentence-transformers>=3.0"   # aktiviert die Vektor-Suche
+pip install --index-url https://download.pytorch.org/whl/cpu torch
 ```
 
-Ohne dieses Paket bleibt der Vault vollständig nutzbar — die Suche läuft dann wie bisher FTS5-only, ohne Fehler. Genauso verhält sich der Vault, wenn die `sqlite-vec`-Extension nicht ladbar ist (z. B. Python-Builds ohne `--enable-loadable-sqlite-extensions` auf macOS): die KNN-Suche rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
+Lässt sich das Backend nicht laden (Modell-Download nicht möglich, inkompatible Torch-Version), fällt der Vault mit einer Log-Warnung auf FTS5-only zurück statt zu scheitern. Genauso verhält er sich, wenn die `sqlite-vec`-Extension nicht ladbar ist (z. B. Python-Builds ohne `--enable-loadable-sqlite-extensions` auf macOS): die KNN-Suche rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
 
 | Env-Variable | Default | Wirkung |
 |---|---|---|

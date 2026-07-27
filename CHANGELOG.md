@@ -10,7 +10,11 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
-- **Lokale Embedding-Pipeline (#372):** Neues Modul `academic_vault/embedding_model.py` kapselt `intfloat/multilingual-e5-small` (MIT, 384d) inkl. der e5-Pflichtpräfixe `passage: `/`query: `, L2-Normalisierung und float32-Serialisierung. Neues Modul `academic_vault/ingest.py` verdrahtet Textquelle → Chunks → Embedding → `chunk_embeddings`; `vault.add_paper()` triggert den Ingest best effort (abschaltbar via `VAULT_AUTO_EMBED=0`). Das Backend (`sentence-transformers`) bleibt eine optionale Installation — ohne sie läuft der Vault unverändert FTS5-only.
+- **Lokale Embedding-Pipeline (#372):** Neues Modul `academic_vault/embedding_model.py` kapselt `intfloat/multilingual-e5-small` (MIT, 384d) inkl. der e5-Pflichtpräfixe `passage: `/`query: `, L2-Normalisierung und float32-Serialisierung. Neues Modul `academic_vault/ingest.py` verdrahtet Textquelle → Chunks → Embedding → `chunk_embeddings`; `vault.add_paper()` triggert den Ingest best effort (abschaltbar via `VAULT_AUTO_EMBED=0`).
+
+### Dependencies
+
+- **`sentence-transformers>=3.0` ist neue Laufzeit-Abhängigkeit (#372)** — in `pyproject.toml` und `scripts/requirements.txt`. Ohne das Backend bliebe `chunk_embeddings` in jeder realen Installation leer und die Vektor-Suche wäre eine Attrappe. Torch bezieht `uv` über `[tool.uv.sources]` aus dem CPU-Index von PyTorch, damit der CUDA-Stack (mehrere GB) nicht in `uv.lock` und in jeden CI-Job wandert. Die Modellgewichte (~470 MB) werden beim ersten `add_paper()` nach `VAULT_EMBEDDING_CACHE` geladen; scheitert das, warnt der Vault im Log und läuft FTS5-only weiter.
 
 ### Changed
 

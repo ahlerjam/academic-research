@@ -702,3 +702,131 @@ def test_e5_small_real_model_roundtrip():
     vector = embedder.embed_query("Wie funktioniert Retrieval-Augmented Generation?")
     assert len(vector) == EMBEDDING_DIM
     assert abs(math.sqrt(sum(v * v for v in vector)) - 1.0) < 1e-3
+
+
+# ---------------------------------------------------------------------------
+# Deklariertes Backend (#372, AC1)
+# ---------------------------------------------------------------------------
+#
+# AC1 verlangt, dass ``chunk_embeddings`` nach ``add_paper`` einen Datensatz mit
+# nicht-leerem ``embedding_vector`` enthaelt — und zwar in einer normalen
+# Installation, nicht nur mit injiziertem Embedder. Notwendige und hinreichende
+# Vorbedingung dafuer ist, dass das Backend, das ``_load_backend_model()``
+# importiert, in BEIDEN dokumentierten Installationswegen wirklich deklariert
+# und danach importierbar ist:
+#
+#   * Dev/CI      -> pyproject.toml [project].dependencies  + `uv sync --extra dev`
+#   * Endnutzer   -> scripts/requirements.txt               + scripts/setup.sh
+#
+# War das Backend nur als Kommentar dokumentiert, lief ``get_embedder()`` in
+# jeder realen Installation in den ImportError-Zweig und ``add_paper`` schrieb
+# null Zeilen. Diese Tests halten genau diese Regression fest.
+
+
+class TestEmbeddingBackendIsDeclaredDependency:
+    """Das Embedding-Backend muss deklarierte Dependency sein, kein Kommentar."""
+
+    BACKEND_DIST = "sentence-transformers"
+    BACKEND_MODULE = "sentence_transformers"
+
+    def test_pyproject_declares_embedding_backend(self):
+        """`uv sync --extra dev` muss das Backend mitinstallieren."""
+        import tomllib
+        from pathlib import Path
+
+        from packaging.requirements import Requirement
+
+        root = Path(__file__).resolve().parent.parent
+        data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        declared = {
+            Requirement(dep).name.lower().replace("_", "-")
+            for dep in data["project"]["dependencies"]
+        }
+        assert self.BACKEND_DIST in declared, (
+            f"{self.BACKEND_DIST} fehlt in pyproject.toml [project].dependencies — "
+            "ohne Deklaration liefert get_embedder() in der Dev-/CI-Umgebung None "
+            "und add_paper schreibt keine chunk_embeddings (AC1 von #372)."
+        )
+
+    def test_requirements_txt_declares_embedding_backend(self):
+        """Der Endnutzerweg (scripts/setup.sh -> pip) muss das Backend mitinstallieren."""
+        from pathlib import Path
+
+        from packaging.requirements import Requirement
+
+        root = Path(__file__).resolve().parent.parent
+        declared = set()
+        for raw in (root / "scripts" / "requirements.txt").read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            # Auskommentierte Zeilen zaehlen ausdruecklich NICHT als Deklaration.
+            if not line or line.startswith("#") or line.startswith("-"):
+                continue
+            declared.add(Requirement(line).name.lower().replace("_", "-"))
+        assert self.BACKEND_DIST in declared, (
+            f"{self.BACKEND_DIST} ist in scripts/requirements.txt nicht (oder nur "
+            "auskommentiert) deklariert — der vom Vault-MCP-Server genutzte "
+            "Endnutzer-venv bekommt dann kein Embedding-Backend (AC1 von #372)."
+        )
+
+    def test_declared_backend_is_importable(self):
+        """Das deklarierte Backend muss in der synchronisierten Umgebung auffindbar sein.
+
+        ``find_spec`` statt ``import``: der eigentliche Import zieht Torch nach
+        (mehrere Sekunden) und wird fuer diese Aussage nicht gebraucht.
+        """
+        import importlib.util
+
+        assert importlib.util.find_spec(self.BACKEND_MODULE) is not None, (
+            f"{self.BACKEND_MODULE} ist nicht installiert. Umgebung mit "
+            "`uv sync --extra dev` neu aufbauen; schlaegt das fehl, ist die "
+            "Deklaration in pyproject.toml unvollstaendig."
+        )
+
+
+class TestSuiteStaysOffline:
+    """Die Suite darf das echte Modell nicht laden — auch mit installiertem Backend.
+
+    Seit das Backend eine harte Dependency ist, laeuft ``get_embedder()`` nicht
+    mehr in einen ImportError. Ohne Schutz wuerde damit JEDER ``add_paper``-Aufruf
+    der Suite ``intfloat/multilingual-e5-small`` (~470 MB) von HuggingFace ziehen
+    und Tests netzabhaengig machen. Der Guard sitzt als autouse-Fixture in
+    tests/conftest.py.
+    """
+
+    def test_backend_loader_is_blocked(self):
+        import academic_vault.embedding_model as em
+
+        with pytest.raises(RuntimeError, match="Testlauf"):
+            em._load_backend_model("intfloat/multilingual-e5-small")
+
+    def test_get_embedder_returns_none_under_guard(self):
+        from academic_vault.embedding_model import get_embedder, reset_embedder_cache
+
+        reset_embedder_cache()
+        try:
+            assert get_embedder() is None
+        finally:
+            reset_embedder_cache()
+
+    def test_smoke_subprocess_env_disables_auto_embed(self):
+        """Der E2E-Smoke-Test startet den Vault als Subprozess — dort greift der
+        autouse-Guard nicht. Auf Entwicklermaschinen ist im Endnutzer-venv
+        inzwischen ein echtes Backend installiert, also muss der Ingest fuer den
+        Subprozess ueber die Env abgeschaltet sein."""
+        from tests.helpers.smoke_core import _minimal_env
+
+        assert _minimal_env().get("VAULT_AUTO_EMBED") == "0"
+
+    def test_add_paper_degrades_gracefully_under_guard(self, temp_vault_db):
+        """Ohne injizierten Embedder: keine Exception, keine Chunks, kein Download."""
+        from academic_vault.db import VaultDB
+
+        VaultDB(temp_vault_db).init_schema()
+        _add_paper(temp_vault_db, "p_guard", "Attention", "Transformer-Architektur.")
+
+        conn = sqlite3.connect(temp_vault_db)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM chunk_embeddings WHERE paper_id = ?", ("p_guard",)
+        ).fetchone()[0]
+        conn.close()
+        assert count == 0
