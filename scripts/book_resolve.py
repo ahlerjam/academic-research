@@ -214,8 +214,9 @@ def resolve_googlebooks(isbn: str | None = None, title: str | None = None) -> di
     else:
         return None
 
+    params: dict[str, str | int] = {"q": query, "maxResults": 1}
     try:
-        resp = requests.get(GB_API_URL, params={"q": query, "maxResults": 1}, timeout=10)
+        resp = requests.get(GB_API_URL, params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:

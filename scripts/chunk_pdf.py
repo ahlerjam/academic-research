@@ -46,7 +46,7 @@ def _outline_page_number(reader: PdfReader, item) -> int | None:
 
 def _flatten_outline(reader: PdfReader, outline, depth: int = 0) -> list[dict]:
     """Flacht den Outline-Tree auf Top-Level-Kapitel ab (Tiefe 0)."""
-    result = []
+    result: list[dict] = []
     if outline is None:
         return result
     for item in outline:

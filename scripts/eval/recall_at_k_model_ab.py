@@ -114,7 +114,7 @@ def run_model_ab(cfg: ModelConfig, data: dict, k: int = 10) -> dict:
 
     queries = data["queries"]
     query_texts = [cfg.query_prefix + q["query"] for q in queries]
-    encode_kwargs = {"normalize_embeddings": True, "show_progress_bar": False}
+    encode_kwargs: dict = {"normalize_embeddings": True, "show_progress_bar": False}
     if cfg.query_prompt_name:
         encode_kwargs["prompt_name"] = cfg.query_prompt_name
     query_embeddings = np.asarray(model.encode(query_texts, **encode_kwargs))
