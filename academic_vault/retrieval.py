@@ -78,6 +78,11 @@ def reciprocal_rank_fusion(
     Jedes Ergebnis-Dict muss 'paper_id' enthalten.
     Das Ergebnis-Dict wird um 'rrf_score' ergaenzt.
 
+    Metadaten werden pro Paper aus beiden Quellen zusammengefuehrt: ein Paper,
+    das in beiden Listen auftaucht, behaelt sowohl die vec0-Felder
+    (chunk_id, distance) als auch die FTS5-Felder (score, Snippet mit
+    '<b>'-Highlighting). Bei gleichem Schluessel gewinnt FTS5.
+
     Args:
         vec_results: Liste von Dicts aus vec0-Suche (geordnet nach Relevanz).
         fts_results: Liste von Dicts aus FTS5-Suche (geordnet nach Relevanz).
@@ -91,12 +96,15 @@ def reciprocal_rank_fusion(
     fts_ranks: dict[str, int] = {r["paper_id"]: idx + 1 for idx, r in enumerate(fts_results)}
     all_paper_ids = set(vec_ranks.keys()) | set(fts_ranks.keys())
 
-    # Quell-Dict: erste Quelle (vec0) gewinnt fuer Metadaten (snippet etc.)
+    # Metadaten BEIDER Quellen zusammenfuehren statt einander verdraengen zu
+    # lassen: vec0 liefert chunk_id/distance, FTS5 den dokumentierten 'score'
+    # und das '<b>'-Highlighting im Snippet. Bei Schluesselkollision gewinnt
+    # FTS5, weil dessen Felder den Rueckgabevertrag von search_papers bilden.
     paper_data: dict[str, dict] = {}
     for r in vec_results:
-        paper_data.setdefault(r["paper_id"], dict(r))
+        paper_data.setdefault(r["paper_id"], {}).update(r)
     for r in fts_results:
-        paper_data.setdefault(r["paper_id"], dict(r))
+        paper_data.setdefault(r["paper_id"], {}).update(r)
 
     fused: list[dict] = []
     for pid in all_paper_ids:

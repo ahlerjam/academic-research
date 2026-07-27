@@ -311,6 +311,18 @@ def add_v64_tables(db_path: str) -> None:
         conn.close()
 
 
+def add_chunk_vectors_table(db_path: str) -> int:
+    """Legt die vec0-Tabelle ``chunk_vectors`` an und spiegelt Bestandsvektoren.
+
+    Idempotent. Ohne ladbare sqlite-vec-Extension ein No-op (Rueckgabe 0) — die
+    KNN-Suche laeuft dann ueber den Python-Fallback in ``VaultDB.knn_chunks``.
+    Gibt die Anzahl gespiegelter Vektoren zurueck (Issue #372).
+    """
+    from academic_vault.db import VaultDB
+
+    return VaultDB(db_path).sync_chunk_vectors()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed-Migration: literature_state.md -> academic_vault SQLite"

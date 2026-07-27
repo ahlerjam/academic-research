@@ -5,15 +5,25 @@ Context-Manager-Klasse mit sqlite-vec-Fallback und FTS5-Volltext-Suche.
 
 import contextlib
 import json
+import math
 import os
 import re
 import sqlite3
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from uuid import uuid4
 
+from .embedding_model import EMBEDDING_DIM, deserialize_f32, serialize_f32
+
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+
+# vec0-Spiegel der chunk_embeddings-Vektoren (Issue #372). Die DDL steht hier
+# statt in schema.sql, weil sie die geladene sqlite-vec-Extension voraussetzt.
+_CHUNK_VECTORS_DDL = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors "
+    f"USING vec0(chunk_id TEXT PRIMARY KEY, embedding FLOAT[{EMBEDDING_DIM}])"
+)
 
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 
@@ -263,6 +273,7 @@ class VaultDB:
                         "CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings "
                         "USING vec0(quote_id TEXT PRIMARY KEY, embedding FLOAT[384])"
                     )
+                    conn.execute(_CHUNK_VECTORS_DDL)
                 except sqlite3.OperationalError:
                     self.vec_available = False
 
@@ -829,6 +840,7 @@ class VaultDB:
         chunk_id = str(uuid4())
         now = int(time.time())
         with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
             conn.execute(
                 """
                 INSERT INTO chunk_embeddings
@@ -846,6 +858,7 @@ class VaultDB:
                     now,
                 ),
             )
+            self._mirror_chunk_vector(conn, chunk_id, embedding_vector)
         return chunk_id
 
     def get_chunk_embeddings(self, paper_id: str) -> list[dict]:
@@ -856,6 +869,204 @@ class VaultDB:
                 (paper_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def delete_chunk_embeddings(self, paper_id: str) -> int:
+        """Loescht alle Chunks eines Papers (inkl. vec0-Spiegel). Gibt die Anzahl zurueck.
+
+        Wird vom Ingest vor dem Neuschreiben aufgerufen, damit ein wiederholter
+        ``add_paper``-Upsert die Chunk-Tabelle nicht endlos aufblaeht.
+        """
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            chunk_ids = [
+                row["chunk_id"]
+                for row in conn.execute(
+                    "SELECT chunk_id FROM chunk_embeddings WHERE paper_id = ?", (paper_id,)
+                ).fetchall()
+            ]
+            if not chunk_ids:
+                return 0
+            conn.execute("DELETE FROM chunk_embeddings WHERE paper_id = ?", (paper_id,))
+            if self.load_vec_extension(conn):
+                with contextlib.suppress(sqlite3.OperationalError):
+                    conn.executemany(
+                        "DELETE FROM chunk_vectors WHERE chunk_id = ?",
+                        [(cid,) for cid in chunk_ids],
+                    )
+        return len(chunk_ids)
+
+    # ------------------------------------------------------------------
+    # Vektor-Suche ueber Chunks (Issue #372)
+    # ------------------------------------------------------------------
+
+    def _mirror_chunk_vector(
+        self,
+        conn: sqlite3.Connection,
+        chunk_id: str,
+        embedding_vector: bytes | None,
+    ) -> bool:
+        """Spiegelt einen Chunk-Vektor in die vec0-Tabelle. Best effort.
+
+        Gibt False zurueck, wenn kein (passender) Vektor vorliegt oder die
+        sqlite-vec-Extension nicht ladbar ist — dann uebernimmt der
+        Python-Fallback in :meth:`knn_chunks` die Suche.
+        """
+        if not embedding_vector or len(embedding_vector) != EMBEDDING_DIM * 4:
+            return False
+        if not self.load_vec_extension(conn):
+            return False
+        try:
+            conn.execute(_CHUNK_VECTORS_DDL)
+            conn.execute(
+                "INSERT OR REPLACE INTO chunk_vectors (chunk_id, embedding) VALUES (?, ?)",
+                (chunk_id, embedding_vector),
+            )
+        except sqlite3.OperationalError:
+            return False
+        return True
+
+    def sync_chunk_vectors(self) -> int:
+        """Legt die vec0-Tabelle an und spiegelt vorhandene Chunk-Vektoren hinein.
+
+        Idempotent; ohne ladbare sqlite-vec-Extension ein No-op (Rueckgabe 0).
+        Gibt die Anzahl gespiegelter Vektoren zurueck.
+        """
+        mirrored = 0
+        with self._connection(commit=True) as conn:
+            if not self.load_vec_extension(conn):
+                return 0
+            try:
+                conn.execute(_CHUNK_VECTORS_DDL)
+            except sqlite3.OperationalError:
+                return 0
+            rows = conn.execute(
+                "SELECT chunk_id, embedding_vector FROM chunk_embeddings "
+                "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
+                (EMBEDDING_DIM * 4,),
+            ).fetchall()
+            for row in rows:
+                if self._mirror_chunk_vector(conn, row["chunk_id"], row["embedding_vector"]):
+                    mirrored += 1
+        return mirrored
+
+    def knn_chunks(self, query_vector: Sequence[float], k: int = 10) -> list[dict]:
+        """K-Nearest-Neighbour-Suche ueber chunk_embeddings.
+
+        Primaerpfad ist die vec0-Virtual-Table ``chunk_vectors``; ist die
+        sqlite-vec-Extension nicht ladbar (Python-Builds ohne
+        ``--enable-loadable-sqlite-extensions``, u. a. auf macOS) oder der
+        vec0-Spiegel unvollstaendig, wird dieselbe Suche in Python ueber die
+        BLOBs in ``chunk_embeddings`` gerechnet.
+
+        Beide Pfade nutzen die euklidische Distanz. Da alle Vektoren
+        L2-normalisiert gespeichert werden, ist deren Rangfolge identisch zur
+        Kosinus-Rangfolge — und beide Pfade liefern dieselbe Reihenfolge.
+
+        Returns:
+            Liste aus ``{chunk_id, paper_id, chunk_text, distance}``,
+            aufsteigend nach Distanz (nahester Treffer zuerst).
+        """
+        if not query_vector or k <= 0:
+            return []
+        dim = len(query_vector)
+        with self._connection() as conn:
+            total = conn.execute(
+                "SELECT count(*) FROM chunk_embeddings "
+                "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
+                (dim * 4,),
+            ).fetchone()[0]
+            if total == 0:
+                return []
+            hits: list[dict] | None = None
+            if dim == EMBEDDING_DIM and self.load_vec_extension(conn):
+                hits = self._knn_chunks_vec0(conn, query_vector, k, total)
+            if hits is None:
+                hits = self._knn_chunks_python(conn, query_vector, k)
+        return hits
+
+    def _knn_chunks_vec0(
+        self,
+        conn: sqlite3.Connection,
+        query_vector: Sequence[float],
+        k: int,
+        expected_total: int,
+    ) -> list[dict] | None:
+        """vec0-KNN. Gibt None zurueck, wenn der Pfad nicht verlaesslich ist."""
+        try:
+            mirrored = conn.execute("SELECT count(*) FROM chunk_vectors").fetchone()[0]
+        except sqlite3.OperationalError:
+            return None
+        if mirrored < expected_total:
+            # Spiegel unvollstaendig (z. B. DB aus einer Umgebung ohne
+            # Extension): lieber vollstaendig in Python rechnen als still
+            # Treffer verlieren. `migrate.add_chunk_vectors_table` repariert das.
+            return None
+        try:
+            rows = conn.execute(
+                "SELECT chunk_id, distance FROM chunk_vectors "
+                "WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+                (serialize_f32(query_vector), k),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return None
+
+        hits: list[dict] = []
+        for row in rows:
+            meta = conn.execute(
+                "SELECT paper_id, chunk_text FROM chunk_embeddings WHERE chunk_id = ?",
+                (row["chunk_id"],),
+            ).fetchone()
+            if meta is None:
+                continue
+            hits.append(
+                {
+                    "chunk_id": row["chunk_id"],
+                    "paper_id": meta["paper_id"],
+                    "chunk_text": meta["chunk_text"],
+                    "distance": float(row["distance"]),
+                }
+            )
+        # Gleicher Tiebreaker wie im Python-Fallback: bei exakt gleicher Distanz
+        # (z. B. zwei zur Query orthogonale Chunks) wuerde vec0 sonst nach
+        # interner rowid ordnen und beide Pfade lieferten verschiedene
+        # Reihenfolgen fuer dieselben Daten.
+        hits.sort(key=lambda hit: (hit["distance"], hit["chunk_id"]))
+        return hits
+
+    def _knn_chunks_python(
+        self,
+        conn: sqlite3.Connection,
+        query_vector: Sequence[float],
+        k: int,
+    ) -> list[dict]:
+        """Reiner Python-Fallback: euklidische Distanz ueber alle Chunk-BLOBs."""
+        dim = len(query_vector)
+        rows = conn.execute(
+            "SELECT chunk_id, paper_id, chunk_text, embedding_vector FROM chunk_embeddings "
+            "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
+            (dim * 4,),
+        ).fetchall()
+
+        hits: list[dict] = []
+        for row in rows:
+            try:
+                vector = deserialize_f32(row["embedding_vector"])
+            except ValueError:
+                continue
+            distance = math.sqrt(
+                sum((a - b) ** 2 for a, b in zip(query_vector, vector, strict=True))
+            )
+            hits.append(
+                {
+                    "chunk_id": row["chunk_id"],
+                    "paper_id": row["paper_id"],
+                    "chunk_text": row["chunk_text"],
+                    "distance": distance,
+                }
+            )
+        # chunk_id als Tiebreaker: deterministische Reihenfolge bei Gleichstand.
+        hits.sort(key=lambda hit: (hit["distance"], hit["chunk_id"]))
+        return hits[:k]
 
     def lock_vault(self, slug: str) -> None:
         """Setzt Vault-Lock fuer einen Slug. Idempotent."""

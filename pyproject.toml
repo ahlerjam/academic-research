@@ -36,6 +36,18 @@ dependencies = [
     "sqlite-vec==0.1.10a4",
     "jsonschema>=4.0",
     "pyzotero>=1.5",
+    # Lokale Embedding-Pipeline der Vektor-Suche (#372): laedt
+    # intfloat/multilingual-e5-small (MIT, 384d). Harte Dependency, weil
+    # chunk_embeddings sonst in jeder realen Installation leer bliebe und
+    # vault.search(rerank=True) auf reine FTS5-Umsortierung zurueckfaellt.
+    "sentence-transformers>=3.0",
+    # torch ist funktional eine transitive Dependency von sentence-transformers.
+    # Es steht hier NUR, damit [tool.uv.sources] greifen kann: uv wendet Sources
+    # ausschliesslich auf direkte Dependencies an. Ohne diesen Eintrag loest uv
+    # torch von PyPI auf und zieht auf Linux den kompletten CUDA-Stack
+    # (cuda-toolkit + nvidia-* + triton, mehrere GB) in uv.lock und in jeden
+    # CI-Job. Mit dem Eintrag kommt das CPU-Wheel.
+    "torch>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -51,6 +63,20 @@ dev = [
 # uv sync installiert nur die Dependencies, baut das Projekt nicht.
 [tool.uv]
 package = false
+
+# torch aus dem CPU-Index von PyTorch beziehen. Die Default-Wheels auf PyPI
+# buendeln auf Linux den CUDA-Stack; der Vault rechnet e5-small auf der CPU,
+# GPU-Wheels waeren reiner Ballast (Download, Cache, Runner-Disk).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+# explicit = true: dieser Index wird NUR fuer Pakete benutzt, die ihn oben
+# ausdruecklich referenzieren — alle uebrigen Dependencies kommen unveraendert
+# von PyPI (kein Dependency-Confusion-Risiko durch einen breiten Extra-Index).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 # ---------------------------------------------------------------------------
 # pytest
@@ -114,3 +140,23 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = ["tests.*", "evals.*"]
 ignore_errors = true
+
+# Der ML-Stack (seit #372 im Environment) liefert eigene Stubs, die PEP-695-
+# `type`-Statements nutzen. Unter python_version = "3.11" kann mypy sie nicht
+# parsen und bricht mit einem Syntaxfehler ab, BEVOR es unseren Code sieht
+# ("errors prevented further checking"). Diese Pakete pruefen wir ohnehin nicht
+# — also ihren Importen gar nicht erst folgen.
+[[tool.mypy.overrides]]
+module = [
+    "numpy",
+    "numpy.*",
+    "torch",
+    "torch.*",
+    "transformers",
+    "transformers.*",
+    "sentence_transformers",
+    "sentence_transformers.*",
+]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+ignore_missing_imports = true

@@ -15,3 +15,12 @@ sqlite-vec>=0.1.0
 jsonschema>=4.0
 # optional — nur fuer Zotero-Import (Skill: zotero-import)
 pyzotero>=1.5
+# lokale Embedding-Pipeline fuer die Vektor-Suche (Issue #372).
+# Befuellt chunk_embeddings beim Ingest und liefert vault.search(rerank=True)
+# echte Vektortreffer statt reiner FTS5-Umsortierung
+# (intfloat/multilingual-e5-small, 384d, MIT).
+# Zieht Torch nach; auf Linux installiert pip standardmaessig das CUDA-Wheel.
+# Wer das CPU-Wheel will (deutlich kleiner, fuer diesen Vault ausreichend),
+# installiert Torch vorher separat:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+sentence-transformers>=3.0
