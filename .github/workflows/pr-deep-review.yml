@@ -212,9 +212,22 @@ jobs:
           # untouched files is out of scope and the dominant false-positive
           # source (it falsely escalates api/v1 + shared/models symbols to P1).
           DEAD_PATHS="$(jq -r '.deadCodePaths | if length == 0 then ["."] else . end | join(" ")' .github/flowkit-review.json)"
+          set +e
           uv run vulture $DEAD_PATHS \
             --min-confidence 80 \
-            > "$RUNNER_TEMP/vulture.txt" 2>&1 || true
+            > "$RUNNER_TEMP/vulture.txt" 2>&1
+          VULTURE_EXIT=$?
+          set -e
+          # vulture exit codes (per upstream docs): 0 = kein Fund, 3 = totem Code
+          # gefunden (erwarteter Normalfall, Skript laeuft weiter). Alles andere
+          # (1 = ungueltige Eingabe/Syntaxfehler, 2 = ungueltige CLI-Argumente,
+          # oder jeder sonstige Exit-Code) ist ein echter Tool-Fehlschlag und darf
+          # NICHT mehr durch ein pauschales '|| true' verschluckt werden.
+          if [ "$VULTURE_EXIT" -ne 0 ] && [ "$VULTURE_EXIT" -ne 3 ]; then
+            echo "::error::vulture ist mit Exit-Code $VULTURE_EXIT fehlgeschlagen (kein regulaerer Dead-Code-Fund):"
+            cat "$RUNNER_TEMP/vulture.txt"
+            exit 1
+          fi
           uv run ruff check --select F401 $DEAD_PATHS \
             --output-format json > "$RUNNER_TEMP/ruff_f401.json" 2>/dev/null || true
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
