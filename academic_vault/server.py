@@ -57,15 +57,15 @@ def validate_csl_json(csl_json: str) -> dict:
     except ImportError:
         # Fallback ohne jsonschema-Lib: gleiche Invarianten manuell pruefen.
         if not isinstance(data, dict):
-            raise ValueError("csl_json muss ein JSON-Objekt sein.")
+            raise ValueError("csl_json muss ein JSON-Objekt sein.") from None
         if "type" not in data:
             raise ValueError(
                 f"csl_json: Pflichtfeld 'type' fehlt -- erlaubt: {sorted(VALID_PAPER_TYPES)}"
-            )
+            ) from None
         if data["type"] not in VALID_PAPER_TYPES:
             raise ValueError(
                 f"Ungueltiger type '{data['type']}' -- erlaubt: {sorted(VALID_PAPER_TYPES)}"
-            )
+            ) from None
         return data
 
     try:

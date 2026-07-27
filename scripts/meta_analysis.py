@@ -78,13 +78,13 @@ def dersimonianlaird(studies: list[Study]) -> MetaAnalysisResult:
     wi = [1.0 / v for v in vi]
     sum_wi = sum(wi)
     sum_wi2 = sum(w * w for w in wi)
-    sum_wiyi = sum(w * y for w, y in zip(wi, yi))
+    sum_wiyi = sum(w * y for w, y in zip(wi, yi, strict=False))
 
     # Fixed-effect pooled estimate (for Q calculation)
     fe_pool = sum_wiyi / sum_wi
 
     # --- Step 2: Q statistic ---
-    Q = sum(w * (y - fe_pool) ** 2 for w, y in zip(wi, yi))
+    Q = sum(w * (y - fe_pool) ** 2 for w, y in zip(wi, yi, strict=False))
     df = k - 1
 
     # --- Step 3: C ---
@@ -96,7 +96,7 @@ def dersimonianlaird(studies: list[Study]) -> MetaAnalysisResult:
     # --- Step 5: Random-effects weights ---
     wi_star = [1.0 / (v + tau2) for v in vi]
     sum_wi_star = sum(wi_star)
-    sum_wi_star_yi = sum(ws * y for ws, y in zip(wi_star, yi))
+    sum_wi_star_yi = sum(ws * y for ws, y in zip(wi_star, yi, strict=False))
 
     # --- Step 6: Pooled ES ---
     pooled_es = sum_wi_star_yi / sum_wi_star

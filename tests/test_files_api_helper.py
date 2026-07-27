@@ -167,7 +167,7 @@ def test_beta_header_present(tmp_path):
 
     call_kwargs = client.beta.files.upload.call_args
     # extra_headers muss beta-Flag enthalten
-    extra_headers = call_kwargs.kwargs.get("extra_headers") or (
+    call_kwargs.kwargs.get("extra_headers") or (
         call_kwargs.args[1] if len(call_kwargs.args) > 1 else {}
     )
     assert "anthropic-beta" in str(call_kwargs), f"Beta-Header fehlt im upload-Call: {call_kwargs}"

@@ -8,8 +8,8 @@ Details: README.md (lang!), CHANGELOG.md.
 - Setup (frischer Worktree, vor dem ersten Gate): `uv sync --extra dev`
   (Pins in pyproject.toml + uv.lock; Endnutzer-Weg bleibt scripts/setup.sh + pip)
 - Tests: `uv run pytest tests/` (Matrix-CI: Ubuntu+macOS, py3.11-3.13)
-- Lint: `uv run ruff check .` und `uv run ruff format --check .` (format ist
-  CI-blockierend; check wird blockierend, sobald #340 abgearbeitet ist)
+- Lint: `uv run ruff check .` und `uv run ruff format --check .` (beide
+  CI-blockierend seit #340)
 - Types: `uv run mypy` (Konfig in pyproject.toml; blockierend nach #341)
 - Hooks-Syntax: `node --check hooks/*.mjs`
 - Hook-Harness: `bash scripts/dev/test-pretooluse-blocker.sh` (testet die

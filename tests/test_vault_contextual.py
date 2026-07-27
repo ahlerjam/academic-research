@@ -343,7 +343,7 @@ class TestVaultSearchWithRerank:
 
     def test_search_papers_signature_accepts_rerank(self, tmp_path):
         """search_papers akzeptiert rerank-Parameter ohne TypeError."""
-        db_path = _make_db(tmp_path)
+        _make_db(tmp_path)
         import inspect
 
         from academic_vault.server import search_papers

@@ -116,7 +116,7 @@ def test_export_snapshot_failopen_when_dir_missing(tmp_path, temp_vault_db):
     from academic_vault.server import export_snapshot
 
     # Kein Exception-Raise erwartet
-    result = export_snapshot(
+    export_snapshot(
         db_path=temp_vault_db,
         slug="missing-proj",
         project_dir=str(tmp_path / "nonexistent"),
