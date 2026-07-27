@@ -12,10 +12,10 @@ Vollständiges Setup über das zentrale Installationsskript. Ein Aufruf, alle Ab
 ## Ausführung
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh $ARGUMENTS
 ```
 
-Das Skript übernimmt in sechs Schritten:
+Das Skript übernimmt in acht Schritten:
 
 1. Legt `~/.academic-research/{sessions,pdfs,venv}` an.
 2. Erstellt die Python-venv und installiert `httpx`, `pypdf`, `pyyaml`, `openpyxl` (aus `scripts/requirements.txt`).
@@ -30,7 +30,8 @@ Das Skript übernimmt in sechs Schritten:
     (kein Hard-Fail — der vendorierte Skill im Plugin bleibt funktionsfähig)
 5. Schreibt die Claude-Code-Permissions über `scripts/configure_permissions.py`.
 6. **Projekt-Bootstrap (Auto-Detect).** Wenn das aktuelle Verzeichnis ein leerer Ordner ist, fragt `/setup` `"Hier einen Facharbeit-Arbeitsordner initialisieren?"`. Bei `y` werden `academic_context.md` (Stub), `CLAUDE.md`, `.gitignore`, sowie `kapitel/`, `literatur/`, `pdfs/` angelegt. In einem bestehenden Facharbeit-Ordner (mit `academic_context.md`) werden nur fehlende Artefakte nachgezogen — idempotent, keine Rückfrage. In Code-Repos (erkannt an `package.json`, `pyproject.toml`, …) oder nicht-leeren fremden Verzeichnissen: keine Aktion. Findet der Bootstrap zusätzlich bestehenden Kontext in Claude-Memory, bietet er an, ihn einmalig ins Projekt zu kopieren; die Memory-Dateien bleiben als Backup liegen.
-7. **SciHub Opt-in (F18).** Das Skript fragt am Ende:
+7. **Uni-Profil-Setup (F16.5).** Mit `--uni <profil>` (z.B. `/academic-research:setup --uni tum`) wird `config/library-profiles/<profil>.yaml` nicht-interaktiv nach `~/.academic-research/library-profiles/active.yaml` kopiert. Ohne `--uni` fragt das Skript interaktiv (Opt-in), ob jetzt ein Hochschul-Profil gewählt werden soll — bei Zustimmung folgt eine nummerierte Profil-Auswahl. Bei Opt-out oder nicht-interaktivem stdin (z.B. CI) bleibt das aktive Profil leer/Default, ohne Fehler. Verfügbare Profile: siehe [Per-Uni-Profile](../docs/reference/uni-profiles.md). Hinweis: Ein unbekannter `--uni`-Wert bricht das Setup ab (`set -euo pipefail`).
+8. **SciHub Opt-in (F18).** Das Skript fragt am Ende:
 
    ```
    SciHub-Tier aktivieren? (Rechtlich umstritten — Nutzung auf deine eigene Verantwortung)
@@ -54,6 +55,8 @@ Das Skript übernimmt in sechs Schritten:
 | ⚠️ humanizer-de Skill (global): nicht gefunden | Nur vendorierter Plugin-Skill verfügbar (ausreichend für Plugin-Nutzung) |
 | ⚠️ … | siehe Hinweistext direkt unter dem Marker |
 | ✅ Facharbeit-Arbeitsordner initialisiert | Projekt-Struktur wurde im aktuellen Verzeichnis angelegt |
+| ✅ Uni-Profil '\<profil\>' aktiviert | `config/library-profiles/<profil>.yaml` wurde nach `active.yaml` kopiert |
+| ℹ️ Uni-Profil-Setup übersprungen (Default) | Kein `--uni` gesetzt und Opt-in abgelehnt/nicht-interaktiv — aktives Profil bleibt leer/Default |
 | ✅ SciHub Opt-in: aktiviert | `scihub_optin: true` in active.yaml — SciHub als Last-Resort aktiv |
 | ℹ️ SciHub Opt-in: deaktiviert (Default) | `scihub_optin: false` — SciHub wird nicht genutzt |
 
