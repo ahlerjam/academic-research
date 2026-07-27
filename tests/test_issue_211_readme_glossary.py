@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import docs as _docs
+
 REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
 
@@ -28,8 +30,8 @@ REQUIRED_TERMS = [
 
 
 def _glossary_section() -> str:
-    """Extrahiert den Glossar-Abschnitt aus dem README."""
-    text = README.read_text(encoding="utf-8")
+    """Extrahiert den Glossar-Abschnitt (seit #402 in docs/reference/glossary.md)."""
+    text = _docs.GLOSSARY_DOC.read_text(encoding="utf-8")
     m = re.search(r"^## Glossar\s*$", text, flags=re.MULTILINE)
     assert m, "README enthält keine '## Glossar'-Sektion"
     start = m.end()

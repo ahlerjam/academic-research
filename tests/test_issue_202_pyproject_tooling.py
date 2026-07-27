@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import docs as _docs
+
 ROOT = Path(__file__).parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
 PRECOMMIT = ROOT / ".pre-commit-config.yaml"
@@ -97,5 +99,7 @@ def test_ci_fuehrt_ruff_und_mypy():
 
 
 def test_readme_contributing_mit_precommit():
-    text = README.read_text(encoding="utf-8").lower()
-    assert "pre-commit" in text, "README erklaert pre-commit-Setup nicht"
+    """CONTRIBUTING-Teil erklaert das pre-commit-Setup (seit #402 in docs/)."""
+    text = _docs.DEVELOPMENT_DOC.read_text(encoding="utf-8").lower()
+    assert "pre-commit" in text, "Entwickler-Doku erklaert pre-commit-Setup nicht"
+    assert "contributing" in text, "Entwickler-Doku hat keinen CONTRIBUTING-Teil"

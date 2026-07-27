@@ -22,6 +22,8 @@ import stat
 import subprocess
 from pathlib import Path
 
+from tests.helpers import docs as _docs
+
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "post-tool-use-decisions.mjs"
 README_PATH = Path(__file__).parent.parent / "README.md"
 
@@ -119,8 +121,12 @@ def test_log_rotation_at_10mb(tmp_path):
 
 
 def test_readme_has_privacy_logs_section():
-    """README enthaelt eine Privacy/Logs-Sektion."""
-    text = README_PATH.read_text()
+    """Die Hooks-Referenz enthaelt eine Privacy/Logs-Sektion.
+
+    Bis #402 stand sie in der README; der Inhalt ist unveraendert, nur die
+    Datei hat gewechselt (docs/reference/hooks.md).
+    """
+    text = _docs.HOOKS_DOC.read_text(encoding="utf-8")
     assert re.search(r"^#+\s*Privacy", text, re.MULTILINE | re.IGNORECASE), (
         "Keine Privacy/Logs-Sektion in README.md gefunden"
     )
