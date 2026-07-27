@@ -119,7 +119,13 @@ def fake_embedder():
 
 @pytest.fixture(autouse=True)
 def block_real_embedding_backend(monkeypatch):
-    """Verhindert, dass die Suite das echte e5-Modell laedt (#372).
+    """Verhindert, dass die Suite echte e5-Artefakte laedt (#372, #374).
+
+    Blockiert zwei Ladepfade: die Modellgewichte (``_load_backend_model``, #372)
+    und den Tokenizer, den das Chunking fuer exakte Tokenbudgets nutzt
+    (``chunking._load_tokenizer``, #374). Ohne den zweiten Guard zoege jeder
+    ``chunk_pages``-Aufruf Tokenizer-Dateien von HuggingFace; das Chunking
+    faellt stattdessen auf ``approximate_token_count`` zurueck.
 
     ``sentence-transformers`` ist seit #372 eine harte Dependency, also laeuft
     ``get_embedder()`` in der CI nicht mehr in einen ImportError. Ohne diesen
@@ -156,10 +162,21 @@ def block_real_embedding_backend(monkeypatch):
 
     monkeypatch.setattr(em, "_load_backend_model", _blocked)
     em.reset_embedder_cache()
+
+    try:
+        import academic_vault.chunking as chunking
+    except Exception:
+        chunking = None
+    if chunking is not None:
+        monkeypatch.setattr(chunking, "_load_tokenizer", _blocked)
+        chunking.reset_token_counter_cache()
+
     try:
         yield
     finally:
         em.reset_embedder_cache()
+        if chunking is not None:
+            chunking.reset_token_counter_cache()
 
 
 # ---------------------------------------------------------------------------
