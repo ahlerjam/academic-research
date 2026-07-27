@@ -113,7 +113,7 @@ Das Plugin kommt mit vorkonfigurierten **Per-Uni-Profilen** für ETH Zürich, FU
 | **Zotero-Import** | v6.3 | pyzotero-Pull-only mit DOI/ISBN-Dedup in den Vault. |
 | **Hooks-Stack** | v6.4 | 7 Hook-Events: PreToolUse, PostToolUse, PreCompact, Notification, PostCompact, SessionStart, Stop. |
 | **LaTeX-Export** | v6.5 | Markdown-Kapitel → `.tex`, Bibliographie → `.bib` (biblatex DIN-1505). Per-Uni-Template-Slot. |
-| **Contextual Retrieval** | v6.5 | Hybrid BM25 + vec0 mit Reciprocal-Rank-Fusion. Anthropic-Contextual-Embedding-Cache. |
+| **Contextual Retrieval** | v6.5 | Hybrid BM25 + vec0 mit Reciprocal-Rank-Fusion. Lokale Embedding-Pipeline (`intfloat/multilingual-e5-small`, 384d) seit v6.6; Kontextsätze via Anthropic-Prompt-Caching opt-in. |
 | **Topic-Brainstorm** | v6.5 | 3-5 Kandidaten mit Feasibility/Novelty/Career-Fit-Scores + Pilot-Paper-Sets. |
 | **Reading-List-Import** | v6.5 | PDF/Markdown/Plaintext-Listen → DOI/ISBN-Auflösung → Vault. |
 | **Grant / Poster / Response** | v6.5 | Grant-Proposal (DFG/BMBF/EU), Conference-Poster (LaTeX tikzposter), Reviewer-Response-Letter. Default-Off, Opt-in via `output_targets`. |
@@ -622,6 +622,28 @@ Der **Vault** (`academic_vault/`) ist die Kernkomponente seit v6.0. Er ersetzt d
 
 **Datenbank:** `~/.academic-research/projects/<slug>/vault.db`
 
+### Vektor-Suche (Embedding-Pipeline)
+
+`vault.add_paper()` erzeugt seit v6.6 automatisch Chunk-Embeddings (`chunk_embeddings` + vec0-Spiegel `chunk_vectors`); `vault.search(..., rerank=True)` führt die KNN-Treffer per Reciprocal-Rank-Fusion mit dem BM25-Ranking zusammen.
+
+Das Embedding-Backend ist **optional** und bewusst keine harte Abhängigkeit (`sentence-transformers` zieht Torch mit ~2,5 GB nach):
+
+```bash
+pip install "sentence-transformers>=3.0"   # aktiviert die Vektor-Suche
+```
+
+Ohne dieses Paket bleibt der Vault vollständig nutzbar — die Suche läuft dann wie bisher FTS5-only, ohne Fehler. Genauso verhält sich der Vault, wenn die `sqlite-vec`-Extension nicht ladbar ist (z. B. Python-Builds ohne `--enable-loadable-sqlite-extensions` auf macOS): die KNN-Suche rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
+
+| Env-Variable | Default | Wirkung |
+|---|---|---|
+| `VAULT_AUTO_EMBED` | `1` | `0` schaltet den Embedding-Ingest in `vault.add_paper()` ab. |
+| `VAULT_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Alternatives Modell (muss 384 Dimensionen liefern). |
+| `VAULT_EMBEDDING_CACHE` | `~/.academic-research/models` | Ablageort der Modellgewichte. |
+| `VAULT_MAX_CHUNKS` | `64` | Obergrenze der Chunks pro Ingest (Latenzschutz). |
+| `VAULT_CONTEXTUAL_EMBEDDING` | *(aus)* | `1` + `ANTHROPIC_API_KEY` erzeugt pro Chunk einen 1-Satz-Kontext. |
+
+Bestands-Datenbanken bekommen den vec0-Spiegel per `python -c "from academic_vault.migrate import add_chunk_vectors_table; add_chunk_vectors_table('<pfad>/vault.db')"`.
+
 ### MCP-Tools (alle 33)
 
 Der Server registriert **33 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz: [`academic_vault/server.py`](academic_vault/server.py) (Funktion `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit Default-Werten, Beschreibung und Beispiel-Call.
@@ -630,7 +652,7 @@ Der Server registriert **33 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referen
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
 |------|-------------|------|
-| `vault.search(query, type=None, k=5, rerank=False)` | Hybrid-Suche (BM25 + vec0 + RRF); `rerank=True` aktiviert Voyage/Cohere | `vault.search("transformer attention", k=10)` |
+| `vault.search(query, type=None, k=5, rerank=False)` | Hybrid-Suche (BM25 + vec0-KNN + RRF); `rerank=True` aktiviert zusätzlich Voyage/Cohere | `vault.search("transformer attention", k=10)` |
 | `vault.get_paper(paper_id)` | Paper-Metadaten + `pdf_status` | `vault.get_paper("vaswani2017")` |
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` |
@@ -830,7 +852,7 @@ cp config/library-profiles/tum.yaml \
 | **Subagent** | LLM-Unteragent, der von einem Skill oder Command gestartet wird, um eine spezialisierte Aufgabe zu erledigen (z. B. ein Site-Subagent für Buch-Download auf tib.eu). |
 | **Site-Profile** | YAML-Konfiguration einer Hochschule, die Auth-Typ (HAN/Shibboleth/EZproxy), lizenzierte Seiten und Zugangsdaten-Keys beschreibt. Wird von `auth-helper` und `book-fetcher` genutzt. |
 | **Material-Passport** | Unveränderlicher Metadaten-Passport für ein Artefakt (Paper, Kapitel). Kann via `vault.lock_passport()` eingefroren werden — danach keine Änderungen mehr möglich. |
-| **Contextual Retrieval** | Anthropic-Pattern: vor jedem Chunk-Embedding wird ein 1-Satz-Kontext angehängt (via Prompt-Caching). Verbessert Recall@10 deutlich vs. Vanilla-vec0. |
+| **Contextual Retrieval** | Anthropic-Pattern: vor jedem Chunk-Embedding wird ein 1-Satz-Kontext angehängt (via Prompt-Caching). Verbessert Recall@10 deutlich vs. Vanilla-vec0. Im Vault opt-in über `VAULT_CONTEXTUAL_EMBEDDING=1` (kostet einen API-Call pro Chunk). |
 | **Decision-Log** | Append-only-Protokoll aller `.md`-Änderungen und Entscheidungen. Wird vom Hook `post-tool-use-decisions.mjs` (PostToolUse) automatisch befüllt; programmatisch via `vault.add_decision(text, category)`. |
 | **Vault-Lock** | Read-only-Sperre des Vault. Nach `vault.lock_passport(paper_id)` sind keine Schreibzugriffe mehr möglich — Grundlage für reproduzierbare Abgaben (siehe Repro-Lock, Skill `material-passport`). |
 | **Repro-Lock** | Reproduzierbarkeits-Sperre des Skills `material-passport`: friert den Material-Passport ein und sperrt den Vault read-only (Vault-Lock), damit Dritte den Stand exakt nachvollziehen können. |

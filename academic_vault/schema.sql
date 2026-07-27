@@ -48,10 +48,15 @@ CREATE TABLE IF NOT EXISTS quotes (
   created_at        INTEGER NOT NULL
 );
 
--- vec0 Virtual Table: optional, nur wenn sqlite-vec Extension geladen ist.
--- Wird in db.py per try/except erstellt.
+-- vec0 Virtual Tables: optional, nur wenn sqlite-vec Extension geladen ist.
+-- Werden in db.py per try/except erstellt (quote_embeddings + chunk_vectors,
+-- letztere als Spiegel der chunk_embeddings-Vektoren, Issue #372).
 -- CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings USING vec0(
 --   quote_id TEXT PRIMARY KEY,
+--   embedding FLOAT[384]
+-- );
+-- CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(
+--   chunk_id TEXT PRIMARY KEY,
 --   embedding FLOAT[384]
 -- );
 

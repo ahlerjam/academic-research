@@ -23,8 +23,12 @@ Bereitgestellte Fixtures:
   - mock_browser_use     MagicMock als Ersatz fuer browser-use-Aufrufe
   - sample_pdf           Pfad auf tests/fixtures/sample_book.pdf
   - library_profile_tum  geparstes config/library-profiles/tum.yaml als dict
+  - fake_embedder        deterministischer Offline-Embedder (384d, kein Modell-Download)
 """
 
+import hashlib
+import math
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -74,6 +78,43 @@ def temp_vault_db(tmp_path):
     db = VaultDB(str(db_path))
     db.init_schema()
     return str(db_path)
+
+
+# ---------------------------------------------------------------------------
+# Embedder-Stub (Issue #372)
+# ---------------------------------------------------------------------------
+class DeterministicEmbedder:
+    """Offline-Stand-in fuer ``intfloat/multilingual-e5-small`` (384d).
+
+    Hashing-Bag-of-Words statt neuronalem Modell: gleiche Tokens ergeben
+    gleiche Achsen, das Ergebnis ist L2-normalisiert. Damit verhaelt sich der
+    Vektorraum lexikalisch-semantisch genug fuer Retrieval-Tests, ohne dass ein
+    Modell heruntergeladen werden muss (CI bleibt hermetisch und offline).
+    """
+
+    dim = 384
+
+    def _vector(self, text: str) -> list[float]:
+        vec = [0.0] * self.dim
+        for token in re.findall(r"\w+", text.lower()):
+            idx = int(hashlib.sha256(token.encode("utf-8")).hexdigest()[:8], 16) % self.dim
+            vec[idx] += 1.0
+        norm = math.sqrt(sum(v * v for v in vec))
+        if norm == 0.0:
+            return vec
+        return [v / norm for v in vec]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._vector(t) for t in texts]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._vector(text)
+
+
+@pytest.fixture
+def fake_embedder():
+    """Deterministischer 384d-Embedder ohne Netzwerk/Modell-Download (#372)."""
+    return DeterministicEmbedder()
 
 
 # ---------------------------------------------------------------------------

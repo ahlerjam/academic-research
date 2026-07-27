@@ -7,18 +7,25 @@ Start via: python -m academic_vault.server
 """
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
 from uuid import uuid4
 
 from .db import VALID_PAPER_TYPES, VaultDB, default_db_path
+from .embedding_model import get_embedder
 from .files_api import FilesAPIClient
+
+logger = logging.getLogger(__name__)
 
 # Kanonischer DB-Default (Single Source of Truth, Issue #190):
 # VAULT_DB_PATH aus Env, sonst ~/.academic-research/projects/<slug>/vault.db.
 _DEFAULT_DB = default_db_path()
 _ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Maximale Snippet-Laenge eines Vektor-Treffers in der Suchausgabe.
+_VEC_SNIPPET_CHARS = 240
 
 
 # JSON-Schema fuer das csl_json eines Papers (Issue #213, Security Round-2 M3).
@@ -136,6 +143,7 @@ def search_papers(
                 Reranker wird nur genutzt wenn VOYAGE_API_KEY oder COHERE_API_KEY gesetzt.
                 Fallback auf RRF-Result wenn kein API-Key vorhanden.
     """
+    raw_query = query
     query = _sanitize_fts5_query(query)
     conn = VaultDB._open(db_path)
     try:
@@ -177,7 +185,12 @@ def search_papers(
 
     from .retrieval import apply_reranker, reciprocal_rank_fusion
 
-    fused = reciprocal_rank_fusion(_vec0_search(db_path, query, k=k), fts_results, k=60, top_n=k)
+    # Der Vektorpfad bekommt die UNSANITIERTE Query: das FTS5-Sanitizing
+    # entfernt Bindestriche und Operator-Keywords und verfaelscht damit die
+    # Semantik, auf die das Embedding-Modell reagiert.
+    fused = reciprocal_rank_fusion(
+        _vec0_search(db_path, raw_query, k=k), fts_results, k=60, top_n=k
+    )
 
     voyage_key = os.environ.get("VOYAGE_API_KEY") or None
     cohere_key = os.environ.get("COHERE_API_KEY") or None
@@ -221,13 +234,83 @@ def _sanitize_fts5_query(query: str) -> str:
 
 
 def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
-    """vec0 KNN-Suche fuer Hybrid-Retrieval.
+    """Vektor-KNN ueber chunk_embeddings fuer das Hybrid-Retrieval (Issue #372).
 
-    Stub fuer MVP: Gibt leere Liste zurueck (kein lokales Embedding-Modell verfuegbar).
-    RRF faellt damit auf FTS5-only zurueck.
-    Erweiterung: query-Vektor generieren + KNN in chunk_embeddings via sqlite-vec.
+    Ablauf: Query-Embedding (lokales e5-Modell) -> KNN ueber die Chunks ->
+    Aggregation auf Paper-Ebene (bester Chunk je Paper), weil
+    ``reciprocal_rank_fusion`` auf ``paper_id`` schluesselt.
+
+    Leere Liste — und damit RRF auf FTS5-Basis — genau dann, wenn kein
+    Embedding-Backend installiert ist, noch keine Chunk-Vektoren existieren oder
+    die Vektor-Suche fehlschlaegt. Die Textsuche darf daran nie scheitern.
+
+    Returns:
+        Liste aus ``{paper_id, chunk_id, snippet, distance}``, aufsteigend nach
+        Distanz (nahester Treffer zuerst), maximal ``k`` Eintraege.
     """
-    return []
+    embedder = get_embedder()
+    if embedder is None:
+        return []
+
+    try:
+        query_vector = embedder.embed_query(query)
+        # Mehr Chunks als Paper anfragen: mehrere Chunks koennen zum selben
+        # Paper gehoeren und werden anschliessend aggregiert.
+        hits = VaultDB(db_path).knn_chunks(query_vector, k=max(k * 4, k))
+    except Exception as exc:  # Vektorsuche ist optional — nie fatal fuer die Textsuche
+        logger.warning("vec0-Suche fehlgeschlagen, Fallback auf FTS5-only: %s", exc)
+        return []
+
+    best_per_paper: dict[str, dict] = {}
+    for hit in hits:  # bereits aufsteigend nach Distanz sortiert
+        paper_id = hit["paper_id"]
+        if paper_id in best_per_paper:
+            continue
+        chunk_text = hit.get("chunk_text") or ""
+        best_per_paper[paper_id] = {
+            "paper_id": paper_id,
+            "chunk_id": hit["chunk_id"],
+            "snippet": _vec_snippet(chunk_text),
+            "distance": hit["distance"],
+        }
+
+    ranked = sorted(best_per_paper.values(), key=lambda entry: entry["distance"])
+    return ranked[:k]
+
+
+def _vec_snippet(chunk_text: str, limit: int = _VEC_SNIPPET_CHARS) -> str:
+    """Kuerzt einen Chunk auf Snippet-Laenge (Ausgabe + Reranker-Input)."""
+    text = " ".join(chunk_text.split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
+def _auto_embed_enabled() -> bool:
+    """Ob ``add_paper`` Embeddings erzeugt (abschaltbar via ``VAULT_AUTO_EMBED=0``)."""
+    return os.environ.get("VAULT_AUTO_EMBED", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
+    """Best-effort-Ingest nach einem Paper-Upsert.
+
+    Fehler werden geloggt, nie geworfen: ein kaputtes/fehlendes
+    Embedding-Backend darf ``vault.add_paper`` nicht scheitern lassen.
+    """
+    if not _auto_embed_enabled():
+        return 0
+    try:
+        from .ingest import ingest_paper_embeddings
+
+        return ingest_paper_embeddings(db_path, paper_id)
+    except Exception as exc:  # Ingest ist optional — nie fatal fuer add_paper
+        logger.warning("Embedding-Ingest fuer '%s' fehlgeschlagen: %s", paper_id, exc)
+        return 0
 
 
 def search_quote_text(db_path: str, verbatim: str, k: int = 5) -> list[dict]:
@@ -324,6 +407,9 @@ def add_paper(
 
     csl_json wird strikt validiert (Issue #213): Pflichtfeld 'type', gueltiger
     CSL-Typ, valides JSON. Bei Verstoss ValueError statt silent default.
+
+    Nach dem Upsert laeuft der Embedding-Ingest (Issue #372) best effort:
+    abschaltbar via ``VAULT_AUTO_EMBED=0``, Fehler werden geloggt statt geworfen.
     """
     validate_csl_json(csl_json)
     db = VaultDB(db_path)
@@ -343,6 +429,7 @@ def add_paper(
         parent_paper_id=parent_paper_id,
         provenance=provenance,
     )
+    _maybe_ingest_embeddings(db_path, paper_id)
 
 
 def add_chapter(
