@@ -2,6 +2,8 @@ anthropic>=0.40
 httpx>=0.28.1
 pypdf>=4.0.0
 pyyaml>=6.0.3
+# Pflicht-Dependency des vendorierten xlsx-Skills (/excel, /pickup) — Issue #367
+openpyxl>=3.1.5
 # requests>=2.32.4: CVE-2024-35195 (cert verification bypass), CVE-2024-47081 (.netrc credential leak)
 requests>=2.32.4
 # lxml>=5.2.0: CVE-2022-2309 (NULL pointer deref)

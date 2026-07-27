@@ -1,11 +1,21 @@
-"""Regressionstest fuer Issue #235: pandas + openpyxl ungenutzt.
+"""Regressionstest fuer Issue #235: pandas ungenutzt.
 
-`pandas` und `openpyxl` standen in `scripts/requirements.txt`, werden aber
-von keinem `scripts/*.py` importiert (`openpyxl` nur im separaten Skill
-`skills/xlsx`). Dieser Test sichert ab, dass
+`pandas` und `openpyxl` standen in `scripts/requirements.txt`, wurden aber
+von keinem `scripts/*.py` importiert. Issue #235 entfernte beide.
 
-1. `scripts/requirements.txt` weder `pandas` noch `openpyxl` listet, und
-2. kein `scripts/`-Code `pandas` oder `openpyxl` importiert,
+Fuer `openpyxl` war das zu kurz gegriffen: der vendorierte Skill
+`skills/xlsx/scripts/recalc.py` (genutzt von den Slash-Commands `/excel` und
+`/pickup`) braucht `openpyxl` zwingend, importiert es aber ausserhalb von
+`scripts/` — der damalige Scan sah diesen Konsumenten nicht. Ohne die
+Dependency ist `/excel`/`/pickup` in jeder Installation ueber den
+dokumentierten Setup-Weg (`scripts/requirements.txt`) defekt
+(`ModuleNotFoundError`). Issue #367 hat `openpyxl` deshalb wieder aufgenommen;
+dieser Test prueft ab jetzt nur noch `pandas`.
+
+Dieser Test sichert ab, dass
+
+1. `scripts/requirements.txt` kein `pandas` listet, und
+2. kein `scripts/`-Code `pandas` importiert,
 
 sodass nur tatsaechlich genutzte Pakete im Top-Level-Requirements stehen.
 """
@@ -19,9 +29,10 @@ REPO_ROOT = Path(__file__).parent.parent
 REQUIREMENTS = REPO_ROOT / "scripts" / "requirements.txt"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 
-# Pakete, die laut Akzeptanzkriterien NICHT mehr im Top-Level-Requirements
-# stehen duerfen, weil sie von scripts/ nicht importiert werden.
-UNUSED_PACKAGES = ("pandas", "openpyxl")
+# Pakete, die laut Akzeptanzkriterien NICHT im Top-Level-Requirements stehen
+# duerfen, weil sie von scripts/ nicht importiert werden. `openpyxl` ist seit
+# Issue #367 bewusst ausgenommen (Konsument: skills/xlsx/, siehe Docstring).
+UNUSED_PACKAGES = ("pandas",)
 
 
 def _listed_packages() -> set[str]:
