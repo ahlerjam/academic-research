@@ -698,6 +698,52 @@ class TestImportPipeline:
         mock_vault_add.assert_called_once()
         mock_excluded.assert_not_called()
 
+    def test_excluded_source_write_failure_is_surfaced(self):
+        """Schlaegt vault_add_excluded_source() nach erkannter Retraction fehl,
+        darf das nicht spurlos verschluckt werden (except Exception: pass).
+
+        Die erkannte Retraktion ginge sonst ohne jedes Signal verloren:
+        kein Eintrag in errors, kein Log, kein Test - Regression zu PR #419.
+        """
+        from parse_list import import_reading_list
+
+        mock_client = MagicMock()
+        entry = dict(PARSED_ENTRIES[1])  # hat DOI
+        mock_client.messages.create.return_value = MagicMock(
+            content=[MagicMock(text=json.dumps([entry]))]
+        )
+        mock_vault_add = MagicMock()
+
+        def fake_resolve_doi(doi):
+            return json.dumps({"type": "article-journal", "title": "Resolved", "DOI": doi})
+
+        with (
+            patch("parse_list.resolve_doi", side_effect=fake_resolve_doi),
+            patch("parse_list.vault_add_paper", mock_vault_add),
+            patch("parse_list.check_retraction", return_value=True),
+            patch(
+                "parse_list.vault_add_excluded_source",
+                side_effect=RuntimeError("vault locked"),
+            ) as mock_excluded,
+        ):
+            result = import_reading_list(
+                str(SAMPLE_TXT),
+                db_path=":memory:",
+                llm_client=mock_client,
+            )
+
+        # Der Ingest selbst bleibt unberuehrt (fail-safe fuer den regulaeren Import) ...
+        mock_vault_add.assert_called_once()
+        assert result["imported"] == 1
+
+        # ... aber der Fehlschlag beim Markieren als excluded_source muss sichtbar sein.
+        mock_excluded.assert_called_once()
+        assert result["errors"], (
+            "Eine erkannte Retraktion, die nicht in den Vault geschrieben werden konnte, "
+            "muss in result['errors'] auftauchen statt spurlos zu verschwinden"
+        )
+        assert any("vault locked" in e or "excluded_source" in e for e in result["errors"])
+
 
 class TestFileFormats:
     """Tests fuer verschiedene Input-Formate."""

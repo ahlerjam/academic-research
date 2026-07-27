@@ -525,14 +525,27 @@ def import_reading_list(
             # Retraction-Check (Issue #383): fail-safe, blockiert den Ingest nie.
             if doi:
                 try:
-                    if check_retraction(doi):
+                    retracted = check_retraction(doi)
+                except Exception:
+                    # Crossref-/Netzwerk-Ausfall: darf den Ingest nie blockieren (AC3).
+                    retracted = False
+
+                if retracted:
+                    try:
                         vault_add_excluded_source(
                             db_path=db_path,
                             paper_id=paper_id,
                             reason="Crossref: update-type retraction",
                         )
-                except Exception:
-                    pass
+                    except Exception as exc:
+                        # Die Retraktion wurde erkannt, konnte aber nicht in den
+                        # Vault geschrieben werden. Der Ingest selbst bleibt
+                        # erfolgreich (fail-safe), der Fehlschlag darf aber nicht
+                        # spurlos verschwinden.
+                        errors.append(
+                            f"{entry.get('title', '?')}: Retraction erkannt, aber "
+                            f"vault_add_excluded_source fehlgeschlagen: {exc}"
+                        )
 
         except Exception as exc:
             errors.append(f"{entry.get('title', '?')}: {exc}")
