@@ -15,8 +15,11 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import docs as _docs
+
 SKILLS_DIR = Path(__file__).parent.parent / "skills"
-README_PATH = Path(__file__).parent.parent / "README.md"
+# Die Skills-Tabelle liegt seit dem README-Relaunch (#402) unter docs/reference/.
+SKILLS_DOC_PATH = _docs.SKILLS_DOC
 VENDORED_SKILLS = {"xlsx", "_common", "humanizer-de"}
 ALL_SKILLS = sorted(
     p for p in SKILLS_DIR.glob("*/SKILL.md") if p.parent.name not in VENDORED_SKILLS
@@ -52,16 +55,16 @@ def _description(path: Path) -> str:
 
 
 def _readme_skill_triggers() -> dict[str, list[str]]:
-    """Parst die README-'Skills-Übersicht'-Tabelle.
+    """Parst die Skills-Tabelle aus docs/reference/skills.md.
 
     Liefert ``{skill_name: [trigger_phrase, ...]}`` aus der Spalte
     'Aktiviert bei'. Trigger stehen dort als kursive Phrasen in
     deutschen Anfuehrungszeichen, z.B. *„Kapitel schreiben"*.
+
+    Bis #402 stand diese Tabelle in der README; die Pruefung ist dieselbe
+    geblieben, nur die Quelldatei hat sich geaendert.
     """
-    text = README_PATH.read_text()
-    start = text.index("## Skills-Übersicht")
-    end = text.index("\n---", start)
-    section = text[start:end]
+    section = SKILLS_DOC_PATH.read_text(encoding="utf-8")
 
     row_re = re.compile(r"^\|\s*`([a-z0-9-]+)`\s*\|\s*(.+?)\s*\|", re.M)
     trig_re = re.compile(r'[„"]([^„""]+)["""]')

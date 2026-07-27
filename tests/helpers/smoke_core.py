@@ -44,6 +44,8 @@ AGENTS_DIR = REPO_ROOT / "agents"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 SERVER_PY = REPO_ROOT / "academic_vault" / "server.py"
 README = REPO_ROOT / "README.md"
+# Die MCP-Tool-Referenz wanderte mit dem README-Relaunch (#402) nach docs/.
+VAULT_DOC = REPO_ROOT / "docs" / "reference" / "vault.md"
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 
@@ -707,14 +709,14 @@ def check_hooks_json_integrity() -> None:
 
 
 def check_tool_three_way_consistency(state: dict[str, Any]) -> None:
-    """Drei-Wege-Konsistenz: @mcp.tool (server.py) == README == list_tools."""
+    """Drei-Wege-Konsistenz: @mcp.tool (server.py) == Vault-Referenz == list_tools."""
     server_tools = TOOL_NAME_RE.findall(SERVER_PY.read_text(encoding="utf-8"))
     assert len(server_tools) == EXPECTED_TOOL_COUNT, (
         f"server.py hat {len(server_tools)} @mcp.tool, erwartet {EXPECTED_TOOL_COUNT}"
     )
-    readme = README.read_text(encoding="utf-8")
-    not_in_readme = [t for t in server_tools if t not in readme]
-    assert not not_in_readme, f"Tools fehlen in README: {not_in_readme}"
+    doc = VAULT_DOC.read_text(encoding="utf-8")
+    not_in_doc = [t for t in server_tools if t not in doc]
+    assert not not_in_doc, f"Tools fehlen in {VAULT_DOC.name}: {not_in_doc}"
 
     listed = set(state["tool_names"])
     assert set(server_tools) == listed, (

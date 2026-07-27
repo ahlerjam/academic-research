@@ -10,6 +10,8 @@ Code-Referenz `academic_vault/server.py` verlinken.
 import re
 from pathlib import Path
 
+from tests.helpers import docs as _docs
+
 REPO_ROOT = Path(__file__).parent.parent
 SERVER_PY = REPO_ROOT / "academic_vault" / "server.py"
 README = REPO_ROOT / "README.md"
@@ -23,7 +25,8 @@ def _registered_tools() -> list[str]:
 
 
 def _readme_text() -> str:
-    return README.read_text()
+    """Die MCP-Tool-Referenz — bis #402 die README, seither docs/reference/vault.md."""
+    return _docs.VAULT_DOC.read_text(encoding="utf-8")
 
 
 def test_registered_tool_count_is_stable() -> None:

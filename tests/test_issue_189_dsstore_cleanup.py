@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from tests.helpers import docs as _docs
+
 REPO_ROOT = Path(__file__).parent.parent
 
 
@@ -57,8 +59,13 @@ def test_pre_commit_config_exists_with_required_hooks():
 
 
 def test_readme_mentions_pre_commit():
-    readme = REPO_ROOT / "README.md"
-    assert readme.exists(), "README.md fehlt"
-    assert "pre-commit" in readme.read_text(encoding="utf-8").lower(), (
-        "README sollte einen Hinweis auf pre-commit enthalten"
+    """Die Entwickler-Doku empfiehlt pre-commit.
+
+    Stand bis #402 in der README; mit dem Relaunch in docs/development.md
+    ausgelagert, weil die README ein Nutzer- und kein Beitragenden-Dokument ist.
+    """
+    dev_doc = _docs.DEVELOPMENT_DOC
+    assert dev_doc.exists(), "docs/development.md fehlt"
+    assert "pre-commit" in dev_doc.read_text(encoding="utf-8").lower(), (
+        "Entwickler-Doku sollte einen Hinweis auf pre-commit enthalten"
     )

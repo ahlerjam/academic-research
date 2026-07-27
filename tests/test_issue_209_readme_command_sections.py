@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import docs as _docs
+
 REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
 COMMANDS_DIR = REPO_ROOT / "commands"
@@ -32,14 +34,13 @@ SKILL_AGENT_HINTS = ("Skill", "skill", "Agent", "agent")
 
 
 def _commands_section() -> str:
-    """Liefert den Text der README-Sektion 'Commands / Slash-Commands'."""
-    text = README.read_text(encoding="utf-8")
-    start = text.index("## Commands / Slash-Commands")
-    # Die naechste Top-Level-Sektion beendet den Block.
-    rest = text[start + len("## Commands / Slash-Commands") :]
-    m = re.search(r"\n## ", rest)
-    end = m.start() if m else len(rest)
-    return rest[:end]
+    """Liefert die Command-Referenz.
+
+    Bis #402 war das die README-Sektion 'Commands / Slash-Commands'; seither ist
+    docs/reference/commands.md das ganze Dokument. Die Pruefungen darunter
+    (Syntax, Beispiel, Skill-/Agent-Verweis je Command) sind unveraendert.
+    """
+    return _docs.COMMANDS_DOC.read_text(encoding="utf-8")
 
 
 def _command_subsection(section_text: str, name: str) -> str:

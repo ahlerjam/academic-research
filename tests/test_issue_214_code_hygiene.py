@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import docs as _docs
+
 _WORKTREE_ROOT = Path(__file__).parent.parent
 
 _DB_SRC_PATH = _WORKTREE_ROOT / "academic_vault" / "db.py"
@@ -148,20 +150,28 @@ def test_find_figures_by_caption_treats_wildcards_literally(tmp_path):
 
 
 def test_readme_test_paths_have_tests_prefix():
-    """README erwaehnt Test-Dateien mit tests/-Prefix (nicht nackt)."""
-    text = _README_PATH.read_text(encoding="utf-8")
+    """Doku erwaehnt Test-Dateien mit tests/-Prefix (nicht nackt).
+
+    Bis #402 stand die Entwickler-Sektion in der README; sie liegt jetzt in
+    docs/development.md. Geprueft wird weiterhin die gesamte Nutzerdoku, damit
+    ein nackter Dateiname nirgends zurueckkommt.
+    """
+    text = _docs.DEVELOPMENT_DOC.read_text(encoding="utf-8")
     assert "tests/test_skill_naming.py" in text
     assert "tests/test_cross_references.py" in text
-    # Nackte Erwaehnung ohne Prefix darf nicht mehr vorkommen.
-    assert not re.search(r"(?<!/)\btest_skill_naming\.py", text), (
+    # Nackte Erwaehnung ohne Prefix darf in der gesamten Doku nicht vorkommen.
+    surface = _docs.read_surface()
+    assert not re.search(r"(?<!/)\btest_skill_naming\.py", surface), (
         "test_skill_naming.py wird noch ohne tests/-Prefix erwaehnt"
     )
-    assert not re.search(r"(?<!/)\btest_cross_references\.py", text), (
+    assert not re.search(r"(?<!/)\btest_cross_references\.py", surface), (
         "test_cross_references.py wird noch ohne tests/-Prefix erwaehnt"
     )
 
 
 def test_readme_output_paths_marked_as_project_output():
-    """README markiert User-Output-Pfade als <projekt>/... (nicht als Repo-Files)."""
-    text = _README_PATH.read_text(encoding="utf-8")
-    assert "<projekt>/" in text, "README sollte User-Output-Pfade klar als <projekt>/... markieren"
+    """Doku markiert User-Output-Pfade als <projekt>/... (nicht als Repo-Files)."""
+    text = _docs.INSTALLATION_DOC.read_text(encoding="utf-8")
+    assert "<projekt>/" in text, (
+        "Die Installationsanleitung sollte User-Output-Pfade klar als <projekt>/... markieren"
+    )
