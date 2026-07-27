@@ -1,7 +1,37 @@
 # Eval-Set: humanizer-de-Pipeline
 
 **Ticket:** #68 — F4 humanizer-de Integration in chapter-writer + quality-reviewer  
-**Status:** Eval-Skeleton (manueller Run erforderlich)
+**Status:** `metric` — automatisierter Offline-Runner + optionaler manueller GPTZero-Check (#390)
+
+---
+
+## Automatisierter Lauf (seit #390)
+
+```bash
+uv run python evals/humanizer-de-pipeline/runner.py     # Report auf stdout
+uv run pytest tests/evals/test_humanizer_pipeline_evals.py -v
+```
+
+`runner.py` misst die **Tell-Dichte**: Treffer kuratierter KI-Marker aus
+`skills/humanizer-de/references/patterns.md` pro 100 Wörter, je Vorher- und
+Nachher-Draft. Kein Netz, kein `ANTHROPIC_API_KEY`, keine Score-Schwankungen —
+deshalb läuft dieses Eval-Set in jeder CI-Matrix mit.
+
+Zwei Negativkontrollen halten die Metrik ehrlich:
+
+- **Detection-Floor** (`DETECTION_FLOOR = 1.5`): Der Vorher-Draft muss diese
+  Dichte überschreiten. Ein Runner, der nichts erkennt, würde sonst jede
+  „Reduktion" trivial bestehen.
+- **Substanz-Quotient** (`MIN_SUBSTANCE_RATIO = 0.7`): Der Nachher-Draft muss
+  mindestens 70 % der Wortmenge behalten. Sonst ließe sich die Tell-Dichte
+  durch radikales Kürzen auf 0 drücken, ohne umformuliert zu haben.
+
+**Grenzen, offen benannt:** Die Tell-Dichte ist ein *Proxy*, kein
+Detektor-Score. Sie misst die Vermeidung bekannter Formulierungsmuster an einem
+kleinen, handgeschriebenen Sample (n = 3 Paare) — nicht, ob ein realer
+KI-Detektor den Text für menschlich hält. Der GPTZero-Abgleich unten bleibt
+deshalb als optionaler manueller Zusatzcheck bestehen; er ist nur kein
+CI-Pfad mehr, weil er einen externen Dienst und manuelle Bewertung braucht.
 
 ---
 
@@ -38,7 +68,8 @@ Nachher-Draft (humanisierter Output nach `humanizer-de`-Pass):
 **Vorher-Drafts** (`drafts/`) enthalten die KI-typischen Tells (Baseline für GPTZero-Score).
 **Nachher-Drafts** (`drafts-after/`) zeigen den humanisierten Output für den Nachher-Score.
 
-Der Eval-Vergleich erfolgt manuell via GPTZero (kein automatisierter CI-Run).
+Der GPTZero-Vergleich erfolgt manuell (kein CI-Run); die automatisierte
+Tell-Dichte oben nutzt dieselben Draft-Paare.
 
 ---
 
