@@ -629,8 +629,18 @@ class TestVerbatimGuardTex:
         )
         assert result.returncode == 2, f"Erwartet exit 2 (block auf .tex), got {result.returncode}"
 
-    def test_hook_tex_bypass_works(self):
-        """<!-- vault-guard: skip --> Bypass funktioniert auch bei .tex-Pfaden."""
+    def test_hook_tex_bypass_works(self, tmp_path):
+        """<!-- vault-guard: skip --> Bypass funktioniert auch bei .tex-Pfaden.
+
+        VAULT_GUARD_BYPASS_LOG wird auf tmp_path umgelenkt (Issue #381 loggt die
+        Bypass-Nutzung jetzt) — sonst wuerde der Testlauf ins echte Home-Verzeichnis
+        schreiben.
+        """
         content = '<!-- vault-guard: skip -->\n"Unverifiziiertes Zitat in LaTeX."'
-        result = run_hook("Write", "thesis.tex", content)
+        result = run_hook(
+            "Write",
+            "thesis.tex",
+            content,
+            env_overrides={"VAULT_GUARD_BYPASS_LOG": str(tmp_path / "vault-guard-bypass.log")},
+        )
         assert result.returncode == 0

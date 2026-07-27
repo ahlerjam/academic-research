@@ -58,7 +58,9 @@ Pandoc manuell überspringen: `force_custom=True` in `render_tex.py`
 
 Der `verbatim-guard`-Hook blockiert `.tex`-Writes wenn Zitate nicht im Vault verifiziert sind.
 
-Bypass (nur für Ausnahmefälle): `<!-- vault-guard: skip -->` im Content.
+Bypass (nur für Ausnahmefälle): `<!-- vault-guard: skip -->` im Content. Jede Nutzung
+wird geloggt (stderr-Warnung + Eintrag in `~/.academic-research/vault-guard-bypass.log`,
+Override via `VAULT_GUARD_BYPASS_LOG`).
 
 ## Per-Uni-Template-Slot
 
