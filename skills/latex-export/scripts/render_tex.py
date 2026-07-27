@@ -45,12 +45,25 @@ def _escape_tex(text: str) -> str:
     return result
 
 
+# Erkennt bereits vorhandene LaTeX-Kommandos im Markdown-Quelltext, z. B.
+# \cite{key}, \citep[S. 12]{key}, \ref{fig:1}. Diese Spans werden von
+# _escape_tex_text unveraendert durchgereicht statt escaped (sonst wuerde
+# \cite{key} lautlos zu \textbackslash{}cite{key}, Issue #386).
+# Bewusste Einschraenkung (siehe Plan-Kommentar): keine verschachtelten
+# Klammern in Kommando-Argumenten (\cite{\emph{x}}) -- ausserhalb des
+# Scopes dieses Fixes.
+_LATEX_COMMAND_RE = re.compile(r"\\[A-Za-z]+\*?(?:\[[^\[\]]*\])*(?:\{[^{}]*\})+")
+
+
 def _escape_tex_text(text: str) -> str:
     """Escaped LaTeX-Sonderzeichen in Paragraph-Text.
 
     Laesst Markdown-Inline-Marker (*_) unveraendert damit _apply_inline_formatting
     danach korrekt angewendet werden kann. Escaped & % $ # ^ ~ { }.
     Backslash wird zu \\textbackslash{}.
+
+    Bereits im Markdown vorhandene LaTeX-Kommandos (z. B. \\cite{key}) werden
+    erkannt und unveraendert durchgereicht statt escaped (Issue #386).
     """
     # Selektive Zeichen — kein _ da es fuer *_kursiv_* Syntax verwendet wird
     PARA_SPECIAL = [
@@ -62,10 +75,21 @@ def _escape_tex_text(text: str) -> str:
         ("^", r"\textasciicircum{}"),
         ("~", r"\textasciitilde{}"),
     ]
-    result = text
-    for char, replacement in PARA_SPECIAL:
-        result = result.replace(char, replacement)
-    return result
+
+    def escape_plain(segment: str) -> str:
+        result = segment
+        for char, replacement in PARA_SPECIAL:
+            result = result.replace(char, replacement)
+        return result
+
+    parts: list[str] = []
+    last_end = 0
+    for match in _LATEX_COMMAND_RE.finditer(text):
+        parts.append(escape_plain(text[last_end : match.start()]))
+        parts.append(match.group(0))  # bereits vorhandenes Kommando: unveraendert
+        last_end = match.end()
+    parts.append(escape_plain(text[last_end:]))
+    return "".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -252,18 +276,41 @@ def _pandoc_available() -> bool:
         return False
 
 
+# pandocs eigene Standard-Definition aus dessen Default-LaTeX-Template
+# (verifiziert per `pandoc --print-default-data-file=templates/common.latex`).
+# --standalone=false unterdrueckt die Praeambel, daher fehlt sie -- ohne sie
+# bricht jede Liste den pdflatex-Build mit "Undefined control sequence
+# \tightlist" (Issue #386, AC1). \providecommand ist idempotent, falls eine
+# umgebende Dokumentklasse/Praeambel \tightlist bereits kennt.
+_PANDOC_TIGHTLIST_DEFINITION = (
+    "\\providecommand{\\tightlist}{%\n  \\setlength{\\itemsep}{0pt}\\setlength{\\parskip}{0pt}}\n"
+)
+
+
 def _pandoc_render(md: str) -> str | None:
     """Konvertiert Markdown via pandoc zu LaTeX. Gibt None zurueck bei Fehler."""
     try:
         result = subprocess.run(
-            ["pandoc", "--from=markdown", "--to=latex", "--standalone=false"],
+            [
+                "pandoc",
+                "--from=markdown",
+                "--to=latex",
+                "--standalone=false",
+                # H1 -> \chapter (statt Default \section), damit pandoc-Pfad
+                # und Custom-Fallback-Pfad dieselbe Kapitelhierarchie erzeugen
+                # (Issue #386, AC3).
+                "--top-level-division=chapter",
+            ],
             input=md,
             capture_output=True,
             text=True,
             timeout=30,
         )
         if result.returncode == 0:
-            return result.stdout
+            output = result.stdout
+            if r"\tightlist" in output:
+                output = _PANDOC_TIGHTLIST_DEFINITION + output
+            return output
         return None
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None

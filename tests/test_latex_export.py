@@ -11,10 +11,13 @@ Abgedeckt:
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 # Pfade
 WORKTREE = Path(__file__).parent.parent
@@ -24,6 +27,13 @@ HOOK_PATH = WORKTREE / "hooks" / "verbatim-guard.mjs"
 
 # sys.path fuer direkten Import der Scripts
 sys.path.insert(0, str(SCRIPTS_DIR))
+
+# pandoc/pdflatex sind in der CI (ubuntu-latest/macos-latest Matrix) nicht
+# installiert -- Tests, die einen echten Aufruf brauchen, werden dort uebersprungen
+# (etabliertes Pattern, vgl. tests/test_project_bootstrap.py:189) und sind nur
+# lokal beweiskraeftig.
+PANDOC_AVAILABLE = shutil.which("pandoc") is not None
+PDFLATEX_AVAILABLE = shutil.which("pdflatex") is not None
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +201,160 @@ class TestRenderTex:
         monkeypatch.setattr(sp, "run", fake_run)
         result = render_markdown_to_tex("# Titel\n\nText.\n", force_custom=True)
         assert r"\chapter{Titel}" in result
+
+
+# ---------------------------------------------------------------------------
+# pandoc-Pfad Tests (Issue #386 -- bisher ungetestet)
+# ---------------------------------------------------------------------------
+
+
+class TestPandocPath:
+    """Tests fuer den pandoc-Renderpfad (_pandoc_render), subprocess gemockt."""
+
+    def test_pandoc_render_injects_tightlist_definition_when_present(self, monkeypatch):
+        """Enthaelt pandoc-Output \\tightlist, wird eine \\providecommand-Definition vorangestellt."""
+        from render_tex import _pandoc_render
+
+        fake_stdout = "\\begin{itemize}\n\\tightlist\n\\item\n  Alpha\n\\end{itemize}\n"
+
+        class FakeResult:
+            returncode = 0
+            stdout = fake_stdout
+            stderr = ""
+
+        captured_cmd = {}
+
+        def fake_run(cmd, **kwargs):
+            captured_cmd["cmd"] = cmd
+            return FakeResult()
+
+        monkeypatch.setattr("render_tex.subprocess.run", fake_run)
+        result = _pandoc_render("- Alpha\n")
+
+        assert result is not None
+        assert result.startswith(r"\providecommand{\tightlist}"), result
+        assert "--top-level-division=chapter" in captured_cmd["cmd"]
+
+    def test_pandoc_render_no_tightlist_injection_without_list(self, monkeypatch):
+        """Ohne \\tightlist im pandoc-Output wird keine Definition injiziert (kein Overhead)."""
+        from render_tex import _pandoc_render
+
+        fake_stdout = "\\chapter{Titel}\n\nEinfacher Text.\n"
+
+        monkeypatch.setattr(
+            "render_tex.subprocess.run",
+            lambda cmd, **kwargs: type(
+                "FakeResult", (), {"returncode": 0, "stdout": fake_stdout, "stderr": ""}
+            )(),
+        )
+        result = _pandoc_render("# Titel\n\nEinfacher Text.\n")
+
+        assert result == fake_stdout
+        assert r"\providecommand{\tightlist}" not in result
+
+
+class TestPandocRealCompile:
+    """Tests mit echtem pandoc + pdflatex.
+
+    Uebersprungen wenn die Tools fehlen (z.B. CI-Runner ohne TeXLive) --
+    dort ist der Beweis nur lokal erbringbar.
+    """
+
+    @pytest.mark.skipif(
+        not (PANDOC_AVAILABLE and PDFLATEX_AVAILABLE),
+        reason="pandoc und/oder pdflatex nicht in PATH",
+    )
+    def test_pandoc_list_compiles_with_pdflatex(self, tmp_path):
+        """AC1: .tex mit Markdown-Liste kompiliert mit pdflatex ohne '\\tightlist undefined'."""
+        from render_tex import render_markdown_to_tex
+
+        md = "# Kapitel Eins\n\n- Alpha\n- Beta\n- Gamma\n"
+        body = render_markdown_to_tex(md, force_custom=False)
+        assert r"\tightlist" in body  # Voraussetzung: pandoc erzeugt tightlist bei Listen
+
+        doc = "\\documentclass{report}\n\\begin{document}\n" + body + "\n\\end{document}\n"
+        tex_file = tmp_path / "doc.tex"
+        tex_file.write_text(doc, encoding="utf-8")
+
+        result = subprocess.run(
+            [
+                "pdflatex",
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                "-output-directory",
+                str(tmp_path),
+                str(tex_file),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        log = result.stdout + result.stderr
+        assert "Undefined control sequence" not in log, f"pdflatex-Fehler:\n{log}"
+        assert result.returncode == 0, f"pdflatex-Kompilierung fehlgeschlagen:\n{log}"
+        assert (tmp_path / "doc.pdf").exists()
+
+    @pytest.mark.skipif(not PANDOC_AVAILABLE, reason="pandoc nicht in PATH")
+    def test_pandoc_and_custom_path_same_chapter_hierarchy(self):
+        """AC3: pandoc-Pfad und Custom-Fallback-Pfad erzeugen aus identischem H1-Markdown \\chapter{}."""
+        from render_tex import render_markdown_to_tex
+
+        md = "# Einleitung\n\nEin Absatz.\n"
+        pandoc_result = render_markdown_to_tex(md, force_custom=False)
+        custom_result = render_markdown_to_tex(md, force_custom=True)
+
+        assert r"\chapter{Einleitung}" in pandoc_result
+        assert r"\chapter{Einleitung}" in custom_result
+
+
+# ---------------------------------------------------------------------------
+# Custom-Renderer: bereits vorhandene LaTeX-Kommandos duerfen nicht
+# doppelt escaped werden (Issue #386, AC2)
+# ---------------------------------------------------------------------------
+
+
+class TestEscapeExistingCommands:
+    """Regressionstests fuer _escape_tex_text: eingebettete LaTeX-Kommandos bleiben erhalten."""
+
+    def test_custom_renderer_preserves_cite_command(self):
+        """Ein eingebettetes \\cite{key} bleibt unveraendert, wird NICHT zu \\textbackslash{}cite{key}."""
+        from render_tex import render_markdown_to_tex
+
+        md = "Laut der Studie \\cite{smith2023} ist das belegt.\n"
+        result = render_markdown_to_tex(md, force_custom=True)
+
+        assert r"\cite{smith2023}" in result
+        assert r"\textbackslash{}cite" not in result
+
+    def test_custom_renderer_preserves_cite_with_optional_arg(self):
+        """\\citep[S. 12]{key} bleibt inkl. optionalem Argument vollstaendig erhalten."""
+        from render_tex import render_markdown_to_tex
+
+        md = "Vgl. \\citep[S. 12]{mueller2019}.\n"
+        result = render_markdown_to_tex(md, force_custom=True)
+
+        assert r"\citep[S. 12]{mueller2019}" in result
+        assert r"\textbackslash{}citep" not in result
+
+    def test_custom_renderer_still_escapes_bare_backslash(self):
+        """Ein nackter Backslash (kein erkanntes LaTeX-Kommando) wird weiterhin escaped."""
+        from render_tex import render_markdown_to_tex
+
+        md = "Ein Backslash \\ steht hier isoliert im Text.\n"
+        result = render_markdown_to_tex(md, force_custom=True)
+
+        assert r"\textbackslash{}" in result
+
+    def test_custom_renderer_escapes_special_chars_alongside_cite(self):
+        """Sonderzeichen ausserhalb erkannter Kommandos werden weiterhin escaped, auch neben \\cite{}."""
+        from render_tex import render_markdown_to_tex
+
+        md = "Kosten: 50% laut \\cite{smith2023} & mehr.\n"
+        result = render_markdown_to_tex(md, force_custom=True)
+
+        assert r"\cite{smith2023}" in result
+        assert r"\%" in result
+        assert r"\&" in result
 
 
 # ---------------------------------------------------------------------------
