@@ -346,16 +346,29 @@ def resolve_doi(doi: str) -> str | None:
     return _crossref_message_to_csl(msg)
 
 
-def _is_retraction_update(update_to: list[dict]) -> bool:
-    """Prueft ob eine Crossref update-to-Liste einen Retraction-Eintrag enthaelt."""
-    return any(entry.get("type") == "retraction" for entry in update_to)
+def _is_retraction_update(updated_by: object) -> bool:
+    """Prueft ob eine Crossref `updated-by`-Liste einen Retraction-Eintrag enthaelt.
+
+    Robust gegen fehlendes Feld und gegen explizites JSON-null: Crossref liefert
+    `updated-by` nur bei tatsaechlich aktualisierten Werken.
+    """
+    if not isinstance(updated_by, list):
+        return False
+    return any(
+        isinstance(entry, dict) and entry.get("type") == "retraction" for entry in updated_by
+    )
 
 
 def check_retraction(doi: str) -> bool:
     """Prueft via Crossref ob ein DOI als zurueckgezogen (retracted) markiert ist.
 
-    Nutzt die seit 09/2023 in Crossref integrierten Retraction-Watch-Daten
-    (Feld `message.update-to` mit `type == "retraction"`).
+    Nutzt die seit 09/2023 in Crossref integrierten Retraction-Watch-Daten.
+
+    Ausgewertet wird `message.updated-by` mit `type == "retraction"`: Crossref
+    haengt dieses Feld an den ZURUECKGEZOGENEN Artikel. Das Gegenstueck
+    `message.update-to` gehoert zur Retraction-NOTIZ und zeigt von dieser auf den
+    Artikel — es auszuwerten drehte die Relation um und liefe fuer jedes real
+    zurueckgezogene Paper ins Leere (Regression, PR #419).
 
     Fail-safe: Jeder Netzwerk-/Parse-Fehler oder fehlender DOI liefert False —
     blockiert niemals den regulaeren Paper-Ingest (AC3, Issue #383).
@@ -374,7 +387,7 @@ def check_retraction(doi: str) -> bool:
             return False
 
         msg = resp.json().get("message", {})
-        return _is_retraction_update(msg.get("update-to", []))
+        return _is_retraction_update(msg.get("updated-by"))
     except Exception:
         return False
 

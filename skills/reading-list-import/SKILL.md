@@ -131,7 +131,7 @@ und vervollständigt das Ergebnis.
 3. LLM-Parser aufrufen (Sonnet) — extrahiert strukturierte Liste
 4. Für jeden Eintrag: DOI/ISBN resolven → CSL-JSON
 5. `vault.add_paper()` aufrufen (idempotent: Dedup via DOI/ISBN)
-6. Bei vorhandenem DOI: Retraction-Status via Crossref prüfen (`update-to`-Feld,
+6. Bei vorhandenem DOI: Retraction-Status via Crossref prüfen (`updated-by`-Feld,
    `type: retraction`) — Treffer → `vault.add_excluded_source()`, Ausfall
    blockiert den Ingest nicht (fail-safe)
 7. Bei Mehrdeutigkeit (_ambiguous: true): AskUserQuestion-Tool nutzen
