@@ -151,6 +151,11 @@ def search_papers(
     """
     raw_query = query
     query = _sanitize_fts5_query(query)
+    if not query:
+        # Leere oder rein aus FTS5-Sonderzeichen bestehende Query: kein
+        # gueltiger MATCH-Ausdruck moeglich, daher leeres Ergebnis statt
+        # sqlite3.OperationalError (Issue #369).
+        return []
     conn = VaultDB._open(db_path)
     try:
         if type_filter:
@@ -236,7 +241,7 @@ def _sanitize_fts5_query(query: str) -> str:
     sanitized = _FTS5_OPERATOR_KEYWORDS.sub(" ", sanitized)
     # Mehrfache Leerzeichen zusammenfassen
     sanitized = re.sub(r"\s+", " ", sanitized).strip()
-    return sanitized if sanitized else query
+    return sanitized
 
 
 def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
