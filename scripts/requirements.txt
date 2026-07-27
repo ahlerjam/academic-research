@@ -24,3 +24,9 @@ pyzotero>=1.5
 # installiert Torch vorher separat:
 #   pip install --index-url https://download.pytorch.org/whl/cpu torch
 sentence-transformers>=3.0
+# transformers<5.0 (Issue #376): FlagEmbedding 1.4.0 (lokaler Reranker-Fallback,
+# optional per `pip install FlagEmbedding`) ruft intern
+# Tokenizer.prepare_for_model() auf, das in transformers>=5.x entfernt wurde.
+# Global gedeckelt, damit dieser Pfad synchron zu pyproject.toml/uv.lock bleibt
+# (vgl. pyproject.toml, [project.dependencies]).
+transformers<5.0

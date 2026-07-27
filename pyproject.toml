@@ -41,6 +41,18 @@ dependencies = [
     # chunk_embeddings sonst in jeder realen Installation leer bliebe und
     # vault.search(rerank=True) auf reine FTS5-Umsortierung zurueckfaellt.
     "sentence-transformers>=3.0",
+    # transformers<5.0 (#376, P1-Fix aus dem Review): uv resolved [project.dependencies],
+    # optional-dependencies und dev-Gruppen GEMEINSAM zu EINER universellen Version je
+    # Paket (keine Pro-Extra-Resolution ohne tool.uv.conflicts) -- eine Deckelung nur im
+    # rerank-local-Extra haette die Default-Resolution (`uv sync --extra dev`, kein
+    # rerank-local) trotzdem auf <5.0 gezogen, nur unausgesprochen und ohne
+    # scripts/requirements.txt nachzuziehen. Also bewusst hier deklariert: die Deckelung
+    # gilt global, CI und scripts/requirements.txt (Endnutzerpfad) bleiben damit
+    # konsistent. Grund: FlagEmbedding 1.4.0 (aktuellster Release, Stand 2026-07) ruft
+    # intern Tokenizer.prepare_for_model() auf, das in transformers>=5.x entfernt wurde
+    # -- verifiziert per Live-Download (AttributeError). Kann entfallen, sobald
+    # FlagEmbedding nachzieht (vgl. rerank-local-Extra unten).
+    "transformers<5.0",
     # torch ist funktional eine transitive Dependency von sentence-transformers.
     # Es steht hier NUR, damit [tool.uv.sources] greifen kann: uv wendet Sources
     # ausschliesslich auf direkte Dependencies an. Ohne diesen Eintrag loest uv
@@ -69,13 +81,12 @@ rerank-cloud = [
 # nach sich (torch/transformers sind bereits Hard-Dependencies fuer #372) —
 # bewusst EIGENER Extra, damit `uv sync --extra dev` (Default-CI) schlank
 # bleibt und dieser Ballast nur bezieht, wer den lokalen Fallback nutzt/testet.
-# transformers<5.0: FlagEmbedding 1.4.0 (aktuellster Release, Stand 2026-07)
-# ruft intern Tokenizer.prepare_for_model() auf, das in transformers>=5.x
-# entfernt wurde -- verifiziert per Live-Download (AttributeError). Deckelung
-# auf die 4.x-Linie, bis FlagEmbedding nachzieht.
+# Die transformers<5.0-Deckelung, die FlagEmbedding hier erzwingt, steht NICHT
+# in diesem Extra, sondern global in [project.dependencies] (siehe Kommentar
+# dort) -- uv resolved extras nicht isoliert, ein Cap nur hier haette die
+# Default-Resolution unausgesprochen mitgezogen.
 rerank-local = [
     "FlagEmbedding>=1.3,<2.0",
-    "transformers<5.0",
 ]
 
 # uv: Repo ist kein installierbares Package (lose gekoppelte Skripte) —

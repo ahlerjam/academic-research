@@ -38,6 +38,7 @@ dependencies = [
     { name = "sqlite-vec" },
     { name = "torch", version = "2.13.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "python_full_version < '3.15' and sys_platform == 'darwin'" },
     { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "python_full_version >= '3.15' or sys_platform != 'darwin'" },
+    { name = "transformers" },
 ]
 
 [package.optional-dependencies]
@@ -53,7 +54,6 @@ rerank-cloud = [
 ]
 rerank-local = [
     { name = "flagembedding" },
-    { name = "transformers" },
 ]
 
 [package.metadata]
@@ -77,7 +77,7 @@ requires-dist = [
     { name = "sentence-transformers", specifier = ">=3.0" },
     { name = "sqlite-vec", specifier = "==0.1.10a4" },
     { name = "torch", specifier = ">=2.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "transformers", marker = "extra == 'rerank-local'", specifier = "<5.0" },
+    { name = "transformers", specifier = "<5.0" },
     { name = "voyageai", marker = "extra == 'rerank-cloud'", specifier = ">=0.5,<1.0" },
 ]
 provides-extras = ["dev", "rerank-cloud", "rerank-local"]
