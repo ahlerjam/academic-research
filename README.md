@@ -978,6 +978,19 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 Kein CI-Trigger — Evals laufen lokal vor jedem Release. Reports unter `docs/evals/`.
 
+**Was ohne API-Key wirklich läuft.** `uv run pytest tests/evals/` ergibt ohne
+`ANTHROPIC_API_KEY` **184 bestandene und 148 übersprungene** Tests. Davon sind
+**147 Skips API-gated** — sie kommen aus `require_api_key()` in
+`tests/evals/eval_runner.py` und bedeuten: hier wird derzeit keine
+LLM-Qualität gemessen. Von den
+37 Komponenten unter `evals/` haben genau **3** einen Runner, der offline
+Inhalt bewertet (`verbatim-guard`, `humanizer-de-pipeline`, `auto-download`);
+die übrigen 34 werden nur strukturell geprüft. Welche Komponente in welchem
+Zustand ist und warum, steht vollständig in
+[`docs/evals/STRATEGY.md`](docs/evals/STRATEGY.md) — inklusive der Bezifferung
+des API-Budgets, das nötig wäre, um daraus echte Metriken zu machen. Der Guard
+`tests/evals/test_eval_strategy.py` hält Tabelle und Dateisystem synchron.
+
 ---
 
 ## Lizenz
