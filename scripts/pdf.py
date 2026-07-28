@@ -1,29 +1,23 @@
 #!/usr/bin/env python3
-"""PDF resolution, download, text extraction and fulltext indexing — v4 rewrite.
+"""PDF resolution, download and text extraction — v4 rewrite.
 
 Merges v3 pdf_resolver.py + fulltext_index.py into a single module.
 
 Actions:
   resolve  — Download PDFs via 5-tier fallback strategy
   extract  — Extract text from downloaded PDFs (pypdf)
-  index    — Build TF-IDF fulltext index
-  search   — Search fulltext index
 
 Usage:
   python pdf.py --action resolve --papers papers.json --output-dir pdfs/ --output pdf_status.json
   python pdf.py --action extract --pdf-dir pdfs/ --output pdf_texts.json
-  python pdf.py --action search --query "governance" --index-path fulltext_index.json
 """
 
 from __future__ import annotations
 
 import argparse
-import collections
 import logging
-import math
 import os
 import random
-import re
 import sys
 import xml.etree.ElementTree as ET
 from typing import Any
@@ -402,76 +396,6 @@ def action_extract(pdf_dir: str, output_path: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# TF-IDF fulltext index
-# ---------------------------------------------------------------------------
-
-
-def _tokenize_for_index(text: str) -> list[str]:
-    """Tokenize text for indexing."""
-    return [t for t in re.split(r"[^a-z0-9äöüß]+", text.lower()) if len(t) > 2]
-
-
-def action_index(pdf_texts_path: str, output_path: str) -> int:
-    """Build TF-IDF index from extracted texts."""
-    texts = load_json(pdf_texts_path)
-    doc_count = len(texts)
-    if doc_count == 0:
-        save_json({"index": {}, "doc_count": 0, "doc_lengths": {}}, output_path)
-        return 0
-
-    # Term frequency per document
-    tf: dict[str, dict[str, int]] = {}
-    doc_lengths: dict[str, int] = {}
-    df: dict[str, int] = collections.defaultdict(int)
-
-    for doc_id, text in texts.items():
-        tokens = _tokenize_for_index(text)
-        doc_lengths[doc_id] = len(tokens)
-        term_counts: dict[str, int] = collections.defaultdict(int)
-        for token in tokens:
-            term_counts[token] += 1
-        tf[doc_id] = dict(term_counts)
-        for term in term_counts:
-            df[term] += 1
-
-    # Build inverted index with TF-IDF scores
-    index: dict[str, list[tuple[str, float]]] = {}
-    for doc_id, term_counts in tf.items():
-        length = max(1, doc_lengths[doc_id])
-        for term, count in term_counts.items():
-            tf_score = count / length
-            idf_score = math.log(doc_count / max(1, df[term]))
-            tfidf = tf_score * idf_score
-            if tfidf > 0.001:
-                index.setdefault(term, []).append((doc_id, round(tfidf, 6)))
-
-    # Sort by score
-    for term in index:
-        index[term].sort(key=lambda x: x[1], reverse=True)
-
-    save_json({"index": index, "doc_count": doc_count, "doc_lengths": doc_lengths}, output_path)
-    log.info("Indexed %d documents, %d terms", doc_count, len(index))
-    return 0
-
-
-def action_search(query: str, index_path: str, limit: int = 10) -> int:
-    """Search fulltext index."""
-    data = load_json(index_path)
-    index = data.get("index", {})
-    tokens = _tokenize_for_index(query)
-
-    doc_scores: dict[str, float] = collections.defaultdict(float)
-    for token in tokens:
-        for doc_id, score in index.get(token, []):
-            doc_scores[doc_id] += score
-
-    ranked = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
-    for doc_id, score in ranked:
-        print(f"{score:.4f}  {doc_id}")
-    return 0
-
-
-# ---------------------------------------------------------------------------
 # OCR-Detection
 # ---------------------------------------------------------------------------
 
@@ -516,18 +440,12 @@ def detect_needs_ocr(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="PDF resolution, extraction, and indexing")
-    parser.add_argument(
-        "--action", required=True, choices=["resolve", "extract", "index", "search"]
-    )
+    parser = argparse.ArgumentParser(description="PDF resolution and extraction")
+    parser.add_argument("--action", required=True, choices=["resolve", "extract"])
     parser.add_argument("--papers", help="Papers JSON (for resolve)")
     parser.add_argument("--output-dir", help="PDF output directory (for resolve)")
     parser.add_argument("--output", help="Output file path")
     parser.add_argument("--pdf-dir", help="PDF directory (for extract)")
-    parser.add_argument("--pdf-texts", help="PDF texts JSON (for index)")
-    parser.add_argument("--index-path", help="Index file path (for search)")
-    parser.add_argument("--query", help="Search query (for search)")
-    parser.add_argument("--limit", type=int, default=10, help="Search result limit")
     parser.add_argument(
         "--email", default=os.environ.get("UNPAYWALL_EMAIL", "academic-research@example.com")
     )
@@ -549,18 +467,6 @@ def main() -> int:
             log.error("extract requires --pdf-dir, --output")
             return 1
         return action_extract(args.pdf_dir, args.output)
-
-    if args.action == "index":
-        if not args.pdf_texts or not args.output:
-            log.error("index requires --pdf-texts, --output")
-            return 1
-        return action_index(args.pdf_texts, args.output)
-
-    if args.action == "search":
-        if not args.query or not args.index_path:
-            log.error("search requires --query, --index-path")
-            return 1
-        return action_search(args.query, args.index_path, args.limit)
 
     return 1
 
