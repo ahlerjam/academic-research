@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from uuid import uuid4
 
-from .db import VALID_PAPER_TYPES, VaultDB, default_db_path
+from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _Unset, default_db_path
 from .embedding_model import get_embedder
 from .files_api import FilesAPIClient
 
@@ -80,6 +80,40 @@ def validate_csl_json(csl_json: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _ensure_schema_for_read(db_path: str) -> None:
+    """Stellt vor einem reinen Lesezugriff sicher, dass die DB nutzbar ist.
+
+    Bewusst NICHT einfach ``VaultDB(db_path).init_schema()``: ``schema.sql``
+    enthaelt drei unbedingte ``DROP TRIGGER``+``CREATE TRIGGER``-Paare (siehe
+    Kommentar dort), die -- anders als ``CREATE TABLE IF NOT EXISTS`` -- bei
+    jedem Lauf sqlite_master schreiben. Riefe jeder Lesepfad unconditional
+    ``init_schema()``, wuerde jeder Read (get_paper, search_papers, ...) zu
+    einem DDL-Schreibvorgang (Review-Fund P1 zu PR #478/#455).
+
+    Der Guard hier prueft nur billig, ob die DB ueberhaupt schon eine
+    ``papers``-Tabelle hat. Fehlt sie (frische, leere DB-Datei -- der Fall,
+    den AC3 aus #455 abdeckt), wird einmalig der volle
+    ``VaultDB.init_schema()`` durchlaufen. Existiert sie bereits, wird nichts
+    weiter getan -- Reparatur von Bestands-Drift (fehlende Spalten/Tabellen,
+    veraltete Trigger) bleibt bewusst Aufgabe der Schreibpfade (add_paper,
+    add_quote, ...), die weiterhin unbedingt ``init_schema()`` aufrufen und
+    damit voll migrations-/reparaturfaehig bleiben (z.B. Trigger-Refresh auf
+    Bestands-DBs, Issue #373).
+    """
+    conn = VaultDB._open(db_path)
+    try:
+        papers_exists = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='papers'"
+            ).fetchone()
+            is not None
+        )
+    finally:
+        conn.close()
+    if not papers_exists:
+        VaultDB(db_path).init_schema()
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -139,6 +173,7 @@ def get_quote(db_path: str, quote_id: str) -> dict | None:
     Feld aktuell nur manuell; die NLI-Klassifikation ist ein Folge-Issue.
     """
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.get_quote(quote_id)
 
 
@@ -176,6 +211,14 @@ def search_papers(
         # gueltiger MATCH-Ausdruck moeglich, daher leeres Ergebnis statt
         # sqlite3.OperationalError (Issue #369).
         return []
+    # Schema-Sicherstellung vor der rohen SQL-Query unten (Issue #455): diese
+    # Funktion umgeht VaultDB komplett und oeffnet die Connection direkt
+    # ueber VaultDB._open(), daher greift keine der init_schema()-Aufrufe in
+    # den anderen Lesepfaden. Ohne dies crasht die erste Suche auf einer
+    # frischen DB mit sqlite3.OperationalError statt ein leeres Ergebnis zu
+    # liefern. _ensure_schema_for_read() statt unbedingtem init_schema()
+    # (Review-Fund P1 zu PR #478): letzteres fuehrt bei jedem Aufruf DDL aus.
+    _ensure_schema_for_read(db_path)
     conn = VaultDB._open(db_path)
     try:
         if type_filter:
@@ -359,6 +402,7 @@ def _maybe_extract_fulltext(db_path: str, paper_id: str, pdf_path: str | None) -
         return False
     try:
         db = VaultDB(db_path)
+        db.init_schema()
         if db.get_fulltext(paper_id) is not None:
             return False
         from .fulltext import extract_fulltext
@@ -392,6 +436,7 @@ def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
 def search_quote_text(db_path: str, verbatim: str, k: int = 5) -> list[dict]:
     """LIKE-Suche in quotes.verbatim. Gibt [{quote_id, verbatim, paper_id}] zurueck."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.search_quote_text(verbatim, k)
 
 
@@ -403,6 +448,7 @@ def find_quotes(
 ) -> list[dict]:
     """Gibt Quotes fuer ein Paper zurueck, optional per verbatim-Filter."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.find_quotes(paper_id, query, k)
 
 
@@ -434,12 +480,14 @@ def add_figure(
 def get_figure(db_path: str, figure_id: str) -> dict | None:
     """Gibt vollstaendigen Figure-Record als dict oder None."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.get_figure(figure_id)
 
 
 def list_figures(db_path: str, paper_id: str) -> list[dict]:
     """Gibt alle Figures fuer ein Paper, nach page sortiert."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.list_figures(paper_id)
 
 
@@ -458,6 +506,7 @@ def find_figure_by_caption(
     ein In-Text-Referenz-Label ist (z. B. ``"Abb. 3.4"``), kein Caption-Fragment.
     """
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.find_figures_by_reference(caption_fragment, paper_id=paper_id)
 
 
@@ -465,17 +514,17 @@ def add_paper(
     db_path: str,
     paper_id: str,
     csl_json: str,
-    pdf_path: str | None = None,
-    doi: str | None = None,
-    isbn: str | None = None,
-    page_offset: int = 0,
-    editor: str | None = None,
-    chapter: str | None = None,
-    page_first: int | None = None,
-    page_last: int | None = None,
-    container_title: str | None = None,
-    parent_paper_id: str | None = None,
-    provenance: str | None = None,
+    pdf_path: str | None | _Unset = _UNSET,
+    doi: str | None | _Unset = _UNSET,
+    isbn: str | None | _Unset = _UNSET,
+    page_offset: int | _Unset = _UNSET,
+    editor: str | None | _Unset = _UNSET,
+    chapter: str | None | _Unset = _UNSET,
+    page_first: int | None | _Unset = _UNSET,
+    page_last: int | None | _Unset = _UNSET,
+    container_title: str | None | _Unset = _UNSET,
+    parent_paper_id: str | None | _Unset = _UNSET,
+    provenance: str | None | _Unset = _UNSET,
 ) -> None:
     """Upsert eines Papers in den Vault. Unterstuetzt type=book|chapter.
 
@@ -483,6 +532,14 @@ def add_paper(
 
     csl_json wird strikt validiert (Issue #213): Pflichtfeld 'type', gueltiger
     CSL-Typ, valides JSON. Bei Verstoss ValueError statt silent default.
+
+    Alle optionalen Parameter defaulten auf das Sentinel ``_UNSET`` statt auf
+    ``None``/``0`` (Issue #455) und werden unveraendert an ``VaultDB.add_paper()``
+    durchgereicht: ein zweiter Aufruf fuer dieselbe ``paper_id``, der ein
+    optionales Feld nicht mit uebergibt, laesst dessen Bestandswert
+    unangetastet statt ihn auf den Default zurueckzusetzen. Ein bewusst
+    geleertes Feld (explizit ``None``/``0`` uebergeben) wird weiterhin
+    geleert.
 
     Nach dem Upsert laufen zwei best-effort-Schritte, beide loggen Fehler statt
     sie zu werfen: die PDF-Volltext-Extraktion (Issue #373, abschaltbar via
@@ -507,7 +564,12 @@ def add_paper(
         parent_paper_id=parent_paper_id,
         provenance=provenance,
     )
-    _maybe_extract_fulltext(db_path, paper_id, pdf_path)
+    # _maybe_extract_fulltext() erwartet str | None -- Sentinel ("nicht
+    # uebergeben") ist fuer die Volltextextraktion aequivalent zu "kein
+    # PDF-Pfad angegeben". isinstance() statt "is _UNSET", damit mypy den
+    # else-Zweig zuverlaessig auf "str | None" narrowed.
+    resolved_pdf_path: str | None = None if isinstance(pdf_path, _Unset) else pdf_path
+    _maybe_extract_fulltext(db_path, paper_id, resolved_pdf_path)
     _maybe_ingest_embeddings(db_path, paper_id)
 
 
@@ -552,6 +614,7 @@ def add_chapter(
 def get_paper(db_path: str, paper_id: str) -> dict | None:
     """Gibt Paper-Metadata als dict zurueck oder None."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.get_paper(paper_id)
 
 
@@ -585,18 +648,21 @@ def get_stats(db_path: str) -> dict:
 def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
     """Setzt ocr_done-Flag fuer ein Paper im Vault."""
     db = VaultDB(db_path)
+    db.init_schema()
     db.set_ocr_done(paper_id, value)
 
 
 def update_pdf_path(db_path: str, paper_id: str, new_path: str) -> None:
     """Aktualisiert pdf_path fuer ein Paper im Vault."""
     db = VaultDB(db_path)
+    db.init_schema()
     db.update_pdf_path(paper_id, new_path)
 
 
 def set_page_offset(db_path: str, paper_id: str, offset: int) -> None:
     """Setzt page_offset fuer ein Paper im Vault."""
     db = VaultDB(db_path)
+    db.init_schema()
     db.set_page_offset(paper_id, offset)
 
 
@@ -988,6 +1054,7 @@ def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
         Gedruckte Seitenzahl (>= 1).
     """
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     offset = db.get_page_offset(paper_id)
     printed = pdf_page - offset
     return max(1, printed)  # Nie kleiner als 1
@@ -1018,6 +1085,7 @@ def extract_fulltext_for_paper(
     from .fulltext import extract_fulltext
 
     db = VaultDB(db_path)
+    db.init_schema()
     paper = db.get_paper(paper_id)
     if paper is None:
         raise ValueError(f"Paper unbekannt: {paper_id}")
@@ -1071,21 +1139,24 @@ def _build_mcp_server():
     def _vault_add_paper(
         paper_id: str,
         csl_json: str,
-        pdf_path: str | None = None,
-        doi: str | None = None,
-        isbn: str | None = None,
-        page_offset: int = 0,
-        editor: str | None = None,
-        chapter: str | None = None,
-        page_first: int | None = None,
-        page_last: int | None = None,
-        container_title: str | None = None,
-        parent_paper_id: str | None = None,
-        provenance: str | None = None,
+        pdf_path: str | None | _Unset = _UNSET,
+        doi: str | None | _Unset = _UNSET,
+        isbn: str | None | _Unset = _UNSET,
+        page_offset: int | _Unset = _UNSET,
+        editor: str | None | _Unset = _UNSET,
+        chapter: str | None | _Unset = _UNSET,
+        page_first: int | None | _Unset = _UNSET,
+        page_last: int | None | _Unset = _UNSET,
+        container_title: str | None | _Unset = _UNSET,
+        parent_paper_id: str | None | _Unset = _UNSET,
+        provenance: str | None | _Unset = _UNSET,
     ) -> None:
         """Upsert eines Papers. type aus csl_json; book|chapter|article-journal erlaubt.
 
         provenance: Herkunfts-Tag (z.B. "scihub") fuer Provenance-Audit (#195).
+
+        Nicht uebergebene optionale Felder lassen ihren Bestandswert beim
+        Upsert unangetastet statt ihn zu leeren (Issue #455).
         """
         add_paper(
             db_path,
