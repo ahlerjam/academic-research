@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ns2="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"><responseDate>2026-07-28T20:45:00Z</responseDate><request verb="ListRecords" metadataPrefix="oai_dc">https://www.econstor.eu/oai/request</request><ListRecords><record><header><identifier>oai:econstor.eu:10419/73976</identifier><datestamp>2023-11-02T02:00:12Z</datestamp><setSpec>com_10419_267</setSpec><setSpec>col_10419_268</setSpec><setSpec>open_access</setSpec><setSpec>ddc:330</setSpec><setSpec>doc-type:workingPaper</setSpec></header><metadata><ns2:dc xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+   <dc:title>Impact of Cultural Differences on Knowledge Transfer in British, Hungarian and Polish Enterprises</dc:title>
+   <dc:creator>Hauke, Aleksandra</dc:creator>
+   <dc:subject>ddc:330</dc:subject>
+   <dc:subject>L10</dc:subject>
+   <dc:subject>Cultural Differences</dc:subject>
+   <dc:subject>Knowledge Transfer</dc:subject>
+   <dc:subject>Wissenstransfer</dc:subject>
+   <dc:subject>Kultur</dc:subject>
+   <dc:subject>Vergleich</dc:subject>
+   <dc:subject>Ungarn</dc:subject>
+   <dc:subject>Großbritannien</dc:subject>
+   <dc:subject>Polen</dc:subject>
+   <dc:description>The aim of the article is to verify the hypothesis, that despite the cultural differences existing among Great Britain, Hungary and Poland, all enterprises put much effort to ensure good conditions for knowledge sharing by their employees. It consists of two major parts. In the first one, the theoretical concepts of culture and knowledge are presented. In the second part, the interpretation of results obtained in research on macro and micro level analyses in three European countries are shown. The macro level analysis is based on the differences in cultural dimensions presented by G. Hofstede and R. Gestland while the micro level analysis is conducted based on the results of empirical investigation carried out by International Research Group: Marketing in the XXI century, among companies operating in Great Britain, Hungary and Poland. Results obtained through this survey are compared with cultural dimensions in order to see how significant the distance between the received theory and empirical investigation is.</dc:description>
+   <dc:date>2006</dc:date>
+   <dc:type>doc-type:workingPaper</dc:type>
+   <dc:identifier>gbv-ppn:517048442</dc:identifier>
+   <dc:identifier>http://hdl.handle.net/10419/73976</dc:identifier>
+   <dc:identifier>RePEc:fem:femwpa:2006.50</dc:identifier>
+   <dc:language>eng</dc:language>
+   <dc:relation>Series: Nota di Lavoro ; No. 50.2006</dc:relation>
+   <dc:rights>http://www.econstor.eu/dspace/Nutzungsbedingungen</dc:rights>
+   <dc:publisher>Milano: Fondazione Eni Enrico Mattei (FEEM)</dc:publisher>
+</ns2:dc></metadata></record><record><header><identifier>oai:econstor.eu:10419/186701</identifier><datestamp>2023-11-02T02:00:13Z</datestamp><setSpec>com_10419_307</setSpec><setSpec>com_10419_306</setSpec><setSpec>col_10419_308</setSpec><setSpec>open_access</setSpec><setSpec>ddc:330</setSpec><setSpec>doc-type:workingPaper</setSpec></header><metadata><ns2:dc xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+   <dc:title>The Effects of Alternative Sharing Arrangements on Employment: Preliminary Evidence From Britain</dc:title>
+   <dc:creator>Jones, Derek C.</dc:creator>
+   <dc:creator>Pliskin, Jeffrey</dc:creator>
+   <dc:subject>ddc:330</dc:subject>
+   <dc:description>A sample of British firms with diverse sharing arrangements is used to investigate the effects of profit sharing on employment levels. Employment effects are sometimes significant but depend upon the measure of profit sharing, how the dynamics are modeled, and whether measures of employee participation in decision making are included in the estimating equation. Using a continuous measure of profit sharing, employment effects, which typically range from -6% to 6% are much more modest than those obtained by some other researchers. Most findings are not dramatically affected by estimating for separate time periods, individual industries or separately for larger firms.</dc:description>
+   <dc:date>1988</dc:date>
+   <dc:type>doc-type:workingPaper</dc:type>
+   <dc:identifier>http://hdl.handle.net/10419/186701</dc:identifier>
+   <dc:identifier>RePEc:lev:wrkpap:wp_8</dc:identifier>
+   <dc:language>eng</dc:language>
+   <dc:relation>Series: Working Paper ; No. 8</dc:relation>
+   <dc:rights>http://www.econstor.eu/dspace/Nutzungsbedingungen</dc:rights>
+   <dc:publisher>Annandale-on-Hudson, NY: Levy Economics Institute of Bard College</dc:publisher>
+</ns2:dc></metadata></record><record><header><identifier>oai:econstor.eu:10419/225398</identifier><datestamp>2023-11-02T02:00:14Z</datestamp><setSpec>com_10419_45</setSpec><setSpec>com_10419_116250</setSpec><setSpec>col_10419_225358</setSpec><setSpec>doc-type:report</setSpec><setSpec>open_access</setSpec><setSpec>ddc:300</setSpec></header><metadata><ns2:dc xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+   <dc:title>How long do assets last during loss of income? WSI Distribution Report 2017</dc:title>
+   <dc:creator>Tiefensee, Anita</dc:creator>
+   <dc:subject>ddc:300</dc:subject>
+   <dc:description>A key function of assets is securing the level of consumption during loss of income. In Germany, 30 % of households can secure their current level of consumption from their assets for a few weeks or months at the most. These households have no appreciable assets at their disposal, or are even in debt. The median figure, which splits all households into two halves of equal size, is just under two years. 10 % of households can secure their current consumption for at least just under 13 years, and 5 % can even do so for more than 21 years. The securing of consumption in East Germany is markedly lower than in West Germany. Broken down into age groups, although the securing of consumption rises with age, in every age bracket at least 20 % of households could not secure their current level of consumption at all or could so for only a very short time by using up their assets. Single parents in particular are reliant on their regular income. The results show that the majority of households have only very limited private provision in the form of assets at their disposal. Generally speaking, a household's consumption can be secured on a private or state level. There should be securing of consumption on one of the two levels, otherwise major risks are not covered. There is a patent need for political action on both levels.</dc:description>
+   <dc:description>Eine wichtige Funktion von Vermögen ist die Sicherung des Konsumniveaus bei Einkommensausfällen. In Deutschland können 30 % der Haushalte maximal wenige Wochen oder Monate ihr aktuelles Konsumniveau aus ihren Vermögen sichern. Diese Haushalte verfügen über kein nennenswertes Vermögen oder sind sogar verschuldet. DerMedianwert, der alle Haushalte in zwei gleich große Hälften teilt, liegt bei knapp zwei Jahren. 10 % der Haushalte können mindestens knapp 13 Jahre und 5 % sogar über 21 Jahre ihren aktuellen Konsum sichern. Die Konsumsicherung im Osten liegt deutlich unter der im Westen. Aufgeschlüsselt nach Altersgruppen zeigt sich zwar ein Anstieg der Konsumsicherung mit dem Alter, allerdings verbleiben in allen Altersklassen mindestens 20 % der Haushalte, die gar nicht oder nur sehr kurz ihr aktuelles Konsumniveau durch Verbrauch ihres Vermögens sichern könnten. Insbesondere Alleinerziehende sind auf ihr laufendes Einkommen angewiesen. Die Ergebnisse zeigen, dass die Mehrheit der Haushalte nur über eine sehr eingeschränkte private Absicherung in Form von Vermögen verfügt. Generell kann die Konsumsicherung eines Haushaltes auf privater oder staatlicher Ebene erfolgen. Auf einer der beiden Ebenen sollte eine Sicherung stattfinden, da sonst wichtige Lebensrisiken nicht abgesichert sind. Auf beiden Ebenen zeigt sich politischer Handlungsbedarf. (Vorlage)</dc:description>
+   <dc:date>2017</dc:date>
+   <dc:type>doc-type:report</dc:type>
+   <dc:identifier>gbv-ppn:1735998745</dc:identifier>
+   <dc:identifier>urn:nbn:de:101:1-201801187904</dc:identifier>
+   <dc:identifier>http://hdl.handle.net/10419/225398</dc:identifier>
+   <dc:identifier>RePEc:zbw:wsirep:37e</dc:identifier>
+   <dc:language>eng</dc:language>
+   <dc:relation>Series: WSI Report ; No. 37e</dc:relation>
+   <dc:rights>http://www.econstor.eu/dspace/Nutzungsbedingungen</dc:rights>
+   <dc:publisher>Düsseldorf: Hans-Böckler-Stiftung, Wirtschafts- und Sozialwissenschaftliches Institut (WSI)</dc:publisher>
+</ns2:dc></metadata></record></ListRecords></OAI-PMH>
