@@ -57,6 +57,21 @@ OPENAIRE_NO_PDF_URL_RESPONSE = {
     ]
 }
 
+OPENAIRE_VIEWER_PAGE_RESPONSE = {
+    "results": [
+        {
+            "instances": [
+                {
+                    "urls": [
+                        "https://doi.org/10.1371/journal.pbio.1002055",
+                        "https://repo.example.org/pdfjs/viewer.html?file=123",
+                    ]
+                }
+            ]
+        }
+    ]
+}
+
 
 class TestTierOpenaire:
     def test_success_returns_pdf_url(self):
@@ -87,6 +102,20 @@ class TestTierOpenaire:
         from pdf import tier_openaire
 
         resp = _mock_httpx_response(OPENAIRE_NO_PDF_URL_RESPONSE)
+        client = _mock_httpx_client(resp)
+
+        result = tier_openaire(client, "10.1371/journal.pbio.1002055")
+        assert result is None
+
+    def test_viewer_page_url_is_not_mistaken_for_pdf(self):
+        """Regression (Review-Finding): eine PDF.js-Viewer-Seite (HTML) enthaelt
+        den Substring '/pdf' (in '/pdfjs/'), ist aber kein direkter PDF-Link.
+        Ein Substring-Match wuerde hier faelschlich zuschlagen und die
+        Tier-Kette faelschlich terminieren -> muss None liefern.
+        """
+        from pdf import tier_openaire
+
+        resp = _mock_httpx_response(OPENAIRE_VIEWER_PAGE_RESPONSE)
         client = _mock_httpx_client(resp)
 
         result = tier_openaire(client, "10.1371/journal.pbio.1002055")
@@ -521,6 +550,38 @@ class TestResolvePdfUrlOrdering:
         client.get.side_effect = mock_get
 
         paper = {"doi": "10.9999/test", "title": "Test paper"}
+        url, source, error = resolve_pdf_url(client, paper, "test@example.com")
+
+        assert url == "https://unpaywall.example/paper.pdf"
+        assert source == "unpaywall"
+        assert error is None
+
+    def test_openaire_viewer_page_falls_back_to_unpaywall(self):
+        """Regression (Review-Finding): eine OpenAIRE-Instanz-URL, die nur die
+        Viewer-Seite eines Repositoriums ist (kein direkter PDF-Link), darf
+        die Kette nicht faelschlich mit success=False terminieren, sondern
+        muss auf Unpaywall weiterlaufen.
+        """
+        from pdf import resolve_pdf_url
+
+        def mock_get(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            resp.text = self._EMPTY_ARXIV_XML
+            if "api.openaire.eu" in url:
+                resp.json.return_value = OPENAIRE_VIEWER_PAGE_RESPONSE
+            elif "api.unpaywall.org" in url:
+                resp.json.return_value = {
+                    "best_oa_location": {"url_for_pdf": "https://unpaywall.example/paper.pdf"}
+                }
+            else:
+                resp.json.return_value = {}
+            return resp
+
+        client = MagicMock()
+        client.get.side_effect = mock_get
+
+        paper = {"doi": "10.1371/journal.pbio.1002055", "title": "Test paper"}
         url, source, error = resolve_pdf_url(client, paper, "test@example.com")
 
         assert url == "https://unpaywall.example/paper.pdf"

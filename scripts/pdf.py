@@ -21,6 +21,7 @@ import random
 import sys
 import xml.etree.ElementTree as ET
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -85,14 +86,34 @@ def download_pdf(client: httpx.Client, pdf_url: str, output_path: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _looks_like_pdf_url(url: str) -> bool:
+    """Precise check whether a URL plausibly points at a direct PDF file.
+
+    Matches only a ``.pdf`` path extension, an exact ``pdf`` path segment
+    (e.g. ``/content/pdf/...`` — not ``/pdfjs/...``), or a ``type=printable``
+    query parameter (exact key/value, not a substring). A naive substring
+    check against the raw URL (``"/pdf" in url``) also matches PDF.js viewer
+    pages like ``https://repo.example.org/pdfjs/viewer.html?file=123``,
+    which are HTML, not PDFs — this precision avoids that false positive.
+    """
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    if path.endswith(".pdf"):
+        return True
+    if "pdf" in [segment for segment in path.split("/") if segment]:
+        return True
+    query = parse_qs(parsed.query.lower())
+    return query.get("type") == ["printable"]
+
+
 def tier_openaire(client: httpx.Client, doi: str) -> str | None:
     """Tier 1: Resolve via OpenAIRE Graph API.
 
     Fragt ``graph/v1/researchProducts`` per DOI (``pid``) ab und sucht in
     ``results[0]["instances"][]["urls"][]`` nach einer URL, die per Muster
-    (``.pdf``-Endung, ``/pdf`` oder ``type=printable`` im Pfad/Query) nach
-    einem direkten PDF-Link aussieht. Es gibt kein verlaessliches
-    "ist PDF"-Feld in der API-Antwort, daher die Heuristik.
+    (siehe ``_looks_like_pdf_url``) nach einem direkten PDF-Link aussieht.
+    Es gibt kein verlaessliches "ist PDF"-Feld in der API-Antwort, daher
+    die Heuristik.
     """
     resp = client.get(
         "https://api.openaire.eu/graph/v1/researchProducts",
@@ -108,8 +129,7 @@ def tier_openaire(client: httpx.Client, doi: str) -> str | None:
         for url in instance.get("urls") or []:
             if not isinstance(url, str):
                 continue
-            lower = url.lower()
-            if lower.endswith(".pdf") or "/pdf" in lower or "type=printable" in lower:
+            if _looks_like_pdf_url(url):
                 return url
     return None
 
