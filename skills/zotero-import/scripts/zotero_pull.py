@@ -401,7 +401,8 @@ def run_import(
                                     f"fehlgeschlagen: {e}"
                                 )
 
-                        break  # Nur erstes PDF-Attachment
+                        if local_path:
+                            break  # Nur erstes erfolgreich geladenes PDF-Attachment
 
                 result.imported += 1
 

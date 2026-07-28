@@ -458,3 +458,165 @@ class TestAnnotationImport:
         assert len(rows) == 1
         assert rows[0]["printed_page"] is None
         assert rows[0]["extraction_method"] == "manual"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: PDF-Attachment-Fallback bleibt erhalten (Regression zu Issue #395)
+# ---------------------------------------------------------------------------
+
+
+def _item_with_two_pdf_attachments(item_key: str, doi: str) -> tuple[list, list, str, str]:
+    """Baut ein Journal-Item mit ZWEI PDF-Attachment-Kindern.
+
+    Gibt (items, attachment_children, erster_key, zweiter_key) zurueck.
+    """
+    item, _single_child, first_key = _item_with_pdf_attachment(item_key, doi)
+    second_key = "ATTPDF02"
+    attachment_children = [
+        {
+            "key": key,
+            "version": 1,
+            "data": {
+                "key": key,
+                "itemType": "attachment",
+                "linkMode": "linked_file",
+                "contentType": "application/pdf",
+                "filename": "paper_a.pdf",
+                "title": "paper_a.pdf",
+            },
+        }
+        for key in (first_key, second_key)
+    ]
+    return item, attachment_children, first_key, second_key
+
+
+def _paper_pdf_path(db_path: str, paper_id: str) -> str | None:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute("SELECT pdf_path FROM papers WHERE paper_id = ?", (paper_id,)).fetchone()
+    finally:
+        conn.close()
+    return row[0] if row else None
+
+
+class TestPDFAttachmentFallback:
+    def test_failed_first_download_falls_back_to_second_pdf(self, tmp_path):
+        """Schlaegt der Download des ersten PDFs fehl, wird das zweite versucht."""
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, first_key, second_key = _item_with_two_pdf_attachments(
+            "FALLBACK", "10.9999/fallback.001"
+        )
+
+        def children_side_effect(key):
+            if key == "FALLBACK":
+                return attachment_children
+            return []
+
+        attempted: list[str] = []
+
+        def download_side_effect(_zot, _item_key, att_key, _tmp_dir):
+            attempted.append(att_key)
+            return None if att_key == first_key else str(ATTACHMENT_A)
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.side_effect = children_side_effect
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id_abc") as mock_ef:
+                with patch("zotero_pull._download_attachment", side_effect=download_side_effect):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert attempted == [first_key, second_key]
+        assert result.imported == 1
+        mock_ef.assert_called_once()
+        assert "file_mock_id_abc" in result.file_ids
+        assert _paper_pdf_path(db_path, "zotero-FALLBACK") == str(ATTACHMENT_A)
+
+    def test_successful_first_download_stops_after_first_pdf(self, tmp_path):
+        """Erfolgreicher Download → zweites PDF-Attachment wird nicht angefasst."""
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, first_key, _second_key = _item_with_two_pdf_attachments(
+            "FIRSTPDF", "10.9999/fallback.002"
+        )
+
+        def children_side_effect(key):
+            if key == "FIRSTPDF":
+                return attachment_children
+            return []
+
+        attempted: list[str] = []
+
+        def download_side_effect(_zot, _item_key, att_key, _tmp_dir):
+            attempted.append(att_key)
+            return str(ATTACHMENT_A)
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.side_effect = children_side_effect
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id_abc") as mock_ef:
+                with patch("zotero_pull._download_attachment", side_effect=download_side_effect):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert attempted == [first_key]
+        assert result.imported == 1
+        mock_ef.assert_called_once()
+
+    def test_annotations_imported_even_when_download_fails(self, tmp_path):
+        """Annotationen haengen nicht am Download-Erfolg des PDFs."""
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment(
+            "ANNONOPD", "10.9999/annot.003"
+        )
+        annotation_children = [
+            {
+                "key": "ANNOKEY3",
+                "version": 1,
+                "data": {
+                    "key": "ANNOKEY3",
+                    "itemType": "annotation",
+                    "annotationType": "highlight",
+                    "annotationText": "Highlight ohne heruntergeladenes PDF.",
+                    "annotationPageLabel": "7",
+                },
+            }
+        ]
+
+        def children_side_effect(key):
+            if key == "ANNONOPD":
+                return attachment_children
+            if key == att_key:
+                return annotation_children
+            return []
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.side_effect = children_side_effect
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id") as mock_ef:
+                with patch("zotero_pull._download_attachment", return_value=None):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.imported == 1
+        assert result.errors == []
+        mock_ef.assert_not_called()
+
+        rows = _quotes_rows(db_path)
+        assert len(rows) == 1
+        assert rows[0]["verbatim"] == "Highlight ohne heruntergeladenes PDF."
+        assert rows[0]["printed_page"] == 7
