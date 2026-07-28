@@ -109,6 +109,48 @@ def test_search_dblp_zero_hits_no_hit_key(monkeypatch):
     assert results == []
 
 
+def test_search_dblp_venue_as_list_is_flattened_to_string(monkeypatch):
+    """DBLP liefert 'venue' bei Editorship-Eintraegen (Proceedings-Baende) als
+    Liste statt String (live gegen die echte API verifiziert, z.B.
+    journals/corr/abs-2601-00047: venue: ["ICLP", "EPTCS"]). Das Paper-Schema
+    (text_utils.Paper.venue: str | None) erwartet einen String — ungefiltert
+    durchgereicht wuerde eine Liste ins Schema geschrieben. Analog zum
+    bestehenden Muster in search_base()'s dc()-Helper: erstes Element ziehen.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = {
+            "result": {
+                "hits": {
+                    "@total": "1",
+                    "hit": [
+                        {
+                            "info": {
+                                "title": "Proceedings 41st ICLP.",
+                                "venue": ["ICLP", "EPTCS"],
+                                "year": "2026",
+                                "doi": "10.4204/EPTCS.439",
+                                "ee": "https://doi.org/10.4204/EPTCS.439",
+                                "authors": {"author": {"@pid": "1/1", "text": "Alice Editor"}},
+                            }
+                        }
+                    ],
+                }
+            }
+        }
+        return httpx.Response(200, json=body)
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(search.httpx, "Client", _mock_client_factory(transport))
+    monkeypatch.setattr(search.time, "sleep", lambda *a, **k: None)
+
+    results = search.search_dblp("ICLP proceedings", limit=1)
+
+    assert len(results) == 1
+    assert results[0]["venue"] == "ICLP"
+    assert isinstance(results[0]["venue"], str)
+
+
 def test_search_dblp_http_error_is_caught_by_run_module(monkeypatch):
     """Ein HTTP-Fehler darf den Prozess nicht crashen — _run_module faengt ihn ab."""
 

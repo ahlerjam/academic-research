@@ -558,6 +558,8 @@ def search_dblp(query: str, limit: int) -> list[dict[str, Any]]:
         authors = [a.get("text") for a in author_data if isinstance(a, dict) and a.get("text")]
         year_raw = info.get("year")
         year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
+        venue_raw = info.get("venue")
+        venue = venue_raw[0] if isinstance(venue_raw, list) and venue_raw else venue_raw
         results.append(
             normalize_paper(
                 {
@@ -566,7 +568,7 @@ def search_dblp(query: str, limit: int) -> list[dict[str, Any]]:
                     "authors": authors,
                     "year": year,
                     "abstract": None,
-                    "venue": info.get("venue"),
+                    "venue": venue,
                     "citations": 0,
                     "url": info.get("ee") or info.get("url"),
                 },
