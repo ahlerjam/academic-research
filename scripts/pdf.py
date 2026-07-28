@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+import arxiv_latex
 from text_utils import load_json, normalize_doi, safe_filename, save_json
 
 try:
@@ -435,18 +436,79 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         return ""
 
 
-def action_extract(pdf_dir: str, output_path: str) -> int:
-    """Extract text from all PDFs in directory."""
+def extract_text_for_paper(pdf_path: str, doi: str | None = None) -> str:
+    """Extrahiert Text fuer ein Paper: bevorzugt die arXiv-LaTeX-Quelle
+    (Formeltreue bei MINT-Themen, #399), wenn `doi` auf eine arXiv-ID
+    verweist (Muster `10.48550/arxiv.<id>`, siehe scripts/search.py::
+    search_arxiv()); faellt sonst auf die bestehende PDF-Extraktion zurueck.
+
+    Das ist der einzige Aufrufer von arxiv_latex.fetch_arxiv_latex_source()
+    im Repo ausserhalb dessen eigener Testdatei (#399, Scope "In": Nutzung
+    als Alternative zur PDF-Extraktion, wenn ein Paper eine arXiv-ID hat).
+    Aendert NICHTS an der Extraktion fuer Nicht-arXiv-Quellen (`doi` ohne
+    arXiv-Muster bzw. `None`) -- Out-Scope aus #399.
+    """
+    arxiv_id = arxiv_latex.arxiv_id_from_doi(doi)
+    if arxiv_id:
+        latex_source = arxiv_latex.fetch_arxiv_latex_source(arxiv_id)
+        if latex_source:
+            return latex_source
+    return extract_text_from_pdf(pdf_path)
+
+
+def _doi_by_pdf_filename(pdf_status_path: str | None) -> dict[str, str]:
+    """Baut ein {PDF-Dateiname: DOI}-Mapping aus dem pdf_status.json von
+    action_resolve() (#399: ermoeglicht action_extract(), fuer arXiv-Papers
+    die LaTeX-Quelle statt PDF-Extraktion zu nutzen).
+
+    Liefert ein leeres Mapping, wenn kein Pfad angegeben ist oder die Datei
+    fehlt/kaputt ist -- action_extract() faellt dann vollstaendig auf die
+    bisherige, unveraenderte PDF-Extraktion zurueck.
+    """
+    if not pdf_status_path:
+        return {}
+    try:
+        status = load_json(pdf_status_path)
+    except (OSError, ValueError):
+        log.warning(
+            "pdf-status %s nicht lesbar -- arXiv-LaTeX-Alternative uebersprungen",
+            pdf_status_path,
+        )
+        return {}
+    if not isinstance(status, dict):
+        return {}
+
+    mapping: dict[str, str] = {}
+    for doi, entry in status.items():
+        pdf_path = entry.get("pdf_path") if isinstance(entry, dict) else None
+        if isinstance(pdf_path, str) and pdf_path:
+            mapping[os.path.basename(pdf_path)] = doi
+    return mapping
+
+
+def action_extract(pdf_dir: str, output_path: str, pdf_status_path: str | None = None) -> int:
+    """Extract text from all PDFs in directory.
+
+    Wenn `pdf_status_path` (Ausgabe von action_resolve()) angegeben ist,
+    wird pro PDF-Datei die zugehoerige DOI nachgeschlagen; hat ein Paper
+    eine erkennbare arXiv-ID, wird zuerst die arXiv-LaTeX-Quelle als
+    Formeltreue-Alternative zur PDF-Extraktion versucht (#399). Ohne
+    `pdf_status_path` ist das Verhalten identisch zum Vorher-Stand (Out-
+    Scope #399: bestehende Pipeline fuer Nicht-arXiv-Quellen unveraendert).
+    """
     texts: dict[str, str] = {}
     if not os.path.isdir(pdf_dir):
         log.error("PDF directory not found: %s", pdf_dir)
         return 1
 
+    doi_by_filename = _doi_by_pdf_filename(pdf_status_path)
+
     for fname in sorted(os.listdir(pdf_dir)):
         if not fname.lower().endswith(".pdf"):
             continue
         path = os.path.join(pdf_dir, fname)
-        text = extract_text_from_pdf(path)
+        doi = doi_by_filename.get(fname)
+        text = extract_text_for_paper(path, doi)
         texts[fname] = text
 
     save_json(texts, output_path)
@@ -506,6 +568,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", help="Output file path")
     parser.add_argument("--pdf-dir", help="PDF directory (for extract)")
     parser.add_argument(
+        "--pdf-status",
+        help=(
+            "pdf_status.json von --action resolve (fuer extract, optional). "
+            "Aktiviert die arXiv-LaTeX-Alternative aus #399 fuer Papers mit "
+            "erkennbarer arXiv-ID; ohne diese Option unveraendertes Verhalten."
+        ),
+    )
+    parser.add_argument(
         "--email", default=os.environ.get("UNPAYWALL_EMAIL", "academic-research@example.com")
     )
     return parser.parse_args()
@@ -525,7 +595,7 @@ def main() -> int:
         if not args.pdf_dir or not args.output:
             log.error("extract requires --pdf-dir, --output")
             return 1
-        return action_extract(args.pdf_dir, args.output)
+        return action_extract(args.pdf_dir, args.output, pdf_status_path=args.pdf_status)
 
     return 1
 
