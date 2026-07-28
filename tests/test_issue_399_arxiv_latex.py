@@ -134,6 +134,28 @@ def test_fetch_returns_none_for_http_error(monkeypatch):
     assert result is None
 
 
+def test_fetch_returns_none_for_truncated_gzip_body(monkeypatch, caplog):
+    """Abgeschnittener gzip-Body (kaputte HTTP-Antwort) -> None statt Absturz.
+
+    Regression: gzip.decompress() wirft bei einem Stream ohne End-of-Stream-
+    Marker EOFError, bei einem korrupten Deflate-Block zlib.error -- beides
+    KEINE OSError-Subklassen. Ein `except OSError` allein liess diese beiden
+    Faelle durchschlagen und riss den Aufrufer-Batch ab (P1-Review-Fund PR #435).
+    """
+    full_body = _make_targz({"main.tex": b"\\documentclass{article}"})
+    truncated_body = full_body[:-5]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=truncated_body)
+
+    _patched_client(monkeypatch, handler)
+
+    with caplog.at_level(logging.INFO):
+        result = arxiv_latex.fetch_arxiv_latex_source(ARXIV_ID)
+
+    assert result is None
+
+
 def test_fetch_returns_none_for_empty_targz_without_tex(monkeypatch):
     """Archiv ohne jegliche .tex-Datei -> None statt Absturz."""
     body = _make_targz({"README": b"no tex here"})

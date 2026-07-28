@@ -40,6 +40,7 @@ import io
 import logging
 import sys
 import tarfile
+import zlib
 
 import httpx
 
@@ -181,7 +182,13 @@ def fetch_arxiv_latex_source(arxiv_id: str) -> str | None:
     if content.startswith(GZIP_MAGIC):
         try:
             decompressed = gzip.decompress(content)
-        except OSError:
+        except (OSError, EOFError, zlib.error):
+            # gzip.decompress wirft bei abgeschnittenem Stream EOFError und bei
+            # korruptem Deflate-Block zlib.error -- beides KEINE OSError-
+            # Subklassen (nur gzip.BadGzipFile erbt von OSError). Ohne diese
+            # Erweiterung reisst ein abgeschnittener/korrupter e-print-Body den
+            # gesamten Aufrufer-Batch ab (P1-Review-Fund PR #435).
+            log.info("arXiv %s: gzip-Payload abgeschnitten/korrupt", arxiv_id)
             return None
         if tarfile.is_tarfile(io.BytesIO(decompressed)):
             main_tex = _extract_tex_from_targz(decompressed)
