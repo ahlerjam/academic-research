@@ -27,6 +27,12 @@ REQUIRED_PERMISSIONS = [
     "Bash(~/.academic-research/venv/bin/pip *)",
     "Bash(browser-use:*)",
     "Bash(browser-use *)",
+    # Eng gescoptes Ersatzmuster fuer das entfernte pauschale Bash(mkdir *)
+    # (PR #476-Review, P1): commands/search.md legt Session-Verzeichnisse
+    # unter ~/.academic-research/sessions/... an, commands/latex.md unter
+    # ~/.academic-research/library-profiles/ -- beide brauchen mkdir -p
+    # weiterhin, aber nur innerhalb des eigenen Datenverzeichnisses.
+    "Bash(mkdir -p ~/.academic-research/*)",
 ]
 
 

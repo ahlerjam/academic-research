@@ -75,6 +75,48 @@ def test_required_permissions_still_covers_venv_and_browser_use():
 
 
 # ---------------------------------------------------------------------------
+# P1-Fix (PR #476-Review, Runde 2): eng gescoptes Ersatzmuster fuer das
+# ersatzlos entfernte Bash(mkdir *) -- ohne dieses Muster loesen
+# commands/search.md (mkdir -p unter sessions/) und commands/latex.md
+# (mkdir -p unter library-profiles/) bei jedem Lauf eine Permission-
+# Rueckfrage aus, weil weder die globale Regel noch die command-eigenen
+# allowed-tools mkdir abdecken.
+# ---------------------------------------------------------------------------
+
+SCOPED_MKDIR_PATTERN = "Bash(mkdir -p ~/.academic-research/*)"
+SEARCH_COMMAND_MD = REPO_ROOT / "commands" / "search.md"
+LATEX_COMMAND_MD = REPO_ROOT / "commands" / "latex.md"
+
+
+def test_required_permissions_has_scoped_mkdir_replacement():
+    assert SCOPED_MKDIR_PATTERN in configure_permissions.REQUIRED_PERMISSIONS, (
+        "REQUIRED_PERMISSIONS muss ein eng gescoptes Ersatzmuster fuer das "
+        "entfernte Bash(mkdir *) enthalten (PR #476-Review P1)"
+    )
+    assert SCOPED_MKDIR_PATTERN not in BLANKET_EXEC_PATTERNS, (
+        "das Ersatzmuster darf keine pauschale Codeausfuehrung sein (AC2)"
+    )
+
+
+def test_scoped_mkdir_pattern_covers_search_command_invocation():
+    content = SEARCH_COMMAND_MD.read_text(encoding="utf-8")
+    assert 'mkdir -p "$SESSION_DIR/pdfs"' in content, (
+        "commands/search.md legt weiterhin ein Session-Verzeichnis per mkdir -p an"
+    )
+    # Der Praefix vor der Variablenexpansion muss zum Muster passen: die
+    # Regel matcht "mkdir -p ~/.academic-research/" + beliebiger Rest, und
+    # $SESSION_DIR ist als ~/.academic-research/sessions/... definiert.
+    assert "SESSION_DIR=~/.academic-research/sessions/" in content
+
+
+def test_scoped_mkdir_pattern_covers_latex_command_invocation():
+    content = LATEX_COMMAND_MD.read_text(encoding="utf-8")
+    assert "mkdir -p ~/.academic-research/library-profiles/" in content, (
+        "commands/latex.md legt weiterhin library-profiles/ per mkdir -p an"
+    )
+
+
+# ---------------------------------------------------------------------------
 # pending_permissions()
 # ---------------------------------------------------------------------------
 
