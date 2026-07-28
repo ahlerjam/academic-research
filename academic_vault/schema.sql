@@ -46,7 +46,16 @@ CREATE TABLE IF NOT EXISTS quotes (
   context_after     TEXT,
   extraction_method TEXT NOT NULL CHECK(extraction_method IN ('citations-api','manual')),
   api_response_id   TEXT,
-  created_at        INTEGER NOT NULL
+  created_at        INTEGER NOT NULL,
+  -- Haltung des Zitats zur zitierenden Aussage (Issue #400). Vorgemerkt fuer
+  -- eine spaetere, rein lokale NLI-Klassifikation (Konzept-Anleihe: scite
+  -- Smart Citations / SemanticCite) -- die Befuellung ist ein Folge-Issue,
+  -- bis dahin bleibt das Feld NULL, sofern es nicht manuell gesetzt wird.
+  -- Werteliste gespiegelt in db.VALID_STANCES und migrate.add_stance_column().
+  -- Bewusst als LETZTE Spalte: `ALTER TABLE ... ADD COLUMN` (migrate.py) haengt
+  -- sie auf Bestands-DBs ebenfalls hinten an, so bleibt die Spaltenreihenfolge
+  -- zwischen frischer und migrierter DB identisch.
+  stance            TEXT CHECK(stance IN ('supports','contrasts','mentions') OR stance IS NULL)
 );
 
 -- vec0 Virtual Tables: optional, nur wenn sqlite-vec Extension geladen ist.
