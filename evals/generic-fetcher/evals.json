@@ -10,13 +10,14 @@
       "input": {
         "url": "https://zenodo.org/records/10425331",
         "title": "Open Data Practices in Civil Engineering",
-        "fixture": "zenodo_record.html"
+        "fixture": "zenodo_record.html",
+        "pdf_route": "/records/10425331/files/open-data-practices.pdf"
       },
       "expected": {
         "status": "success",
         "min_tries": 2
       },
-      "notes": "Live-Lauf ist netzabhaengig; offline geprueft wird die Navigations- und Protokollierungslogik ueber tests/helpers/generic_fetcher_nav.py."
+      "notes": "Der Live-Lauf gegen zenodo.org bleibt netzabhaengig; im Test faehrt der Case end-to-end gegen einen lokalen HTTP-Ursprung (tests/helpers/local_origin.py): Seite laden, PDF-Route holen, Datei schreiben und von der Platte verifizieren."
     },
     {
       "id": "gf-02",
@@ -26,13 +27,14 @@
       "input": {
         "url": "https://www.mdpi.com/2071-1050/15/4/1234",
         "title": "Circular Construction Materials",
-        "fixture": "mdpi_article.html"
+        "fixture": "mdpi_article.html",
+        "pdf_route": "/2071-1050/15/4/1234/pdf"
       },
       "expected": {
         "status": "success",
         "min_tries": 2
       },
-      "notes": "Belegt, dass die Erkennung nicht an der Dateiendung haengt."
+      "notes": "Belegt, dass die Erkennung nicht an der Dateiendung haengt — die PDF-Route /2071-1050/15/4/1234/pdf wird real geholt und die geschriebene Datei gegen die ausgelieferten Bytes geprueft."
     },
     {
       "id": "gf-03",
@@ -42,13 +44,14 @@
       "input": {
         "url": "https://books.openedition.org/pub/4711",
         "title": "Chapitre 3. Méthodes de terrain",
-        "fixture": "openedition_chapter.html"
+        "fixture": "openedition_chapter.html",
+        "pdf_route": "/pdf/chapitre-3.pdf"
       },
       "expected": {
         "status": "success",
         "min_tries": 2
       },
-      "notes": "Deckt AC4 (eingebettetes PDF) zugleich auf einer realen Plattform ab."
+      "notes": "Deckt AC4 (eingebettetes PDF) zugleich auf einer realen Plattform ab; die aus dem pdf.js-Viewer extrahierte URL wird real geholt und die Datei verifiziert."
     },
     {
       "id": "gf-04",

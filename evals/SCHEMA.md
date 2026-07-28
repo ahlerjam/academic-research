@@ -77,9 +77,12 @@ ohne die Messqualitaet zu erhoehen — Begruendung in `docs/evals/STRATEGY.md`).
 | `oa-fetchers` | **Top-Level-Array** von Cases, ohne `component`-Feld | `tests/test_oa_fetchers.py` |
 
 `generic-fetcher` erweitert das Case-Objekt um `platform` (Ziel-Plattform ohne
-dedizierten Agent) und `input.fixture` (DOM-Fixture unter
-`tests/fixtures/dom_heuristics/`), damit die Navigationslogik offline gegen
-einen gespeicherten Seitenzustand fahren kann.
+dedizierten Agent), `input.fixture` (DOM-Fixture unter
+`tests/fixtures/dom_heuristics/`) und — bei den `platform_navigation`-Cases —
+`input.pdf_route` (Pfad, unter dem der lokale Test-Ursprung die PDF ausliefert).
+Damit faehrt die Navigationslogik offline gegen einen gespeicherten
+Seitenzustand und beschafft die Datei zugleich real ueber HTTP von
+127.0.0.1 (`tests/helpers/local_origin.py`).
 
 ```json
 {

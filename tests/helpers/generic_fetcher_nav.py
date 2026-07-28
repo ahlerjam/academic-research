@@ -5,11 +5,16 @@ ein reiner Prompt (kein Python unter ``agents/``, Issue #173). Damit die
 Entscheidungsregeln trotzdem pruefbar sind, bildet dieses Modul sie 1:1 nach und
 faehrt gegen gespeicherte DOM-Fixtures statt gegen einen echten Browser.
 
-**Grenze des Spiegels:** Er trifft Entscheidungen, er laedt nichts herunter.
-``_download()`` leitet nur den Zielpfad ab; ein echter Download passiert
-ausschliesslich im Agenten via ``browser-use``. Alles, was hier gruen ist, belegt
-die Navigations- und Abbruchlogik — nicht die Netz-Beschaffung (vgl.
-``docs/evals/STRATEGY.md``, Status ``structural``).
+Der Spiegel entscheidet **und** beschafft: ``_download()`` holt die Datei ueber
+den injizierten Transport (``assets``), schreibt sie und **verifiziert sie von
+der Platte** — existiert, groesser als null Bytes, beginnt mit ``%PDF-``. Erst
+danach gibt es ``status: success``. Damit ist ``downloaded`` eine Feststellung
+und keine Behauptung.
+
+**Grenze des Spiegels:** Der Transport ist injiziert. Im Agenten liefert ihn
+``browser-use``, im Test ein echter HTTP-Ursprung auf 127.0.0.1
+(``tests/helpers/local_origin.py``). Nicht abgedeckt bleibt allein das
+oeffentliche Netz der Zielplattformen (vgl. ``docs/evals/STRATEGY.md``).
 
 Gegen Drift zwischen Prompt und Spiegel sichert
 ``tests/test_generic_fetcher.py::TestPromptMirrorCoupling`` in beide Richtungen ab.
@@ -47,6 +52,7 @@ DECISIONS = (
     "pdf_link_detected",
     "embedded_pdf_detected",
     "downloaded",
+    "download_failed",
     "licensed_route",
     "paywall_no_license",
     "login_wall_no_license",
@@ -58,6 +64,9 @@ DECISIONS = (
 )
 
 STEP_BUDGET_EXHAUSTED = "step_budget_exhausted"
+
+#: Kopf jeder PDF-Datei — Pruefstein der Download-Verifikation.
+PDF_MAGIC = b"%PDF-"
 
 POSITIVE_PDF_TEXTS = (
     "Download PDF",
@@ -158,8 +167,11 @@ class GenericFetcherNavigator:
             ``auth_url``). Leeres Dict = kein Uni-Profil.
         pages: URL -> HTML. Entweder ein Mapping oder eine Callable; fehlende
             Seiten liefern ``None`` (= Seite nicht ladbar).
+        assets: URL -> Bytes. Der Datei-Transport (im Agenten der browser-use-
+            Download). Ohne ihn scheitert jeder Download — es gibt dann keinen
+            Volltext und damit kein ``success``.
         max_steps: Schritt-Budget; Default ist ``maxSteps`` aus dem Agent-Frontmatter.
-        download_dir: Zielverzeichnis fuer den abgeleiteten ``file_path``.
+        download_dir: Zielverzeichnis, wenn ``navigate()`` kein ``output_path`` bekommt.
     """
 
     def __init__(
@@ -168,12 +180,14 @@ class GenericFetcherNavigator:
         pages: Mapping[str, str] | Callable[[str], str | None],
         max_steps: int | None = None,
         download_dir: str = "/tmp",
+        assets: Mapping[str, bytes] | Callable[[str], bytes | None] | None = None,
     ) -> None:
         self.profile = dict(profile or {})
         self.licensed_sites = tuple(self.profile.get("licensed_sites") or ())
         self.proxy_pattern = self.profile.get("proxy_pattern") or ""
         self.auth_url = self.profile.get("auth_url") or ""
         self._pages = pages
+        self._assets = assets
         self.max_steps = load_max_steps() if max_steps is None else max_steps
         self.download_dir = download_dir
 
@@ -185,6 +199,14 @@ class GenericFetcherNavigator:
         if callable(self._pages):
             return self._pages(url)
         return self._pages.get(url)
+
+    def _retrieve(self, url: str) -> bytes | None:
+        """Holt die Datei ueber den Datei-Transport (im Agenten: browser-use-Download)."""
+        if self._assets is None:
+            return None
+        if callable(self._assets):
+            return self._assets(url)
+        return self._assets.get(url)
 
     # ------------------------------------------------------------------
     # Erkennungs-Heuristiken
@@ -295,8 +317,13 @@ class GenericFetcherNavigator:
         url: str,
         title: str | None = None,
         session_context: str | None = None,
+        output_path: str | None = None,
     ) -> dict:
-        """Fuehrt den Entscheidungsbaum aus und gibt das Output-Schema zurueck."""
+        """Fuehrt den Entscheidungsbaum aus und gibt das Output-Schema zurueck.
+
+        ``output_path`` ist der vom Master (`book-fetcher`) vorgegebene Zielpfad;
+        ohne ihn wird ein Name unter ``download_dir`` abgeleitet.
+        """
         tries: list[dict] = []
         current = url
         action = "load_page"
@@ -354,21 +381,27 @@ class GenericFetcherNavigator:
                 self._log(tries, step, action, current, f"PDF-Quelle {pdf_url}", decision)
                 if len(tries) >= self.max_steps:
                     return self._result("pickup_required", tries, reason=STEP_BUDGET_EXHAUSTED)
-                file_path = self._download(pdf_url)
+                file_path, observation = self._download(pdf_url, output_path)
                 self._log(
                     tries,
                     len(tries) + 1,
                     "download_pdf",
                     pdf_url,
-                    f"PDF gespeichert unter {file_path}",
-                    "downloaded",
+                    observation,
+                    "downloaded" if file_path else "download_failed",
                 )
+                if file_path is None:
+                    return self._result(
+                        "pickup_required",
+                        tries,
+                        reason=f"Kein verifizierter Volltext aus {pdf_url}: {observation}",
+                    )
                 return self._result(
                     "success",
                     tries,
                     file_path=file_path,
                     pdf_url=pdf_url,
-                    reason=f"Volltext ueber {decision} beschafft",
+                    reason=f"Volltext ueber {decision} beschafft und unter {file_path} verifiziert",
                 )
 
             if state == "licensed":
@@ -445,12 +478,58 @@ class GenericFetcherNavigator:
         assert embedded is not None  # classify_state hat open_access nur dann gesetzt
         return embedded[0], "embedded_pdf_detected"
 
-    def _download(self, pdf_url: str) -> str:
-        """Leitet den Zielpfad ab — der Spiegel laedt selbst nichts herunter."""
+    def _download(self, pdf_url: str, output_path: str | None) -> tuple[str | None, str]:
+        """Holt die Datei, schreibt sie und prueft sie von der Platte.
+
+        Returns:
+            ``(pfad, beobachtung)`` bei bestandener Pruefung, sonst
+            ``(None, beobachtung)``. Eine nicht bestandene Datei wird geloescht,
+            damit kein halbes Artefakt als Volltext liegen bleibt.
+        """
+        target = output_path or os.path.join(self.download_dir, self._derive_name(pdf_url))
+        payload = self._retrieve(pdf_url)
+        if payload is None:
+            # Gar keine Antwort — es gibt nichts zu schreiben und nichts zu pruefen.
+            return None, f"Download von {pdf_url} lieferte keine Daten"
+        # Eine leere Antwort wird geschrieben und faellt in der Pruefung durch:
+        # dieselbe Lage wie beim Agenten, dem browser-use eine 0-Byte-Datei ablegt.
+
+        parent = os.path.dirname(target)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(target, "wb") as fh:
+            fh.write(payload)
+
+        size = self._verify_artifact(target)
+        if size is None:
+            os.remove(target)
+            return None, (
+                f"Datei unter {target} bestand die Pruefung nicht "
+                f"(existiert / > 0 Bytes / beginnt mit {PDF_MAGIC.decode()})"
+            )
+        return target, f"PDF gespeichert unter {target} ({size} Bytes, beginnt mit %PDF-)"
+
+    @staticmethod
+    def _derive_name(pdf_url: str) -> str:
         name = os.path.basename(urlsplit(pdf_url).path) or "download"
-        if not name.casefold().endswith(".pdf"):
-            name = f"{name}.pdf"
-        return os.path.join(self.download_dir, name)
+        return name if name.casefold().endswith(".pdf") else f"{name}.pdf"
+
+    @staticmethod
+    def _verify_artifact(path: str) -> int | None:
+        """Evidenzschritt: die geschriebene Datei zurueckgelesen, nicht der Download behauptet.
+
+        Returns:
+            Die Groesse in Bytes, wenn die Datei existiert, nicht leer ist und mit
+            ``%PDF-`` beginnt; sonst ``None``.
+        """
+        if not os.path.isfile(path):
+            return None
+        size = os.path.getsize(path)
+        if size <= 0:
+            return None
+        with open(path, "rb") as fh:
+            head = fh.read(len(PDF_MAGIC))
+        return size if head == PDF_MAGIC else None
 
     @staticmethod
     def _log(

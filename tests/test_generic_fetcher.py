@@ -15,22 +15,28 @@ Output-Schema (Issue #448):
 import json
 import os
 import re
+from urllib.parse import urlsplit
 
 import pytest
 
 from tests.helpers.generic_fetcher_nav import (
     DECISIONS,
     PAGE_STATES,
+    PDF_MAGIC,
     VIEWER_PATTERNS,
     GenericFetcherNavigator,
     load_max_steps,
 )
+from tests.helpers.local_origin import LocalOrigin
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENT_FILE = os.path.join(REPO_ROOT, "agents", "generic-fetcher.md")
 AGENTS_DIR = os.path.join(REPO_ROOT, "agents")
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "dom_heuristics")
 EVALS_FILE = os.path.join(REPO_ROOT, "evals", "generic-fetcher", "evals.json")
+#: Echte PDF-Bytes als Nutzlast der lokalen Plattform-Origins (kein Attrappen-String).
+PDF_SOURCE = os.path.join(os.path.dirname(__file__), "fixtures", "fulltext", "nonce_paper.pdf")
+HTML_TYPE = "text/html; charset=utf-8"
 
 # Parsed once at module load to avoid repeated disk reads across test methods.
 _AGENT_FM: dict = {}
@@ -76,6 +82,12 @@ def _fixture(name: str) -> str:
 def _load_eval_cases() -> list[dict]:
     with open(EVALS_FILE, encoding="utf-8") as fh:
         return json.load(fh)["cases"]
+
+
+def _pdf_payload(marker: str) -> bytes:
+    """Echte PDF-Bytes, je Plattform unterscheidbar (angehaengter PDF-Kommentar)."""
+    with open(PDF_SOURCE, "rb") as fh:
+        return fh.read() + f"\n%% platform: {marker}\n".encode()
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +281,25 @@ class TestPromptMirrorCoupling:
         _, body = _agent()
         missing = [d for d in DECISIONS if d not in body]
         assert not missing, f"decision-Werte fehlen im Prompt: {missing}"
+
+    def test_prompt_requires_download_verification_before_success(self):
+        """Der Prompt fordert dieselbe Pruefung, die der Spiegel in `_verify_artifact` fuehrt."""
+        _, body = _agent()
+        marker = "## Download-Verifikation"
+        assert marker in body, "Prompt braucht einen Abschnitt '## Download-Verifikation'."
+        section = body.split(marker, 1)[1].split("\n## ", 1)[0]
+        for needle in (PDF_MAGIC.decode(), "Bytes", "download_failed", "output_path"):
+            assert needle in section, f"Verifikationskapitel nennt {needle!r} nicht: {section!r}"
+        assert re.search(r"nie\s+`success`\s+ohne\s+verifizierte", section), (
+            "Der Prompt muss `success` ohne verifizierte Datei ausdruecklich ausschliessen."
+        )
+
+    def test_prompt_binds_file_path_to_output_path(self):
+        """`file_path` ist der vom Master vorgegebene `output_path`, kein selbst gewaehlter Ort."""
+        _, body = _agent()
+        assert re.search(r"`file_path`.{0,200}`output_path`", body, re.S), (
+            "Der Prompt muss `file_path` an `output_path` binden."
+        )
 
     def test_try_object_keys_documented_in_prompt(self):
         """Das tries[]-Objektschema ist im Prompt beschrieben (kein Freitext-String mehr)."""
@@ -474,15 +505,50 @@ class TestPlatformCases:
             )
 
     @pytest.mark.parametrize("case", PLATFORM_CASES, ids=lambda c: c["id"])
-    def test_platform_fulltext_with_logged_path(self, case):
-        nav = GenericFetcherNavigator(
-            profile={}, pages={case["input"]["url"]: _fixture(case["input"]["fixture"])}
-        )
-        result = nav.navigate(case["input"]["url"], title=case["input"].get("title"))
+    def test_platform_fulltext_with_logged_path(self, case, tmp_path):
+        """AC1 end-to-end: Volltext wird real beschafft, liegt auf der Platte, Weg protokolliert.
+
+        Der Lauf geht ueber einen echten HTTP-Ursprung auf 127.0.0.1, der die
+        Plattform-DOM und die PDF-Route ausliefert: HTTP-GET, echte Bytes, echte
+        Datei. Nicht abgedeckt bleibt allein das oeffentliche Netz der drei
+        Plattformen (siehe docs/evals/STRATEGY.md).
+        """
+        page_route = urlsplit(case["input"]["url"]).path
+        pdf_route = case["input"]["pdf_route"]
+        payload = _pdf_payload(case["platform"])
+        target = str(tmp_path / f"{case['id']}.pdf")
+
+        with LocalOrigin(
+            {
+                page_route: (HTML_TYPE, _fixture(case["input"]["fixture"]).encode("utf-8")),
+                pdf_route: ("application/pdf", payload),
+            }
+        ) as origin:
+            nav = GenericFetcherNavigator(
+                profile={},
+                pages=origin.page_transport(),
+                assets=origin.asset_transport(),
+            )
+            result = nav.navigate(
+                origin.url(page_route),
+                title=case["input"].get("title"),
+                output_path=target,
+            )
 
         assert not _validate_output_schema(result), _validate_output_schema(result)
         assert result["status"] == "success", f"{case['id']}: {result}"
-        assert result["file_path"], f"{case['id']}: kein file_path"
+
+        # Beschafft heisst: die Datei liegt da, mit genau den ausgelieferten Bytes.
+        assert result["file_path"] == target, f"{case['id']}: {result['file_path']!r}"
+        assert os.path.isfile(target), f"{case['id']}: keine Datei unter {target}"
+        with open(target, "rb") as fh:
+            written = fh.read()
+        assert written == payload, (
+            f"{case['id']}: Bytes weichen ab ({len(written)} statt {len(payload)})"
+        )
+        assert written.startswith(PDF_MAGIC), f"{case['id']}: kein PDF-Kopf"
+
+        # Weg protokolliert: jeder Eintrag vollstaendig, der Download nachweisbar.
         assert len(result["tries"]) >= 2, (
             f"{case['id']}: Weg nicht protokolliert: {result['tries']}"
         )
@@ -490,6 +556,74 @@ class TestPlatformCases:
             assert TRY_KEYS <= set(entry), f"{case['id']}: unvollstaendiger tries-Eintrag {entry}"
             assert entry["observation"], f"{case['id']}: leere observation"
             assert entry["decision"] in DECISIONS, f"{case['id']}: unbekannte decision {entry}"
+        downloaded = [t for t in result["tries"] if t["decision"] == "downloaded"]
+        assert len(downloaded) == 1, f"{case['id']}: {result['tries']}"
+        assert urlsplit(downloaded[0]["url"]).path == pdf_route, downloaded[0]
+        assert str(len(payload)) in downloaded[0]["observation"], (
+            f"{case['id']}: Protokoll nennt die verifizierte Groesse nicht: {downloaded[0]}"
+        )
+
+    def test_dead_pdf_route_is_not_reported_as_success(self, tmp_path):
+        """Die Seite verspricht ein PDF, die Route ist tot — dann gibt es kein `success`."""
+        target = str(tmp_path / "dead.pdf")
+        routes = {"/article/1": (HTML_TYPE, _fixture("pdf_link.html").encode("utf-8"))}
+        with LocalOrigin(routes) as origin:
+            nav = GenericFetcherNavigator(
+                profile={}, pages=origin.page_transport(), assets=origin.asset_transport()
+            )
+            result = nav.navigate(
+                origin.url("/article/1"), title="Advanced Topics in AI", output_path=target
+            )
+
+        assert result["status"] == "pickup_required", result
+        assert "file_path" not in result, result
+        assert not os.path.exists(target), "Kein Phantom-Artefakt bei fehlgeschlagenem Download"
+        assert result["tries"][-1]["decision"] == "download_failed", result["tries"]
+
+    def test_empty_file_is_not_success(self, tmp_path):
+        """Die Route liefert 200 mit application/pdf, aber null Bytes — kein Volltext."""
+        target = str(tmp_path / "empty.pdf")
+        with LocalOrigin(
+            {
+                "/article/1": (HTML_TYPE, _fixture("pdf_link.html").encode("utf-8")),
+                "/files/advanced-topics-ai.pdf": ("application/pdf", b""),
+            }
+        ) as origin:
+            nav = GenericFetcherNavigator(
+                profile={}, pages=origin.page_transport(), assets=origin.asset_transport()
+            )
+            result = nav.navigate(
+                origin.url("/article/1"), title="Advanced Topics in AI", output_path=target
+            )
+
+        assert result["status"] == "pickup_required", result
+        assert "file_path" not in result, result
+        assert not os.path.exists(target), "Eine leere Datei darf nicht als Volltext liegen bleiben"
+        assert result["tries"][-1]["decision"] == "download_failed", result["tries"]
+
+    def test_html_error_page_instead_of_pdf_is_not_success(self, tmp_path):
+        """Soft-404: Die PDF-Route antwortet mit 200 und HTML — keine verifizierte PDF."""
+        target = str(tmp_path / "soft404.pdf")
+        with LocalOrigin(
+            {
+                "/article/1": (HTML_TYPE, _fixture("pdf_link.html").encode("utf-8")),
+                "/files/advanced-topics-ai.pdf": (
+                    HTML_TYPE,
+                    b"<html><body>Dieses Dokument ist nicht mehr verfuegbar.</body></html>",
+                ),
+            }
+        ) as origin:
+            nav = GenericFetcherNavigator(
+                profile={}, pages=origin.page_transport(), assets=origin.asset_transport()
+            )
+            result = nav.navigate(
+                origin.url("/article/1"), title="Advanced Topics in AI", output_path=target
+            )
+
+        assert result["status"] == "pickup_required", result
+        assert "file_path" not in result, result
+        assert not os.path.exists(target), "Eine Nicht-PDF darf nicht als Volltext liegen bleiben"
+        assert result["tries"][-1]["decision"] == "download_failed", result["tries"]
 
 
 # ---------------------------------------------------------------------------
@@ -580,20 +714,25 @@ class TestLicensedRoute:
         assert result["status"] == "auth_required", result
         assert result["url"] == "https://login.tum.de/idp/"
 
-    def test_session_context_reuses_existing_session(self):
+    def test_session_context_reuses_existing_session(self, tmp_path):
         """Mit bestehender Session wird der Profil-Weg direkt genutzt statt erneut Auth zu melden."""
         url = "https://publisher.example.org/book/9780123"
         proxied = "https://publisher.example.org.proxy.ub.tum.de/book/9780123"
+        payload = _pdf_payload("licensed")
         nav = GenericFetcherNavigator(
             profile=LICENSED_PROFILE,
             pages={url: _fixture("licensed_gate.html"), proxied: _fixture("pdf_link.html")},
+            assets={
+                "https://publisher.example.org.proxy.ub.tum.de/files/advanced-topics-ai.pdf": payload
+            },
+            download_dir=str(tmp_path),
         )
         result = nav.navigate(
             url, title="Advanced Topics in AI", session_context="browser-use:active:tum"
         )
 
         assert result["status"] == "success", result
-        assert result["file_path"]
+        assert os.path.isfile(result["file_path"]), result
         actions = [t["action"] for t in result["tries"]]
         assert "open_profile_route" in actions, actions
 
@@ -620,26 +759,37 @@ class TestEmbeddedViewer:
             ("embedded_object.html", "https://viewer.example.org/docs/paper.pdf"),
         ],
     )
-    def test_embedded_pdf_detected_and_saved(self, fixture, expected_pdf):
+    def test_embedded_pdf_detected_and_saved(self, fixture, expected_pdf, tmp_path):
         url = "https://viewer.example.org/read/42"
-        nav = GenericFetcherNavigator(profile={}, pages={url: _fixture(fixture)})
+        payload = _pdf_payload("embedded")
+        nav = GenericFetcherNavigator(
+            profile={},
+            pages={url: _fixture(fixture)},
+            assets={expected_pdf: payload},
+            download_dir=str(tmp_path),
+        )
         result = nav.navigate(url, title="Embedded Paper")
 
         assert result["status"] == "success", result
-        assert result["file_path"], result
+        assert os.path.isfile(result["file_path"]), result
         assert result["pdf_url"] == expected_pdf, result
         decisions = [t["decision"] for t in result["tries"]]
         assert "embedded_pdf_detected" in decisions, decisions
 
-    def test_content_type_pdf_after_redirect_is_detected(self):
+    def test_content_type_pdf_after_redirect_is_detected(self, tmp_path):
         url = "https://viewer.example.org/download/42"
+        payload = _pdf_payload("direct")
         nav = GenericFetcherNavigator(
-            profile={}, pages={url: "Content-Type: application/pdf\n\n%PDF-1.7 binary"}
+            profile={},
+            pages={url: "Content-Type: application/pdf\n\n%PDF-1.7 binary"},
+            assets={url: payload},
+            download_dir=str(tmp_path),
         )
         result = nav.navigate(url, title="Direct PDF Response")
 
         assert result["status"] == "success", result
         assert result["pdf_url"] == url
+        assert os.path.isfile(result["file_path"]), result
 
 
 # ---------------------------------------------------------------------------
