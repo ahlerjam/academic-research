@@ -97,7 +97,8 @@ Resolution: arXiv-API (id_list=) bzw. Crossref → CSL-JSON je Kandidat
     ↓
 vault.add_paper(..., provenance="github-repo") pro erfolgreich aufgelöstem Kandidat
     ↓
-Ergebnis: {candidates: [...], message: "N Kandidat(en) ... "}
+Ergebnis: {candidates: [...], status: "ok"|"incomplete", errors: [...],
+           message: "N Kandidat(en) ... "}
 ```
 
 ## Verhalten
@@ -113,6 +114,9 @@ Ergebnis: {candidates: [...], message: "N Kandidat(en) ... "}
    (Dedup über bestehende DOI-Logik des Vaults)
 8. Ergebnis melden: N Kandidaten gefunden/abgelegt, oder verständliche
    Meldung ohne Treffer
+9. Bei `status: "incomplete"` (mindestens eine Quelle war nicht lesbar) die
+   Fehlerliste an den User weitergeben und **nicht** behaupten, das Repo
+   enthalte keine Referenz — dieser Lauf hat sie schlicht nicht gesehen
 
 ## Abgrenzung
 
@@ -141,7 +145,9 @@ Ergebnis: {candidates: [...], message: "N Kandidat(en) ... "}
   Freitext-Erwähnungen ohne Link/ID) — dokumentierte Einschränkung, kein
   Anspruch auf Vollständigkeit
 - GitHub-API-Rate-Limit (60 Requests/Stunde ohne Token) kann zu 403/429
-  führen — wird wie Netzwerkfehler behandelt (kein Crash, leeres Ergebnis)
+  führen. Kein Crash, aber das Ergebnis ist dann `status: "incomplete"` mit
+  gefüllter `errors`-Liste und CLI-Exit-Code 2: „nicht gelesen" ist **nicht**
+  „nicht vorhanden", nur ein sauberes HTTP 404 belegt echte Abwesenheit
 - `CITATION.cff`-Schema variiert zwischen Repos (`preferred-citation` vs.
   Top-Level-Felder, fehlende Keys) — Parsing ist rein `.get()`-basiert
 - Netzausfälle bei arXiv/Crossref führen zu übersprungenen Kandidaten statt

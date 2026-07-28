@@ -8,6 +8,12 @@ CITATION.cff (YAML), loest sie ueber die arXiv-API bzw. Crossref zu CSL-JSON
 auf und schreibt Treffer mit provenance="github-repo" in den Vault. Ohne
 jeden Treffer: strukturiertes Leer-Ergebnis statt Exception oder Fabrikation.
 
+Epistemische Grundregel dieses Moduls (Review-Fund PR #433): "nicht gelesen"
+ist NICHT "nicht vorhanden". Ein fehlgeschlagener Fetch (403/429/5xx, Timeout,
+fehlendes `requests`) liefert kein Wissen ueber den Repo-Inhalt und darf
+niemals als belegte Aussage "das Repo enthaelt keine Referenz" ausgegeben
+werden. Nur ein sauberes HTTP 404 belegt echte Abwesenheit einer Datei.
+
 CLI:
     python skills/github-repo-research/scripts/analyze_repo.py \
         --url https://github.com/<owner>/<repo> --db vault.db
@@ -24,6 +30,7 @@ import sys
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import NamedTuple
 
 # ---------------------------------------------------------------------------
 # Optional-Dependencies (graceful fallback, analog zu reading-list-import)
@@ -93,6 +100,47 @@ def parse_github_url(url: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 
+class FetchResult(NamedTuple):
+    """Ergebnis eines GitHub-Fetches mit EXPLIZITER Fehler-Unterscheidung.
+
+    Vor dem Fix (Review-Fund PR #433) gaben die Fetch-Funktionen fuer drei
+    voellig verschiedene Ausgaenge dasselbe `None` zurueck:
+
+    1. HTTP 200, Datei gelesen, aber ohne Inhalt
+    2. HTTP 404 -- Datei existiert nachweislich nicht (Beleg fuer Abwesenheit)
+    3. HTTP 403/429/5xx, Timeout, DNS-Fehler, fehlendes `requests`
+       (Fetch fehlgeschlagen -- KEINE Information ueber den Repo-Inhalt)
+
+    analyze_repo() konnte Fall 3 dadurch nicht von Fall 2 unterscheiden und
+    meldete einen Rate-Limit-Treffer als belegte Aussage "Repo enthaelt keine
+    Referenz". Deshalb trennt dieser Typ beides sauber:
+
+    - `text`  : gelesener Inhalt, oder None (nicht vorhanden bzw. nicht lesbar)
+    - `error` : None = Fetch war erfolgreich; sonst Klartext-Grund des Fehlers
+    """
+
+    text: str | None
+    error: str | None = None
+
+    @property
+    def failed(self) -> bool:
+        """True, wenn der Fetch fehlschlug -- dann sagt `text is None` NICHTS
+        ueber die Existenz der Datei aus."""
+        return self.error is not None
+
+
+_NO_REQUESTS_ERROR = "Python-Paket 'requests' nicht installiert -- kein GitHub-Zugriff moeglich"
+
+
+def _describe_http_status(status_code: int) -> str:
+    """Klartext-Grund fuer einen nicht verwertbaren HTTP-Status."""
+    if status_code in (403, 429):
+        return f"HTTP {status_code} (GitHub-Rate-Limit; ohne Token 60 Requests/Stunde)"
+    if status_code >= 500:
+        return f"HTTP {status_code} (GitHub-Serverfehler)"
+    return f"HTTP {status_code}"
+
+
 def _decode_github_content(payload: dict) -> str | None:
     """Dekodiert den 'content'-Wert einer GitHub-Contents-API-Antwort."""
     content = payload.get("content")
@@ -106,55 +154,61 @@ def _decode_github_content(payload: dict) -> str | None:
     return content
 
 
-def fetch_readme(owner: str, repo: str) -> str | None:
+def _fetch_github_text(url: str) -> FetchResult:
+    """Liest eine GitHub-API-Ressource als Text -- wirft nie eine Exception.
+
+    Unterscheidet strikt zwischen "nachweislich nicht vorhanden" (HTTP 404 ->
+    FetchResult(None) ohne Fehler) und "konnte nicht gelesen werden" (alles
+    andere -> FetchResult(None, <Grund>)).
+    """
+    if not _REQUESTS_AVAILABLE:
+        return FetchResult(None, _NO_REQUESTS_ERROR)
+    try:
+        resp = requests.get(
+            url,
+            timeout=_TIMEOUT,
+            headers={"Accept": "application/vnd.github+json", "User-Agent": _USER_AGENT},
+        )
+    except Exception as exc:  # Timeout, DNS, Connection-Reset, ...
+        return FetchResult(None, f"Netzwerkfehler: {exc}")
+
+    # 404 ist die EINZIGE belastbare Negativ-Auskunft: die Datei (bzw. das
+    # oeffentliche Repo) existiert nicht. Alles andere ist ein Fehlschlag.
+    if resp.status_code == 404:
+        return FetchResult(None)
+    if resp.status_code != 200:
+        return FetchResult(None, _describe_http_status(resp.status_code))
+
+    try:
+        payload = resp.json()
+    except Exception as exc:
+        return FetchResult(None, f"Antwort nicht als JSON lesbar: {exc}")
+    if not isinstance(payload, dict):
+        return FetchResult(None, "Unerwartetes Antwortformat der GitHub-API")
+
+    text = _decode_github_content(payload)
+    if text is None:
+        return FetchResult(None, "Inhalt der GitHub-Antwort nicht dekodierbar")
+    return FetchResult(text)
+
+
+def fetch_readme(owner: str, repo: str) -> FetchResult:
     """Holt den README-Text eines Repos ueber die GitHub-REST-API.
 
-    Gibt None zurueck bei 404/Rate-Limit/Netzwerkfehler -- niemals eine
-    Exception (Grundlage fuer AC2: kein Crash bei fehlender Referenz).
+    Liefert FetchResult(text) bei Erfolg, FetchResult(None) wenn das Repo
+    nachweislich kein README hat (404) und FetchResult(None, <Grund>) wenn der
+    Abruf fehlschlug -- niemals eine Exception (AC2: kein Crash).
     """
-    if not _REQUESTS_AVAILABLE:
-        return None
-    url = f"{GITHUB_API}/repos/{owner}/{repo}/readme"
-    try:
-        resp = requests.get(
-            url,
-            timeout=_TIMEOUT,
-            headers={"Accept": "application/vnd.github+json", "User-Agent": _USER_AGENT},
-        )
-    except Exception:
-        return None
-    if resp.status_code != 200:
-        return None
-    try:
-        payload = resp.json()
-    except Exception:
-        return None
-    return _decode_github_content(payload)
+    return _fetch_github_text(f"{GITHUB_API}/repos/{owner}/{repo}/readme")
 
 
-def fetch_citation_cff(owner: str, repo: str) -> str | None:
+def fetch_citation_cff(owner: str, repo: str) -> FetchResult:
     """Holt CITATION.cff eines Repos ueber die GitHub-Contents-API.
 
-    Gibt None zurueck falls die Datei fehlt (404) oder bei Netzwerkfehler.
+    Gleiche Semantik wie fetch_readme(): 404 = Datei nachweislich nicht
+    vorhanden (der Normalfall), alles andere = Fehlschlag mit Grund.
     """
-    if not _REQUESTS_AVAILABLE:
-        return None
-    url = f"{GITHUB_API}/repos/{owner}/{repo}/contents/CITATION.cff"
-    try:
-        resp = requests.get(
-            url,
-            timeout=_TIMEOUT,
-            headers={"Accept": "application/vnd.github+json", "User-Agent": _USER_AGENT},
-        )
-    except Exception:
-        return None
-    if resp.status_code != 200:
-        return None
-    try:
-        payload = resp.json()
-    except Exception:
-        return None
-    return _decode_github_content(payload)
+    return _fetch_github_text(f"{GITHUB_API}/repos/{owner}/{repo}/contents/CITATION.cff")
 
 
 # ---------------------------------------------------------------------------
@@ -464,36 +518,65 @@ def analyze_repo(url: str, db_path: str = "vault.db") -> dict:
     Ohne erkennbare Referenz: strukturiertes Leer-Ergebnis statt Exception
     oder Fabrikation (AC2).
 
+    Konnte eine Quelle nicht gelesen werden (Rate-Limit, Timeout, fehlendes
+    `requests`), ist das Ergebnis `status="incomplete"`: die Analyse sagt dann
+    NICHTS darueber aus, ob das Repo eine Referenz enthaelt (Review-Fund
+    PR #433). Nur ein sauberes 404 belegt echte Abwesenheit.
+
     Args:
         url: GitHub-Repo-URL
         db_path: Pfad zur Vault-SQLite-Datenbank
 
     Returns:
         {"candidates": [{"paper_id", "doi"?, "arxiv_id"?, "source"}, ...],
+         "status": "ok" | "incomplete",
+         "errors": [str, ...],
          "message": str}
     """
     owner, repo = parse_github_url(url)
 
-    readme_text = fetch_readme(owner, repo)
-    cff_text = fetch_citation_cff(owner, repo)
+    readme = fetch_readme(owner, repo)
+    cff = fetch_citation_cff(owner, repo)
 
-    arxiv_ids = extract_arxiv_ids(readme_text)
-    dois = extract_dois(readme_text)
+    # Fehlgeschlagene Fetches sammeln: sie begrenzen, was ueberhaupt
+    # behauptet werden darf.
+    errors: list[str] = []
+    if readme.failed:
+        errors.append(f"README: {readme.error}")
+    if cff.failed:
+        errors.append(f"CITATION.cff: {cff.error}")
+    status = "incomplete" if errors else "ok"
 
-    cff_data = parse_citation_cff(cff_text)
+    arxiv_ids = extract_arxiv_ids(readme.text)
+    dois = extract_dois(readme.text)
+
+    cff_data = parse_citation_cff(cff.text)
     if cff_data and cff_data.get("doi"):
         cff_doi = cff_data["doi"]
         if cff_doi.lower() not in [d.lower() for d in dois]:
             dois.append(cff_doi)
 
     if not arxiv_ids and not dois:
-        return {
-            "candidates": [],
-            "message": (
+        if errors:
+            # KEINE Absenz-Aussage: die betroffene Quelle wurde nie gesehen.
+            message = (
+                f"Unbestaetigt: {owner}/{repo} konnte nicht vollstaendig gelesen werden "
+                f"({'; '.join(errors)}). Daraus folgt NICHT, dass das Repo keine "
+                f"arXiv-ID oder DOI enthaelt -- bitte spaeter erneut versuchen "
+                f"(GitHub-Rate-Limit: mit Token deutlich hoeher)."
+            )
+        elif readme.text is None and cff.text is None:
+            message = (
+                f"Kein Kandidaten-Paper gefunden: {owner}/{repo} hat weder ein README "
+                f"noch eine CITATION.cff (beide von der GitHub-API als nicht vorhanden "
+                f"gemeldet)."
+            )
+        else:
+            message = (
                 f"Kein Kandidaten-Paper gefunden: weder README noch CITATION.cff von "
                 f"{owner}/{repo} enthalten eine erkennbare arXiv-ID oder DOI."
-            ),
-        }
+            )
+        return {"candidates": [], "status": status, "errors": errors, "message": message}
 
     candidates: list[dict] = []
 
@@ -519,6 +602,8 @@ def analyze_repo(url: str, db_path: str = "vault.db") -> dict:
     if not candidates:
         return {
             "candidates": [],
+            "status": status,
+            "errors": errors,
             "message": (
                 f"Referenz(en) in {owner}/{repo} erkannt ({len(arxiv_ids)} arXiv-ID(s), "
                 f"{len(dois)} DOI(s)), aber keine liess sich aufloesen "
@@ -526,9 +611,19 @@ def analyze_repo(url: str, db_path: str = "vault.db") -> dict:
             ),
         }
 
+    message = f"{len(candidates)} Kandidat(en) aus {owner}/{repo} in den Vault geschrieben."
+    if errors:
+        # Treffer gefunden, aber nicht alle Quellen gelesen -> die Liste kann
+        # unvollstaendig sein; das gehoert offen in die Meldung.
+        message += (
+            f" Achtung, Ergebnis unvollstaendig: {'; '.join(errors)} -- "
+            f"es koennen weitere Referenzen uebersehen worden sein."
+        )
     return {
         "candidates": candidates,
-        "message": f"{len(candidates)} Kandidat(en) aus {owner}/{repo} in den Vault geschrieben.",
+        "status": status,
+        "errors": errors,
+        "message": message,
     }
 
 
@@ -551,6 +646,14 @@ def _cli() -> None:
     print(result["message"])
     for c in result["candidates"]:
         print(f"  - {c}")
+
+    # Exit-Code 2 bei unvollstaendigem Ergebnis: ein aufrufendes Skript darf
+    # "keine Kandidaten wegen Rate-Limit" nicht als sauberen Negativ-Befund
+    # (Exit 0) verbuchen.
+    if result.get("status") == "incomplete":
+        for err in result.get("errors", []):
+            print(f"  ! {err}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":

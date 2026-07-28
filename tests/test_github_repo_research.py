@@ -5,6 +5,9 @@ Testet analyze_repo.py:
   in den Vault geschrieben (AC1)
 - README ohne erkennbare Publikations-Referenz -> strukturiertes
   Leer-Ergebnis, kein Crash, keine Fabrikation (AC2)
+- Fetch-Fehler (403/Timeout/kein requests) -> Ergebnis ist als unvollstaendig
+  markiert und behauptet NICHT, das Repo enthalte keine Referenz (AC2,
+  Review-Fund PR #433)
 - Frontmatter (allowed-tools) und Quelltext verbieten jede
   Code-Ausfuehrung des analysierten Zielrepos (AC3)
 - Beide Faelle sind hier gemeinsam gruen (AC4)
@@ -157,8 +160,8 @@ class TestAnalyzeRepoHit:
         readme_text = _read("readme_with_arxiv.md")
 
         with (
-            patch.object(agr, "fetch_readme", return_value=readme_text),
-            patch.object(agr, "fetch_citation_cff", return_value=None),
+            patch.object(agr, "fetch_readme", return_value=agr.FetchResult(readme_text)),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(None)),
             patch.object(agr, "resolve_arxiv_id", return_value=ARXIV_CSL_JSON) as mock_resolve,
             patch.object(agr, "vault_add_paper") as mock_add,
         ):
@@ -186,8 +189,10 @@ class TestAnalyzeRepoHit:
         )
 
         with (
-            patch.object(agr, "fetch_readme", return_value="# My Tool\n\nNo direct link here.\n"),
-            patch.object(agr, "fetch_citation_cff", return_value=cff_text),
+            patch.object(
+                agr, "fetch_readme", return_value=agr.FetchResult("# My Tool\n\nNo link.\n")
+            ),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(cff_text)),
             patch.object(agr, "resolve_doi", return_value=crossref_csl) as mock_resolve,
             patch.object(agr, "vault_add_paper") as mock_add,
         ):
@@ -228,8 +233,10 @@ class TestAnalyzeRepoHit:
         mock_resp.json.return_value = {"message": crossref_message}
 
         with (
-            patch.object(agr, "fetch_readme", return_value="# My Tool\n\nNo direct link here.\n"),
-            patch.object(agr, "fetch_citation_cff", return_value=cff_text),
+            patch.object(
+                agr, "fetch_readme", return_value=agr.FetchResult("# My Tool\n\nNo link.\n")
+            ),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(cff_text)),
             patch("requests.get", return_value=mock_resp),
         ):
             result = agr.analyze_repo("https://github.com/foo/bar", db_path=temp_vault_db)
@@ -248,8 +255,8 @@ class TestAnalyzeRepoNoHit:
         readme_text = _read("readme_without_reference.md")
 
         with (
-            patch.object(agr, "fetch_readme", return_value=readme_text),
-            patch.object(agr, "fetch_citation_cff", return_value=None),
+            patch.object(agr, "fetch_readme", return_value=agr.FetchResult(readme_text)),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(None)),
             patch.object(agr, "vault_add_paper") as mock_add,
         ):
             result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
@@ -261,13 +268,30 @@ class TestAnalyzeRepoNoHit:
     def test_readme_fetch_failure_does_not_crash(self):
         """GitHub-API nicht erreichbar (Rate-Limit/Netzfehler) -> kein Crash (AC2)."""
         with (
-            patch.object(agr, "fetch_readme", return_value=None),
-            patch.object(agr, "fetch_citation_cff", return_value=None),
+            patch.object(
+                agr, "fetch_readme", return_value=agr.FetchResult(None, "HTTP 403 (Rate-Limit?)")
+            ),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(None)),
             patch.object(agr, "vault_add_paper") as mock_add,
         ):
             result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
 
         assert result["candidates"] == []
+        mock_add.assert_not_called()
+
+    def test_both_sources_absent_reports_absence_not_error(self):
+        """Repo hat weder README noch CITATION.cff (beide 404) -> das IST ein Beleg
+        fuer Abwesenheit und darf als solcher gemeldet werden (status 'ok')."""
+        with (
+            patch.object(agr, "fetch_readme", return_value=agr.FetchResult(None)),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(None)),
+            patch.object(agr, "vault_add_paper") as mock_add,
+        ):
+            result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
+
+        assert result["candidates"] == []
+        assert result["status"] == "ok"
+        assert result["errors"] == []
         mock_add.assert_not_called()
 
     def test_resolution_failure_returns_no_candidates_not_fabricated(self):
@@ -275,8 +299,8 @@ class TestAnalyzeRepoNoHit:
         readme_text = _read("readme_with_arxiv.md")
 
         with (
-            patch.object(agr, "fetch_readme", return_value=readme_text),
-            patch.object(agr, "fetch_citation_cff", return_value=None),
+            patch.object(agr, "fetch_readme", return_value=agr.FetchResult(readme_text)),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(None)),
             patch.object(agr, "resolve_arxiv_id", return_value=None),
             patch.object(agr, "vault_add_paper") as mock_add,
         ):
@@ -284,6 +308,136 @@ class TestAnalyzeRepoNoHit:
 
         assert result["candidates"] == []
         mock_add.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# AC2 (Review-Fund PR #433): Fetch-Fehler != Beleg fuer Abwesenheit
+# ---------------------------------------------------------------------------
+
+# Wortlaut-Fragment der Absenz-Behauptung ("... enthalten eine erkennbare
+# arXiv-ID oder DOI"). Genau diese Aussage darf NIE fallen, wenn README bzw.
+# CITATION.cff gar nicht gelesen werden konnten.
+_ABSENCE_CLAIM_FRAGMENT = "enthalten eine erkennbare"
+
+
+class TestFetchErrorIsNotEvidenceOfAbsence:
+    """Ein 403/404-freier Fehlschlag (Rate-Limit, Timeout, fehlendes `requests`)
+    liefert KEIN Wissen ueber den Repo-Inhalt. analyze_repo() darf daraus
+    deshalb nicht die belegte Aussage 'Repo enthaelt keine Referenz' machen
+    (analyze_repo.py:489 vor diesem Fix) -- Evidence before assertions.
+    """
+
+    def test_fetch_readme_rate_limit_is_error_not_absence(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 403
+        with patch("requests.get", return_value=mock_resp):
+            result = agr.fetch_readme("foo", "bar")
+
+        assert result.text is None
+        assert result.failed
+        assert "403" in result.error
+
+    def test_fetch_readme_404_is_absence_not_error(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        with patch("requests.get", return_value=mock_resp):
+            result = agr.fetch_readme("foo", "bar")
+
+        assert result.text is None
+        assert not result.failed
+
+    def test_fetch_readme_network_exception_is_error(self):
+        with patch("requests.get", side_effect=OSError("connection timed out")):
+            result = agr.fetch_readme("foo", "bar")
+
+        assert result.failed
+        assert "connection timed out" in result.error
+
+    def test_fetch_citation_cff_rate_limit_is_error_not_absence(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 429
+        with patch("requests.get", return_value=mock_resp):
+            result = agr.fetch_citation_cff("foo", "bar")
+
+        assert result.text is None
+        assert result.failed
+
+    def test_missing_requests_is_error_not_absence(self):
+        with patch.object(agr, "_REQUESTS_AVAILABLE", False):
+            assert agr.fetch_readme("foo", "bar").failed
+            assert agr.fetch_citation_cff("foo", "bar").failed
+
+    def test_analyze_repo_marks_result_incomplete_and_avoids_absence_claim(self):
+        with (
+            patch.object(
+                agr, "fetch_readme", return_value=agr.FetchResult(None, "HTTP 403 (Rate-Limit?)")
+            ),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(None)),
+            patch.object(agr, "vault_add_paper") as mock_add,
+        ):
+            result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
+
+        assert result["candidates"] == []
+        assert result["status"] == "incomplete"
+        assert any("403" in e for e in result["errors"])
+        assert _ABSENCE_CLAIM_FRAGMENT not in result["message"]
+        assert "403" in result["message"]
+        mock_add.assert_not_called()
+
+    def test_analyze_repo_reports_fetch_error_even_when_candidates_found(self):
+        """CITATION.cff liefert einen Treffer, das README blieb aber ungelesen:
+        das Ergebnis ist trotzdem unvollstaendig und muss das sagen."""
+        cff_text = (
+            "cff-version: 1.2.0\ntitle: My Tool\npreferred-citation:\n"
+            "  doi: 10.1234/abcd\n  title: The Paper Behind My Tool\n"
+        )
+        crossref_csl = '{"type": "article-journal", "title": "T", "DOI": "10.1234/abcd"}'
+
+        with (
+            patch.object(
+                agr, "fetch_readme", return_value=agr.FetchResult(None, "Netzwerkfehler: timeout")
+            ),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(cff_text)),
+            patch.object(agr, "resolve_doi", return_value=crossref_csl),
+            patch.object(agr, "vault_add_paper"),
+        ):
+            result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
+
+        assert len(result["candidates"]) == 1
+        assert result["status"] == "incomplete"
+        assert any("timeout" in e for e in result["errors"])
+
+    def test_successful_run_is_status_ok_without_errors(self):
+        readme_text = _read("readme_with_arxiv.md")
+        with (
+            patch.object(agr, "fetch_readme", return_value=agr.FetchResult(readme_text)),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(None)),
+            patch.object(agr, "resolve_arxiv_id", return_value=ARXIV_CSL_JSON),
+            patch.object(agr, "vault_add_paper"),
+        ):
+            result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
+
+        assert result["status"] == "ok"
+        assert result["errors"] == []
+
+    def test_cli_exits_nonzero_on_incomplete_result(self):
+        """Ein unvollstaendiges Ergebnis darf einem Skript nicht als Erfolg
+        (Exit 0) gemeldet werden."""
+        incomplete = {
+            "candidates": [],
+            "status": "incomplete",
+            "errors": ["README: HTTP 403 (Rate-Limit?)"],
+            "message": "unbestaetigt",
+        }
+        argv = ["analyze_repo.py", "--url", "https://github.com/foo/bar"]
+        with (
+            patch.object(agr, "analyze_repo", return_value=incomplete),
+            patch.object(sys, "argv", argv),
+            pytest.raises(SystemExit) as exc,
+        ):
+            agr._cli()
+
+        assert exc.value.code != 0
 
 
 # ---------------------------------------------------------------------------
