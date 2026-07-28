@@ -87,7 +87,15 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/zotero-import/scripts/zotero_pull.py \
 3. Für jedes Item: DOI/ISBN-Dedup gegen Vault
 4. Neue Items: `vault.add_paper()` + ggf. PDF-Attachment herunterladen
 5. PDFs: `vault.ensure_file()` → Files-API-Upload + file_id cachen
-6. Ergebnis ausgeben: N importiert, M übersprungen, Fehler
+6. Annotation-Kinder (Highlights/Notizen) des ersten PDF-Attachments werden
+   als Quotes importiert: Text aus `annotationText` (Fallback
+   `annotationComment` für reine Notiz-Annotationen ohne markierten Text),
+   Seitenzahl aus `annotationPageLabel` — nur exakt-numerische Labels werden
+   zu `printed_page`, alles andere (römische Ziffern, Bereiche, leer) ergibt
+   `printed_page = NULL` statt eines Rateversuchs. Jede Quote wird mit
+   `extraction_method="manual"` angelegt. Ein Fehler bei einer einzelnen
+   Annotation bricht den Item-Import nicht ab, sondern landet in den Fehlern.
+7. Ergebnis ausgeben: N importiert, M übersprungen, Fehler, importierte Quotes
 
 ## Sicherheitshinweise
 
@@ -99,5 +107,25 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/zotero-import/scripts/zotero_pull.py \
 
 - Items ohne DOI und ISBN können nicht dedupliziert werden — sie werden bei
   jedem Import neu angelegt
-- Nur das erste PDF-Attachment pro Item wird verarbeitet
-- Annotations, Notes und verschachtelte Attachments werden nicht importiert
+- Nur das erste PDF-Attachment pro Item wird verarbeitet — Annotationen an
+  weiteren Attachments desselben Items werden nicht importiert
+- Notes (eigenständige Zotero-Notiz-Items) und verschachtelte Attachments
+  bleiben unberücksichtigt; nur Annotation-Kinder des betrachteten
+  PDF-Attachments werden verarbeitet
+- Dedup-Kurzschluss: Ist ein Paper bereits per DOI/ISBN im Vault, wird die
+  Attachment- und damit Annotation-Verarbeitung bei erneutem Lauf komplett
+  übersprungen — neue Annotationen zu einem bereits importierten Paper werden
+  bei einem Re-Import nicht nachgezogen
+
+## Optionale Companion-Integration: 54yyyu/zotero-mcp
+
+[54yyyu/zotero-mcp](https://github.com/54yyyu/zotero-mcp) ist ein separater,
+eigenständiger MCP-Server für tiefere Zotero-Interaktion (Suche, Notizen,
+Volltext) direkt aus einem MCP-Client heraus. Lizenz: MIT. Stand der
+Verifikation (Issue #395): ~4,45k GitHub-Stars.
+
+Dieser Skill bindet `54yyyu/zotero-mcp` **nicht** automatisch ein (keine
+Einbindung in `.mcp.json`) — es ist eine optionale Ergänzung, die Nutzer bei
+Bedarf selbst als zusätzlichen MCP-Server konfigurieren können, wenn sie über
+den hier beschriebenen Batch-Import hinaus interaktiv mit Zotero arbeiten
+möchten.

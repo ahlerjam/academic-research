@@ -38,7 +38,7 @@ except ImportError:  # pragma: no cover
 # Vault-Funktionen direkt importieren (kein MCP-Roundtrip noetig)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
-from academic_vault.server import add_paper, ensure_file  # noqa: E402
+from academic_vault.server import add_paper, add_quote, ensure_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Datenklassen
@@ -53,6 +53,7 @@ class ImportResult:
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
     file_ids: list[str] = field(default_factory=list)
+    quotes_imported: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +186,42 @@ def _zotero_item_to_csl(item_data: dict) -> dict:
     }
     # Leere Strings entfernen (sauberes JSON)
     return {k: v for k, v in csl.items() if v != "" and v != [] and v != {}}
+
+
+# ---------------------------------------------------------------------------
+# Annotation-Helpers (Issue #395)
+# ---------------------------------------------------------------------------
+
+
+def _parse_page_label(label: str | None) -> int | None:
+    """Parst Zoteros `annotationPageLabel` zu `int`, falls exakt numerisch.
+
+    Zotero erlaubt beliebige Strings als Seitenlabel (roemische Ziffern wie
+    "iv", Bereiche wie "12-13", leere Strings). Solche Faelle werden bewusst
+    NICHT geraten/approximiert, sondern liefern `None` — `printed_page` ist
+    eine INTEGER-Spalte und darf nicht raten.
+    """
+    if label is None:
+        return None
+    stripped = label.strip()
+    if not stripped or not stripped.isdigit():
+        return None
+    return int(stripped)
+
+
+def _annotation_verbatim(child_data: dict) -> str | None:
+    """Extrahiert den Highlight-/Notiztext aus einem Annotation-Kind.
+
+    Bevorzugt `annotationText` (Highlight-Ausschnitt). Faellt bei reinen
+    Notiz-Annotationen (kein markierter Text) auf `annotationComment`
+    zurueck. Gibt `None`, wenn beides leer ist — solche Annotationen werden
+    nicht als Quote importiert.
+    """
+    text = (child_data.get("annotationText") or "").strip()
+    if text:
+        return text
+    comment = (child_data.get("annotationComment") or "").strip()
+    return comment or None
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +366,42 @@ def run_import(
                                 result.errors.append(
                                     f"ensure_file fuer {paper_id} fehlgeschlagen: {e}"
                                 )
-                            break  # Nur erstes PDF-Attachment
+
+                        # Annotationen (Highlights/Notizen) dieses Attachments
+                        # importieren — unabhaengig vom Download-Erfolg des PDFs.
+                        try:
+                            annotation_children = zot.children(att_key)
+                        except Exception as e:
+                            result.errors.append(
+                                f"Annotationen fuer {att_key} konnten nicht geladen werden: {e}"
+                            )
+                            annotation_children = []
+
+                        for annotation_child in annotation_children:
+                            ann_data = annotation_child.get("data", {})
+                            if ann_data.get("itemType") != "annotation":
+                                continue
+                            verbatim = _annotation_verbatim(ann_data)
+                            if not verbatim:
+                                continue
+                            try:
+                                add_quote(
+                                    db_path=db_path,
+                                    paper_id=paper_id,
+                                    verbatim=verbatim,
+                                    extraction_method="manual",
+                                    printed_page=_parse_page_label(
+                                        ann_data.get("annotationPageLabel")
+                                    ),
+                                )
+                                result.quotes_imported += 1
+                            except Exception as e:
+                                result.errors.append(
+                                    f"Quote-Import fuer Annotation in {paper_id} "
+                                    f"fehlgeschlagen: {e}"
+                                )
+
+                        break  # Nur erstes PDF-Attachment
 
                 result.imported += 1
 
@@ -365,6 +437,8 @@ def main() -> None:
             print(f"  - {err}", file=sys.stderr)
     if result.file_ids:
         print(f"Files-API file_ids gecacht: {len(result.file_ids)}")
+    if result.quotes_imported:
+        print(f"Annotationen als Quotes importiert: {result.quotes_imported}")
 
 
 if __name__ == "__main__":

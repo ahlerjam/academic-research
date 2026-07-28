@@ -6,6 +6,7 @@ Alle pyzotero-Calls werden vollstaendig gemockt — keine echten API-Calls.
 
 import json
 import os
+import sqlite3
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -303,3 +304,157 @@ class TestConfigPermissions:
                 result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 0
+
+
+# ---------------------------------------------------------------------------
+# Test 7: Annotation-Import (Issue #395)
+# ---------------------------------------------------------------------------
+
+
+def _item_with_pdf_attachment(item_key: str, doi: str) -> tuple[list, list, str]:
+    """Baut ein Journal-Item + zugehoeriges PDF-Attachment-Kind.
+
+    Gibt (items, attachment_children, attachment_key) zurueck.
+    """
+    item = [
+        {
+            "key": item_key,
+            "version": 1,
+            "data": {
+                "key": item_key,
+                "itemType": "journalArticle",
+                "title": "Paper mit Annotationen",
+                "creators": [{"creatorType": "author", "firstName": "Nora", "lastName": "Klein"}],
+                "date": "2024",
+                "DOI": doi,
+                "ISBN": "",
+                "abstractNote": "Hat Annotationen",
+            },
+        }
+    ]
+    att_key = "ATTPDF01"
+    attachment_children = [
+        {
+            "key": att_key,
+            "version": 1,
+            "data": {
+                "key": att_key,
+                "itemType": "attachment",
+                "linkMode": "linked_file",
+                "contentType": "application/pdf",
+                "filename": "paper_a.pdf",
+                "title": "paper_a.pdf",
+            },
+        }
+    ]
+    return item, attachment_children, att_key
+
+
+def _quotes_rows(db_path: str) -> list[sqlite3.Row]:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        return conn.execute(
+            "SELECT verbatim, printed_page, extraction_method FROM quotes"
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+class TestAnnotationImport:
+    def test_annotation_creates_quote_with_page(self, tmp_path):
+        """Annotation-Kind mit Highlight-Text + Seitenlabel → genau 1 Quote."""
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment(
+            "ANNOITEM", "10.9999/annot.001"
+        )
+        annotation_children = [
+            {
+                "key": "ANNOKEY1",
+                "version": 1,
+                "data": {
+                    "key": "ANNOKEY1",
+                    "itemType": "annotation",
+                    "annotationType": "highlight",
+                    "annotationText": "Ein wichtiges Highlight.",
+                    "annotationPageLabel": "42",
+                },
+            }
+        ]
+
+        def children_side_effect(key):
+            if key == "ANNOITEM":
+                return attachment_children
+            if key == att_key:
+                return annotation_children
+            return []
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.side_effect = children_side_effect
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.imported == 1
+        assert result.errors == []
+
+        rows = _quotes_rows(db_path)
+        assert len(rows) == 1
+        assert rows[0]["verbatim"] == "Ein wichtiges Highlight."
+        assert rows[0]["printed_page"] == 42
+        assert rows[0]["extraction_method"] == "manual"
+
+    def test_annotation_non_numeric_page_label_yields_null_page(self, tmp_path):
+        """Nicht-numerisches annotationPageLabel (z.B. 'iv') → printed_page NULL, kein Crash."""
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment(
+            "ANNOITM2", "10.9999/annot.002"
+        )
+        annotation_children = [
+            {
+                "key": "ANNOKEY2",
+                "version": 1,
+                "data": {
+                    "key": "ANNOKEY2",
+                    "itemType": "annotation",
+                    "annotationType": "highlight",
+                    "annotationText": "Randbemerkung ohne nummerische Seite.",
+                    "annotationPageLabel": "iv",
+                },
+            }
+        ]
+
+        def children_side_effect(key):
+            if key == "ANNOITM2":
+                return attachment_children
+            if key == att_key:
+                return annotation_children
+            return []
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.side_effect = children_side_effect
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.imported == 1
+        assert result.errors == []
+
+        rows = _quotes_rows(db_path)
+        assert len(rows) == 1
+        assert rows[0]["printed_page"] is None
+        assert rows[0]["extraction_method"] == "manual"
