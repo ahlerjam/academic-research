@@ -133,6 +133,20 @@ class TestResolveArxivId:
         with patch("requests.get", side_effect=OSError("timeout")):
             assert aps.resolve_arxiv_id("2005.14165") is None
 
+    def test_error_feed_returns_none_no_fake_paper(self):
+        """arXiv beantwortet eine unbekannte/ungueltige ID mit HTTP 200 und
+        einem regulaeren Atom-Feed, dessen einziger <entry> auf
+        arxiv.org/api/errors zeigt und <title>Error</title> traegt (siehe
+        arXiv-API-Manual). Dieser Fehler-Entry darf NIEMALS als gueltiges
+        Paper (Titel "Error") durchgereicht werden -- sonst landet ein
+        Fake-Paper im Vault (P1-Regression aus PR #440 Review)."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = _read("arxiv_response_error.xml")
+
+        with patch("requests.get", return_value=mock_resp):
+            assert aps.resolve_arxiv_id("1234.5678") is None
+
 
 # ---------------------------------------------------------------------------
 # Titel/Autoren-Heuristik aus PDF-Volltext
@@ -209,6 +223,27 @@ class TestAnchorPaperSurveyArxivSuccess:
         mock_search.assert_not_called()
         assert vault_get_paper(temp_vault_db, "arxiv-2005-14165") is None
 
+    def test_arxiv_error_feed_adds_no_fake_paper(self, temp_vault_db):
+        """End-to-End-Gegenstueck zu TestResolveArxivId::test_error_feed_returns_none_no_fake_paper:
+        eine reale HTTP-200-Fehlerantwort der arXiv-API darf nicht als
+        Anker-Paper mit Titel "Error" im Vault landen (AC1: genau ein Paper
+        NUR bei echtem Treffer)."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = _read("arxiv_response_error.xml")
+
+        with (
+            patch("requests.get", return_value=mock_resp),
+            patch.object(aps, "vault_add_paper") as mock_add,
+            patch.object(aps, "run_search") as mock_search,
+        ):
+            result = aps.anchor_paper_survey("1234.5678", db_path=temp_vault_db)
+
+        assert result["status"] == "error"
+        mock_add.assert_not_called()
+        mock_search.assert_not_called()
+        assert vault_get_paper(temp_vault_db, "arxiv-1234-5678") is None
+
 
 # ---------------------------------------------------------------------------
 # AC2: PDF-Pfad -> Titel/Autoren "korrekt genug" fuer Folge-Suche
@@ -280,6 +315,21 @@ class TestAnchorPaperSurveyPdfSuccess:
         assert isinstance(result["message"], str) and result["message"].strip()
         mock_add.assert_not_called()
         mock_search.assert_not_called()
+
+    def test_pdf_paper_id_is_deterministic_across_repeated_calls(self, sample_pdf, temp_vault_db):
+        """Zwei Laeufe auf demselben PDF-Pfad muessen dieselbe paper_id
+        liefern, damit vault_add_paper() (Upsert ueber paper_id) den
+        gleichen Eintrag aktualisiert statt ein Duplikat anzulegen (P2 aus
+        PR #440 Review: uuid4() waere bei jedem Lauf neu)."""
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_SAMPLE_TEXT),
+            patch.object(aps, "run_search", return_value=([], [])),
+        ):
+            result1 = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+            result2 = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        assert result1["paper_id"] == result2["paper_id"]
 
     def test_pdf_with_no_extractable_text_returns_clean_error(self, sample_pdf, temp_vault_db):
         with (

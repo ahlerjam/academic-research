@@ -172,3 +172,6 @@ Pfad)? → `ValueError` mit Klartextmeldung, ebenfalls ohne jede Vault-Mutation.
 - Netz-Ausfälle bei arXiv/der Folge-Suche führen zu einem sauberen
   Fehlertext statt Crash oder fabriziertem Ergebnis — "nicht gelesen" ist
   nicht "nicht vorhanden"
+- **Nur arXiv-IDs im Format `YYMM.NNNNN`** (seit 2007) werden erkannt;
+  alte IDs (z. B. `hep-th/9901001`) scheitern mit Fehlermeldung (bekannte
+  Lücke, kein Bug)

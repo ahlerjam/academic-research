@@ -32,10 +32,10 @@ Verwendbar auch als Modul (fuer Tests und den Skill selbst).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
-import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -184,9 +184,18 @@ def resolve_arxiv_id(arxiv_id: str) -> str | None:
     if entry is None:
         return None
 
+    # arXiv beantwortet eine unbekannte/ungueltige ID NICHT mit HTTP != 200,
+    # sondern mit einem regulaeren Atom-Feed (HTTP 200), dessen einziger
+    # <entry> auf "arxiv.org/api/errors" zeigt und <title>Error</title>
+    # traegt (arXiv-API-Manual). Ohne diesen Guard wuerde ein Fake-Paper mit
+    # Titel "Error" im Vault landen -- Regression aus PR #440 Review (P1).
+    entry_id = (entry.findtext("atom:id", namespaces=_ATOM_NS) or "").strip()
+    if "arxiv.org/api/errors" in entry_id:
+        return None
+
     title = (entry.findtext("atom:title", namespaces=_ATOM_NS) or "").strip()
     title = re.sub(r"\s+", " ", title)
-    if not title:
+    if not title or title == "Error":
         return None
 
     authors = []
@@ -342,7 +351,13 @@ def _handle_pdf(pdf_path: str, db_path: str) -> dict:
 
     csl = {"type": "article-journal", "title": title, "author": authors}
     csl_json = json.dumps(csl, ensure_ascii=False)
-    paper_id = f"anchor-{uuid.uuid4().hex[:12]}"
+    # Deterministisch aus dem absoluten PDF-Pfad ableiten (nicht uuid4()),
+    # damit vault_add_paper() ein Upsert ist: ein zweiter Lauf auf demselben
+    # PDF aktualisiert denselben Eintrag statt ein Duplikat anzulegen --
+    # analog zum arXiv-Pfad (paper_id=arxiv-<id>). P2 aus PR #440 Review.
+    abs_path = str(Path(pdf_path).expanduser().resolve())
+    path_hash = hashlib.sha256(abs_path.encode("utf-8")).hexdigest()[:12]
+    paper_id = f"anchor-{path_hash}"
     vault_add_paper(db_path=db_path, paper_id=paper_id, csl_json=csl_json, pdf_path=pdf_path)
     return {"status": "ok", "paper_id": paper_id, "source": "pdf", "title": title}
 
