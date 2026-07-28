@@ -145,9 +145,12 @@ def search_papers(
         query: Suchquery.
         type_filter: Optionaler Paper-Type-Filter (article-journal, book, chapter).
         k: Maximale Trefferzahl.
-        rerank: Wenn True, wird Hybrid-Retrieval (RRF) und optionaler Reranker aktiviert.
-                Reranker wird nur genutzt wenn VOYAGE_API_KEY oder COHERE_API_KEY gesetzt.
-                Fallback auf RRF-Result wenn kein API-Key vorhanden.
+        rerank: Wenn True, wird Hybrid-Retrieval (RRF) und Reranking aktiviert.
+                Prioritaet (#376): VOYAGE_API_KEY > COHERE_API_KEY > kostenfreier
+                lokaler bge-reranker-v2-m3-Fallback (nur wenn beide Cloud-Keys
+                fehlen). Jedes Ergebnis-Dict traegt 'reranked' (bool) und
+                'reranker' (str), damit ein fehlgeschlagenes Cloud-Reranking
+                sichtbar bleibt statt still auf RRF zurueckzufallen.
     """
     raw_query = query
     query = _sanitize_fts5_query(query)
@@ -206,15 +209,16 @@ def search_papers(
     voyage_key = os.environ.get("VOYAGE_API_KEY") or None
     cohere_key = os.environ.get("COHERE_API_KEY") or None
 
-    if voyage_key or cohere_key:
-        return apply_reranker(
-            query=query,
-            candidates=fused,
-            voyage_api_key=voyage_key,
-            cohere_api_key=cohere_key,
-        )
-
-    return fused
+    # Kein Gate mehr auf "irgendein Cloud-Key gesetzt" (#376): apply_reranker
+    # wird immer aufgerufen, damit auch ohne Cloud-Keys der kostenfreie lokale
+    # bge-reranker-v2-m3-Fallback greifen kann. Ohne diesen Aufruf bliebe der
+    # lokale Fallback in retrieval.py toter Code.
+    return apply_reranker(
+        query=query,
+        candidates=fused,
+        voyage_api_key=voyage_key,
+        cohere_api_key=cohere_key,
+    )
 
 
 _FTS5_OPERATOR_KEYWORDS = re.compile(r"\b(?:NEAR|AND|OR|NOT)\b")

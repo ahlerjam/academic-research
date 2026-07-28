@@ -24,6 +24,10 @@ Bereitgestellte Fixtures:
   - sample_pdf           Pfad auf tests/fixtures/sample_book.pdf
   - library_profile_tum  geparstes config/library-profiles/tum.yaml als dict
   - fake_embedder        deterministischer Offline-Embedder (384d, kein Modell-Download)
+
+Autouse-Fixtures (kein expliziter Import noetig, greifen automatisch):
+  - block_real_embedding_backend        blockt echtes e5-Embedding-Modell (#372)
+  - block_real_local_reranker_backend   blockt echtes bge-reranker-v2-m3-Modell (#376)
 """
 
 import hashlib
@@ -177,6 +181,54 @@ def block_real_embedding_backend(monkeypatch):
         em.reset_embedder_cache()
         if chunking is not None:
             chunking.reset_token_counter_cache()
+
+
+# ---------------------------------------------------------------------------
+# Lokaler Reranker-Backend-Guard (Issue #376)
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def block_real_local_reranker_backend(monkeypatch):
+    """Verhindert, dass die Suite das echte bge-reranker-v2-m3-Modell laedt (#376).
+
+    Seit #376 ruft ``search_papers(..., rerank=True)`` ``apply_reranker`` immer
+    auf -- auch ohne Cloud-API-Keys. Ohne diesen Guard wuerde jeder derartige
+    Testaufruf versuchen, ``BAAI/bge-reranker-v2-m3`` (FlagEmbedding-Backend)
+    von HuggingFace zu laden, sobald FlagEmbedding manuell installiert ist
+    (kein uv-Extra, vgl. pyproject.toml) -- die Suite waere netzabhaengig und
+    um Groessenordnungen langsamer.
+
+    Analog ``block_real_embedding_backend``: gepatcht wird bewusst nur
+    ``_load_local_reranker_backend`` (die unterste Schicht), Tests, die den
+    lokalen Reranker ueber ``_get_local_reranker`` mocken, bleiben unberuehrt.
+
+    Ausnahme: mit ``VAULT_RERANK_LOCAL_LIVE_TEST=1`` greift der Guard nicht —
+    das ist das bestehende Gate des Live-Tests gegen das echte Modell.
+    """
+    import os
+
+    if os.environ.get("VAULT_RERANK_LOCAL_LIVE_TEST") == "1":
+        yield
+        return
+
+    try:
+        import academic_vault.retrieval as retrieval
+    except Exception:
+        yield
+        return
+
+    def _blocked(*_args, **_kwargs):
+        raise RuntimeError(
+            "Lokaler Reranker im Testlauf blockiert (tests/conftest.py). Tests "
+            "mocken _get_local_reranker; fuer das echte Modell "
+            "VAULT_RERANK_LOCAL_LIVE_TEST=1 setzen."
+        )
+
+    monkeypatch.setattr(retrieval, "_load_local_reranker_backend", _blocked)
+    retrieval.reset_local_reranker_cache()
+    try:
+        yield
+    finally:
+        retrieval.reset_local_reranker_cache()
 
 
 # ---------------------------------------------------------------------------
