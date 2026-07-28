@@ -122,6 +122,7 @@ def test_page_labels_to_vault_get_printed_page():
 
     from academic_vault.server import add_paper, get_printed_page
     from academic_vault.server import set_page_offset as srv_set_offset
+
     from page_offset import detect_page_offset
 
     pdf = _require_fixture("page_labels.pdf")
