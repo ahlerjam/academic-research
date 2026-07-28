@@ -22,6 +22,78 @@ def _mock_httpx_client(response: MagicMock) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
+# Tier 1: OpenAIRE
+# ---------------------------------------------------------------------------
+
+OPENAIRE_HIT_RESPONSE = {
+    "results": [
+        {
+            "instances": [
+                {
+                    "urls": [
+                        "https://doi.org/10.1371/journal.pbio.1002055",
+                        "https://example.org/article/file?id=123&type=printable",
+                    ]
+                }
+            ]
+        }
+    ]
+}
+
+OPENAIRE_EMPTY_RESPONSE = {"results": []}
+
+OPENAIRE_NO_PDF_URL_RESPONSE = {
+    "results": [
+        {
+            "instances": [
+                {
+                    "urls": [
+                        "https://doi.org/10.1371/journal.pbio.1002055",
+                        "https://example.org/landing-page",
+                    ]
+                }
+            ]
+        }
+    ]
+}
+
+
+class TestTierOpenaire:
+    def test_success_returns_pdf_url(self):
+        """Erfolgsfall: PDF-taugliche URL wird per Heuristik aus instances[].urls extrahiert."""
+        from pdf import tier_openaire
+
+        resp = _mock_httpx_response(OPENAIRE_HIT_RESPONSE)
+        client = _mock_httpx_client(resp)
+
+        result = tier_openaire(client, "10.1371/journal.pbio.1002055")
+        assert result == "https://example.org/article/file?id=123&type=printable"
+        client.get.assert_called_once()
+        call_url = client.get.call_args[0][0]
+        assert "api.openaire.eu" in call_url
+
+    def test_empty_results_returns_none(self):
+        """Leerfall: keine Treffer -> None."""
+        from pdf import tier_openaire
+
+        resp = _mock_httpx_response(OPENAIRE_EMPTY_RESPONSE)
+        client = _mock_httpx_client(resp)
+
+        result = tier_openaire(client, "10.9999/nothing")
+        assert result is None
+
+    def test_no_pdf_url_in_instances_returns_none(self):
+        """Leerfall: Treffer vorhanden, aber keine URL erfuellt die PDF-Heuristik -> None."""
+        from pdf import tier_openaire
+
+        resp = _mock_httpx_response(OPENAIRE_NO_PDF_URL_RESPONSE)
+        client = _mock_httpx_client(resp)
+
+        result = tier_openaire(client, "10.1371/journal.pbio.1002055")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
 # Tier 6: OpenAccessButton
 # ---------------------------------------------------------------------------
 
@@ -403,3 +475,54 @@ class TestResolvePdfUrlOrdering:
 
         assert url == "https://example.org/paper.pdf"
         assert source == "openaccessbutton"
+
+    def test_resolve_returns_openaire_url_on_hit(self):
+        """resolve_pdf_url gibt (url, 'openaire', None) zurueck bei OpenAIRE-Treffer."""
+        from pdf import resolve_pdf_url
+
+        def mock_get(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            resp.text = self._EMPTY_ARXIV_XML
+            if "api.openaire.eu" in url:
+                resp.json.return_value = OPENAIRE_HIT_RESPONSE
+            else:
+                resp.json.return_value = {}
+            return resp
+
+        client = MagicMock()
+        client.get.side_effect = mock_get
+
+        paper = {"doi": "10.1371/journal.pbio.1002055", "title": "Test paper"}
+        url, source, error = resolve_pdf_url(client, paper, "test@example.com")
+
+        assert url == "https://example.org/article/file?id=123&type=printable"
+        assert source == "openaire"
+
+    def test_openaire_miss_falls_back_to_unpaywall(self):
+        """Kein OpenAIRE-Treffer -> sauberer Fallback auf Unpaywall, keine Exception."""
+        from pdf import resolve_pdf_url
+
+        def mock_get(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            resp.text = self._EMPTY_ARXIV_XML
+            if "api.openaire.eu" in url:
+                resp.json.return_value = OPENAIRE_EMPTY_RESPONSE
+            elif "api.unpaywall.org" in url:
+                resp.json.return_value = {
+                    "best_oa_location": {"url_for_pdf": "https://unpaywall.example/paper.pdf"}
+                }
+            else:
+                resp.json.return_value = {}
+            return resp
+
+        client = MagicMock()
+        client.get.side_effect = mock_get
+
+        paper = {"doi": "10.9999/test", "title": "Test paper"}
+        url, source, error = resolve_pdf_url(client, paper, "test@example.com")
+
+        assert url == "https://unpaywall.example/paper.pdf"
+        assert source == "unpaywall"
+        assert error is None

@@ -85,8 +85,37 @@ def download_pdf(client: httpx.Client, pdf_url: str, output_path: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def tier_openaire(client: httpx.Client, doi: str) -> str | None:
+    """Tier 1: Resolve via OpenAIRE Graph API.
+
+    Fragt ``graph/v1/researchProducts`` per DOI (``pid``) ab und sucht in
+    ``results[0]["instances"][]["urls"][]`` nach einer URL, die per Muster
+    (``.pdf``-Endung, ``/pdf`` oder ``type=printable`` im Pfad/Query) nach
+    einem direkten PDF-Link aussieht. Es gibt kein verlaessliches
+    "ist PDF"-Feld in der API-Antwort, daher die Heuristik.
+    """
+    resp = client.get(
+        "https://api.openaire.eu/graph/v1/researchProducts",
+        params={"pid": doi},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    results = resp.json().get("results", [])
+    if not results:
+        return None
+    instances = results[0].get("instances") or []
+    for instance in instances:
+        for url in instance.get("urls") or []:
+            if not isinstance(url, str):
+                continue
+            lower = url.lower()
+            if lower.endswith(".pdf") or "/pdf" in lower or "type=printable" in lower:
+                return url
+    return None
+
+
 def tier_unpaywall(client: httpx.Client, doi: str, email: str) -> str | None:
-    """Tier 1: Resolve via Unpaywall."""
+    """Tier 2: Resolve via Unpaywall."""
     resp = client.get(
         f"https://api.unpaywall.org/v2/{doi}", params={"email": email}, timeout=TIMEOUT
     )
@@ -95,7 +124,7 @@ def tier_unpaywall(client: httpx.Client, doi: str, email: str) -> str | None:
 
 
 def tier_core(client: httpx.Client, doi: str) -> str | None:
-    """Tier 2: Resolve via CORE."""
+    """Tier 3: Resolve via CORE."""
     import time
 
     for attempt in range(3):
@@ -116,7 +145,7 @@ def tier_core(client: httpx.Client, doi: str) -> str | None:
 
 
 def tier_module_urls(paper: dict[str, Any]) -> str | None:
-    """Tier 3: OA URLs from search metadata."""
+    """Tier 4: OA URLs from search metadata."""
     for field in ("open_access_pdf", "openAccessPdf"):
         val = paper.get(field)
         if isinstance(val, dict) and val.get("url"):
@@ -130,7 +159,7 @@ def tier_module_urls(paper: dict[str, Any]) -> str | None:
 
 
 def tier_direct_url(paper: dict[str, Any]) -> str | None:
-    """Tier 4: Direct PDF URL."""
+    """Tier 5: Direct PDF URL."""
     url = paper.get("url")
     if isinstance(url, str) and url.lower().endswith(".pdf"):
         return url
@@ -138,7 +167,7 @@ def tier_direct_url(paper: dict[str, Any]) -> str | None:
 
 
 def tier_arxiv_title(client: httpx.Client, title: str) -> str | None:
-    """Tier 5: arXiv title search fallback."""
+    """Tier 6: arXiv title search fallback."""
     safe_title = title[:80].replace('"', " ")
     try:
         resp = client.get(
@@ -159,7 +188,7 @@ def tier_arxiv_title(client: httpx.Client, title: str) -> str | None:
 
 
 def tier_openaccessbutton(client: httpx.Client, doi: str) -> str | None:
-    """Tier 6: Resolve via OpenAccessButton API."""
+    """Tier 7: Resolve via OpenAccessButton API."""
     resp = client.get(
         "https://api.openaccessbutton.org/find",
         params={"id": doi},
@@ -173,7 +202,7 @@ _DOAB_BASE = "https://directory.doabooks.org"
 
 
 def tier_doab(client: httpx.Client, isbn_or_title: str) -> str | None:
-    """Tier 7: Resolve via DOAB REST API."""
+    """Tier 8: Resolve via DOAB REST API."""
     resp = client.get(
         "https://directory.doabooks.org/rest/search",
         params={"query": isbn_or_title, "expand": "bitstreams"},
@@ -196,7 +225,7 @@ def tier_doab(client: httpx.Client, isbn_or_title: str) -> str | None:
 
 
 def tier_europepmc(client: httpx.Client, doi: str) -> str | None:
-    """Tier 8: Resolve via Europe PMC API (biomedical OA)."""
+    """Tier 10: Resolve via Europe PMC API (biomedical OA)."""
     resp = client.get(
         "https://www.europepmc.org/backend/europepmc/findByQuery.do",
         params={
@@ -223,31 +252,41 @@ def resolve_pdf_url(
     """Try all tiers to find a PDF URL. Returns (url, source_tier, error).
 
     Tier order:
-      1 Unpaywall        (DOI)
-      2 CORE             (DOI)
-      3 Module OA URLs   (metadata)
-      4 Direct URL       (metadata)
-      5 arXiv Title      (title)
-      6 DOAB             (isbn/title) — books/chapters only, before OpenAccessButton
-      7 OpenAccessButton (DOI)
-      8 DOAB             (isbn/title) — non-book fallback
-      9 EuropePMC        (DOI) — final fallback for all DOIs
+      1  OpenAIRE         (DOI) — European OA repositories
+      2  Unpaywall        (DOI)
+      3  CORE             (DOI)
+      4  Module OA URLs   (metadata)
+      5  Direct URL       (metadata)
+      6  arXiv Title      (title)
+      7  DOAB             (isbn/title) — books/chapters only, before OpenAccessButton
+      8  OpenAccessButton (DOI)
+      9  DOAB             (isbn/title) — non-book fallback
+      10 EuropePMC        (DOI) — final fallback for all DOIs
     """
     doi = normalize_doi(paper.get("doi"))
     last_error = None
     paper_type = paper.get("type") or ""
     is_book = paper_type in {"book", "chapter"}
 
-    # Tier 1: Unpaywall
+    # Tier 1: OpenAIRE
+    if doi:
+        try:
+            url = tier_openaire(client, doi)
+            if url:
+                return url, "openaire", None
+        except Exception as exc:
+            last_error = str(exc)
+
+    # Tier 2: Unpaywall
     if doi:
         try:
             url = tier_unpaywall(client, doi, email)
             if url:
-                return url, "unpaywall", None
+                return url, "unpaywall", last_error
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 2: CORE
+    # Tier 3: CORE
     if doi:
         try:
             url = tier_core(client, doi)
@@ -256,17 +295,17 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 3: Module OA URLs
+    # Tier 4: Module OA URLs
     url = tier_module_urls(paper)
     if url:
         return url, "module_oa", last_error
 
-    # Tier 4: Direct URL
+    # Tier 5: Direct URL
     url = tier_direct_url(paper)
     if url:
         return url, "direct", last_error
 
-    # Tier 5: arXiv title search
+    # Tier 6: arXiv title search
     if title := paper.get("title"):
         try:
             url = tier_arxiv_title(client, title)
@@ -275,7 +314,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 6 (book priority): DOAB first for books/chapters
+    # Tier 7 (book priority): DOAB first for books/chapters
     isbn_or_title = paper.get("isbn") or paper.get("title") or ""
     if is_book and isbn_or_title:
         try:
@@ -285,7 +324,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 7: OpenAccessButton
+    # Tier 8: OpenAccessButton
     if doi:
         try:
             url = tier_openaccessbutton(client, doi)
@@ -294,7 +333,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 8: DOAB for non-book types
+    # Tier 9: DOAB for non-book types
     if not is_book and isbn_or_title:
         try:
             url = tier_doab(client, isbn_or_title)
@@ -303,7 +342,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 9: EuropePMC — final fallback for all DOIs
+    # Tier 10: EuropePMC — final fallback for all DOIs
     if doi:
         try:
             url = tier_europepmc(client, doi)
