@@ -62,7 +62,7 @@ Trigger-Evals pro Skill (Block C).
 
 ## Zweites Format: `cases[]` (Nicht-Skill-Komponenten)
 
-Vier Verzeichnisse folgen nicht dem `prompts[]`-Schema oben, sondern einem
+Fuenf Verzeichnisse folgen nicht dem `prompts[]`-Schema oben, sondern einem
 `cases[]`-Format. Das ist historisch gewachsen und bewusst **nicht**
 normalisiert (ein Umbau wuerde `tests/test_figure_verifier.py`,
 `tests/test_oa_fetchers.py` und `tests/test_publisher_fetchers.py` brechen,
@@ -71,9 +71,15 @@ ohne die Messqualitaet zu erhoehen — Begruendung in `docs/evals/STRATEGY.md`).
 | Verzeichnis | Aufbau | Geprueft von |
 |---|---|---|
 | `fetch` | Objekt mit `component`/`component_type`/`cases[]` | `tests/test_fetch_command.py` |
+| `generic-fetcher` | Objekt mit `component`/`component_type`/`cases[]` | `tests/test_generic_fetcher.py` |
 | `publisher-fetchers` | Objekt mit `component`/`component_type`/`cases[]` | `tests/test_publisher_fetchers.py` |
 | `figure-verifier` | **Top-Level-Array** von Cases, ohne `component`-Feld | `tests/test_figure_verifier.py` |
 | `oa-fetchers` | **Top-Level-Array** von Cases, ohne `component`-Feld | `tests/test_oa_fetchers.py` |
+
+`generic-fetcher` erweitert das Case-Objekt um `platform` (Ziel-Plattform ohne
+dedizierten Agent) und `input.fixture` (DOM-Fixture unter
+`tests/fixtures/dom_heuristics/`), damit die Navigationslogik offline gegen
+einen gespeicherten Seitenzustand fahren kann.
 
 ```json
 {
@@ -105,7 +111,7 @@ ohne die Messqualitaet zu erhoehen — Begruendung in `docs/evals/STRATEGY.md`).
   (`figure-verifier`, `oa-fetchers`, z. B. `{"figure_id_non_empty": true}`)
 - `cases[].agent` (optional): Ziel-Subagent bei Fetcher-Evals
 
-Alle vier Verzeichnisse sind in `docs/evals/STRATEGY.md` als `structural`
+Alle fuenf Verzeichnisse sind in `docs/evals/STRATEGY.md` als `structural`
 gefuehrt: ihre Cases setzen Live-Downloads, Verlags-Auth oder einen VLM-Aufruf
 voraus und sind daher nicht hermetisch ausfuehrbar.
 

@@ -1,0 +1,70 @@
+{
+  "component": "generic-fetcher",
+  "component_type": "agent",
+  "cases": [
+    {
+      "id": "gf-01",
+      "description": "Zenodo-Record ohne dedizierten Agent: direkter 'Download PDF'-Link neben einem Preview-Link (Negativ-Indikator) fuehrt zum Volltext",
+      "type": "platform_navigation",
+      "platform": "zenodo",
+      "input": {
+        "url": "https://zenodo.org/records/10425331",
+        "title": "Open Data Practices in Civil Engineering",
+        "fixture": "zenodo_record.html"
+      },
+      "expected": {
+        "status": "success",
+        "min_tries": 2
+      },
+      "notes": "Live-Lauf ist netzabhaengig; offline geprueft wird die Navigations- und Protokollierungslogik ueber tests/helpers/generic_fetcher_nav.py."
+    },
+    {
+      "id": "gf-02",
+      "description": "MDPI-Artikel ohne dedizierten Agent: PDF-Route ohne .pdf-Endung, erkannt ueber den Anchor-Text",
+      "type": "platform_navigation",
+      "platform": "mdpi",
+      "input": {
+        "url": "https://www.mdpi.com/2071-1050/15/4/1234",
+        "title": "Circular Construction Materials",
+        "fixture": "mdpi_article.html"
+      },
+      "expected": {
+        "status": "success",
+        "min_tries": 2
+      },
+      "notes": "Belegt, dass die Erkennung nicht an der Dateiendung haengt."
+    },
+    {
+      "id": "gf-03",
+      "description": "OpenEdition-Books-Kapitel ohne dedizierten Agent: PDF steckt hinter einem pdf.js-Viewer",
+      "type": "platform_navigation",
+      "platform": "openedition",
+      "input": {
+        "url": "https://books.openedition.org/pub/4711",
+        "title": "Chapitre 3. Méthodes de terrain",
+        "fixture": "openedition_chapter.html"
+      },
+      "expected": {
+        "status": "success",
+        "min_tries": 2
+      },
+      "notes": "Deckt AC4 (eingebettetes PDF) zugleich auf einer realen Plattform ab."
+    },
+    {
+      "id": "gf-04",
+      "description": "Gegenprobe: Paywall ohne passende Lizenz im Uni-Profil endet in pickup_required mit Begruendung, ohne Umgehungsversuch",
+      "type": "paywall_abort",
+      "platform": "generic-publisher",
+      "input": {
+        "url": "https://publisher.example.org/book/9780123",
+        "title": "Machine Learning Methods",
+        "fixture": "paywall.html"
+      },
+      "expected": {
+        "status": "pickup_required",
+        "reason_contains": "Get Access"
+      },
+      "notes": "Negativkontrolle zu gf-01..gf-03: die Navigation darf nicht alles als beschaffbar einstufen."
+    }
+  ]
+}

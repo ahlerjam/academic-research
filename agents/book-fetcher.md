@@ -144,11 +144,28 @@ Rufe `Agent(generic-fetcher)` auf:
 {
   "<identifier_type>": "<identifier_value>",
   "url": "<beste URL aus metadata_only-Responses, falls vorhanden>",
-  "output_path": "<output_path>"
+  "output_path": "<output_path>",
+  "session_context": "<nur falls bereits eine Session besteht, sonst weglassen>"
 }
 ```
 
 Trage Ergebnis in `tries` ein.
+
+**Auth-Retry-Logik bei `auth_required`** (analog Schritt 4, der generic-fetcher
+meldet diesen Status bei einer im Uni-Profil lizenzierten Domain):
+
+1. Trage `{subagent: generic-fetcher, status: auth_required}` in `tries` ein
+2. Rufe `Agent(auth-helper)` auf mit `target_url` = `url` aus der
+   `auth_required`-Antwort (die Profil-Route) und dem bekannten `profile_path`
+3. Trage das auth-helper-Ergebnis in `tries` ein
+4. Bei `{status: authenticated}`: `Agent(generic-fetcher)` **einmalig** erneut
+   aufrufen — mit demselben Payload plus `session_context` aus der
+   auth-helper-Antwort. Kein zweiter Retry.
+5. Bei `{status: captcha}`: **SOFORT stoppen**, `{status: captcha}` zurueckgeben
+6. Bei `{status: auth_failed}`: `pickup_required` zurueckgeben
+
+`auth_required` ist ein reiner **Innen-Status**. Er erscheint in `tries`, aber
+nie im Master-Output: du loest ihn immer zu einem der vier Stati unten auf.
 
 ---
 
@@ -199,6 +216,8 @@ generic-fetcher:
   -- pickup_required --> status: pickup_required + pickup_hint
   -- captcha --> status: captcha
   -- no_match --> status: no_match (kein Treffer in allen Quellen)
+  -- auth_required --> auth-helper --> genau ein Retry (mit session_context)
+                       --> danach success oder pickup_required
 ```
 
 ---

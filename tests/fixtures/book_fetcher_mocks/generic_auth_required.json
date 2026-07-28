@@ -1,0 +1,15 @@
+{
+  "status": "auth_required",
+  "source": "generic-fetcher",
+  "url": "https://publisher.example.org.proxy.ub.tum.de/book/9780123",
+  "reason": "Lizenzierte Domain im Uni-Profil — Zugang ueber den hinterlegten Weg statt anonymer Kopien",
+  "tries": [
+    {
+      "step": 1,
+      "action": "load_page",
+      "url": "https://publisher.example.org/book/9780123",
+      "observation": "Zugangs-Gate 'Institutional Login', Host in licensed_sites",
+      "decision": "licensed_route"
+    }
+  ]
+}
