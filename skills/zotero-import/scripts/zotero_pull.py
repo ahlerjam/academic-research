@@ -224,6 +224,31 @@ def _annotation_verbatim(child_data: dict) -> str | None:
     return comment or None
 
 
+def _existing_quote_keys(db_path: str, paper_id: str) -> set[tuple[str, int | None]]:
+    """Liest die bereits vorhandenen Quote-Schluessel eines Papers.
+
+    Schluessel ist `(verbatim, printed_page)` — die fachliche Identitaet einer
+    importierten Markierung. Zwei Markierungen mit demselben Wortlaut auf
+    verschiedenen Seiten bleiben dadurch zwei getrennte Quotes, ein zweiter
+    Import derselben Markierung wird jedoch erkannt.
+
+    Notwendig, weil `add_quote()` jede Quote mit frischer `uuid4()` einfuegt
+    und selbst nicht dedupliziert: Items ohne DOI/ISBN durchlaufen bei jedem
+    Lauf den vollen Importpfad (`_paper_exists_in_vault` kann sie nicht
+    erkennen), waehrend `paper_id` ueber den stabilen Zotero-Key konstant
+    bleibt — ohne diesen Filter wuechse pro Lauf eine weitere Kopie jeder
+    Markierung an dasselbe Paper.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT verbatim, printed_page FROM quotes WHERE paper_id = ?", (paper_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return {(verbatim, printed_page) for verbatim, printed_page in rows}
+
+
 # ---------------------------------------------------------------------------
 # Attachment-Download (gemockt in Tests)
 # ---------------------------------------------------------------------------
@@ -377,6 +402,11 @@ def run_import(
                             )
                             annotation_children = []
 
+                        # Bereits vorhandene Quotes dieses Papers einmal lesen;
+                        # jede neu eingefuegte Markierung wandert in dasselbe Set,
+                        # damit auch Dubletten innerhalb eines Laufs greifen.
+                        seen_quotes = _existing_quote_keys(db_path, paper_id)
+
                         for annotation_child in annotation_children:
                             ann_data = annotation_child.get("data", {})
                             if ann_data.get("itemType") != "annotation":
@@ -384,16 +414,18 @@ def run_import(
                             verbatim = _annotation_verbatim(ann_data)
                             if not verbatim:
                                 continue
+                            printed_page = _parse_page_label(ann_data.get("annotationPageLabel"))
+                            if (verbatim, printed_page) in seen_quotes:
+                                continue
                             try:
                                 add_quote(
                                     db_path=db_path,
                                     paper_id=paper_id,
                                     verbatim=verbatim,
                                     extraction_method="manual",
-                                    printed_page=_parse_page_label(
-                                        ann_data.get("annotationPageLabel")
-                                    ),
+                                    printed_page=printed_page,
                                 )
+                                seen_quotes.add((verbatim, printed_page))
                                 result.quotes_imported += 1
                             except Exception as e:
                                 result.errors.append(

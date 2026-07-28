@@ -620,3 +620,176 @@ class TestPDFAttachmentFallback:
         assert len(rows) == 1
         assert rows[0]["verbatim"] == "Highlight ohne heruntergeladenes PDF."
         assert rows[0]["printed_page"] == 7
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Annotation-Quotes werden beim Re-Import nicht dupliziert (Issue #395)
+# ---------------------------------------------------------------------------
+
+
+def _item_without_identifier_with_pdf(item_key: str) -> tuple[list, list, str]:
+    """Item OHNE DOI/ISBN + PDF-Attachment-Kind.
+
+    Solche Items koennen von ``_paper_exists_in_vault`` nicht dedupliziert
+    werden (dokumentierte Einschraenkung) und durchlaufen bei jedem Lauf den
+    vollen Importpfad inklusive Annotation-Verarbeitung.
+    """
+    items, attachment_children, att_key = _item_with_pdf_attachment(item_key, "")
+    items[0]["data"]["title"] = "Paper ohne Identifier mit Annotationen"
+    return items, attachment_children, att_key
+
+
+class TestAnnotationReimportDedup:
+    def test_reimport_without_identifier_does_not_duplicate_quotes(self, tmp_path):
+        """Zweiter Lauf ueber dieselbe Annotation legt keinen zweiten Quote an.
+
+        Regression zu Issue #395: ``paper_id`` ist ueber den stabilen
+        Zotero-Key deterministisch, ``add_paper`` ist ein Upsert — die
+        Annotation-Schleife rief ``add_quote`` aber ungeprueft auf und legte
+        pro Lauf eine weitere Kopie derselben Markierung an.
+        """
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_without_identifier_with_pdf("NOIDANNO")
+        annotation_children = [
+            {
+                "key": "ANNOKEY4",
+                "version": 1,
+                "data": {
+                    "key": "ANNOKEY4",
+                    "itemType": "annotation",
+                    "annotationType": "highlight",
+                    "annotationText": "Markierung ohne Identifier-Dedup.",
+                    "annotationPageLabel": "11",
+                },
+            }
+        ]
+
+        def children_side_effect(key):
+            if key == "NOIDANNO":
+                return attachment_children
+            if key == att_key:
+                return annotation_children
+            return []
+
+        def _run():
+            with patch("zotero_pull.zotero") as mock_zotero_module:
+                zot_mock = _make_zotero_mock(item)
+                zot_mock.children.side_effect = children_side_effect
+                mock_zotero_module.Zotero.return_value = zot_mock
+                with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                    with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                        return run_import(config_path=str(cfg_path), db_path=db_path)
+
+        result_1 = _run()
+        assert result_1.quotes_imported == 1
+        assert len(_quotes_rows(db_path)) == 1
+
+        result_2 = _run()
+        assert result_2.errors == []
+        # Das Paper selbst ist nicht dedup-faehig und wird erneut importiert
+        # (Upsert auf identische paper_id) — die Annotation aber schon.
+        assert result_2.quotes_imported == 0, (
+            f"Re-Import legte {result_2.quotes_imported} Quote(s) erneut an"
+        )
+        rows = _quotes_rows(db_path)
+        assert len(rows) == 1, f"Quote-Duplikate nach Re-Import: {[r['verbatim'] for r in rows]}"
+
+    def test_same_verbatim_on_different_pages_stays_separate(self, tmp_path):
+        """Identischer Text auf zwei Seiten sind zwei echte Markierungen.
+
+        Der Dedup-Schluessel ist (verbatim, printed_page) — er darf zwei
+        Markierungen desselben Wortlauts auf verschiedenen Seiten nicht
+        zusammenfallen lassen.
+        """
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_without_identifier_with_pdf("NOIDANN2")
+        annotation_children = [
+            {
+                "key": f"ANNPG{page}",
+                "version": 1,
+                "data": {
+                    "key": f"ANNPG{page}",
+                    "itemType": "annotation",
+                    "annotationType": "highlight",
+                    "annotationText": "Wiederkehrende Definition.",
+                    "annotationPageLabel": page,
+                },
+            }
+            for page in ("3", "9")
+        ]
+
+        def children_side_effect(key):
+            if key == "NOIDANN2":
+                return attachment_children
+            if key == att_key:
+                return annotation_children
+            return []
+
+        def _run():
+            with patch("zotero_pull.zotero") as mock_zotero_module:
+                zot_mock = _make_zotero_mock(item)
+                zot_mock.children.side_effect = children_side_effect
+                mock_zotero_module.Zotero.return_value = zot_mock
+                with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                    with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                        return run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert _run().quotes_imported == 2
+        assert sorted(r["printed_page"] for r in _quotes_rows(db_path)) == [3, 9]
+
+        assert _run().quotes_imported == 0
+        assert len(_quotes_rows(db_path)) == 2
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Annotation-Doku liegt in references/, nicht inline in SKILL.md
+# ---------------------------------------------------------------------------
+
+_SKILL_DIR = Path(__file__).resolve().parent.parent / "skills" / "zotero-import"
+_SKILL_MD = _SKILL_DIR / "SKILL.md"
+_ANNOTATIONS_REF = _SKILL_DIR / "references" / "annotations.md"
+
+
+class TestAnnotationDocsProgressiveDisclosure:
+    """Progressive Disclosure fuer die Annotation-Doku (Issue #395).
+
+    Die Detaildoku (Textquelle, Seitenlabel-Parsing, Idempotenz, Companion-MCP)
+    gehoert nach ``references/annotations.md``. Inline in SKILL.md gestellt,
+    sprengt sie das Token-Budget der Guards in tests/baselines/ — was in der
+    Vergangenheit zum Anheben genau dieser Baselines verleitet hat, statt den
+    Inhalt auszulagern. Dieser Test haelt die Auslagerung fest.
+    """
+
+    def test_reference_file_exists_and_documents_contract(self):
+        assert _ANNOTATIONS_REF.exists(), f"Ausgelagerte Referenz fehlt: {_ANNOTATIONS_REF}"
+        text = _ANNOTATIONS_REF.read_text(encoding="utf-8")
+        for marker in (
+            "annotationText",
+            "annotationComment",
+            "annotationPageLabel",
+            "printed_page",
+            "54yyyu/zotero-mcp",
+        ):
+            assert marker in text, f"references/annotations.md dokumentiert '{marker}' nicht"
+
+    def test_skill_md_links_to_reference(self):
+        assert "references/annotations.md" in _SKILL_MD.read_text(encoding="utf-8"), (
+            "SKILL.md verlinkt nicht auf references/annotations.md"
+        )
+
+    def test_skill_md_has_no_inlined_annotation_detail(self):
+        """Die Detailfelder duerfen NICHT zurueck nach SKILL.md wandern."""
+        text = _SKILL_MD.read_text(encoding="utf-8")
+        for marker in ("annotationText", "annotationComment", "annotationPageLabel"):
+            assert marker not in text, (
+                f"SKILL.md enthaelt Detailfeld '{marker}' inline — "
+                "gehoert nach references/annotations.md"
+            )
