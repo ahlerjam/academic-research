@@ -17,12 +17,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from academic_vault import server as vault_server
+from academic_vault.db import VaultDB
+
 _WORKTREE_ROOT = Path(__file__).parent.parent
 
 _SCRIPT = _WORKTREE_ROOT / "skills" / "material-passport" / "scripts" / "build_passport.py"
-
-from academic_vault import server as vault_server
-from academic_vault.db import VaultDB
 
 # ---------------------------------------------------------------------------
 # Helpers

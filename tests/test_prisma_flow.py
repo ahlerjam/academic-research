@@ -119,9 +119,9 @@ def test_prisma_checklist_has_27_items():
     content = checklist.read_text(encoding="utf-8")
     # Count checkbox items: lines starting with "- [ ]" or "- [x]"
     items = [
-        l
-        for l in content.splitlines()
-        if l.strip().startswith(("- [ ]", "- [x]", "* [ ]", "* [x]"))
+        line
+        for line in content.splitlines()
+        if line.strip().startswith(("- [ ]", "- [x]", "* [ ]", "* [x]"))
     ]
     assert len(items) >= 27, f"Expected >=27 checklist items, got {len(items)}"
 

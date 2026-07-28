@@ -1,5 +1,6 @@
 """Smoke-Tests fuer den academic_vault MCP-Server (TDD-First Skelett)."""
 
+import importlib.util
 import json
 import os
 import sqlite3
@@ -30,12 +31,7 @@ try:
 except ImportError:
     _FILES_API_AVAILABLE = False
 
-try:
-    from academic_vault import server as vault_server
-
-    _SERVER_AVAILABLE = True
-except ImportError:
-    _SERVER_AVAILABLE = False
+_SERVER_AVAILABLE = importlib.util.find_spec("academic_vault.server") is not None
 
 
 # ---------------------------------------------------------------------------
@@ -124,10 +120,10 @@ def test_search_returns_results():
         # Seed 50 Papers fuer realistische FTS5-Bedingungen (AC: <500ms bei >=50)
         for i in range(50):
             csl = (
-                '{"title": "DevOps Governance Study %d",'
-                ' "abstract": "Paper %d about DevOps in enterprise."}'
-            ) % (i, i)
-            db.add_paper("p-search-%d" % i, csl)
+                f'{{"title": "DevOps Governance Study {i}",'
+                f' "abstract": "Paper {i} about DevOps in enterprise."}}'
+            )
+            db.add_paper(f"p-search-{i}", csl)
 
         from academic_vault.server import search_papers
 
@@ -138,7 +134,7 @@ def test_search_returns_results():
         assert len(results) >= 1
         assert "paper_id" in results[0]
         # AC #62: Performance-Ziel <500ms bei mind. 50 Papers
-        assert elapsed < 0.5, "search took %.3fs, expected <0.5s" % elapsed
+        assert elapsed < 0.5, f"search took {elapsed:.3f}s, expected <0.5s"
     finally:
         os.unlink(db_path)
 

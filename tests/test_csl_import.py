@@ -20,7 +20,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 # Import will fail until implementation exists (RED)
-from csl_import import CSLParser, csl_to_markdown
+from csl_import import CSLParser, csl_to_markdown  # noqa: E402
 
 
 class TestCSLParserMetadata:

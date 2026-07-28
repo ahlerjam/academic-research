@@ -125,7 +125,7 @@ def test_rct_calls_add_risk_of_bias_with_correct_domains(temp_vault_db, tmp_path
 
     from tests.helpers.rob_agent_helper import assess_risk_of_bias
 
-    result = assess_risk_of_bias(
+    assess_risk_of_bias(
         db_path=temp_vault_db,
         paper_id="paper_rct",
         study_type="RCT",

@@ -15,7 +15,7 @@ def create_sample_book(output_path: str) -> None:
     writer = PdfWriter()
 
     # 10 Seiten: 2 Titelseiten + je 2 Seiten pro Kapitel (4 Kapitel)
-    for i in range(10):
+    for _i in range(10):
         writer.add_blank_page(width=595, height=842)
 
     # Outline-Eintraege: 4 Kapitel (0-indexed Seitennummern)

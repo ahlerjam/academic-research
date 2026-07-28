@@ -126,7 +126,7 @@ def test_label_sanitization():
     # Mermaid-Syntax: test_paper["label text"] — der aeussere " gehoert zur Syntax.
     # Pruefen: Das originale " aus dem Titel "Learning" darf nicht roh im Label stehen.
     # Im sanitizierten Label wird " zu '' (zwei Einfach-Anfuehrungszeichen).
-    lines = [l for l in src.splitlines() if "test_paper[" in l]
+    lines = [line for line in src.splitlines() if "test_paper[" in line]
     assert len(lines) == 1
     # Extrahiere den Label-Inhalt zwischen den aeusseren Mermaid-Quotes
     # Format: test_paper["<label_inhalt>"]
