@@ -23,6 +23,9 @@ _ALLOWED_HTTP = (
     "http://www.loc.gov/MARC21/slim",
     "http://www.loc.gov/zing/srw/",
     "http://doi.org/",
+    # SVG-Namespace im Demo-Renderer (#451) — ebenfalls ein Namespace-Bezeichner,
+    # der so im Dokument stehen MUSS; https:// waere schlicht ein anderer Name.
+    "http://www.w3.org/2000/svg",
 )
 
 # Finde http://-URLs, die einen .../api/query- oder export.arxiv.org-Pfad

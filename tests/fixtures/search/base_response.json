@@ -1,0 +1,122 @@
+{
+  "responseHeader": {
+    "zkConnected": true,
+    "status": 0,
+    "QTime": 128,
+    "params": {
+      "q": "creator:summann",
+      "facet": "true",
+      "facet.field": [
+        "f_dcsubject",
+        "f_dcyear"
+      ],
+      "facet.limit": "10",
+      "facet.mincount": "1",
+      "facet.sort": "count",
+      "fl": "dccollection,dccontenttype,dccontinent,dccountry,dccreator,dcdate,dcdescription,dcdocid,dcdoi,dcformat,dcidentifier,dclang,dclanguage,dclink,dcperson,dcpublisher,dcrights,dcsource,dcsubject,dctitle,dcyear,dctype,dcclasscode,dctypenorm,dcdeweyfull,dcdeweyhuns,dcdeweytens,dcdeweyones,dcautoclasscode,dcrelation,dccontributor,dccoverage,dchdate,dcoa,dcrightsnorm",
+      "fq": "collection:ftubbiepub"
+    }
+  },
+  "response": {
+    "numFound": 70,
+    "start": 0,
+    "maxScore": 8.910765,
+    "docs": [
+      {
+        "dchdate": "2019-09-23T12:46:37Z",
+        "dcdocid": "a3e98a979171fc179135968f2e5bbf5d7e8696f2ff964b6f02050bb479bcdf8b",
+        "dccontinent": "ceu",
+        "dccountry": "de",
+        "dccollection": "ftubbiepub",
+        "dcprovider": "PUB - Publications at Bielefeld University",
+        "dctitle": "10 years BASE: A contribution to the worldwide development of repositories",
+        "dccreator": [
+          "Pieper, Dirk",
+          "Summann, Friedrich"
+        ],
+        "dcperson": [
+          "Pieper, Dirk",
+          "Summann, Friedrich"
+        ],
+        "dcauthorid": [
+          "Pieper, Dirk | orcid:0000-0002-6083-9348",
+          "Summann, Friedrich | orcid:0000-0002-6297-3348"
+        ],
+        "dcsubject": [
+          "Bielefeld Academic Search Engine",
+          "ddc:020"
+        ],
+        "dcdate": "2014",
+        "dcyear": 2014,
+        "dctype": [
+          "info:eu-repo/semantics/conferenceObject",
+          "doc-type:conferenceObject",
+          "text"
+        ],
+        "dctypenorm": [
+          "13"
+        ],
+        "dcidentifier": [
+          "https://pub.uni-bielefeld.de/record/2710028"
+        ],
+        "dclink": "https://pub.uni-bielefeld.de/record/2710028",
+        "dcsource": "Pieper D, Summann F. 10 years BASE: A contribution to the worldwide development of repositories. Presented at the China IR Seminar 2014.",
+        "dclanguage": [
+          "eng"
+        ],
+        "dcrights": "info:eu-repo/semantics/openAccess",
+        "dcdeweyfull": [
+          "020"
+        ],
+        "dcdeweyhuns": [
+          "0"
+        ],
+        "dcdeweytens": [
+          "02"
+        ],
+        "dcdeweyones": [
+          "020"
+        ],
+        "dcclasscode": [
+          "020"
+        ],
+        "dcoa": 1,
+        "dclang": [
+          "eng"
+        ]
+      }
+    ]
+  },
+  "facet_counts": {
+    "facet_queries": {},
+    "facet_fields": {
+      "f_dcsubject": {
+        "ddc:020": 42,
+        "Bielefeld Academic Search Engine": 12,
+        "ddc:004": 9,
+        "Repositories": 3,
+        "Bibliothek": 2,
+        "Communication": 2,
+        "Comunicazione": 2,
+        "Informatica": 2,
+        "Informatics": 2,
+        "Informatik": 2
+      },
+      "f_dcyear": {
+        "1994": 5,
+        "2009": 5,
+        "2014": 5,
+        "2017": 5,
+        "2004": 4,
+        "2005": 4,
+        "2006": 4,
+        "2013": 4,
+        "2015": 4,
+        "2016": 4
+      }
+    },
+    "facet_ranges": {},
+    "facet_intervals": {},
+    "facet_heatmaps": {}
+  }
+}
