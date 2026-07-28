@@ -1,7 +1,7 @@
 ---
 description: Search academic papers across multiple APIs (Semantic Scholar, CrossRef, OpenAlex, BASE, EconBiz, EconStor, arXiv)
 disable-model-invocation: true
-allowed-tools: Read, Write, Bash(~/.academic-research/venv/bin/python *), Bash(browser-use:*), Bash(browser-use *), Agent(query-generator, relevance-scorer)
+allowed-tools: Read, Write, Bash(~/.academic-research/venv/bin/python *), Bash(browser-use:*), Bash(browser-use *), Bash(SESSION_DIR=~/.academic-research/sessions/*), Bash(mkdir -p "$SESSION_DIR/pdfs"), Agent(query-generator, relevance-scorer), AskUserQuestion
 argument-hint: "<query>" [--mode quick|standard|deep|metadata] [--modules crossref,openalex,...] [--limit N] [--batch] [--interactive]
 ---
 
@@ -72,6 +72,41 @@ Für jedes Browser-Modul in fester Reihenfolge:
 
 1. **No-Auth zuerst:** `google_scholar` → `springer` → `oecd` → `repec`
 2. **Auth danach:** `ebscohost` → `proquest` → `opac`
+
+#### Consent-Gate vor den Auth-Modulen (Hochschul-Zugangsdaten)
+
+Bevor das erste Auth-Modul (`ebscohost`, `proquest`, `opac`) startet, muss eine
+einmalige, erklärte Zustimmung vorliegen — diese Module verwenden per
+HAN-Login (`config/browser_guides/han_login.md`) Hochschul-Zugangsdaten in
+Browser-Sessions gegen externe Plattformen. Es gelten dabei unverändert die
+Nutzungsbedingungen von **EBSCOhost**, **ProQuest** und dem **HAN**-Proxy
+deiner Hochschule.
+
+```bash
+~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/deep_search_consent.py --check
+```
+
+Gibt das Skript `no` aus (noch keine gespeicherte Zustimmung): **AskUserQuestion**-Gate mit Erklärungstext:
+
+> Die Tiefensuche greift für EBSCOhost, ProQuest und den Hochschul-OPAC auf
+> Browser-Sessions zu, die deine Hochschul-Zugangsdaten (HAN-Login) verwenden.
+> Dabei gelten unverändert die Nutzungsbedingungen von EBSCOhost, ProQuest und
+> dem HAN-Proxy deiner Hochschule. Zugangsdaten werden nie im Klartext an das
+> LLM übergeben (siehe `auth-helper`) — sie laufen ausschließlich über lokale
+> Shell-Umgebungsvariablen direkt in die Login-Formulare. Jetzt zustimmen?
+
+Optionen:
+1. **Zustimmen** — Zustimmung wird gespeichert, alle drei Auth-Module laufen wie geplant.
+2. **Ablehnen** — nur `ebscohost`, `proquest` und `opac` werden für diesen Lauf übersprungen; No-Auth-Module und alle 7 API-Module laufen unverändert weiter. Keine Zustimmung wird gespeichert — die Frage erscheint beim nächsten Tiefensuche-Lauf erneut.
+
+Bei "Zustimmen":
+
+```bash
+~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/deep_search_consent.py --record
+```
+
+Gibt der erste Check bereits `yes` aus, liegt die Zustimmung schon aus einem
+früheren Lauf vor — kein erneutes Fragen, direkt weiter mit den Auth-Modulen.
 
 Pro Modul:
 
