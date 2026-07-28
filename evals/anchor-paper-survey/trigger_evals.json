@@ -1,0 +1,25 @@
+{
+  "component": "anchor-paper-survey",
+  "should_trigger": [
+    "Ich moechte meine Recherche von diesem Paper aus starten: https://arxiv.org/abs/2005.14165.",
+    "Nutze dieses arXiv-Paper als Anker fuer die Themenfindung.",
+    "Hier ist mein Ausgangspaper als PDF, finde verwandte Arbeiten dazu.",
+    "Welche Arbeiten zitieren dieses Paper? Leg es bitte zuerst im Vault an.",
+    "Ich kenne schon ein Schluesselpaper -- bau die Literatur darum herum auf.",
+    "Lege dieses arXiv-Paper als Anker-Paper an und such verwandte Arbeiten.",
+    "Starte einen Survey ausgehend von diesem einen Papier.",
+    "Nimm diese lokale PDF als Ausgangspunkt fuer die Themen-Findung."
+  ],
+  "should_not_trigger": [
+    "Importiere meine Zotero-Bibliothek.",
+    "Extrahiere Zitate aus dem PDF.",
+    "Schreibe Kapitel 2.",
+    "Welches Thema soll ich nehmen, ohne Ausgangspaper?",
+    "Exportiere nach LaTeX.",
+    "Pruefe meinen Text auf Plagiate.",
+    "Erstelle ein Poster.",
+    "Schaerfe meine Forschungsfrage.",
+    "Generiere einen Titel.",
+    "Analysiere dieses GitHub-Repo auf verlinkte Publikationen."
+  ]
+}
