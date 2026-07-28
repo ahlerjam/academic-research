@@ -38,7 +38,7 @@ except ImportError:  # pragma: no cover
 # Vault-Funktionen direkt importieren (kein MCP-Roundtrip noetig)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
-from academic_vault.server import add_paper, ensure_file  # noqa: E402
+from academic_vault.server import add_paper, add_quote, ensure_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Datenklassen
@@ -53,6 +53,13 @@ class ImportResult:
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
     file_ids: list[str] = field(default_factory=list)
+    quotes_imported: int = 0
+    # Annotationen mit Kommentar, aber ohne markierten Quellentext (Notiz-,
+    # Bild-, Ink-Annotationen). Sie werden bewusst nicht als Quote importiert
+    # (siehe _annotation_verbatim) — der Zaehler haelt das sichtbar, damit
+    # fehlende PDF-Notizen nach dem Import nicht als stiller Datenverlust
+    # dastehen.
+    comments_skipped: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +192,77 @@ def _zotero_item_to_csl(item_data: dict) -> dict:
     }
     # Leere Strings entfernen (sauberes JSON)
     return {k: v for k, v in csl.items() if v != "" and v != [] and v != {}}
+
+
+# ---------------------------------------------------------------------------
+# Annotation-Helpers (Issue #395)
+# ---------------------------------------------------------------------------
+
+
+def _parse_page_label(label: str | None) -> int | None:
+    """Parst Zoteros `annotationPageLabel` zu `int`, falls exakt numerisch.
+
+    Zotero erlaubt beliebige Strings als Seitenlabel (roemische Ziffern wie
+    "iv", Bereiche wie "12-13", leere Strings). Solche Faelle werden bewusst
+    NICHT geraten/approximiert, sondern liefern `None` — `printed_page` ist
+    eine INTEGER-Spalte und darf nicht raten.
+    """
+    if label is None:
+        return None
+    stripped = label.strip()
+    # isdecimal() statt isdigit(): isdigit() laesst Unicode-Ziffern wie
+    # Hochstellungszeichen ("²") durch, fuer die int() dennoch einen
+    # ValueError wirft (isdecimal() lehnt sie korrekt ab).
+    if not stripped or not stripped.isdecimal():
+        return None
+    return int(stripped)
+
+
+def _annotation_verbatim(child_data: dict) -> str | None:
+    """Extrahiert den markierten QUELLENTEXT aus einem Annotation-Kind.
+
+    Ausschliesslich `annotationText` — der von Zotero aus dem PDF
+    uebernommene Ausschnitt (Highlight/Underline). Gibt `None`, wenn das Feld
+    leer ist; solche Annotationen werden nicht als Quote importiert.
+
+    KEIN Fallback auf `annotationComment`: Der Kommentar ist der eigene Text
+    der forschenden Person, kein Beleg aus der Quelle. `quotes.verbatim`
+    traegt aber genau eine Zusage — *dieser Wortlaut steht so in der Quelle* —
+    und `hooks/verbatim-guard.mjs` gibt ein Zitat im Kapitel allein deshalb
+    frei, weil `search_quote_text()` es in `quotes.verbatim` findet (LIKE-Suche
+    ohne weiteren Diskriminator; `extraction_method` wird nicht gelesen). Ein
+    Fallback wuerde die eigene Notiz also zum vermeintlich belegten Zitat
+    machen und den Guard genau die Fehlzuschreibung durchwinken lassen, die er
+    verhindern soll. Zotero selbst trennt beides strikt: In Note-Templates
+    wird `{{:highlight}}` (= `annotationText`) in Anfuehrungszeichen bzw.
+    `<blockquote>` gerendert, `{{:comment}}` dagegen ausserhalb des Zitats.
+    """
+    return (child_data.get("annotationText") or "").strip() or None
+
+
+def _existing_quote_keys(db_path: str, paper_id: str) -> set[tuple[str, int | None]]:
+    """Liest die bereits vorhandenen Quote-Schluessel eines Papers.
+
+    Schluessel ist `(verbatim, printed_page)` — die fachliche Identitaet einer
+    importierten Markierung. Zwei Markierungen mit demselben Wortlaut auf
+    verschiedenen Seiten bleiben dadurch zwei getrennte Quotes, ein zweiter
+    Import derselben Markierung wird jedoch erkannt.
+
+    Notwendig, weil `add_quote()` jede Quote mit frischer `uuid4()` einfuegt
+    und selbst nicht dedupliziert: Items ohne DOI/ISBN durchlaufen bei jedem
+    Lauf den vollen Importpfad (`_paper_exists_in_vault` kann sie nicht
+    erkennen), waehrend `paper_id` ueber den stabilen Zotero-Key konstant
+    bleibt — ohne diesen Filter wuechse pro Lauf eine weitere Kopie jeder
+    Markierung an dasselbe Paper.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT verbatim, printed_page FROM quotes WHERE paper_id = ?", (paper_id,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return {(verbatim, printed_page) for verbatim, printed_page in rows}
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +407,55 @@ def run_import(
                                 result.errors.append(
                                     f"ensure_file fuer {paper_id} fehlgeschlagen: {e}"
                                 )
-                            break  # Nur erstes PDF-Attachment
+
+                        # Annotationen (Highlights/Notizen) dieses Attachments
+                        # importieren — unabhaengig vom Download-Erfolg des PDFs.
+                        try:
+                            annotation_children = zot.children(att_key)
+                        except Exception as e:
+                            result.errors.append(
+                                f"Annotationen fuer {att_key} konnten nicht geladen werden: {e}"
+                            )
+                            annotation_children = []
+
+                        # Bereits vorhandene Quotes dieses Papers einmal lesen;
+                        # jede neu eingefuegte Markierung wandert in dasselbe Set,
+                        # damit auch Dubletten innerhalb eines Laufs greifen.
+                        seen_quotes = _existing_quote_keys(db_path, paper_id)
+
+                        for annotation_child in annotation_children:
+                            ann_data = annotation_child.get("data", {})
+                            if ann_data.get("itemType") != "annotation":
+                                continue
+                            verbatim = _annotation_verbatim(ann_data)
+                            if not verbatim:
+                                # Nur-Kommentar-Annotation: nicht als Quote
+                                # importieren (Nutzertext, kein Beleg), aber
+                                # mitzaehlen statt still zu verwerfen.
+                                if (ann_data.get("annotationComment") or "").strip():
+                                    result.comments_skipped += 1
+                                continue
+                            printed_page = _parse_page_label(ann_data.get("annotationPageLabel"))
+                            if (verbatim, printed_page) in seen_quotes:
+                                continue
+                            try:
+                                add_quote(
+                                    db_path=db_path,
+                                    paper_id=paper_id,
+                                    verbatim=verbatim,
+                                    extraction_method="manual",
+                                    printed_page=printed_page,
+                                )
+                                seen_quotes.add((verbatim, printed_page))
+                                result.quotes_imported += 1
+                            except Exception as e:
+                                result.errors.append(
+                                    f"Quote-Import fuer Annotation in {paper_id} "
+                                    f"fehlgeschlagen: {e}"
+                                )
+
+                        if local_path:
+                            break  # Nur erstes erfolgreich geladenes PDF-Attachment
 
                 result.imported += 1
 
@@ -365,6 +491,13 @@ def main() -> None:
             print(f"  - {err}", file=sys.stderr)
     if result.file_ids:
         print(f"Files-API file_ids gecacht: {len(result.file_ids)}")
+    if result.quotes_imported:
+        print(f"Annotationen als Quotes importiert: {result.quotes_imported}")
+    if result.comments_skipped:
+        print(
+            f"Nur-Kommentar-Annotationen uebersprungen: {result.comments_skipped} "
+            f"(eigener Text, kein Beleg aus der Quelle — nicht als Zitat importiert)"
+        )
 
 
 if __name__ == "__main__":

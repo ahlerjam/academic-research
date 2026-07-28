@@ -161,12 +161,17 @@ jobs:
       # die Suite modulweit statt zu laufen (#385). Bewusst NICHT das volle
       # scripts/setup.sh (Netzwerk-Installs, Permissions-Config) — nur die
       # harte Laufzeit-Abhaengigkeit des MCP-Server-Prozesses.
+      # Version an uv.lock gekoppelt (nicht "mcp>=1.0"): dieser Schritt installiert
+      # ohne Lockfile-Bezug, mcp 2.0.0 (PyPI) hat mcp.server.fastmcp entfernt und
+      # bricht academic_vault/server.py::_build_mcp_server() (faengt ImportError,
+      # Server startet als "mcp SDK nicht installiert"). uv.lock pinnt 1.28.1 —
+      # beim naechsten `uv lock --upgrade` hier synchron mitziehen.
       - name: E2E-Smoke-Voraussetzung — venv mit mcp-SDK anlegen
         run: |
           set -euo pipefail
           uv venv "$HOME/.academic-research/venv"
-          uv pip install --python "$HOME/.academic-research/venv/bin/python" "mcp>=1.0"
-          "$HOME/.academic-research/venv/bin/python" -c "import mcp.client.stdio"
+          uv pip install --python "$HOME/.academic-research/venv/bin/python" "mcp==1.28.1"
+          "$HOME/.academic-research/venv/bin/python" -c "from mcp.server.fastmcp import FastMCP; import mcp.client.stdio"
       - name: pytest mit Coverage
         run: |
           uv run pytest tests/ -p no:cacheprovider \
