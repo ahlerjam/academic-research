@@ -2,9 +2,9 @@
 
 [← zurück zur README](../../README.md)
 
-## Suchquellen (14)
+## Suchquellen (15)
 
-Das Plugin sucht in 14 Quellen: **7 API-Quellen** laufen immer und parallel, 7 weitere
+Das Plugin sucht in 15 Quellen: **8 API-Quellen** laufen immer und parallel, 7 weitere
 Module steuert die `browser-use`-CLI an (nur im `--mode deep`).
 
 ### API-Module (automatisch, parallel)
@@ -20,6 +20,7 @@ Registriert im `MODULES`-Dispatch von `scripts/search.py` — das ist die maßge
 | `econbiz` | ZBW Suchportal | Wirtschaft |
 | `econstor` | OA-Wirtschafts-Repository | Wirtschaft |
 | `arxiv` | arXiv Preprints | CS, ML, Physik, Mathe |
+| `dblp` | DBLP Computer Science Bibliography | Informatik |
 
 ### Browser-Module (`browser-use`-CLI)
 

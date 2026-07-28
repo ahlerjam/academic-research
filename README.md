@@ -63,7 +63,7 @@ sind auf deutschsprachige Hochschulen ausgelegt.
 
 | | |
 |---|---|
-| **Suchen** | 14 Quellen parallel — 7 API-Quellen immer, 7 Browser-Module auf Wunsch. Dedupliziert, 5D-bewertet, geclustert. |
+| **Suchen** | 15 Quellen parallel — 8 API-Quellen immer, 7 Browser-Module auf Wunsch. Dedupliziert, 5D-bewertet, geclustert. |
 | **Belegen** | Vault-MCP-Server (SQLite + FTS5 + Vektor-Suche). Zitate mit Seitenzahl und Herkunft. Hook blockt unbelegte Zitate. |
 | **Beschaffen** | Buch-Pipeline über TIB, Springer, OAPEN, DOAB, KVK und weitere — mit deinem Hochschulzugang. |
 | **Schreiben** | Kapitelentwürfe aus Vault-Quellen, Exposé, Gliederung, Methodikberatung. |

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Multi-source academic paper search — v4 rewrite.
 
-Searches across 7 API sources in parallel:
-  CrossRef, OpenAlex, Semantic Scholar, BASE, EconBiz, EconStor, arXiv
+Searches across 8 API sources in parallel:
+  CrossRef, OpenAlex, Semantic Scholar, BASE, EconBiz, EconStor, arXiv, DBLP
 
 Usage:
   python search.py --query "DevOps Governance" --modules crossref,openalex --limit 50
@@ -535,6 +535,47 @@ def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
     return results
 
 
+def search_dblp(query: str, limit: int) -> list[dict[str, Any]]:
+    """Search DBLP publication API (computer science venues/conferences).
+
+    Pattern adapted from JeanDiable/academic-research-plugin (MIT),
+    lib/paper_search.py.
+    """
+    url = "https://dblp.org/search/publ/api"
+    with httpx.Client(timeout=TIMEOUT) as client:
+        resp = client.get(url, params={"q": query, "format": "json", "h": limit})
+        resp.raise_for_status()
+        payload = resp.json()
+    time.sleep(0.5)
+    hits = payload.get("result", {}).get("hits", {}) or {}
+    items = hits.get("hit", []) or []
+    results: list[dict[str, Any]] = []
+    for item in items:
+        info = item.get("info", {}) or {}
+        author_data = (info.get("authors") or {}).get("author") or []
+        if isinstance(author_data, dict):
+            author_data = [author_data]
+        authors = [a.get("text") for a in author_data if isinstance(a, dict) and a.get("text")]
+        year_raw = info.get("year")
+        year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
+        results.append(
+            normalize_paper(
+                {
+                    "doi": info.get("doi"),
+                    "title": info.get("title"),
+                    "authors": authors,
+                    "year": year,
+                    "abstract": None,
+                    "venue": info.get("venue"),
+                    "citations": 0,
+                    "url": info.get("ee") or info.get("url"),
+                },
+                "dblp",
+            )
+        )
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Module registry
 # ---------------------------------------------------------------------------
@@ -547,6 +588,7 @@ MODULES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
     "econbiz": search_econbiz,
     "econstor": search_econstor,
     "arxiv": search_arxiv,
+    "dblp": search_dblp,
 }
 
 
