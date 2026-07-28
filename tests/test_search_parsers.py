@@ -2,6 +2,11 @@
 
 AC3: je Suchmodul ein Test gegen eine eingefrorene echte Antwort
      (tests/fixtures/search/, siehe create_fixtures.py fuer Herkunft).
+     Ausnahme: BASE (api.base-search.net blockt jede erreichbare Sandbox-IP,
+     siehe Kommentar bei test_base_parses_schema_reconstructed_fixture) --
+     6/7 Fixtures sind echte Live-Antworten, 1/7 (BASE) ist eine dokumentierte
+     Schema-Rekonstruktion. test_ac3_no_test_overclaims_real_fixture_for_
+     not_live_verified_module (unten) haelt diese Ausnahme als Regression fest.
 AC1: ein fehlerhafter Einzeldatensatz wird uebersprungen, die uebrigen
      Treffer eines Moduls bleiben erhalten -- keine Exception propagiert.
 
@@ -14,6 +19,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -161,7 +167,18 @@ def test_semantic_scholar_skips_broken_item_keeps_rest(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_base_parses_real_fixture(monkeypatch):
+def test_base_parses_schema_reconstructed_fixture(monkeypatch):
+    # KEIN echter Live-Pull: api.base-search.net blockt diese Sandbox-IP mit
+    # HTTP 200 + {"error": "Access denied ..."} (unabhaengig vom Client --
+    # per curl UND per WebFetch bestaetigt, Stand 2026-07-28). base_response.json
+    # ist deshalb von Hand aus dem in search.py bereits verwendeten Feldschema
+    # (dctitle/dccreator/dcyear/dcabstract/dcpublisher/dcidentifier) rekonstruiert,
+    # NICHT gegen eine echte Antwort verifiziert (siehe create_fixtures.py-
+    # Docstring). Dieser Test prueft daher nur Selbstkonsistenz des Parsers
+    # gegen das dokumentierte Schema -- kein AC3-Nachweis fuer BASE. Bei
+    # Zugriff auf eine nicht geblockte IP: Fixture per create_fixtures.py
+    # ersetzen und diesen Test zurueck auf '..._parses_real_fixture' umbenennen
+    # (Praezedenzfall fuer die Namenskonvention: test_econstor_rest_parses_real_shaped_items).
     body = (FIXTURES / "base_response.json").read_bytes()
     _patch_client(monkeypatch, _json_handler(body))
 
@@ -311,3 +328,37 @@ def test_arxiv_skips_broken_item_keeps_rest(monkeypatch):
     results = search.search_arxiv("climate change", limit=3)
 
     assert len(results) == len(entries) - 1
+
+
+# ---------------------------------------------------------------------------
+# AC3-Provenienz-Guard (Review-Finding zu PR #477 / Issue #456): ein Test
+# darf sich nicht "..._parses_real_fixture" nennen, wenn create_fixtures.py
+# fuer dasselbe Modul dokumentiert, dass gerade KEIN echter Live-Pull
+# verifiziert werden konnte (Schema-Rekonstruktion von Hand). Sonst
+# suggeriert der Testname faelschlich, AC3 sei fuer dieses Modul erfuellt.
+# ---------------------------------------------------------------------------
+
+# Module, fuer die create_fixtures.py (Modul-Docstring) explizit festhaelt,
+# dass kein echter Live-Pull moeglich/verifiziert war. Aktuell: BASE, weil
+# api.base-search.net die Sandbox-IP blockt (Stand siehe dort).
+NOT_LIVE_VERIFIED_MODULES = {"base"}
+
+
+def test_ac3_no_test_overclaims_real_fixture_for_not_live_verified_module():
+    """Namens-Guard gegen das PR-#477-Review-Finding: verhindert, dass ein
+    Parser-Test sich '..._real_fixture' nennt, obwohl die zugehoerige
+    Fixture laut create_fixtures.py von Hand rekonstruiert (nicht live
+    verifiziert) ist."""
+    source = Path(__file__).read_text(encoding="utf-8")
+    pattern = re.compile(r"^def (test_(\w+?)_parses_real_fixture)\(", re.MULTILINE)
+    matches = list(pattern.finditer(source))
+    assert matches, "Regex fand keine '..._parses_real_fixture'-Tests mehr -- Pattern pruefen."
+    for match in matches:
+        func_name, module = match.group(1), match.group(2)
+        assert module not in NOT_LIVE_VERIFIED_MODULES, (
+            f"{func_name} behauptet per Namen eine echte Live-Fixture, aber "
+            f"'{module}' ist in create_fixtures.py als NICHT live verifiziert "
+            "dokumentiert (Schema-Rekonstruktion). Test umbenennen, z.B. "
+            "'..._parses_schema_reconstructed_fixture' (Praezedenzfall: "
+            "test_econstor_rest_parses_real_shaped_items)."
+        )
