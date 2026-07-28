@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -196,6 +196,46 @@ class TestAnalyzeRepoHit:
         mock_resolve.assert_called_once_with("10.1234/abcd")
         assert len(result["candidates"]) == 1
         mock_add.assert_called_once()
+
+    def test_doi_path_with_real_crossref_type_reaches_real_vault(self, temp_vault_db):
+        """Regression (PR #433-Review): der obige Test mockt resolve_doi() UND
+        vault_add_paper() weg und kann daher nie sehen, dass die echte
+        resolve_doi()-Implementierung Crossrefs 'type'-Vokabular (z.B.
+        'journal-article') unveraendert als CSL-'type' durchreicht. Der Vault
+        akzeptiert aber ausschliesslich {'article-journal', 'book', 'chapter'}
+        (VALID_PAPER_TYPES, academic_vault/db.py) und wirft sonst ValueError
+        (validate_csl_json, academic_vault/server.py) -- vault_add_paper()
+        crashte dadurch fuer praktisch jeden echten Crossref-Journal-Treffer.
+
+        Hier laeuft NUR die HTTP-Grenze (requests.get) gemockt; resolve_doi()
+        und vault_add_paper() laufen echt gegen eine frisch initialisierte
+        Vault-DB (temp_vault_db-Fixture aus tests/conftest.py).
+        """
+        cff_text = (
+            "cff-version: 1.2.0\ntitle: My Tool\npreferred-citation:\n"
+            "  doi: 10.1234/abcd\n  title: The Paper Behind My Tool\n"
+        )
+        crossref_message = {
+            # Echtes Crossref-Vokabular, KEIN CSL-Typ (vgl. VALID_PAPER_TYPES).
+            "type": "journal-article",
+            "title": ["The Paper Behind My Tool"],
+            "author": [{"family": "Doe", "given": "Jane"}],
+            "DOI": "10.1234/abcd",
+            "published": {"date-parts": [[2021]]},
+        }
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"message": crossref_message}
+
+        with (
+            patch.object(agr, "fetch_readme", return_value="# My Tool\n\nNo direct link here.\n"),
+            patch.object(agr, "fetch_citation_cff", return_value=cff_text),
+            patch("requests.get", return_value=mock_resp),
+        ):
+            result = agr.analyze_repo("https://github.com/foo/bar", db_path=temp_vault_db)
+
+        assert len(result["candidates"]) == 1
+        assert result["candidates"][0]["doi"] == "10.1234/abcd"
 
 
 # ---------------------------------------------------------------------------

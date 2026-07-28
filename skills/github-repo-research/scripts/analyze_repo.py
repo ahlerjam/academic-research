@@ -310,6 +310,48 @@ def _normalize_doi(doi: str) -> str:
     return m.group(1) if m else doi
 
 
+# Der Vault akzeptiert ausschliesslich {"article-journal", "book", "chapter"}
+# als csl_json-'type' (VALID_PAPER_TYPES, academic_vault/db.py -- strikt
+# durchgesetzt von validate_csl_json, academic_vault/server.py, Issue #213).
+# Crossref benutzt dagegen seine eigene, deutlich feinere Typ-Taxonomie
+# (https://api.crossref.org/types, z.B. "journal-article",
+# "proceedings-article", "posted-content", ...). Eine 1:1-Uebernahme des
+# Crossref-'type'-Feldes crashte vault_add_paper() mit ValueError fuer
+# praktisch jeden echten Treffer (Review-Fund PR #433: analyze_repo.py
+# vor diesem Fix). Bekannte Crossref-Typen werden daher explizit auf den
+# passenden CSL-Typ gemappt; alles Unbekannte/Fehlende faellt sicher auf
+# "article-journal" zurueck (haeufigster Fall, entspricht dem bisherigen
+# Default) statt eine Exception zu werfen.
+_CROSSREF_TYPE_TO_CSL: dict[str, str] = {
+    "book": "book",
+    "monograph": "book",
+    "edited-book": "book",
+    "reference-book": "book",
+    "book-series": "book",
+    "book-set": "book",
+    "book-chapter": "chapter",
+    "book-part": "chapter",
+    "book-section": "chapter",
+    "book-track": "chapter",
+    "reference-entry": "chapter",
+    "journal-article": "article-journal",
+}
+
+
+def _map_crossref_type_to_csl(crossref_type: str | None) -> str:
+    """Mappt einen Crossref-'type'-Wert auf einen vault-validen CSL-Typ.
+
+    Siehe Kommentar zu _CROSSREF_TYPE_TO_CSL. Unbekannte oder fehlende Typen
+    (z.B. "proceedings-article", "posted-content", "report", "dataset", ...)
+    fallen auf "article-journal" zurueck statt vault_add_paper() crashen zu
+    lassen -- kein stiller Datenverlust, da 'type' ohnehin kein AC-relevantes
+    Feld dieses Skills ist (Kandidat landet trotzdem korrekt im Vault).
+    """
+    if not crossref_type:
+        return "article-journal"
+    return _CROSSREF_TYPE_TO_CSL.get(crossref_type, "article-journal")
+
+
 def resolve_doi(doi: str) -> str | None:
     """Holt CSL-JSON fuer einen DOI via Crossref.
 
@@ -352,7 +394,7 @@ def resolve_doi(doi: str) -> str | None:
     title = titles[0] if titles else ""
 
     csl: dict = {
-        "type": msg.get("type", "article-journal"),
+        "type": _map_crossref_type_to_csl(msg.get("type")),
         "title": title,
         "author": authors,
         "DOI": msg.get("DOI", doi_clean),
