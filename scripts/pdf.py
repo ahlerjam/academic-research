@@ -451,7 +451,7 @@ def extract_text_for_paper(pdf_path: str, doi: str | None = None) -> str:
     arxiv_id = arxiv_latex.arxiv_id_from_doi(doi)
     if arxiv_id:
         latex_source = arxiv_latex.fetch_arxiv_latex_source(arxiv_id)
-        if latex_source is not None:
+        if latex_source:
             return latex_source
     return extract_text_from_pdf(pdf_path)
 

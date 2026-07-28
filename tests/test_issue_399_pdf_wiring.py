@@ -109,6 +109,28 @@ def test_extract_text_for_paper_falls_back_to_pdf_when_latex_unavailable(monkeyp
     assert result == "pdf-text:paper.pdf"
 
 
+def test_extract_text_for_paper_falls_back_to_pdf_when_latex_source_is_empty_string(monkeypatch):
+    """arXiv-DOI, aber fetch_arxiv_latex_source() liefert "" (z. B. Tarball mit
+    ausschliesslich 0-Byte-.tex-Dateien, siehe arxiv_latex._pick_main_tex()'s
+    Groessen-Fallback) -> Fallback auf PDF-Extraktion, NICHT der leere String
+    (P1-Finding pr-deep-review PR #435: `is not None` wertete "" faelschlich
+    als Erfolg und unterdrueckte den Fallback -- leerer Papertext trotz
+    vorhandenem PDF)."""
+
+    def fake_fetch(arxiv_id: str) -> str | None:
+        return ""
+
+    def fake_pdf_extract(pdf_path: str) -> str:
+        return f"pdf-text:{pdf_path}"
+
+    monkeypatch.setattr(pdf.arxiv_latex, "fetch_arxiv_latex_source", fake_fetch)
+    monkeypatch.setattr(pdf, "extract_text_from_pdf", fake_pdf_extract)
+
+    result = pdf.extract_text_for_paper("paper.pdf", doi="10.48550/arxiv.2301.12345")
+
+    assert result == "pdf-text:paper.pdf"
+
+
 def test_action_extract_uses_latex_source_via_pdf_status(tmp_path, monkeypatch):
     """Integrationstest: action_extract() mit pdf_status_path nutzt fuer ein
     Paper mit arXiv-DOI die LaTeX-Quelle statt pypdf-Extraktion (#399,
