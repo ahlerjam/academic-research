@@ -6,12 +6,16 @@ extrahierten Textes (reportlab: y=40 = unten, aber pypdf liest
 aufsteigend nach y, also erscheint y=40 zuerst).
 """
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 # scripts/ zum Python-Pfad hinzufuegen
 
+ROOT = Path(__file__).parent.parent
+SCRIPT = ROOT / "scripts" / "page_offset.py"
 FIXTURES = Path(__file__).parent / "fixtures" / "page_offset"
 
 
@@ -164,6 +168,49 @@ def test_validate_offset_wrong_rejects():
     pdf = _require_fixture("ten_prefaces.pdf")
     result = validate_offset(str(pdf), offset=0, check_pages=[11, 12])
     assert result is False, "validate_offset soll False fuer falschen Offset zurueckgeben"
+
+
+# ---------------------------------------------------------------------------
+# CLI --validate Tests (Regression #384: Label-Offset darf nicht als
+# INKONSISTENT gemeldet werden, nur weil die Text-Heuristik nicht greift)
+# ---------------------------------------------------------------------------
+
+
+def test_cli_validate_label_offset_nicht_pruefbar_statt_inkonsistent():
+    """--validate meldet bei Label-Baum-Offset NICHT PRUEFBAR, nie INKONSISTENT.
+
+    page_labels.pdf hat einen korrekten /PageLabels-Baum (offset=3), aber
+    keinen per Text-Heuristik extrahierbaren Seitentext. Vor dem Fix gab die
+    CLI hier faelschlich 'Validierung: INKONSISTENT' fuer einen korrekten
+    Offset aus (#384-Regressionsfund)."""
+    pdf = _require_fixture("page_labels.pdf")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(pdf), "--validate"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "page_offset: 3" in result.stdout
+    assert "INKONSISTENT" not in result.stdout, (
+        f"Korrekter Label-Offset darf nicht als INKONSISTENT gemeldet werden:\n{result.stdout}"
+    )
+    assert "NICHT PRUEFBAR" in result.stdout
+
+
+def test_cli_validate_text_heuristik_offset_bleibt_pruefbar():
+    """--validate prueft weiterhin real, wenn der Offset aus der Text-Heuristik
+    stammt (kein /PageLabels-Baum vorhanden) -- Bestandsverhalten unveraendert."""
+    pdf = _require_fixture("ten_prefaces.pdf")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(pdf), "--validate"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "page_offset: 10" in result.stdout
+    assert "Validierung: OK" in result.stdout
 
 
 # ---------------------------------------------------------------------------

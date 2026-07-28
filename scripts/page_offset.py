@@ -218,5 +218,17 @@ if __name__ == "__main__":
     print(f"page_offset: {offset}")
 
     if args.validate and offset > 0:
-        valid = validate_offset(args.pdf_path, offset)
-        print(f"Validierung: {'OK' if valid else 'INKONSISTENT'}")
+        # Stammt der Offset aus dem PDF-eigenen /PageLabels-Baum (autoritative
+        # Quelle), ist er per Konstruktion korrekt -- die Text-Heuristik
+        # validate_offset() prueft aber ausschliesslich ueber extrahierten
+        # Seitentext und liefert fuer Scan-PDFs ohne Text faelschlich
+        # "INKONSISTENT" (#384-Regressionsfund). Solche Faelle als NICHT
+        # PRUEFBAR kennzeichnen statt einen korrekten Offset zu diskreditieren.
+        if _detect_offset_from_page_labels(args.pdf_path) is not None:
+            print(
+                "Validierung: NICHT PRUEFBAR "
+                "(Offset aus PDF-/PageLabels-Baum, Text-Heuristik nicht anwendbar)"
+            )
+        else:
+            valid = validate_offset(args.pdf_path, offset)
+            print(f"Validierung: {'OK' if valid else 'INKONSISTENT'}")
