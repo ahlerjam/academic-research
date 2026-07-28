@@ -71,6 +71,14 @@ def edit_payload(old: str, new: str, file_path: str = "kapitel/kap1.md") -> dict
     }
 
 
+def chapter_project(tmp_path, content: str, name: str = "kap1.md") -> Path:
+    """Legt ein Projektverzeichnis mit einer Kapiteldatei auf Platte an."""
+    project_dir = tmp_path / "projekt"
+    (project_dir / "kapitel").mkdir(parents=True, exist_ok=True)
+    (project_dir / "kapitel" / name).write_text(content, encoding="utf-8")
+    return project_dir
+
+
 @pytest.fixture
 def vault_with_quote(tmp_path):
     """Vault-DB mit einem Zitat inkl. context_before/context_after."""
@@ -153,6 +161,87 @@ def test_warning_payload_is_valid_hook_json_with_vault_context(vault_with_quote)
     )
 
 
+def test_claim_drift_warns_on_minimal_edit_against_disk_state(vault_with_quote, tmp_path):
+    """AC1: Realistischer Edit — ``old_string``/``new_string`` tragen NUR das
+    geaenderte Wort.
+
+    Das belegte Zitat und die Quellenangabe stehen ausschliesslich in der Datei
+    auf Platte. Ein Guard, der nur die beiden Tool-Strings vergleicht, sieht
+    dort nie ein Zitat und bleibt faelschlich stumm — genau der Alltagsfall,
+    den AC1 abdeckt.
+    """
+    project_dir = chapter_project(tmp_path, CHAPTER_OLD)
+    result = run_hook(
+        edit_payload("moderaten Effekt", "starken Effekt"),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert warned(result), (
+        f"Minimaler Edit neben belegtem Zitat blieb stumm. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )
+
+
+def test_minimal_edit_warning_carries_vault_context(vault_with_quote, tmp_path):
+    """AC1: Auch beim minimalen Edit traegt die Warnung den Vault-Kontext."""
+    project_dir = chapter_project(tmp_path, CHAPTER_OLD)
+    result = run_hook(
+        edit_payload("moderaten Effekt", "starken Effekt"),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert VAULT_VERBATIM in context, f"Zitat fehlt im Hinweis: {context}"
+    assert VAULT_CONTEXT_BEFORE in context, f"context_before fehlt im Hinweis: {context}"
+
+
+def test_claim_drift_warns_on_minimal_multiedit_against_disk_state(vault_with_quote, tmp_path):
+    """AC1: Auch MultiEdit mit minimalen Spans zieht den Dateikontext heran."""
+    project_dir = chapter_project(tmp_path, "# Titel\n\n" + CHAPTER_OLD)
+    payload = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": "kapitel/kap1.md",
+            "edits": [
+                {"old_string": "# Titel", "new_string": "# Ueberschrift"},
+                {"old_string": "moderaten Effekt", "new_string": "starken Effekt"},
+            ],
+        },
+    }
+    result = run_hook(
+        payload,
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert warned(result), (
+        f"Minimaler MultiEdit neben belegtem Zitat blieb stumm. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )
+
+
+def test_claim_drift_warns_on_absolute_edit_path(vault_with_quote, tmp_path):
+    """AC1: Der Dateikontext wird auch bei absolutem Tool-Pfad gefunden."""
+    project_dir = chapter_project(tmp_path, CHAPTER_OLD)
+    result = run_hook(
+        edit_payload(
+            "moderaten Effekt",
+            "starken Effekt",
+            file_path=str(project_dir / "kapitel" / "kap1.md"),
+        ),
+        env_overrides={"VAULT_DB_PATH": vault_with_quote},
+    )
+    assert result.returncode == 0
+    assert warned(result), f"Absoluter Pfad ohne Warnung: {result.stderr}"
+
+
 def test_claim_drift_warns_on_write_against_disk_state(vault_with_quote, tmp_path):
     """AC1: Write-Pfad vergleicht gegen den Dateizustand auf Platte."""
     project_dir = tmp_path / "projekt"
@@ -209,6 +298,109 @@ def test_no_warning_when_change_far_from_quote(vault_with_quote):
         f"False Positive: Aenderung ist >300 Zeichen vom Zitat entfernt. "
         f"stdout: {result.stdout} stderr: {result.stderr}"
     )
+
+
+def test_no_warning_for_minimal_edit_far_from_quote(vault_with_quote, tmp_path):
+    """AC2: Der Dateikontext darf keine Fernwirkung erzeugen.
+
+    Gegenprobe zum minimalen Edit: derselbe Mechanismus, aber die Aenderung
+    liegt weit ausserhalb des Zitat-Fensters -> stumm.
+    """
+    filler = "Ein Fuellsatz ohne jeden Belegbezug steht hier. " * 20  # ~940 Zeichen
+    content = (
+        "## Einleitung\n\nDer Aufbau folgt einer moderaten Gliederung.\n\n" + filler + CHAPTER_OLD
+    )
+    project_dir = chapter_project(tmp_path, content)
+    result = run_hook(
+        edit_payload("moderaten Gliederung", "strengen Gliederung"),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert not warned(result), (
+        f"False Positive: Aenderung ist >300 Zeichen vom Zitat entfernt. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )
+
+
+def test_no_warning_for_minimal_edit_when_citation_changed_too(vault_with_quote, tmp_path):
+    """AC2: Wird die Quellenangabe im selben Edit-Lauf mitgeaendert -> stumm."""
+    project_dir = chapter_project(tmp_path, CHAPTER_OLD)
+    payload = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": "kapitel/kap1.md",
+            "edits": [
+                {"old_string": "moderaten Effekt", "new_string": "starken Effekt"},
+                {"old_string": "(Mueller 2021, S. 45)", "new_string": "(Schmidt 2022, S. 12)"},
+            ],
+        },
+    }
+    result = run_hook(
+        payload,
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert not warned(result), (
+        f"False Positive trotz mitgeaenderter Quellenangabe: {result.stdout} {result.stderr}"
+    )
+
+
+def test_no_warning_when_edit_does_not_match_disk_content(vault_with_quote, tmp_path):
+    """AC2: Passt ``old_string`` nicht auf den Dateistand, wird nichts geraten.
+
+    Der Edit wuerde ohnehin fehlschlagen; der Guard darf daraus keine Warnung
+    ueber einen Dateistand konstruieren, der so nie entsteht.
+    """
+    project_dir = chapter_project(tmp_path, CHAPTER_OLD)
+    result = run_hook(
+        edit_payload("hier steht gar nichts dergleichen", "irgendwas anderes"),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert not warned(result), f"Warnung fuer nicht passenden Edit: {result.stdout} {result.stderr}"
+
+
+def test_no_warning_for_minimal_formatting_only_edit(vault_with_quote, tmp_path):
+    """AC2: Reine Markup-Aenderung bleibt auch mit Dateikontext stumm."""
+    project_dir = chapter_project(tmp_path, CHAPTER_OLD)
+    result = run_hook(
+        edit_payload("moderaten", "**moderaten**"),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert not warned(result), f"False Positive bei reiner Formatierung: {result.stderr}"
+
+
+def test_dollar_signs_in_replacement_do_not_corrupt_reconstruction(vault_with_quote, tmp_path):
+    """Die Rekonstruktion des neuen Dateistands ist kein Regex-Replace.
+
+    ``$&``/``$'`` sind in ``String.replace`` Sonderzeichen. Werden sie nicht
+    literal eingesetzt, verschiebt sich der rekonstruierte Text und damit das
+    Zitat-Fenster.
+    """
+    project_dir = chapter_project(tmp_path, CHAPTER_OLD)
+    result = run_hook(
+        edit_payload("moderaten Effekt", "starken Effekt von $99 (kein $& und kein $')"),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert VAULT_VERBATIM in context, f"Zitat nach $-Ersetzung nicht gefunden: {context}"
 
 
 def test_no_warning_without_any_vault_quote(empty_vault):

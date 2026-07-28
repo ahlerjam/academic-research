@@ -33,6 +33,15 @@ diese Lücke schließt der `claim-drift-guard` als **additiver Zusatzcheck**: er
 nichts an der bestehenden Kernlogik und **blockiert nie** (Exit 0, Warnung als
 `systemMessage` + `hookSpecificOutput.additionalContext`, kein `permissionDecision`).
 
+Verglichen werden immer **ganze Dateistände**, nicht die Tool-Strings: Ein realistischer
+`Edit` trägt in `old_string`/`new_string` nur die geänderte Stelle („moderaten Effekt" →
+„starken Effekt"), während Zitat und Quellenangabe ausschließlich in der Datei stehen.
+Der Hook liest deshalb den Stand von Platte und rekonstruiert daraus den neuen Stand
+(`MultiEdit`: kumulativ, ein Vergleichspaar je Teil-Edit). Ohne lesbaren Vorgängerstand
+fällt er auf den reinen String-Vergleich zurück; bei `Write` auf eine neue Datei gibt es
+keinen Vergleichsstand und er schweigt. Passt `old_string` nicht auf den Dateistand,
+würde auch das echte Tool scheitern — der Teil-Edit wird übersprungen.
+
 Er warnt nur, wenn alle Bedingungen zugleich gelten:
 
 1. Pfad ist eine Kapitel-/LaTeX-Datei (`kapitel/*.md`, `*.tex`) — wie beim `verbatim-guard`.
@@ -40,9 +49,11 @@ Er warnt nur, wenn alle Bedingungen zugleich gelten:
    Whitespace kollabiert) — reine Formatierungsänderungen zählen nicht.
 3. Im Fenster um die Änderung (Default 300 Zeichen, `CLAIM_DRIFT_WINDOW`) liegt ein
    Zitat-Span, der in Alt **und** Neu wörtlich identisch vorkommt.
-4. Die Beleg-Marker in diesem Fenster (`(Autor Jahr, S. x)`, `\cite{…}`, `[^fussnote]`,
-   `[@citekey]`) sind unverändert — wurde die Quelle mitgeändert, war es eine bewusste
-   Anpassung und der Hook schweigt.
+4. Die Beleg-Marker im Fenster **um dieses Zitat** (`(Autor Jahr, S. x)`, `\cite{…}`,
+   `[^fussnote]`, `[@citekey]`) sind unverändert — wurde die Quelle mitgeändert, war es
+   eine bewusste Anpassung und der Hook schweigt. Maßgeblich ist der Stand nach dem
+   *kompletten* Tool-Aufruf: bei einem `MultiEdit`, das die Aussage im einen und die
+   Quelle im anderen Teil-Edit anfasst, zählt das als mitgeändert.
 5. Dieser Zitat-Span ist im Vault belegt (`search_quote_text` → `get_quote`).
 
 Der Vault-Lookup ist **tri-state**: gefunden / nicht gefunden / nicht erreichbar. Anders

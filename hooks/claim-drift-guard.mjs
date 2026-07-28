@@ -116,44 +116,128 @@ function resolveFilePath(filePath) {
 // Alt/Neu-Paare je Tool-Shape
 // ---------------------------------------------------------------------------
 
-/**
- * Liefert die zu vergleichenden Textpaare:
- *   - Edit:      [{old_string, new_string}]
- *   - MultiEdit: je edits[]-Eintrag ein Paar
- *   - Write:     Dateiinhalt von Platte als "alt", content als "neu".
- *                Existiert die Datei nicht (neue Kapiteldatei), gibt es keinen
- *                Vergleichsstand — dann bleibt der Hook stumm.
- */
-function collectPairs(toolName, toolInput) {
-  if (toolName === 'Edit') {
-    return [{ before: toolInput.old_string || '', after: toolInput.new_string || '' }];
-  }
-  if (toolName === 'MultiEdit') {
-    if (!Array.isArray(toolInput.edits)) return [];
-    return toolInput.edits.map((e) => ({
-      before: e?.old_string || '',
-      after: e?.new_string || '',
-    }));
-  }
-  // Write
-  const diskPath = resolveFilePath(toolInput.file_path);
+/** Liest den aktuellen Dateistand, oder null wenn es keinen gibt. */
+function readDiskState(filePath) {
+  const diskPath = resolveFilePath(filePath);
   if (!diskPath || !existsSync(diskPath)) {
     debug(`Kein Vorgaengerstand auf Platte: ${diskPath || '(kein Pfad)'}`);
-    return [];
+    return null;
   }
-  let previous;
   try {
-    previous = readFileSync(diskPath, 'utf-8');
+    return readFileSync(diskPath, 'utf-8');
   } catch (err) {
     debug(`Datei nicht lesbar (${diskPath}): ${err.message}`);
-    return [];
+    return null;
   }
-  return [{ before: previous, after: toolInput.content || '' }];
 }
 
-/** Der gesamte neue Text — nur fuer die Bypass-Marker-Erkennung. */
-function newContent(pairs) {
-  return pairs.map((p) => p.after).join('\n');
+/**
+ * Wendet eine Edit-Ersetzung literal an (bewusst KEIN String.replace: dort
+ * waeren `$&`, `$'` & Co. im Ersatztext Sonderzeichen und wuerden den
+ * rekonstruierten Text verschieben).
+ *
+ * @returns {string|null} null, wenn `oldStr` im Text nicht vorkommt.
+ */
+function applyEdit(text, oldStr, newStr, replaceAll) {
+  if (!oldStr || !text.includes(oldStr)) return null;
+  if (replaceAll) return text.split(oldStr).join(newStr);
+  const index = text.indexOf(oldStr);
+  return text.slice(0, index) + newStr + text.slice(index + oldStr.length);
+}
+
+/**
+ * Liefert die zu vergleichenden Textpaare — jeweils GANZE Dateistaende, nicht
+ * nur die Tool-Strings.
+ *
+ * Das ist fuer Edit/MultiEdit wesentlich: ein realistischer Edit traegt in
+ * `old_string`/`new_string` nur die geaenderte Textstelle ("moderaten Effekt"
+ * → "starken Effekt"). Zitat und Quellenangabe stehen dann ausschliesslich in
+ * der Datei. Wuerde der Guard nur die beiden Tool-Strings vergleichen, laege im
+ * Fenster um die Aenderung nie ein Zitat und er bliebe stumm — genau der Fall,
+ * den Issue #397 abdecken soll. Deshalb wird der neue Dateistand aus dem
+ * Dateistand auf Platte rekonstruiert.
+ *
+ *   - Edit:      [{Platte, Platte mit angewandtem Edit}]
+ *   - MultiEdit: ein Paar je edits[]-Eintrag, kumulativ angewandt. Pro Paar
+ *                bleibt so genau EINE zusammenhaengende Aenderung uebrig, was
+ *                Voraussetzung fuer computeChangeRegion() ist.
+ *   - Write:     Dateiinhalt von Platte als "alt", content als "neu".
+ *
+ * Jedes Paar traegt zusaetzlich den Gesamtstand des Dokuments vor und nach dem
+ * KOMPLETTEN Tool-Aufruf (`docBefore`/`docAfter`) — den braucht die
+ * Beleg-Pruefung, siehe citationChangedAroundQuote().
+ *
+ * Ohne lesbaren Vorgaengerstand auf Platte faellt der Hook auf den alten,
+ * schwaecheren Vergleich der reinen Tool-Strings zurueck: besser als blind.
+ * Fuer Write gibt es diesen Rueckfall nicht — dort ist "kein Dateistand"
+ * gleichbedeutend mit "neue Datei", und ohne Vorgaengertext gibt es nichts zu
+ * vergleichen. Passt ein `old_string` nicht auf den Dateistand, wuerde auch das
+ * echte Tool scheitern; der betroffene Edit wird uebersprungen, statt einen nie
+ * entstehenden Dateistand zu konstruieren.
+ */
+function collectPairs(toolName, toolInput) {
+  const disk = readDiskState(toolInput.file_path);
+
+  if (toolName === 'Edit') {
+    const oldStr = toolInput.old_string || '';
+    const newStr = toolInput.new_string || '';
+    if (disk === null) return [withDoc({ before: oldStr, after: newStr })];
+    const reconstructed = applyEdit(disk, oldStr, newStr, toolInput.replace_all);
+    if (reconstructed === null) {
+      debug('old_string kommt im Dateistand nicht vor — Edit wird uebersprungen.');
+      return [];
+    }
+    return [withDoc({ before: disk, after: reconstructed })];
+  }
+
+  if (toolName === 'MultiEdit') {
+    if (!Array.isArray(toolInput.edits)) return [];
+    if (disk === null) {
+      return toolInput.edits.map((e) => withDoc({
+        before: e?.old_string || '',
+        after: e?.new_string || '',
+      }));
+    }
+    const staged = [];
+    let current = disk;
+    for (const edit of toolInput.edits) {
+      const next = applyEdit(current, edit?.old_string, edit?.new_string || '', edit?.replace_all);
+      if (next === null) {
+        debug('old_string kommt im Dateistand nicht vor — Edit wird uebersprungen.');
+        continue;
+      }
+      staged.push({ before: current, after: next });
+      current = next;
+    }
+    // docAfter ist der Stand NACH allen Teil-Edits: eine Quellenangabe, die ein
+    // spaeterer Teil-Edit anpasst, gilt auch fuer die frueheren Paare als
+    // mitgeaendert.
+    return staged.map((p) => ({ ...p, docBefore: disk, docAfter: current }));
+  }
+
+  // Write
+  if (disk === null) return [];
+  return [withDoc({ before: disk, after: toolInput.content || '' })];
+}
+
+/** Paar ohne eigenen Dokumentkontext: der Paartext IST der Kontext. */
+function withDoc(pair) {
+  return { ...pair, docBefore: pair.before, docAfter: pair.after };
+}
+
+/**
+ * Der vom Modell tatsaechlich geschriebene Text — nur fuer die
+ * Bypass-Marker-Erkennung. Bewusst die Tool-Eingabe und nicht der
+ * rekonstruierte Dateistand: der Marker soll die konkrete Schreiboperation
+ * abwaehlen, exakt wie in verbatim-guard.mjs, und nicht eine Datei dauerhaft
+ * aus der Pruefung nehmen, weil er irgendwo darin steht.
+ */
+function authoredContent(toolName, toolInput) {
+  if (toolName === 'MultiEdit' && Array.isArray(toolInput.edits)) {
+    return toolInput.edits.map((e) => e?.new_string || '').join('\n');
+  }
+  if (toolName === 'Edit') return toolInput.new_string || '';
+  return toolInput.content || '';
 }
 
 // ---------------------------------------------------------------------------
@@ -251,15 +335,41 @@ function distanceToRegion(span, regionStart, regionEnd) {
 // Kandidaten-Ermittlung
 // ---------------------------------------------------------------------------
 
+/** Beleg-Marker im Fenster um das Zitat, oder null wenn es dort nicht steht. */
+function markersAroundQuote(quoteText, doc) {
+  const index = doc.indexOf(quoteText);
+  if (index === -1) return null;
+  const from = Math.max(0, index - WINDOW);
+  const to = Math.min(doc.length, index + quoteText.length + WINDOW);
+  return extractCitationMarkers(doc.slice(from, to));
+}
+
+/**
+ * Wurde die Quellenangabe RUND UM DIESES ZITAT mitgeaendert? Dann ist die
+ * Ueberarbeitung eine bewusste Anpassung und keine Drift.
+ *
+ * Der Vergleich haengt bewusst am Zitat und nicht an der Aenderungsregion:
+ * bei einem MultiEdit stecken "Aussage aendern" und "Quelle nachziehen" in
+ * zwei getrennten Teil-Edits. Eine regionsbezogene Pruefung saehe im ersten
+ * Teil-Edit eine unveraenderte Quellenangabe und wuerde falsch warnen.
+ */
+function citationChangedAroundQuote(quoteText, docBefore, docAfter) {
+  const markersBefore = markersAroundQuote(quoteText, docBefore);
+  const markersAfter = markersAroundQuote(quoteText, docAfter);
+  if (markersBefore === null || markersAfter === null) return false;
+  return JSON.stringify(markersBefore) !== JSON.stringify(markersAfter);
+}
+
 /**
  * Sucht Zitat-Spans, die
  *   1. im neuen Text im Fenster um die Aenderung liegen,
  *   2. woertlich unveraendert auch im alten Text vorkommen (der Beleg selbst
  *      wurde also nicht angefasst),
- *   3. deren Beleg-Marker im selben Fenster ebenfalls unveraendert sind.
+ *   3. deren Beleg-Marker im Fenster um das Zitat unveraendert sind.
  * Gibt [] zurueck, sobald einer der Ausschlussgruende greift.
  */
-function findAnchoredQuotes(before, after) {
+function findAnchoredQuotes(pair) {
+  const { before, after, docBefore, docAfter } = pair;
   if (before === after || !before) return [];
 
   const region = computeChangeRegion(before, after);
@@ -270,21 +380,15 @@ function findAnchoredQuotes(before, after) {
     return [];
   }
 
-  const markersBefore = extractCitationMarkers(
-    before.slice(Math.max(0, region.start - WINDOW), Math.min(before.length, region.beforeEnd + WINDOW))
-  );
-  const markersAfter = extractCitationMarkers(
-    after.slice(Math.max(0, region.start - WINDOW), Math.min(after.length, region.afterEnd + WINDOW))
-  );
-  if (JSON.stringify(markersBefore) !== JSON.stringify(markersAfter)) {
-    debug('Beleg-Marker im Fenster wurden mitgeaendert — bewusste Anpassung.');
-    return [];
-  }
-
-  return extractQuoteSpans(after).filter(
-    (span) => distanceToRegion(span, region.start, region.afterEnd) <= WINDOW
-      && before.includes(span.text)
-  );
+  return extractQuoteSpans(after).filter((span) => {
+    if (distanceToRegion(span, region.start, region.afterEnd) > WINDOW) return false;
+    if (!before.includes(span.text)) return false;
+    if (citationChangedAroundQuote(span.text, docBefore, docAfter)) {
+      debug('Beleg-Marker am Zitat wurden mitgeaendert — bewusste Anpassung.');
+      return false;
+    }
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -421,19 +525,19 @@ async function main() {
   const filePath = toolInput.file_path || '';
   if (!isProtectedPath(filePath)) process.exit(0);
 
-  const pairs = collectPairs(toolName, toolInput);
-  if (pairs.length === 0) process.exit(0);
-
-  if (newContent(pairs).includes(BYPASS_MARKER)) {
+  if (authoredContent(toolName, toolInput).includes(BYPASS_MARKER)) {
     debug('Bypass-Marker gesetzt — Claim-Drift-Pruefung uebersprungen.');
     process.exit(0);
   }
+
+  const pairs = collectPairs(toolName, toolInput);
+  if (pairs.length === 0) process.exit(0);
 
   // Kandidaten sammeln (dedupliziert, Lookup-Budget begrenzt die Laufzeit).
   const candidates = [];
   const seen = new Set();
   for (const pair of pairs) {
-    for (const span of findAnchoredQuotes(pair.before, pair.after)) {
+    for (const span of findAnchoredQuotes(pair)) {
       if (seen.has(span.text)) continue;
       seen.add(span.text);
       candidates.push(span.text);
