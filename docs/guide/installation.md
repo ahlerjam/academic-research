@@ -11,8 +11,16 @@ Detail, was das Setup genau tut, und wie eine Migration von v5 abläuft.
 |-----------|-------|--------------|
 | **Claude Code** | CLI zum Ausführen | [Installations-Anleitung](https://code.claude.com/docs/en/quickstart) |
 | **Python 3.11+** | Vault-MCP-Server, Suchskripte | `brew install python@3.11` (macOS) |
+| **Node.js** | Alle Hooks sind `.mjs` und werden in `hooks/hooks.json` als `node …` gestartet — ohne Node greifen `verbatim-guard` und `claim-drift-guard` nicht | `brew install node` (macOS); CI testet gegen Node 20 |
 | **Git** | Plugin-Marketplace-Install | auf macOS/Linux meist vorinstalliert |
 | **`uv` oder `pipx`** *(optional)* | Automatische `browser-use`-Installation | `brew install pipx` oder `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+
+**Einmaliger Modell-Download.** Beim ersten Paper mit PDF lädt das Plugin die Gewichte
+des Embedding-Modells `intfloat/multilingual-e5-small` (~470 MB) nach
+`~/.academic-research/models`. Das braucht einmalig Netz und dauert spürbar; danach
+laufen Volltext- und Vektor-Suche offline. Ohne diesen Download bleibt der Vektor-Index
+leer — die Volltextsuche (FTS5) funktioniert trotzdem. Ein anderes Modell lässt sich über
+`VAULT_EMBEDDING_MODEL` setzen, siehe [Vault-Referenz](../reference/vault.md).
 
 `uv`/`pipx` sind optional: fehlen sie, überspringt das Setup die `browser-use`-CLI und
 sagt das auch. Die 7 API-Suchmodule und der gesamte Vault-/Schreib-Workflow laufen
