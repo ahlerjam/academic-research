@@ -3,11 +3,30 @@
 Alternativer Recherche-Einstieg: statt eines Themas gibt der User ein
 Ausgangspaper an (arXiv-URL/-ID oder lokaler PDF-Pfad). Der Skill loest daraus
 Titel/Autoren auf, legt GENAU EIN Anker-Paper im Vault an
-(``provenance="anchor-paper"``) und stoesst darauf eine Folge-Suche ueber die
-bestehenden Fetcher (``scripts/search.py::run_search``) an, um verwandte
-Arbeiten zu finden. Die Folge-Suche liefert nur Kandidaten zur Anzeige --
-Treffer werden NICHT automatisch in den Vault geschrieben (keine neue
-Zitations-Graph-Datenbank, siehe Issue-Scope "Out").
+(``provenance="anchor-paper"``) und stoesst darauf eine Folge-Suche an, um
+verwandte Arbeiten zu finden. Die Folge-Suche liefert nur Kandidaten zur
+Anzeige -- Treffer werden NICHT automatisch in den Vault geschrieben (keine
+neue Zitations-Graph-Datenbank, siehe Issue-Scope "Out").
+
+Folge-Suche, zweigleisig (PR #440 Review, P1):
+  - **arXiv-Anker**: echte Zitations-/Referenz-Traversierung ueber die
+    Semantic-Scholar-Graph-API (``/paper/{id}/citations`` +
+    ``/paper/{id}/references``, ``run_citation_search()``) -- der arXiv-Anker
+    liefert mit seiner ID einen stabilen, direkt referenzierbaren
+    Semantic-Scholar-Identifier (``ARXIV:<id>``). Das erfuellt Issue-Scope
+    "In" woertlich ("referenzierte/zitierende Arbeiten ... nachlädt"; kein
+    neuer externer Dienst, da Semantic Scholar bereits Teil des
+    ``network_allowlist`` ist).
+  - **PDF-Anker**: mangels stabiler externer Paper-ID faellt die Folge-Suche
+    auf eine Titel-Stichwortsuche ueber die bestehenden Fetcher
+    (``scripts/search.py::run_search``) zurueck -- dokumentierte
+    Einschraenkung, siehe SKILL.md "Bekannte Einschraenkungen".
+  - In beiden Faellen wird die Rohtrefferliste VOR der Anzeige durch
+    ``_filter_and_dedupe()`` geschickt: das Anker-Paper selbst wird aus der
+    Trefferliste entfernt (sonst zaehlt es sich als eigene "verwandte
+    Arbeit") und Mehrfachtreffer werden ueber die kanonische Repo-Pipeline
+    ``scripts/dedup.py::deduplicate()`` zusammengefuehrt (sonst ist die
+    gemeldete Trefferzahl systematisch zu hoch).
 
 Musterhinweis: Konzept-Idee lose angelehnt an
 JeanDiable/academic-research-plugin (MIT) -- keine Code-Uebernahme,
@@ -36,7 +55,9 @@ import hashlib
 import json
 import re
 import sys
+import time
 import xml.etree.ElementTree as ET
+from difflib import SequenceMatcher
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -76,6 +97,20 @@ except ImportError:
     _SEARCH_AVAILABLE = False
 
 try:
+    from dedup import deduplicate as _deduplicate_papers
+
+    _DEDUP_AVAILABLE = True
+except ImportError:
+    _DEDUP_AVAILABLE = False
+
+try:
+    from text_utils import normalize_doi, normalize_paper
+
+    _TEXT_UTILS_AVAILABLE = True
+except ImportError:
+    _TEXT_UTILS_AVAILABLE = False
+
+try:
     from academic_vault.server import add_paper as _vault_add_paper_native
 
     _VAULT_NATIVE = True
@@ -97,6 +132,22 @@ _ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 # Fetcher treffen, keine domaenenspezifische Vorauswahl.
 DEFAULT_SEARCH_MODULES: list[str] = ["arxiv", "semantic_scholar", "openalex", "crossref"]
 DEFAULT_SEARCH_LIMIT = 20
+
+# Semantic-Scholar-Graph-API fuer echte Zitations-/Referenz-Traversierung
+# (arXiv-Anker-Fall) -- bereits Teil des SKILL.md network_allowlist.
+_S2_PAPER_API = "https://api.semanticscholar.org/graph/v1/paper"
+_S2_RELATION_FIELDS = "title,year,authors,externalIds,abstract,venue,citationCount"
+# Nested Objekt-Key je Relation in der S2-Antwort (real verifiziert):
+# {"data": [{"citingPaper": {...}}]} bzw. {"data": [{"citedPaper": {...}}]}.
+_S2_RELATIONS: tuple[tuple[str, str], ...] = (
+    ("citations", "citingPaper"),
+    ("references", "citedPaper"),
+)
+
+# Schwelle fuer "ist dieser Treffer das Anker-Paper selbst" -- bewusst
+# identisch zu dedup.py's Titel-Schwelle (Level 2), weil es dieselbe Frage
+# ist: "beschreiben zwei Titel dieselbe Arbeit?" (siehe _filter_and_dedupe).
+_ANCHOR_TITLE_SIMILARITY_THRESHOLD = 0.85
 
 _ARXIV_ABS_PDF_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
 _ARXIV_BARE_ID_RE = re.compile(r"^(\d{4}\.\d{4,5})(?:v\d+)?$")
@@ -264,6 +315,134 @@ def run_search(
     return _run_search_native(query, modules, limit=limit)
 
 
+def _fetch_s2_relation(paper_ref: str, relation: str, limit: int) -> dict | None:
+    """Einzelner GET gegen /paper/{paper_ref}/{relation}, mit einmaligem
+    Retry bei HTTP 429 (Semantic Scholar rate-limitet ohne API-Key
+    aggressiv -- real beobachtet waehrend der Implementierung).
+
+    Gibt das geparste JSON zurueck, oder None bei Netzwerkfehler/HTTP!=200
+    nach dem Retry -- niemals eine Exception (Evidence before assertions).
+    """
+    url = f"{_S2_PAPER_API}/{paper_ref}/{relation}"
+    params = {"fields": _S2_RELATION_FIELDS, "limit": limit}
+    headers = {"User-Agent": _USER_AGENT}
+    for attempt in range(2):
+        try:
+            resp = requests.get(url, params=params, timeout=_TIMEOUT, headers=headers)
+        except Exception:
+            return None
+        if resp.status_code == 429 and attempt == 0:
+            time.sleep(2.0)
+            continue
+        if resp.status_code != 200:
+            return None
+        try:
+            return resp.json()
+        except Exception:
+            return None
+    return None
+
+
+def run_citation_search(
+    paper_ref: str,
+    limit: int = DEFAULT_SEARCH_LIMIT,
+) -> tuple[list[dict], list[str]]:
+    """Echte Zitations-/Referenz-Traversierung ueber die
+    Semantic-Scholar-Graph-API fuer ein S2-referenzierbares Anker-Paper
+    (z.B. ``paper_ref="ARXIV:2005.14165"``).
+
+    Erfuellt Issue-#394-Scope "In" woertlich: "anschliessend
+    referenzierte/zitierende Arbeiten ... nachlädt" -- im Unterschied zu
+    ``run_search()`` (Titel-Stichwortsuche) sind das hier tatsaechlich
+    verifizierte Zitationsbeziehungen, kein Text-Match (P1 aus PR #440
+    Review: SKILL.md versprach Zitations-Recherche, geliefert wurde nur
+    Titel-Keyword-Suche).
+
+    Ruft beide Relationen ab (Arbeiten, die den Anker zitieren UND Arbeiten,
+    die der Anker zitiert). Ein Netzwerkfehler/HTTP!=200 einer einzelnen
+    Relation liefert KEINE Exception, sondern landet als Eintrag (z.B.
+    "citations") in der zurueckgegebenen Fehlerliste -- analog zu
+    ``failed_modules`` bei ``run_search()``, damit beide Pfade in
+    ``anchor_paper_survey()`` gleich behandelt werden koennen.
+
+    Wird in Tests via patch() ersetzt.
+    """
+    if not paper_ref or not _REQUESTS_AVAILABLE:
+        return [], [relation for relation, _ in _S2_RELATIONS]
+
+    hits: list[dict] = []
+    failed: list[str] = []
+    for relation, nested_key in _S2_RELATIONS:
+        payload = _fetch_s2_relation(paper_ref, relation, limit)
+        if payload is None:
+            failed.append(relation)
+            continue
+        items = payload.get("data") or []
+        for item in items:
+            paper = item.get(nested_key) or {}
+            title = (paper.get("title") or "").strip()
+            if not title:
+                continue
+            ext = paper.get("externalIds") or {}
+            raw = {
+                "doi": ext.get("DOI"),
+                "title": title,
+                "authors": [a.get("name") for a in paper.get("authors", []) if a.get("name")],
+                "year": paper.get("year"),
+                "abstract": paper.get("abstract"),
+                "venue": paper.get("venue"),
+                "citations": paper.get("citationCount", 0),
+                "url": f"https://www.semanticscholar.org/paper/{paper.get('paperId')}"
+                if paper.get("paperId")
+                else None,
+            }
+            source_module = f"semantic_scholar_{relation}"
+            hit = normalize_paper(raw, source_module) if _TEXT_UTILS_AVAILABLE else raw
+            hits.append(hit)
+        time.sleep(0.5)  # S2-Rate-Limit-Hoeflichkeit, analog scripts/search.py
+    return hits, failed
+
+
+def _filter_and_dedupe(
+    hits: list[dict],
+    anchor_title: str,
+    anchor_doi: str | None = None,
+) -> list[dict]:
+    """Entfernt das Anker-Paper aus der Rohtrefferliste und dedupliziert den
+    Rest ueber die kanonische Repo-Pipeline (``scripts/dedup.py::deduplicate``,
+    siehe auch ``commands/search.md`` Schritt 5).
+
+    Ohne diesen Schritt zaehlt sich das Anker-Paper als eigene "verwandte
+    Arbeit" (die Folge-Suche fragt woertlich nach dem Anker-Titel bzw. holt
+    dessen Zitations-Nachbarschaft, der Anker selbst taucht darin fast immer
+    auf) und Mehrfachtreffer aus mehreren Modulen/Relationen blaehen die
+    gemeldete Trefferzahl systematisch auf (P1 aus PR #440 Review).
+    """
+    anchor_doi_norm = (
+        normalize_doi(anchor_doi)
+        if (_TEXT_UTILS_AVAILABLE and anchor_doi)
+        else (anchor_doi or None)
+    )
+    anchor_title_norm = (anchor_title or "").strip().lower()
+
+    filtered: list[dict] = []
+    for hit in hits:
+        hit_doi = hit.get("doi")
+        hit_doi_norm = normalize_doi(hit_doi) if (_TEXT_UTILS_AVAILABLE and hit_doi) else hit_doi
+        if anchor_doi_norm and hit_doi_norm and hit_doi_norm == anchor_doi_norm:
+            continue
+        hit_title = (hit.get("title") or "").strip()
+        if hit_title and anchor_title_norm:
+            ratio = SequenceMatcher(None, hit_title.lower(), anchor_title_norm).ratio()
+            if ratio >= _ANCHOR_TITLE_SIMILARITY_THRESHOLD:
+                continue
+        filtered.append(hit)
+
+    if _DEDUP_AVAILABLE:
+        filtered = _deduplicate_papers(filtered)
+    return filtered
+
+
 # ---------------------------------------------------------------------------
 # Vault-Integration
 # ---------------------------------------------------------------------------
@@ -317,7 +496,18 @@ def _handle_arxiv(arxiv_id: str, db_path: str) -> dict:
     paper_id = f"arxiv-{arxiv_id.replace('.', '-')}"
     doi = f"10.48550/arXiv.{arxiv_id}"
     vault_add_paper(db_path=db_path, paper_id=paper_id, csl_json=csl_json, doi=doi)
-    return {"status": "ok", "paper_id": paper_id, "source": "arxiv", "title": title}
+    return {
+        "status": "ok",
+        "paper_id": paper_id,
+        "source": "arxiv",
+        "title": title,
+        "doi": doi,
+        # Semantic-Scholar-Graph-API akzeptiert arXiv-IDs direkt in diesem
+        # Format als {paper_id} (real verifiziert) -- damit ist eine echte
+        # Zitations-/Referenz-Traversierung moeglich (run_citation_search()),
+        # ohne den arXiv-Treffer vorher erneut per Titel-Suche wiederzufinden.
+        "s2_ref": f"ARXIV:{arxiv_id}",
+    }
 
 
 def _handle_pdf(pdf_path: str, db_path: str) -> dict:
@@ -392,6 +582,14 @@ def anchor_paper_survey(
     bereits angelegte Anker-Paper zu verwerfen -- es wird als sauberer
     Fehlertext in der Nachricht gemeldet.
 
+    Folge-Suche, zweigleisig (PR #440 Review, P1 -- siehe Modul-Docstring):
+    arXiv-Anker nutzen ``run_citation_search()`` (echte Zitations-/Referenz-
+    Traversierung ueber Semantic Scholar), PDF-Anker fallen mangels stabiler
+    externer Paper-ID auf ``run_search()`` (Titel-Stichwortsuche) zurueck.
+    In beiden Faellen entfernt ``_filter_and_dedupe()`` das Anker-Paper aus
+    der Rohtrefferliste und dedupliziert den Rest ueber die kanonische
+    Repo-Pipeline (``scripts/dedup.py``), bevor gezaehlt/gemeldet wird.
+
     Returns:
         {"status": "ok"|"error", "paper_id"?, "source"?, "title"?,
          "search"?: {"hits", "count", "failed_modules"}, "message"}
@@ -404,8 +602,14 @@ def anchor_paper_survey(
     if anchor["status"] == "error":
         return anchor
 
-    modules = list(search_modules) if search_modules else list(DEFAULT_SEARCH_MODULES)
-    hits, failed = run_search(anchor["title"], modules, limit=search_limit)
+    s2_ref = anchor.get("s2_ref")
+    if s2_ref:
+        raw_hits, failed = run_citation_search(s2_ref, limit=search_limit)
+    else:
+        modules = list(search_modules) if search_modules else list(DEFAULT_SEARCH_MODULES)
+        raw_hits, failed = run_search(anchor["title"], modules, limit=search_limit)
+
+    hits = _filter_and_dedupe(raw_hits, anchor["title"], anchor.get("doi"))
 
     if hits:
         message = (

@@ -14,8 +14,10 @@ description: >
   "Survey ausgehend von einem Paper / einem Papier".
   Extrahiert Titel/Autoren aus arXiv-Metadaten (arXiv-API) bzw. heuristisch
   aus einem lokalen PDF (`scripts/pdf.py`), legt genau einen Vault-Eintrag
-  via `vault.add_paper(provenance="anchor-paper")` an und stößt eine
-  Folge-Suche über `scripts/search.py::run_search()` an.
+  via `vault.add_paper(provenance="anchor-paper")` an und lädt danach
+  verwandte Arbeiten nach: bei arXiv-Ankern per echter Zitations-/
+  Referenz-Abfrage (Semantic Scholar), bei PDF-Ankern per Titelsuche über
+  `scripts/search.py::run_search()`.
 license: MIT
 allowed-tools:
   - Bash
@@ -42,9 +44,19 @@ Ergänzt die themenbasierte Recherche um einen zweiten Einstiegspunkt:
 starten, gibt der User ein Ausgangspaper an — eine arXiv-URL/-ID oder den
 Pfad zu einer lokalen PDF. Der Skill legt dieses Paper als Anker im Vault
 an (`provenance="anchor-paper"`) und lädt darauf aufbauend verwandte Arbeiten
-über die bereits vorhandenen Fetcher (`scripts/search.py`) nach — analog zum
-Geschwister-Feature `github-repo-research` (Issue #401), nur mit einem Paper
-statt einem Code-Repository als Anker.
+nach — analog zum Geschwister-Feature `github-repo-research` (Issue #401),
+nur mit einem Paper statt einem Code-Repository als Anker.
+
+Die Folge-Suche ist bewusst zweigleisig: arXiv-Anker besitzen mit ihrer ID
+einen stabilen Semantic-Scholar-Identifier (`ARXIV:<id>`) und bekommen damit
+eine **echte** Zitations-/Referenz-Traversierung (`/paper/{id}/citations` +
+`/paper/{id}/references`) — Arbeiten, die den Anker tatsächlich zitieren
+bzw. die er zitiert, kein Text-Match. PDF-Anker haben keinen solchen
+externen Identifier und fallen auf eine Titelsuche über die bereits
+vorhandenen Fetcher (`scripts/search.py`) zurück. In beiden Fällen wird das
+Anker-Paper selbst aus der Trefferliste gefiltert und die Rohtreffer werden
+über die kanonische Repo-Pipeline (`scripts/dedup.py`) dedupliziert, bevor
+gezählt/gemeldet wird.
 
 Konzept-Idee lose angelehnt an `JeanDiable/academic-research-plugin` (MIT) —
 ausschließlich als Ideengeber zitiert; diese Implementierung teilt keinen
@@ -99,9 +111,14 @@ CSL-JSON (Titel/Autoren/DOI)   extract_text_from_pdf() + Titel/Autoren-Heuristik
     ←──── genau EIN Anker-Paper ────→
     ↓
 vault.add_paper(..., provenance="anchor-paper")
-    ↓
-Folge-Suche: run_search(query=Titel, modules=[arxiv, semantic_scholar,
-             openalex, crossref])
+    ↓                              ↘
+arXiv-Anker                     PDF-Anker
+    ↓                              ↓
+run_citation_search(              run_search(query=Titel,
+  "ARXIV:<id>")                     modules=[arxiv, semantic_scholar,
+  → /citations + /references         openalex, crossref])
+    ↓                              ↓
+    ←── _filter_and_dedupe() ───→   (Anker raus, scripts/dedup.py)
     ↓
 Ergebnis: {status: "ok"|"error", paper_id, source, title,
            search: {hits, count, failed_modules}, message}
@@ -127,17 +144,23 @@ Pfad)? → `ValueError` mit Klartextmeldung, ebenfalls ohne jede Vault-Mutation.
 5. Erfolgreich aufgelöstes Anker-Paper via `vault.add_paper()` ablegen
    (`provenance="anchor-paper"`) — **genau ein** Eintrag, kein Mehr, kein
    Weniger
-6. Folge-Suche über `scripts/search.py::run_search()` mit dem Titel als
-   Query anstoßen; Treffer werden **nur angezeigt**, nicht automatisch in
-   den Vault geschrieben
+6. Folge-Suche anstoßen — **arXiv-Anker**: `run_citation_search()` fragt
+   die Semantic-Scholar-Graph-API nach Arbeiten, die den Anker zitieren
+   (`/citations`) bzw. die er zitiert (`/references`); **PDF-Anker**:
+   `scripts/search.py::run_search()` mit dem extrahierten Titel als Query
+   (kein stabiler externer Identifier verfügbar). Danach entfernt
+   `_filter_and_dedupe()` das Anker-Paper aus der Rohtrefferliste und
+   dedupliziert den Rest über `scripts/dedup.py`. Treffer werden **nur
+   angezeigt**, nicht automatisch in den Vault geschrieben
 7. Ergebnis melden: Anker angelegt + N verwandte Arbeiten gefunden, oder
    sauberer Fehlertext bei Auflösungs-/Extraktions-/Suchfehlern
 
 ## Abgrenzung
 
 - **Kein neuer externer Dienst und keine Zitations-Graph-Datenbank** — die
-  Folge-Suche nutzt ausschließlich die bereits vorhandenen Quellen-APIs
-  (`scripts/search.py`); Semantic Scholar liefert Zitationsdaten bereits.
+  Zitations-/Referenz-Abfrage nutzt ausschließlich die Semantic-Scholar-API,
+  die bereits Teil des `network_allowlist` ist; es wird kein eigener
+  Zitations-Graph aufgebaut oder persistiert.
 - **Folge-Treffer werden nicht automatisch importiert**: nur das Anker-Paper
   selbst landet im Vault, die Suchergebnisse sind Kandidaten zur Anzeige.
 - Kein Cross-Skill-Import aus `github-repo-research`: eigenständige
@@ -147,8 +170,10 @@ Pfad)? → `ValueError` mit Klartextmeldung, ebenfalls ohne jede Vault-Mutation.
 
 ## Sicherheitshinweise
 
-- **Read-only Netz**: Nur lesende API-Zugriffe (arXiv, Crossref, OpenAlex,
-  Semantic Scholar über `scripts/search.py`)
+- **Read-only Netz**: Nur lesende API-Zugriffe (arXiv; Semantic Scholar
+  direkt für die Zitations-/Referenz-Abfrage der arXiv-Anker; Crossref,
+  OpenAlex, Semantic Scholar über `scripts/search.py` für die
+  Titel-Stichwortsuche der PDF-Anker)
 - **Kein Schreiben in externe Systeme**: Nur der lokale Vault wird beschrieben
 - **Keine Codeausführung**: Es wird kein Skript/Code aus einer PDF oder von
   arXiv ausgeführt, ausschließlich Text-/Metadaten-Extraktion
@@ -166,9 +191,15 @@ Pfad)? → `ValueError` mit Klartextmeldung, ebenfalls ohne jede Vault-Mutation.
 - Scan-PDFs ohne Textlayer werden erkannt (`detect_needs_ocr`), aber nicht
   automatisch per OCR nachbearbeitet — das bleibt ein manueller,
   vorgelagerter Schritt (`scripts/ocr.py`)
-- Die Folge-Suche verwendet nur den extrahierten Titel als Query; sehr
-  generische oder gekürzte Titel können zu Streutreffern oder keinem
-  Treffer führen
+- **Nur arXiv-Anker bekommen eine geprüfte Zitations-/Referenz-Beziehung**
+  (Semantic-Scholar-`/citations`+`/references`). PDF-Anker haben keinen
+  stabilen externen Paper-Identifier und fallen auf eine Titel-Stichwortsuche
+  zurück — deren Treffer sind thematisch ähnlich, aber KEINE nachgewiesene
+  Zitationsbeziehung. Trigger wie "welche Arbeiten zitieren dieses Paper"
+  lösen den Skill für PDF-Anker korrekt aus, liefern in diesem Fall aber nur
+  die Titel-Näherung, keine verifizierte Zitationsliste. Sehr generische
+  oder gekürzte extrahierte Titel können dabei zusätzlich zu Streutreffern
+  oder keinem Treffer führen
 - Netz-Ausfälle bei arXiv/der Folge-Suche führen zu einem sauberen
   Fehlertext statt Crash oder fabriziertem Ergebnis — "nicht gelesen" ist
   nicht "nicht vorhanden"

@@ -188,7 +188,7 @@ class TestAnchorPaperSurveyArxivSuccess:
         with (
             patch("requests.get", return_value=mock_resp),
             patch.object(aps, "vault_add_paper", wraps=aps.vault_add_paper) as mock_add,
-            patch.object(aps, "run_search", return_value=(search_hits, [])) as mock_search,
+            patch.object(aps, "run_citation_search", return_value=(search_hits, [])) as mock_search,
         ):
             result = aps.anchor_paper_survey(
                 "https://arxiv.org/abs/2005.14165", db_path=temp_vault_db
@@ -197,7 +197,12 @@ class TestAnchorPaperSurveyArxivSuccess:
         assert result["status"] == "ok"
         assert result["source"] == "arxiv"
         mock_add.assert_called_once()
-        mock_search.assert_called_once()
+        # arXiv-Anker nutzt die echte Zitations-/Referenz-Traversierung
+        # (run_citation_search), nicht die Titel-Keyword-Suche -- P1 aus
+        # PR #440 Review: SKILL.md versprach Zitations-Recherche, geliefert
+        # wurde vorher nur run_search(). Siehe auch
+        # TestFollowUpSearchQualityFixes weiter unten.
+        mock_search.assert_called_once_with("ARXIV:2005.14165", limit=aps.DEFAULT_SEARCH_LIMIT)
 
         paper = vault_get_paper(temp_vault_db, result["paper_id"])
         assert paper is not None
@@ -205,14 +210,20 @@ class TestAnchorPaperSurveyArxivSuccess:
         assert csl["title"] == "Language Models are Few-Shot Learners"
         assert paper["provenance"] == "anchor-paper"
 
+        # Ein einzelner Roh-Treffer ohne Kollision mit dem Anker durchlaeuft
+        # _filter_and_dedupe() -- dedup.py::deduplicate() normalisiert dabei
+        # jeden Treffer auf das gemeinsame Paper-Schema (ergaenzt z.B. leere
+        # "authors"/"citations"-Felder), deshalb hier gezielte Feldchecks
+        # statt exakter Dict-Gleichheit mit der rohen Eingabe.
         assert result["search"]["count"] == 1
-        assert result["search"]["hits"] == search_hits
+        assert result["search"]["hits"][0]["title"] == "A Related Work"
+        assert result["search"]["hits"][0]["doi"] == "10.1234/related"
 
     def test_arxiv_resolution_failure_adds_no_paper(self, temp_vault_db):
         with (
             patch.object(aps, "resolve_arxiv_id", return_value=None),
             patch.object(aps, "vault_add_paper") as mock_add,
-            patch.object(aps, "run_search") as mock_search,
+            patch.object(aps, "run_citation_search") as mock_search,
         ):
             result = aps.anchor_paper_survey(
                 "https://arxiv.org/abs/2005.14165", db_path=temp_vault_db
@@ -235,7 +246,7 @@ class TestAnchorPaperSurveyArxivSuccess:
         with (
             patch("requests.get", return_value=mock_resp),
             patch.object(aps, "vault_add_paper") as mock_add,
-            patch.object(aps, "run_search") as mock_search,
+            patch.object(aps, "run_citation_search") as mock_search,
         ):
             result = aps.anchor_paper_survey("1234.5678", db_path=temp_vault_db)
 
@@ -366,6 +377,225 @@ class TestAnchorPaperSurveyInvalidInput:
     def test_empty_input_raises_value_error(self, temp_vault_db):
         with pytest.raises(ValueError):
             aps.anchor_paper_survey("", db_path=temp_vault_db)
+
+
+# ---------------------------------------------------------------------------
+# Folge-Suche-Qualitaet (P1-Findings aus PR #440 Review, Fix-Runde)
+#
+# 1. Folge-Suche ohne Dedup und ohne Anker-Filter: Trefferzahl falsch,
+#    Anker-Paper landet als eigene "verwandte Arbeit" (anchor_paper.py:408).
+# 2. SKILL.md wirbt mit Zitations-Recherche, liefert aber nur eine
+#    Titel-Keyword-Suche -- Scope-"In" von #394 nicht umgesetzt (SKILL.md:13).
+# ---------------------------------------------------------------------------
+
+
+ARXIV_TITLE = "Language Models are Few-Shot Learners"
+ARXIV_DOI = "10.48550/arXiv.2005.14165"
+
+
+class TestAnchorFilterAndDedupe:
+    """Direkte Unit-Tests fuer _filter_and_dedupe() (P1 #1)."""
+
+    def test_anchor_hit_with_identical_title_is_excluded(self):
+        hits = [
+            {"title": ARXIV_TITLE, "doi": None},
+            {"title": "A Genuinely Different Related Work", "doi": "10.1/other"},
+        ]
+        result = aps._filter_and_dedupe(hits, ARXIV_TITLE, ARXIV_DOI)
+        titles = [h["title"] for h in result]
+        assert ARXIV_TITLE not in titles
+        assert "A Genuinely Different Related Work" in titles
+        assert len(result) == 1
+
+    def test_anchor_hit_matched_by_doi_even_with_slightly_different_title(self):
+        """Manche Fetcher liefern denselben Treffer mit leicht abweichender
+        Titel-Schreibweise (Gross-/Kleinschreibung, Zusatz) zurueck -- der
+        DOI-Abgleich muss ihn trotzdem als Anker erkennen."""
+        hits = [{"title": "language models are few-shot learners", "doi": ARXIV_DOI}]
+        result = aps._filter_and_dedupe(hits, ARXIV_TITLE, ARXIV_DOI)
+        assert result == []
+
+    def test_unrelated_hit_with_similar_but_distinct_title_survives(self):
+        """Ein NICHT-identisches, nur thematisch verwandtes Paper darf nicht
+        faelschlich als Anker herausgefiltert werden (kein Overmatching)."""
+        hits = [{"title": "A Survey of Few-Shot Learning Methods", "doi": "10.1/survey"}]
+        result = aps._filter_and_dedupe(hits, ARXIV_TITLE, ARXIV_DOI)
+        assert len(result) == 1
+
+    def test_duplicate_hits_across_modules_are_merged(self):
+        """Dieselbe verwandte Arbeit, von zwei Modulen unabhaengig gefunden
+        (gleiche DOI) -- muss zu einem Treffer zusammengefuehrt werden,
+        sonst ist die gemeldete Trefferzahl aufgeblaeht."""
+        hits = [
+            {"title": "A Related Work", "doi": "10.1234/related", "source_module": "arxiv"},
+            {"title": "A Related Work", "doi": "10.1234/related", "source_module": "crossref"},
+        ]
+        result = aps._filter_and_dedupe(hits, ARXIV_TITLE, ARXIV_DOI)
+        assert len(result) == 1
+
+    def test_empty_hits_returns_empty(self):
+        assert aps._filter_and_dedupe([], ARXIV_TITLE, ARXIV_DOI) == []
+
+
+class TestAnchorPaperSurveyEndToEndFiltersAnchor:
+    """End-to-End-Gegenstueck: der Anker darf auch ueber die volle Pipeline
+    nicht als eigene 'verwandte Arbeit' im Ergebnis auftauchen (P1 #1)."""
+
+    def test_arxiv_anchor_not_counted_as_its_own_related_work(self, temp_vault_db):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = _read("arxiv_response.xml")
+
+        # Realistisches Szenario: die Zitations-/Referenz-Traversierung
+        # liefert den Anker selbst (z.B. weil er als Ko-Zitation auftaucht)
+        # PLUS zwei echte verwandte Arbeiten, eine davon doppelt (zwei
+        # Relationen liefern denselben Nachbarn).
+        raw_hits = [
+            {"title": ARXIV_TITLE, "doi": ARXIV_DOI},
+            {
+                "title": "GPT-2: Language Models are Unsupervised Multitask Learners",
+                "doi": "10.1/gpt2",
+            },
+            {
+                "title": "GPT-2: Language Models are Unsupervised Multitask Learners",
+                "doi": "10.1/gpt2",
+            },
+        ]
+
+        with (
+            patch("requests.get", return_value=mock_resp),
+            patch.object(aps, "run_citation_search", return_value=(raw_hits, [])),
+        ):
+            result = aps.anchor_paper_survey(
+                "https://arxiv.org/abs/2005.14165", db_path=temp_vault_db
+            )
+
+        assert result["status"] == "ok"
+        titles = [h["title"] for h in result["search"]["hits"]]
+        assert ARXIV_TITLE not in titles
+        assert result["search"]["count"] == 1
+        assert "GPT-2: Language Models are Unsupervised Multitask Learners" in titles
+
+
+class TestCitationSearchWiring:
+    """arXiv-Anker nutzen die echte Semantic-Scholar-Zitations-/Referenz-API,
+    PDF-Anker fallen mangels stabiler externer ID auf die Titel-Keyword-Suche
+    zurueck (P1 #2: SKILL.md versprach Zitations-Recherche, geliefert wurde
+    vorher immer nur run_search())."""
+
+    def test_arxiv_anchor_calls_citation_search_not_keyword_search(self, temp_vault_db):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = _read("arxiv_response.xml")
+
+        with (
+            patch("requests.get", return_value=mock_resp),
+            patch.object(aps, "run_citation_search", return_value=([], [])) as mock_citation,
+            patch.object(aps, "run_search") as mock_keyword,
+        ):
+            aps.anchor_paper_survey("https://arxiv.org/abs/2005.14165", db_path=temp_vault_db)
+
+        mock_citation.assert_called_once_with("ARXIV:2005.14165", limit=aps.DEFAULT_SEARCH_LIMIT)
+        mock_keyword.assert_not_called()
+
+    def test_pdf_anchor_falls_back_to_keyword_search_documented_limitation(
+        self, sample_pdf, temp_vault_db
+    ):
+        """PDF-Anker haben keinen stabilen externen Paper-Identifier fuer die
+        Semantic-Scholar-API -- dieser Fallback ist eine dokumentierte
+        Einschraenkung (SKILL.md), kein Bug."""
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_SAMPLE_TEXT),
+            patch.object(aps, "run_search", return_value=([], [])) as mock_keyword,
+            patch.object(aps, "run_citation_search") as mock_citation,
+        ):
+            aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        mock_keyword.assert_called_once()
+        mock_citation.assert_not_called()
+
+    def test_partial_relation_failure_is_reported(self, temp_vault_db):
+        """Schlaegt nur eine der beiden Relationen (citations/references)
+        fehl, muss das im Ergebnis sichtbar sein -- kein stiller Datenverlust."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = _read("arxiv_response.xml")
+
+        with (
+            patch("requests.get", return_value=mock_resp),
+            patch.object(aps, "run_citation_search", return_value=([], ["references"])),
+        ):
+            result = aps.anchor_paper_survey(
+                "https://arxiv.org/abs/2005.14165", db_path=temp_vault_db
+            )
+
+        assert result["status"] == "ok"
+        assert result["search"]["failed_modules"] == ["references"]
+        assert "references" in result["message"]
+
+
+class TestRunCitationSearch:
+    """Netzwerk-naher Test fuer run_citation_search() selbst (echte
+    Zitations-/Referenz-Traversierung ueber die Semantic-Scholar-Graph-API)."""
+
+    def _s2_payload(self, nested_key: str, papers: list[dict]) -> MagicMock:
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"data": [{nested_key: p} for p in papers]}
+        return resp
+
+    def test_combines_citations_and_references(self):
+        citing = self._s2_payload(
+            "citingPaper",
+            [{"title": "Citing Paper A", "externalIds": {"DOI": "10.1/a"}, "year": 2021}],
+        )
+        cited = self._s2_payload(
+            "citedPaper",
+            [{"title": "Cited Paper B", "externalIds": {"DOI": "10.1/b"}, "year": 2019}],
+        )
+        with patch("requests.get", side_effect=[citing, cited]):
+            hits, failed = aps.run_citation_search("ARXIV:2005.14165", limit=10)
+
+        assert failed == []
+        titles = {h["title"] for h in hits}
+        assert titles == {"Citing Paper A", "Cited Paper B"}
+
+    def test_one_relation_failing_is_reported_without_crash(self):
+        citing_ok = self._s2_payload("citingPaper", [{"title": "Citing Paper A"}])
+        references_fail = MagicMock(status_code=500)
+
+        with patch("requests.get", side_effect=[citing_ok, references_fail]):
+            hits, failed = aps.run_citation_search("ARXIV:2005.14165", limit=10)
+
+        assert failed == ["references"]
+        assert [h["title"] for h in hits] == ["Citing Paper A"]
+
+    def test_network_exception_reported_no_crash(self):
+        with patch("requests.get", side_effect=OSError("timeout")):
+            hits, failed = aps.run_citation_search("ARXIV:2005.14165", limit=10)
+
+        assert hits == []
+        assert set(failed) == {"citations", "references"}
+
+    def test_retries_once_on_429_then_succeeds(self):
+        rate_limited = MagicMock(status_code=429)
+        ok_after_retry = self._s2_payload("citingPaper", [{"title": "Citing Paper A"}])
+        references_empty = self._s2_payload("citedPaper", [])
+
+        with (
+            patch("requests.get", side_effect=[rate_limited, ok_after_retry, references_empty]),
+            patch.object(aps.time, "sleep"),
+        ):
+            hits, failed = aps.run_citation_search("ARXIV:2005.14165", limit=10)
+
+        assert failed == []
+        assert [h["title"] for h in hits] == ["Citing Paper A"]
+
+    def test_empty_paper_ref_returns_empty_with_failed(self):
+        hits, failed = aps.run_citation_search("", limit=10)
+        assert hits == []
+        assert set(failed) == {"citations", "references"}
 
 
 # ---------------------------------------------------------------------------
