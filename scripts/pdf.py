@@ -21,9 +21,11 @@ import random
 import sys
 import xml.etree.ElementTree as ET
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+import arxiv_latex
 from text_utils import load_json, normalize_doi, safe_filename, save_json
 
 try:
@@ -85,8 +87,56 @@ def download_pdf(client: httpx.Client, pdf_url: str, output_path: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _looks_like_pdf_url(url: str) -> bool:
+    """Precise check whether a URL plausibly points at a direct PDF file.
+
+    Matches only a ``.pdf`` path extension, an exact ``pdf`` path segment
+    (e.g. ``/content/pdf/...`` — not ``/pdfjs/...``), or a ``type=printable``
+    query parameter (exact key/value, not a substring). A naive substring
+    check against the raw URL (``"/pdf" in url``) also matches PDF.js viewer
+    pages like ``https://repo.example.org/pdfjs/viewer.html?file=123``,
+    which are HTML, not PDFs — this precision avoids that false positive.
+    """
+    parsed = urlparse(url)
+    path = parsed.path.lower()
+    if path.endswith(".pdf"):
+        return True
+    if "pdf" in [segment for segment in path.split("/") if segment]:
+        return True
+    query = parse_qs(parsed.query.lower())
+    return query.get("type") == ["printable"]
+
+
+def tier_openaire(client: httpx.Client, doi: str) -> str | None:
+    """Tier 1: Resolve via OpenAIRE Graph API.
+
+    Fragt ``graph/v1/researchProducts`` per DOI (``pid``) ab und sucht in
+    ``results[0]["instances"][]["urls"][]`` nach einer URL, die per Muster
+    (siehe ``_looks_like_pdf_url``) nach einem direkten PDF-Link aussieht.
+    Es gibt kein verlaessliches "ist PDF"-Feld in der API-Antwort, daher
+    die Heuristik.
+    """
+    resp = client.get(
+        "https://api.openaire.eu/graph/v1/researchProducts",
+        params={"pid": doi},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    results = resp.json().get("results", [])
+    if not results:
+        return None
+    instances = results[0].get("instances") or []
+    for instance in instances:
+        for url in instance.get("urls") or []:
+            if not isinstance(url, str):
+                continue
+            if _looks_like_pdf_url(url):
+                return url
+    return None
+
+
 def tier_unpaywall(client: httpx.Client, doi: str, email: str) -> str | None:
-    """Tier 1: Resolve via Unpaywall."""
+    """Tier 2: Resolve via Unpaywall."""
     resp = client.get(
         f"https://api.unpaywall.org/v2/{doi}", params={"email": email}, timeout=TIMEOUT
     )
@@ -95,7 +145,7 @@ def tier_unpaywall(client: httpx.Client, doi: str, email: str) -> str | None:
 
 
 def tier_core(client: httpx.Client, doi: str) -> str | None:
-    """Tier 2: Resolve via CORE."""
+    """Tier 3: Resolve via CORE."""
     import time
 
     for attempt in range(3):
@@ -116,7 +166,7 @@ def tier_core(client: httpx.Client, doi: str) -> str | None:
 
 
 def tier_module_urls(paper: dict[str, Any]) -> str | None:
-    """Tier 3: OA URLs from search metadata."""
+    """Tier 4: OA URLs from search metadata."""
     for field in ("open_access_pdf", "openAccessPdf"):
         val = paper.get(field)
         if isinstance(val, dict) and val.get("url"):
@@ -130,7 +180,7 @@ def tier_module_urls(paper: dict[str, Any]) -> str | None:
 
 
 def tier_direct_url(paper: dict[str, Any]) -> str | None:
-    """Tier 4: Direct PDF URL."""
+    """Tier 5: Direct PDF URL."""
     url = paper.get("url")
     if isinstance(url, str) and url.lower().endswith(".pdf"):
         return url
@@ -138,7 +188,7 @@ def tier_direct_url(paper: dict[str, Any]) -> str | None:
 
 
 def tier_arxiv_title(client: httpx.Client, title: str) -> str | None:
-    """Tier 5: arXiv title search fallback."""
+    """Tier 6: arXiv title search fallback."""
     safe_title = title[:80].replace('"', " ")
     try:
         resp = client.get(
@@ -159,7 +209,7 @@ def tier_arxiv_title(client: httpx.Client, title: str) -> str | None:
 
 
 def tier_openaccessbutton(client: httpx.Client, doi: str) -> str | None:
-    """Tier 6: Resolve via OpenAccessButton API."""
+    """Tier 7: Resolve via OpenAccessButton API."""
     resp = client.get(
         "https://api.openaccessbutton.org/find",
         params={"id": doi},
@@ -173,7 +223,7 @@ _DOAB_BASE = "https://directory.doabooks.org"
 
 
 def tier_doab(client: httpx.Client, isbn_or_title: str) -> str | None:
-    """Tier 7: Resolve via DOAB REST API."""
+    """Tier 8: Resolve via DOAB REST API."""
     resp = client.get(
         "https://directory.doabooks.org/rest/search",
         params={"query": isbn_or_title, "expand": "bitstreams"},
@@ -196,7 +246,7 @@ def tier_doab(client: httpx.Client, isbn_or_title: str) -> str | None:
 
 
 def tier_europepmc(client: httpx.Client, doi: str) -> str | None:
-    """Tier 8: Resolve via Europe PMC API (biomedical OA)."""
+    """Tier 10: Resolve via Europe PMC API (biomedical OA)."""
     resp = client.get(
         "https://www.europepmc.org/backend/europepmc/findByQuery.do",
         params={
@@ -223,31 +273,41 @@ def resolve_pdf_url(
     """Try all tiers to find a PDF URL. Returns (url, source_tier, error).
 
     Tier order:
-      1 Unpaywall        (DOI)
-      2 CORE             (DOI)
-      3 Module OA URLs   (metadata)
-      4 Direct URL       (metadata)
-      5 arXiv Title      (title)
-      6 DOAB             (isbn/title) — books/chapters only, before OpenAccessButton
-      7 OpenAccessButton (DOI)
-      8 DOAB             (isbn/title) — non-book fallback
-      9 EuropePMC        (DOI) — final fallback for all DOIs
+      1  OpenAIRE         (DOI) — European OA repositories
+      2  Unpaywall        (DOI)
+      3  CORE             (DOI)
+      4  Module OA URLs   (metadata)
+      5  Direct URL       (metadata)
+      6  arXiv Title      (title)
+      7  DOAB             (isbn/title) — books/chapters only, before OpenAccessButton
+      8  OpenAccessButton (DOI)
+      9  DOAB             (isbn/title) — non-book fallback
+      10 EuropePMC        (DOI) — final fallback for all DOIs
     """
     doi = normalize_doi(paper.get("doi"))
     last_error = None
     paper_type = paper.get("type") or ""
     is_book = paper_type in {"book", "chapter"}
 
-    # Tier 1: Unpaywall
+    # Tier 1: OpenAIRE
+    if doi:
+        try:
+            url = tier_openaire(client, doi)
+            if url:
+                return url, "openaire", None
+        except Exception as exc:
+            last_error = str(exc)
+
+    # Tier 2: Unpaywall
     if doi:
         try:
             url = tier_unpaywall(client, doi, email)
             if url:
-                return url, "unpaywall", None
+                return url, "unpaywall", last_error
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 2: CORE
+    # Tier 3: CORE
     if doi:
         try:
             url = tier_core(client, doi)
@@ -256,17 +316,17 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 3: Module OA URLs
+    # Tier 4: Module OA URLs
     url = tier_module_urls(paper)
     if url:
         return url, "module_oa", last_error
 
-    # Tier 4: Direct URL
+    # Tier 5: Direct URL
     url = tier_direct_url(paper)
     if url:
         return url, "direct", last_error
 
-    # Tier 5: arXiv title search
+    # Tier 6: arXiv title search
     if title := paper.get("title"):
         try:
             url = tier_arxiv_title(client, title)
@@ -275,7 +335,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 6 (book priority): DOAB first for books/chapters
+    # Tier 7 (book priority): DOAB first for books/chapters
     isbn_or_title = paper.get("isbn") or paper.get("title") or ""
     if is_book and isbn_or_title:
         try:
@@ -285,7 +345,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 7: OpenAccessButton
+    # Tier 8: OpenAccessButton
     if doi:
         try:
             url = tier_openaccessbutton(client, doi)
@@ -294,7 +354,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 8: DOAB for non-book types
+    # Tier 9: DOAB for non-book types
     if not is_book and isbn_or_title:
         try:
             url = tier_doab(client, isbn_or_title)
@@ -303,7 +363,7 @@ def resolve_pdf_url(
         except Exception as exc:
             last_error = str(exc)
 
-    # Tier 9: EuropePMC — final fallback for all DOIs
+    # Tier 10: EuropePMC — final fallback for all DOIs
     if doi:
         try:
             url = tier_europepmc(client, doi)
@@ -376,18 +436,79 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         return ""
 
 
-def action_extract(pdf_dir: str, output_path: str) -> int:
-    """Extract text from all PDFs in directory."""
+def extract_text_for_paper(pdf_path: str, doi: str | None = None) -> str:
+    """Extrahiert Text fuer ein Paper: bevorzugt die arXiv-LaTeX-Quelle
+    (Formeltreue bei MINT-Themen, #399), wenn `doi` auf eine arXiv-ID
+    verweist (Muster `10.48550/arxiv.<id>`, siehe scripts/search.py::
+    search_arxiv()); faellt sonst auf die bestehende PDF-Extraktion zurueck.
+
+    Das ist der einzige Aufrufer von arxiv_latex.fetch_arxiv_latex_source()
+    im Repo ausserhalb dessen eigener Testdatei (#399, Scope "In": Nutzung
+    als Alternative zur PDF-Extraktion, wenn ein Paper eine arXiv-ID hat).
+    Aendert NICHTS an der Extraktion fuer Nicht-arXiv-Quellen (`doi` ohne
+    arXiv-Muster bzw. `None`) -- Out-Scope aus #399.
+    """
+    arxiv_id = arxiv_latex.arxiv_id_from_doi(doi)
+    if arxiv_id:
+        latex_source = arxiv_latex.fetch_arxiv_latex_source(arxiv_id)
+        if latex_source:
+            return latex_source
+    return extract_text_from_pdf(pdf_path)
+
+
+def _doi_by_pdf_filename(pdf_status_path: str | None) -> dict[str, str]:
+    """Baut ein {PDF-Dateiname: DOI}-Mapping aus dem pdf_status.json von
+    action_resolve() (#399: ermoeglicht action_extract(), fuer arXiv-Papers
+    die LaTeX-Quelle statt PDF-Extraktion zu nutzen).
+
+    Liefert ein leeres Mapping, wenn kein Pfad angegeben ist oder die Datei
+    fehlt/kaputt ist -- action_extract() faellt dann vollstaendig auf die
+    bisherige, unveraenderte PDF-Extraktion zurueck.
+    """
+    if not pdf_status_path:
+        return {}
+    try:
+        status = load_json(pdf_status_path)
+    except (OSError, ValueError):
+        log.warning(
+            "pdf-status %s nicht lesbar -- arXiv-LaTeX-Alternative uebersprungen",
+            pdf_status_path,
+        )
+        return {}
+    if not isinstance(status, dict):
+        return {}
+
+    mapping: dict[str, str] = {}
+    for doi, entry in status.items():
+        pdf_path = entry.get("pdf_path") if isinstance(entry, dict) else None
+        if isinstance(pdf_path, str) and pdf_path:
+            mapping[os.path.basename(pdf_path)] = doi
+    return mapping
+
+
+def action_extract(pdf_dir: str, output_path: str, pdf_status_path: str | None = None) -> int:
+    """Extract text from all PDFs in directory.
+
+    Wenn `pdf_status_path` (Ausgabe von action_resolve()) angegeben ist,
+    wird pro PDF-Datei die zugehoerige DOI nachgeschlagen; hat ein Paper
+    eine erkennbare arXiv-ID, wird zuerst die arXiv-LaTeX-Quelle als
+    Formeltreue-Alternative zur PDF-Extraktion versucht (#399). Ohne
+    `pdf_status_path` ist das Verhalten identisch zum Vorher-Stand (Out-
+    Scope #399: bestehende Pipeline fuer Nicht-arXiv-Quellen unveraendert).
+    """
     texts: dict[str, str] = {}
     if not os.path.isdir(pdf_dir):
         log.error("PDF directory not found: %s", pdf_dir)
         return 1
 
+    doi_by_filename = _doi_by_pdf_filename(pdf_status_path)
+
     for fname in sorted(os.listdir(pdf_dir)):
         if not fname.lower().endswith(".pdf"):
             continue
         path = os.path.join(pdf_dir, fname)
-        text = extract_text_from_pdf(path)
+        doi = doi_by_filename.get(fname)
+        text = extract_text_for_paper(path, doi)
         texts[fname] = text
 
     save_json(texts, output_path)
@@ -447,6 +568,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", help="Output file path")
     parser.add_argument("--pdf-dir", help="PDF directory (for extract)")
     parser.add_argument(
+        "--pdf-status",
+        help=(
+            "pdf_status.json von --action resolve (fuer extract, optional). "
+            "Aktiviert die arXiv-LaTeX-Alternative aus #399 fuer Papers mit "
+            "erkennbarer arXiv-ID; ohne diese Option unveraendertes Verhalten."
+        ),
+    )
+    parser.add_argument(
         "--email", default=os.environ.get("UNPAYWALL_EMAIL", "academic-research@example.com")
     )
     return parser.parse_args()
@@ -466,7 +595,7 @@ def main() -> int:
         if not args.pdf_dir or not args.output:
             log.error("extract requires --pdf-dir, --output")
             return 1
-        return action_extract(args.pdf_dir, args.output)
+        return action_extract(args.pdf_dir, args.output, pdf_status_path=args.pdf_status)
 
     return 1
 
