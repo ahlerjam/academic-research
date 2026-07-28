@@ -116,10 +116,10 @@ Default-Werten, Beschreibung und Beispiel-Call.
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
 |------|-------------|------|
-| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None)` | Fügt Verbatim-Zitat mit Provenance ein; `extraction_method="citations-api"` erfordert `api_response_id` | `vault.add_quote("vaswani2017", "Attention is all you need", "citations-api", api_response_id="resp_1")` |
+| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None, stance=None)` | Fügt Verbatim-Zitat mit Provenance ein; `extraction_method="citations-api"` erfordert `api_response_id`; `stance` ist optional (`"supports"`/`"contrasts"`/`"mentions"`, sonst `None`) | `vault.add_quote("vaswani2017", "Attention is all you need", "citations-api", api_response_id="resp_1")` |
 | `vault.search_quote_text(verbatim, k=5)` | LIKE-Volltextsuche in `quotes.verbatim` (prüft, ob ein Zitat existiert) | `vault.search_quote_text("Attention is all", k=3)` |
 | `vault.find_quotes(paper_id, query=None, k=10)` | Gibt Quotes für ein Paper zurück (optional Ähnlichkeitssuche) | `vault.find_quotes("vaswani2017", query="self-attention")` |
-| `vault.get_quote(quote_id)` | Vollständiger Quote-Record | `vault.get_quote("q_42")` |
+| `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` |
 
 **Figures & Tabellen** (v6.1 Figure-Verifier)
 

@@ -224,6 +224,33 @@ def add_provenance_column(db_path: str) -> None:
         conn.close()
 
 
+def add_stance_column(db_path: str) -> None:
+    """Fuegt die stance-Spalte zu quotes hinzu. Idempotent (try/except). (#400)
+
+    Haelt die Haltung eines Zitats zur zitierenden Aussage fest
+    (`supports`/`contrasts`/`mentions`, siehe ``db.VALID_STANCES``). Der
+    CHECK-Constraint wird mit angelegt, damit eine migrierte Bestands-DB
+    dieselbe zweite Verteidigungslinie hat wie eine frisch aus ``schema.sql``
+    erzeugte. Default NULL fuer bestehende Zitate -- die automatische
+    Befuellung per lokaler NLI-Klassifikation ist ein Folge-Issue.
+    Aufruf-Sicher: kann mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "ALTER TABLE quotes ADD COLUMN stance TEXT "
+                "CHECK(stance IN ('supports','contrasts','mentions') OR stance IS NULL)"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def add_figures_table(db_path: str) -> None:
     """Erstellt figures-Tabelle falls nicht vorhanden. Idempotent.
 
@@ -314,12 +341,11 @@ def add_v64_tables(db_path: str) -> None:
 def apply_pending_migrations(db_path: str) -> None:
     """Buendelt die bekannten additiven Bestands-Migrationshelfer (Issue #368).
 
-    Fuehrt die 5 bestehenden, jeweils fuer sich idempotenten Helfer in fester
-    Reihenfolge aus. Bisher wurden diese Helfer nur direkt von Tests
-    aufgerufen (`test_vault_parent.py`, `test_vault_book_chapter.py`) -- kein
-    Produktivpfad hat sie verdrahtet. `VaultDB.init_schema()` ruft diese
-    Funktion ueber ein `PRAGMA user_version`-Gate genau einmal pro
-    Schema-Generation auf einer Legacy-DB auf.
+    Fuehrt die jeweils fuer sich idempotenten Helfer in fester Reihenfolge aus.
+    `VaultDB.init_schema()` ruft diese Funktion ueber ein
+    `PRAGMA user_version`-Gate genau einmal pro Schema-Generation auf einer
+    Legacy-DB auf; jeder neue Helfer gehoert hier hinein UND braucht seine
+    Spalten in `db._LEGACY_MIGRATION_COLUMNS` (Verifikation vor dem Stempeln).
 
     Jeder Helfer oeffnet/schliesst seine eigene kurzlebige `sqlite3`-Connection
     (try/except pro ALTER bzw. `CREATE TABLE IF NOT EXISTS`), daher ist auch
@@ -330,6 +356,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_book_columns(db_path)
     add_figures_table(db_path)
     add_v64_tables(db_path)
+    add_stance_column(db_path)
 
 
 def add_chunk_vectors_table(db_path: str) -> int:

@@ -91,11 +91,20 @@ def add_quote(
     section: str | None = None,
     context_before: str | None = None,
     context_after: str | None = None,
+    stance: str | None = None,
 ) -> str:
     """Fuegt Quote in Vault ein. Gibt quote_id zurueck.
 
     Halluzinationsschutz: extraction_method='citations-api' erfordert
     api_response_id. Bei Fehlen wird ValueError geworfen.
+
+    ``stance`` (optional, Issue #400) haelt die Haltung des Zitats zur
+    zitierenden Aussage fest -- einer der Werte aus ``VALID_STANCES``
+    (``supports``/``contrasts``/``mentions``) oder ``None``. Ungueltige Werte
+    weist ``VaultDB.add_quote`` mit ``ValueError`` ab. Das Feld wird derzeit nur
+    manuell gesetzt; die automatische Klassifikation per lokalem NLI-Modell
+    (Konzept-Anleihe: scite Smart Citations / SemanticCite, jeweils nur als
+    Idee uebernommen -- keine API-Anbindung) ist ein separates Folge-Issue.
     """
     if extraction_method == "citations-api" and not api_response_id:
         raise ValueError(
@@ -115,12 +124,20 @@ def add_quote(
         section=section,
         context_before=context_before,
         context_after=context_after,
+        stance=stance,
     )
     return quote_id
 
 
 def get_quote(db_path: str, quote_id: str) -> dict | None:
-    """Gibt vollstaendigen Quote-Record als dict zurueck oder None."""
+    """Gibt vollstaendigen Quote-Record als dict zurueck oder None.
+
+    Enthaelt seit Issue #400 auch das Feld ``stance`` (``supports``/
+    ``contrasts``/``mentions`` oder ``None``). Auf Bestands-DBs, die noch nicht
+    ueber ``VaultDB.init_schema()`` migriert wurden, kann der Schluessel fehlen
+    -- Konsumenten greifen deshalb per ``.get("stance")`` zu. Befuellt wird das
+    Feld aktuell nur manuell; die NLI-Klassifikation ist ein Folge-Issue.
+    """
     db = VaultDB(db_path)
     return db.get_quote(quote_id)
 
@@ -1125,8 +1142,12 @@ def _build_mcp_server():
         section: str | None = None,
         context_before: str | None = None,
         context_after: str | None = None,
+        stance: str | None = None,
     ) -> str:
-        """Fuegt Quote ein. extraction_method='citations-api' erfordert api_response_id."""
+        """Fuegt Quote ein. extraction_method='citations-api' erfordert api_response_id.
+
+        stance (optional): 'supports' | 'contrasts' | 'mentions' | None (#400).
+        """
         return add_quote(
             db_path=db_path,
             paper_id=paper_id,
@@ -1138,6 +1159,7 @@ def _build_mcp_server():
             section=section,
             context_before=context_before,
             context_after=context_after,
+            stance=stance,
         )
 
     @mcp.tool(name="vault.search_quote_text")
