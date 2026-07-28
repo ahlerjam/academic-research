@@ -30,33 +30,46 @@ _CHUNK_VECTORS_DDL = (
 
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 
+# Erlaubte Werte fuer `quotes.stance` (Issue #400): Haltung eines Zitats zur
+# zitierenden Aussage. Gespiegelt vom CHECK-Constraint in schema.sql bzw.
+# migrate.add_stance_column() -- der Constraint ist die zweite
+# Verteidigungslinie fuer Direkt-Inserts, die Python-Validierung in
+# `add_quote()` liefert die lesbare Fehlermeldung. Die automatische Befuellung
+# per lokaler NLI-Klassifikation ist ein Folge-Issue; bis dahin bleibt das Feld
+# NULL, sofern es nicht manuell gesetzt wird.
+VALID_STANCES = frozenset({"supports", "contrasts", "mentions"})
+
 # Schema-Versions-Gate (Issue #368): ueber PRAGMA user_version verfolgt.
 # Unversionierte/Legacy-DBs haben user_version=0 (SQLite-Default) und liegen
 # damit garantiert unter diesem Wert. Hochzaehlen, sobald schema.sql um
 # Spalten/Tabellen erweitert wird, die eine Bestands-Migration brauchen --
 # und der neue migrate.py-Helfer in apply_pending_migrations() ergaenzt wird.
-CURRENT_SCHEMA_VERSION = 1
+# 2 = quotes.stance (Issue #400).
+CURRENT_SCHEMA_VERSION = 2
 
-# Spalten, die `migrate.apply_pending_migrations()` in `papers` nachziehen muss
+# Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
 # jeder Helfer kapselt sein `ALTER TABLE` in `except sqlite3.OperationalError:
 # pass` (migrate.py) -- das faengt nicht nur "duplicate column name", sondern
 # z. B. auch "database is locked". Vor dem Stempeln wird deshalb per
-# `PRAGMA table_info(papers)` verifiziert, dass die Migration tatsaechlich
+# `PRAGMA table_info(<tabelle>)` verifiziert, dass die Migration tatsaechlich
 # gegriffen hat, statt dem Rueckgabewert (`None`, kein Erfolgssignal) blind zu
 # vertrauen -- sonst schliesst sich das Versions-Gate unwiderruflich, obwohl
 # die Spalten weiterhin fehlen.
-_LEGACY_MIGRATION_COLUMNS = frozenset(
-    {
-        "parent_paper_id",
-        "provenance",
-        "editor",
-        "chapter",
-        "page_first",
-        "page_last",
-        "container_title",
-    }
-)
+_LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
+    "papers": frozenset(
+        {
+            "parent_paper_id",
+            "provenance",
+            "editor",
+            "chapter",
+            "page_first",
+            "page_last",
+            "container_title",
+        }
+    ),
+    "quotes": frozenset({"stance"}),
+}
 
 
 class VaultLockedError(RuntimeError):
@@ -365,20 +378,23 @@ class VaultDB:
         # unwiderruflich (Review-Fund PR #427: user_version wuerde auch nach
         # fehlgeschlagener Migration gestempelt, AC1 dauerhaft verletzt).
         with self._connection(commit=True) as conn:
-            papers_columns = {
-                row["name"] for row in conn.execute("PRAGMA table_info(papers)").fetchall()
-            }
-            if _LEGACY_MIGRATION_COLUMNS <= papers_columns:
+            missing: list[str] = []
+            for table, required in _LEGACY_MIGRATION_COLUMNS.items():
+                present = {
+                    row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+                }
+                missing += [f"{table}.{col}" for col in sorted(required - present)]
+
+            if not missing:
                 conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
             else:
                 # Stempel bewusst auslassen: user_version bleibt unter
                 # CURRENT_SCHEMA_VERSION, damit der naechste init_schema()-Aufruf
                 # die Migration erneut versucht statt sie faelschlich als
                 # erledigt zu betrachten.
-                missing = sorted(_LEGACY_MIGRATION_COLUMNS - papers_columns)
                 logger.warning(
                     "Migration auf Schema-Version %d nicht verifizierbar -- "
-                    "papers fehlen weiterhin Spalten %s. user_version bleibt "
+                    "es fehlen weiterhin Spalten %s. user_version bleibt "
                     "unveraendert, naechster init_schema()-Aufruf migriert erneut (#368).",
                     CURRENT_SCHEMA_VERSION,
                     missing,
@@ -539,8 +555,27 @@ class VaultDB:
         section: str | None = None,
         context_before: str | None = None,
         context_after: str | None = None,
+        stance: str | None = None,
     ) -> None:
-        """INSERT eines Quotes in die quotes-Tabelle."""
+        """INSERT eines Quotes in die quotes-Tabelle.
+
+        Args:
+            stance: Optionale Haltung des Zitats zur zitierenden Aussage
+                (`VALID_STANCES`), sonst `None` (Issue #400). Die Validierung
+                liegt hier statt allein im CHECK-Constraint, damit jeder
+                Aufrufweg (MCP-Tool wie direkte ``VaultDB``-Nutzung) dieselbe
+                lesbare Meldung bekommt statt eines rohen
+                ``sqlite3.IntegrityError``.
+
+        Raises:
+            ValueError: Wenn ``stance`` weder ``None`` noch einer der Werte aus
+                ``VALID_STANCES`` ist.
+        """
+        if stance is not None and stance not in VALID_STANCES:
+            raise ValueError(
+                f"Ungueltiger stance '{stance}' -- erlaubt: {sorted(VALID_STANCES)} oder None"
+            )
+
         now = int(time.time())
         with self._connection(commit=True) as conn:
             self._raise_if_locked(conn)
@@ -549,8 +584,8 @@ class VaultDB:
                 INSERT INTO quotes
                   (quote_id, paper_id, verbatim, pdf_page, printed_page,
                    section, context_before, context_after,
-                   extraction_method, api_response_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   extraction_method, api_response_id, created_at, stance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     quote_id,
@@ -564,6 +599,7 @@ class VaultDB:
                     extraction_method,
                     api_response_id,
                     now,
+                    stance,
                 ),
             )
 
