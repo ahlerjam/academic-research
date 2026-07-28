@@ -46,6 +46,11 @@ import httpx
 TIMEOUT = 30.0
 GZIP_MAGIC = b"\x1f\x8b"
 PDF_MAGIC = b"%PDF"
+PS_MAGIC = b"%!PS"
+
+# DOI-Praefix, den scripts/search.py::search_arxiv() fuer arXiv-Treffer setzt
+# (`doi = f"10.48550/arxiv.{arxiv_id}"`) -- Grundlage fuer arxiv_id_from_doi().
+ARXIV_DOI_PREFIX = "10.48550/arxiv."
 
 # Caps gegen Decompression-Bomb/Speicherverbrauch beim In-Memory-Tar-Handling
 # (Vorbild: OAI_MAX_PAGES/OAI_MAX_RECORDS aus scripts/search.py, Issue #236).
@@ -53,6 +58,31 @@ ARXIV_LATEX_MAX_MEMBERS = 500
 ARXIV_LATEX_MAX_MEMBER_SIZE = 10_000_000  # 10 MB pro einzelner .tex-Datei
 
 log = logging.getLogger(__name__)
+
+
+def arxiv_id_from_doi(doi: str | None) -> str | None:
+    """Extrahiert die arXiv-ID aus einer DOI im Muster `10.48550/arxiv.<id>`.
+
+    scripts/search.py::search_arxiv() setzt fuer arXiv-Treffer genau dieses
+    DOI-Muster (`doi = f"10.48550/arxiv.{arxiv_id}"`). Dieser Baustein macht
+    das Feature aus scripts/pdf.py heraus nutzbar (#399, Scope "In": Nutzung
+    als Alternative zur PDF-Extraktion, wenn ein Paper eine arXiv-ID hat) --
+    ohne die bestehende Pipeline fuer Nicht-arXiv-Quellen zu beruehren, da
+    diese Funktion fuer alle anderen DOIs (bzw. `None`) `None` liefert.
+
+    Args:
+        doi: DOI-String, roh oder bereits normalisiert; `None` erlaubt.
+
+    Returns:
+        Die arXiv-ID (z.B. "2301.12345") oder `None`, wenn `doi` nicht dem
+        arXiv-DOI-Muster entspricht.
+    """
+    if not doi:
+        return None
+    value = doi.strip().lower()
+    if not value.startswith(ARXIV_DOI_PREFIX):
+        return None
+    return value[len(ARXIV_DOI_PREFIX) :] or None
 
 
 def _decode_tex(data: bytes) -> str:
@@ -158,8 +188,29 @@ def fetch_arxiv_latex_source(arxiv_id: str) -> str | None:
             if main_tex is None:
                 return None
             return _decode_tex(main_tex)
-        # Einzeldatei-gzip (kein Tar): die entpackten Bytes SIND die Quelle.
-        if b"\\documentclass" not in decompressed and not decompressed.strip():
+        # Einzeldatei-gzip (kein Tar): die entpackten Bytes SIND die Quelle --
+        # aber nur, wenn sie erkennbar LaTeX sind. arXiv liefert PDF-only-
+        # bzw. PostScript-only-Einzeldatei-Submissions ebenfalls gzip-gepackt
+        # aus (Content-Encoding: x-gzip). Die vorherige Bedingung
+        # (`\\documentclass not in decompressed and not decompressed.strip()`)
+        # war effektiv nur "leere Daten -> None", da eine leere Datei nie
+        # `\\documentclass` enthaelt -- jeder nicht-leere Nicht-LaTeX-Inhalt
+        # (PDF, PostScript, Klartext) fiel unbemerkt auf _decode_tex() durch,
+        # das ueber den latin-1-Fallback (siehe oben) jeden Binaerinhalt
+        # klaglos in einen str verwandelt (critic-Review PR #435).
+        if not decompressed.strip():
+            return None
+        if decompressed.startswith(PDF_MAGIC) or decompressed.startswith(PS_MAGIC):
+            log.info(
+                "arXiv %s: Einzeldatei-gzip ist PDF/PostScript, keine LaTeX-Quelle",
+                arxiv_id,
+            )
+            return None
+        if b"\\documentclass" not in decompressed and b"\\begin{document}" not in decompressed:
+            log.info(
+                "arXiv %s: Einzeldatei-gzip enthaelt kein erkennbares LaTeX",
+                arxiv_id,
+            )
             return None
         return _decode_tex(decompressed)
 
