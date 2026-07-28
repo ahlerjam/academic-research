@@ -85,10 +85,15 @@ Das Setup ist **idempotent**: mehrfach aufrufbar, ohne etwas zu zerstören.
 > gilt für **alle** Claude-Code-Projekte auf diesem Rechner, nicht nur für
 > academic-research. Das Setup zeigt deshalb die einzelnen neuen Regeln vor
 > dem Schreiben an (`scripts/configure_permissions.py`) und schreibt erst nach
-> expliziter Bestätigung — läuft `setup.sh` ohne Terminal (Pipe, CI), greift
-> der sichere Default: **kein** Schreiben. Keine der gesetzten Regeln erlaubt
-> pauschale Codeausführung (z. B. kein `Bash(python3 *)` mehr, nur eng
-> gescopte Muster wie `Bash(~/.academic-research/venv/bin/python *)`).
+> expliziter Bestätigung — läuft `setup.sh` ohne Terminal (Pipe, CI, u. a. der
+> primäre `/academic-research:setup`-Aufruf durch Claude Code selbst), greift
+> der sichere Default: **kein** automatisches Schreiben, sichtbar gemeldet
+> samt Nachhol-Befehl (`configure_permissions.py --yes`). Läuft `/setup` über
+> Claude Code, holt Claude die Bestätigung in diesem Fall selbst per
+> `AskUserQuestion` ein, bevor `configure_permissions.py --yes` schreibt
+> (siehe `commands/setup.md`). Keine der gesetzten Regeln erlaubt pauschale
+> Codeausführung (z. B. kein `Bash(python3 *)` mehr, nur eng gescopte Muster
+> wie `Bash(~/.academic-research/venv/bin/python *)`).
 > **Rücknahme:** Die betreffenden Zeilen aus dem `permissions.allow`-Array in
 > `~/.claude/settings.local.json` manuell entfernen (oder — falls dort keine
 > anderen Projekt-Berechtigungen stehen — die ganze Datei löschen).

@@ -75,14 +75,22 @@ def pending_permissions(settings_path: Path) -> list[str]:
     return [perm for perm in REQUIRED_PERMISSIONS if perm not in allow_list]
 
 
-def confirm_write(pending: list[str], settings_path: Path) -> bool:
+def confirm_write(pending: list[str], settings_path: Path, assume_yes: bool = False) -> bool:
     """Zeigt die zu setzenden Berechtigungen an und fragt nach Bestaetigung.
 
     - Ohne neue Regeln (idempotenter Re-Lauf, ``pending`` leer): keine Rueckfrage
       noetig, gilt als bestaetigt (kein Prompt-Spam bei jedem Setup-Aufruf).
-    - Nicht-interaktives stdin (CI/Pipe): sicherer Default = NICHT schreiben,
-      analog ``scihub_optin.py``/``uni_profile_setup.py``.
-    - Interaktiv: explizite Zustimmung ("j"/"ja"/"y"/"yes") erforderlich.
+    - ``assume_yes=True`` (CLI-Flag ``--yes`` bzw.
+      ``ACADEMIC_RESEARCH_CONFIRM_PERMISSIONS=1``): explizite, vorab erteilte
+      Zustimmung — z. B. nachdem Claude Code die pending-Regeln bereits per
+      ``AskUserQuestion`` bestaetigt bekommen hat (siehe commands/setup.md).
+      Greift auch ohne TTY, denn genau das ist der Fall, den Issue #458 P1
+      abdeckt: der primaere ``/setup``-Pfad laeuft ohne Terminal-Eingabe.
+    - Nicht-interaktives stdin ohne ``assume_yes`` (CI/Pipe/reines
+      Skript-Ausfuehren): sicherer Default = NICHT schreiben, analog
+      ``scihub_optin.py``/``uni_profile_setup.py``.
+    - Interaktiv (TTY, kein ``assume_yes``): explizite Zustimmung
+      ("j"/"ja"/"y"/"yes") erforderlich.
     """
     if not pending:
         return True
@@ -99,11 +107,16 @@ def confirm_write(pending: list[str], settings_path: Path) -> bool:
         f"in {settings_path} entfernen."
     )
 
+    if assume_yes:
+        print("✅ --yes gesetzt — Berechtigungen werden ohne weitere Rueckfrage geschrieben.")
+        return True
+
     if not sys.stdin.isatty():
         print(
             "ℹ️  Nicht-interaktives stdin — Berechtigungen werden NICHT automatisch "
             "geschrieben (sicherer Default). Zum Bestaetigen configure_permissions.py "
-            "direkt in einem Terminal ausfuehren."
+            "direkt in einem Terminal ausfuehren, oder mit '--yes' nicht-interaktiv "
+            "bestaetigen (siehe commands/setup.md)."
         )
         return False
 
@@ -140,8 +153,19 @@ def main(settings_path: Path | None = None) -> int:
 
 
 if __name__ == "__main__":
+    _args = sys.argv[1:]
+
+    if "--pending-count" in _args:
+        # Reine Abfrage fuer aufrufende Skripte/Doku-Flows (z. B. setup.sh,
+        # commands/setup.md): Anzahl noch fehlender Regeln, ohne Anzeige/
+        # Bestaetigungs-Gate und ohne zu schreiben.
+        print(len(pending_permissions(SETTINGS_PATH)))
+        sys.exit(0)
+
+    _assume_yes = "--yes" in _args or os.environ.get("ACADEMIC_RESEARCH_CONFIRM_PERMISSIONS") == "1"
+
     _pending = pending_permissions(SETTINGS_PATH)
-    if confirm_write(_pending, SETTINGS_PATH):
+    if confirm_write(_pending, SETTINGS_PATH, assume_yes=_assume_yes):
         sys.exit(main(SETTINGS_PATH))
     print("⚠️  Abgebrochen — keine Berechtigungen geschrieben.")
     sys.exit(0)

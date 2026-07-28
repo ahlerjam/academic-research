@@ -15,6 +15,8 @@ CLI-Ebene (``pending_permissions`` + ``confirm_write``), nicht in ``main()``.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -188,6 +190,105 @@ def test_confirm_write_skips_prompt_when_nothing_pending(monkeypatch, tmp_path):
     pending = configure_permissions.pending_permissions(target)
     assert pending == []
     assert configure_permissions.confirm_write(pending, target) is True
+
+
+def test_confirm_write_assume_yes_bypasses_non_interactive_default(monkeypatch, tmp_path):
+    """P1-Fix (#458, PR #476-Review): --yes/assume_yes muss auch OHNE TTY
+    bestaetigen -- genau der primaere /setup-Pfad via Claude Code (kein
+    Terminal), fuer den es zuvor keinen nicht-interaktiven Zustimmungsweg gab.
+    """
+    target = tmp_path / "settings.local.json"
+    monkeypatch.setattr(sys, "stdin", _FakeStdinNonTTY())
+
+    def _boom(*_a, **_kw):
+        raise AssertionError("input() haette bei assume_yes=True nicht aufgerufen werden duerfen")
+
+    monkeypatch.setattr("builtins.input", _boom)
+
+    pending = configure_permissions.pending_permissions(target)
+    confirmed = configure_permissions.confirm_write(pending, target, assume_yes=True)
+    assert confirmed is True
+
+
+def test_confirm_write_assume_yes_false_default_unchanged(monkeypatch, tmp_path):
+    """assume_yes ist optional und defaultet auf False -- bestehendes
+    Verhalten (sicherer Default ohne TTY) bleibt unveraendert."""
+    target = tmp_path / "settings.local.json"
+    monkeypatch.setattr(sys, "stdin", _FakeStdinNonTTY())
+
+    pending = configure_permissions.pending_permissions(target)
+    assert configure_permissions.confirm_write(pending, target) is False
+
+
+# ---------------------------------------------------------------------------
+# CLI-Fassade: --yes / ACADEMIC_RESEARCH_CONFIRM_PERMISSIONS / --pending-count
+# (P1-Fix #458, PR #476-Review: nicht-interaktiver Bestaetigungsweg fuer den
+# primaeren /setup-Pfad, der ohne TTY laeuft)
+# ---------------------------------------------------------------------------
+
+
+def _run_cli(
+    args: list[str], settings_path: Path, env_extra: dict | None = None
+) -> subprocess.CompletedProcess:
+    module_path = Path(configure_permissions.__file__)
+    env = dict(os.environ)
+    env["HOME"] = str(settings_path.parent.parent)  # SETTINGS_PATH = ~/.claude/settings.local.json
+    if env_extra:
+        env.update(env_extra)
+    return subprocess.run(
+        [sys.executable, str(module_path), *args],
+        input="",  # explizit leeres stdin -> nicht-interaktiv (kein TTY)
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
+    )
+
+
+def _isolated_settings_path(tmp_path: Path) -> Path:
+    claude_dir = tmp_path / "home" / ".claude"
+    claude_dir.mkdir(parents=True)
+    return claude_dir / "settings.local.json"
+
+
+def test_cli_without_yes_non_interactive_does_not_write(tmp_path):
+    target = _isolated_settings_path(tmp_path)
+    result = _run_cli([], target)
+    assert result.returncode == 0
+    assert not target.exists()
+    assert "NICHT automatisch" in result.stdout
+
+
+def test_cli_yes_flag_writes_without_tty(tmp_path):
+    target = _isolated_settings_path(tmp_path)
+    result = _run_cli(["--yes"], target)
+    assert result.returncode == 0
+    assert target.exists(), "CLI --yes haette trotz fehlendem TTY schreiben muessen"
+    allow = json.loads(target.read_text(encoding="utf-8"))["permissions"]["allow"]
+    for perm in configure_permissions.REQUIRED_PERMISSIONS:
+        assert perm in allow
+
+
+def test_cli_env_var_confirms_without_tty(tmp_path):
+    target = _isolated_settings_path(tmp_path)
+    result = _run_cli([], target, env_extra={"ACADEMIC_RESEARCH_CONFIRM_PERMISSIONS": "1"})
+    assert result.returncode == 0
+    assert target.exists()
+
+
+def test_cli_pending_count_reports_full_count_without_writing(tmp_path):
+    target = _isolated_settings_path(tmp_path)
+    result = _run_cli(["--pending-count"], target)
+    assert result.returncode == 0
+    assert result.stdout.strip() == str(len(configure_permissions.REQUIRED_PERMISSIONS))
+    assert not target.exists()
+
+
+def test_cli_pending_count_zero_after_yes_write(tmp_path):
+    target = _isolated_settings_path(tmp_path)
+    _run_cli(["--yes"], target)
+    result = _run_cli(["--pending-count"], target)
+    assert result.stdout.strip() == "0"
 
 
 def test_main_signature_unchanged_for_issue_230_compat():
