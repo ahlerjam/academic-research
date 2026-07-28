@@ -54,6 +54,12 @@ class ImportResult:
     errors: list[str] = field(default_factory=list)
     file_ids: list[str] = field(default_factory=list)
     quotes_imported: int = 0
+    # Annotationen mit Kommentar, aber ohne markierten Quellentext (Notiz-,
+    # Bild-, Ink-Annotationen). Sie werden bewusst nicht als Quote importiert
+    # (siehe _annotation_verbatim) — der Zaehler haelt das sichtbar, damit
+    # fehlende PDF-Notizen nach dem Import nicht als stiller Datenverlust
+    # dastehen.
+    comments_skipped: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -213,18 +219,25 @@ def _parse_page_label(label: str | None) -> int | None:
 
 
 def _annotation_verbatim(child_data: dict) -> str | None:
-    """Extrahiert den Highlight-/Notiztext aus einem Annotation-Kind.
+    """Extrahiert den markierten QUELLENTEXT aus einem Annotation-Kind.
 
-    Bevorzugt `annotationText` (Highlight-Ausschnitt). Faellt bei reinen
-    Notiz-Annotationen (kein markierter Text) auf `annotationComment`
-    zurueck. Gibt `None`, wenn beides leer ist — solche Annotationen werden
-    nicht als Quote importiert.
+    Ausschliesslich `annotationText` — der von Zotero aus dem PDF
+    uebernommene Ausschnitt (Highlight/Underline). Gibt `None`, wenn das Feld
+    leer ist; solche Annotationen werden nicht als Quote importiert.
+
+    KEIN Fallback auf `annotationComment`: Der Kommentar ist der eigene Text
+    der forschenden Person, kein Beleg aus der Quelle. `quotes.verbatim`
+    traegt aber genau eine Zusage — *dieser Wortlaut steht so in der Quelle* —
+    und `hooks/verbatim-guard.mjs` gibt ein Zitat im Kapitel allein deshalb
+    frei, weil `search_quote_text()` es in `quotes.verbatim` findet (LIKE-Suche
+    ohne weiteren Diskriminator; `extraction_method` wird nicht gelesen). Ein
+    Fallback wuerde die eigene Notiz also zum vermeintlich belegten Zitat
+    machen und den Guard genau die Fehlzuschreibung durchwinken lassen, die er
+    verhindern soll. Zotero selbst trennt beides strikt: In Note-Templates
+    wird `{{:highlight}}` (= `annotationText`) in Anfuehrungszeichen bzw.
+    `<blockquote>` gerendert, `{{:comment}}` dagegen ausserhalb des Zitats.
     """
-    text = (child_data.get("annotationText") or "").strip()
-    if text:
-        return text
-    comment = (child_data.get("annotationComment") or "").strip()
-    return comment or None
+    return (child_data.get("annotationText") or "").strip() or None
 
 
 def _existing_quote_keys(db_path: str, paper_id: str) -> set[tuple[str, int | None]]:
@@ -416,6 +429,11 @@ def run_import(
                                 continue
                             verbatim = _annotation_verbatim(ann_data)
                             if not verbatim:
+                                # Nur-Kommentar-Annotation: nicht als Quote
+                                # importieren (Nutzertext, kein Beleg), aber
+                                # mitzaehlen statt still zu verwerfen.
+                                if (ann_data.get("annotationComment") or "").strip():
+                                    result.comments_skipped += 1
                                 continue
                             printed_page = _parse_page_label(ann_data.get("annotationPageLabel"))
                             if (verbatim, printed_page) in seen_quotes:
@@ -475,6 +493,11 @@ def main() -> None:
         print(f"Files-API file_ids gecacht: {len(result.file_ids)}")
     if result.quotes_imported:
         print(f"Annotationen als Quotes importiert: {result.quotes_imported}")
+    if result.comments_skipped:
+        print(
+            f"Nur-Kommentar-Annotationen uebersprungen: {result.comments_skipped} "
+            f"(eigener Text, kein Beleg aus der Quelle — nicht als Zitat importiert)"
+        )
 
 
 if __name__ == "__main__":

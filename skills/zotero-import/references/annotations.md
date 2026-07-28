@@ -19,10 +19,30 @@ Jede so gefundene Annotation wird über `vault.add_quote()` mit
 
 | Feld | Verwendung |
 | --- | --- |
-| `annotationText` | bevorzugt — der markierte Ausschnitt |
-| `annotationComment` | Fallback für reine Notiz-Annotationen ohne markierten Text |
+| `annotationText` | **einzige** Quelle für `quotes.verbatim` — der von Zotero aus dem PDF übernommene Ausschnitt |
+| `annotationComment` | wird **nie** importiert — eigener Text der forschenden Person, kein Beleg |
 
-Sind beide leer, wird die Annotation übersprungen (kein leerer Quote).
+Ist `annotationText` leer (reine Notiz-, Bild- oder Ink-Annotation), wird die
+Annotation übersprungen. Trägt sie einen Kommentar, zählt
+`ImportResult.comments_skipped` sie mit und die CLI weist sie aus — der Import
+verschluckt also nichts stillschweigend.
+
+### Warum kein Fallback auf `annotationComment`
+
+`quotes.verbatim` trägt im Vault genau eine Zusage: *dieser Wortlaut steht so
+in der Quelle*. `hooks/verbatim-guard.mjs` gibt ein in Anführungszeichen
+gesetztes Zitat in `kapitel/*.md` bzw. `*.tex` allein deshalb frei, weil
+`search_quote_text()` es in `quotes.verbatim` findet — eine LIKE-Suche ohne
+weiteren Diskriminator, `extraction_method` wird dabei nicht gelesen.
+
+Ein Fallback würde den eigenen Kommentar als vermeintlich belegtes Zitat in den
+Vault schreiben; der Guard winkt ihn später durch, und die eigene Formulierung
+stünde mit Quellenzuschreibung in Anführungszeichen im Kapitel. Genau diese
+Fehlzuschreibung soll der Guard verhindern.
+
+Zotero trennt beides selbst strikt: In den Note-Templates wird
+`{{:highlight}}` (= `annotationText`) in Anführungszeichen bzw. `<blockquote>`
+gerendert, `{{:comment}}` dagegen als Fließtext außerhalb des Zitats.
 
 ## Seitenzahl
 

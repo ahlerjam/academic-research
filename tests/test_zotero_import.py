@@ -868,3 +868,190 @@ class TestAnnotationDocsProgressiveDisclosure:
             f"SKILL.md nennt 54yyyu/zotero-mcp, aber nicht dessen MIT-Lizenzstatus "
             f"in derselben Zeile: {mention_line!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 11: annotationComment darf NIE als verbatim landen (Issue #395)
+# ---------------------------------------------------------------------------
+
+
+def _annotation_child(key: str, **data) -> dict:
+    """Baut ein Annotation-Kind mit den uebergebenen Datenfeldern."""
+    payload = {"key": key, "itemType": "annotation"}
+    payload.update(data)
+    return {"key": key, "version": 1, "data": payload}
+
+
+def _run_with_annotations(tmp_path, item_key: str, doi: str, annotation_children: list):
+    """Fuehrt run_import fuer ein Item mit den gegebenen Annotationen aus."""
+    from zotero_pull import run_import
+
+    cfg_path = _minimal_config(tmp_path)
+    db_path = str(tmp_path / "vault.db")
+
+    item, attachment_children, att_key = _item_with_pdf_attachment(item_key, doi)
+
+    def children_side_effect(key):
+        if key == item_key:
+            return attachment_children
+        if key == att_key:
+            return annotation_children
+        return []
+
+    with patch("zotero_pull.zotero") as mock_zotero_module:
+        zot_mock = _make_zotero_mock(item)
+        zot_mock.children.side_effect = children_side_effect
+        mock_zotero_module.Zotero.return_value = zot_mock
+
+        with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+            with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+    return result, db_path
+
+
+class TestAnnotationCommentIsNotVerbatim:
+    """``annotationComment`` ist Nutzertext, kein Beleg aus der Quelle.
+
+    ``quotes.verbatim`` traegt im Vault genau eine Zusage: *dieser Wortlaut
+    steht so in der Quelle*. ``hooks/verbatim-guard.mjs`` loest ein in einem
+    Kapitel gesetztes Anfuehrungszeichen-Span ausschliesslich ueber
+    ``search_quote_text()`` auf — eine LIKE-Suche in ``quotes.verbatim`` ohne
+    jeden weiteren Diskriminator (``extraction_method`` wird nicht gelesen).
+    Alles, was in ``verbatim`` steht, ist fuer den Guard damit ein belegtes
+    Zitat.
+
+    ``annotationComment`` ist aber der eigene Kommentar der forschenden Person
+    (Zettel-Notiz im PDF), nicht der Wortlaut der Quelle. Zotero selbst trennt
+    beides strikt: In den Note-Templates wird ``{{:highlight}}``
+    (= ``annotationText``) in Anfuehrungszeichen bzw. ``<blockquote>``
+    gerendert, ``{{:comment}}`` dagegen als Fliesstext ausserhalb des Zitats.
+
+    Ein Fallback von ``annotationText`` auf ``annotationComment`` liesse den
+    eigenen Kommentar also als vermeintlich belegtes Zitat in den Vault
+    wandern — der Guard winkt ihn spaeter durch, und die eigene Formulierung
+    stuende mit Quellenzuschreibung in Anfuehrungszeichen im Kapitel. Genau
+    diese Klasse von Fehlzuschreibung soll der Guard verhindern.
+    """
+
+    USER_COMMENT = "Dieser Ansatz erscheint mir methodisch fragwuerdig."
+
+    def test_note_only_annotation_creates_no_quote(self, tmp_path):
+        """Reine Notiz-Annotation (nur Kommentar) erzeugt KEINEN Quote."""
+        annotation_children = [
+            _annotation_child(
+                "ANNONOTE",
+                annotationType="note",
+                annotationComment=self.USER_COMMENT,
+                annotationPageLabel="12",
+            )
+        ]
+
+        result, db_path = _run_with_annotations(
+            tmp_path, "ANNOCMT1", "10.9999/annot.010", annotation_children
+        )
+
+        assert result.imported == 1
+        assert result.errors == []
+        assert _quotes_rows(db_path) == []
+        assert result.quotes_imported == 0
+
+    def test_note_only_annotation_does_not_pass_verbatim_guard(self, tmp_path):
+        """Der Nutzerkommentar ist ueber den Guard-Lookup nicht auffindbar.
+
+        Das ist die eigentliche Sicherheitszusage: ``verbatim-guard.mjs`` fragt
+        genau diese Funktion, um ein Zitat im Kapitel freizugeben.
+        """
+        from academic_vault.server import search_quote_text
+
+        annotation_children = [
+            _annotation_child(
+                "ANNONOT2",
+                annotationType="note",
+                annotationComment=self.USER_COMMENT,
+            )
+        ]
+
+        _, db_path = _run_with_annotations(
+            tmp_path, "ANNOCMT2", "10.9999/annot.011", annotation_children
+        )
+
+        assert search_quote_text(db_path, self.USER_COMMENT) == [], (
+            "Eigener Annotation-Kommentar ist als Vault-Zitat auffindbar — "
+            "der verbatim-guard wuerde ihn als belegtes Zitat durchwinken"
+        )
+
+    def test_highlight_with_comment_imports_only_the_highlight(self, tmp_path):
+        """Highlight + Kommentar: nur der markierte Quellentext wird Quote."""
+        annotation_children = [
+            _annotation_child(
+                "ANNOMIX1",
+                annotationType="highlight",
+                annotationText="Der markierte Satz aus der Quelle.",
+                annotationComment=self.USER_COMMENT,
+                annotationPageLabel="8",
+            )
+        ]
+
+        result, db_path = _run_with_annotations(
+            tmp_path, "ANNOCMT3", "10.9999/annot.012", annotation_children
+        )
+
+        rows = _quotes_rows(db_path)
+        assert result.errors == []
+        assert [r["verbatim"] for r in rows] == ["Der markierte Satz aus der Quelle."]
+        assert rows[0]["printed_page"] == 8
+        assert all(self.USER_COMMENT not in r["verbatim"] for r in rows)
+
+    def test_image_annotation_with_comment_creates_no_quote(self, tmp_path):
+        """Auch Nicht-Text-Annotationen (image/ink) duerfen keinen Quote erzeugen.
+
+        Sie tragen nie ``annotationText``; ihr ``annotationComment`` ist
+        genauso Nutzertext wie bei der Notiz-Annotation.
+        """
+        annotation_children = [
+            _annotation_child(
+                "ANNOIMG1",
+                annotationType="image",
+                annotationComment=self.USER_COMMENT,
+                annotationPageLabel="3",
+            )
+        ]
+
+        result, db_path = _run_with_annotations(
+            tmp_path, "ANNOCMT4", "10.9999/annot.013", annotation_children
+        )
+
+        assert result.errors == []
+        assert _quotes_rows(db_path) == []
+
+    def test_skipped_notes_are_counted_not_silently_dropped(self, tmp_path):
+        """Uebersprungene Nur-Kommentar-Annotationen bleiben sichtbar.
+
+        Der Kommentar gehoert fachlich nicht in ``quotes`` (und die
+        ``notes``-Tabelle hat noch keine Python-API). Er darf aber auch nicht
+        spurlos verschwinden — sonst wundert sich die Nutzerin, warum ihre
+        PDF-Notizen nach dem Import fehlen.
+        """
+        annotation_children = [
+            _annotation_child(
+                "ANNOCNT1",
+                annotationType="note",
+                annotationComment=self.USER_COMMENT,
+            ),
+            _annotation_child(
+                "ANNOCNT2",
+                annotationType="highlight",
+                annotationText="Belegter Wortlaut aus der Quelle.",
+                annotationComment="Nebenbemerkung zum Highlight.",
+            ),
+        ]
+
+        result, db_path = _run_with_annotations(
+            tmp_path, "ANNOCMT5", "10.9999/annot.014", annotation_children
+        )
+
+        assert result.quotes_imported == 1
+        assert result.comments_skipped == 1, (
+            "Nur-Kommentar-Annotationen werden still verworfen — ImportResult muss sie zaehlen"
+        )
