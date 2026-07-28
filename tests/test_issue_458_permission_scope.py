@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -75,17 +76,61 @@ def test_required_permissions_still_covers_venv_and_browser_use():
 
 
 # ---------------------------------------------------------------------------
-# P1-Fix (PR #476-Review, Runde 2): eng gescoptes Ersatzmuster fuer das
-# ersatzlos entfernte Bash(mkdir *) -- ohne dieses Muster loesen
+# P1-Fix (PR #476-Review, Runde 2+3): eng gescoptes Ersatzmuster fuer das
+# ersatzlos entfernte Bash(mkdir *) -- ohne Ersatzmuster loesen
 # commands/search.md (mkdir -p unter sessions/) und commands/latex.md
 # (mkdir -p unter library-profiles/) bei jedem Lauf eine Permission-
 # Rueckfrage aus, weil weder die globale Regel noch die command-eigenen
 # allowed-tools mkdir abdecken.
+#
+# Runde-3-Korrektur: Claude-Code-Bash-Regeln matchen auf dem LITERALEN
+# Kommandotext (Praefix-Match bei trailing '*', sonst exakt) -- NICHT auf
+# der Variablen-Expansion. commands/search.md ruft
+# 'SESSION_DIR=~/.academic-research/sessions/$(date ...)' gefolgt von
+# 'mkdir -p "$SESSION_DIR/pdfs"' auf; das globale, auf
+# '~/.academic-research/' gescopte Muster passt auf keinen der beiden
+# LITERALEN Kommandotexte (der eine beginnt mit 'SESSION_DIR=', der andere
+# mit 'mkdir -p "$SESSION_DIR'). Fix: zwei command-eigene Bash-Muster in
+# commands/search.md:4 (nicht global, da nur dort gebraucht). Die Tests
+# unten pruefen die Praefix-Match-Semantik gegen den TATSAECHLICHEN
+# Kommandotext, nicht nur, dass Teilstrings irgendwo in der Datei vorkommen.
 # ---------------------------------------------------------------------------
 
 SCOPED_MKDIR_PATTERN = "Bash(mkdir -p ~/.academic-research/*)"
 SEARCH_COMMAND_MD = REPO_ROOT / "commands" / "search.md"
 LATEX_COMMAND_MD = REPO_ROOT / "commands" / "latex.md"
+
+# Literale Kommandotexte, wie sie in den jeweiligen .md-Dateien stehen (und
+# damit von Claude Code 1:1 als Bash-Tool-Aufruf gesehen werden -- VOR jeder
+# Shell-Expansion).
+SEARCH_SESSION_DIR_COMMAND = (
+    "SESSION_DIR=~/.academic-research/sessions/$(date -u +%Y-%m-%dT%H-%M-%SZ)"
+)
+SEARCH_MKDIR_COMMAND = 'mkdir -p "$SESSION_DIR/pdfs"'
+LATEX_MKDIR_COMMAND = "mkdir -p ~/.academic-research/library-profiles/"
+
+
+def _bash_pattern_matches(pattern_inner: str, command_text: str) -> bool:
+    """Vereinfachte Nachbildung von Claude Codes Bash-Permission-Matching
+    fuer den hier relevanten Fall: endet das Muster auf '*', ist es ein
+    Praefix-Match auf den literalen Kommandotext; sonst ein exaktes Match.
+    Reicht aus, um zu verifizieren, dass unsere eigenen Muster die
+    dokumentierten Kommandotexte tatsaechlich abdecken (kein Anspruch,
+    Claude Codes vollstaendige Infix-/Suffix-Wildcard-Semantik
+    nachzubilden)."""
+    if pattern_inner.endswith("*"):
+        return command_text.startswith(pattern_inner[:-1])
+    return command_text == pattern_inner
+
+
+def _bash_patterns_in_allowed_tools(command_md: Path) -> list[str]:
+    content = command_md.read_text(encoding="utf-8")
+    frontmatter = content.split("---")[1]
+    for line in frontmatter.splitlines():
+        if line.strip().startswith("allowed-tools:"):
+            value = line.split("allowed-tools:", 1)[1]
+            return re.findall(r"Bash\(([^()]*)\)", value)
+    raise AssertionError(f"Kein 'allowed-tools:' in {command_md}-Frontmatter gefunden")
 
 
 def test_required_permissions_has_scoped_mkdir_replacement():
@@ -98,22 +143,50 @@ def test_required_permissions_has_scoped_mkdir_replacement():
     )
 
 
-def test_scoped_mkdir_pattern_covers_search_command_invocation():
-    content = SEARCH_COMMAND_MD.read_text(encoding="utf-8")
-    assert 'mkdir -p "$SESSION_DIR/pdfs"' in content, (
-        "commands/search.md legt weiterhin ein Session-Verzeichnis per mkdir -p an"
-    )
-    # Der Praefix vor der Variablenexpansion muss zum Muster passen: die
-    # Regel matcht "mkdir -p ~/.academic-research/" + beliebiger Rest, und
-    # $SESSION_DIR ist als ~/.academic-research/sessions/... definiert.
-    assert "SESSION_DIR=~/.academic-research/sessions/" in content
-
-
 def test_scoped_mkdir_pattern_covers_latex_command_invocation():
     content = LATEX_COMMAND_MD.read_text(encoding="utf-8")
-    assert "mkdir -p ~/.academic-research/library-profiles/" in content, (
+    assert LATEX_MKDIR_COMMAND in content, (
         "commands/latex.md legt weiterhin library-profiles/ per mkdir -p an"
     )
+    scoped_inner = SCOPED_MKDIR_PATTERN[len("Bash(") : -1]
+    assert _bash_pattern_matches(scoped_inner, LATEX_MKDIR_COMMAND), (
+        f"Das globale Muster {SCOPED_MKDIR_PATTERN!r} deckt den literalen Kommandotext "
+        f"{LATEX_MKDIR_COMMAND!r} aus commands/latex.md nicht ab"
+    )
+
+
+def test_search_command_has_own_bash_patterns_for_session_dir_setup():
+    """PR #476-Review Runde 3: der Testname behauptete zuvor eine Abdeckung,
+    die er nicht nachwies (nur Teilstring-Praesenz statt Praefix-Match).
+    Dieser Test prueft, dass mindestens ein in commands/search.md deklariertes
+    Bash-Muster JEDEN der beiden literalen Kommandotexte per Praefix-/Exakt-
+    Match tatsaechlich abdeckt."""
+    content = SEARCH_COMMAND_MD.read_text(encoding="utf-8")
+    assert SEARCH_SESSION_DIR_COMMAND in content, (
+        "commands/search.md muss die SESSION_DIR-Zuweisung unveraendert enthalten"
+    )
+    assert SEARCH_MKDIR_COMMAND in content, (
+        "commands/search.md muss den mkdir-Aufruf unveraendert enthalten"
+    )
+
+    bash_patterns = _bash_patterns_in_allowed_tools(SEARCH_COMMAND_MD)
+
+    assert any(_bash_pattern_matches(p, SEARCH_SESSION_DIR_COMMAND) for p in bash_patterns), (
+        f"Keine Bash-Regel in commands/search.md allowed-tools deckt den literalen "
+        f"Kommandotext {SEARCH_SESSION_DIR_COMMAND!r} ab (PR #476-Review Runde 3)"
+    )
+    assert any(_bash_pattern_matches(p, SEARCH_MKDIR_COMMAND) for p in bash_patterns), (
+        f"Keine Bash-Regel in commands/search.md allowed-tools deckt den literalen "
+        f"Kommandotext {SEARCH_MKDIR_COMMAND!r} ab (PR #476-Review Runde 3)"
+    )
+
+
+def test_bash_pattern_matches_helper_rejects_non_matches():
+    """Gegenprobe fuer den Test-Helfer selbst: ein zu enges Muster darf NICHT
+    faelschlich als Treffer gewertet werden (verhindert einen falsch-gruenen
+    Test durch einen zu freizuegigen Matcher)."""
+    assert not _bash_pattern_matches("mkdir -p ~/.academic-research/*", SEARCH_MKDIR_COMMAND)
+    assert not _bash_pattern_matches("mkdir -p /tmp/*", SEARCH_MKDIR_COMMAND)
 
 
 # ---------------------------------------------------------------------------
