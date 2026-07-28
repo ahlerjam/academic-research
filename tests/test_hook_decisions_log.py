@@ -93,7 +93,7 @@ def test_hook_logs_md_write(tmp_path):
     assert len(log_content.strip()) > 0, "decisions.log ist leer"
 
     # Eine Zeile im Log
-    lines = [l for l in log_content.strip().splitlines() if l.strip()]
+    lines = [line for line in log_content.strip().splitlines() if line.strip()]
     assert len(lines) >= 1, f"Erwartet mindestens 1 Log-Zeile, got {len(lines)}"
 
 
@@ -153,7 +153,7 @@ def test_hook_appends_multiple_writes(tmp_path):
         result = run_hook(payload, env_overrides=env_overrides)
         assert result.returncode == 0
 
-    lines = [l for l in log_file.read_text().strip().splitlines() if l.strip()]
+    lines = [line for line in log_file.read_text().strip().splitlines() if line.strip()]
     assert len(lines) >= 3, f"Erwartet 3 Log-Zeilen, got {len(lines)}: {lines}"
 
 
@@ -190,7 +190,7 @@ def test_hook_logs_md_edit(tmp_path):
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
 
     assert log_file.exists(), "decisions.log wurde bei Edit nicht erstellt (Hook umgangen)"
-    lines = [l for l in log_file.read_text().strip().splitlines() if l.strip()]
+    lines = [line for line in log_file.read_text().strip().splitlines() if line.strip()]
     assert len(lines) >= 1, f"Erwartet >=1 Log-Zeile bei Edit, got {len(lines)}"
     assert "kap1.md" in lines[0], f"Dateiname fehlt in: {lines[0]}"
 
@@ -220,6 +220,6 @@ def test_hook_logs_md_multiedit(tmp_path):
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
 
     assert log_file.exists(), "decisions.log wurde bei MultiEdit nicht erstellt (Hook umgangen)"
-    lines = [l for l in log_file.read_text().strip().splitlines() if l.strip()]
+    lines = [line for line in log_file.read_text().strip().splitlines() if line.strip()]
     assert len(lines) >= 1, f"Erwartet >=1 Log-Zeile bei MultiEdit, got {len(lines)}"
     assert "kap2.md" in lines[0], f"Dateiname fehlt in: {lines[0]}"

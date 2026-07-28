@@ -14,13 +14,8 @@ Akzeptanzkriterium (Issue #237):
 import os
 import sqlite3
 import tempfile
-from pathlib import Path
 
 import pytest
-
-# Worktree-Root zum PYTHONPATH hinzufuegen damit academic_vault importierbar ist
-_WORKTREE_ROOT = Path(__file__).parent.parent
-
 from academic_vault.db import VaultDB
 
 
@@ -86,8 +81,7 @@ def test_add_quote_fk_violation_closes_connection(monkeypatch):
 
         assert tracker.opened, "add_quote sollte mindestens eine Connection oeffnen"
         assert tracker.open_count == 0, (
-            "Connection-Leak: %d offene Connection(s) nach Exception in add_quote"
-            % tracker.open_count
+            f"Connection-Leak: {tracker.open_count} offene Connection(s) nach Exception in add_quote"
         )
     finally:
         os.unlink(db_path)
@@ -109,7 +103,7 @@ def test_add_score_snapshot_fk_violation_closes_connection(monkeypatch):
 
         assert tracker.opened
         assert tracker.open_count == 0, (
-            "Connection-Leak nach Exception in add_score_snapshot: %d offen" % tracker.open_count
+            f"Connection-Leak nach Exception in add_score_snapshot: {tracker.open_count} offen"
         )
     finally:
         os.unlink(db_path)
@@ -131,7 +125,7 @@ def test_add_risk_of_bias_fk_violation_closes_connection(monkeypatch):
 
         assert tracker.opened
         assert tracker.open_count == 0, (
-            "Connection-Leak nach Exception in add_risk_of_bias: %d offen" % tracker.open_count
+            f"Connection-Leak nach Exception in add_risk_of_bias: {tracker.open_count} offen"
         )
     finally:
         os.unlink(db_path)
@@ -149,7 +143,7 @@ def test_successful_write_also_closes_connection(monkeypatch):
 
         assert tracker.opened
         assert tracker.open_count == 0, (
-            "Connection-Leak im Erfolgsfall von add_paper: %d offen" % tracker.open_count
+            f"Connection-Leak im Erfolgsfall von add_paper: {tracker.open_count} offen"
         )
     finally:
         os.unlink(db_path)

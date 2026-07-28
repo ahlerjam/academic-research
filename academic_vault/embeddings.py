@@ -18,10 +18,10 @@ def _get_anthropic_client(api_key: str | None = None):
 
         key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         return anthropic.Anthropic(api_key=key)
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "anthropic SDK nicht installiert. Bitte 'pip install anthropic' ausfuehren."
-        )
+        ) from err
 
 
 def generate_context_sentence(

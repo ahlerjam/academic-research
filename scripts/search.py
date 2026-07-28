@@ -244,7 +244,7 @@ def search_openalex(query: str, limit: int) -> list[dict[str, Any]]:
 def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
     """Search Semantic Scholar paper endpoint."""
     url = "https://api.semanticscholar.org/graph/v1/paper/search"
-    params = {
+    params: dict[str, str | int] = {
         "query": query,
         "limit": limit,
         "fields": "paperId,title,authors,year,abstract,venue,citationCount,openAccessPdf,externalIds",
@@ -289,7 +289,12 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
 def search_base(query: str, limit: int) -> list[dict[str, Any]]:
     """Search BASE API (Bielefeld Academic Search Engine)."""
     url = "https://api.base-search.net/cgi-bin/BaseHttpSearchInterface.fcgi"
-    params = {"func": "PerformSearch", "query": query, "format": "json", "hits": limit}
+    params: dict[str, str | int] = {
+        "func": "PerformSearch",
+        "query": query,
+        "format": "json",
+        "hits": limit,
+    }
     with httpx.Client(timeout=TIMEOUT) as client:
         resp = client.get(url, params=params)
         resp.raise_for_status()
@@ -299,7 +304,7 @@ def search_base(query: str, limit: int) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for item in items[:limit]:
 
-        def dc(fld: str) -> str | None:
+        def dc(fld: str, item=item) -> str | None:
             val = item.get(fld)
             return val[0] if isinstance(val, list) and val else val
 
@@ -481,7 +486,7 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
 def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
     """Search arXiv via Atom feed API."""
     url = "https://export.arxiv.org/api/query"
-    params = {
+    params: dict[str, str | int] = {
         "search_query": f"all:{query}",
         "start": 0,
         "max_results": limit,

@@ -53,6 +53,6 @@ def test_ecma_schema_mappings_resolve_to_existing_files():
     ecma_paths = _ecma_schema_paths()
     assert ecma_paths, "Keine ecma/-Schema-Pfade in base.py gefunden"
     for rel in ecma_paths:
-        assert "fouth-edition" not in rel, "Schema-Pfad enthaelt noch den Tippfehler: %s" % rel
+        assert "fouth-edition" not in rel, f"Schema-Pfad enthaelt noch den Tippfehler: {rel}"
         target = schemas_dir / rel
-        assert target.is_file(), "Schema-Datei fehlt: %s" % target
+        assert target.is_file(), f"Schema-Datei fehlt: {target}"

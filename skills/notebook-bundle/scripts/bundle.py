@@ -82,7 +82,7 @@ def _make_toc_bytes(papers: list[dict[str, Any]], page_numbers: list[int]) -> by
     stream_parts.append("0 0 Td")
     y -= 40
 
-    for i, (paper, pnum) in enumerate(zip(papers, page_numbers)):
+    for i, (paper, pnum) in enumerate(zip(papers, page_numbers, strict=False)):
         title = paper.get("title", "(kein Titel)")
         year = paper.get("year", "")
         safe_entry = _safe_pdf_string(f"{i + 1}. {title} ({year}) ............ S. {pnum}")

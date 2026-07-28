@@ -1,11 +1,15 @@
 """page_offset.py — Ermittelt page_offset fuer Buecher mit Vorseiten.
 
-Logik:
-  1. Iteriere ueber die ersten sample_pages PDF-Seiten (0-basiert).
-  2. Extrahiere Text jeder Seite via pypdf.
-  3. Suche nach isolierter arabischer Ziffer "1" als erste oder letzte
-     Zeile des extrahierten Textes (typische Seitenzahl-Position).
-  4. offset = gefundene_pdf_seite_1basiert - 1
+Logik (in dieser Reihenfolge, #384):
+  0. Zuerst wird der PDF-eigene `/PageLabels`-Baum ausgelesen (autoritative
+     Quelle, sofern vorhanden). Liefert er einen Offset, wird dieser direkt
+     zurueckgegeben.
+  1. Nur als Fallback (kein Label-Baum / kein passendes Decimal-Segment /
+     Parse-Fehler): Iteriere ueber die ersten sample_pages PDF-Seiten
+     (0-basiert), extrahiere Text jeder Seite via pypdf und suche nach
+     isolierter arabischer Ziffer "1" als erste oder letzte Zeile des
+     extrahierten Textes (typische Seitenzahl-Position).
+     offset = gefundene_pdf_seite_1basiert - 1
      (d.h. pdf_page_1basiert - offset = printed_page)
 
 Kein LLM-Aufruf. Deterministisch und schnell.
@@ -22,8 +26,10 @@ def _get_pdf_reader():
         from pypdf import PdfReader
 
         return PdfReader
-    except ImportError:
-        raise ImportError("Kein PDF-Lesemodul verfuegbar. Bitte 'pip install pypdf' ausfuehren.")
+    except ImportError as err:
+        raise ImportError(
+            "Kein PDF-Lesemodul verfuegbar. Bitte 'pip install pypdf' ausfuehren."
+        ) from err
 
 
 def _extract_page_number(text: str) -> int | None:
@@ -64,19 +70,75 @@ def _extract_page_number(text: str) -> int | None:
     return None
 
 
-def detect_page_offset(pdf_path: str, sample_pages: int = 30) -> int:
-    """Scannt die ersten sample_pages Seiten des PDFs.
+def _detect_offset_from_page_labels(pdf_path: str) -> int | None:
+    """Liest den PDF-eigenen `/PageLabels`-Baum aus (autoritative Quelle).
 
-    Gibt offset = (pdf_page_1basiert_der_ersten_arabischen_1) - 1 zurueck.
-    Gibt 0 zurueck wenn keine arabische '1' gefunden.
+    Sucht das *erste* Segment mit Decimal-Stil (`/S == "/D"`) ohne Prefix
+    (`/P`) im `/Nums`-Array (`trailer["/Root"]["/PageLabels"]["/Nums"]`) und
+    berechnet daraus den Offset:
+
+        offset = (segment_start_index + 1) - segment_start_wert
+
+    `segment_start_index` ist der 0-basierte PDF-Seitenindex, ab dem das
+    Segment beginnt (`+1` macht ihn 1-basiert); `segment_start_wert` ist der
+    Wert des ersten Labels in diesem Segment (`/St`, Default 1 laut PDF-Spec).
+
+    Ist bei mehreren Decimal-Segmenten (z.B. Anhang startet erneut bei 1) das
+    *erste* gefundene Segment massgeblich -- konsistent mit der bestehenden
+    Text-Heuristik, die ebenfalls die erste gefundene arabische "1" nimmt.
+
+    Gibt None zurueck wenn kein `/PageLabels`-Baum vorhanden ist, kein
+    passendes Decimal-Segment gefunden wird, oder der Baum defekt/
+    inkonsistent ist (fehlender `/Root`, leeres/fehlerhaftes `/Nums`). Wirft
+    bewusst keine Exception weiter, damit der Aufrufer verlustfrei auf die
+    Text-Heuristik zurueckfallen kann (AC2).
+    """
+    try:
+        PdfReader = _get_pdf_reader()
+        reader = PdfReader(pdf_path)
+        root = reader.trailer["/Root"]
+        page_labels = root["/PageLabels"].get_object()
+        nums = page_labels["/Nums"]
+    except (KeyError, TypeError):
+        return None
+
+    try:
+        for i in range(0, len(nums) - 1, 2):
+            segment_start = nums[i]
+            segment = nums[i + 1].get_object()
+            style = segment.get("/S")
+            prefix = segment.get("/P")
+            if style == "/D" and not prefix:
+                start_value = segment.get("/St", 1)
+                return (int(segment_start) + 1) - int(start_value)
+    except (IndexError, TypeError, KeyError, AttributeError):
+        return None
+
+    return None
+
+
+def detect_page_offset(pdf_path: str, sample_pages: int = 30) -> int:
+    """Ermittelt den page_offset eines PDFs.
+
+    Versucht zuerst den PDF-eigenen `/PageLabels`-Baum
+    (`_detect_offset_from_page_labels`); liefert dieser ein Ergebnis, wird es
+    direkt zurueckgegeben. Andernfalls (kein Baum / kein Decimal-Segment /
+    Parse-Fehler) greift die bestehende Text-Heuristik als Fallback: scannt
+    die ersten sample_pages Seiten des PDFs und gibt
+    offset = (pdf_page_1basiert_der_ersten_arabischen_1) - 1 zurueck.
+    Gibt 0 zurueck wenn weder Label-Baum noch arabische '1' gefunden werden.
 
     Args:
         pdf_path: Pfad zur PDF-Datei.
         sample_pages: Anzahl der zu scannenden Seiten (Standard: 30).
 
     Returns:
-        page_offset (int >= 0). Bedeutung: printed_page = pdf_page - offset.
+        page_offset (int). Bedeutung: printed_page = pdf_page - offset.
     """
+    label_offset = _detect_offset_from_page_labels(pdf_path)
+    if label_offset is not None:
+        return label_offset
+
     PdfReader = _get_pdf_reader()
 
     reader = PdfReader(pdf_path)
@@ -156,5 +218,17 @@ if __name__ == "__main__":
     print(f"page_offset: {offset}")
 
     if args.validate and offset > 0:
-        valid = validate_offset(args.pdf_path, offset)
-        print(f"Validierung: {'OK' if valid else 'INKONSISTENT'}")
+        # Stammt der Offset aus dem PDF-eigenen /PageLabels-Baum (autoritative
+        # Quelle), ist er per Konstruktion korrekt -- die Text-Heuristik
+        # validate_offset() prueft aber ausschliesslich ueber extrahierten
+        # Seitentext und liefert fuer Scan-PDFs ohne Text faelschlich
+        # "INKONSISTENT" (#384-Regressionsfund). Solche Faelle als NICHT
+        # PRUEFBAR kennzeichnen statt einen korrekten Offset zu diskreditieren.
+        if _detect_offset_from_page_labels(args.pdf_path) is not None:
+            print(
+                "Validierung: NICHT PRUEFBAR "
+                "(Offset aus PDF-/PageLabels-Baum, Text-Heuristik nicht anwendbar)"
+            )
+        else:
+            valid = validate_offset(args.pdf_path, offset)
+            print(f"Validierung: {'OK' if valid else 'INKONSISTENT'}")

@@ -10,7 +10,7 @@ from pypdf import PdfWriter
 def make_mock_pdf(title: str, num_pages: int = 3) -> bytes:
     """Erzeugt ein minimales PDF mit num_pages leeren Seiten."""
     writer = PdfWriter()
-    for i in range(num_pages):
+    for _i in range(num_pages):
         writer.add_blank_page(width=595, height=842)
     buf = io.BytesIO()
     writer.write(buf)
@@ -39,7 +39,7 @@ def fixture_dir(tmp_path_factory):
     years = [2020, 2019, 2021, 2022, 2023]
 
     papers = []
-    for pid, title, authors, year in zip(paper_ids, titles, authors_list, years):
+    for pid, title, authors, year in zip(paper_ids, titles, authors_list, years, strict=False):
         pdf_path = d / f"paper_{pid}.pdf"
         pdf_path.write_bytes(make_mock_pdf(title, num_pages=3))
         papers.append(

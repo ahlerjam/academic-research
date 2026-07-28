@@ -7,9 +7,6 @@ in db.py / server.py hinzugefuegt wird.
 import os
 import sqlite3
 import tempfile
-from pathlib import Path
-
-_WORKTREE_ROOT = Path(__file__).parent.parent
 
 from academic_vault import server as vault_server
 from academic_vault.db import VaultDB

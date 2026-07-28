@@ -1,8 +1,9 @@
 """smoke_core — gemeinsame End-to-End-Smoke-Logik.
 
-Wird von ZWEI Deliverables geteilt:
-  * ``tests/test_smoke_e2e.py``  — pytest-Wrapper (CI-grün).
-  * ``scripts/smoke.py``         — eigenständiger PASS/FAIL-Reporter.
+Wird von ``tests/test_smoke_e2e.py`` als pytest-Wrapper konsumiert (CI-grün).
+(Der frühere eigenständige Standalone-Reporter unter ``scripts/`` wurde als
+verwaistes Skript entfernt (Issue #377) — die Logik hier lebt unverändert
+weiter.)
 
 Jede ``check_*``-Funktion ist eine eigenständige, deterministische Prüfung
 OHNE echtes Netzwerk. Sie wirft bei Fehler eine ``AssertionError`` (für

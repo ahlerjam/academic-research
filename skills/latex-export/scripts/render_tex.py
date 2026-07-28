@@ -146,7 +146,7 @@ def _custom_render(md: str) -> str:
     def flush_paragraph(para_lines: list[str]) -> str:
         if not para_lines:
             return ""
-        text = " ".join(l.strip() for l in para_lines if l.strip())
+        text = " ".join(line.strip() for line in para_lines if line.strip())
         # Sonderzeichen escapen bevor Inline-Formatierung angewandt wird
         # Wichtig: Inline-Formatierung setzt \-Zeichen -> zuerst escapen,
         # dann inline-Formatierung (Bold/Italic) anwenden.

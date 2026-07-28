@@ -5,9 +5,10 @@ das, was die ~1600 bestehenden Unit-Tests NICHT abdecken: den echten
 MCP-Server-PROZESS, echte node-Hook-Subprozesse, Struktur-Integrität und
 Script-Importierbarkeit.
 
-Die eigentliche Logik lebt in ``tests/helpers/smoke_core.py`` und wird vom
-eigenständigen Reporter ``scripts/smoke.py`` 1:1 wiederverwendet (Single Source
-of Truth). Dieser Wrapper exponiert sie als parametrisierte pytest-Cases.
+Die eigentliche Logik lebt in ``tests/helpers/smoke_core.py`` (Single Source
+of Truth; der frühere eigenständige Standalone-Reporter unter ``scripts/``
+wurde als verwaistes Skript entfernt, Issue #377). Dieser Wrapper exponiert
+sie als parametrisierte pytest-Cases.
 
 Voraussetzungen (in CI gegeben):
   * ``~/.academic-research/venv/bin/python`` mit installiertem ``mcp``-SDK.

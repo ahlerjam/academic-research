@@ -61,8 +61,8 @@ def _get_voyage_client(api_key: str | None = None):
 
         key = api_key or os.environ.get("VOYAGE_API_KEY", "")
         return voyageai.Client(api_key=key)
-    except ImportError:
-        raise ImportError("voyageai SDK nicht installiert. Bitte 'pip install voyageai'.")
+    except ImportError as err:
+        raise ImportError("voyageai SDK nicht installiert. Bitte 'pip install voyageai'.") from err
 
 
 def _get_cohere_client(api_key: str | None = None):
@@ -75,8 +75,8 @@ def _get_cohere_client(api_key: str | None = None):
 
         key = api_key or os.environ.get("COHERE_API_KEY", "")
         return cohere.Client(api_key=key)
-    except ImportError:
-        raise ImportError("cohere SDK nicht installiert. Bitte 'pip install cohere'.")
+    except ImportError as err:
+        raise ImportError("cohere SDK nicht installiert. Bitte 'pip install cohere'.") from err
 
 
 def _load_local_reranker_backend(model_id: str):
