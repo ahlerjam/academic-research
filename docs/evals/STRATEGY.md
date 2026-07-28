@@ -55,6 +55,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `abstract-generator` | structural | `tests/evals/test_abstract_generator_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Quality-Prompts bewerten generierten Fließtext; ohne LLM-Aufruf gibt es dafür kein deterministisches Surrogat. Läuft nur mit `ANTHROPIC_API_KEY`, sonst Skip. |
 | `academic-context` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Konversationsverhalten beim Kontext-Setup — nicht ohne Modell messbar; ohne Key Skip. |
 | `advisor` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Beratungsqualität ist ein Urteil über freien Text, kein prüfbares Artefakt; ohne Key Skip. |
+| `anchor-paper-survey` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | arXiv-Resolution, PDF-Titel-Heuristik und die Vault-/Suchintegration sind in `tests/test_anchor_paper_survey.py` deterministisch getestet; die Evals prüfen nur Trigger und Dialogführung. Ohne Key Skip. |
 | `book-handler` | structural | `tests/evals/test_book_handler_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die deterministischen Anteile (PDF-Seitenversatz, OCR-Erkennung) sind bereits in `tests/test_book_handler*.py` abgedeckt; die Evals messen den LLM-Anteil. Ohne Key Skip. |
 | `chapter-writer` | structural | `tests/evals/test_chapter_writer_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Kapitelqualität ist der Kern-LLM-Output; ein Offline-Proxy wäre eine Scheinmetrik. Ohne Key Skip. |
 | `citation-extraction` | structural | `tests/evals/test_citation_extraction_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Extraktion aus Freitext-PDFs; die Parser-Anteile sind separat in `tests/test_citation*.py` getestet. Ohne Key Skip. |
@@ -88,7 +89,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 3 × `metric`, 35 × `structural`, 0 × `removed`.
+**Bilanz:** 3 × `metric`, 36 × `structural`, 0 × `removed`.
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).

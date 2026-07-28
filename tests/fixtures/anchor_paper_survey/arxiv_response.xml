@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>ArXiv Query: id_list=2005.14165</title>
+  <entry>
+    <id>http://arxiv.org/abs/2005.14165v4</id>
+    <updated>2020-07-22T18:03:20Z</updated>
+    <published>2020-05-28T17:29:03Z</published>
+    <title>Language Models are Few-Shot Learners</title>
+    <summary>We demonstrate that scaling up language models greatly improves
+    task-agnostic, few-shot performance.</summary>
+    <author>
+      <name>Tom B. Brown</name>
+    </author>
+    <author>
+      <name>Benjamin Mann</name>
+    </author>
+    <link href="http://arxiv.org/abs/2005.14165v4" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2005.14165v4" rel="related" type="application/pdf"/>
+  </entry>
+</feed>

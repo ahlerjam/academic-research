@@ -1,0 +1,24 @@
+{
+  "component": "anchor-paper-survey",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "aps-01",
+      "input": "Wie viele Paper legst du im Vault an, wenn ich dir eine arXiv-URL als Ausgangspaper gebe?",
+      "expected": {"type": "regex", "value": "(genau )?(ein|eins|1) Paper"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "aps-02",
+      "input": "Werden die verwandten Arbeiten aus der Folge-Suche automatisch in den Vault geschrieben?",
+      "expected": {"type": "regex", "value": "(nein|nicht automatisch|nur.*(angezeigt|Kandidat))"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "aps-03",
+      "input": "Was passiert, wenn ich dir eine PDF ohne Textlayer als Ausgangspaper gebe?",
+      "expected": {"type": "regex", "value": "(OCR|kein.*(Text|Titel)|Fehler)"},
+      "mode": "with_skill"
+    }
+  ]
+}
