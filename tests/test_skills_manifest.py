@@ -177,9 +177,9 @@ def test_no_inline_fabrikation(skill_path: Path) -> None:
 @pytest.mark.parametrize("skill_path", ALL_SKILLS, ids=lambda p: p.parent.name)
 def test_token_reduction(skill_path: Path) -> None:
     """Jedes SKILL.md muss >= 1400 Zeichen (~ 350 Token) kleiner als Baseline sein."""
+    skill_name = skill_path.parent.name
     assert BASELINES_PATH.exists(), f"Baseline-Datei fehlt: {BASELINES_PATH}"
     baselines = json.loads(BASELINES_PATH.read_text())
-    skill_name = skill_path.parent.name
     assert skill_name in baselines, f"Skill '{skill_name}' nicht in Baseline"
     old_chars = baselines[skill_name]
     new_chars = len(skill_path.read_text())
