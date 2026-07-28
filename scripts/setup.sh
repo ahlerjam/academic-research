@@ -137,8 +137,12 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 5. Claude-Code-Permissions
+# 5. Claude-Code-Permissions (benutzerweit, nicht projektbezogen)
 # ---------------------------------------------------------------------------
+# configure_permissions.py zeigt die neu zu setzenden Regeln an und schreibt
+# sie erst nach Bestaetigung (Issue #458). Bei nicht-interaktivem stdin
+# (Pipe/CI) greift der sichere Default: kein Schreiben, Exit-Code bleibt 0
+# (bricht setup.sh unter 'set -euo pipefail' NICHT ab).
 
 python3 "$SCRIPT_DIR/configure_permissions.py"
 

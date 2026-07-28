@@ -73,11 +73,25 @@ Der Command ruft `scripts/setup.sh`. Was dabei passiert (in dieser Reihenfolge):
    eines von beiden vorhanden ist.
 5. Prüft, ob der globale `browser-use`-Claude-Skill unter `~/.claude/skills/browser-use/`
    liegt (wird separat von Anthropic bereitgestellt, nicht Teil dieses Plugins).
-6. Trägt Claude-Code-Permissions in `~/.claude/settings.local.json` ein.
+6. Zeigt die neu zu setzenden Claude-Code-Permissions an und trägt sie erst
+   nach Bestätigung in `~/.claude/settings.local.json` ein (siehe Hinweis
+   unten).
 7. Fragt (bei leerem Ordner): *„Hier einen Facharbeit-Arbeitsordner initialisieren?"*
 8. Fragt nach dem **SciHub-Tier** — Default ist *aus*.
 
 Das Setup ist **idempotent**: mehrfach aufrufbar, ohne etwas zu zerstören.
+
+> **Schritt 6 ist benutzerweit, nicht projektbezogen:** `~/.claude/settings.local.json`
+> gilt für **alle** Claude-Code-Projekte auf diesem Rechner, nicht nur für
+> academic-research. Das Setup zeigt deshalb die einzelnen neuen Regeln vor
+> dem Schreiben an (`scripts/configure_permissions.py`) und schreibt erst nach
+> expliziter Bestätigung — läuft `setup.sh` ohne Terminal (Pipe, CI), greift
+> der sichere Default: **kein** Schreiben. Keine der gesetzten Regeln erlaubt
+> pauschale Codeausführung (z. B. kein `Bash(python3 *)` mehr, nur eng
+> gescopte Muster wie `Bash(~/.academic-research/venv/bin/python *)`).
+> **Rücknahme:** Die betreffenden Zeilen aus dem `permissions.allow`-Array in
+> `~/.claude/settings.local.json` manuell entfernen (oder — falls dort keine
+> anderen Projekt-Berechtigungen stehen — die ganze Datei löschen).
 
 > **Stolperstelle:** Schritt 7 und 8 sind interaktive Fragen. Läuft `setup.sh` ohne
 > Terminal (Pipe, CI), greift jeweils der sichere Default — der Arbeitsordner wird dann

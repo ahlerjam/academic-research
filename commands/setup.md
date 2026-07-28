@@ -28,7 +28,17 @@ Das Skript übernimmt in acht Schritten:
     - Gefunden: `✅ humanizer-de Skill (global): vorhanden`
     - Nicht gefunden: `⚠️ humanizer-de Skill (global): nicht gefunden — für eigenständige Nutzung installieren: https://github.com/marmbiz/humanizer-de`
     (kein Hard-Fail — der vendorierte Skill im Plugin bleibt funktionsfähig)
-5. Schreibt die Claude-Code-Permissions über `scripts/configure_permissions.py`.
+5. **Claude-Code-Permissions (benutzerweit, nicht projektbezogen).** Zeigt die
+   neu zu setzenden Regeln über `scripts/configure_permissions.py` an und
+   schreibt sie erst nach Bestätigung nach `~/.claude/settings.local.json` —
+   diese Datei gilt für **alle** Claude-Code-Projekte auf dem Rechner, nicht
+   nur für academic-research. Keine der Regeln erlaubt pauschale
+   Codeausführung (nur eng gescopte Muster, z. B.
+   `Bash(~/.academic-research/venv/bin/python *)`). Bei nicht-interaktivem
+   stdin (Pipe/CI) greift der sichere Default: kein Schreiben. Sind bereits
+   alle Regeln vorhanden (idempotenter Re-Lauf), entfällt die Rückfrage.
+   **Rücknahme:** die geschriebenen Zeilen manuell aus dem
+   `permissions.allow`-Array in `~/.claude/settings.local.json` entfernen.
 6. **Projekt-Bootstrap (Auto-Detect).** Wenn das aktuelle Verzeichnis ein leerer Ordner ist, fragt `/setup` `"Hier einen Facharbeit-Arbeitsordner initialisieren?"`. Bei `y` werden `academic_context.md` (Stub), `CLAUDE.md`, `.gitignore`, sowie `kapitel/`, `literatur/`, `pdfs/` angelegt. In einem bestehenden Facharbeit-Ordner (mit `academic_context.md`) werden nur fehlende Artefakte nachgezogen — idempotent, keine Rückfrage. In Code-Repos (erkannt an `package.json`, `pyproject.toml`, …) oder nicht-leeren fremden Verzeichnissen: keine Aktion. Findet der Bootstrap zusätzlich bestehenden Kontext in Claude-Memory, bietet er an, ihn einmalig ins Projekt zu kopieren; die Memory-Dateien bleiben als Backup liegen.
 7. **Uni-Profil-Setup (F16.5).** Mit `--uni <profil>` (z.B. `/academic-research:setup --uni tum`) wird `config/library-profiles/<profil>.yaml` nicht-interaktiv nach `~/.academic-research/library-profiles/active.yaml` kopiert. Ohne `--uni` fragt das Skript interaktiv (Opt-in), ob jetzt ein Hochschul-Profil gewählt werden soll — bei Zustimmung folgt eine nummerierte Profil-Auswahl. Bei Opt-out oder nicht-interaktivem stdin (z.B. CI) bleibt das aktive Profil leer/Default, ohne Fehler. Verfügbare Profile: siehe [Per-Uni-Profile](../docs/reference/uni-profiles.md). Hinweis: Ein unbekannter `--uni`-Wert bricht das Setup ab (`set -euo pipefail`).
 8. **SciHub Opt-in (F18).** Das Skript fragt am Ende:
