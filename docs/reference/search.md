@@ -39,6 +39,22 @@ Auth-Module danach.
 > Ohne installierte `browser-use`-CLI werden die Browser-Module übersprungen; die
 > API-Suche funktioniert unverändert weiter. Das Setup meldet das explizit.
 
+### Zustimmung für Hochschul-Zugangsdaten (Auth-Module)
+
+`ebscohost`, `proquest` und `opac` verwenden per HAN-Login
+(`config/browser_guides/han_login.md`) Hochschul-Zugangsdaten in
+Browser-Sessions. Dabei gelten unverändert die Nutzungsbedingungen der
+jeweiligen Plattform — **EBSCOhost**, **ProQuest** und der **HAN**-Proxy der
+Hochschule.
+
+Vor dem allerersten Zugriff auf eines dieser drei Module im `--mode deep`
+holt `commands/search.md` eine einmalige, erklärte Zustimmung ein
+(`scripts/deep_search_consent.py`, `AskUserQuestion`-Gate). Die Zustimmung
+wird in `~/.academic-research/consent.json` gespeichert und danach **nicht
+erneut abgefragt**. Bei Ablehnung werden nur die drei Auth-Module für den
+aktuellen Lauf übersprungen — No-Auth-Module und alle 7 API-Module laufen
+unverändert weiter.
+
 ## 5D-Scoring
 
 Jedes Paper wird nach 5 Dimensionen bewertet (0–1):

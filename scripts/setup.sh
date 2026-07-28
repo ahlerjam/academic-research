@@ -137,10 +137,25 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 5. Claude-Code-Permissions
+# 5. Claude-Code-Permissions (benutzerweit, nicht projektbezogen)
 # ---------------------------------------------------------------------------
+# configure_permissions.py zeigt die neu zu setzenden Regeln an und schreibt
+# sie erst nach Bestaetigung (Issue #458). Bei nicht-interaktivem stdin
+# (Pipe/CI, u.a. der primaere /setup-Aufruf durch Claude Code) greift der
+# sichere Default: kein Schreiben, Exit-Code bleibt 0 (bricht setup.sh unter
+# 'set -euo pipefail' NICHT ab). In diesem Fall bleiben pending Regeln offen —
+# das wird unten sichtbar gemeldet, inkl. Nachhol-Befehl. commands/setup.md
+# instruiert Claude Code, diesen Fall per AskUserQuestion + '--yes' selbst
+# abzuschliessen.
 
 python3 "$SCRIPT_DIR/configure_permissions.py"
+
+REMAINING_PERMS="$(python3 "$SCRIPT_DIR/configure_permissions.py" --pending-count)"
+if [ "$REMAINING_PERMS" -gt 0 ]; then
+  echo "⚠️  Schritt 5 (Claude-Code-Permissions) nicht abgeschlossen — $REMAINING_PERMS Regel(n) fehlen weiterhin in ~/.claude/settings.local.json."
+  echo "   Nachholen: python3 $SCRIPT_DIR/configure_permissions.py --yes   (schreibt ohne weitere Rueckfrage)"
+  echo "   oder ohne '--yes' interaktiv in einem Terminal ausfuehren."
+fi
 
 # ---------------------------------------------------------------------------
 # 6. Projekt-Bootstrap (Auto-Detect)
