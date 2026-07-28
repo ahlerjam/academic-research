@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **28 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count,
+Insgesamt **29 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count,
 inklusive dem vendorierten `xlsx/`). Das Verzeichnis `skills/_common/` enthält nur
 geteilte Markdown-Fragmente und zählt nicht als Skill.
 
@@ -35,6 +35,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `reading-list-import` | *„Literaturliste importieren"*, *„Quellenliste"* | PDF/Markdown/Text → Vault |
 | `citation-style-import` | *„eigenen Zitierstil"*, *„CSL laden"* | CSL-Repository → Vault-Stilregeln |
 | `book-handler` | *„Buch"*, *„Monografie"*, *„Sammelband"*, ISBN-/Springer-DOI-Muster | Löst ISBN/Titel/DOI via DNB + OpenLibrary + DOAB auf, legt CSL-JSON im Vault an ([SKILL.md](../../skills/book-handler/SKILL.md)) |
+| `github-repo-research` | *„GitHub-Repo analysieren"*, *„Paper zu einem Repo finden"* | README/CITATION.cff → arXiv-/DOI-Kandidaten im Vault ([SKILL.md](../../skills/github-repo-research/SKILL.md)) |
 
 ## Schreib-Skills
 

@@ -32,6 +32,16 @@ TOKEN_REDUCTION_MIN = 1400  # Zeichen ~ 350 Token (cl100k-Proxy)
 CHARS_PER_TOKEN = 4  # cl100k-Proxy: 1400 Zeichen ~ 350 Token
 TOKEN_DRIFT_THRESHOLD = 1.20  # max. +20% Token-Drift vs. Baseline (Issue #200)
 
+# skill_sizes.json haelt die Groesse VOR der Preamble-Extraction (v6.0, #115)
+# fest, damit test_token_reduction eine echte Verkleinerung nachweisen kann.
+# Skills, die -- wie github-repo-research (#401) -- erst NACH diesem Refactor
+# direkt im Preamble-Pattern neu angelegt wurden, hatten nie eine bloatige
+# Vorgaenger-Version: es gibt nichts zu reduzieren, ein Baseline-Eintrag waere
+# eine erfundene Zahl. Sie bleiben deshalb von test_token_reduction
+# ausgenommen, sind aber ganz normal in tokens.json erfasst und damit voll von
+# test_token_drift_vs_baseline (Issue #200, Wachstumsschutz nach vorn) erfasst.
+NEW_SKILLS_NO_LEGACY_BASELINE = {"github-repo-research"}
+
 
 def _estimate_tokens(text: str) -> int:
     """Deterministischer cl100k-Proxy: aufgerundete Zeichenzahl / 4."""
@@ -177,9 +187,14 @@ def test_no_inline_fabrikation(skill_path: Path) -> None:
 @pytest.mark.parametrize("skill_path", ALL_SKILLS, ids=lambda p: p.parent.name)
 def test_token_reduction(skill_path: Path) -> None:
     """Jedes SKILL.md muss >= 1400 Zeichen (~ 350 Token) kleiner als Baseline sein."""
+    skill_name = skill_path.parent.name
+    if skill_name in NEW_SKILLS_NO_LEGACY_BASELINE:
+        pytest.skip(
+            f"{skill_name}: nach Preamble-Konvention neu angelegt (#401), "
+            "keine Legacy-Groesse zum Reduzieren"
+        )
     assert BASELINES_PATH.exists(), f"Baseline-Datei fehlt: {BASELINES_PATH}"
     baselines = json.loads(BASELINES_PATH.read_text())
-    skill_name = skill_path.parent.name
     assert skill_name in baselines, f"Skill '{skill_name}' nicht in Baseline"
     old_chars = baselines[skill_name]
     new_chars = len(skill_path.read_text())
