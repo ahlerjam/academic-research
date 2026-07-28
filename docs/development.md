@@ -97,13 +97,13 @@ uv run pytest tests/evals/ -v
 Kein CI-Trigger — Evals laufen lokal vor jedem Release. Reports unter `docs/evals/`.
 
 **Was ohne API-Key wirklich läuft.** `uv run pytest tests/evals/` ergibt ohne
-`ANTHROPIC_API_KEY` **184 bestandene und 148 übersprungene** Tests. Davon sind
-**147 Skips API-gated** — sie kommen aus `require_api_key()` in
+`ANTHROPIC_API_KEY` **188 bestandene und 152 übersprungene** Tests. Die Skips
+kommen ganz überwiegend aus `require_api_key()` in
 `tests/evals/eval_runner.py` und bedeuten: hier wird derzeit keine
 LLM-Qualität gemessen. Von den
-37 Komponenten unter `evals/` haben genau **3** einen Runner, der offline
+40 Komponenten unter `evals/` haben genau **3** einen Runner, der offline
 Inhalt bewertet (`verbatim-guard`, `humanizer-de-pipeline`, `auto-download`);
-die übrigen 34 werden nur strukturell geprüft. Welche Komponente in welchem
+die übrigen 37 werden nur strukturell geprüft. Welche Komponente in welchem
 Zustand ist und warum, steht vollständig in
 [`docs/evals/STRATEGY.md`](evals/STRATEGY.md) — inklusive der Bezifferung
 des API-Budgets, das nötig wäre, um daraus echte Metriken zu machen. Der Guard

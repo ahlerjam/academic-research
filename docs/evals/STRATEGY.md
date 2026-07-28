@@ -63,6 +63,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `cluster-visualizer` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Bewertet Diagramm-Interpretation; die Clustering-Mathematik ist in `tests/test_cluster*.py` abgedeckt. Ohne Key Skip. |
 | `conference-poster` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Layout- und Textqualität eines Posters ist ein Gestaltungsurteil, kein Assert. Ohne Key Skip. |
 | `fetch` | structural | `tests/test_fetch_command.py` (Schema-Assertions) | Die drei Cases prüfen Identifier-Erkennung, deren Logik ausschließlich als Prompt in `commands/fetch.md` existiert. Ein Offline-Runner müsste die Testhilfe `tests/test_fetch_command.py` gegen sich selbst prüfen — Tautologie statt Metrik. |
+| `generic-fetcher` | structural | `tests/test_generic_fetcher.py` (Navigations-Spiegel gegen einen lokalen HTTP-Ursprung) | Die vier Cases beschreiben Volltext-Beschaffung auf realen Plattformen (Zenodo, MDPI, OpenEdition Books) plus eine Paywall-Gegenprobe. Die drei Plattform-Cases laufen end-to-end: `tests/helpers/local_origin.py` serviert die gespeicherte Plattform-DOM **und** die PDF-Route auf 127.0.0.1, `tests/helpers/generic_fetcher_nav.py` holt die Datei per HTTP, schreibt sie und verifiziert sie von der Platte (existiert, > 0 Bytes, `%PDF-`); der Test vergleicht die geschriebenen Bytes mit den ausgelieferten. Der Status bleibt `structural`, weil die DOM aus Fixtures stammt und das öffentliche Netz der drei Plattformen ungetestet bleibt — ob Zenodo, MDPI oder OpenEdition heute real ausliefern, ist netzabhängig und bleibt Operator-Sache (gleiche Lage wie `oa-fetchers`/`publisher-fetchers`). |
 | `figure-verifier` | structural | `tests/test_figure_verifier.py` (Schema-Assertions) | Cases setzen einen realen VLM-Aufruf plus PDF-Seitenrender voraus; beides ist weder kostenlos noch deterministisch. |
 | `github-repo-research` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | README-/CITATION.cff-Extraktion und -Resolution sind in `tests/test_github_repo_research.py` deterministisch getestet; die Evals prüfen nur Trigger und Dialogführung. Ohne Key Skip. |
 | `grant-proposal` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Antragsqualität ist ein inhaltliches Urteil über Fließtext. Ohne Key Skip. |
@@ -89,7 +90,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 3 × `metric`, 36 × `structural`, 0 × `removed`.
+**Bilanz:** 3 × `metric`, 37 × `structural`, 0 × `removed`.
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).
@@ -108,13 +109,15 @@ haben ausschließlich Existenz- und Schema-Assertions.
 
 ## Zwei Schemata unter `evals/`
 
-`evals/SCHEMA.md` beschreibt das `prompts[]`-Format. Vier Verzeichnisse benutzen
+`evals/SCHEMA.md` beschreibt das `prompts[]`-Format. Fünf Verzeichnisse benutzen
 faktisch ein zweites, `cases[]`-basiertes Format (`fetch`, `figure-verifier`,
-`oa-fetchers`, `publisher-fetchers`; `figure-verifier` und `oa-fetchers` sogar
-als Top-Level-Array ohne `component`-Feld). Das ist in `evals/SCHEMA.md`
-dokumentiert, aber bewusst **nicht** normalisiert: ein Umbau würde
-`tests/test_figure_verifier.py`, `tests/test_oa_fetchers.py` und
+`generic-fetcher`, `oa-fetchers`, `publisher-fetchers`; `figure-verifier` und
+`oa-fetchers` sogar als Top-Level-Array ohne `component`-Feld). Das ist in
+`evals/SCHEMA.md` dokumentiert, aber bewusst **nicht** normalisiert: ein Umbau
+würde `tests/test_figure_verifier.py`, `tests/test_oa_fetchers.py` und
 `tests/test_publisher_fetchers.py` brechen, ohne die Messqualität zu erhöhen.
+`generic-fetcher` (#448) folgt demselben `cases[]`-Format wie die verwandten
+Fetcher-Verzeichnisse, statt eine sechste Variante einzuführen.
 
 ## API-Budget
 

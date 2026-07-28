@@ -162,15 +162,14 @@ class BookFetcherRouter:
         if best_metadata_url:
             generic_payload["url"] = best_metadata_url
 
-        resp = self.dispatch_subagent("generic-fetcher", generic_payload)
+        resp = self._try_generic(generic_payload, tries)
         status = resp.get("status", "no_match")
-        tries.append(self._try_entry("generic-fetcher", status))
 
         if status == "success":
             return {
                 "status": "success",
                 "source": "generic-fetcher",
-                "file_path": resp.get("pdf_path"),
+                "file_path": self._pdf_path(resp),
                 "tries": tries,
             }
 
@@ -194,6 +193,50 @@ class BookFetcherRouter:
                 "identifier_type": id_type,
             },
         }
+
+    @staticmethod
+    def _pdf_path(resp: dict):
+        """Der Agent-Prompt nennt das Feld `file_path`; Altfixtures nutzen `pdf_path`."""
+        return resp.get("file_path") or resp.get("pdf_path")
+
+    def _try_generic(self, payload: dict, tries: list) -> dict:
+        """Ruft generic-fetcher auf und loest `auth_required` mit genau EINEM Retry auf.
+
+        `auth_required` ist ein reiner Innen-Status (Issue #448): der Master
+        reicht ihn an `auth-helper` weiter und wiederholt den Aufruf einmalig mit
+        dem `session_context` -- nach aussen bleibt das Enum aus commands/fetch.md.
+        """
+        resp = self.dispatch_subagent("generic-fetcher", payload)
+        status = resp.get("status", "no_match")
+        tries.append(self._try_entry("generic-fetcher", status))
+
+        if status != "auth_required":
+            return resp
+
+        auth_resp = self.dispatch_subagent(
+            "auth-helper",
+            {
+                "target_url": resp.get("url", ""),
+                "profile_path": "~/.academic-research/library-profiles/active.yaml",
+            },
+        )
+        auth_status = auth_resp.get("status", "auth_failed")
+        tries.append(self._try_entry("auth-helper", auth_status))
+
+        if auth_status == "captcha":
+            return {"status": "captcha", "reason": "CAPTCHA beim Login"}
+
+        if auth_status != "authenticated":
+            return {
+                "status": "pickup_required",
+                "reason": resp.get("reason", "Authentifizierung fehlgeschlagen"),
+            }
+
+        retry_payload = dict(payload)
+        retry_payload["session_context"] = auth_resp.get("session_context")
+        retry_resp = self.dispatch_subagent("generic-fetcher", retry_payload)
+        tries.append(self._try_entry("generic-fetcher", retry_resp.get("status", "no_match")))
+        return retry_resp
 
     def _get_licensed_publisher_subagents(self) -> list:
         """Gibt die Verlags-Subagenten zurueck, deren Host in licensed_sites ist."""
