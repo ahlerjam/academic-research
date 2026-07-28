@@ -106,10 +106,11 @@ def _get_local_reranker(model_id: str | None = None):
     """Gibt den lokalen bge-reranker-v2-m3 zurueck oder ``None`` (Degradationspfad).
 
     Analog ``embedding_model.get_embedder()``: ``None`` ist ein Degradations-,
-    kein Absturzpfad -- fehlt das FlagEmbedding-Backend (Extra ``rerank-local``
-    nicht installiert) oder schlaegt der Modell-Download fehl, wird das
-    geloggt und ``apply_reranker`` faellt auf die unrerankte Reihenfolge
-    zurueck statt abzustuerzen.
+    kein Absturzpfad -- fehlt das FlagEmbedding-Backend (kein uv-Extra, nur
+    manuell per ``pip install FlagEmbedding`` installierbar, siehe
+    pyproject.toml) oder schlaegt der Modell-Download fehl, wird das geloggt
+    und ``apply_reranker`` faellt auf die unrerankte Reihenfolge zurueck statt
+    abzustuerzen.
     """
     key = model_id or os.environ.get(ENV_LOCAL_RERANKER_MODEL) or LOCAL_RERANKER_MODEL_ID
     if key in _LOCAL_RERANKER_CACHE:
@@ -295,8 +296,8 @@ def rerank_with_local_bge(
     """Rerankt Kandidaten via lokalem ``BAAI/bge-reranker-v2-m3`` (Apache-2.0, #376).
 
     Kostenfreier Fallback ohne Cloud-API-Key: laedt/nutzt das FlagEmbedding-
-    Backend (Extra ``rerank-local``) ueber den lazy Singleton
-    :func:`_get_local_reranker`.
+    Backend (kein uv-Extra, manuelles Opt-in, siehe pyproject.toml) ueber den
+    lazy Singleton :func:`_get_local_reranker`.
 
     Args:
         query: Suchquery.

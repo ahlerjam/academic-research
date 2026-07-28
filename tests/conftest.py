@@ -193,8 +193,9 @@ def block_real_local_reranker_backend(monkeypatch):
     Seit #376 ruft ``search_papers(..., rerank=True)`` ``apply_reranker`` immer
     auf -- auch ohne Cloud-API-Keys. Ohne diesen Guard wuerde jeder derartige
     Testaufruf versuchen, ``BAAI/bge-reranker-v2-m3`` (FlagEmbedding-Backend)
-    von HuggingFace zu laden, sobald das ``rerank-local``-Extra installiert
-    ist -- die Suite waere netzabhaengig und um Groessenordnungen langsamer.
+    von HuggingFace zu laden, sobald FlagEmbedding manuell installiert ist
+    (kein uv-Extra, vgl. pyproject.toml) -- die Suite waere netzabhaengig und
+    um Groessenordnungen langsamer.
 
     Analog ``block_real_embedding_backend``: gepatcht wird bewusst nur
     ``_load_local_reranker_backend`` (die unterste Schicht), Tests, die den

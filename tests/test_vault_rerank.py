@@ -330,9 +330,11 @@ class TestRerankerIntegration:
         mockt einen FUNKTIONIERENDEN lokalen Reranker und prueft damit einen
         anderen Zweig. Der Pfad "kein Reranker verfuegbar" blieb dadurch ohne
         jede Absicherung, obwohl er der Normalfall jeder `setup.sh`-Installation
-        ist: `FlagEmbedding` (Extra `rerank-local`) steht nicht in
-        `scripts/requirements.txt`, also schlaegt `_get_local_reranker()` dort
-        immer fehl.
+        ist: `FlagEmbedding` ist bewusst kein uv-/pip-verwalteter Dependency
+        (weder in `pyproject.toml` noch in `scripts/requirements.txt`, nur
+        manuell per `pip install FlagEmbedding` nachinstallierbar -- vgl.
+        Fixrunde PR #422), also schlaegt `_get_local_reranker()` dort immer
+        fehl.
 
         Bewusst KEIN Patch von `_get_local_reranker`: die autouse-Fixture
         `block_real_local_reranker_backend` (tests/conftest.py) blockiert das
@@ -765,6 +767,116 @@ class TestRerankerVisibleFailure:
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert any("cohere" in r.message.lower() for r in warnings), (
             f"Kein sichtbarer Cohere-Log-Hinweis gefunden: {[r.message for r in warnings]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Live-Tests gegen die echten Voyage/Cohere-APIs (#376, AC3-Beweis,
+# Fixrunde PR #422)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    os.environ.get("VAULT_RERANK_CLOUD_LIVE_TEST") != "1",
+    reason="Live-API-Test nur mit VAULT_RERANK_CLOUD_LIVE_TEST=1 (echter "
+    "Netzwerk-Call gegen Voyage/Cohere mit absichtlich ungueltigem Key).",
+)
+class TestRerankerVisibleFailureLive:
+    """AC3 woertlich: ein *Live*-Test mit ungueltigem Key statt nur eines Mocks.
+
+    `TestRerankerVisibleFailure` oben mockt `_get_voyage_client`/
+    `_get_cohere_client` mit einem generischen `RuntimeError` als
+    `side_effect` -- das landet immer im catch-all `except Exception` in
+    `apply_reranker`, nie in den eigens eingefuehrten benannten Handlern
+    `except VoyageError`/`except CohereApiError`. Faellt bei einer
+    kuenftigen SDK-Version der Importpfad `voyageai.error.VoyageError` bzw.
+    `cohere.core.api_error.ApiError` still auf den Platzhalter zurueck
+    (retrieval.py, `try: from voyageai.error import VoyageError`), schluege
+    dort KEIN Test an.
+
+    Diese Klasse macht echte Netzwerk-Aufrufe gegen die realen SDKs mit
+    absichtlich ungueltigem Key und beweist direkt (per `isinstance` gegen
+    die tatsaechlich geworfene Exception), dass die reale Fehlerklasse der
+    API eine Unterklasse der importierten Basisklasse ist -- der benannte
+    Handler wird also wirklich getroffen, nicht nur der Catch-all.
+    """
+
+    def test_voyage_invalid_key_live_raises_named_voyage_error(self):
+        """Echter Voyage-Call mit ungueltigem Key wirft eine VoyageError-Instanz."""
+        pytest.importorskip("voyageai")
+        import voyageai.error
+        from academic_vault.retrieval import VoyageError, rerank_with_voyage
+
+        with pytest.raises(VoyageError) as exc_info:
+            rerank_with_voyage(
+                query="test query",
+                candidates=[{"paper_id": "p001", "text": "Some document text."}],
+                api_key="invalid-voyage-key-for-ac3-live-test",
+            )
+
+        # Beweis, dass es sich um die echte SDK-Klasse handelt, nicht um den
+        # nie ausgeloesten Platzhalter aus retrieval.py.
+        assert type(exc_info.value).__module__.startswith("voyageai")
+        assert isinstance(exc_info.value, voyageai.error.VoyageError)
+
+    def test_voyage_invalid_key_live_apply_reranker_returns_reranked_false(self, caplog):
+        """apply_reranker() mit echtem ungueltigem Voyage-Key: reranked=False + WARNING (AC3)."""
+        pytest.importorskip("voyageai")
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [{"paper_id": "p001", "text": "Some document text about machine learning."}]
+
+        with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+            result = apply_reranker(
+                query="test",
+                candidates=candidates,
+                voyage_api_key="invalid-voyage-key-for-ac3-live-test",
+                cohere_api_key=None,
+            )
+
+        assert all(entry["reranked"] is False for entry in result)
+        assert all(entry["reranker"] == "none" for entry in result)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("voyage" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Voyage-Log-Hinweis (Live) gefunden: {[r.message for r in warnings]}"
+        )
+
+    def test_cohere_invalid_key_live_raises_named_cohere_error(self):
+        """Echter Cohere-Call mit ungueltigem Key wirft eine CohereApiError-Instanz."""
+        pytest.importorskip("cohere")
+        import cohere.core.api_error
+        from academic_vault.retrieval import CohereApiError, rerank_with_cohere
+
+        with pytest.raises(CohereApiError) as exc_info:
+            rerank_with_cohere(
+                query="test query",
+                candidates=[{"paper_id": "p001", "text": "Some document text."}],
+                api_key="invalid-cohere-key-for-ac3-live-test",
+            )
+
+        assert type(exc_info.value).__module__.startswith("cohere")
+        assert isinstance(exc_info.value, cohere.core.api_error.ApiError)
+
+    def test_cohere_invalid_key_live_apply_reranker_returns_reranked_false(self, caplog):
+        """apply_reranker() mit echtem ungueltigem Cohere-Key: reranked=False + WARNING (AC3)."""
+        pytest.importorskip("cohere")
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [{"paper_id": "p001", "text": "Some document text about machine learning."}]
+
+        with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+            result = apply_reranker(
+                query="test",
+                candidates=candidates,
+                voyage_api_key=None,
+                cohere_api_key="invalid-cohere-key-for-ac3-live-test",
+            )
+
+        assert all(entry["reranked"] is False for entry in result)
+        assert all(entry["reranker"] == "none" for entry in result)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("cohere" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Cohere-Log-Hinweis (Live) gefunden: {[r.message for r in warnings]}"
         )
 
 
