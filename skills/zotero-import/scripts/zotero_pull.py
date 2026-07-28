@@ -204,7 +204,10 @@ def _parse_page_label(label: str | None) -> int | None:
     if label is None:
         return None
     stripped = label.strip()
-    if not stripped or not stripped.isdigit():
+    # isdecimal() statt isdigit(): isdigit() laesst Unicode-Ziffern wie
+    # Hochstellungszeichen ("²") durch, fuer die int() dennoch einen
+    # ValueError wirft (isdecimal() lehnt sie korrekt ab).
+    if not stripped or not stripped.isdecimal():
         return None
     return int(stripped)
 

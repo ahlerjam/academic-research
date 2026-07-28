@@ -26,9 +26,9 @@ security:
 
 ## Zweck
 
-Holt alle Items und PDF-Attachments aus einer Zotero-Library (user oder group)
-und importiert sie in den academic-research Vault. Idempotent: wiederholter
-Aufruf erstellt keine Duplikate (Items mit DOI/ISBN).
+Holt Items und PDF-Attachments aus einer Zotero-Library (user/group) in den
+academic-research Vault. Idempotent: wiederholter Aufruf erstellt keine
+Duplikate (Items mit DOI/ISBN).
 
 ## Voraussetzungen
 
@@ -48,14 +48,13 @@ zotero_library_id: "DEINE_LIBRARY_ID"
 zotero_library_type: "group"   # oder "user"
 ```
 
-Permissions setzen (Pflicht):
+Permissions (Pflicht):
 
 ```bash
 chmod 0600 ~/.academic-research/config.yaml
 ```
 
-**Hinweis:** Der API-Key ist ein persönliches Credential. Er wird niemals geloggt,
-in den Vault geschrieben oder im PR-Diff sichtbar.
+**Hinweis:** Der API-Key wird nie geloggt, in den Vault geschrieben oder im PR-Diff sichtbar.
 
 ### 3. Zotero API-Key erstellen
 
@@ -67,10 +66,8 @@ in den Vault geschrieben oder im PR-Diff sichtbar.
 
 ### Automatisch (Skill-Trigger)
 
-Claude erkennt folgende Phrasen und führt den Import aus:
-- "Zotero importieren"
-- "Bibliothek synchronisieren"
-- "Zotero sync"
+Claude erkennt die Trigger-Phrasen aus dem Frontmatter automatisch
+(z. B. "Zotero importieren").
 
 ### Manuell
 
@@ -94,7 +91,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/zotero-import/scripts/zotero_pull.py \
 
 - **Read-only**: Kein Schreiben zurück nach Zotero
 - **Netz-Allowlist**: Nur `api.zotero.org` (via pyzotero)
-- **Credentials**: Nur in `~/.academic-research/config.yaml` mit 0600
+- **Credentials**: `~/.academic-research/config.yaml`, Modus 0600
 
 ## Bekannte Einschränkungen
 
@@ -102,3 +99,4 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/zotero-import/scripts/zotero_pull.py \
   jedem Import neu angelegt
 - Nur das erste PDF-Attachment pro Item wird verarbeitet
 - Notes und verschachtelte Attachments werden nicht importiert
+- **Optional:** [54yyyu/zotero-mcp](https://github.com/54yyyu/zotero-mcp) (MIT), s. `references/annotations.md`.

@@ -459,6 +459,61 @@ class TestAnnotationImport:
         assert rows[0]["printed_page"] is None
         assert rows[0]["extraction_method"] == "manual"
 
+    def test_annotation_unicode_digit_page_label_does_not_crash(self, tmp_path):
+        """annotationPageLabel mit Unicode-Ziffer (z.B. Hochstellung '²') crasht nicht.
+
+        Regression: ``str.isdigit()`` gibt fuer ``"²"`` ``True`` zurueck,
+        ``int("²")`` wirft aber ``ValueError`` — die Annotation wuerde
+        dann komplett verworfen und als Fehler gemeldet statt mit
+        ``printed_page = NULL`` importiert zu werden (``str.isdecimal()``
+        lehnt den Fall korrekt ab).
+        """
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment(
+            "ANNOITM3", "10.9999/annot.004"
+        )
+        annotation_children = [
+            {
+                "key": "ANNOKEY5",
+                "version": 1,
+                "data": {
+                    "key": "ANNOKEY5",
+                    "itemType": "annotation",
+                    "annotationType": "highlight",
+                    "annotationText": "Fussnotenverweis.",
+                    "annotationPageLabel": "²",
+                },
+            }
+        ]
+
+        def children_side_effect(key):
+            if key == "ANNOITM3":
+                return attachment_children
+            if key == att_key:
+                return annotation_children
+            return []
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.side_effect = children_side_effect
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.imported == 1
+        assert result.errors == []
+
+        rows = _quotes_rows(db_path)
+        assert len(rows) == 1
+        assert rows[0]["printed_page"] is None
+        assert rows[0]["extraction_method"] == "manual"
+
 
 # ---------------------------------------------------------------------------
 # Test 8: PDF-Attachment-Fallback bleibt erhalten (Regression zu Issue #395)
@@ -793,3 +848,23 @@ class TestAnnotationDocsProgressiveDisclosure:
                 f"SKILL.md enthaelt Detailfeld '{marker}' inline — "
                 "gehoert nach references/annotations.md"
             )
+
+    def test_skill_md_mentions_companion_with_correct_license(self):
+        """AC3 (Issue #395): SKILL.md selbst muss 54yyyu/zotero-mcp + MIT nennen.
+
+        Nur references/annotations.md zu verlinken reicht nicht (Progressive
+        Disclosure wird nur bei Bedarf geladen) — die Nennung muss in
+        SKILL.md selbst stehen, inkl. korrektem Lizenzstatus in derselben
+        Zeile (nicht nur zufaellig `license: MIT` im Frontmatter des Skills
+        selbst, das ist eine andere Lizenz als die von 54yyyu/zotero-mcp).
+        """
+        text = _SKILL_MD.read_text(encoding="utf-8")
+        assert "54yyyu/zotero-mcp" in text, (
+            "SKILL.md muss 54yyyu/zotero-mcp als optionale Companion-Integration "
+            "nennen (AC3, Issue #395)"
+        )
+        mention_line = next(line for line in text.splitlines() if "54yyyu/zotero-mcp" in line)
+        assert "MIT" in mention_line, (
+            f"SKILL.md nennt 54yyyu/zotero-mcp, aber nicht dessen MIT-Lizenzstatus "
+            f"in derselben Zeile: {mention_line!r}"
+        )
