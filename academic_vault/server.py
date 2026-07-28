@@ -80,6 +80,40 @@ def validate_csl_json(csl_json: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _ensure_schema_for_read(db_path: str) -> None:
+    """Stellt vor einem reinen Lesezugriff sicher, dass die DB nutzbar ist.
+
+    Bewusst NICHT einfach ``VaultDB(db_path).init_schema()``: ``schema.sql``
+    enthaelt drei unbedingte ``DROP TRIGGER``+``CREATE TRIGGER``-Paare (siehe
+    Kommentar dort), die -- anders als ``CREATE TABLE IF NOT EXISTS`` -- bei
+    jedem Lauf sqlite_master schreiben. Riefe jeder Lesepfad unconditional
+    ``init_schema()``, wuerde jeder Read (get_paper, search_papers, ...) zu
+    einem DDL-Schreibvorgang (Review-Fund P1 zu PR #478/#455).
+
+    Der Guard hier prueft nur billig, ob die DB ueberhaupt schon eine
+    ``papers``-Tabelle hat. Fehlt sie (frische, leere DB-Datei -- der Fall,
+    den AC3 aus #455 abdeckt), wird einmalig der volle
+    ``VaultDB.init_schema()`` durchlaufen. Existiert sie bereits, wird nichts
+    weiter getan -- Reparatur von Bestands-Drift (fehlende Spalten/Tabellen,
+    veraltete Trigger) bleibt bewusst Aufgabe der Schreibpfade (add_paper,
+    add_quote, ...), die weiterhin unbedingt ``init_schema()`` aufrufen und
+    damit voll migrations-/reparaturfaehig bleiben (z.B. Trigger-Refresh auf
+    Bestands-DBs, Issue #373).
+    """
+    conn = VaultDB._open(db_path)
+    try:
+        papers_exists = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='papers'"
+            ).fetchone()
+            is not None
+        )
+    finally:
+        conn.close()
+    if not papers_exists:
+        VaultDB(db_path).init_schema()
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -139,7 +173,7 @@ def get_quote(db_path: str, quote_id: str) -> dict | None:
     Feld aktuell nur manuell; die NLI-Klassifikation ist ein Folge-Issue.
     """
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     return db.get_quote(quote_id)
 
 
@@ -182,8 +216,9 @@ def search_papers(
     # ueber VaultDB._open(), daher greift keine der init_schema()-Aufrufe in
     # den anderen Lesepfaden. Ohne dies crasht die erste Suche auf einer
     # frischen DB mit sqlite3.OperationalError statt ein leeres Ergebnis zu
-    # liefern.
-    VaultDB(db_path).init_schema()
+    # liefern. _ensure_schema_for_read() statt unbedingtem init_schema()
+    # (Review-Fund P1 zu PR #478): letzteres fuehrt bei jedem Aufruf DDL aus.
+    _ensure_schema_for_read(db_path)
     conn = VaultDB._open(db_path)
     try:
         if type_filter:
@@ -401,7 +436,7 @@ def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
 def search_quote_text(db_path: str, verbatim: str, k: int = 5) -> list[dict]:
     """LIKE-Suche in quotes.verbatim. Gibt [{quote_id, verbatim, paper_id}] zurueck."""
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     return db.search_quote_text(verbatim, k)
 
 
@@ -413,7 +448,7 @@ def find_quotes(
 ) -> list[dict]:
     """Gibt Quotes fuer ein Paper zurueck, optional per verbatim-Filter."""
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     return db.find_quotes(paper_id, query, k)
 
 
@@ -445,14 +480,14 @@ def add_figure(
 def get_figure(db_path: str, figure_id: str) -> dict | None:
     """Gibt vollstaendigen Figure-Record als dict oder None."""
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     return db.get_figure(figure_id)
 
 
 def list_figures(db_path: str, paper_id: str) -> list[dict]:
     """Gibt alle Figures fuer ein Paper, nach page sortiert."""
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     return db.list_figures(paper_id)
 
 
@@ -471,7 +506,7 @@ def find_figure_by_caption(
     ein In-Text-Referenz-Label ist (z. B. ``"Abb. 3.4"``), kein Caption-Fragment.
     """
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     return db.find_figures_by_reference(caption_fragment, paper_id=paper_id)
 
 
@@ -579,7 +614,7 @@ def add_chapter(
 def get_paper(db_path: str, paper_id: str) -> dict | None:
     """Gibt Paper-Metadata als dict zurueck oder None."""
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     return db.get_paper(paper_id)
 
 
@@ -1019,7 +1054,7 @@ def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
         Gedruckte Seitenzahl (>= 1).
     """
     db = VaultDB(db_path)
-    db.init_schema()
+    _ensure_schema_for_read(db_path)
     offset = db.get_page_offset(paper_id)
     printed = pdf_page - offset
     return max(1, printed)  # Nie kleiner als 1

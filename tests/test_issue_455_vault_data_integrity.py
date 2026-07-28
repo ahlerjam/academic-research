@@ -296,3 +296,135 @@ def test_sqlite_operational_error_would_have_been_raised_without_fix():
             conn.execute("SELECT * FROM papers_fts WHERE papers_fts MATCH ?", ("x",))
         finally:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Review-Fund PR #478 (P1, Performance): die neun reinen Lesepfade in
+# server.py (get_paper, search_papers, get_quote, search_quote_text,
+# find_quotes, get_figure, list_figures, find_figure_by_caption,
+# get_printed_page) riefen bislang unbedingt ``VaultDB.init_schema()`` auf.
+# schema.sql enthaelt bewusst unbedingte DROP TRIGGER + CREATE TRIGGER-Paare
+# (siehe Kommentar dort) -- ``init_schema()`` selbst muss diese fuer Schreib-
+# pfade (add_paper, add_quote, ...) unbedingt ausfuehren koennen, damit
+# Bestands-Drift (z.B. per Test/extern veraenderte Trigger, Issue #373)
+# weiterhin repariert wird. ``_ensure_schema_for_read()`` verlagert den Guard
+# deshalb auf die Lesepfade selbst: ein billiger sqlite_master-Check statt
+# eines vollen init_schema()-Laufs, sobald die DB bereits eine
+# ``papers``-Tabelle hat.
+# ---------------------------------------------------------------------------
+
+
+def test_server_get_paper_repeat_call_does_not_rerun_ddl(temp_vault_db):
+    """Zweiter ``vault_server.get_paper()``-Aufruf auf einer bereits
+    initialisierten DB darf kein DDL (u.a. DROP+CREATE TRIGGER) mehr
+    ausloesen. `PRAGMA schema_version` steigt bei JEDER Schema-Aenderung --
+    bleibt er stabil, lief kein DDL erneut."""
+    db_path = temp_vault_db  # Fixture hat init_schema() bereits einmal gerufen
+    vault_server.add_paper(db_path, "read-hotpath-2024", _CSL_ARTICLE)
+
+    with sqlite3.connect(db_path) as conn:
+        schema_version_before = conn.execute("PRAGMA schema_version").fetchone()[0]
+
+    vault_server.get_paper(db_path, "read-hotpath-2024")
+
+    with sqlite3.connect(db_path) as conn:
+        schema_version_after = conn.execute("PRAGMA schema_version").fetchone()[0]
+
+    assert schema_version_after == schema_version_before, (
+        "vault_server.get_paper() hat auf einer bereits initialisierten DB "
+        "erneut DDL ausgefuehrt statt nur einen billigen Read zu machen "
+        "(Review-Fund P1 zu PR #478)."
+    )
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda db_path: vault_server.get_paper(db_path, "read-hotpath-2024"),
+        lambda db_path: vault_server.search_papers(db_path, "hotpath"),
+        lambda db_path: vault_server.get_quote(db_path, "does-not-exist"),
+        lambda db_path: vault_server.search_quote_text(db_path, "hotpath"),
+        lambda db_path: vault_server.find_quotes(db_path, "read-hotpath-2024"),
+        lambda db_path: vault_server.get_figure(db_path, "does-not-exist"),
+        lambda db_path: vault_server.list_figures(db_path, "read-hotpath-2024"),
+        lambda db_path: vault_server.find_figure_by_caption(db_path, "Abb. 1"),
+        lambda db_path: vault_server.get_printed_page(db_path, "read-hotpath-2024", 5),
+    ],
+    ids=[
+        "get_paper",
+        "search_papers",
+        "get_quote",
+        "search_quote_text",
+        "find_quotes",
+        "get_figure",
+        "list_figures",
+        "find_figure_by_caption",
+        "get_printed_page",
+    ],
+)
+def test_server_read_paths_do_not_rerun_ddl_on_initialized_db(temp_vault_db, call):
+    """Alle neun in PR #478 P1 genannten Lesepfade: kein DDL-Rerun auf einer
+    bereits initialisierten DB (Review-Fund P1, konkrete Liste der
+    betroffenen Zeilen aus dem Sticky-Comment)."""
+    db_path = temp_vault_db  # Fixture hat init_schema() bereits einmal gerufen
+    vault_server.add_paper(db_path, "read-hotpath-2024", _CSL_ARTICLE)
+
+    with sqlite3.connect(db_path) as conn:
+        schema_version_before = conn.execute("PRAGMA schema_version").fetchone()[0]
+
+    call(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        schema_version_after = conn.execute("PRAGMA schema_version").fetchone()[0]
+
+    assert schema_version_after == schema_version_before, (
+        "Lesepfad hat auf einer bereits initialisierten DB erneut DDL "
+        "ausgefuehrt statt nur einen billigen Read zu machen "
+        "(Review-Fund P1 zu PR #478)."
+    )
+
+
+def test_server_get_paper_on_fresh_db_still_initializes_schema(tmp_path):
+    """Gegenprobe zu AC3: der neue Guard darf die Fresh-DB-Reparatur aus
+    #455 nicht regressieren -- eine wirklich frische, leere DB-Datei muss
+    weiterhin transparent initialisiert werden statt zu crashen."""
+    db_path = str(tmp_path / "fresh.db")
+    assert vault_server.get_paper(db_path, "irrelevant") is None
+
+
+def test_write_paths_still_call_init_schema_unconditionally_for_repair(temp_vault_db):
+    """Schreibpfade (hier: add_quote) muessen weiterhin unbedingt
+    ``init_schema()`` aufrufen, damit Bestands-Drift reparierbar bleibt --
+    der P1-Fix darf nur die reinen Lesepfade betreffen (Review-Fund P1 zu
+    PR #478, Abgrenzung zur Reparatur-Semantik aus Issue #373)."""
+    db_path = temp_vault_db
+    vault_server.add_paper(db_path, "write-path-2024", _CSL_ARTICLE)
+
+    # Trigger papers_ai auf einen kaputten (pre-#373) Stand zuruecksetzen,
+    # analog zu tests/test_issue_373_fulltext.py::_downgrade_to_legacy_schema.
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript("""
+            DROP TRIGGER IF EXISTS papers_ai;
+            CREATE TRIGGER papers_ai AFTER INSERT ON papers BEGIN
+              INSERT INTO papers_fts(paper_id, title, abstract, fulltext)
+              VALUES (new.paper_id, json_extract(new.csl_json, '$.title'),
+                      json_extract(new.csl_json, '$.abstract'), NULL);
+            END;
+        """)
+        conn.commit()
+
+    # add_quote() ruft init_schema() unbedingt auf und muss den Trigger
+    # dabei reparieren (DROP+CREATE aus dem aktuellen schema.sql).
+    vault_server.add_quote(db_path, "write-path-2024", "Zitat", "manual")
+
+    with sqlite3.connect(db_path) as conn:
+        trigger_sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='papers_ai'"
+        ).fetchone()[0]
+
+    assert "paper_fulltext" in trigger_sql, (
+        "add_quote() hat den (kuenstlich zurueckgesetzten) Trigger papers_ai "
+        "nicht repariert -- Schreibpfade muessen weiterhin unbedingt "
+        "init_schema() aufrufen (Review-Fund P1 zu PR #478 betrifft nur "
+        "Lesepfade)."
+    )
