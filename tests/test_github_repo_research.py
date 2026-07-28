@@ -144,6 +144,134 @@ class TestParseCitationCff:
 
 
 # ---------------------------------------------------------------------------
+# AC2 (Review-Fund PR #433, Runde 2): untypisierte YAML-Werte in CITATION.cff
+# ---------------------------------------------------------------------------
+
+# CITATION.cff ist YAML, und YAML ist untypisiert: yaml.safe_load() typisiert
+# einen unquotierten Wert nach seiner FORM. `doi: 10.5281` wird damit zu float,
+# `doi: 2024` zu int, `doi: true` zu bool und eine Sequenz zu list -- nur ein
+# Wert mit "/" (die uebliche DOI-Form) landet ueberhaupt als str.
+# analyze_repo() behandelt den CITATION.cff-DOI dagegen durchgaengig als String
+# (.lower() beim Dedup, re.match() beim arXiv-Praefix-Filter, .strip() in
+# _normalize_doi) und crashte deshalb mit AttributeError bzw. TypeError, sobald
+# ein Repo eine solche CITATION.cff hatte -- Verletzung von AC2 ("kein Crash").
+_NON_STRING_DOI_LINES = [
+    "doi: 10.5281",  # -> float
+    "doi: 2024",  # -> int
+    "doi: true",  # -> bool
+    "doi:\n  - 10.1234/abcd",  # -> list
+]
+
+
+class TestNonStringCffValuesDoNotCrash:
+    @pytest.mark.parametrize("doi_line", _NON_STRING_DOI_LINES)
+    def test_analyze_repo_survives_non_string_cff_doi(self, doi_line):
+        """Der gemeldete Crash: kein Kandidat, aber auch keine Exception (AC2)."""
+        cff_text = f"cff-version: 1.2.0\ntitle: My Tool\n{doi_line}\n"
+
+        with (
+            patch.object(
+                agr,
+                "fetch_readme",
+                return_value=agr.FetchResult(_read("readme_without_reference.md")),
+            ),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(cff_text)),
+            patch.object(agr, "resolve_doi") as mock_resolve,
+            patch.object(agr, "vault_add_paper") as mock_add,
+        ):
+            result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
+
+        assert result["candidates"] == []
+        assert result["status"] == "ok"
+        assert isinstance(result["message"], str) and result["message"]
+        mock_resolve.assert_not_called()
+        mock_add.assert_not_called()
+
+    def test_non_string_cff_doi_does_not_crash_pipeline_with_valid_readme_doi(self):
+        """Beweist, dass der Fix an der Parser-Grenze sitzen muss, nicht am
+        .lower()-Vergleich: sobald das README eine gueltige DOI liefert, laeuft
+        die Pipeline ueber den Dedup-Vergleich hinaus weiter in
+        _ARXIV_DOI_PREFIX_RE.match() und resolve_doi()/_normalize_doi() --
+        an einem float scheitern die genauso (TypeError bzw. AttributeError).
+        """
+        readme_text = "# Tool\n\nPublished at https://doi.org/10.1038/nature14539\n"
+        cff_text = "cff-version: 1.2.0\ntitle: My Tool\ndoi: 10.5281\n"
+        crossref_csl = '{"type": "article-journal", "title": "T", "DOI": "10.1038/nature14539"}'
+
+        with (
+            patch.object(agr, "fetch_readme", return_value=agr.FetchResult(readme_text)),
+            patch.object(agr, "fetch_citation_cff", return_value=agr.FetchResult(cff_text)),
+            patch.object(agr, "resolve_doi", return_value=crossref_csl) as mock_resolve,
+            patch.object(agr, "vault_add_paper"),
+        ):
+            result = agr.analyze_repo("https://github.com/foo/bar", db_path="unused.db")
+
+        # Die gueltige README-DOI bleibt erhalten, der kaputte cff-Wert wird
+        # weder aufgeloest noch als Kandidat fabriziert.
+        mock_resolve.assert_called_once_with("10.1038/nature14539")
+        assert [c["doi"] for c in result["candidates"]] == ["10.1038/nature14539"]
+
+    @pytest.mark.parametrize("doi_line", _NON_STRING_DOI_LINES)
+    def test_parse_citation_cff_treats_non_string_doi_as_absent(self, doi_line):
+        cff = f"cff-version: 1.2.0\ntitle: My Tool\n{doi_line}\n"
+        result = agr.parse_citation_cff(cff)
+
+        assert result is not None
+        assert result["doi"] is None
+        assert result["title"] == "My Tool"
+
+    def test_parse_citation_cff_returns_none_when_only_malformed_doi(self):
+        """Ohne verwertbaren DOI UND ohne Titel bleibt nichts uebrig."""
+        assert agr.parse_citation_cff("cff-version: 1.2.0\ndoi: 10.5281\n") is None
+
+    def test_parse_citation_cff_falls_back_to_valid_top_level_doi(self):
+        """Kaputter DOI in preferred-citation darf einen gueltigen Top-Level-DOI
+        nicht verdecken (vorher gewann der truthy float)."""
+        cff = (
+            "cff-version: 1.2.0\n"
+            "doi: 10.1234/abcd\n"
+            "preferred-citation:\n"
+            "  doi: 10.5281\n"
+            "  title: The Paper\n"
+        )
+        result = agr.parse_citation_cff(cff)
+
+        assert result is not None
+        assert result["doi"] == "10.1234/abcd"
+
+    def test_parse_citation_cff_output_fields_are_always_strings(self):
+        """Vertrag der Funktion: was zurueckkommt, ist str -- sonst crasht es
+        beim naechsten Konsumenten. Gilt fuer Titel und Autorennamen ebenso
+        wie fuer den DOI."""
+        cff = (
+            "cff-version: 1.2.0\n"
+            "title: 2024\n"
+            "doi: 10.1234/abcd\n"
+            "authors:\n"
+            "  - family-names: 2024\n"
+            "    given-names: 1999\n"
+            "  - name: 42\n"
+            "  - family-names: Doe\n"
+            "    given-names: Jane\n"
+        )
+        result = agr.parse_citation_cff(cff)
+
+        assert result is not None
+        assert result["title"] is None
+        assert result["authors"] == [{"family": "Doe", "given": "Jane"}]
+        for author in result["authors"]:
+            assert all(isinstance(v, str) for v in author.values())
+
+    def test_whitespace_only_cff_doi_is_treated_as_absent(self):
+        """Ein leerer/nur-Whitespace-DOI ist kein DOI -- er darf nicht als
+        Crossref-Lookup enden."""
+        result = agr.parse_citation_cff('cff-version: 1.2.0\ntitle: My Tool\ndoi: "   "\n')
+
+        assert result is not None
+        assert result["doi"] is None
+
+
+# ---------------------------------------------------------------------------
 # AC1: Treffer-Fall -- README mit arXiv-Link fuehrt zu >=1 Vault-Eintrag
 # ---------------------------------------------------------------------------
 

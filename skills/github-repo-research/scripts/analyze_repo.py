@@ -254,12 +254,40 @@ def extract_dois(text: str | None) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _cff_string(value: object) -> str | None:
+    """Nimmt einen YAML-Wert nur an, wenn er ein nicht-leerer String ist.
+
+    YAML ist untypisiert: yaml.safe_load() typisiert einen unquotierten Wert
+    nach seiner FORM. `doi: 10.5281` wird dadurch zu float, `doi: 2024` zu int,
+    `doi: true` zu bool, eine Sequenz zu list -- als str landet nur, was sich
+    nicht als Zahl/Bool lesen laesst (bei DOIs der Normalfall, weil sie ein "/"
+    enthalten). Die Konsumenten dieses Moduls behandeln DOI und Titel dagegen
+    durchgaengig als String: .lower() beim Dedup, re.match() im
+    arXiv-Praefix-Filter, .strip() in _normalize_doi(). Ein durchgereichter
+    Nicht-String liess analyze_repo() deshalb mit AttributeError bzw. TypeError
+    abbrechen (Review-Fund PR #433) -- ein Verstoss gegen AC2 ("kein Crash").
+
+    Ein Nicht-String gilt hier als "Feld nicht verwertbar", nicht als Fehler:
+    ein solcher Wert kann per Definition kein DOI sein (jeder DOI enthaelt ein
+    "/" und waere damit als str geparst worden), und aus einem float wird kein
+    DOI zurueckgeraten -- das waere Fabrikation. Der Kandidat entfaellt dann
+    still, statt einen sinnlosen Crossref-Lookup auszuloesen.
+    """
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
 def parse_citation_cff(text: str | None) -> dict | None:
     """Parst CITATION.cff (YAML) zu {'doi', 'title', 'authors'} oder None.
 
     Bevorzugt 'preferred-citation', faellt auf Top-Level-Felder zurueck.
     Rein .get()-basiert -- kein KeyError bei fehlenden/abweichenden Keys.
     Gibt None zurueck bei kaputtem YAML oder ganz ohne DOI/Titel.
+
+    Vertrag der Rueckgabe: 'doi' und 'title' sind entweder ein nicht-leerer
+    `str` oder None, Autorennamen immer `str` -- siehe _cff_string(). Nur so
+    duerfen die Aufrufer sie als String behandeln.
     """
     if not text or not _YAML_AVAILABLE:
         return None
@@ -273,8 +301,10 @@ def parse_citation_cff(text: str | None) -> dict | None:
     preferred = data.get("preferred-citation")
     source = preferred if isinstance(preferred, dict) else {}
 
-    doi = source.get("doi") or data.get("doi")
-    title = source.get("title") or data.get("title")
+    # Erst normalisieren, dann das `or` auswerten: sonst gewinnt ein kaputter
+    # (aber truthy) preferred-citation-Wert gegen einen gueltigen Top-Level-Wert.
+    doi = _cff_string(source.get("doi")) or _cff_string(data.get("doi"))
+    title = _cff_string(source.get("title")) or _cff_string(data.get("title"))
     if not doi and not title:
         return None
 
@@ -284,12 +314,14 @@ def parse_citation_cff(text: str | None) -> dict | None:
         for a in authors_raw:
             if not isinstance(a, dict):
                 continue
-            given = a.get("given-names", "")
-            family = a.get("family-names", "")
+            given = _cff_string(a.get("given-names")) or ""
+            family = _cff_string(a.get("family-names")) or ""
             if family or given:
                 authors.append({"family": family, "given": given})
-            elif a.get("name"):
-                authors.append({"literal": a["name"]})
+                continue
+            literal = _cff_string(a.get("name"))
+            if literal:
+                authors.append({"literal": literal})
 
     return {"doi": doi, "title": title, "authors": authors}
 
