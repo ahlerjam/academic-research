@@ -260,33 +260,88 @@ class TestNonZeroExitAndStderrPropagation:
 
 
 # ---------------------------------------------------------------------------
-# Fix-Runde PR #436 (Issue #398): 'cargo install hallucinator' existiert nicht
-# (crates.io-API https://crates.io/api/v1/crates/hallucinator -> HTTP 404,
-# verifiziert 2026-07-28). Docs/INSTALL_HINT duerfen diesen Weg nicht mehr
-# nennen.
+# Fix-Runde PR #436 (Issue #398): Beide bisher dokumentierten "Alternativen"
+# liefern das Binary NICHT, das dieser Wrapper via shutil.which("hallucinator-cli")
+# sucht. Verifiziert am 2026-07-28:
+#
+#   1. `cargo install hallucinator` -- es gibt kein solches Crate.
+#      https://crates.io/api/v1/crates/hallucinator -> HTTP 404
+#      {"errors":[{"detail":"crate `hallucinator` does not exist"}]}
+#
+#   2. `pip install hallucinator` -- das PyPI-Paket (0.2.1) enthaelt
+#      AUSSCHLIESSLICH die PyO3/maturin-Python-Bindings, kein CLI. Die Wheels
+#      fuehren weder eine `entry_points.txt` noch ein `*.data/scripts/`-
+#      Verzeichnis; ihr RECORD listet nur hallucinator/__init__.py,
+#      __init__.pyi, _native.cpython-312-*.so, _native.pyi, py.typed. Damit
+#      landet nach `pip install` KEIN ausfuehrbares `hallucinator-cli` im PATH
+#      -- der Wrapper wuerde weiterhin mit dem INSTALL_HINT abbrechen.
+#      Das Upstream-README trennt beides ausdruecklich und nennt fuer die CLI
+#      nur den Installer `curl -sSf https://hallucinator.science/install-cli.sh | sh`.
+#
+# Guard: Weder INSTALL_HINT noch Modul-Docstring noch die Installationsdoku
+# duerfen einen dieser beiden Wege als Bezugsquelle fuer das Binary nennen;
+# der real funktionierende Installer muss stattdessen dastehen.
 # ---------------------------------------------------------------------------
+
+#: Installationswege, die `hallucinator-cli` nachweislich NICHT bereitstellen.
+NON_WORKING_INSTALL_PATHS = ("cargo install hallucinator", "pip install hallucinator")
+
+#: Der einzige vom Upstream dokumentierte Weg zum CLI-Binary.
+WORKING_INSTALL_MARKER = "install-cli.sh"
+
+
+def _hallucinator_doc_block() -> str:
+    """Nur der `hallucinator-cli`-Listenpunkt aus docs/guide/installation.md.
+
+    Bewusst eng geschnitten: `split("\\n- ")` allein liefe bis zum naechsten
+    Listenpunkt und damit ueber weite Teile des Dokuments, sodass die Guards
+    unten auf unbeteiligte Abschnitte anschlagen bzw. von ihnen erfuellt werden
+    koennten. Der Listenpunkt ist ein zusammenhaengender Absatz (Folgezeilen
+    eingerueckt), endet also an der ersten Leerzeile.
+    """
+    from tests.helpers import docs as _docs
+
+    text = _docs.INSTALLATION_DOC.read_text(encoding="utf-8")
+    blocks = [block for block in text.split("\n- ") if "hallucinator-cli" in block]
+    assert blocks, "hallucinator-cli-Abschnitt fehlt in docs/guide/installation.md"
+    return blocks[0].split("\n\n")[0]
 
 
 class TestInstallInstructionsAccuracy:
-    """Regressionsguard gegen den falschen cargo-Installationsweg."""
+    """Regressionsguard gegen Installationswege, die das Binary nicht liefern."""
 
-    def test_install_hint_drops_nonexistent_cargo_crate(self):
+    def test_install_hint_names_only_the_working_installer(self):
         from hallucinator_check import INSTALL_HINT
 
-        assert "cargo install hallucinator" not in INSTALL_HINT
-        assert "pip install hallucinator" in INSTALL_HINT
+        for path in NON_WORKING_INSTALL_PATHS:
+            assert path not in INSTALL_HINT, (
+                f"INSTALL_HINT nennt '{path}', liefert aber kein hallucinator-cli"
+            )
+        assert WORKING_INSTALL_MARKER in INSTALL_HINT
 
-    def test_module_docstring_drops_nonexistent_cargo_crate(self):
+    def test_module_docstring_names_only_the_working_installer(self):
         import hallucinator_check
 
-        assert "cargo install hallucinator" not in (hallucinator_check.__doc__ or "")
+        doc = hallucinator_check.__doc__ or ""
+        for path in NON_WORKING_INSTALL_PATHS:
+            assert path not in doc, f"Modul-Docstring nennt '{path}' als Bezugsquelle"
+        assert WORKING_INSTALL_MARKER in doc
 
-    def test_installation_doc_drops_nonexistent_cargo_crate(self):
-        from tests.helpers import docs as _docs
+    def test_installation_doc_names_only_the_working_installer(self):
+        block = _hallucinator_doc_block()
 
-        text = _docs.INSTALLATION_DOC.read_text(encoding="utf-8")
-        assert "cargo install hallucinator" not in text
-        assert "pip install hallucinator" in text
+        for path in NON_WORKING_INSTALL_PATHS:
+            assert path not in block, (
+                f"docs/guide/installation.md nennt '{path}' als Bezugsquelle fuer hallucinator-cli"
+            )
+        assert WORKING_INSTALL_MARKER in block
+
+    def test_installation_doc_warns_that_pypi_package_is_bindings_only(self):
+        """Die Doku muss die naheliegende Falle aktiv benennen, nicht nur meiden."""
+        block = _hallucinator_doc_block()
+
+        assert "PyPI" in block
+        assert "Bindings" in block
 
 
 # ---------------------------------------------------------------------------

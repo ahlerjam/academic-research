@@ -9,11 +9,18 @@ Referenzen aufspueren kann -- ergaenzend zum bestehenden verbatim-guard.
 WICHTIG (AGPL-3.0-Reichweite): Dieses Modul ruft `hallucinator-cli` NUR als
 externen Subprozess auf. Es importiert keinen Code aus dem hallucinator-Projekt
 und vendort nichts davon in diesem Repo. Das Binary muss der Nutzer separat
-installieren -- laut Upstream-README per Installer-Skript
-(`curl -sSf https://hallucinator.science/install-cli.sh | sh`) oder per
-`pip install hallucinator` (PyPI-Paket mit Python-Bindings). Es existiert
-KEIN Crate `hallucinator` auf crates.io, ein Rust-Paketmanager-Weg entfaellt
-daher -- es ist bewusst keine Dependency in pyproject.toml oder
+installieren -- laut Upstream-README ausschliesslich per Installer-Skript
+(`curl -sSf https://hallucinator.science/install-cli.sh | sh`).
+
+Zwei naheliegende Wege liefern das Binary NACHWEISLICH NICHT und werden hier
+deshalb bewusst nicht genannt: Auf crates.io existiert kein Crate
+`hallucinator` (API-Abfrage -> HTTP 404), und das gleichnamige PyPI-Paket
+enthaelt nur die PyO3-Python-Bindings (Modul `hallucinator`) -- seine Wheels
+fuehren weder entry_points noch ein scripts/-Verzeichnis und legen damit kein
+ausfuehrbares `hallucinator-cli` im PATH ab. Der shutil.which-Guard unten
+wuerde nach so einer Installation unveraendert greifen.
+
+hallucinator ist bewusst keine Dependency in pyproject.toml oder
 scripts/requirements.txt, um das Plugin nicht versehentlich unter
 AGPL-Copyleft zu stellen.
 
@@ -40,10 +47,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 INSTALL_HINT = (
     "hallucinator-cli nicht gefunden. hallucinator ist ein optionales externes "
     "Tool (gianlucasb, AGPL-3.0, https://github.com/gianlucasb/hallucinator) "
-    "und muss separat installiert werden, z.B. per "
-    "curl -sSf https://hallucinator.science/install-cli.sh | sh "
-    "oder pip install hallucinator (siehe Upstream-Doku; es existiert KEIN "
-    "Crate 'hallucinator' auf crates.io, ein Rust-Paketmanager-Weg entfaellt). "
+    "und muss separat installiert werden -- laut Upstream-README ausschliesslich "
+    "per Installer-Skript: "
+    "'curl -sSf https://hallucinator.science/install-cli.sh | sh'. "
+    "Nicht ausreichend: Das PyPI-Paket 'hallucinator' enthaelt nur die "
+    "Python-Bindings und legt kein CLI-Binary im PATH ab; ein Crate "
+    "'hallucinator' existiert auf crates.io nicht. "
     "Es wird bewusst nicht in pyproject.toml/scripts/requirements.txt "
     "gebundelt (AGPL-Copyleft)."
 )

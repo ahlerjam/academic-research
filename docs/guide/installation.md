@@ -28,15 +28,17 @@ trotzdem — nur die 7 Browser-Module (`--mode deep`) stehen dann nicht bereit.
 - **`hallucinator-cli`** *(optional, [gianlucasb/hallucinator](https://github.com/gianlucasb/hallucinator),
   **AGPL-3.0**)* — zusätzliche, kostenlose Offline-Absicherung gegen fabrizierte
   Referenzen (Titel/Autor/DOI), ergänzend zum `verbatim-guard`-Hook. Separat vom
-  Nutzer installieren — laut Upstream-README per Installer-Skript
-  (`curl -sSf https://hallucinator.science/install-cli.sh | sh`) oder per
-  `pip install hallucinator` (PyPI-Paket mit Python-Bindings). Es existiert
-  **kein** Crate `hallucinator` auf crates.io, ein Rust-Paketmanager-Weg
-  entfällt daher. Bewusst **nicht** in `pyproject.toml`/`scripts/requirements.txt`
-  gebundelt und nicht im Repo vendored, um die AGPL-Copyleft-Reichweite nicht
-  auf dieses Plugin auszudehnen. `scripts/hallucinator_check.py` ruft das
-  Binary rein als Subprozess auf und bricht bei fehlender Installation mit
-  klarer Fehlermeldung ab (kein Crash).
+  Nutzer installieren — das Upstream-README nennt dafür **ausschließlich** das
+  Installer-Skript `curl -sSf https://hallucinator.science/install-cli.sh | sh`.
+  **Nicht ausreichend:** Das gleichnamige PyPI-Paket liefert nur die
+  Python-Bindings (Modul `hallucinator`, PyO3) und legt **kein**
+  `hallucinator-cli` im PATH ab; ein Crate `hallucinator` existiert auf
+  crates.io **nicht**. Bewusst **nicht** in
+  `pyproject.toml`/`scripts/requirements.txt` gebundelt und nicht im Repo
+  vendored, um die AGPL-Copyleft-Reichweite nicht auf dieses Plugin
+  auszudehnen. `scripts/hallucinator_check.py` ruft das Binary rein als
+  Subprozess auf und bricht bei fehlender Installation mit klarer
+  Fehlermeldung ab (kein Crash).
 
 ## Schritt 1 — Plugin-Marketplace registrieren
 
