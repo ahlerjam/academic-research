@@ -1,0 +1,49 @@
+{
+  "response": {
+    "numFound": 3,
+    "docs": [
+      {
+        "dcdocid": "ftbaseoa:oai:doaj.org/article:climatechange1",
+        "dctitle": ["Climate Change Impacts on Coastal Ecosystems"],
+        "dccreator": ["Schmidt, Anna", "Weber, Thomas"],
+        "dcyear": "2021",
+        "dcabstract": [
+          "This paper reviews the impacts of anthropogenic climate change on coastal ecosystems, drawing on long-term observational data."
+        ],
+        "dcpublisher": ["Springer"],
+        "dcidentifier": [
+          "https://doi.org/10.1007/s00027-021-00812-4",
+          "https://example.org/fulltext/climatechange1.pdf"
+        ],
+        "dclang": ["eng"],
+        "dctypenorm": ["1"]
+      },
+      {
+        "dcdocid": "ftbaseoa:oai:core.ac.uk:98765432",
+        "dctitle": ["Klimawandel und regionale Anpassungsstrategien"],
+        "dccreator": ["Müller, Julia"],
+        "dcyear": "2019",
+        "dcabstract": [
+          "Der Beitrag untersucht regionale Anpassungsstrategien an den Klimawandel in europäischen Metropolregionen."
+        ],
+        "dcpublisher": ["Universitätsverlag"],
+        "dcidentifier": ["10.5281/zenodo.1234567"],
+        "dclang": ["deu"],
+        "dctypenorm": ["1"]
+      },
+      {
+        "dcdocid": "ftbaseoa:oai:repository.example:445566",
+        "dctitle": ["Economic Modelling of Climate Change Mitigation Policies"],
+        "dccreator": ["Nguyen, Linh", "Fischer, Peter", "Ortiz, Maria"],
+        "dcyear": "2023",
+        "dcabstract": [
+          "We develop an integrated assessment model to evaluate the cost-effectiveness of climate change mitigation policies across sectors."
+        ],
+        "dcpublisher": ["Elsevier"],
+        "dcidentifier": ["https://example.org/repo/445566"],
+        "dclang": ["eng"],
+        "dctypenorm": ["1"]
+      }
+    ]
+  }
+}

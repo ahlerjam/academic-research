@@ -163,34 +163,37 @@ def search_crossref(query: str, limit: int) -> list[dict[str, Any]]:
     time.sleep(0.5)
     results: list[dict[str, Any]] = []
     for item in items:
-        authors = []
-        for author in item.get("author", []):
-            given = author.get("given", "")
-            family = author.get("family", "")
-            full_name = f"{given} {family}".strip()
-            if full_name:
-                authors.append(full_name)
-        year = None
-        date_parts = item.get("published-print", {}).get("date-parts") or item.get(
-            "published-online", {}
-        ).get("date-parts")
-        if date_parts and date_parts[0]:
-            year = int(date_parts[0][0])
-        results.append(
-            normalize_paper(
-                {
-                    "doi": item.get("DOI"),
-                    "title": (item.get("title") or [None])[0],
-                    "authors": authors,
-                    "year": year,
-                    "abstract": item.get("abstract"),
-                    "venue": (item.get("container-title") or [None])[0],
-                    "citations": item.get("is-referenced-by-count", 0),
-                    "url": item.get("URL"),
-                },
-                "crossref",
+        try:
+            authors = []
+            for author in item.get("author", []):
+                given = author.get("given", "")
+                family = author.get("family", "")
+                full_name = f"{given} {family}".strip()
+                if full_name:
+                    authors.append(full_name)
+            year = None
+            date_parts = item.get("published-print", {}).get("date-parts") or item.get(
+                "published-online", {}
+            ).get("date-parts")
+            if date_parts and date_parts[0]:
+                year = int(date_parts[0][0])
+            results.append(
+                normalize_paper(
+                    {
+                        "doi": item.get("DOI"),
+                        "title": (item.get("title") or [None])[0],
+                        "authors": authors,
+                        "year": year,
+                        "abstract": item.get("abstract"),
+                        "venue": (item.get("container-title") or [None])[0],
+                        "citations": item.get("is-referenced-by-count", 0),
+                        "url": item.get("URL"),
+                    },
+                    "crossref",
+                )
             )
-        )
+        except Exception:
+            log.warning("Module 'crossref': skipping malformed item %r", item, exc_info=True)
     return results
 
 
@@ -215,29 +218,32 @@ def search_openalex(query: str, limit: int) -> list[dict[str, Any]]:
     time.sleep(0.5)
     results: list[dict[str, Any]] = []
     for item in items:
-        authors = [
-            a.get("author", {}).get("display_name")
-            for a in item.get("authorships", [])
-            if a.get("author", {}).get("display_name")
-        ]
-        location = item.get("primary_location", {}) or {}
-        source = location.get("source", {}) or {}
-        oa_info = item.get("open_access") or {}
-        entry = normalize_paper(
-            {
-                "doi": (item.get("doi") or "").replace("https://doi.org/", "") or None,
-                "title": item.get("title"),
-                "authors": authors,
-                "year": item.get("publication_year"),
-                "abstract": _reconstruct_abstract(item.get("abstract_inverted_index")),
-                "venue": source.get("display_name"),
-                "citations": item.get("cited_by_count", 0),
-                "url": item.get("id"),
-                "oa_url": oa_info.get("oa_url"),
-            },
-            "openalex",
-        )
-        results.append(entry)
+        try:
+            authors = [
+                a.get("author", {}).get("display_name")
+                for a in item.get("authorships", [])
+                if a.get("author", {}).get("display_name")
+            ]
+            location = item.get("primary_location", {}) or {}
+            source = location.get("source", {}) or {}
+            oa_info = item.get("open_access") or {}
+            entry = normalize_paper(
+                {
+                    "doi": (item.get("doi") or "").replace("https://doi.org/", "") or None,
+                    "title": item.get("title"),
+                    "authors": authors,
+                    "year": item.get("publication_year"),
+                    "abstract": _reconstruct_abstract(item.get("abstract_inverted_index")),
+                    "venue": source.get("display_name"),
+                    "citations": item.get("cited_by_count", 0),
+                    "url": item.get("id"),
+                    "oa_url": oa_info.get("oa_url"),
+                },
+                "openalex",
+            )
+            results.append(entry)
+        except Exception:
+            log.warning("Module 'openalex': skipping malformed item %r", item, exc_info=True)
     return results
 
 
@@ -264,25 +270,30 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
     time.sleep(0.5)
     results: list[dict[str, Any]] = []
     for item in items:
-        external_ids = item.get("externalIds") or {}
-        oa_pdf = item.get("openAccessPdf") or {}
-        entry = normalize_paper(
-            {
-                "doi": external_ids.get("DOI"),
-                "title": item.get("title"),
-                "authors": [a.get("name") for a in item.get("authors", []) if a.get("name")],
-                "year": item.get("year"),
-                "abstract": item.get("abstract"),
-                "venue": item.get("venue"),
-                "citations": item.get("citationCount", 0),
-                "url": f"https://www.semanticscholar.org/paper/{item.get('paperId')}"
-                if item.get("paperId")
-                else None,
-                "open_access_pdf": oa_pdf.get("url"),
-            },
-            "semantic_scholar",
-        )
-        results.append(entry)
+        try:
+            external_ids = item.get("externalIds") or {}
+            oa_pdf = item.get("openAccessPdf") or {}
+            entry = normalize_paper(
+                {
+                    "doi": external_ids.get("DOI"),
+                    "title": item.get("title"),
+                    "authors": [a.get("name") for a in item.get("authors", []) if a.get("name")],
+                    "year": item.get("year"),
+                    "abstract": item.get("abstract"),
+                    "venue": item.get("venue"),
+                    "citations": item.get("citationCount", 0),
+                    "url": f"https://www.semanticscholar.org/paper/{item.get('paperId')}"
+                    if item.get("paperId")
+                    else None,
+                    "open_access_pdf": oa_pdf.get("url"),
+                },
+                "semantic_scholar",
+            )
+            results.append(entry)
+        except Exception:
+            log.warning(
+                "Module 'semantic_scholar': skipping malformed item %r", item, exc_info=True
+            )
     return results
 
 
@@ -303,37 +314,43 @@ def search_base(query: str, limit: int) -> list[dict[str, Any]]:
     items = payload.get("response", {}).get("docs", []) or []
     results: list[dict[str, Any]] = []
     for item in items[:limit]:
+        if not isinstance(item, dict):
+            log.warning("Module 'base': skipping non-dict item %r", item)
+            continue
+        try:
 
-        def dc(fld: str, item=item) -> str | None:
-            val = item.get(fld)
-            return val[0] if isinstance(val, list) and val else val
+            def dc(fld: str, item=item) -> str | None:
+                val = item.get(fld)
+                return val[0] if isinstance(val, list) and val else val
 
-        doi = None
-        for ident in item.get("dcidentifier") or []:
-            ident_str = str(ident)
-            if "doi.org/" in ident_str:
-                doi = ident_str.split("doi.org/")[-1]
-                break
-            if ident_str.startswith("10."):
-                doi = ident_str
-                break
-        year_raw = dc("dcyear")
-        year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
-        results.append(
-            normalize_paper(
-                {
-                    "doi": doi,
-                    "title": dc("dctitle"),
-                    "authors": item.get("dccreator") or [],
-                    "year": year,
-                    "abstract": dc("dcabstract"),
-                    "venue": dc("dcpublisher"),
-                    "citations": 0,
-                    "url": dc("dcidentifier"),
-                },
-                "base",
+            doi = None
+            for ident in item.get("dcidentifier") or []:
+                ident_str = str(ident)
+                if "doi.org/" in ident_str:
+                    doi = ident_str.split("doi.org/")[-1]
+                    break
+                if ident_str.startswith("10."):
+                    doi = ident_str
+                    break
+            year_raw = dc("dcyear")
+            year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
+            results.append(
+                normalize_paper(
+                    {
+                        "doi": doi,
+                        "title": dc("dctitle"),
+                        "authors": item.get("dccreator") or [],
+                        "year": year,
+                        "abstract": dc("dcabstract"),
+                        "venue": dc("dcpublisher"),
+                        "citations": 0,
+                        "url": dc("dcidentifier"),
+                    },
+                    "base",
+                )
             )
-        )
+        except Exception:
+            log.warning("Module 'base': skipping malformed item %r", item, exc_info=True)
     return results
 
 
@@ -345,26 +362,54 @@ def search_econbiz(query: str, limit: int) -> list[dict[str, Any]]:
         resp.raise_for_status()
         payload = resp.json()
     time.sleep(0.5)
-    items = payload.get("results", []) or payload.get("items", []) or []
+    # EconBiz liefert je nach API-Version entweder eine flache "results"/"items"-
+    # Liste oder (aktueller Live-Stand, Elasticsearch-Envelope) "hits.hits" --
+    # Fallback-Kette deckt beide Formen ab (#456).
+    items = (
+        payload.get("results")
+        or payload.get("items")
+        or (payload.get("hits") or {}).get("hits")
+        or []
+    )
     results: list[dict[str, Any]] = []
     for item in items:
-        results.append(
-            normalize_paper(
-                {
-                    "doi": item.get("doi"),
-                    "title": item.get("title"),
-                    "authors": item.get("authors") or [],
-                    "year": int(item["year"])
-                    if item.get("year") and str(item.get("year")).isdigit()
-                    else None,
-                    "abstract": item.get("abstract"),
-                    "venue": item.get("source") or item.get("venue"),
-                    "citations": item.get("citationCount", 0),
-                    "url": item.get("url"),
-                },
-                "econbiz",
+        if not isinstance(item, dict):
+            log.warning("Module 'econbiz': skipping non-dict item %r", item)
+            continue
+        try:
+            identifier_urls = item.get("identifier_url") or []
+            doi = item.get("doi")
+            if not doi:
+                for ident in identifier_urls:
+                    if isinstance(ident, str) and "doi.org/" in ident:
+                        doi = ident.split("doi.org/")[-1]
+                        break
+            year_raw = item.get("year")
+            if year_raw is None:
+                date_list = item.get("date") or []
+                if date_list and isinstance(date_list[0], str):
+                    digits = "".join(c for c in date_list[0] if c.isdigit())
+                    year_raw = digits[:4] if len(digits) >= 4 else None
+            year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
+            authors = item.get("authors") or item.get("creator") or []
+            paper_url = item.get("url") or (identifier_urls[0] if identifier_urls else None)
+            results.append(
+                normalize_paper(
+                    {
+                        "doi": doi,
+                        "title": item.get("title"),
+                        "authors": authors,
+                        "year": year,
+                        "abstract": item.get("abstract"),
+                        "venue": item.get("source") or item.get("venue"),
+                        "citations": item.get("citationCount", 0),
+                        "url": paper_url,
+                    },
+                    "econbiz",
+                )
             )
-        )
+        except Exception:
+            log.warning("Module 'econbiz': skipping malformed item %r", item, exc_info=True)
     return results
 
 
@@ -411,44 +456,52 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
                         page_done = True
                         break
                     records_seen += 1
-                    metadata = record.find(".//oai:metadata", ns)
-                    if metadata is None:
+                    try:
+                        metadata = record.find(".//oai:metadata", ns)
+                        if metadata is None:
+                            continue
+                        dc_el = metadata.find("{http://www.openarchives.org/OAI/2.0/oai_dc/}dc")
+                        if dc_el is None:
+                            continue
+                        title_el = dc_el.find(f"{{{OAI_DC_NS}}}title")
+                        title = title_el.text if title_el is not None and title_el.text else ""
+                        desc_el = dc_el.find(f"{{{OAI_DC_NS}}}description")
+                        desc = desc_el.text if desc_el is not None and desc_el.text else ""
+                        if query_lower not in title.lower() and query_lower not in desc.lower():
+                            continue
+                        creators = [
+                            c.text for c in dc_el.findall(f"{{{OAI_DC_NS}}}creator") if c.text
+                        ]
+                        date_el = dc_el.find(f"{{{OAI_DC_NS}}}date")
+                        year = None
+                        if date_el is not None and date_el.text:
+                            year_str = date_el.text[:4]
+                            if year_str.isdigit():
+                                year = int(year_str)
+                        doi = None
+                        item_url = None
+                        for id_el in dc_el.findall(f"{{{OAI_DC_NS}}}identifier"):
+                            if id_el.text and "doi.org" in id_el.text:
+                                doi = id_el.text.replace("https://doi.org/", "").replace(
+                                    "http://doi.org/", ""
+                                )
+                            elif id_el.text and id_el.text.startswith("http"):
+                                item_url = id_el.text
+                        items.append(
+                            {
+                                "title": title,
+                                "authors": creators,
+                                "year": year,
+                                "abstract": desc,
+                                "doi": doi,
+                                "url": item_url,
+                            }
+                        )
+                    except Exception:
+                        log.warning(
+                            "Module 'econstor': skipping malformed OAI record", exc_info=True
+                        )
                         continue
-                    dc_el = metadata.find("{http://www.openarchives.org/OAI/2.0/oai_dc/}dc")
-                    if dc_el is None:
-                        continue
-                    title_el = dc_el.find(f"{{{OAI_DC_NS}}}title")
-                    title = title_el.text if title_el is not None and title_el.text else ""
-                    desc_el = dc_el.find(f"{{{OAI_DC_NS}}}description")
-                    desc = desc_el.text if desc_el is not None and desc_el.text else ""
-                    if query_lower not in title.lower() and query_lower not in desc.lower():
-                        continue
-                    creators = [c.text for c in dc_el.findall(f"{{{OAI_DC_NS}}}creator") if c.text]
-                    date_el = dc_el.find(f"{{{OAI_DC_NS}}}date")
-                    year = None
-                    if date_el is not None and date_el.text:
-                        year_str = date_el.text[:4]
-                        if year_str.isdigit():
-                            year = int(year_str)
-                    doi = None
-                    item_url = None
-                    for id_el in dc_el.findall(f"{{{OAI_DC_NS}}}identifier"):
-                        if id_el.text and "doi.org" in id_el.text:
-                            doi = id_el.text.replace("https://doi.org/", "").replace(
-                                "http://doi.org/", ""
-                            )
-                        elif id_el.text and id_el.text.startswith("http"):
-                            item_url = id_el.text
-                    items.append(
-                        {
-                            "title": title,
-                            "authors": creators,
-                            "year": year,
-                            "abstract": desc,
-                            "doi": doi,
-                            "url": item_url,
-                        }
-                    )
                     if len(items) >= limit:
                         page_done = True
                         break
@@ -464,7 +517,10 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
                     break
     time.sleep(0.5)
     for item in items[:limit]:
-        if isinstance(item, dict):
+        if not isinstance(item, dict):
+            log.warning("Module 'econstor': skipping non-dict item %r", item)
+            continue
+        try:
             results.append(
                 normalize_paper(
                     {
@@ -480,6 +536,8 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
                     "econstor",
                 )
             )
+        except Exception:
+            log.warning("Module 'econstor': skipping malformed item %r", item, exc_info=True)
     return results
 
 
@@ -499,38 +557,42 @@ def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
     root = ET.fromstring(resp.text)
     results: list[dict[str, Any]] = []
     for entry in root.findall(f"{{{ARXIV_NS}}}entry"):
-        raw_id = (entry.findtext(f"{{{ARXIV_NS}}}id") or "").strip()
-        arxiv_id = raw_id.split("/abs/")[-1].split("v")[0]
-        title = (entry.findtext(f"{{{ARXIV_NS}}}title") or "").strip().replace("\n", " ")
-        abstract = (entry.findtext(f"{{{ARXIV_NS}}}summary") or "").strip()
-        authors = [
-            a.findtext(f"{{{ARXIV_NS}}}name") or "" for a in entry.findall(f"{{{ARXIV_NS}}}author")
-        ]
-        published = entry.findtext(f"{{{ARXIV_NS}}}published") or ""
-        year = int(published[:4]) if len(published) >= 4 else None
-        pdf_url = None
-        for link in entry.findall(f"{{{ARXIV_NS}}}link"):
-            if link.get("title") == "pdf":
-                pdf_url = link.get("href")
-                break
-        if not pdf_url and arxiv_id:
-            pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
-        results.append(
-            normalize_paper(
-                {
-                    "doi": f"10.48550/arxiv.{arxiv_id}" if arxiv_id else None,
-                    "title": title,
-                    "authors": [a for a in authors if a],
-                    "year": year,
-                    "abstract": abstract,
-                    "venue": "arXiv",
-                    "citations": 0,
-                    "url": pdf_url,
-                    "open_access_pdf": pdf_url,
-                },
-                "arxiv",
+        try:
+            raw_id = (entry.findtext(f"{{{ARXIV_NS}}}id") or "").strip()
+            arxiv_id = raw_id.split("/abs/")[-1].split("v")[0]
+            title = (entry.findtext(f"{{{ARXIV_NS}}}title") or "").strip().replace("\n", " ")
+            abstract = (entry.findtext(f"{{{ARXIV_NS}}}summary") or "").strip()
+            authors = [
+                a.findtext(f"{{{ARXIV_NS}}}name") or ""
+                for a in entry.findall(f"{{{ARXIV_NS}}}author")
+            ]
+            published = entry.findtext(f"{{{ARXIV_NS}}}published") or ""
+            year = int(published[:4]) if len(published) >= 4 else None
+            pdf_url = None
+            for link in entry.findall(f"{{{ARXIV_NS}}}link"):
+                if link.get("title") == "pdf":
+                    pdf_url = link.get("href")
+                    break
+            if not pdf_url and arxiv_id:
+                pdf_url = f"https://arxiv.org/pdf/{arxiv_id}"
+            results.append(
+                normalize_paper(
+                    {
+                        "doi": f"10.48550/arxiv.{arxiv_id}" if arxiv_id else None,
+                        "title": title,
+                        "authors": [a for a in authors if a],
+                        "year": year,
+                        "abstract": abstract,
+                        "venue": "arXiv",
+                        "citations": 0,
+                        "url": pdf_url,
+                        "open_access_pdf": pdf_url,
+                    },
+                    "arxiv",
+                )
             )
-        )
+        except Exception:
+            log.warning("Module 'arxiv': skipping malformed entry", exc_info=True)
     time.sleep(0.5)
     return results
 
@@ -641,11 +703,28 @@ def main() -> int:
             return 1
 
     papers, failed = run_search(args.query, requested, args.limit, queries_map)
+    papers_per_module = {
+        m: sum(1 for p in papers if p.get("source_module") == m) for m in requested
+    }
+    if failed:
+        log.warning(
+            "%d/%d modules failed: %s",
+            len(failed),
+            len(requested),
+            ", ".join(sorted(failed)),
+        )
     log.info("Found %d papers (%d modules failed)", len(papers), len(failed))
 
     output_text = json.dumps(papers, ensure_ascii=False, indent=2)
     if args.output:
         save_json(papers, args.output)
+        status = {
+            "requested_modules": requested,
+            "failed_modules": sorted(failed),
+            "papers_per_module": papers_per_module,
+        }
+        status_path = Path(args.output).with_name(Path(args.output).stem + "_status.json")
+        save_json(status, str(status_path))
     else:
         sys.stdout.write(output_text + "\n")
 
