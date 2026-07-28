@@ -21,33 +21,106 @@ Ausnahmen:
   tests/test_search_parsers.py separat mit einer synthetischen Response
   abgedeckt, da er im Live-Betrieb aktuell nicht erreicht wird.
 
-- BASE (api.base-search.net): der Endpunkt blockt Anfragen aus dieser
-  Sandbox-Umgebung generell mit HTTP 200 + `{"error": "Access denied for IP
-  address ..."}` (IP-basierter Block, unabhaengig vom User-Agent; die
-  Hauptseite www.base-search.net ist dagegen erreichbar -- Stand 2026-07-28,
-  nicht bei jedem Lauf erneut verifiziert). Ein echter Live-Pull ist aus
-  dieser Umgebung daher nicht moeglich. Die Fixture `base_response.json` ist
-  stattdessen von Hand aus dem in `search.py` bereits verwendeten
-  Feldschema (dctitle/dccreator/dcyear/dcabstract/dcpublisher/dcidentifier)
-  rekonstruiert -- NICHT verifiziert gegen eine aktuelle Live-Antwort. Wer
-  Zugriff auf eine nicht geblockte IP hat, sollte sie durch einen echten
-  Pull ersetzen:
+- BASE (api.base-search.net): der Endpunkt ist nicht oeffentlich. Der BASE
+  Interface Guide v1.27 (Maerz 2023) haelt fest: "The interface is IP
+  controlled or with an apikey and interested users have to register at
+  https://www.base-search.net/about/en/contact.php". Nicht registrierte
+  Aufrufer bekommen HTTP 200 + {"error": "Access denied for IP address ...
+  and user agent ..."} -- am 2026-07-28 live gegengeprueft. Ein Live-Pull ist
+  damit in KEINER unregistrierten Umgebung moeglich (auch nicht in CI), nicht
+  bloss in einer Sandbox; ein "auf einer anderen IP nachziehen" gibt es ohne
+  Registrierung nicht.
+
+  Eingefroren wird deshalb die vom Betreiber selbst veroeffentlichte
+  PerformSearch-Antwort aus dem Interface Guide, Abschnitt "Example Response
+  Format" (S. 6-8):
+    https://www.base-search.net/about/download/base_interface.pdf
+    Snapshot: https://web.archive.org/web/20250702101712/
+              https://www.base-search.net/about/download/base_interface.pdf
+  -> `base_documented_response.xml` (Zeilenumbrueche des PDF-Satzes
+  rueckgaengig gemacht, Fortsetzungsmarker "(...)" hinter dem einzigen
+  abgedruckten <doc> entfernt, damit die Datei parst -- dieselbe Art Kuerzung
+  wie oben bei EconStor). Der enthaltene Datensatz ist echt und unabhaengig
+  gegengeprueft gegen pub.uni-bielefeld.de/record/2710028 ("10 years BASE: A
+  contribution to the worldwide development of repositories",
+  Pieper/Summann, 2014).
+
+  `search_base()` ruft format=json ab; `base_response.json` wird daher hier
+  mechanisch aus dem XML erzeugt (`solr_xml_to_json`), nicht von Hand
+  geschrieben. tests/test_search_parsers.py::
+  test_base_json_fixture_is_derived_from_documented_xml haelt das fest.
+
+  Wer einen API-Key besitzt, kann die Fixture jederzeit durch einen echten
+  Live-Pull ersetzen (dann `base_documented_response.xml` samt
+  Provenienz-Test entfernen):
 
     curl "https://api.base-search.net/cgi-bin/BaseHttpSearchInterface.fcgi\
-?func=PerformSearch&query=climate+change&format=json&hits=3" \
+?func=PerformSearch&query=climate+change&format=json&hits=3&apikey=<KEY>" \
         -o tests/fixtures/search/base_response.json
 """
 
 from __future__ import annotations
 
+import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any
 
 import httpx
 
 OUT = Path(__file__).parent
 QUERY = "climate change"
 LIMIT = 3
+
+# Solr-XML-Writer -> JSON-Writer. Nur diese Elementtypen kommen in einer
+# BASE-PerformSearch-Antwort vor; alles andere ist ein Fehler statt einer
+# stillen Annahme.
+_SOLR_SCALARS: dict[str, Any] = {
+    "str": lambda text: text,
+    "date": lambda text: text,
+    "int": int,
+    "long": int,
+    "float": float,
+    "double": float,
+    "bool": lambda text: text == "true",
+}
+
+
+def _solr_value(el: ET.Element) -> Any:
+    tag = el.tag
+    if tag in _SOLR_SCALARS:
+        return _SOLR_SCALARS[tag](el.text or "")
+    if tag == "null":
+        return None
+    if tag == "arr":
+        return [_solr_value(child) for child in el]
+    if tag in ("response", "lst", "doc"):
+        # NamedList -> Objekt (Solr-Konvention json.nl=map).
+        return {child.get("name"): _solr_value(child) for child in el}
+    if tag == "result":
+        out: dict[str, Any] = {
+            "numFound": int(el.get("numFound", "0")),
+            "start": int(el.get("start", "0")),
+        }
+        max_score = el.get("maxScore")
+        if max_score is not None:
+            out["maxScore"] = float(max_score)
+        out["docs"] = [_solr_value(child) for child in el]
+        return out
+    raise ValueError(f"unbekanntes Solr-XML-Element: <{tag}>")
+
+
+def solr_xml_to_json(xml_bytes: bytes) -> dict[str, Any]:
+    """Eine Solr-XML-Writer-Antwort in die JSON-Writer-Form ueberfuehren.
+
+    Deterministisch und ohne Handarbeit -- damit `base_response.json`
+    nachweisbar aus `base_documented_response.xml` stammt. Konsumiert wird von
+    `search_base()` ohnehin nur `response.docs`; die NamedList-Abbildung
+    entspricht dort dem Solr-Default fuer Dokumente.
+    """
+    result = _solr_value(ET.fromstring(xml_bytes))
+    assert isinstance(result, dict)
+    return result
 
 
 def fetch(name: str, url: str, params: dict) -> None:
@@ -81,6 +154,19 @@ def fetch_econstor_oai() -> None:
         OUT / "econstor_oai_response.xml", encoding="UTF-8", xml_declaration=True
     )
     print("geschrieben: econstor_oai_response.xml")
+
+
+def build_base_from_documented_xml() -> None:
+    """base_response.json aus der eingefrorenen Betreiber-Antwort ableiten.
+
+    Kein Netzwerkzugriff: der BASE-Endpunkt ist registrierungspflichtig (siehe
+    Modul-Docstring), die Quelle ist deshalb `base_documented_response.xml`.
+    """
+    payload = solr_xml_to_json((OUT / "base_documented_response.xml").read_bytes())
+    (OUT / "base_response.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print("geschrieben: base_response.json (abgeleitet aus base_documented_response.xml)")
 
 
 def main() -> None:
@@ -121,11 +207,7 @@ def main() -> None:
         },
     )
     fetch_econstor_oai()
-    print(
-        "BASE (base_response.json) NICHT ueberschrieben -- Endpunkt blockt "
-        "diese Sandbox-IP, siehe Docstring. Von Hand ersetzen, falls eine "
-        "nicht-geblockte Umgebung verfuegbar ist."
-    )
+    build_base_from_documented_xml()
 
 
 if __name__ == "__main__":

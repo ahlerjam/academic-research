@@ -311,6 +311,14 @@ def search_base(query: str, limit: int) -> list[dict[str, Any]]:
         resp.raise_for_status()
         payload = resp.json()
     time.sleep(0.5)
+    # BASE meldet seine dokumentierten Fehler nicht per HTTP-Status, sondern
+    # mit HTTP 200 + {"error": ...} (Interface Guide v1.27, Appendix 4) --
+    # darunter "Access denied ...", das jede nicht registrierte IP bekommt.
+    # Ohne diese Pruefung faende der Zugriff unten schlicht keine "docs" und
+    # das Modul meldete 0 Treffer als Erfolg: stiller Totalausfall der Quelle,
+    # genau der Fall aus #456.
+    if isinstance(payload, dict) and payload.get("error"):
+        raise RuntimeError(f"BASE API error: {payload['error']}")
     items = payload.get("response", {}).get("docs", []) or []
     results: list[dict[str, Any]] = []
     for item in items[:limit]:
@@ -341,7 +349,10 @@ def search_base(query: str, limit: int) -> list[dict[str, Any]]:
                         "title": dc("dctitle"),
                         "authors": item.get("dccreator") or [],
                         "year": year,
-                        "abstract": dc("dcabstract"),
+                        # BASE kennt kein "dcabstract" -- das Abstract-Feld
+                        # heisst "dcdescription" (Interface Guide v1.27,
+                        # Appendix 2 "Fields").
+                        "abstract": dc("dcdescription"),
                         "venue": dc("dcpublisher"),
                         "citations": 0,
                         "url": dc("dcidentifier"),

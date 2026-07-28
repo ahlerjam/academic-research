@@ -2,11 +2,12 @@
 
 AC3: je Suchmodul ein Test gegen eine eingefrorene echte Antwort
      (tests/fixtures/search/, siehe create_fixtures.py fuer Herkunft).
-     Ausnahme: BASE (api.base-search.net blockt jede erreichbare Sandbox-IP,
-     siehe Kommentar bei test_base_parses_schema_reconstructed_fixture) --
-     6/7 Fixtures sind echte Live-Antworten, 1/7 (BASE) ist eine dokumentierte
-     Schema-Rekonstruktion. test_ac3_no_test_overclaims_real_fixture_for_
-     not_live_verified_module (unten) haelt diese Ausnahme als Regression fest.
+     6/7 Fixtures sind live von der echten API geholt; BASE ist
+     registrierungspflichtig und deshalb aus keiner unregistrierten Umgebung
+     live abrufbar -- dort ist die vom Betreiber selbst veroeffentlichte
+     PerformSearch-Antwort eingefroren (Details im Provenienz-Block bei den
+     BASE-Tests). test_ac3_real_fixture_tests_only_use_generated_fixtures
+     (unten) haelt fest, dass keine dieser Fixtures von Hand entstehen kann.
 AC1: ein fehlerhafter Einzeldatensatz wird uebersprungen, die uebrigen
      Treffer eines Moduls bleiben erhalten -- keine Exception propagiert.
 
@@ -18,6 +19,7 @@ anzulegen.
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import re
 import xml.etree.ElementTree as ET
@@ -164,44 +166,111 @@ def test_semantic_scholar_skips_broken_item_keeps_rest(monkeypatch):
 
 # ---------------------------------------------------------------------------
 # BASE
+#
+# Provenienz der Fixture (AC3): api.base-search.net ist kein oeffentlicher
+# Endpunkt. Der BASE Interface Guide v1.27 (Maerz 2023), Abschnitt "BASE HTTP
+# Interface", haelt fest: "The interface is IP controlled or with an apikey and
+# interested users have to register". Ohne Registrierung antwortet der Endpunkt
+# mit HTTP 200 + {"error": "Access denied for IP address ... and user agent
+# ..."} -- am 2026-07-28 live gegengeprueft (curl und WebFetch). Ein Live-Pull
+# ist damit in KEINER unregistrierten Umgebung moeglich, auch nicht in CI; die
+# frueher hier dokumentierte "Sandbox-IP" war nicht die Ursache.
+#
+# Eingefroren ist deshalb die vom API-Betreiber selbst veroeffentlichte
+# PerformSearch-Antwort aus dem BASE Interface Guide v1.27, Abschnitt
+# "Example Response Format" (S. 6-8):
+#   https://www.base-search.net/about/download/base_interface.pdf
+#   Snapshot: https://web.archive.org/web/20250702101712/
+#             https://www.base-search.net/about/download/base_interface.pdf
+# -> tests/fixtures/search/base_documented_response.xml (Zeilenumbrueche des
+#    PDF-Satzes rueckgaengig gemacht, Fortsetzungsmarker "(...)" hinter dem
+#    einzigen abgedruckten <doc> entfernt, damit die Datei parst -- dieselbe
+#    Art Kuerzung wie bei der EconStor-OAI-Fixture).
+#
+# Der enthaltene Datensatz ist echt und unabhaengig gegengeprueft gegen
+# pub.uni-bielefeld.de/record/2710028: "10 years BASE: A contribution to the
+# worldwide development of repositories", Pieper/Summann, 2014.
+#
+# search_base() ruft format=json ab. base_response.json wird daher mechanisch
+# aus dem XML erzeugt (create_fixtures.py::solr_xml_to_json, Solr-XML-Writer ->
+# JSON-Writer); test_base_json_fixture_is_derived_from_documented_xml haelt das
+# fest. An der Fixture ist damit nichts von Hand erfunden -- der frueher hier
+# aus dem Parser-Feldschema rekonstruierte Datensatz war zirkulaer (er konnte
+# den Parser nicht widerlegen) und hat einen echten Feldfehler verdeckt, siehe
+# test_base_reads_abstract_from_documented_dcdescription_field.
 # ---------------------------------------------------------------------------
 
 
-def test_base_parses_schema_reconstructed_fixture(monkeypatch):
-    # KEIN echter Live-Pull: api.base-search.net blockt diese Sandbox-IP mit
-    # HTTP 200 + {"error": "Access denied ..."} (unabhaengig vom Client --
-    # per curl UND per WebFetch bestaetigt, Stand 2026-07-28). base_response.json
-    # ist deshalb von Hand aus dem in search.py bereits verwendeten Feldschema
-    # (dctitle/dccreator/dcyear/dcabstract/dcpublisher/dcidentifier) rekonstruiert,
-    # NICHT gegen eine echte Antwort verifiziert (siehe create_fixtures.py-
-    # Docstring). Dieser Test prueft daher nur Selbstkonsistenz des Parsers
-    # gegen das dokumentierte Schema -- kein AC3-Nachweis fuer BASE. Bei
-    # Zugriff auf eine nicht geblockte IP: Fixture per create_fixtures.py
-    # ersetzen und diesen Test zurueck auf '..._parses_real_fixture' umbenennen
-    # (Praezedenzfall fuer die Namenskonvention: test_econstor_rest_parses_real_shaped_items).
+def _create_fixtures_module():
+    """create_fixtures.py als Modul laden (kein Package, daher per Pfad)."""
+    spec = importlib.util.spec_from_file_location(
+        "search_create_fixtures", FIXTURES / "create_fixtures.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_base_json_fixture_is_derived_from_documented_xml():
+    """base_response.json muss exakt die mechanische Solr-XML->JSON-Umsetzung
+    der eingefrorenen Betreiber-Antwort sein -- so kann sich keine von Hand
+    erfundene Struktur einschleichen (Review-Finding zu PR #477)."""
+    solr_xml_to_json = _create_fixtures_module().solr_xml_to_json
+
+    derived = solr_xml_to_json((FIXTURES / "base_documented_response.xml").read_bytes())
+    checked_in = json.loads((FIXTURES / "base_response.json").read_bytes())
+
+    assert derived == checked_in
+
+
+def test_base_parses_real_fixture(monkeypatch):
     body = (FIXTURES / "base_response.json").read_bytes()
     _patch_client(monkeypatch, _json_handler(body))
 
     results = search.search_base("climate change", limit=3)
 
-    assert len(results) == 3
-    assert all(r["title"] for r in results)
-    assert all(r["source_module"] == "base" for r in results)
+    assert len(results) == 1
+    paper = results[0]
+    assert paper["title"] == (
+        "10 years BASE: A contribution to the worldwide development of repositories"
+    )
+    assert paper["authors"] == ["Pieper, Dirk", "Summann, Friedrich"]
+    assert paper["year"] == 2014
+    assert paper["url"] == "https://pub.uni-bielefeld.de/record/2710028"
+    assert paper["source_module"] == "base"
 
 
-def test_base_skips_non_dict_item_keeps_rest(monkeypatch):
+def test_base_reads_abstract_from_documented_dcdescription_field(monkeypatch):
+    """BASE kennt kein Feld 'dcabstract'. Laut Interface Guide v1.27,
+    Appendix 2 ("Fields"), heisst das Abstract-Feld 'dcdescription' (single);
+    'dcabstract' kommt im gesamten Guide nicht vor und steht auch nicht in der
+    'fl'-Feldliste der Betreiber-Beispielantwort. Der Parser las bisher
+    'dcabstract' -- BASE-Treffer hatten daher immer abstract=None."""
     payload = json.loads((FIXTURES / "base_response.json").read_bytes())
-    docs = payload["response"]["docs"]
-    assert len(docs) >= 2
-    mutated_docs = ["not-a-dict-doc-entry", *docs[1:]]
-    payload["response"]["docs"] = mutated_docs
-    payload["response"]["numFound"] = len(mutated_docs)
+    abstract = "A short abstract as delivered by BASE in the dcdescription field."
+    payload["response"]["docs"][0]["dcdescription"] = abstract
     body = json.dumps(payload).encode("utf-8")
     _patch_client(monkeypatch, _json_handler(body))
 
     results = search.search_base("climate change", limit=3)
 
-    assert len(results) == len(docs) - 1
+    assert results[0]["abstract"] == abstract
+
+
+def test_base_skips_non_dict_item_keeps_rest(monkeypatch):
+    payload = json.loads((FIXTURES / "base_response.json").read_bytes())
+    docs = payload["response"]["docs"]
+    assert len(docs) == 1
+    payload["response"]["docs"] = ["not-a-dict-doc-entry", *docs]
+    payload["response"]["numFound"] = 2
+    body = json.dumps(payload).encode("utf-8")
+    _patch_client(monkeypatch, _json_handler(body))
+
+    results = search.search_base("climate change", limit=3)
+
+    assert len(results) == 1
+    assert results[0]["title"].startswith("10 years BASE")
 
 
 # ---------------------------------------------------------------------------
@@ -331,34 +400,40 @@ def test_arxiv_skips_broken_item_keeps_rest(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# AC3-Provenienz-Guard (Review-Finding zu PR #477 / Issue #456): ein Test
-# darf sich nicht "..._parses_real_fixture" nennen, wenn create_fixtures.py
-# fuer dasselbe Modul dokumentiert, dass gerade KEIN echter Live-Pull
-# verifiziert werden konnte (Schema-Rekonstruktion von Hand). Sonst
-# suggeriert der Testname faelschlich, AC3 sei fuer dieses Modul erfuellt.
+# AC3-Provenienz-Guard (Review-Finding zu PR #477 / Issue #456): ein Test darf
+# sich nur dann "..._parses_real_fixture" nennen, wenn die benutzte Fixture
+# nachweislich von create_fixtures.py stammt -- also entweder live von der
+# echten API geholt (6 Module) oder mechanisch aus der eingefrorenen
+# Betreiber-Antwort abgeleitet (BASE, siehe Provenienz-Block oben). Eine von
+# Hand geschriebene Datei ins Fixture-Verzeichnis zu legen und den Test
+# "real_fixture" zu nennen, faellt damit auf -- genau der Fehler, den die
+# frueher hier eingefrorene BASE-Ausnahme festgehalten hat.
 # ---------------------------------------------------------------------------
 
-# Module, fuer die create_fixtures.py (Modul-Docstring) explizit festhaelt,
-# dass kein echter Live-Pull moeglich/verifiziert war. Aktuell: BASE, weil
-# api.base-search.net die Sandbox-IP blockt (Stand siehe dort).
-NOT_LIVE_VERIFIED_MODULES = {"base"}
 
-
-def test_ac3_no_test_overclaims_real_fixture_for_not_live_verified_module():
-    """Namens-Guard gegen das PR-#477-Review-Finding: verhindert, dass ein
-    Parser-Test sich '..._real_fixture' nennt, obwohl die zugehoerige
-    Fixture laut create_fixtures.py von Hand rekonstruiert (nicht live
-    verifiziert) ist."""
+def test_ac3_real_fixture_tests_only_use_generated_fixtures():
     source = Path(__file__).read_text(encoding="utf-8")
-    pattern = re.compile(r"^def (test_(\w+?)_parses_real_fixture)\(", re.MULTILINE)
+    generator = (FIXTURES / "create_fixtures.py").read_text(encoding="utf-8")
+
+    pattern = re.compile(
+        r"^def (test_\w+_parses_real_fixture)\(.*?(?=^def |\Z)", re.MULTILINE | re.DOTALL
+    )
     matches = list(pattern.finditer(source))
-    assert matches, "Regex fand keine '..._parses_real_fixture'-Tests mehr -- Pattern pruefen."
+    assert len(matches) == 7, (
+        f"AC3 verlangt je Suchmodul einen Test gegen eine eingefrorene echte "
+        f"Antwort -- gefunden: {[m.group(1) for m in matches]}"
+    )
+
     for match in matches:
-        func_name, module = match.group(1), match.group(2)
-        assert module not in NOT_LIVE_VERIFIED_MODULES, (
-            f"{func_name} behauptet per Namen eine echte Live-Fixture, aber "
-            f"'{module}' ist in create_fixtures.py als NICHT live verifiziert "
-            "dokumentiert (Schema-Rekonstruktion). Test umbenennen, z.B. "
-            "'..._parses_schema_reconstructed_fixture' (Praezedenzfall: "
-            "test_econstor_rest_parses_real_shaped_items)."
-        )
+        func_name, body = match.group(1), match.group(0)
+        used = re.findall(r'FIXTURES / "([^"]+)"', body)
+        assert used, f"{func_name} liest keine Fixture-Datei -- Name ist irrefuehrend."
+        for fixture_name in used:
+            assert (FIXTURES / fixture_name).exists(), f"{func_name}: {fixture_name} fehlt."
+            assert fixture_name in generator, (
+                f"{func_name} nennt sich 'real_fixture', aber '{fixture_name}' wird von "
+                "create_fixtures.py nicht erzeugt -- die Herkunft der Datei ist damit "
+                "unbelegt. Entweder in create_fixtures.py aufnehmen (Live-Pull oder "
+                "dokumentierte Ableitung) oder den Test umbenennen (Praezedenzfall: "
+                "test_econstor_rest_parses_real_shaped_items)."
+            )

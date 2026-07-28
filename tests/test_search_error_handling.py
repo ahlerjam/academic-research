@@ -75,6 +75,47 @@ def test_run_module_server_error_reports_failure(monkeypatch, module_name):
 
 
 # ---------------------------------------------------------------------------
+# BASE: dokumentierte Fehler kommen mit HTTP 200 (AC2)
+# ---------------------------------------------------------------------------
+
+
+# Wortlaut aus BASE Interface Guide v1.27 (Maerz 2023), Appendix 4
+# "Alphabetic list of error messages". Genau diese Antwort liefert
+# api.base-search.net an jede nicht registrierte IP -- am 2026-07-28 live
+# gegengeprueft (siehe Provenienz-Kommentar in tests/test_search_parsers.py).
+BASE_DOCUMENTED_ERRORS = [
+    "'query' parameter is empty or not valid!",
+    "'query' parameter not defined!",
+    "Access denied for IP address xxx.xxx.xxx.xxx and user agent xyz.",
+    "Collection 'xyz' not found!",
+    "Function 'xyz' is not supported!",
+    "Parameter 'func' not found!",
+    "Repository not found!",
+    "The system is currently unavailable due to system maintenance.",
+]
+
+
+@pytest.mark.parametrize("message", BASE_DOCUMENTED_ERRORS)
+def test_base_documented_error_envelope_is_reported_as_failure(monkeypatch, message):
+    """BASE meldet die dokumentierten Fehler nicht per HTTP-Statuscode, sondern
+    mit HTTP 200 und {"error": ...}. Ohne Sonderbehandlung passiert
+    raise_for_status(), payload["response"]["docs"] fehlt schlicht und das Modul
+    meldet 0 Treffer als Erfolg -- der stille Totalausfall einer Quelle, gegen
+    den #456 antritt (AC2)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"error": message})
+
+    _patch_client(monkeypatch, handler)
+
+    name, papers, failed = search._run_module("base", "climate change", 3)
+
+    assert name == "base"
+    assert papers == []
+    assert failed is True
+
+
+# ---------------------------------------------------------------------------
 # main()/CLI-Ebene: Sichtbarkeit (AC2) + Exitcode (AC4)
 # ---------------------------------------------------------------------------
 
