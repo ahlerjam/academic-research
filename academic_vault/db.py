@@ -72,6 +72,61 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
 }
 
 
+class _Unset:
+    """Sentinel-Typ fuer optionale ``add_paper()``-Parameter (Issue #455).
+
+    Unterscheidet "Parameter nicht uebergeben" (Wert bleibt beim Upsert
+    unangetastet) von "bewusst auf None/0 gesetzt" (Wert wird explizit
+    geleert). Ein nacktes ``object()`` waere hierfuer ungeeignet, weil sich
+    damit kein praeziser Typ (``str | None | _Unset``) fuer mypy formulieren
+    laesst. Muss durch alle drei Aufrufebenen durchgereicht werden
+    (``VaultDB.add_paper`` -> ``server.add_paper`` -> MCP-Tool-Wrapper
+    ``_vault_add_paper``), sonst geht die Unterscheidung auf einer
+    Zwischenschicht verloren.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<UNSET>"
+
+
+_UNSET = _Unset()
+
+# Optionale papers-Spalten, die von add_paper()'s Sentinel-Logik erfasst
+# werden, in der Reihenfolge, in der sie im INSERT/UPDATE auftauchen.
+_OPTIONAL_PAPER_COLUMNS: tuple[str, ...] = (
+    "doi",
+    "isbn",
+    "pdf_path",
+    "page_offset",
+    "editor",
+    "chapter",
+    "page_first",
+    "page_last",
+    "container_title",
+    "parent_paper_id",
+    "provenance",
+)
+
+# Defaults fuer eine echte Neuanlage (Sentinel -> dieser Wert), identisch zu
+# den frueheren Funktions-Defaults -- bei einer Erstanlage ohne uebergebenen
+# Wert soll sich am Ergebnis nichts aendern.
+_OPTIONAL_PAPER_DEFAULTS: dict[str, object] = {
+    "doi": None,
+    "isbn": None,
+    "pdf_path": None,
+    "page_offset": 0,
+    "editor": None,
+    "chapter": None,
+    "page_first": None,
+    "page_last": None,
+    "container_title": None,
+    "parent_paper_id": None,
+    "provenance": None,
+}
+
+
 class VaultLockedError(RuntimeError):
     """Material-Passport ist gesperrt -- Schreiboperation wurde verweigert.
 
@@ -408,17 +463,17 @@ class VaultDB:
         self,
         paper_id: str,
         csl_json: str,
-        doi: str | None = None,
-        isbn: str | None = None,
-        pdf_path: str | None = None,
-        page_offset: int = 0,
-        editor: str | None = None,
-        chapter: str | None = None,
-        page_first: int | None = None,
-        page_last: int | None = None,
-        container_title: str | None = None,
-        parent_paper_id: str | None = None,
-        provenance: str | None = None,
+        doi: str | None | _Unset = _UNSET,
+        isbn: str | None | _Unset = _UNSET,
+        pdf_path: str | None | _Unset = _UNSET,
+        page_offset: int | _Unset = _UNSET,
+        editor: str | None | _Unset = _UNSET,
+        chapter: str | None | _Unset = _UNSET,
+        page_first: int | None | _Unset = _UNSET,
+        page_last: int | None | _Unset = _UNSET,
+        container_title: str | None | _Unset = _UNSET,
+        parent_paper_id: str | None | _Unset = _UNSET,
+        provenance: str | None | _Unset = _UNSET,
     ) -> None:
         """Upsert eines Papers in die papers-Tabelle.
 
@@ -430,6 +485,14 @@ class VaultDB:
         defaulted (Issue #213, Security Round-2 M3), sondern als ValueError
         gemeldet. Fehlt das Feld 'type' komplett, gilt weiterhin der
         DB-Default 'article-journal'.
+
+        Alle optionalen Parameter defaulten auf das Sentinel ``_UNSET``
+        statt auf ``None``/``0`` (Issue #455): Ein zweiter Upsert-Aufruf fuer
+        dieselbe ``paper_id``, der ein optionales Feld nicht mit uebergibt,
+        laesst dessen Bestandswert unangetastet -- vorher wurde jedes nicht
+        uebergebene Feld stillschweigend auf seinen Default zurueckgesetzt.
+        Ein bewusst geleertes Feld (explizit ``None``/``0`` uebergeben) wird
+        weiterhin geleert, weil dieser Wert von ``_UNSET`` unterscheidbar ist.
         """
         try:
             csl = json.loads(csl_json)
@@ -444,51 +507,64 @@ class VaultDB:
                 f"Ungueltiger type '{paper_type}' -- erlaubt: {sorted(VALID_PAPER_TYPES)}"
             )
 
+        supplied: dict[str, object] = {
+            "doi": doi,
+            "isbn": isbn,
+            "pdf_path": pdf_path,
+            "page_offset": page_offset,
+            "editor": editor,
+            "chapter": chapter,
+            "page_first": page_first,
+            "page_last": page_last,
+            "container_title": container_title,
+            "parent_paper_id": parent_paper_id,
+            "provenance": provenance,
+        }
+        # Werte fuer den INSERT-Zweig (Neuanlage): bei nicht uebergebenen
+        # (Sentinel-)Feldern der bisherige Default -- fuer eine echte
+        # Neuanlage aendert sich dadurch nichts am Ergebnis.
+        insert_values = {
+            col: (_OPTIONAL_PAPER_DEFAULTS[col] if val is _UNSET else val)
+            for col, val in supplied.items()
+        }
+        # Nur tatsaechlich uebergebene Spalten landen im UPDATE SET -- das
+        # ist der Kern des Fixes: nicht uebergebene optionale Felder
+        # behalten beim Upsert ihren Bestandswert.
+        provided_columns = [col for col, val in supplied.items() if val is not _UNSET]
+
         now = int(time.time())
+        set_clauses = ["type = excluded.type", "csl_json = excluded.csl_json"]
+        set_clauses += [f"{col} = excluded.{col}" for col in provided_columns]
+        set_clauses.append("updated_at = excluded.updated_at")
+
+        columns = [
+            "paper_id",
+            "type",
+            "csl_json",
+            *_OPTIONAL_PAPER_COLUMNS,
+            "added_at",
+            "updated_at",
+        ]
+        placeholders = ", ".join("?" for _ in columns)
+        values = (
+            paper_id,
+            paper_type,
+            csl_json,
+            *(insert_values[col] for col in _OPTIONAL_PAPER_COLUMNS),
+            now,
+            now,
+        )
+
         with self._connection(commit=True) as conn:
             self._raise_if_locked(conn)
             conn.execute(
-                """
-                INSERT INTO papers
-                  (paper_id, type, csl_json, doi, isbn, pdf_path, page_offset,
-                   editor, chapter, page_first, page_last, container_title,
-                   parent_paper_id, provenance,
-                   added_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                f"""
+                INSERT INTO papers ({", ".join(columns)})
+                VALUES ({placeholders})
                 ON CONFLICT(paper_id) DO UPDATE SET
-                  type            = excluded.type,
-                  csl_json        = excluded.csl_json,
-                  doi             = excluded.doi,
-                  isbn            = excluded.isbn,
-                  pdf_path        = excluded.pdf_path,
-                  page_offset     = excluded.page_offset,
-                  editor          = excluded.editor,
-                  chapter         = excluded.chapter,
-                  page_first      = excluded.page_first,
-                  page_last       = excluded.page_last,
-                  container_title = excluded.container_title,
-                  parent_paper_id = excluded.parent_paper_id,
-                  provenance      = excluded.provenance,
-                  updated_at      = excluded.updated_at
+                  {", ".join(set_clauses)}
                 """,
-                (
-                    paper_id,
-                    paper_type,
-                    csl_json,
-                    doi,
-                    isbn,
-                    pdf_path,
-                    page_offset,
-                    editor,
-                    chapter,
-                    page_first,
-                    page_last,
-                    container_title,
-                    parent_paper_id,
-                    provenance,
-                    now,
-                    now,
-                ),
+                values,
             )
 
     def get_paper(self, paper_id: str) -> dict | None:

@@ -66,6 +66,12 @@ Ausgabe nach `$SESSION_DIR/queries.json` speichern.
   --output "$SESSION_DIR/api_results.json"
 ```
 
+Neben `api_results.json` schreibt `search.py` seit #456 zusätzlich eine Sidecar-Statusdatei
+`$SESSION_DIR/api_results_status.json` (`requested_modules`, `failed_modules`,
+`papers_per_module`). Fällt eine Quelle ganz oder teilweise aus, steht sie dort explizit in
+`failed_modules` — bei Bedarf im Ergebnis-Digest erwähnen, statt eine leere/kleinere Trefferzahl
+kommentarlos hinzunehmen.
+
 ### Schritt 4: Browser-Suche (standard-/deep-Modus, falls nicht `--no-browser`)
 
 Für jedes Browser-Modul in fester Reihenfolge:
