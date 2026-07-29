@@ -167,9 +167,11 @@ Neu in v6.5: exportiert Markdown-Kapitel nach LaTeX.
 ```
 
 **Skills/Agents:** Lädt den `latex-export`-Skill (`skills/latex-export/`):
-`render_tex.py` (Markdown → `.tex`, Pandoc oder Custom-Renderer) und `build_bib.py`
-(`.bib` aus dem Vault). Der `verbatim-guard`-Hook blockiert `.tex`-Writes mit
-nicht-verifizierten Zitaten.
+`export_thesis.py` orchestriert Kapitel-Auswahl, `render_tex.py`
+(Markdown → `.tex`, Pandoc oder Custom-Renderer), optionales
+Uni-Template-Wrapping und `build_bib.py` (`.bib` aus dem Vault, Pfad
+unabhängig von `--output`). Der `verbatim-guard`-Hook blockiert `.tex`-Writes
+mit nicht-verifizierten Zitaten.
 
 ### `/academic-research:history`
 
