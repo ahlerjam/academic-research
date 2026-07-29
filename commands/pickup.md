@@ -119,3 +119,14 @@ sheets = build_pickup_sheets(entries)
 - `pickup_required`-Einträge aus `/academic-research:fetch` haben typisch
   `availability_status: fernleihe` oder `availability_status: lizenz_noetig`.
 - Spec: `specs/v6.2/I.md`
+
+## Abgleich mit /academic-research:excel (Issue #447)
+
+Anders als `/academic-research:excel` bekommt dieser Command keinen eigenen
+Router-Skill: Seine Trigger-Phrasen (z. B. „Pickup-Liste", „Bibliotheks-Pickup")
+sind bereits domänenspezifisch eng genug, um nicht mit der breiten
+Aktivierungsbeschreibung des generischen `document-skills:xlsx`-Skills zu
+kollidieren. `/academic-research:excel` dagegen konkurriert mit sehr
+generischen Formulierungen ("Excel aus meinen Papers") und braucht deshalb den
+Skill `literature-excel` als Vorschaltung. Dieser Command bleibt funktional
+unverändert.

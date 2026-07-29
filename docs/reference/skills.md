@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **32 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **33 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -39,6 +39,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `book-handler` | *„Buch"*, *„Monografie"*, *„Sammelband"*, ISBN-/Springer-DOI-Muster | Löst ISBN/Titel/DOI via DNB + OpenLibrary + DOAB auf, legt CSL-JSON im Vault an ([SKILL.md](../../skills/book-handler/SKILL.md)) |
 | `github-repo-research` | *„GitHub-Repo analysieren"*, *„Paper zu einem Repo finden"* | README/CITATION.cff → arXiv-/DOI-Kandidaten im Vault ([SKILL.md](../../skills/github-repo-research/SKILL.md)) |
 | `anchor-paper-survey` | *„arXiv-Paper als Anker verwenden"*, *„verwandte Arbeiten zu diesem Paper finden"* | arXiv-URL/PDF als Ausgangspaper → Vault-Eintrag + Folge-Suche verwandter Arbeiten ([SKILL.md](../../skills/anchor-paper-survey/SKILL.md)) |
+| `literature-excel` | *„Excel-Übersicht meiner Literatur"*, *„Excel aus meinen Papers"* | Router zu `/academic-research:excel`: leitet literaturbezogene NL-Anfragen zur 4-Sheet-Spezifikation statt zum generischen xlsx-Skill ([SKILL.md](../../skills/literature-excel/SKILL.md)) |
 
 ## Schreib-Skills
 
