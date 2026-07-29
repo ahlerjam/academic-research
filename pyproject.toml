@@ -30,6 +30,14 @@ dependencies = [
     # Pflicht-Dependency des Excel-Backends document-skills:xlsx, das /excel und
     # /pickup aufrufen — Issue #367, Backend extern seit #445.
     "openpyxl>=3.1.5",
+    # Renderer von word-export/slide-export (#446): skills/word-export/scripts/
+    # render_docx.py und skills/slide-export/scripts/render_pptx.py erzeugen
+    # .docx/.pptx deterministisch im Repo-Code -- dieselbe Rolle wie
+    # render_tex.py im LaTeX-Pfad. Harte Runtime-Dependency (nicht dev): ohne
+    # sie enden /academic-research:word und :slides in jeder realen Installation
+    # ohne Zieldatei. Zweitstelle beim Aendern: scripts/requirements.txt.
+    "python-docx>=1.1",
+    "python-pptx>=1.0",
     # requests>=2.32.4: CVE-2024-35195 (cert verification bypass), CVE-2024-47081 (.netrc credential leak)
     "requests>=2.32.4",
     # lxml>=5.2.0: CVE-2022-2309 (NULL pointer deref)

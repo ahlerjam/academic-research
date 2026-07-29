@@ -176,9 +176,9 @@ Git-Historie abrufbar.
 # 2. Vault einrichten (MCP-Server-Init)
 /academic-research:setup
 
-# 3. Existierende Literatur migrieren (optional)
-/academic-research:setup --migrate-v5
-# → Fragt: "literature_state.md in Vault migrieren?" → y
+# 3. Existierende Literatur migrieren (optional) — eigenständiges Skript,
+#    kein setup-Flag: liest literature_state.md, schreibt in den Vault.
+python academic_vault/migrate.py --state literature_state.md --db <vault.db>
 ```
 
 **Von v4.x oder älter:** erst vollständig deinstallieren, dann neu installieren — v5.0 war

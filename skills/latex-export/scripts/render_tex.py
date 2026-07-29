@@ -63,20 +63,30 @@ def _escape_tex(text: str) -> str:
 # Bewusste Einschraenkung (siehe Plan-Kommentar): keine verschachtelten
 # Klammern in Kommando-Argumenten (\cite{\emph{x}}) -- ausserhalb des
 # Scopes dieses Fixes.
-_LATEX_SAFE_COMMANDS = (
+#: Nur die Zitationskommandos -- word-export loest genau diese zu Kurzbelegen
+#: auf (Querverweise haben in einem Word-Fliesstext keine Entsprechung).
+#: Oeffentlich, damit word-/slide-export die Liste importieren statt kopieren
+#: (sonst driften die Allowlists auseinander, Fixrunde PR #488).
+LATEX_CITATION_COMMANDS = (
     "cite",
     "citep",
     "citet",
     "parencite",
     "footcite",
+)
+#: Querverweis-Kommandos -- fuer .tex erhaltenswert, in .docx/.pptx bedeutungslos.
+LATEX_REFERENCE_COMMANDS = (
     "ref",
     "autoref",
     "eqref",
     "label",
 )
-_LATEX_COMMAND_RE = re.compile(
+_LATEX_SAFE_COMMANDS = LATEX_CITATION_COMMANDS + LATEX_REFERENCE_COMMANDS
+#: Oeffentlich: slide-export entfernt damit alle LaTeX-Marker aus Folientexten.
+LATEX_COMMAND_RE = re.compile(
     r"\\(?:" + "|".join(_LATEX_SAFE_COMMANDS) + r")\*?(?:\[[^\[\]]*\])*(?:\{[^{}]*\})+"
 )
+_LATEX_COMMAND_RE = LATEX_COMMAND_RE
 
 
 def _escape_tex_text(text: str) -> str:
