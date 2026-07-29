@@ -1,6 +1,6 @@
 # Commands / Slash-Commands
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin bringt
 **9 Slash-Commands** mit (`commands/*.md`).
@@ -19,6 +19,8 @@ Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin 
 
 Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispiel(e)** und
 **Skills/Agents** (was unter der Haube läuft).
+
+## Command-Referenz
 
 ### `/academic-research:setup`
 

@@ -1,6 +1,10 @@
 # Suchquellen, Scoring und Cluster
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
+
+Woher die Literatur kommt, wie Treffer bewertet werden und wie daraus Themencluster
+entstehen. Maßgeblich für die Modulliste ist immer der `MODULES`-Dispatch in
+`scripts/search.py` — diese Seite gibt ihn wieder.
 
 ## Suchquellen (14)
 
