@@ -186,6 +186,114 @@ def test_googlebooks_fallback():
 
 
 # ---------------------------------------------------------------------------
+# Buch-Identitaetspruefung (Issue #464 AC3): Google Books' q=isbn:... ist
+# eine Volltextsuche, keine exakte Index-Abfrage -- items[0] kann ein
+# Fremdtreffer sein. Vor dem Fix wurden dessen Metadaten ungeprueft
+# uebernommen, obwohl die gelieferte industryIdentifiers/isbn_13-Kennung
+# nicht zur angefragten ISBN passt.
+# ---------------------------------------------------------------------------
+
+GB_RESPONSE_MISMATCHED_ISBN = {
+    "kind": "books#volumes",
+    "totalItems": 1,
+    "items": [
+        {
+            "volumeInfo": {
+                "title": "Voellig anderes Buch",
+                "authors": ["Fremdautor, Falsch"],
+                "publisher": "Anderer Verlag",
+                "publishedDate": "1999",
+                "industryIdentifiers": [{"type": "ISBN_13", "identifier": "9999999999999"}],
+            }
+        }
+    ],
+}
+
+OL_RESPONSE_MISMATCHED_ISBN = {
+    "ISBN:9783446461031": {
+        "title": "Voellig anderes Buch",
+        "authors": [{"name": "Fremdautor, Falsch"}],
+        "publishers": [{"name": "Anderer Verlag"}],
+        "publish_date": "1999",
+        "isbn_13": ["9999999999999"],
+    }
+}
+
+
+def test_googlebooks_rejects_mismatched_isbn_hit():
+    """GoogleBooks liefert einen Treffer, dessen industryIdentifiers nicht
+    zur angefragten ISBN passen -- resolve_googlebooks muss None liefern
+    statt der Fremdtreffer-Metadaten (Issue #464 AC3)."""
+    import book_resolve
+
+    with patch("book_resolve.requests.get") as mock_get:
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = GB_RESPONSE_MISMATCHED_ISBN
+        resp.raise_for_status = MagicMock()
+        mock_get.return_value = resp
+
+        result = book_resolve.resolve_googlebooks(isbn="9783446461031")
+
+    assert result is None, f"Erwartet None bei Fremdtreffer, erhalten {result}"
+
+
+def test_openlibrary_rejects_mismatched_isbn_hit():
+    """OpenLibrary liefert einen Treffer, dessen isbn_13 nicht zur
+    angefragten ISBN passt -- resolve_openlibrary muss None liefern statt
+    der Fremdtreffer-Metadaten (Issue #464 AC3)."""
+    import book_resolve
+
+    def _make_json_response(data):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = data
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    with patch("book_resolve.requests.get") as mock_get:
+        mock_get.return_value = _make_json_response(OL_RESPONSE_MISMATCHED_ISBN)
+
+        result = book_resolve.resolve_openlibrary(isbn="9783446461031")
+
+    assert result is None, f"Erwartet None bei Fremdtreffer, erhalten {result}"
+
+
+def test_resolve_does_not_leak_mismatched_googlebooks_hit():
+    """resolve() end-to-end: DNB + OL leer, GoogleBooks liefert nur einen
+    Fremdtreffer -- die falschen Metadaten duerfen NICHT im Endergebnis
+    landen (Issue #464 AC3)."""
+    import book_resolve
+
+    def _make_json_response(data):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = data
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    with patch("book_resolve.requests.get") as mock_get:
+
+        def side_effect(url, **kwargs):
+            if "dnb.de" in url:
+                return _make_mock_response(DNB_SRU_EMPTY)
+            elif "openlibrary.org" in url:
+                return _make_json_response({})
+            elif "googleapis.com" in url:
+                return _make_json_response(GB_RESPONSE_MISMATCHED_ISBN)
+            else:
+                # DOAB: leer
+                return _make_json_response([])
+
+        mock_get.side_effect = side_effect
+        result = book_resolve.resolve(isbn="9783446461031")
+
+    assert result.get("title") != "Voellig anderes Buch", (
+        f"Fremdtreffer-Titel ist ins Ergebnis durchgesickert: {result}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # DOAB OA-Check Tests
 # ---------------------------------------------------------------------------
 

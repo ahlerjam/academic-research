@@ -51,6 +51,21 @@ def _marc_all_fields(record_el, tag: str, subfield_code: str, ns: str) -> list:
     return results
 
 
+def _isbn_matches(requested: str, candidates: list) -> bool:
+    """Prueft, ob eine der gelieferten Kennungen zur angefragten ISBN passt.
+
+    Issue #464 AC3: Google Books' q=isbn:... und OpenLibrarys
+    bibkeys-Lookup sind keine garantiert exakten Index-Abfragen -- der
+    erste/einzige Treffer kann ein Fremdtreffer sein. Vergleich ohne
+    Bindestriche; leere `candidates` gelten NICHT als Mismatch (fehlende
+    Kennung != abweichende Kennung, sonst False Positives bei
+    unvollstaendigen Datensaetzen)."""
+    if not candidates:
+        return True
+    norm_requested = requested.replace("-", "")
+    return any(norm_requested == str(c).replace("-", "") for c in candidates if c)
+
+
 def _parse_name(raw: str) -> dict:
     """Wandelt 'Nachname, Vorname' in CSL-Name-Dict um."""
     parts = raw.split(",", 1)
@@ -175,6 +190,19 @@ def resolve_openlibrary(isbn: str | None = None) -> dict | None:
         return None
 
     item = data[key]
+
+    # Issue #464 AC3: gelieferten Treffer gegen die angefragte ISBN pruefen,
+    # bevor seine Metadaten uebernommen werden.
+    norm_isbn = isbn.replace("-", "")
+    candidate_isbns = list(item.get("isbn_13", [])) + list(item.get("isbn_10", []))
+    if not _isbn_matches(norm_isbn, candidate_isbns):
+        print(
+            f"[WARN] OpenLibrary Fremdtreffer: angefragt {norm_isbn}, "
+            f"geliefert {candidate_isbns} -- verworfen.",
+            file=sys.stderr,
+        )
+        return None
+
     csl: dict = {"type": "book"}
     csl["title"] = item.get("title", "")
 
@@ -228,6 +256,23 @@ def resolve_googlebooks(isbn: str | None = None, title: str | None = None) -> di
         return None
 
     vi = items[0].get("volumeInfo", {})
+
+    # Issue #464 AC3: q=isbn:... ist bei GoogleBooks eine Volltextsuche,
+    # keine exakte Index-Abfrage -- items[0] kann ein Fremdtreffer sein.
+    # Nur pruefbar, wenn ueberhaupt nach ISBN gesucht wurde.
+    if isbn:
+        norm_isbn = isbn.replace("-", "")
+        candidate_isbns = [
+            e.get("identifier") for e in vi.get("industryIdentifiers", []) if e.get("identifier")
+        ]
+        if not _isbn_matches(norm_isbn, candidate_isbns):
+            print(
+                f"[WARN] GoogleBooks Fremdtreffer: angefragt {norm_isbn}, "
+                f"geliefert {candidate_isbns} -- verworfen.",
+                file=sys.stderr,
+            )
+            return None
+
     csl: dict = {"type": "book"}
     csl["title"] = vi.get("title", "")
 

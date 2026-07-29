@@ -494,7 +494,11 @@ def search_econstor(
                     params=oai_params,
                 )
                 oai_resp.raise_for_status()
-                root = ET.fromstring(oai_resp.text)
+                # Rohe Bytes statt oai_resp.text: httpx dekodiert .text ohne
+                # charset-Angabe im Content-Type immer als UTF-8 -- Expat
+                # wertet dagegen die <?xml ... encoding="..."?>-Deklaration
+                # im Prolog selbst aus (Issue #464 AC1).
+                root = ET.fromstring(oai_resp.content)
                 page_done = False
                 for record in root.findall(".//oai:record", ns):
                     if records_seen >= OAI_MAX_RECORDS or len(items) >= limit:
@@ -599,7 +603,9 @@ def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
     with httpx.Client(timeout=TIMEOUT) as client:
         resp = client.get(url, params=params)
         resp.raise_for_status()
-    root = ET.fromstring(resp.text)
+    # Rohe Bytes statt resp.text (Issue #464 AC1, siehe Kommentar oben bei
+    # search_econstor).
+    root = ET.fromstring(resp.content)
     results: list[dict[str, Any]] = []
     for entry in root.findall(f"{{{ARXIV_NS}}}entry"):
         try:
