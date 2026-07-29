@@ -38,9 +38,18 @@ class LocalOrigin:
             )
 
     Unbekannte Pfade beantwortet der Server mit einem echten 404.
+
+    Ein Routen-Eintrag darf statt ``(content_type, bytes)`` auch eine Callable
+    sein, die den vollstaendigen Pfad **inklusive Query** bekommt und daraus die
+    Antwort bildet. Das braucht jede Seite, deren Antwort von gesendeten
+    Formularwerten abhaengt — etwa die MDZ-Zwischenseite, die den PDF-Link erst
+    mit bestaetigtem Rechtehinweis (``xdfz=2``) herausgibt.
     """
 
-    def __init__(self, routes: Mapping[str, tuple[str, bytes]]) -> None:
+    def __init__(
+        self,
+        routes: Mapping[str, tuple[str, bytes] | Callable[[str], tuple[str, bytes]]],
+    ) -> None:
         self.routes = dict(routes)
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
@@ -59,6 +68,8 @@ class LocalOrigin:
                     body = b"<html><body><h1>404 Not Found</h1></body></html>"
                     self._respond(404, "text/html; charset=utf-8", body)
                     return
+                if callable(entry):
+                    entry = entry(self.path)
                 content_type, body = entry
                 self._respond(200, content_type, body)
 

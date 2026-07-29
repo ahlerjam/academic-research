@@ -48,8 +48,15 @@ Kein Login fuer den Standard-Fall (Vollansicht, kleinere Werke).
 4. Verlangt der Download-Dialog ein Login, das nicht konfiguriert ist: KEIN
    Umgehungsversuch → `metadata_only` mit `reason: "Zugriffsstufe: Vollansicht
    (Download erfordert HathiTrust-Login)"`.
-5. `browser-use download <pdf-link-idx> --to <output_path>`
-6. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB.
+5. `browser-use click <pdf-link-idx>` — es gibt **kein**
+   `browser-use download`-Unterkommando (verifiziert gegen browser-use 0.12.6).
+   Chromium nimmt den Download selbst an und legt die Datei unter
+   `<TMPDIR>/browser-use-downloads-<id>/` ab; von dort nach `<output_path>`
+   verschieben.
+6. Antwortet die signierte Download-URL mit "Page Blocked", greift der
+   Massen-Download-Schutz: `pickup_required` mit
+   `reason: "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"`.
+7. Validation von der Platte: erste 5 Bytes = `%PDF-`, Groesse > 10 KB.
 
 ## Ausgabe-Metadaten (Edition)
 

@@ -26,6 +26,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   gesperrte 5er-Status-Enum bleibt unveraendert. Neue Browser-Guides unter
   `config/browser_guides/{hathitrust,internetarchive,mdz}.md`.
 
+  Die Beschaffung ist ausgefuehrt geprueft, nicht nur beschrieben:
+  `tests/helpers/archive_fetcher_nav.py` bildet den Weg jedes Agenten nach,
+  holt die Datei ueber einen echten HTTP-Ursprung auf 127.0.0.1, verschiebt sie
+  und verifiziert sie von der Platte (`%PDF-`, > 10 KB) — mit Negativkontrollen
+  fuer Borrow-only, Suche-im-Buch, Nicht-PDF-Antworten und zu kleine Dateien
+  (`tests/test_free_archive_download.py`). Den Stand im echten Netz haelt
+  `evals/free-archive-fetchers/live-verification.json` fest: Internet Archive
+  (Darwin 1859, 41.339.703 Bytes) und MDZ (Goethes Faust, Cotta 1833,
+  35.191.462 Bytes) wurden am 2026-07-29 real geladen und per SHA-256 belegt;
+  HathiTrust beantwortet den Gesamtband-Download mit „Page Blocked", weshalb
+  dieser Agent dort `pickup_required` meldet statt `success` zu behaupten.
+  Nachfahrbar mit
+  `RUN_LIVE_ARCHIVE_FETCH=1 uv run pytest tests/test_free_archive_live_fetch.py`.
+
 - **Neuer Skill `parallel-screening` + Agent `screening-judge` (#460):** Die
   gleichförmigen Schritte der Recherche — Titel-/Abstract-Screening vieler
   Treffer und Verzerrungsbewertung vieler Studien — laufen jetzt wellenweise
@@ -137,6 +151,28 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   unverändert.
 
 ### Fixed
+
+- **Download-Schritt der Archiv-Fetcher rief ein Kommando auf, das es nicht
+  gibt (#450):** `hathitrust-fetcher`, `internetarchive-fetcher` und
+  `mdz-fetcher` endeten — wie ihre Browser-Guides — mit
+  `browser-use download <idx> --to <pfad>`. Dieses Unterkommando existiert in
+  browser-use 0.12.6 nicht; der Aufruf bricht mit `invalid choice: 'download'`
+  ab, es entsteht nie eine Datei. Damit konnte keiner der drei Agents je einen
+  Titel beschaffen. Sie loesen den Download jetzt per `browser-use click` aus,
+  holen die Datei aus dem Session-Download-Verzeichnis
+  (`<TMPDIR>/browser-use-downloads-<id>/`, angelegt durch `accept_downloads` /
+  `auto_download_pdfs`), verschieben sie nach `output_path` und pruefen erst
+  danach. Ein Regressionstest sperrt den Fehlaufruf.
+  Dieselbe Formulierung steht noch in acht weiteren Fetcher-Agents (`tib`,
+  `oapen`, `doabooks`, `degruyter`, `kvk`, `springer-book`, `nationallizenzen`,
+  `ebook-central`) — ausserhalb des Scopes von #450 und separat zu beheben.
+
+- **Eval-Cases der freien Archive liessen jeden Ausgang gelten (#450):** alle
+  drei Cases akzeptierten `status_in: [success, metadata_only]` und konnten
+  damit nicht scheitern. Jeder Case legt sich jetzt auf genau einen Status
+  fest, die beiden gemeinfreien Testtitel verlangen ein verifiziertes PDF, und
+  zwei neue Gegenproben (`far-04` Borrow-only, `far-05` Suche-im-Buch) halten
+  `metadata_only` davon ab, wieder zum Auffangbecken zu werden.
 
 - **Gesamt-Zeitbudget für den Suchlauf (#465):** `run_search()` in `scripts/search.py` wartete bisher unbegrenzt über `concurrent.futures.as_completed()`, bis alle 7 Modul-Futures fertig waren — insbesondere der EconStor-OAI-PMH-Fallback aus #236 (bis zu `OAI_MAX_PAGES=5` × `TIMEOUT=30s` ≈ 150s Worst-Case, laut #456 aktuell der Live-Normalfall, da `econstor.eu`'s REST-Endpunkt durchgehend HTTP 405 liefert) konnte den gesamten Lauf um Minuten verzögern, ohne dass die übrigen, längst fertigen Treffer ausgeliefert wurden. Neuer optionaler Parameter `time_budget: float | None = None` (Default `None` reproduziert exakt das alte, unbegrenzte Verhalten) schaltet auf `concurrent.futures.wait(futures, timeout=time_budget)` um; noch nicht fertige Futures werden **nicht** per `.result()` abgewartet, sondern als „übersprungen" gewertet — getrennt von echten Modulfehlern (`skipped_out`-Ausgabeparameter statt der bestehenden `failed`-Liste, damit die 2-Tuple-Rückgabe von `run_search()` unverändert bleibt und `skills/anchor-paper-survey/scripts/anchor_paper.py`, das `run_search()` ohne `time_budget` aufruft, im alten unbegrenzten Verhalten bleibt). Der Executor wird bei gesetztem Budget per `shutdown(wait=False, cancel_futures=True)` sofort freigegeben, statt am `with`-Block-Exit doch wieder zu blockieren. `search_econstor()` bekommt zusätzlich ein eigenes, engeres `fallback_time_budget` (Default `ECONSTOR_FALLBACK_TIME_BUDGET_S = 20.0`) direkt in der resumptionToken-Schleife (`time.monotonic()`-Vergleich vor jeder weiteren Runde, analog zu den bestehenden Mengenlimits aus #236) — bei Überschreitung bricht die Schleife mit den bis dahin gesammelten Treffern ab, statt weiterzupollen; `run_search()` bindet diesen Wert über `functools.partial()` an `search_econstor()`, ohne die generische `Callable[[str, int], list[dict]]`-Signatur der `MODULES`-Registry zu ändern. Die CLI bekommt zwei neue, optionale Flags `--time-budget` (Default `DEFAULT_TIME_BUDGET_S = 60.0`) und `--fallback-time-budget` (Default `20.0`) — CLI-Läufe sind damit ab sofort standardmäßig budgetiert, programmatische Aufrufer von `run_search()` bleiben unbetroffen, solange sie `time_budget` nicht setzen. Die Sidecar-Statusdatei (`<output-stem>_status.json`, seit #456) bekommt additiv das Feld `skipped_modules`; der Exitcode-1-Fall („alle Quellen ausgefallen") berücksichtigt jetzt `failed` **und** `skipped` gemeinsam, da ein komplett übersprungener Lauf ansonsten fälschlich als Erfolg (Exitcode 0) durchgegangen wäre. Neu: `tests/test_issue_465_time_budget.py` (14 Tests: Konstanten-Existenz, Einhaltung des Gesamtbudgets mit real verzögertem Modul, getrennte Skip-vs-Fail-Kennzeichnung, Vollständigkeit der übrigen Treffer, enges EconStor-Fallback-Budget unabhängig vom Gesamtbudget, CLI-Sidecar-Statusdatei, CLI-Flag-Defaults, sowie 7× Regressionsschutz für `time_budget=None` über alle Module). `commands/search.md` dokumentiert die beiden neuen Flags und das neue Statusfeld.
 - **LaTeX-Export: dokumentierte Aufrufparameter existierten nicht im Code (#467):** `commands/latex.md` dokumentierte seit Langem `--kapitel <n>|all --output <datei.tex> [--bib <datei.bib>] [--template <uni>]`, real gab es aber nur die beiden rein positionalen Skripte `render_tex.py <input.md> <output.tex>` (ein File → ein File) und `build_bib.py <vault.db> <output.bib>` (voller Vault-Dump) — keine Kapitel-Auswahl, keine Mehrfach-Kapitel-Verkettung, keine unabhängige `.bib`-Pfadsteuerung, kein Uni-Template-Wrapping. Wer den dokumentierten Aufruf 1:1 nutzte, bekam einen Fehler statt eines Exports. Neuer Orchestrator `skills/latex-export/scripts/export_thesis.py` bündelt eine echte `argparse`-CLI: `resolve_chapters()` löst `--kapitel <n>` robust gegen die im Repo uneinheitliche Namenskonvention auf (`kapitel/3.md`, `kapitel/03-methodik.md` — Matching über die führende Ziffernfolge des Dateinamens-Stamms, numerisch statt alphabetisch sortiert für `all`), mit klarer Fehlermeldung bei fehlendem oder mehrdeutigem Treffer; `apply_template()` ersetzt `%%CONTENT%%` in `~/.academic-research/library-profiles/<uni>.tex.template` und exportiert bei fehlender Vorlage trotzdem — mit erklärender Meldung („Template `<uni>` fehlt.") statt Absturz; `--bib` ist strikt unabhängig von `--output` verkabelt (Default `output/refs.bib`) und nutzt ohne expliziten Pfad den kanonischen `academic_vault.db.default_db_path()` (Issue #190). `commands/latex.md` bekommt dafür ein konkretes Schritt-für-Schritt-Ablauf-Schema (Muster aus `commands/humanize.md`/`commands/excel.md`) statt der bisherigen abstrakten Beschreibung; die für #458 gepinnte `mkdir -p ~/.academic-research/library-profiles/`-Zeile bleibt wörtlich erhalten. Neu: `tests/test_latex_export.py::TestResolveChapters`, `TestApplyTemplate`, `TestExportThesisIntegration`, `TestExportThesisCLI` (22 Fälle, je Akzeptanzkriterium mindestens ein Test). Die neue Workflow-Sektion in `skills/latex-export/SKILL.md` hebt `tests/baselines/skill_sizes.json` (3000 → 3240) und `tests/baselines/tokens.json` (360 → 459) um exakt den Netto-Zuwachs an — etabliertes Repo-Muster für legitimes Skill-Wachstum (vgl. 89ca331, d12a976), keine Aufweichung des Token-Drift-Guards.

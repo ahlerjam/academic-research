@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-29",
+  "recorded_by": "Fix-Runde zu PR #498 (Issue #450)",
+  "environment": {
+    "browser_use_version": "0.12.6",
+    "browser": "Chromium (browser-use --headed), Fallback curl fuer reine Byte-Erfassung",
+    "platform": "macOS 15 (darwin 25.5.0)",
+    "network": "privates Endnutzer-Netz, keine Institutions-IP, kein HathiTrust-Login"
+  },
+  "purpose": "AC1 aus Issue #450 ('Jeder der drei Agents beschafft einen bekannten gemeinfreien Testtitel als PDF') ist eine Aussage ueber das echte Netz. Diese Datei ist das Artefakt dazu: pro Agent ein realer Lauf gegen die echte Plattform, mit vollstaendiger URL-Kette und der SHA-256-Pruefsumme der tatsaechlich empfangenen Bytes. Wer den Lauf nachvollziehen will, faehrt tests/test_free_archive_live_fetch.py mit RUN_LIVE_ARCHIVE_FETCH=1.",
+  "verdict_vocabulary": {
+    "pdf_verified": "Ein PDF wurde real empfangen, beginnt mit %PDF- und ist groesser als 10 KB. AC1 fuer diesen Agent belegt.",
+    "blocked_by_platform": "Die Plattform verweigert den Volltext-Download automatisierten Clients. AC1 fuer diesen Agent NICHT belegt -- der Agent darf hier kein success melden."
+  },
+  "runs": [
+    {
+      "agent": "internetarchive-fetcher",
+      "archive": "Internet Archive",
+      "verdict": "pdf_verified",
+      "item_id": "onoriginofspecie1859darw",
+      "item": {
+        "title": "On the origin of species by means of natural selection, or, The preservation of favoured races in the struggle for life",
+        "creator": "Darwin, Charles, 1809-1882",
+        "edition": "London : John Murray, 1859",
+        "rights": "Public domain. The BHL considers that this work is no longer under copyright protection",
+        "access_level": "Vollansicht (kein access-restricted-item, keine Borrow-Schranke)"
+      },
+      "url_chain": [
+        "https://archive.org/details/onoriginofspecie1859darw",
+        "https://archive.org/download/onoriginofspecie1859darw/onoriginofspecie1859darw.pdf"
+      ],
+      "artifact": {
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "bytes": 41339703,
+        "magic": "%PDF-1.5",
+        "sha256": "7828a8653af3630f4078fb2b047acb28847d1393490430e2df3645c63109f17e"
+      },
+      "reproducibility": "Statische Datei, byteweise identisch ueber mehrere Abrufe -- `sha256` ist hier der belastbare Vergleichswert.",
+      "notes": "Die Detailseite fuehrt den Volltext-Link woertlich als 'PDF download' auf .../download/<id>/<id>.pdf. Die Ausgabeangabe stammt aus dem Katalogeintrag des Digitalisats (John Murray, 1859), nicht aus der Eingabe -- AC4. Die Detailseite selbst ist eine JavaScript-Anwendung und antwortet einfachen HTTP-Clients mit einem Bot-Check; der Agent bedient sie deshalb ueber browser-use. Die Download-Route unter archive.org/download/... liefert dagegen auch ohne Browser aus."
+    },
+    {
+      "agent": "mdz-fetcher",
+      "archive": "Muenchener Digitalisierungszentrum (Bayerische Staatsbibliothek)",
+      "verdict": "pdf_verified",
+      "item_id": "bsb10109182",
+      "item": {
+        "title": "Faust: Eine Tragoedie von Goethe. 1",
+        "creator": "Goethe, Johann Wolfgang von (GND 118540238)",
+        "edition": "Stuttgart : J. G. Cotta, 1833",
+        "shelfmark": "Muenchen, Bayerische Staatsbibliothek -- P.o.germ. 484 x-1",
+        "access_level": "Vollansicht (158 Bilder, PDF/DaFo-Download angeboten)"
+      },
+      "url_chain": [
+        "https://www.digitale-sammlungen.de/de/view/bsb10109182",
+        "https://download.digitale-sammlungen.de/BOOKS/download.pl?id=bsb10109182&nr=1&ersteseite=1&letzteseite=158",
+        "https://download.digitale-sammlungen.de/BOOKS/download.pl?...&xdfz=2&abschicken=ja",
+        "https://download.digitale-sammlungen.de/pdf/17853191418888bsb10109182.pdf"
+      ],
+      "artifact": {
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "bytes": 35191462,
+        "magic": "%PDF-1.4",
+        "sha256": "c8bb8210c1e7962ab870db811323a28a1f348e38b0e11ed546c76fb70adf2925",
+        "sha256_is_reproducible": false,
+        "sha256_normalized": "bcdcb708bad77be83e53ede9d718f5a5f0e8aba5025beb84a27b2fb48c85459c",
+        "normalization": "Trailer-Feld /ID durch '/ID []' ersetzt, dann SHA-256."
+      },
+      "reproducibility": "MDZ erzeugt das PDF bei jedem Abruf neu. Ein zweiter Lauf am selben Tag lieferte dieselbe Groesse (35191462 Bytes), aber die rohe Pruefsumme 909895d6975b2ef940beec92e099dd0b6f73c87d492a374c4dda3ceab86c9a86. Der Unterschied betrifft genau 58 Bytes: das Trailer-Feld /ID, das je Generierung neu gewuerfelt wird. Alle uebrigen 35191404 Bytes sind identisch. Deshalb ist `sha256_normalized` der belastbare Vergleichswert, nicht `sha256`.",
+      "notes": "Der Rechtehinweis-Radiobutton heisst `xdfz`; die Vorbelegung ist value=1 ('Nein'), noetig ist value=2 ('Ja'), danach der WEITER-Button des Abschnitts 'Sofort-Download als PDF-Datei'. Der finale PDF-Link traegt einen Zeitstempel-Praefix (17853191418888bsb10109182.pdf, im zweiten Lauf 17853201508888bsb10109182.pdf) und ist NICHT stabil -- er muss jedes Mal ueber die Zwischenseite erzeugt werden. Eine fest verdrahtete PDF-URL waere ein Fehler. Das Formular schreibt seine Attribute gemischt gequotet (name='xdfz', id=\"klammer\", value = 1); nur der Browser normalisiert das beim Serialisieren. Wer den Ablauf nachbaut, muss vom Draht ausgehen, nicht vom DOM-Abzug."
+    },
+    {
+      "agent": "hathitrust-fetcher",
+      "archive": "HathiTrust",
+      "verdict": "blocked_by_platform",
+      "item_id": "hvd.hntupx",
+      "item": {
+        "title": "Kritik der reinen Vernunft. Hrsg. von Benno Erdmann",
+        "creator": "Kant, Immanuel, 1724-1804",
+        "catalog_record": "https://catalog.hathitrust.org/Record/100504329",
+        "access_level": "Vollansicht ('Full view', 'Public Domain.', 630 page scans)"
+      },
+      "url_chain": [
+        "https://catalog.hathitrust.org/Search/Home?lookfor=Kritik+der+reinen+Vernunft&type=title",
+        "https://babel.hathitrust.org/cgi/pt?id=hvd.hntupx&seq=5",
+        "https://babel.hathitrust.org/cgi/imgsrv/download/pdf?id=hvd.hntupx;marker=<signiert>;attachment=1"
+      ],
+      "artifact": {
+        "http_status": 403,
+        "content_type": "text/html",
+        "bytes": null,
+        "magic": null,
+        "sha256": null
+      },
+      "observations": [
+        "catalog.hathitrust.org und babel.hathitrust.org liegen hinter einer Cloudflare-Managed-Challenge. Headless Chromium kommt nicht durch (Turnstile-Widget bleibt stehen); nur die sichtbare Browser-Instanz passiert sie.",
+        "Die Bib-API https://catalog.hathitrust.org/api/volumes/brief/oclc/<n>.json ist NICHT challenge-geschuetzt und liefert je Exemplar usRightsString ('Full view' / 'Limited (search-only)') -- das ist der belastbare Weg zur Zugriffsstufe.",
+        "Das Formular 'Range: Whole item' + 'Format: Ebook (PDF)' erzeugt eine marker-signierte URL unter /cgi/imgsrv/download/pdf. Der Abruf dieser URL beantwortet HathiTrust mit 'Page Blocked -- Sorry, your attempt to access HathiTrust has been blocked.' (Cloudflare Ray ID a22b480dee5ec7bc).",
+        "Damit ist der Gesamtband-Download fuer automatisierte Clients ohne Partner-Institution nicht erreichbar. Der Agent darf diesen Fall nicht als success und auch nicht stillschweigend als metadata_only ausgeben -- die Zugriffsstufe ist Vollansicht, blockiert ist der Massen-Download."
+      ],
+      "notes": "AC1 ist fuer hathitrust-fetcher bewusst NICHT als erfuellt vermerkt. Der Agent bildet diesen Ausgang seit dieser Fix-Runde als pickup_required mit dem Grund 'Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert' ab."
+    }
+  ]
+}

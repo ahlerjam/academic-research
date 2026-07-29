@@ -43,7 +43,12 @@ Kein Login fuer den Standard-Fall (freie Downloads).
 
 1. Auf der archive.org-Item-Seite: `browser-use state` → "DOWNLOAD OPTIONS"-
    Panel suchen.
-2. Vorhanden → Format "PDF" waehlen, `browser-use download <pdf-link-idx> --to <output_path>`.
+2. Vorhanden → den Farb-Eintrag "PDF download" waehlen (`_bw.pdf` ist die
+   Graustufen-Zweitausgabe), dann `browser-use click <pdf-link-idx>` — es gibt **kein**
+   `browser-use download`-Unterkommando (verifiziert gegen browser-use 0.12.6).
+   Chromium nimmt den Download selbst an und legt die Datei unter
+   `<TMPDIR>/browser-use-downloads-<id>/` ab; von dort nach `<output_path>`
+   verschieben.
 3. Kein Download-Panel, aber Button "Borrow" sichtbar → CDL-Fall →
    `metadata_only` mit `reason: "Zugriffsstufe: Borrow-only (Controlled Digital Lending)"`.
 4. Open-Library-Eintrag ohne verlinktes archive.org-Item (nur Katalogdaten) →

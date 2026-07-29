@@ -17,10 +17,15 @@ import pytest
 REPO_ROOT = Path(__file__).parent.parent
 AGENTS_DIR = REPO_ROOT / "agents"
 EVALS_PATH = REPO_ROOT / "evals" / "free-archive-fetchers" / "evals.json"
+LIVE_RECORD_PATH = REPO_ROOT / "evals" / "free-archive-fetchers" / "live-verification.json"
 
 AGENT_NAMES = ["hathitrust-fetcher", "internetarchive-fetcher", "mdz-fetcher"]
 VALID_STATUSES = {"success", "pickup_required", "captcha", "no_match", "metadata_only"}
 ACCESS_LEVEL_PREFIX = "Zugriffsstufe:"
+
+#: Der Radiobutton der MDZ-Download-Zwischenseite. Einzige Quelle: der
+#: Live-Lauf vom 2026-07-29 (siehe live-verification.json).
+MDZ_RIGHTS_RADIO = "xdfz"
 
 
 # ─── Hilfsfunktion (identisch zu tests/test_oa_fetchers.py) ─────────────────
@@ -350,14 +355,14 @@ class TestEvalCases:
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
         assert isinstance(data, list), "evals.json muss ein JSON-Array sein"
 
-    def test_evals_has_three_cases(self):
+    def test_evals_has_five_cases(self):
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
-        assert len(data) == 3, f"Erwartet 3 Eval-Cases, gefunden: {len(data)}"
+        assert len(data) == 5, f"Erwartet 5 Eval-Cases, gefunden: {len(data)}"
 
     def test_eval_ids_are_correct(self):
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
         ids = [c["id"] for c in data]
-        assert ids == ["far-01", "far-02", "far-03"], f"Falsche IDs: {ids}"
+        assert ids == ["far-01", "far-02", "far-03", "far-04", "far-05"], f"Falsche IDs: {ids}"
 
     def test_each_eval_has_required_fields(self):
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
@@ -416,20 +421,22 @@ class TestTierOrderReferencesFreeArchives:
             )
 
 
-# ─── Klasse 8: MDZ-Rechtehinweis-Schritt (AC1, Fix-Runde PR #498) ────────────
+# ─── Klasse 8: MDZ-Rechtehinweis-Schritt (Fix-Runde PR #498) ─────────────────
 
 
 class TestMdzRightsAcknowledgmentStep:
-    """AC1: Ein echter Live-Fetch (durchgefuehrt in der Fix-Runde gegen das
-    reale digitale-sammlungen.de mit Goethes 'Faust. Erster Theil', Stuttgart
-    1833, BSB-Signatur P.o.germ. 484 x-1, urn:nbn:de:bvb:12-bsb10109182-5)
-    deckte einen Schritt auf, den der Standard-Flow bisher nicht dokumentierte:
-    die Download-Zwischenseite (`download.digitale-sammlungen.de/BOOKS/
-    download.pl`) verlangt vor dem eigentlichen PDF-Link ausdruecklich, den
-    vorbelegten Rechtehinweis-Radiobutton von 'Nein' auf 'Ja' umzustellen und
-    den 'WEITER'-Button im Abschnitt 'Sofort-Download als PDF-Datei' zu
-    klicken -- auch bei gemeinfreien Werken. Ohne diesen Schritt bleibt es bei
-    der Zwischenseite, nie beim PDF."""
+    """Die Download-Zwischenseite (`download.digitale-sammlungen.de/BOOKS/
+    download.pl`) verlangt vor dem PDF-Link, den vorbelegten
+    Rechtehinweis-Radiobutton `xdfz` von `1` ("Nein") auf `2` ("Ja")
+    umzustellen und den WEITER-Button des Abschnitts "Sofort-Download als
+    PDF-Datei" zu klicken -- auch bei gemeinfreien Werken. Bleibt die Vorgabe
+    stehen, liefert MDZ nur wieder die Zwischenseite.
+
+    Beleg: Live-Lauf 2026-07-29 an Goethes Faust. 1 (bsb10109182), aufgezeichnet
+    in evals/free-archive-fetchers/live-verification.json und nachfahrbar ueber
+    tests/test_free_archive_live_fetch.py. Die Weiche selbst ist ausgefuehrt
+    geprueft in tests/test_free_archive_download.py.
+    """
 
     def setup_method(self):
         path = AGENTS_DIR / "mdz-fetcher.md"
@@ -443,11 +450,194 @@ class TestMdzRightsAcknowledgmentStep:
         lowered = flow_match.group(1).lower()
         assert "rechtehinweis" in lowered, (
             "Standard-Flow von mdz-fetcher.md muss den Rechtehinweis-Schritt "
-            "auf der Download-Zwischenseite dokumentieren (AC1, per Live-Fetch "
-            "in der Fix-Runde bestaetigt -- ohne 'Ja' + WEITER bleibt es bei "
-            "der Zwischenseite statt beim PDF)"
+            "auf der Download-Zwischenseite dokumentieren"
         )
         assert '"ja"' in lowered or "'ja'" in lowered or "auf „ja“" in lowered, (
             "Standard-Flow muss ausdruecklich benennen, dass die Vorgabe "
             "'Nein' auf 'Ja' umgestellt werden muss"
         )
+
+    def test_standard_flow_names_the_actual_form_field(self):
+        """Ein Prompt, der nur „Ja anklicken" sagt, ist nicht nachbaubar.
+
+        Der Radiobutton heisst `xdfz`, „Ja" ist `value=2`. Ohne diese Angabe
+        muss jede Umsetzung raten -- und eine erste Fassung des Test-Spiegels
+        hat genau daran gescheitert.
+        """
+        assert MDZ_RIGHTS_RADIO in self.body, (
+            f"mdz-fetcher.md muss das Formularfeld '{MDZ_RIGHTS_RADIO}' benennen"
+        )
+        assert f"{MDZ_RIGHTS_RADIO}=2" in self.body, (
+            f"mdz-fetcher.md muss den zu setzenden Wert '{MDZ_RIGHTS_RADIO}=2' benennen"
+        )
+
+
+# ─── Klasse 9: Der Download-Schritt muss ausfuehrbar sein (AC1) ──────────────
+
+
+class TestDownloadStepUsesAnExistingCommand:
+    """Die Wurzel dafuer, dass es zu AC1 nie einen Beleg gab.
+
+    Alle drei Agenten endeten mit `browser-use download <idx> --to <pfad>`.
+    Dieses Unterkommando existiert nicht -- weder in der installierten Version
+    (0.12.6) noch in der Dokumentation des Projekts. Der Aufruf bricht mit
+    `invalid choice: 'download'` ab; es entsteht nie eine Datei, und damit kann
+    kein Agent je einen Testtitel beschafft haben.
+
+    Der reale Mechanismus: Chromium nimmt Downloads selbst an
+    (`accept_downloads`, `auto_download_pdfs`) und legt sie unter
+    `<TMPDIR>/browser-use-downloads-<id>/` ab; von dort wird verschoben und
+    geprueft. Genau das muss im Prompt stehen.
+    """
+
+    #: Ein Aufruf, kein Zitat. `browser-use download …` in der Erklaerung
+    #: („dieses Kommando gibt es nicht") soll erlaubt bleiben.
+    INVOCATION_RE = re.compile(r"browser-use\s+download\s+<")
+
+    TARGETS = [AGENTS_DIR / f"{name}.md" for name in AGENT_NAMES] + [
+        REPO_ROOT / "config" / "browser_guides" / f"{guide}.md"
+        for guide in ("hathitrust", "internetarchive", "mdz")
+    ]
+
+    @pytest.mark.parametrize("path", TARGETS, ids=lambda p: p.name)
+    def test_no_call_to_nonexistent_browser_use_download(self, path):
+        content = path.read_text(encoding="utf-8")
+        hits = self.INVOCATION_RE.findall(content)
+        assert not hits, (
+            f"{path.name} ruft 'browser-use download' auf — dieses Unterkommando "
+            f"existiert nicht (browser-use 0.12.6: invalid choice: 'download'). "
+            f"Der Download laeuft ueber 'browser-use click' plus das "
+            f"Session-Download-Verzeichnis."
+        )
+
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_agent_documents_the_real_download_mechanism(self, agent_name):
+        content = (AGENTS_DIR / f"{agent_name}.md").read_text(encoding="utf-8")
+        assert "browser-use click" in content, (
+            f"{agent_name}.md muss den Download ueber 'browser-use click' ausloesen"
+        )
+        assert "browser-use-downloads-" in content, (
+            f"{agent_name}.md muss das Session-Download-Verzeichnis "
+            f"'<TMPDIR>/browser-use-downloads-<id>/' benennen — dort landet die Datei"
+        )
+
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_agent_verifies_the_file_from_disk(self, agent_name):
+        content = (AGENTS_DIR / f"{agent_name}.md").read_text(encoding="utf-8")
+        assert "%PDF-" in content, f"{agent_name}.md muss die Magic-Bytes '%PDF-' pruefen"
+        assert "10 KB" in content, f"{agent_name}.md muss die Groessenschwelle nennen"
+
+
+# ─── Klasse 10: Der Live-Beleg zu AC1 ────────────────────────────────────────
+
+
+class TestLiveVerificationRecord:
+    """AC1 ist eine Aussage ueber das echte Netz — hier haengt der Beleg dran.
+
+    Ohne diese Datei bleibt „der Agent beschafft ein PDF" eine Behauptung. Der
+    Test prueft nicht, ob die Laeufe gut ausgingen (einer ging nicht gut aus),
+    sondern dass fuer jeden der drei Agenten ueberhaupt ein pruefbarer Befund
+    vorliegt und dass Eval-Cases und Befund dieselben Exemplare meinen.
+    """
+
+    def setup_method(self):
+        self.record = json.loads(LIVE_RECORD_PATH.read_text(encoding="utf-8"))
+        self.runs = {run["agent"]: run for run in self.record["runs"]}
+        self.cases = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
+
+    def test_record_exists_and_covers_every_agent(self):
+        assert set(self.runs) == set(AGENT_NAMES), (
+            f"Live-Beleg deckt nicht alle Agenten ab: {set(self.runs)}"
+        )
+
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_every_run_carries_a_checkable_verdict(self, agent_name):
+        run = self.runs[agent_name]
+        assert run["verdict"] in self.record["verdict_vocabulary"], (
+            f"Unbekanntes Verdict {run['verdict']!r} fuer {agent_name}"
+        )
+        assert run["url_chain"], f"{agent_name}: leere URL-Kette ist kein Beleg"
+        assert run["item_id"], f"{agent_name}: kein Exemplar benannt"
+
+    @pytest.mark.parametrize("agent_name", ["internetarchive-fetcher", "mdz-fetcher"])
+    def test_successful_runs_name_a_real_artifact(self, agent_name):
+        """Wer `pdf_verified` sagt, muss Bytes, Magic und Pruefsumme zeigen."""
+        run = self.runs[agent_name]
+        assert run["verdict"] == "pdf_verified"
+        artifact = run["artifact"]
+        assert artifact["http_status"] == 200
+        assert artifact["content_type"] == "application/pdf"
+        assert artifact["magic"].startswith("%PDF-")
+        assert artifact["bytes"] > 10 * 1024
+        assert re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]), (
+            f"{agent_name}: sha256 sieht nicht wie eine Pruefsumme aus"
+        )
+
+    def test_blocked_run_does_not_pretend_to_have_a_file(self):
+        run = self.runs["hathitrust-fetcher"]
+        assert run["verdict"] == "blocked_by_platform"
+        assert run["artifact"]["sha256"] is None
+        assert run["artifact"]["bytes"] is None
+        assert run["observations"], "Eine Absage ohne Beobachtungen ist kein Befund"
+
+    @pytest.mark.parametrize(
+        "case_id, id_field",
+        [("far-01", "hathitrust_id"), ("far-02", "archive_id"), ("far-03", "bsb_id")],
+    )
+    def test_eval_cases_reference_the_verified_items(self, case_id, id_field):
+        """Beleg und Eval duerfen nicht auseinanderlaufen."""
+        case = next(c for c in self.cases if c["id"] == case_id)
+        run = self.runs[case["agent"]]
+        assert case["input"][id_field] == run["item_id"], (
+            f"{case_id} prueft {case['input'][id_field]!r}, belegt ist {run['item_id']!r}"
+        )
+        assert case["evidence"].startswith("evals/free-archive-fetchers/live-verification.json")
+
+
+class TestEvalCasesDoNotAcceptMetadataOnlyAsEquivalent:
+    """AC1 verlangt eine Beschaffung, keinen Ausweichausgang.
+
+    Vor der Fix-Runde liessen alle drei Cases `status_in: [success,
+    metadata_only]` zu — damit war jeder Ausgang richtig und der Eval sagte
+    nichts. Jeder Case legt sich jetzt auf genau einen Status fest.
+    """
+
+    def setup_method(self):
+        self.cases = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
+
+    def test_no_case_offers_a_choice_of_statuses(self):
+        for case in self.cases:
+            assert "status_in" not in case["expected"], (
+                f"{case['id']}: 'status_in' laesst mehrere Ausgaenge gelten — "
+                f"ein Eval, der nicht scheitern kann, misst nichts"
+            )
+            assert "status" in case["expected"], f"{case['id']}: kein erwarteter Status"
+
+    @pytest.mark.parametrize("case_id", ["far-02", "far-03"])
+    def test_public_domain_cases_demand_a_verified_pdf(self, case_id):
+        case = next(c for c in self.cases if c["id"] == case_id)
+        expected = case["expected"]
+        assert expected["status"] == "success", (
+            f"{case_id} betrifft ein frei ladbares gemeinfreies Digitalisat — "
+            f"hier ist metadata_only ein Fehlschlag, kein Sonderfall"
+        )
+        assert expected["pdf_starts_with"] == "%PDF-"
+        assert expected["pdf_min_bytes"] >= 10 * 1024
+        assert expected["edition"], f"{case_id}: AC4 verlangt die Ausgabe des Digitalisats"
+
+    def test_hathitrust_case_encodes_the_observed_block(self):
+        case = next(c for c in self.cases if c["id"] == "far-01")
+        assert case["expected"]["status"] == "pickup_required"
+        assert case["expected"]["reason"] == (
+            "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"
+        )
+
+    def test_negative_controls_exist_for_restricted_access(self):
+        restricted = [c for c in self.cases if c["expected"]["status"] == "metadata_only"]
+        assert len(restricted) >= 2, (
+            "Ohne Gegenproben waere metadata_only ein Auffangbecken, in dem die "
+            "success-Cases stillschweigend mitlaufen koennten"
+        )
+        for case in restricted:
+            assert case["expected"]["reason"].startswith(ACCESS_LEVEL_PREFIX)
+            assert case["expected"]["pdf_path_absent"] is True

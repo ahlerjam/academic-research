@@ -1,50 +1,92 @@
 [
   {
     "id": "far-01",
-    "description": "HathiTrust-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition, sonst begruendetes metadata_only mit Zugriffsstufe",
+    "description": "HathiTrust-Fetcher: gemeinfreier Klassiker in Vollansicht — der Gesamtband-Download wird von der Plattform geblockt, erwartet pickup_required mit benannter Sperre",
     "agent": "hathitrust-fetcher",
     "input": {
-      "title": "Immanuel Kant: Kritik der reinen Vernunft",
+      "title": "Immanuel Kant: Kritik der reinen Vernunft (Hrsg. Benno Erdmann)",
+      "hathitrust_id": "hvd.hntupx",
       "output_path": "/tmp/eval-far-01.pdf"
     },
     "expected": {
-      "status_in": ["success", "metadata_only"],
+      "status": "pickup_required",
       "source_subagent": "hathitrust-fetcher",
-      "edition_non_empty_if_success": true,
-      "reason_has_access_level_if_metadata_only": true
+      "reason": "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert",
+      "pdf_path_absent": true
     },
-    "note": "HathiTrust fuehrt drei Zugriffsstufen; metadata_only ist akzeptabel, wenn nur Suche-im-Buch oder nur Metadaten vorliegt."
+    "evidence": "evals/free-archive-fetchers/live-verification.json#runs[hathitrust-fetcher]",
+    "note": "Kein success und ausdruecklich auch kein metadata_only: die Zugriffsstufe IST Vollansicht, blockiert ist der Massen-Download. Live belegt am 2026-07-29 (HTTP 403, 'Page Blocked'). Wer diesen Case auf success umstellt, muss zuerst den Beleg ersetzen."
   },
   {
     "id": "far-02",
-    "description": "Internet-Archive-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition, sonst begruendetes metadata_only (u.a. Borrow-only)",
+    "description": "Internet-Archive-Fetcher: Darwins Erstausgabe 1859, gemeinfrei, frei ladbar — erwartet success mit verifiziertem PDF und der Ausgabe des Digitalisats",
     "agent": "internetarchive-fetcher",
     "input": {
       "title": "Charles Darwin: On the Origin of Species (1859, erste Ausgabe)",
+      "archive_id": "onoriginofspecie1859darw",
       "output_path": "/tmp/eval-far-02.pdf"
     },
     "expected": {
-      "status_in": ["success", "metadata_only"],
+      "status": "success",
       "source_subagent": "internetarchive-fetcher",
-      "edition_non_empty_if_success": true,
-      "reason_has_access_level_if_metadata_only": true
+      "pdf_starts_with": "%PDF-",
+      "pdf_min_bytes": 10240,
+      "edition": "London : John Murray, 1859"
     },
-    "note": "Controlled-Digital-Lending-Editionen (Borrow-only) sind der erwartete metadata_only-Fall, nicht ein Fehler."
+    "evidence": "evals/free-archive-fetchers/live-verification.json#runs[internetarchive-fetcher]",
+    "note": "metadata_only ist hier KEIN gleichwertiger Ausgang. Das Digitalisat ist gemeinfrei, unbeschraenkt und wurde am 2026-07-29 real geladen (41339703 Bytes, SHA-256 7828a865...). Ein metadata_only waere ein Fehlschlag, kein Sonderfall."
   },
   {
     "id": "far-03",
-    "description": "MDZ-Fetcher: bekannter gemeinfreier deutschsprachiger Klassiker via Titel — erwartet success mit pdf_path und edition, sonst metadata_only (Werk noch nicht digitalisiert)",
+    "description": "MDZ-Fetcher: Goethes Faust (Cotta 1833), Vollansicht — erwartet success mit verifiziertem PDF nach bestaetigtem Rechtehinweis",
     "agent": "mdz-fetcher",
     "input": {
       "title": "Johann Wolfgang von Goethe: Faust. Der Tragödie erster Teil",
+      "bsb_id": "bsb10109182",
       "output_path": "/tmp/eval-far-03.pdf"
     },
     "expected": {
-      "status_in": ["success", "metadata_only"],
+      "status": "success",
       "source_subagent": "mdz-fetcher",
-      "edition_non_empty_if_success": true,
-      "reason_has_access_level_if_metadata_only": true
+      "pdf_starts_with": "%PDF-",
+      "pdf_min_bytes": 10240,
+      "edition": "Stuttgart : J. G. Cotta 1833"
     },
-    "note": "MDZ kennt nur Vollansicht oder nur Metadaten -- keine Zwischenstufe."
+    "evidence": "evals/free-archive-fetchers/live-verification.json#runs[mdz-fetcher]",
+    "note": "metadata_only ist hier KEIN gleichwertiger Ausgang — MDZ kennt bei diesem Band nur Vollansicht. Am 2026-07-29 real geladen (35191462 Bytes). Der Ablauf haengt am Rechtehinweis-Radiobutton xdfz=2; bleibt die Vorgabe 'Nein' stehen, gibt es nie einen PDF-Link."
+  },
+  {
+    "id": "far-04",
+    "description": "Gegenprobe Internet Archive: Controlled-Digital-Lending-Ausgabe — erwartet metadata_only mit Borrow-Stufe statt eines zusammengesetzten Volltexts",
+    "agent": "internetarchive-fetcher",
+    "input": {
+      "title": "Charles Darwin: The Origin of Species (Norton 1975, Leihausgabe)",
+      "archive_id": "originofspecies00darw",
+      "output_path": "/tmp/eval-far-04.pdf"
+    },
+    "expected": {
+      "status": "metadata_only",
+      "source_subagent": "internetarchive-fetcher",
+      "reason": "Zugriffsstufe: Borrow-only (Controlled Digital Lending)",
+      "pdf_path_absent": true
+    },
+    "note": "Negativkontrolle zu AC2. Ohne sie waere metadata_only ein Auffangbecken, in dem far-02 und far-03 stillschweigend mitlaufen koennten."
+  },
+  {
+    "id": "far-05",
+    "description": "Gegenprobe HathiTrust: Ausgabe mit Zugriffsstufe Suche-im-Buch — erwartet metadata_only, kein Zusammensetzen aus Suchtreffern",
+    "agent": "hathitrust-fetcher",
+    "input": {
+      "title": "Immanuel Kant: Kritik der reinen Vernunft (Limited search-only)",
+      "hathitrust_id": "hvd.hndles",
+      "output_path": "/tmp/eval-far-05.pdf"
+    },
+    "expected": {
+      "status": "metadata_only",
+      "source_subagent": "hathitrust-fetcher",
+      "reason": "Zugriffsstufe: Suche-im-Buch",
+      "pdf_path_absent": true
+    },
+    "note": "Negativkontrolle zu AC2. Die Kennung stammt aus derselben Trefferliste wie far-01 und war am 2026-07-29 als 'Limited (search only)' ausgezeichnet."
   }
 ]

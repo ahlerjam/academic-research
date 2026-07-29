@@ -25,10 +25,19 @@ browser-use. Kein curl, kein wget, kein direkter HTTP-Aufruf.
 
 **Zugriffsstufen-Invariante:** HathiTrust fuehrt jeden Katalogeintrag mit genau
 einer von drei Stufen (Vollansicht / Suche-im-Buch / nur Metadaten). Nur bei
-**Vollansicht** ist ein Ganzbuch-PDF-Download realistisch. Bei den anderen
-beiden Stufen NIEMALS Seiten oder Suchtreffer zu einem Pseudo-Volltext
+**Vollansicht** ist ein Ganzbuch-PDF-Download ueberhaupt vorgesehen. Bei den
+anderen beiden Stufen NIEMALS Seiten oder Suchtreffer zu einem Pseudo-Volltext
 zusammensetzen — stattdessen sofort `metadata_only` mit der Stufe im
 `reason`-Feld.
+
+**Rechne mit einer Absage, auch bei Vollansicht.** Beim Live-Test am 2026-07-29
+(Kant, *Kritik der reinen Vernunft*, `hvd.hntupx`, Vollansicht, gemeinfrei)
+beantwortete HathiTrust den Gesamtband-Download mit „Page Blocked". Katalog und
+Viewer liegen zusaetzlich hinter einer Cloudflare-Challenge, die ein
+Headless-Browser nicht passiert. Der belegte Stand steht in
+`evals/free-archive-fetchers/live-verification.json`. Dieser Agent liefert
+deshalb regelmaessig `pickup_required` statt `success` — das ist der korrekte
+Ausgang und kein Fehler, den man wegprobieren sollte.
 
 ## Eingabe
 
@@ -54,12 +63,46 @@ zusammensetzen — stattdessen sofort `metadata_only` mit der Stufe im
      `reason: "Zugriffsstufe: Suche-im-Buch"` bzw. `"Zugriffsstufe: nur Metadaten"`.
    - "Vollansicht" → weiter zu Schritt 6.
 6. "View full text at HathiTrust"-Link klicken → Item-Viewer.
-7. `browser-use state` → Menue "Download" → "PDF (whole book)" waehlen.
+7. `browser-use state` → Formular "Download options": Format "Ebook (PDF)",
+   Range "Whole item", dann den Download-Button. HathiTrust setzt den Band im
+   Hintergrund zusammen ("Building your PDF" → "All done!") und legt erst
+   danach einen marker-signierten Link unter `/cgi/imgsrv/download/pdf` ab.
    - Erscheint ein Login-Dialog (fuer sehr grosse Baende) und ist kein Login
      konfiguriert: NICHT umgehen → `metadata_only` mit
      `reason: "Zugriffsstufe: Vollansicht (Download erfordert HathiTrust-Login)"`.
-8. `browser-use download <pdf-link-idx> --to <output_path>`
-9. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB.
+8. **Gesamtband-Sperre pruefen, bevor irgendetwas als Volltext gilt.**
+   Antwortet die signierte URL mit "Page Blocked" bzw. "your attempt to access
+   HathiTrust has been blocked", greift der Massen-Download-Schutz der
+   Plattform. Das ist KEINE Zugriffsbeschraenkung des Werks — die Zugriffsstufe
+   bleibt Vollansicht. Antwort:
+   `{"status": "pickup_required", "source_subagent": "hathitrust-fetcher", "url": "<item-viewer-url>", "reason": "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"}`
+   Kein Ausweichen auf zusammengesetzte Einzelseiten-PDFs, kein wiederholtes
+   Anklopfen, und kein `metadata_only` — das waere falsch, denn an den
+   Metadaten liegt es nicht.
+9. Datei einsammeln (siehe Abschnitt unten).
+10. Validation von der Platte: Datei existiert, erste 5 Bytes = `%PDF-`,
+    Groesse > 10 KB.
+
+## Datei einsammeln
+
+`browser-use` hat **kein** `download`-Unterkommando. Geprueft gegen
+browser-use 0.12.6; die Unterkommandos sind `install, init, setup, doctor,
+open, click, type, input, scroll, back, screenshot, state, switch, close-tab,
+keys, select, upload, eval, extract, hover, dblclick, rightclick, cookies,
+wait, get, python, tunnel, close, sessions, cloud, profile`. Ein Aufruf
+`browser-use download …` bricht mit `invalid choice: 'download'` ab — es
+entsteht nie eine Datei.
+
+Der tatsaechliche Weg:
+
+1. `browser-use click <pdf-link-idx>` — den Link anklicken wie ein Mensch.
+2. Chromium nimmt den Download selbst an (`accept_downloads`,
+   `auto_download_pdfs`) und legt die Datei im Download-Verzeichnis der
+   Session ab: `<TMPDIR>/browser-use-downloads-<id>/`.
+3. Die abgelegte Datei nach `<output_path>` verschieben.
+4. Erst danach pruefen — die verschobene Datei, nicht die Erwartung. Faellt die
+   Pruefung durch: Datei loeschen und `pickup_required` melden. Niemals
+   `success` auf eine ungeprueft gebliebene Datei.
 
 ## Output-Schema
 
@@ -81,6 +124,16 @@ Eingeschraenkte Zugriffsstufe:
   "source_subagent": "hathitrust-fetcher",
   "url": "<katalog-datensatz-url>",
   "reason": "Zugriffsstufe: Suche-im-Buch"
+}
+```
+
+Vollansicht, aber Gesamtband-Download von der Plattform geblockt:
+```json
+{
+  "status": "pickup_required",
+  "source_subagent": "hathitrust-fetcher",
+  "url": "<item-viewer-url>",
+  "reason": "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"
 }
 ```
 

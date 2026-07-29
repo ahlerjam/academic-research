@@ -52,17 +52,46 @@ Zwischenstufe wie "Suche-im-Buch".
    - Viewer vorhanden → Download-Icon/-Menue oeffnen, unter "Gesamtes
      Digitalisat/Volltext" den Eintrag "PDF/DaFo" waehlen. Oeffnet einen
      neuen Tab auf `download.digitale-sammlungen.de/BOOKS/download.pl?...`.
-6. **Rechtehinweis auf der Download-Zwischenseite bestaetigen** (per Live-Fetch
-   verifiziert, AC1 -- gilt auch bei gemeinfreien Werken, ist keine
-   Zugriffsbeschraenkung): die Seite zeigt zwei Radiobuttons ("Nein"
-   vorbelegt, "Nein"/"Ja" fuer "Ich versichere, den Rechtehinweis gelesen zu
-   haben und bin damit einverstanden"). "Ja" auswaehlen und den zugehoerigen
-   `WEITER`-Button im Abschnitt "Sofort-Download als PDF-Datei" klicken
-   (NICHT den WEITER-Button der DaFo-Jpeg-Option darunter). Erst danach
-   erscheint der eigentliche Link "PDF-Datei oeffnen oder herunterladen
-   (<Groesse>)".
-7. `browser-use download <pdf-link-idx> --to <output_path>`
-8. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB.
+6. **Rechtehinweis auf der Download-Zwischenseite bestaetigen.** Gilt auch bei
+   gemeinfreien Werken und ist keine Zugriffsbeschraenkung. Die Seite zeigt
+   zwei Radiobuttons zu "Ich versichere, den Rechtehinweis gelesen zu haben
+   und bin damit einverstanden": das Feld heisst `xdfz`, vorbelegt ist
+   `value=1` ("Nein"), gebraucht wird `value=2` ("Ja"). Danach den
+   `WEITER`-Button im Abschnitt "Sofort-Download als PDF-Datei" klicken —
+   NICHT den `WEITER`-Button der DaFo-Jpeg-Option darunter. Erst danach
+   erscheint der Link "PDF-Datei oeffnen oder herunterladen (<Groesse>)".
+   Bleibt "Nein" stehen, liefert MDZ nur wieder die Zwischenseite.
+   Live belegt am 2026-07-29 an Goethes *Faust. 1* (`bsb10109182`, Stuttgart
+   1833) — Beleg inkl. Pruefsummen:
+   `evals/free-archive-fetchers/live-verification.json`.
+7. Der PDF-Link traegt einen Zeitstempel-Praefix
+   (`/pdf/<zeitstempel>bsb<id>.pdf`) und ist NICHT stabil. Er muss jedes Mal
+   ueber die Zwischenseite erzeugt werden; eine gemerkte oder geratene
+   PDF-URL ist ein Fehler.
+8. Datei einsammeln (siehe Abschnitt unten).
+9. Validation von der Platte: Datei existiert, erste 5 Bytes = `%PDF-`,
+   Groesse > 10 KB.
+
+## Datei einsammeln
+
+`browser-use` hat **kein** `download`-Unterkommando. Geprueft gegen
+browser-use 0.12.6; die Unterkommandos sind `install, init, setup, doctor,
+open, click, type, input, scroll, back, screenshot, state, switch, close-tab,
+keys, select, upload, eval, extract, hover, dblclick, rightclick, cookies,
+wait, get, python, tunnel, close, sessions, cloud, profile`. Ein Aufruf
+`browser-use download …` bricht mit `invalid choice: 'download'` ab — es
+entsteht nie eine Datei.
+
+Der tatsaechliche Weg:
+
+1. `browser-use click <pdf-link-idx>` — den Link anklicken wie ein Mensch.
+2. Chromium nimmt den Download selbst an (`accept_downloads`,
+   `auto_download_pdfs`) und legt die Datei im Download-Verzeichnis der
+   Session ab: `<TMPDIR>/browser-use-downloads-<id>/`.
+3. Die abgelegte Datei nach `<output_path>` verschieben.
+4. Erst danach pruefen — die verschobene Datei, nicht die Erwartung. Faellt die
+   Pruefung durch: Datei loeschen und `pickup_required` melden. Niemals
+   `success` auf eine ungeprueft gebliebene Datei.
 
 ## Output-Schema
 
@@ -130,6 +159,10 @@ CAPTCHA erkannt:
   bestimmte Auflage — Ausgabejahr immer aus der Titelaufnahme lesen, nie aus
   der Eingabe.
 - Die Download-Zwischenseite verlangt bei JEDEM Digitalisat (auch gemeinfrei)
-  die Rechtehinweis-Bestaetigung ("Ja" statt der Vorgabe "Nein") vor dem
-  eigentlichen PDF-Link — das ist kein Zugriffshinweis und rechtfertigt kein
-  `metadata_only`, sondern ein Pflichtklick im Standard-Flow (Schritt 6).
+  die Rechtehinweis-Bestaetigung (`xdfz=2`, "Ja" statt der Vorgabe "Nein") vor
+  dem eigentlichen PDF-Link — das ist kein Zugriffshinweis und rechtfertigt
+  kein `metadata_only`, sondern ein Pflichtklick im Standard-Flow (Schritt 6).
+- MDZ erzeugt das PDF bei jedem Abruf neu. Zwei Laeufe desselben Bandes haben
+  dieselbe Groesse, aber verschiedene Pruefsummen — es unterscheidet sich
+  einzig das PDF-Trailer-Feld `/ID`. Eine Pruefsumme taugt hier also nicht als
+  Identitaetsnachweis eines Digitalisats.

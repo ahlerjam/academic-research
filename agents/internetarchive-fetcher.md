@@ -56,9 +56,34 @@ zusammensetzen.
    - Weder Download- noch Borrow-Option (reiner Open-Library-Katalogeintrag
      ohne verknuepftes Digitalisat) →
      `{"status": "metadata_only", "source_subagent": "internetarchive-fetcher", "url": "<edition-url>", "reason": "Zugriffsstufe: nur Metadaten"}`
-6. Format "PDF" im Download-Options-Panel waehlen:
-   `browser-use download <pdf-link-idx> --to <output_path>`
-7. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB.
+6. Format "PDF" im Download-Options-Panel waehlen. Es gibt in der Regel zwei
+   PDF-Eintraege: `<id>.pdf` (Farbe, Anker-Text "PDF download") und
+   `<id>_bw.pdf` (Graustufen, "B/W PDF download"). Nimm den Farb-Eintrag —
+   `_bw` ist die Zweitausgabe, nicht der Volltext erster Wahl. Dann die Datei
+   einsammeln (siehe Abschnitt unten).
+7. Validation von der Platte: Datei existiert, erste 5 Bytes = `%PDF-`,
+   Groesse > 10 KB.
+
+## Datei einsammeln
+
+`browser-use` hat **kein** `download`-Unterkommando. Geprueft gegen
+browser-use 0.12.6; die Unterkommandos sind `install, init, setup, doctor,
+open, click, type, input, scroll, back, screenshot, state, switch, close-tab,
+keys, select, upload, eval, extract, hover, dblclick, rightclick, cookies,
+wait, get, python, tunnel, close, sessions, cloud, profile`. Ein Aufruf
+`browser-use download …` bricht mit `invalid choice: 'download'` ab — es
+entsteht nie eine Datei.
+
+Der tatsaechliche Weg:
+
+1. `browser-use click <pdf-link-idx>` — den Link anklicken wie ein Mensch.
+2. Chromium nimmt den Download selbst an (`accept_downloads`,
+   `auto_download_pdfs`) und legt die Datei im Download-Verzeichnis der
+   Session ab: `<TMPDIR>/browser-use-downloads-<id>/`.
+3. Die abgelegte Datei nach `<output_path>` verschieben.
+4. Erst danach pruefen — die verschobene Datei, nicht die Erwartung. Faellt die
+   Pruefung durch: Datei loeschen und `pickup_required` melden. Niemals
+   `success` auf eine ungeprueft gebliebene Datei.
 
 ## Output-Schema
 

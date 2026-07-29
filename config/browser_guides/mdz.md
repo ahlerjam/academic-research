@@ -36,11 +36,16 @@ Kein Login erforderlich.
 
 1. Auf der Detail-/Viewer-Seite: `browser-use state` → Download-Icon/-Menue
    suchen ("PDF-Download", teils mit Seitenbereichs-Auswahl "gesamtes Werk").
-2. Vorhanden → "gesamtes Werk" bzw. Default-Bereich waehlen,
-   `browser-use download <pdf-link-idx> --to <output_path>`.
+2. Vorhanden → "gesamtes Werk" bzw. Default-Bereich waehlen, auf der
+   Zwischenseite den Rechtehinweis auf `xdfz=2` ("Ja") stellen und den
+   `WEITER`-Button der PDF-Option klicken, dann `browser-use click <pdf-link-idx>` — es gibt **kein**
+   `browser-use download`-Unterkommando (verifiziert gegen browser-use 0.12.6).
+   Chromium nimmt den Download selbst an und legt die Datei unter
+   `<TMPDIR>/browser-use-downloads-<id>/` ab; von dort nach `<output_path>`
+   verschieben.
 3. Kein Viewer/kein Digitalisat verlinkt (nur OPAC-Metadaten) →
    `{"status": "metadata_only", "source_subagent": "mdz-fetcher", "url": "<detailseite-url>", "reason": "Zugriffsstufe: nur Metadaten"}`
-4. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB.
+4. Validation von der Platte: erste 5 Bytes = `%PDF-`, Groesse > 10 KB.
 
 ## Ausgabe-Metadaten (Edition)
 

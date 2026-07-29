@@ -1,0 +1,34 @@
+<!-- Woertlich vom Draht uebernommenes Formular der Download-Zwischenseite
+     https://download.digitale-sammlungen.de/BOOKS/download.pl?id=bsb10109182&nr=1&ersteseite=1&letzteseite=158
+     (Live-Abruf 2026-07-29, HTTP 200). Bewusst NICHT aus dem Browser-DOM kopiert:
+     Chromium normalisiert beim Serialisieren alle Attribute auf doppelte
+     Anfuehrungszeichen. Der Server liefert gemischt -- einfache ('xdfz'),
+     doppelte ("klammer") und gar keine (size=3 type=text ... value = 1).
+     Genau daran ist eine erste Fassung dieses Spiegels gescheitert; deshalb
+     steht hier das Original.
+
+     Entscheidend: der Rechtehinweis-Radiobutton heisst `xdfz`, die Vorbelegung
+     ist value='1' ("Nein"), noetig ist value='2' ("Ja"). Der WEITER-Button des
+     Abschnitts "Sofort-Download als PDF-Datei" steht VOR dem der DaFo-Option. -->
+<html lang="de">
+<head><title>Download</title></head>
+<body>
+<form class='linkszentriert' action='/BOOKS/download.pl' method='get' onsubmit='return please_wait(this.submitbutton)'>Goethe, Johann Wolfgang &lt;&lt;von&gt;&gt;,:<br/>Faust Eine Tragödie von Goethe<br/> Stuttgart 1833<br/><hr/><br/>Erstes Bild <input size=3 type=text name='ersteseite' value = 1>&nbsp;&nbsp;&nbsp;&nbsp;Letztes Bild <input size=3 type=text name='letzteseite' value = 158><br/><b>Aktuelle Bildnummer: 1</b><br/><p class='kleininline'>
+
+Die Vorauswahl umfasst den ganzen Titel. Bei Bedarf &auml;ndern Sie bitte die Nummer f&uuml;r das erste und/oder letzte Bild. Bitte beachten Sie den Unterschied zwischen Seiten- und Bildnummer. Die Bildnummern finden Sie in der Navigationsleiste oben rechts. 
+</p><hr/><b>Ich versichere, den Rechtehinweis gelesen zu haben und bin damit einverstanden.</b><br><img alt='arrow' src='/images/pfeil.gif' style='margin-right:.3em;'><a href='https://rightsstatements.org/vocab/NoC-NC/1.0/' target=_blank>Rechtehinweis</a><br><br><input type='radio' name='xdfz' checked='checked' value='1'> Nein&nbsp;&nbsp;<input type='radio' name='xdfz' value='2'> Ja<hr/><br/><br/><br/><input type='hidden' name='id' value='10109182'><input type='hidden' name='ersteseite' value='1'><input type='hidden' name='letzteseite' value='158'><input type='hidden' name='vers' value='d'><input type='hidden' name='nr' value='1'><input type='hidden' name='abschicken' value='ja'><input type='hidden' name='captcha_zeit' value='10109182'><div id="klammer"><p>Folgende Optionen werden für dieses Digitalisat angeboten:</p><div id="linkerturm"><p>PDF &rarr;</p><br/><br/><br/><p>DaFo &rarr;</p></div><div id="rechterturm"><div class='auswahl'>
+<p>Sofort-Download als PDF-Datei</p>
+<ul>
+<li>Bereitstellung sofort</li>
+</ul>
+<p style='background-color:white;'><input class='weiterbutton' type=submit name='submitbutton' onclick="document.getElementById('overlay').style.display='';window.scrollTo(0,0);this.form.submit(); this.disabled=true; this.value='Sending…';" value='WEITER'></p>
+</div>
+<div class='auswahl'><p>Download als Jpeg-Dateien (300 dpi)&nbsp; <input type="checkbox" name="dafoocr" value="1"> mit OCR-Text</p>
+<ul>
+<li>Bereitstellung innerhalb ca. 4 Wochen</li>
+<li>Mail-Adresse*: <input type="text" name="dafoemail" size="25"></li>
+</ul>
+<div class="hinweis">* Ihre Mailadresse dient der Benachrichtigung zur Abholung Ihrer Daten. <br/><br/><a href="https://dafo.digitale-sammlungen.de/impdat.php?w=1" target=_blank>Datenschutzerkl&auml;rung des DaFo-Dienstes zu den personenbezogenen Daten</a>
+</div><input type='hidden' name='dafoumleitung' value='ja' disabled><p style='background-color:white;'><input class='weiterbutton' type=submit name='submitbutton' id="hicks" onClick="javascript:if(document.getElementsByName('dafoemail')[0].value==''){alert('E-Mail-Adresse fehlt');return false;}else{document.getElementsByName('dafoumleitung')[0].disabled=false;}" value='WEITER'></p></div></div></div></form>
+</body>
+</html>
