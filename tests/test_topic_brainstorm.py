@@ -13,6 +13,8 @@ Diese Tests decken:
 - Kein Fixed-DB-Fallback mehr, keine Feld-Normalisierung (AC3)
 - `reason`-Feld pro Kandidat (AC2)
 - Fachabhaengigkeit wird durchgereicht statt auf eine Domaene normalisiert (AC1/AC4)
+- Ausgefuehrter Nachweis fuer die Eval-Kontrast-Prompts tb-04/tb-05 ohne
+  API-Key (Fix-Runde zu PR #484, siehe TestAC1ExecutedEvidenceForEvalPrompts)
 """
 
 from __future__ import annotations
@@ -22,9 +24,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.evals.eval_runner import EVALS_ROOT, check_expected
+
 _WORKTREE_ROOT = Path(__file__).parent.parent
 
 _SCORER = _WORKTREE_ROOT / "skills" / "topic-brainstorm" / "scripts" / "scorer.py"
+_EVALS_JSON = EVALS_ROOT / "topic-brainstorm" / "evals.json"
 
 # ---------------------------------------------------------------------------
 # Fixtures: zwei fachlich disjunkte Themenkandidaten-Sets (vom Modell geliefert)
@@ -346,6 +351,263 @@ class TestFieldDependency:
             "BWL- und Informatik-Themenvorschlaege ueberschneiden sich — "
             "deutet auf Normalisierung/Fixed-Set hin"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC1 (Fix-Runde PR #484): ausgefuehrter Nachweis fuer die Eval-Kontrast-Prompts
+# ---------------------------------------------------------------------------
+#
+# `evals/topic-brainstorm/evals.json` traegt seit diesem Issue zwei
+# Fach-Kontrast-Prompts (tb-04 Maschinenbau/additive Fertigung, tb-05
+# BWL/Nachhaltigkeit). Der Komponentenstatus ist laut `docs/evals/STRATEGY.md`
+# `structural`/API-gated: ohne `ANTHROPIC_API_KEY` skippt `test_triggers.py`
+# beide Prompts vollstaendig (Issue #55: kein Budget, bewusst nicht erneut
+# angefordert). Es existierte deshalb kein ausgefuehrter Nachweis, dass reale
+# Anfragen aus diesen zwei Faechern beobachtbar unterschiedliche, fachlich
+# passende Vorschlaege liefern (Fix-Runde-Finding zu PR #484).
+#
+# Diese Tests liefern den staerksten ohne API-Budget erreichbaren Nachweis:
+# echte, fach- und interessenspassend entworfene Kandidaten (wie SKILL.md
+# Schritt 2 sie vom Modell verlangt) werden per echtem Scorer-Subprocess
+# verarbeitet und mit derselben Pruefunktion (`check_expected`) gegen dasselbe
+# Erfolgskriterium bewertet, das der jeweilige Eval-Prompt selbst definiert
+# (`expected`-Objekt aus evals.json) — keine im Test duplizierte Regex-Logik.
+
+
+def _prompt_expected(prompt_id: str) -> dict:
+    data = json.loads(_EVALS_JSON.read_text(encoding="utf-8"))
+    for prompt in data["prompts"]:
+        if prompt["id"] == prompt_id:
+            return prompt["expected"]
+    raise AssertionError(f"Kein Eval-Prompt mit id={prompt_id!r} in {_EVALS_JSON}")
+
+
+def _candidate_text(topic: dict) -> str:
+    """Durchsuchbarer Text eines gescorten Kandidaten (Titel + Keywords + Begruendung)."""
+    return " ".join(
+        [
+            topic.get("title", ""),
+            " ".join(topic.get("keywords", [])),
+            topic.get("reason", ""),
+        ]
+    )
+
+
+# Kandidaten fuer tb-04 (Maschinenbau, Interesse "additive Fertigung", 6 Monate,
+# Public Datasets) — fach- und interessenspassend entworfen nach demselben
+# Verfahren, das SKILL.md Schritt 2 vom Modell verlangt.
+_MASCHINENBAU_TOPICS: list[dict] = [
+    {
+        "title": "Topologieoptimierung von generativ gefertigten Leichtbaukomponenten im Maschinenbau",
+        "keywords": ["topologieoptimierung", "additive fertigung", "leichtbau", "maschinenbau"],
+        "reason": "Passt zum Maschinenbau-Studium, da Konstruktionsmethodik und Leichtbau "
+        "Kernkompetenzen sind, und zum Interesse 'additive Fertigung' durch den direkten "
+        "3D-Druck-Bezug.",
+        "base_feasibility": 7.0,
+        "base_novelty": 7.0,
+        "base_career_fit": 8.5,
+        "research_questions": [
+            "Welchen Masseeinsparungseffekt erzielt Topologieoptimierung bei additiv "
+            "gefertigten Bauteilen gegenueber konventionell konstruierten?",
+            "Wie wirkt sich die Bauteilorientierung beim 3D-Druck auf die erzielte "
+            "Steifigkeit aus?",
+        ],
+        "pilot_papers": [
+            "Zhu et al. (2021): Topology optimization in additive manufacturing, CIRP Annals"
+        ],
+    },
+    {
+        "title": "Prozessparameteroptimierung beim Selective Laser Melting fuer Aluminiumlegierungen",
+        "keywords": ["slm", "additive fertigung", "prozessparameter", "maschinenbau"],
+        "reason": "Klassisches Fertigungstechnik-Thema im Maschinenbau, direkt im "
+        "Interessensfeld additive Fertigung verankert.",
+        "base_feasibility": 6.0,
+        "base_novelty": 6.5,
+        "base_career_fit": 8.0,
+        "research_questions": [
+            "Welche Laserleistungs-/Scangeschwindigkeits-Kombinationen minimieren "
+            "Porositaet beim SLM von AlSi10Mg?",
+            "Wie beeinflussen Prozessparameter die mechanischen Eigenschaften additiv "
+            "gefertigter Bauteile?",
+        ],
+        "pilot_papers": [
+            "Aboulkhair et al. (2014): Reducing porosity in AlSi10Mg parts, Additive Manufacturing"
+        ],
+    },
+    {
+        "title": "Qualitaetssicherung additiv gefertigter Bauteile mittels In-situ-Prozessueberwachung",
+        "keywords": [
+            "additive fertigung",
+            "qualitaetssicherung",
+            "prozessueberwachung",
+            "maschinenbau",
+        ],
+        "reason": "Verbindet das Maschinenbau-Kernthema Fertigungsmesstechnik mit dem "
+        "Interesse additive Fertigung; gute Datenlage durch oeffentliche Sensor-Zeitreihen.",
+        "base_feasibility": 7.5,
+        "base_novelty": 7.0,
+        "base_career_fit": 7.5,
+        "research_questions": [
+            "Welche In-situ-Sensordaten korrelieren am staerksten mit Bauteildefekten "
+            "beim 3D-Druck?",
+            "Wie gut lassen sich Defekte anhand oeffentlich verfuegbarer Prozessdatensaetze "
+            "frueh erkennen?",
+        ],
+        "pilot_papers": [
+            "Grasso & Colosimo (2017): Process defects and in situ monitoring in AM, "
+            "Measurement Science and Technology"
+        ],
+    },
+]
+
+# Kandidaten fuer tb-05 (BWL, Interesse "Nachhaltigkeit", 6 Monate,
+# Public Datasets) — fach- und interessenspassend entworfen nach demselben
+# Verfahren, das SKILL.md Schritt 2 vom Modell verlangt.
+_BWL_NACHHALTIGKEIT_TOPICS: list[dict] = [
+    {
+        "title": "ESG-Reporting-Qualitaet und Kapitalkosten bei boersennotierten Mittelstandsunternehmen",
+        "keywords": ["esg", "nachhaltigkeit", "reporting", "bwl"],
+        "reason": "Kernthema der BWL-Finanzwirtschaft mit direktem Bezug zum Interesse "
+        "Nachhaltigkeit ueber ESG-Kriterien.",
+        "base_feasibility": 7.0,
+        "base_novelty": 6.5,
+        "base_career_fit": 8.0,
+        "research_questions": [
+            "Wie haengt die ESG-Reporting-Qualitaet mit den Fremdkapitalkosten "
+            "mittelstaendischer Unternehmen zusammen?",
+            "Welche ESG-Kennzahlen sind fuer Investoren am aussagekraeftigsten?",
+        ],
+        "pilot_papers": [
+            "Friede et al. (2015): ESG and financial performance, Journal of Sustainable "
+            "Finance & Investment"
+        ],
+    },
+    {
+        "title": "Nachhaltige Lieferkettengestaltung im deutschen Mittelstand unter dem Lieferkettensorgfaltspflichtengesetz",
+        "keywords": ["nachhaltigkeit", "lieferkette", "lksg", "bwl"],
+        "reason": "Betriebswirtschaftliches Kernthema Supply-Chain-Management, unmittelbar "
+        "am Interesse Nachhaltigkeit und aktueller Regulatorik ausgerichtet.",
+        "base_feasibility": 6.5,
+        "base_novelty": 7.0,
+        "base_career_fit": 8.5,
+        "research_questions": [
+            "Wie passen mittelstaendische Unternehmen ihre Lieferkettenprozesse an das LkSG an?",
+            "Welche Kosten entstehen durch die Umsetzung von Sorgfaltspflichten in der "
+            "Lieferkette?",
+        ],
+        "pilot_papers": [
+            "Seuring & Mueller (2008): Sustainable supply chain management, Journal of "
+            "Cleaner Production"
+        ],
+    },
+    {
+        "title": "Konsumentenakzeptanz von Kreislaufwirtschaftsmodellen im deutschen Einzelhandel",
+        "keywords": ["kreislaufwirtschaft", "nachhaltigkeit", "konsumentenverhalten", "bwl"],
+        "reason": "Marketing-/Konsumentenverhaltensthema aus der BWL mit klarem "
+        "Nachhaltigkeitsbezug und guter Umfragedatenlage.",
+        "base_feasibility": 7.5,
+        "base_novelty": 6.0,
+        "base_career_fit": 7.5,
+        "research_questions": [
+            "Welche Faktoren beeinflussen die Akzeptanz von Wiederverkaufs-/"
+            "Reparaturangeboten im Einzelhandel?",
+            "Wie unterscheidet sich die Zahlungsbereitschaft fuer kreislauffaehige "
+            "Produkte nach Zielgruppe?",
+        ],
+        "pilot_papers": [
+            "Wastling et al. (2018): Consumer acceptance of circular economy business "
+            "models, Sustainability"
+        ],
+    },
+]
+
+
+class TestAC1ExecutedEvidenceForEvalPrompts:
+    """Ausgefuehrter Nachweis fuer tb-04/tb-05, ohne API-Key reproduzierbar."""
+
+    def test_at_least_three_candidates_per_field(self):
+        """SKILL.md Schritt 2 verlangt 3-5 Kandidaten je Anfrage."""
+        assert len(_MASCHINENBAU_TOPICS) >= 3, (
+            "Zu wenige Maschinenbau-Kandidaten fuer den tb-04-Nachweis "
+            "(SKILL.md verlangt 3-5 Kandidaten pro Anfrage)"
+        )
+        assert len(_BWL_NACHHALTIGKEIT_TOPICS) >= 3, (
+            "Zu wenige BWL-Kandidaten fuer den tb-05-Nachweis "
+            "(SKILL.md verlangt 3-5 Kandidaten pro Anfrage)"
+        )
+
+    def test_maschinenbau_candidates_satisfy_tb04_expected(self):
+        """Jeder Maschinenbau-Kandidat erfuellt das Erfolgskriterium von tb-04."""
+        expected = _prompt_expected("tb-04")
+        topics = _run_scorer(
+            _MASCHINENBAU_TOPICS,
+            interests=["additive Fertigung"],
+            budget="6 Monate",
+            data_access="Public Datasets",
+        )
+        assert len(topics) == len(_MASCHINENBAU_TOPICS)
+        for t in topics:
+            assert check_expected(_candidate_text(t), expected), (
+                f"Kandidat '{t.get('title')}' erfuellt nicht das tb-04-Erfolgskriterium "
+                f"{expected!r}"
+            )
+
+    def test_bwl_nachhaltigkeit_candidates_satisfy_tb05_expected(self):
+        """Jeder BWL-Kandidat erfuellt das Erfolgskriterium von tb-05."""
+        expected = _prompt_expected("tb-05")
+        topics = _run_scorer(
+            _BWL_NACHHALTIGKEIT_TOPICS,
+            interests=["Nachhaltigkeit"],
+            budget="6 Monate",
+            data_access="Public Datasets",
+        )
+        assert len(topics) == len(_BWL_NACHHALTIGKEIT_TOPICS)
+        for t in topics:
+            assert check_expected(_candidate_text(t), expected), (
+                f"Kandidat '{t.get('title')}' erfuellt nicht das tb-05-Erfolgskriterium "
+                f"{expected!r}"
+            )
+
+    def test_maschinenbau_and_bwl_titles_disjoint_from_each_other_and_existing_fixtures(self):
+        """Fach-Kontrast auch ggue. den generischen BWL/Informatik-Fixtures — kein Recycling."""
+        maschinenbau_topics = _run_scorer(
+            _MASCHINENBAU_TOPICS,
+            interests=["additive Fertigung"],
+            budget="6 Monate",
+            data_access="Public Datasets",
+        )
+        bwl_topics = _run_scorer(
+            _BWL_NACHHALTIGKEIT_TOPICS,
+            interests=["Nachhaltigkeit"],
+            budget="6 Monate",
+            data_access="Public Datasets",
+        )
+        maschinenbau_titles = {t["title"] for t in maschinenbau_topics}
+        bwl_titles = {t["title"] for t in bwl_topics}
+        assert maschinenbau_titles.isdisjoint(bwl_titles), (
+            "Maschinenbau- und BWL/Nachhaltigkeit-Vorschlaege ueberschneiden sich"
+        )
+        existing_titles = {t["title"] for t in (*_BWL_TOPICS, *_INFORMATIK_TOPICS)}
+        assert maschinenbau_titles.isdisjoint(existing_titles), (
+            "Maschinenbau-Kandidaten wiederholen Titel aus den generischen Fixtures"
+        )
+        assert bwl_titles.isdisjoint(existing_titles), (
+            "BWL/Nachhaltigkeit-Kandidaten wiederholen Titel aus den generischen Fixtures"
+        )
+
+    def test_reasons_explicitly_name_the_stated_field(self):
+        """Jede Begruendung nennt das genannte Fach ausformuliert, nicht nur ein Schlagwort."""
+        for topic in _MASCHINENBAU_TOPICS:
+            assert "maschinenbau" in topic["reason"].lower(), (
+                f"Begruendung von '{topic['title']}' nennt nicht 'Maschinenbau': "
+                f"{topic['reason']!r}"
+            )
+        for topic in _BWL_NACHHALTIGKEIT_TOPICS:
+            reason_lower = topic["reason"].lower()
+            assert "bwl" in reason_lower or "betriebswirtschaft" in reason_lower, (
+                f"Begruendung von '{topic['title']}' nennt nicht 'BWL'/'Betriebswirtschaft': "
+                f"{topic['reason']!r}"
+            )
 
 
 # ---------------------------------------------------------------------------
