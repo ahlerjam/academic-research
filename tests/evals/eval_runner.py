@@ -2,6 +2,7 @@
 
 Laedt Eval-JSON-Dateien, ruft die Claude-API auf und prueft Expectations.
 """
+
 from __future__ import annotations
 
 import json
@@ -110,17 +111,44 @@ def call_claude(system: str, user: str, model: str = "claude-sonnet-4-6") -> str
         system=system,
         messages=[{"role": "user", "content": user}],
     )
-    return "".join(
-        getattr(block, "text", "") for block in resp.content
-    )
+    return "".join(getattr(block, "text", "") for block in resp.content)
+
+
+def _as_patterns(value: Any) -> list[str]:
+    """Normalisiert ``value``/``reject`` auf eine Liste von Mustern.
+
+    Ein einzelner String bleibt abwaertskompatibel; eine Liste bedeutet UND
+    (alle Muster muessen zutreffen) bzw. bei ``reject`` NOR (keines darf
+    zutreffen).
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    raise ValueError(f"expected.value/reject muss str oder list[str] sein, ist: {type(value)}")
 
 
 def check_expected(output: str, expected: dict[str, Any]) -> bool:
+    """Prueft ``output`` gegen eine expected-Definition aus einer evals.json.
+
+    ``value`` darf eine Liste sein (alle Muster muessen zutreffen). Optional
+    definiert ``reject`` Muster, von denen **keines** zutreffen darf --
+    Negativbedingungen, ohne die ein Kriterium nur Formattreue misst statt
+    Verhalten (Issue #454: eine rein bestaetigende Antwort erfuellte die
+    sparring-partner-Erwartungen, obwohl der Agent widersprechen soll).
+    """
     t = expected.get("type")
+    rejects = _as_patterns(expected.get("reject"))
+    if t in {"substring", "regex"} and any(re.search(r, output) for r in rejects):
+        return False
     if t == "substring":
-        return expected["value"] in output
+        return all(v in output for v in _as_patterns(expected["value"]))
     if t == "regex":
-        return bool(re.search(expected["value"], output))
+        return all(re.search(v, output) for v in _as_patterns(expected["value"]))
+    if rejects:
+        raise ValueError(f"expected.reject wird fuer type={t!r} nicht unterstuetzt")
     if t == "json_field":
         try:
             parsed = json.loads(output)
@@ -202,9 +230,7 @@ def _jsonpath_check(obj: Any, expected: dict[str, Any]) -> bool:
         segments = re.findall(r"\.(\w+)|\[(\d+)\]", normalized)
         # Ohne Segmente, aber nicht-leerer Path = Syntaxfehler (z.B. "a.b" ohne fuehrendes .)
         if not segments:
-            raise ValueError(
-                f"Ungueltiger JSONPath: {path!r} - erwartet '$', '$.key' oder '.key'"
-            )
+            raise ValueError(f"Ungueltiger JSONPath: {path!r} - erwartet '$', '$.key' oder '.key'")
         for key, idx in segments:
             if key:
                 if not isinstance(current, dict) or key not in current:

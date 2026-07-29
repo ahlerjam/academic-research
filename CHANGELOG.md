@@ -10,6 +10,71 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Fetcher-Agents für Cambridge Core, Oxford Academic und JSTOR (#449):** Drei
+  neue Verlags-Subagenten (`agents/cambridge-core.md`, `agents/oxford-academic.md`,
+  `agents/jstor.md`) nach dem `springer-book`/`degruyter`-Muster: Lizenz-Prüfung
+  gegen `~/.academic-research/library-profiles/active.yaml` zuerst, danach
+  Discovery → OA-Badge-Erkennung → Auth-Delegation an `auth-helper` bei
+  fehlendem OA-Badge → Download, identisches 5-Status-Output-Schema
+  (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`). Jeder
+  Agent bekommt einen passenden `config/browser_guides/*.md`. `jstor` läuft
+  bewusst konservativ (Anti-Scraping: hoch — JSTORs Nutzungsbedingungen
+  untersagen automatisiertes/systematisches Herunterladen ausdrücklich,
+  `about.jstor.org/terms`); bei wiederholtem CAPTCHA meldet der Agent ehrlich
+  `status: captcha` statt das Tempo zu erhöhen. `agents/book-fetcher.md`
+  (Schritt-4-Tabelle + Tools-Frontmatter) und `tests/helpers/book_fetcher_router.py`
+  (`PUBLISHER_DOMAIN_MAP`) wurden additiv um die drei neuen Hosts
+  (`cambridge.org`, `academic.oup.com`, `jstor.org`) erweitert, ohne die
+  bestehende Tier-Reihenfolge umzusortieren. Reale Uni-Profile
+  (`config/library-profiles/*.yaml`) bleiben unverändert — `cambridge.org`/
+  `academic.oup.com` sind dort in keinem der fünf Profile hinterlegt (nur
+  `jstor.org` ist bereits überall gelistet); Operatoren müssen `licensed_sites`
+  bei Bedarf manuell ergänzen. Agent-Zähler 20 → 23 (`docs/reference/agents.md`,
+  `AGENTS.md`, `README.md`), Book-Fetcher-Subagenten-Zähler 10 → 13
+  (`plugin.json`/`marketplace.json`, gegen `agents/book-fetcher.md`-Frontmatter
+  geprüft von `tests/test_issue_453_manifest_honesty.py`). **Fixrunde PR #500
+  (AC1 real belegt statt nur behauptet):** Die Review bemängelte zu Recht, dass
+  `pf-06`/`pf-07`/`pf-08` in `evals/publisher-fetchers/evals.json` nur eine
+  triviale Existenzprüfung des `status`-Felds waren (auch von `no_match`/
+  `captcha` erfüllt) und nie ausgeführt wurden. Alle drei Fälle tragen jetzt
+  einen konkreten Zielwert (`equals:success`/`equals:captcha`). Dabei
+  aufgedeckt: die ursprüngliche Oxford-Academic-Testfall-DOI
+  (`10.1093/oso/9780190247249.001.0001`) gehört real zu „Philosophies of
+  Qualitative Research" (Brinkmann 2017), einem kostenpflichtigen OSO-Buch ohne
+  OA-Badge — gegengeprüft über Crossref-Content-Negotiation, also unabhängig von
+  der Verlagsseite; korrigiert auf einen realen Commit-to-Open-Titel.
+  **Zweite Fixrunde PR #500 (Beleg als Artefakt statt als Prosa):** Die erste
+  Fixrunde hat die drei Läufe wirklich gefahren, den Nachweis aber nur als
+  Fließtext in `evals.json`/`CHANGELOG.md` abgelegt — mitsamt
+  JSTOR-Block-Referenz, Client-IP und Uhrzeit. Diese drei Angaben werden pro
+  Request neu vergeben (zwei Abrufe im Sekundenabstand liefern zwei
+  verschiedene Block-Referenzen) und sind deshalb von niemandem nachprüfbar,
+  auch nicht vom Autor. Abgesichert war das ausgerechnet durch einen Test, der
+  prüfte, ob das Wort „verifiziert" in der Notiz vorkommt — er blieb grün, wenn
+  man die Notiz durch eine beliebige Unwahrheit ersetzte. **Präzise Zahlen sind
+  kein Beleg, solange sie niemand nachfahren kann.** Der Nachweis liegt jetzt
+  als maschinell prüfbares Artefakt in
+  `evals/publisher-fetchers/live-verification.json`: pro Agent URL-Kette,
+  HTTP-Status, Bytes, SHA-256 und die mit `pypdf` aus dem geöffneten Dokument
+  gelesene Seitenzahl. Nachfahrbar mit `RUN_LIVE_PUBLISHER_FETCH=1 uv run
+  pytest tests/test_issue_449_live_fetch.py` (opt-in, bewusst nicht im CI — ein
+  Ausfall der Verlage darf die Pipeline nicht rot färben). Belegt sind damit:
+  Cambridge Core liefert anonym ein 228-Seiten-PDF, byteweise stabil über zwei
+  Abrufe; Oxford Academic ein 225-Seiten-PDF, dessen Seite 1 den verlagseigenen
+  Stempel „Downloaded … **by guest**" trägt — Oxfords eigene Kennzeichnung der
+  nicht angemeldeten Sitzung und damit der eigentliche Beleg für den
+  Login-freien Bezug (die Prüfsumme ist hier bewusst *kein* Kriterium, weil der
+  Stempel das Abrufdatum enthält und die Bytes täglich wechseln). JSTOR
+  antwortet am Volltext-Endpunkt mit HTTP 403 und der PerimeterX-Challenge
+  „JSTOR: Access Check"; die Seite ist als Fixture eingecheckt
+  (`tests/fixtures/publisher_fetchers/jstor_access_check.html`, flüchtige
+  Felder neutralisiert — auch damit keine Client-IP im Repo landet) und wird
+  hermetisch gegen die Captcha-Erkennung des Repos gefahren. Damit prüft
+  `tests/test_issue_449_fetcher_evidence.py` die behauptete Tatsache statt ihrer
+  Formulierung: keine Assertion dort prüft mehr den Wortlaut einer Notiz, und
+  einmalige Bezeichner (Block-Referenz, IP, Uhrzeit) sind als Beleg verboten.
+  Status bleibt `structural` (im CI nicht hermetisch fahrbar) — der Beleg ist
+  jetzt aber für jeden reproduzierbar.
 - **Word-/Slide-Export (#446):** Zwei neue Skill+Command-Paare, strukturell analog zu `latex-export`/`commands/latex.md`, beide auf dem externen `document-skills`-Plugin als Renderer-Backend. `skills/word-export/` (`/academic-research:word --kapitel <n>|all --output <datei.docx> [--format docx|pdf] [--template <uni>]`) erzeugt ein `.docx` mit echten Formatvorlagen (`HeadingLevel.*` statt manuellem Fett/Größe), Titelblatt, Inhaltsverzeichnis, eidesstattlicher Erklärung und optional einer PDF-Konvertierung derselben Datei via `soffice --convert-to pdf`. `skills/slide-export/` (`/academic-research:slides --kapitel <n>|all --output <datei.pptx> [--kolloquium|--konferenz]`) erzeugt einen Foliensatz mit genau einer Kernaussage pro Kapitel. Die Bibliografie-Auswahl wird **nicht** dupliziert: `skills/word-export/scripts/collect_references.py` importiert `get_all_papers()` aus `latex-export/scripts/build_bib.py` (dieselbe Vault-Query, nur anders formatiert) — ein Objekt-Identitäts-Test sichert das gegen künftigen Nachbau ab. Die Zitierstil-Regeln werden zur Laufzeit unverändert aus `citation-extraction/references/<style>.md` geladen (Zuordnung über `Zitationsstil` in `academic_context.md`, Default `apa.md`); `collect_references.py` selbst enthält keine eigenen Stilregel-Strings. `\cite{key}`/`\citep[…]{key}`-Marker aus `kapitel/*.md` (Issue #386) werden für den docx-Pfad zu Klartext-Kurzzitaten `(Nachname Jahr)` aufgelöst, unbekannte Keys sichtbar als `(? key)` statt lautlos zu verschwinden. `skills/slide-export/scripts/build_slide_deck.py` importiert `resolve_chapters()` aus `latex-export/scripts/export_thesis.py` (gleiche `--kapitel <n>|all`-Semantik) und extrahiert je Kapitel Titel (erste H1) + ersten Kernsatz nach der Überschrift; fehlt Fließtext, bleibt die Kernaussage leer statt fabriziert. Beide Commands übernehmen das Backend-Präflight-Muster aus `commands/excel.md` (`<!-- docx-backend:start/end -->`/`<!-- pptx-backend:start/end -->`, Verfügbarkeitsprüfung vor dem ersten Skill-Aufruf, Nachinstallations-Befehle) — bei fehlendem `document-skills`-Plugin bricht der Export mit einer verständlichen Meldung ab statt mit einem Stacktrace. `submission-checker/SKILL.md` verweist neu auf `word-export` für die Formatvorlagen-Pflicht. Da `document-skills:docx`/`:pptx` im CI-Runner nicht installiert sind (gleiche Lücke wie bei `xlsx`, #445), ist die echte Dokument-/Deck-Erzeugung nicht CI-fahrbar — getestet sind Bib-Selektion, Stilregel-Ladepfad, Cite-Marker-Auflösung, Kapitel-/Kernaussage-Extraktion und die Backend-Präflight-Struktur als reine Python-/Text-Funktionen (`tests/test_word_export.py`, `tests/test_word_export_skill_md.py`, `tests/test_word_command_frontmatter.py`, `tests/test_slide_export.py`, `tests/test_slide_command_frontmatter.py`). Skill-Zahl 32 → 34, Slash-Commands 9 → 11 (README-Badges, `docs/reference/`, `plugin.json`/`marketplace.json`-Description synchron aktualisiert); `tests/baselines/skill_sizes.json`/`tokens.json` und `docs/evals/STRATEGY.md` um die zwei neuen `structural`-Komponenten ergänzt. **Fixrunde PR #488 (vier live reproduzierte Defekte am ausgelieferten Aufrufweg):** (1) `commands/word.md`/`commands/slides.md` öffneten den vorbereitenden Python-Block mit einem *quotierten* Heredoc (`python3 - <<'PY'`). Ein quotierter Delimiter schaltet jede Shell-Expansion ab — `${CLAUDE_PLUGIN_ROOT}`, `$KAPITEL` und `$VAULT_DB_PATH` blieben literal stehen, `sys.path.insert()` bekam ein nicht existierendes Verzeichnis und der erste Import starb mit einem rohen `ModuleNotFoundError`, **bevor** `document-skills:docx`/`:pptx` überhaupt erreicht wurde (AC1/AC3/AC4/AC6). Statt den Heredoc zu reparieren, bekommen beide Skripte jetzt eine echte `argparse`-CLI und werden wie `latex-export` nach #467/#485 als normale Kommandozeile aufgerufen (`collect_references.py --kapitel <n>|all --payload <datei.json>`, `build_slide_deck.py --kapitel … --payload … --rahmen …`) — damit entfällt die Heredoc-Quoting-Klasse ganz, und Fehler kommen als `FEHLER: …` auf stderr statt als Stacktrace (AC6). (2) `$VAULT_DB_PATH` war in `commands/word.md` nirgends definiert; die Entrymengen-Garantie docx↔LaTeX (AC3) wurde vom Command nie hergestellt. Der Vault-Pfad wird jetzt im Skript über `academic_vault.db.default_db_path()` aufgelöst — exakt der Auflöser, den `export_thesis.py` für die `.bib` nutzt (#190); `--vault-db` bleibt als Test-Override. (3) `resolve_cite_markers()` schlug bei Mehrfachzitaten die komplette Key-Liste als **einen** Key nach: `\cite{a,b}` wurde selbst bei zwei im Vault bekannten Papers zu `(? a,b)` statt zu zwei Kurzbelegen (AC2). Jetzt Key für Key aufgelöst und zu `(Smith 2023; Jones et al. 2022)` zusammengefasst; die Kommando-Allowlist kommt neu als `LATEX_CITATION_COMMANDS` aus `render_tex.py` (Import statt zweiter handgepflegter Liste). (4) Beim Live-Lauf zusätzlich gefunden: `slide-export` schrieb rohe LaTeX-Marker wörtlich als Folien-Kernaussage (`\cite{smith2023,jones2022}` auf einer PowerPoint-Folie), und der Punkt in einem Locator (`\citep[S. 12]{k}`) zerschnitt die Erste-Satz-Erkennung an der falschen Stelle. `strip_latex_markers()` entfernt die Marker vor der Satzzerlegung (kein Auflösen — `slide-export` führt bewusst kein Literaturverzeichnis und hat keinen Vault-Zugriff). Neuer Regressionstest `tests/test_issue_446_documented_invocation.py` führt die `bash`-Blöcke aus `commands/word.md`/`commands/slides.md` **wirklich aus** (echtes Mini-Projekt mit `kapitel/`, `academic_context.md`, befülltem Vault) und sichert zwei Invarianten ab: quotierte Heredocs dürfen repo-weit keine Shell-Variablen referenzieren, und beide Commands dürfen keine undefinierten Shell-Variablen benutzen. `tests/baselines/skill_sizes.json` steigt um den Netto-Zuwachs der beiden SKILL.md (word-export 7769 → 8012, slide-export 5590 → 5734). **Zweite Fixrunde PR #488 (gemeinsame Ursache dreier Review-Funde):** AC1/AC2/AC4 waren strukturell unbelegbar, weil **kein Repo-Code die Zieldatei je erzeugt hat** — die Pipeline endete bei einer JSON-Payload, das Rendern war Prosa-Anweisung an den Agenten. Der Nachweisversuch der ersten Fixrunde landete deshalb als Test-only-Renderer *in* `tests/test_word_export_docx_render.py`/`tests/test_slide_export_pptx_render.py` und bewies nur, dass der Test ein `.docx`/`.pptx` schreiben kann. Gegenmittel ist das Muster des funktionierenden Geschwister-Skills `latex-export`, wo `render_tex.py` die `.tex` wirklich schreibt: neu `skills/word-export/scripts/render_docx.py` und `skills/slide-export/scripts/render_pptx.py` erzeugen `.docx`/`.pptx` deterministisch als Repo-Code (`python-docx`/`python-pptx` wandern dafür von `[project.optional-dependencies].dev` in die Runtime-Deps von `pyproject.toml` **und** `scripts/requirements.txt`). Beide Commands bekommen einen ausführbaren `### Schritt 4`-Block, der den Renderer aufruft; `document-skills:docx`/`:pptx` bleiben deklarierte Plugin-Abhängigkeit und übernehmen nur noch optionale Layout-Verfeinerung **auf der erzeugten Datei**. Die Zitierstil-Formatierung bleibt bewusst draußen: `render_docx.py` übernimmt `payload["bibliography"]` (vom Agenten aus `style_rules` formatiert) zeichengenau und in unveränderter Reihenfolge und bricht mit `FEHLER:` ab, wenn der Vault Papers liefert, die Einträge aber fehlen — ein Verzeichnis in einem nicht belegten Format wäre Fabrikation. Titelblatt-Angaben kommen aus dem neuen Payload-Feld `context` (`collect_references.parse_context_fields()`, nur wirklich ausgefüllte `academic_context.md`-Felder; fehlende erscheinen als sichtbares `[bitte ergänzen]`). Neuer Nachweis `tests/test_issue_446_render_pipeline.py` fährt ausschließlich die dokumentierten bash-Blöcke (Schritt 3 + Schritt 4) und öffnet die entstandene Datei wieder: OPC-Zip-Integrität, echte `Heading 1`/`Heading 2`/`Heading 6`-Formatvorlagen, Word-native TOC-Feldfunktion, aufgelöste Kurzbelege im Fließtext, APA- **und** Harvard-Literatureinträge zeichengenau unter dem Verzeichnis-Heading, eine Folie je Kapitel im `.pptx` — plus echte LibreOffice-Konvertierung, wo `soffice` verfügbar ist. Die beiden Vorrunden-Suiten rufen jetzt denselben Produktionsrenderer auf statt eigenen Rendering-Codes. `tests/baselines/skill_sizes.json`/`tokens.json` steigen um den Netto-Zuwachs der beiden SKILL.md (word-export 8012 → 9233 bzw. 1568 → 1959, slide-export 5734 → 6665 bzw. 1023 → 1317) — dieselbe Baseline, die dieser PR für die neuen Skills selbst eingeführt hat, kein Aufweichen eines historischen Guards.
 - **Neuer Skill `parallel-screening` + Agent `screening-judge` (#460):** Die
   gleichförmigen Schritte der Recherche — Titel-/Abstract-Screening vieler
@@ -50,6 +115,55 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Interpretation der Matrix bleibt explizit out of scope (Meta-Analyse-Pfad).
   Skill-Zähler 30 → 31 in `docs/reference/skills.md`, `README.md` und
   `.claude-plugin/plugin.json`.
+
+- **`sparring-partner`-Agent als wissenschaftlicher Denk- und Impulsgeber (#454):**
+  Neuer Agent `agents/sparring-partner.md` (`model: opus`), der bei konzeptioneller
+  Arbeit widerspricht statt auszuführen: benennt Argumentationslücken, blinde
+  Flecken, Gegenpositionen und Anschlussfragen zu Themenzuschnitt, Forschungsfrage
+  und Argumentationslinie. Liest `./academic_context.md` und fragt `vault.search`/
+  `vault.get_paper` ab, um am konkreten Material zu argumentieren (Read-only,
+  kein `Write`); erzwingt ein festes Antwortformat
+  (`SCHWÄCHE:`/`ALTERNATIVE:`/`GEGENPOSITION:`/`ANSCHLUSSFRAGEN:`) statt
+  Fließtext und lehnt Kapitel-Prosa-Anfragen mit Verweis ab, statt selbst Text zu
+  produzieren. Abgrenzungsabschnitt benennt `advisor`, `research-question-refiner`,
+  `methodology-advisor` und `quality-reviewer` namentlich; die drei erstgenannten
+  Skills verweisen im Gegenzug auf den neuen Agenten zurück. Neu:
+  `evals/sparring-partner/evals.json` (inkl. bewusst tautologischer
+  Forschungsfrage), `tests/evals/test_sparring_partner_evals.py` (API-gated) und
+  `tests/test_sparring_partner_agent.py` (Frontmatter-/Struktur-Guards, CI-fest).
+  Fix-Runde (AC-Verifier zu PR #494): `evals/sparring-partner/recordings.json`
+  hält fünf Transkripte fest, die während der Fix-Runde entstanden sind,
+  sha256-an den Agent-Text gepinnt; `evals/sparring-partner/runner.py` +
+  `tests/evals/test_sparring_partner_recording.py` prüfen sie offline und
+  CI-fest gegen `evals.json::expected`, damit Drift am Agent-Text auffällt
+  statt still zu bestehen. Zweite Fix-Runde (Coordinator-Gate-Befund):
+  Transkript und Erwartung stammen aus derselben Sitzung — kein unabhängiger
+  Verhaltensbeleg, nur der Hash-Pin kann real fehlschlagen; `docs/evals/STRATEGY.md`
+  führt die Komponente deshalb korrekt als `structural`, nicht `metric`. Der
+  inhaltliche AC-Beleg (AC2/AC3/AC5) bleibt `tests/evals/test_sparring_partner_evals.py`
+  (API-gated, jetzt mit explizit übergebenem `model="claude-opus-4-6"` statt dem
+  `call_claude()`-Default). `recordings.json::provenance` korrigiert außerdem die
+  vorherige Aussage "unverändert übernommen" — die Texte sind ae/oe/ue-transliteriert
+  bis auf die durch die Regex erzwungene Ausnahme `SCHWÄCHE`.
+  Dritte Fix-Runde (AC-Verifier, erneut „verfehlt" für AC2–AC5): Die Ursache lag
+  tiefer als der fehlende API-Key — **die Kriterien selbst hatten keine
+  Unterscheidungskraft**. Eine rein bestätigende Antwort („SCHWÄCHE: Keine
+  nennenswerte / ALTERNATIVE: Keine nötig") erfüllte `sp-01`/`sp-02`/`sp-05`,
+  Kapitel-Prosa erfüllte `sp-04`, sobald irgendwo `chapter-writer` vorkam, und eine
+  zustimmende Antwort erfüllte `sp-03`, solange sie das Stichwort „Meier" aus der
+  Eingabe wiederholte. Das traf **beide** Ausführungspfade: auch mit gesetztem
+  `ANTHROPIC_API_KEY` hätte der Live-Eval eine sykophantische Antwort durchgewinkt.
+  Neu deshalb `evals/sparring-partner/counter_examples.json` (neun format-konforme
+  Negativkontrollen) und `tests/evals/test_sparring_partner_criteria.py`, das
+  fordert, dass jede davon abgelehnt und jedes Transkript weiter angenommen wird;
+  das `expected`-Schema kennt dafür jetzt UND-Listen (`value`) und NOR-Listen
+  (`reject`), abwärtskompatibel und in `evals/SCHEMA.md` dokumentiert.
+  `evals/sparring-partner/record.py` ersetzt außerdem den selbstverfassten
+  Recording-Text durch **echte, blinde Modellaufrufe** (Claude-Code-CLI headless,
+  `claude --print --model opus`, OAuth statt API-Key): Kriterien vorher committed,
+  Aufnahme-Subprozess sieht sie nicht, Prompt-Aufbau identisch zum API-gated Pfad
+  (komplette Agent-Datei inkl. Frontmatter). Dass der Abgleich scheitern kann, ist
+  belegt — der erste Lauf gegen die vorab festgelegten Kriterien ergab 1/5.
 
 - **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
   `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,

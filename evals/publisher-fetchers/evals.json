@@ -76,6 +76,51 @@
         "check": "equals:no_match"
       },
       "notes": "Fake-ISBN — Springer sollte 0 Treffer liefern und no_match zurueckgeben."
+    },
+    {
+      "id": "pf-06",
+      "description": "cambridge-core: Gold-OA-Buch via Cambridge Core (Open Access and the Humanities)",
+      "agent": "cambridge-core",
+      "input": {
+        "doi": "10.1017/CBO9781316161012",
+        "output_path": "/tmp/pf-06-cambridge-oa.pdf"
+      },
+      "expected": {
+        "type": "json_field",
+        "path": "$.status",
+        "check": "equals:success"
+      },
+      "notes": "Live belegt (2026-07-29, anonym, ohne Zugangsdaten): Die DOI 10.1017/CBO9781316161012 loest auf die Buchseite auf; der dort woertlich als 'Full book PDF' ausgezeichnete Link liefert HTTP 200, application/pdf, 2.576.510 Bytes, 228 Seiten (mit pypdf geoeffnet, nicht geschaetzt). Seite 1 nennt dieselbe DOI und bindet das PDF an diesen Fall. Vollstaendige URL-Kette und SHA-256 in evals/publisher-fetchers/live-verification.json (Lauf 'cambridge-core'); nachfahrbar mit RUN_LIVE_PUBLISHER_FETCH=1 uv run pytest tests/test_issue_449_live_fetch.py."
+    },
+    {
+      "id": "pf-07",
+      "description": "oxford-academic: Commit-to-Open-OA-Buch via Oxford Scholarship Online",
+      "agent": "oxford-academic",
+      "input": {
+        "doi": "10.1093/oso/9780198919810.001.0001",
+        "output_path": "/tmp/pf-07-oxford-oa.pdf"
+      },
+      "expected": {
+        "type": "json_field",
+        "path": "$.status",
+        "check": "equals:success"
+      },
+      "notes": "DOI korrigiert (Fix-Runde PR #500): Die urspruengliche 10.1093/oso/9780190247249.001.0001 gehoert real zu 'Philosophies of Qualitative Research' (Svend Brinkmann, 2017), einem kostenpflichtigen OSO-Buch ohne OA-Badge — gegengeprueft ueber Crossref-Content-Negotiation, also unabhaengig von der Verlagsseite. Ersetzt durch 'Praiseworthiness: The Lighter Side of Moral Responsibility' (Zoe Johnson King, OUP 2025, cc-by-nc-nd). Live belegt (2026-07-29, anonym): HTTP 200, application/pdf, 11.420.088 Bytes, 225 Seiten; Seite 1 traegt Oxfords eigenen Stempel 'Downloaded from https://academic.oup.com/book/61726 by guest' — 'by guest' belegt den Bezug ohne Login. Details in live-verification.json (Lauf 'oxford-academic')."
+    },
+    {
+      "id": "pf-08",
+      "description": "jstor: OA-Buch via JSTOR (University of California Press, Luminos)",
+      "agent": "jstor",
+      "input": {
+        "title": "Afghanistan's Islam: From Conversion to the Taliban",
+        "output_path": "/tmp/pf-08-jstor-oa.pdf"
+      },
+      "expected": {
+        "type": "json_field",
+        "path": "$.status",
+        "check": "equals:captcha"
+      },
+      "notes": "Live belegt (2026-07-29, anonym): Der direkte Zugriff auf den Volltext-Endpunkt beantwortet JSTOR schon beim ersten Request mit HTTP 403 und der Bot-Challenge 'JSTOR: Access Check' (PerimeterX, Marker px-captcha-error + reCAPTCHA im DOM). Die Seite selbst ist als Fixture eingecheckt (tests/fixtures/publisher_fetchers/jstor_access_check.html) und wird in tests/test_issue_449_fetcher_evidence.py gegen die Captcha-Erkennung des Repos gefahren — die Tatsache wird geprueft, nicht die Formulierung. Bewusst NICHT als Beleg gefuehrt: Block-Referenz, VID, IP und Uhrzeit der Challenge-Seite; sie sind pro Request neu (zwei Abrufe im Sekundenabstand ergaben zwei verschiedene Block-Referenzen) und darum von niemandem nachpruefbar. Da about.jstor.org/terms automatisiertes Herunterladen ausdruecklich untersagt, meldet agents/jstor.md ehrlich status:captcha, statt die Challenge zu umgehen — die von AC1 zugelassene Alternative 'dokumentiert belegt, warum das technisch nicht moeglich ist'."
     }
   ]
 }

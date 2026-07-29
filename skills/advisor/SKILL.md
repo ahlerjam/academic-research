@@ -23,6 +23,7 @@ Kapitel-Reorganisation vor und liefert Expose-Templates.
 Liefert Review/Feedback zu Struktur, Gliederung und Exposé — **ohne
 Neuschrieb** von Kapitel-Prosa.
 Kapitel-Text schreiben → `chapter-writer`; Forschungsfrage → `research-question-refiner`; Methodenwahl → `methodology-advisor`.
+Gegenposition → `sparring-partner`.
 
 ## Bewertungskriterien (PASS/FAIL)
 

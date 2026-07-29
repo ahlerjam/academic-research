@@ -58,6 +58,8 @@ kein Sollzustand — sie stehen hier, damit alte Entscheidungen nachvollziehbar 
   Entwicklungswellen.
 - [Issue-Board-Audit 2026-06-03](audit/2026-06-03-board-audit.md) — Momentaufnahme des
   Boards.
+- [AC3+AC4 Live-Verifikationsbeleg (Issue #389)](audit/2026-07-27-issue-389-ac3-vulture-live-verification.md)
+  — Belegnachweis für die vulture-Dead-Code-Integration.
 - [Evals-Summary v5.2.0](evals/2026-04-23-summary.md) — Momentaufnahme der
   Eval-Infrastruktur.
 - [Recall@10-Goldset und Modell-A/B](evals/recall-at-k-model-ab-375.md) — Momentaufnahme

@@ -1,0 +1,7 @@
+{
+  "status": "success",
+  "source_subagent": "jstor",
+  "pdf_path": "/tmp/jstor.pdf",
+  "url": "https://www.jstor.org/stable/j.ctv1234567",
+  "chapter_only": true
+}
