@@ -8,7 +8,9 @@ den docx-Pfad. Der eigentliche docx-Rendering-Schritt laeuft ueber den
 externen Skill `document-skills:docx` und ist nicht CI-fahrbar (analog zu
 xlsx, siehe tests/test_issue_445_xlsx_devendored.py-Docstring) -- dafuer
 prueft tests/test_word_export_skill_md.py die dokumentierten Formatvorlagen-
-Pflichten strukturell.
+Pflichten strukturell, und tests/test_word_export_docx_render.py fuehrt
+collect_references()/resolve_cite_markers() einmal wirklich gegen ein
+tatsaechlich gerendertes (Test-only-)Dokument aus (Fixrunde PR #488).
 """
 
 from __future__ import annotations

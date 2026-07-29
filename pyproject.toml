@@ -64,6 +64,18 @@ dev = [
     # CI-Pins (blockierendes Format-Gate): Bump nur mit Nachformatierung, vgl. ci.yml
     "ruff==0.16.0",
     "mypy==2.3.0",
+    # Test-only Rendering-Nachweis fuer word-export/slide-export (Fixrunde PR #488,
+    # Issue #446): baut in tests/test_word_export_docx_render.py bzw.
+    # tests/test_slide_export_pptx_render.py aus echten Pipeline-Ausgaben
+    # (collect_references/resolve_cite_markers/extract_slide_data) ein echtes
+    # .docx/.pptx und oeffnet es erneut -- reiner Struktur-/Repair-Nachweis, KEIN
+    # Ersatz fuer document-skills:docx/:pptx (SKILL.md bleibt bei docx-js/
+    # pptxgenjs als Produktions-Renderer). Reine PyPI-Pakete -> anders als
+    # document-skills selbst CI-installierbar (uv sync --extra dev in
+    # .github/actions/setup-python-uv), im Gegensatz zu pdflatex/soffice also
+    # NICHT nur lokal beweiskraeftig.
+    "python-docx>=1.1",
+    "python-pptx>=1.0",
 ]
 # Cloud-Reranker-SDKs (#376): optionale Extras, KEINE Hard-Dependency. Ohne
 # gesetzten API-Key UND ohne installiertes FlagEmbedding (siehe Kommentar

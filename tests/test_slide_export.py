@@ -5,7 +5,9 @@ skills/slide-export/scripts/build_slide_deck.py ab -- Kapitel-Aufloesung
 (Re-Export aus latex-export/export_thesis.resolve_chapters), Titel-/Kernaussage-
 Extraktion und die 1:1-Zuordnung Kapitel -> Folie (AC4). Das eigentliche
 pptx-Rendering laeuft ueber `document-skills:pptx` und ist nicht CI-fahrbar
-(Plan-Risiko #3, analog xlsx).
+(Plan-Risiko #3, analog xlsx) -- tests/test_slide_export_pptx_render.py
+fuehrt extract_slide_data() einmal wirklich gegen ein tatsaechlich
+gerendertes (Test-only-)Deck aus (Fixrunde PR #488).
 """
 
 from __future__ import annotations
