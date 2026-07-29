@@ -890,6 +890,31 @@ class TestExportThesisIntegration:
         assert result.bib_path == Path("output/refs.bib")
         mock_build_bib.assert_called_once_with("irrelevant.db", "output/refs.bib")
 
+    def test_bib_empty_string_falls_back_to_default(self, tmp_path, monkeypatch):
+        """P1-Fix (PR #485-Review): --bib "" (leerer String, wie ihn der
+        dokumentierte CLI-Aufruf ohne --bib zuvor durchreichte) faellt auf
+        den Default zurueck statt Path("") -> PosixPath('.') an
+        build_bib_from_vault()/write_text() zu reichen (IsADirectoryError)."""
+        from export_thesis import export_thesis
+
+        monkeypatch.chdir(tmp_path)
+        kap_dir = self._make_project(tmp_path)
+        out = tmp_path / "output" / "thesis.tex"
+
+        with patch("export_thesis.build_bib_from_vault") as mock_build_bib:
+            mock_build_bib.side_effect = _fake_build_bib
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="1",
+                output_path=out,
+                bib_path="",
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        assert result.bib_path == Path("output/refs.bib")
+        mock_build_bib.assert_called_once_with("irrelevant.db", "output/refs.bib")
+
     def test_export_uses_default_vault_db_path_when_not_specified(self, tmp_path, monkeypatch):
         """Ohne explizite vault_db_path wird academic_vault.db.default_db_path()
         (Single Source of Truth, respektiert VAULT_DB_PATH) verwendet."""
@@ -1031,6 +1056,26 @@ class TestExportThesisCLI:
         assert out.exists()
         captured = capsys.readouterr()
         assert "Template `unbekannt` fehlt" in captured.err
+
+    def test_cli_bib_empty_string_falls_back_without_crash(self, tmp_path, monkeypatch):
+        """P1-Fix (PR #485-Review): vor dem Fix reichte commands/latex.md
+        ohne --bib ein leeres $BIB als `--bib ""` durch, was in export_thesis()
+        auf Path("") -> PosixPath('.') traf (IsADirectoryError). Die CLI
+        muss das jetzt wie "kein --bib" behandeln -- kein Absturz, Default
+        greift."""
+        from export_thesis import main
+
+        monkeypatch.chdir(tmp_path)
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "1.md", "Einleitung")
+
+        out = tmp_path / "custom.tex"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            exit_code = main(["--kapitel", "1", "--output", str(out), "--bib", ""])
+
+        assert exit_code == 0
+        assert (tmp_path / "output" / "refs.bib").exists()
 
     def test_cli_unknown_chapter_exits_with_error_message(self, tmp_path, monkeypatch, capsys):
         """AC1: Nicht existierendes Kapitel -> klare Fehlermeldung, Exit != 0."""

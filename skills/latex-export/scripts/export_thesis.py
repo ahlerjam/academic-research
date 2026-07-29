@@ -181,7 +181,12 @@ def export_thesis(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(content, encoding="utf-8")
 
-    resolved_bib_path = Path(bib_path) if bib_path is not None else Path(DEFAULT_BIB_PATH)
+    # Wahrheitswert statt `is not None`: ein leerer String (z.B. wenn
+    # commands/latex.md ohne --bib "$BIB" mit leerem $BIB durchreicht) soll
+    # ebenfalls auf den Default fallen statt Path("") -> PosixPath('.') an
+    # build_bib_from_vault()/write_text() zu reichen (IsADirectoryError,
+    # PR #485-Review, P1).
+    resolved_bib_path = Path(bib_path) if bib_path else Path(DEFAULT_BIB_PATH)
     resolved_bib_path.parent.mkdir(parents=True, exist_ok=True)
 
     if vault_db_path is None:

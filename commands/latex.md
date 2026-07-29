@@ -58,8 +58,8 @@ Fehlerpfade, Abgrenzung zu `citation-extraction`).
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/export_thesis.py" \
-  --kapitel "$KAPITEL" --output "$OUTPUT" --bib "$BIB" \
-  ${TEMPLATE:+--template "$TEMPLATE"}
+  --kapitel "$KAPITEL" --output "$OUTPUT" \
+  ${BIB:+--bib "$BIB"} ${TEMPLATE:+--template "$TEMPLATE"}
 ```
 
 Das Skript bündelt intern:
