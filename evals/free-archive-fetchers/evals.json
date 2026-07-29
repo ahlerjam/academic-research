@@ -1,0 +1,50 @@
+[
+  {
+    "id": "far-01",
+    "description": "HathiTrust-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition, sonst begruendetes metadata_only mit Zugriffsstufe",
+    "agent": "hathitrust-fetcher",
+    "input": {
+      "title": "Immanuel Kant: Kritik der reinen Vernunft",
+      "output_path": "/tmp/eval-far-01.pdf"
+    },
+    "expected": {
+      "status_in": ["success", "metadata_only"],
+      "source_subagent": "hathitrust-fetcher",
+      "edition_non_empty_if_success": true,
+      "reason_has_access_level_if_metadata_only": true
+    },
+    "note": "HathiTrust fuehrt drei Zugriffsstufen; metadata_only ist akzeptabel, wenn nur Suche-im-Buch oder nur Metadaten vorliegt."
+  },
+  {
+    "id": "far-02",
+    "description": "Internet-Archive-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition, sonst begruendetes metadata_only (u.a. Borrow-only)",
+    "agent": "internetarchive-fetcher",
+    "input": {
+      "title": "Charles Darwin: On the Origin of Species (1859, erste Ausgabe)",
+      "output_path": "/tmp/eval-far-02.pdf"
+    },
+    "expected": {
+      "status_in": ["success", "metadata_only"],
+      "source_subagent": "internetarchive-fetcher",
+      "edition_non_empty_if_success": true,
+      "reason_has_access_level_if_metadata_only": true
+    },
+    "note": "Controlled-Digital-Lending-Editionen (Borrow-only) sind der erwartete metadata_only-Fall, nicht ein Fehler."
+  },
+  {
+    "id": "far-03",
+    "description": "MDZ-Fetcher: bekannter gemeinfreier deutschsprachiger Klassiker via Titel — erwartet success mit pdf_path und edition, sonst metadata_only (Werk noch nicht digitalisiert)",
+    "agent": "mdz-fetcher",
+    "input": {
+      "title": "Johann Wolfgang von Goethe: Faust. Der Tragödie erster Teil",
+      "output_path": "/tmp/eval-far-03.pdf"
+    },
+    "expected": {
+      "status_in": ["success", "metadata_only"],
+      "source_subagent": "mdz-fetcher",
+      "edition_non_empty_if_success": true,
+      "reason_has_access_level_if_metadata_only": true
+    },
+    "note": "MDZ kennt nur Vollansicht oder nur Metadaten -- keine Zwischenstufe."
+  }
+]

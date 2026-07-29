@@ -4,7 +4,7 @@
 
 Agents sind LLM-Subagents. Anders als Skills aktivieren sie sich nicht selbst — sie
 werden von einem Command oder einem Skill gestartet und laufen in eigenem Kontext.
-Das Plugin bringt **20 Agents** mit (`agents/*.md`).
+Das Plugin bringt **23 Agents** mit (`agents/*.md`).
 
 ## Recherche und Bewertung
 
@@ -33,6 +33,9 @@ welcher Reihenfolge probiert werden. Details zur Fallback-Kette in
 | `nationallizenzen` | Sonnet | `book-fetcher` | nationallizenzen.de per browser-use |
 | `ebook-central` | Sonnet | `book-fetcher` | ebookcentral.proquest.com per browser-use |
 | `kvk-fetcher` | Sonnet | `book-fetcher` | KVK Meta-Suche (80+ Kataloge) |
+| `hathitrust-fetcher` | Sonnet | `book-fetcher` | babel.hathitrust.org per browser-use, 3 Zugriffsstufen |
+| `internetarchive-fetcher` | Sonnet | `book-fetcher` | archive.org + openlibrary.org per browser-use, inkl. Borrow-only-Erkennung (CDL) |
+| `mdz-fetcher` | Sonnet | `book-fetcher` | digitale-sammlungen.de (Münchener Digitalisierungszentrum) per browser-use |
 | `generic-fetcher` | Sonnet | `book-fetcher` | Universeller Plattform-Navigator: 5 Seitenzustände, Viewer-/Embed-Erkennung, Profil-Lizenzroute, hartes Schritt-Budget |
 | `auth-helper` | Sonnet | alle Site-Agents | HAN / Shibboleth-WAYF / EZproxy Login-Flow |
 | `scihub-fetcher` | Sonnet | `book-fetcher` | SciHub-Tier — läuft nur bei `scihub_optin: true` |

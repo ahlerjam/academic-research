@@ -30,7 +30,15 @@ FETCH_COMMAND = REPO_ROOT / "commands" / "fetch.md"
 CHAPTER_WRITER_SKILL = REPO_ROOT / "skills" / "chapter-writer" / "SKILL.md"
 CITATION_EXTRACTION_SKILL = REPO_ROOT / "skills" / "citation-extraction" / "SKILL.md"
 
-OA_SUBAGENTS = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+OA_SUBAGENTS = {
+    "doabooks-fetcher",
+    "oapen-fetcher",
+    "tib-fetcher",
+    "kvk-fetcher",
+    "hathitrust-fetcher",
+    "internetarchive-fetcher",
+    "mdz-fetcher",
+}
 
 
 def _load_json(name):

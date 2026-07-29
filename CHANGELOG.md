@@ -10,6 +10,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Drei neue Fetcher-Agents fuer freie Archive (#450):** `hathitrust-fetcher`,
+  `internetarchive-fetcher` (deckt Internet Archive UND Open Library ab) und
+  `mdz-fetcher` (Muenchener Digitalisierungszentrum) erweitern die OA-Kette
+  des `book-fetcher`-Master-Orchestrators um lizenzfreie Klassiker-/
+  Altbestands-Quellen — sie werden in Schritt 3 vor allen Verlags-Subagenten
+  abgefragt. Jeder der drei Agents fuehrt die jeweils eigene Zugriffsstufen-
+  Matrix des Archivs (z.B. Vollansicht/Suche-im-Buch/nur Metadaten bei
+  HathiTrust, Vollansicht/Borrow-only/nur Metadaten bei Internet Archive) und
+  meldet eingeschraenkte Sichtbarkeit ueber das `reason`-Feld
+  (`"Zugriffsstufe: …"`) statt einen unvollstaendigen Volltext aus
+  Suchtreffern/Snippets zusammenzusetzen. Der `success`-Output traegt neu ein
+  `edition`-Feld (Jahr/Ausgabe/Verlag aus dem Katalogeintrag des
+  Digitalisats selbst, nie aus der Eingabe-ISBN/dem Eingabe-Titel). Das
+  gesperrte 5er-Status-Enum bleibt unveraendert. Neue Browser-Guides unter
+  `config/browser_guides/{hathitrust,internetarchive,mdz}.md`.
+
 - **Neuer Skill `parallel-screening` + Agent `screening-judge` (#460):** Die
   gleichförmigen Schritte der Recherche — Titel-/Abstract-Screening vieler
   Treffer und Verzerrungsbewertung vieler Studien — laufen jetzt wellenweise

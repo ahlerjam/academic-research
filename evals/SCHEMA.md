@@ -62,7 +62,7 @@ Trigger-Evals pro Skill (Block C).
 
 ## Zweites Format: `cases[]` (Nicht-Skill-Komponenten)
 
-Fuenf Verzeichnisse folgen nicht dem `prompts[]`-Schema oben, sondern einem
+Sechs Verzeichnisse folgen nicht dem `prompts[]`-Schema oben, sondern einem
 `cases[]`-Format. Das ist historisch gewachsen und bewusst **nicht**
 normalisiert (ein Umbau wuerde `tests/test_figure_verifier.py`,
 `tests/test_oa_fetchers.py` und `tests/test_publisher_fetchers.py` brechen,
@@ -75,6 +75,7 @@ ohne die Messqualitaet zu erhoehen — Begruendung in `docs/evals/STRATEGY.md`).
 | `publisher-fetchers` | Objekt mit `component`/`component_type`/`cases[]` | `tests/test_publisher_fetchers.py` |
 | `figure-verifier` | **Top-Level-Array** von Cases, ohne `component`-Feld | `tests/test_figure_verifier.py` |
 | `oa-fetchers` | **Top-Level-Array** von Cases, ohne `component`-Feld | `tests/test_oa_fetchers.py` |
+| `free-archive-fetchers` | **Top-Level-Array** von Cases, ohne `component`-Feld | `tests/test_free_archive_fetchers.py` |
 
 `generic-fetcher` erweitert das Case-Objekt um `platform` (Ziel-Plattform ohne
 dedizierten Agent), `input.fixture` (DOM-Fixture unter

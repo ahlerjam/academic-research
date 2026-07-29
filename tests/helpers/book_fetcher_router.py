@@ -9,7 +9,19 @@ import datetime
 import re
 
 # Subagent-Reihenfolgen (aus L0-Notes und Spec G.md)
-OA_SUBAGENTS = ["doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"]
+# Issue #450 haengt die drei freien Archiv-Fetcher ans Ende der OA-Kette an
+# (minimaler Diff zu bestehenden Sequenz-Tests) -- "moeglichst weit vorne"
+# aus dem Issue-Scope ist gegenueber den Verlags-Subagenten (Schritt 4)
+# bereits erfuellt, da die gesamte Liste vor diesen laeuft (AC3).
+OA_SUBAGENTS = [
+    "doabooks-fetcher",
+    "oapen-fetcher",
+    "tib-fetcher",
+    "kvk-fetcher",
+    "hathitrust-fetcher",
+    "internetarchive-fetcher",
+    "mdz-fetcher",
+]
 
 PUBLISHER_DOMAIN_MAP = {
     "link.springer.com": "springer-book",
