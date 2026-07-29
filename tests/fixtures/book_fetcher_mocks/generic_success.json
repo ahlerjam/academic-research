@@ -1,0 +1,22 @@
+{
+  "status": "success",
+  "source": "generic-fetcher",
+  "file_path": "/tmp/out.pdf",
+  "reason": "Volltext ueber pdf_link_detected beschafft",
+  "tries": [
+    {
+      "step": 1,
+      "action": "open_profile_route",
+      "url": "https://publisher.example.org.proxy.ub.tum.de/book/9780123",
+      "observation": "Anchor 'Download PDF' gefunden",
+      "decision": "pdf_link_detected"
+    },
+    {
+      "step": 2,
+      "action": "download_pdf",
+      "url": "https://publisher.example.org.proxy.ub.tum.de/files/book.pdf",
+      "observation": "PDF gespeichert unter /tmp/out.pdf",
+      "decision": "downloaded"
+    }
+  ]
+}

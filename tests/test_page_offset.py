@@ -299,3 +299,26 @@ def test_server_get_printed_page_zero_offset():
 
     result = get_printed_page(db_path, "zero_offset_2024", pdf_page=42)
     assert result == 42, f"Erwartet 42 (kein Offset), erhalten {result}"
+
+
+def test_server_get_printed_page_front_matter_returns_none():
+    """Issue #464 AC2: eine Seitenanfrage, die vor dem Textbeginn (Vorspann)
+    liegt, liefert einen erkennbaren Sonderfall (None) statt der Seitenzahl
+    eins. Vor dem Fix klemmte max(1, printed) jede Vorspann-Seite still auf
+    1 -- nicht unterscheidbar von einer echten Seite 1."""
+    import json
+    import tempfile
+
+    from academic_vault.server import add_paper, get_printed_page
+    from academic_vault.server import set_page_offset as srv_set_offset
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        db_path = tf.name
+
+    csl = json.dumps({"type": "book", "title": "Front Matter Test"})
+    add_paper(db_path, "front_matter_2024", csl)
+    srv_set_offset(db_path, "front_matter_2024", 10)
+
+    # pdf_page=5 (1-basiert) liegt vor dem Offset (10) -> im Vorspann.
+    result = get_printed_page(db_path, "front_matter_2024", pdf_page=5)
+    assert result is None, f"Erwartet None (Vorspann-Sonderfall), erhalten {result}"

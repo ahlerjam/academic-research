@@ -1,6 +1,10 @@
 # Glossar
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
+
+Die Begriffe, die in der übrigen Dokumentation vorausgesetzt werden. Wer über einen
+Ausdruck stolpert, schlägt ihn hier nach — jede Zeile erklärt den Begriff so, dass sie
+ohne den Rest der Seite verständlich bleibt.
 
 ## Glossar
 

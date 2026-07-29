@@ -2,6 +2,15 @@
 """Configure Claude Code permissions for academic-research v4.
 
 Adds required tool permissions to ~/.claude/settings.local.json.
+
+Diese Datei ist BENUTZERWEIT (nicht projektbezogen): Die Regeln gelten fuer
+ALLE Claude-Code-Projekte auf diesem Rechner, nicht nur fuer academic-research.
+Deshalb zeigt die CLI (``__main__``-Block unten, ueber ``confirm_write()``) die
+neu zu setzenden Regeln vor dem Schreiben an und verlangt eine Bestaetigung
+(Issue #458). ``main()`` selbst bleibt davon unberuehrt und schreibt weiterhin
+direkt — das haelt die Bestandstests aus Issue #230 (atomarer Schreibvorgang,
+direkter ``main(settings_path=...)``-Aufruf ohne Stdin-Mock) gruen; das
+Bestaetigungs-Gate sitzt strikt VOR dem ``main()``-Aufruf, nicht darin.
 """
 
 from __future__ import annotations
@@ -16,12 +25,14 @@ SETTINGS_PATH = Path.home() / ".claude" / "settings.local.json"
 REQUIRED_PERMISSIONS = [
     "Bash(~/.academic-research/venv/bin/python *)",
     "Bash(~/.academic-research/venv/bin/pip *)",
-    "Bash(python3 *)",
-    "Bash(mkdir *)",
-    "Bash(ls *)",
-    "Bash(cat *)",
     "Bash(browser-use:*)",
     "Bash(browser-use *)",
+    # Eng gescoptes Ersatzmuster fuer das entfernte pauschale Bash(mkdir *)
+    # (PR #476-Review, P1): commands/search.md legt Session-Verzeichnisse
+    # unter ~/.academic-research/sessions/... an, commands/latex.md unter
+    # ~/.academic-research/library-profiles/ -- beide brauchen mkdir -p
+    # weiterhin, aber nur innerhalb des eigenen Datenverzeichnisses.
+    "Bash(mkdir -p ~/.academic-research/*)",
 ]
 
 
@@ -50,6 +61,73 @@ def atomic_write_text(path: Path, text: str) -> None:
         except OSError:
             pass
         raise
+
+
+def pending_permissions(settings_path: Path) -> list[str]:
+    """Gibt die ``REQUIRED_PERMISSIONS`` zurueck, die in ``settings_path`` noch
+    fehlen (Diff gegen den bestehenden ``permissions.allow``-Array).
+
+    Existiert die Datei nicht oder ist sie kein valides JSON, gilt die Liste
+    als leer und alle ``REQUIRED_PERMISSIONS`` sind "pending".
+    """
+    settings_path = Path(settings_path)
+    settings: dict = {}
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    allow_list: list[str] = settings.get("permissions", {}).get("allow", [])
+    return [perm for perm in REQUIRED_PERMISSIONS if perm not in allow_list]
+
+
+def confirm_write(pending: list[str], settings_path: Path, assume_yes: bool = False) -> bool:
+    """Zeigt die zu setzenden Berechtigungen an und fragt nach Bestaetigung.
+
+    - Ohne neue Regeln (idempotenter Re-Lauf, ``pending`` leer): keine Rueckfrage
+      noetig, gilt als bestaetigt (kein Prompt-Spam bei jedem Setup-Aufruf).
+    - ``assume_yes=True`` (CLI-Flag ``--yes`` bzw.
+      ``ACADEMIC_RESEARCH_CONFIRM_PERMISSIONS=1``): explizite, vorab erteilte
+      Zustimmung — z. B. nachdem Claude Code die pending-Regeln bereits per
+      ``AskUserQuestion`` bestaetigt bekommen hat (siehe commands/setup.md).
+      Greift auch ohne TTY, denn genau das ist der Fall, den Issue #458 P1
+      abdeckt: der primaere ``/setup``-Pfad laeuft ohne Terminal-Eingabe.
+    - Nicht-interaktives stdin ohne ``assume_yes`` (CI/Pipe/reines
+      Skript-Ausfuehren): sicherer Default = NICHT schreiben, analog
+      ``scihub_optin.py``/``uni_profile_setup.py``.
+    - Interaktiv (TTY, kein ``assume_yes``): explizite Zustimmung
+      ("j"/"ja"/"y"/"yes") erforderlich.
+    """
+    if not pending:
+        return True
+
+    print(
+        "Folgende neue Claude-Code-Berechtigungen werden BENUTZERWEIT "
+        "(alle Projekte, nicht nur academic-research) eingetragen:"
+    )
+    print(f"  Datei: {settings_path}")
+    for perm in pending:
+        print(f"  + {perm}")
+    print(
+        "Ruecknahme: die obigen Zeilen manuell aus dem 'permissions.allow'-Array "
+        f"in {settings_path} entfernen."
+    )
+
+    if assume_yes:
+        print("✅ --yes gesetzt — Berechtigungen werden ohne weitere Rueckfrage geschrieben.")
+        return True
+
+    if not sys.stdin.isatty():
+        print(
+            "ℹ️  Nicht-interaktives stdin — Berechtigungen werden NICHT automatisch "
+            "geschrieben (sicherer Default). Zum Bestaetigen configure_permissions.py "
+            "direkt in einem Terminal ausfuehren, oder mit '--yes' nicht-interaktiv "
+            "bestaetigen (siehe commands/setup.md)."
+        )
+        return False
+
+    answer = input("Bestaetigen? [j/N] ").strip().lower()
+    return answer in ("j", "ja", "y", "yes")
 
 
 def main(settings_path: Path | None = None) -> int:
@@ -81,4 +159,19 @@ def main(settings_path: Path | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _args = sys.argv[1:]
+
+    if "--pending-count" in _args:
+        # Reine Abfrage fuer aufrufende Skripte/Doku-Flows (z. B. setup.sh,
+        # commands/setup.md): Anzahl noch fehlender Regeln, ohne Anzeige/
+        # Bestaetigungs-Gate und ohne zu schreiben.
+        print(len(pending_permissions(SETTINGS_PATH)))
+        sys.exit(0)
+
+    _assume_yes = "--yes" in _args or os.environ.get("ACADEMIC_RESEARCH_CONFIRM_PERMISSIONS") == "1"
+
+    _pending = pending_permissions(SETTINGS_PATH)
+    if confirm_write(_pending, SETTINGS_PATH, assume_yes=_assume_yes):
+        sys.exit(main(SETTINGS_PATH))
+    print("⚠️  Abgebrochen — keine Berechtigungen geschrieben.")
+    sys.exit(0)

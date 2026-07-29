@@ -8,7 +8,7 @@ import yaml
 REPO_ROOT = Path(__file__).parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
 KEBAB_CASE = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
-VENDORED_SKILLS = {"xlsx", "_common"}
+VENDORED_SKILLS = {"_common"}
 
 
 def _load_frontmatter(skill_md: Path) -> dict:

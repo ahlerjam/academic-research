@@ -1,6 +1,10 @@
 # Suchquellen, Scoring und Cluster
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
+
+Woher die Literatur kommt, wie Treffer bewertet werden und wie daraus Themencluster
+entstehen. Maßgeblich für die Modulliste ist immer der `MODULES`-Dispatch in
+`scripts/search.py` — diese Seite gibt ihn wieder.
 
 ## Suchquellen (15)
 
@@ -43,6 +47,26 @@ Auth-Module danach.
 
 > Ohne installierte `browser-use`-CLI werden die Browser-Module übersprungen; die
 > API-Suche funktioniert unverändert weiter. Das Setup meldet das explizit.
+
+Woher die Auth-Module (`ebscohost`, `proquest`, `opac`) ihre HAN-Zugangsdaten nehmen und
+wie sich das vom Per-Uni-Profil unterscheidet, steht gesammelt unter
+[Zugangsdaten](../guide/installation.md#zugangsdaten).
+
+### Zustimmung für Hochschul-Zugangsdaten (Auth-Module)
+
+`ebscohost`, `proquest` und `opac` verwenden per HAN-Login
+(`config/browser_guides/han_login.md`) Hochschul-Zugangsdaten in
+Browser-Sessions. Dabei gelten unverändert die Nutzungsbedingungen der
+jeweiligen Plattform — **EBSCOhost**, **ProQuest** und der **HAN**-Proxy der
+Hochschule.
+
+Vor dem allerersten Zugriff auf eines dieser drei Module im `--mode deep`
+holt `commands/search.md` eine einmalige, erklärte Zustimmung ein
+(`scripts/deep_search_consent.py`, `AskUserQuestion`-Gate). Die Zustimmung
+wird in `~/.academic-research/consent.json` gespeichert und danach **nicht
+erneut abgefragt**. Bei Ablehnung werden nur die drei Auth-Module für den
+aktuellen Lauf übersprungen — No-Auth-Module und alle 7 API-Module laufen
+unverändert weiter.
 
 ## 5D-Scoring
 

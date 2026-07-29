@@ -1,6 +1,6 @@
 # Quickstart-Protokoll — realer Durchlauf
 
-[← zurück zur README](../README.md)
+[← Doku-Übersicht](README.md)
 
 Protokoll des Durchlaufs, mit dem der [Quickstart der README](../README.md#quickstart)
 abgenommen wurde: frische Installation → Setup → erstes Paper im Vault → erstes
@@ -213,6 +213,25 @@ Alles hier Aufgeführte ist in dieser Dokumentation eingearbeitet.
 | 4 | Die alte README stellte pyzotero als selbsttätig nachinstallierte Abhängigkeit dar; der Code fordert nur zur Installation auf | Korrigiert in [installation.md](guide/installation.md), Guard im selben Test |
 | 5 | Der alte Tests-Badge nannte „963 passing / 1111 collected", gemessen wurden 1809/148 | Zahlen-Badge entfernt, siehe [development.md](development.md) |
 | 6 | Die alte README verlinkte die längst entfernte Datei MIGRATION-v5-to-v6.md unter `docs/` (#346) | Link entfernt, Guard prüft jetzt alle relativen Links |
+
+## Die Demo im README
+
+Das Terminal-Standbild oben in der README ist kein nachgestellter Screenshot, sondern
+eine Wiedergabe der oben protokollierten Ausgaben.
+
+- **Quelle:** [`docs/assets/quickstart.cast`](assets/quickstart.cast) — asciicast v2,
+  abspielbar mit `asciinema play docs/assets/quickstart.cast`.
+- **Inhalt:** die Befehle und Ausgaben der Schritte 1–5 dieses Protokolls, im Wortlaut
+  übernommen. Lange Ausgabeblöcke sind auf die tragenden Zeilen gekürzt; kein Wort ist
+  hinzuerfunden. Ein Test (`tests/test_issue_451_readme_showcase.py`) prüft, dass jede im
+  Cast getippte Befehlszeile in diesem Protokoll steht.
+- **Frame-Zeiten:** gleichmäßig gesetzt, damit der Cast lesbar abspielt. Sie sind
+  **keine** Messwerte des Laufs — die realen Wartezeiten dominiert der Modell-Download.
+- **Bild:** `uv run python scripts/dev/render_quickstart_svg.py` rendert daraus
+  deterministisch [`docs/assets/quickstart.svg`](assets/quickstart.svg). Das Bild ist
+  bewusst statisch: GitHub reicht eingebettete SVG durch einen Sanitizer, dessen Umgang
+  mit SMIL-Animationen nicht zugesichert ist. Ein Test rendert neu und vergleicht
+  byteweise, damit Bild und Mitschnitt nicht auseinanderlaufen.
 
 ## Wiederholen
 

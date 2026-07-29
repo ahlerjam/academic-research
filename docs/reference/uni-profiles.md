@@ -1,6 +1,9 @@
 # Per-Uni-Profile
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
+
+Wie ein Hochschulzugang eingerichtet wird, was ein Profil beschreibt und was ohne Profil
+weiterhin funktioniert. Wer nur Open-Access-Quellen nutzt, braucht diese Seite nicht.
 
 ## Per-Uni-Profile
 
@@ -46,5 +49,8 @@ Das aktive Profil landet in `~/.academic-research/library-profiles/active.yaml`.
 steht auch das `scihub_optin`-Flag (Default `false`, siehe README-Hinweis zum
 SciHub-Tier).
 
-**Zugangsdaten** stehen nie im Profil selbst — die YAML nennt nur die Namen der
-Umgebungsvariablen (`credentials_keys`), aus denen `auth-helper` sie zur Laufzeit liest.
+**Zugangsdaten:** `credentials_keys` nennt zwei weitere Feldnamen in derselben YAML,
+deren Werte der `auth-helper`-Subagent zur Laufzeit ausliest. Details, Ist-Zustand des
+Codes und Abgrenzung zu den beiden anderen Zugangsdaten-Wegen (Such-API-Keys,
+HAN-Zugangsdaten-Datei) stehen gesammelt unter
+[Zugangsdaten](../guide/installation.md#zugangsdaten).

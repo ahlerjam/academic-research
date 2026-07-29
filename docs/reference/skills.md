@@ -1,14 +1,14 @@
 # Skills-Übersicht
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt die
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **30 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count,
-inklusive dem vendorierten `xlsx/`). Das Verzeichnis `skills/_common/` enthält nur
-geteilte Markdown-Fragmente und zählt nicht als Skill.
+Insgesamt **32 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
+als Skill.
 
 Die Spalte „Aktiviert bei" listet reale Trigger-Phrasen: jede davon steht auch in der
 `description` der jeweiligen `SKILL.md` — `tests/test_skills_manifest.py` erzwingt das,
@@ -31,6 +31,8 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `literature-gap-analysis` | *„Literaturlücken"*, *„fehlende Quellen"* | Per-Kapitel-Coverage-Bericht |
 | `source-quality-audit` | *„Quellenqualität"*, *„Peer-Review prüfen"* | 5-Dimensionen-Score 0–100 |
 | `citation-extraction` | *„Zitate finden"*, *„Literaturverzeichnis erstellen"* | Citations-API, seitengenau, 8 Formate |
+| `reading-notes` | *„Notiz zu einer Quelle anlegen"*, *„Kernbefund festhalten"* | Strukturiertes Exzerpt (Kernbefund/Methode/Verwendbarkeit) via `vault.add_note()` ([SKILL.md](../../skills/reading-notes/SKILL.md)) |
+| `extraction-matrix` | *„Extraktionsmatrix erstellen"*, *„Studien vergleichen"* | Studienvergleich als Matrix (Zeilen = Quellen, Spalten aus Schlüsselkonzepten + Standardmerkmalen), Tabelle + Arbeitsblatt-Export ([SKILL.md](../../skills/extraction-matrix/SKILL.md)) |
 | `zotero-import` | *„Zotero importieren"*, *„Bibliothek einlesen"* | pyzotero-Pull mit Vault-Dedup |
 | `reading-list-import` | *„Literaturliste importieren"*, *„Quellenliste"* | PDF/Markdown/Text → Vault |
 | `citation-style-import` | *„eigenen Zitierstil"*, *„CSL laden"* | CSL-Repository → Vault-Stilregeln |
@@ -52,6 +54,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | Skill | Aktiviert bei | Beschreibung |
 |-------|--------------|-------------|
 | `prisma-flow` | *„PRISMA"*, *„Systematic Review"*, *„Flussdiagramm"* | Mermaid-Flow + 27-Punkte-Checkliste |
+| `parallel-screening` | *„viele Treffer screenen"*, *„Screening parallelisieren"*, *„Risk-of-Bias für mehrere Paper"* | Fächert Screening und Verzerrungsbewertung auf Subagents auf, Ledger + Resume + PRISMA-Zähler ([SKILL.md](../../skills/parallel-screening/SKILL.md)) |
 | `material-passport` | *„Material-Passport"*, *„Artefakt sichern"* | Unveränderlicher Repro-Passport |
 
 ## Output-Skills (opt-in via `output_targets`)
@@ -76,8 +79,19 @@ Diese Skills sind per Default aus. Sie laufen erst, wenn im Projekt-State der pa
 | `title-generator` | *„Titelvorschläge"*, *„Arbeitstitel"* | 5–7 Varianten mit Rationale |
 | `submission-checker` | *„abgabefertig"*, *„Formalia prüfen"* | Formalia-Check, Default: FH Leibniz |
 
-## Vendorierte Skills
+## Externe Skills (Plugin-Dependencies)
+
+Diese Skills liegen nicht im Repository, sondern werden bei der Installation als
+Plugin-Abhängigkeit mitgezogen (`dependencies` in `.claude-plugin/plugin.json`).
 
 | Skill | Herkunft | Zweck |
 |-------|----------|-------|
-| `xlsx` | Claude-eigener document-skill, im Plugin mitgeliefert | Excel-Erzeugung für `/academic-research:excel` und `/academic-research:pickup` — kein externes Plugin nötig |
+| `document-skills:xlsx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Excel-Erzeugung für `/academic-research:excel` und `/academic-research:pickup` |
+
+Fehlt die Abhängigkeit, melden beide Commands den Nachinstallations-Weg, statt einen
+Tool-Fehler durchzureichen:
+
+```bash
+claude plugin marketplace add anthropics/skills
+claude plugin install document-skills@anthropic-agent-skills
+```

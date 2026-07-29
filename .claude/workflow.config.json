@@ -11,7 +11,7 @@
   "extraGates": [],
   "protectedAreas": ["vault", "hooks", "security", "ci"],
   "areas": ["vault", "skills", "agents", "commands", "hooks", "scripts", "evals", "ci", "docs", "security"],
-  "parallelism": 1,
+  "parallelism": 3,
   "caps": { "maxParallel": 4, "issuesPerRun": 10, "groomingIssuesPerWeek": 15 },
   "budgets": {
     "S": { "turns": 20, "tokens": 200000 },
@@ -34,9 +34,10 @@
   "markers": { "plan": "<!-- plan:v1 -->", "acVerify": "<!-- ac-verify:v1 -->", "critic": "<!-- critic:v1 -->" },
   "milestoneExcludeRegex": "",
   "excludeLabels": ["type/operator", "type/epic", "epic"],
+  "respectDependencies": true,
   "issueLimit": 300,
   "browserProof": false,
   "notify": false,
-  "critic": { "enabled": true, "fallback": "claude" },
+  "critic": { "enabled": false, "fallback": "claude" },
   "onSmokeFailure": "revert"
 }

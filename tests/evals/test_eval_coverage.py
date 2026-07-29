@@ -19,9 +19,7 @@ from tests.evals.eval_runner import EVALS_ROOT, SKILLS_ROOT
 
 # Skills, die KEINE projekteigenen Evals brauchen:
 # - ``_common``: geteilter Code, kein eigenstaendiger Skill (kein SKILL.md-Trigger).
-# - ``xlsx``: vendorter, proprietaerer Anthropic-Document-Skill (LICENSE.txt), wird
-#   nicht vom Projekt gepflegt und ist daher von der Eval-Pflicht ausgenommen.
-EXEMPT_SKILLS = {"_common", "xlsx"}
+EXEMPT_SKILLS = {"_common"}
 
 # Mindestanforderungen aus evals/SCHEMA.md / Issue #198.
 # Der Floor ist bewusst am bestehenden Repo-Baseline ausgerichtet (alle Trigger-

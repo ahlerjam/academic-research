@@ -48,6 +48,25 @@ BASE="${HOME}/.academic-research"
 SCRIPT_DIR="$(cd "$(dirname "${0:-.}")" && pwd)"
 
 # ---------------------------------------------------------------------------
+# 0. Node.js pruefen (vgl. #468)
+# ---------------------------------------------------------------------------
+# 5 der 7 Hooks sind '.mjs'-Dateien und werden in hooks/hooks.json per
+# 'node ...' gestartet — darunter der beworbene Halluzinationsschutz
+# (verbatim-guard, claim-drift-guard). Fehlt Node, fallen diese Hooks sonst
+# lautlos aus, ohne dass der Nutzer je einen Hinweis bekommt. Analog zum
+# browser-use-Muster (Abschnitt 3) bricht das Setup deswegen NICHT hart ab —
+# venv, Permissions, Bootstrap, Uni-Profil und SciHub-Opt-in sind
+# node-unabhaengig — sondern warnt nur deutlich mit Installationsweg.
+if ! command -v node &>/dev/null; then
+  echo "⚠️  Node.js nicht gefunden — 5 der 7 Hooks (u. a. verbatim-guard, claim-drift-guard) laufen NICHT."
+  echo "   Installieren: brew install node (macOS) oder https://nodejs.org/"
+else
+  echo "✅ Node.js: gefunden ($(node --version))"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # 1. Datenverzeichnis + Python venv
 # ---------------------------------------------------------------------------
 
@@ -137,10 +156,25 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 5. Claude-Code-Permissions
+# 5. Claude-Code-Permissions (benutzerweit, nicht projektbezogen)
 # ---------------------------------------------------------------------------
+# configure_permissions.py zeigt die neu zu setzenden Regeln an und schreibt
+# sie erst nach Bestaetigung (Issue #458). Bei nicht-interaktivem stdin
+# (Pipe/CI, u.a. der primaere /setup-Aufruf durch Claude Code) greift der
+# sichere Default: kein Schreiben, Exit-Code bleibt 0 (bricht setup.sh unter
+# 'set -euo pipefail' NICHT ab). In diesem Fall bleiben pending Regeln offen —
+# das wird unten sichtbar gemeldet, inkl. Nachhol-Befehl. commands/setup.md
+# instruiert Claude Code, diesen Fall per AskUserQuestion + '--yes' selbst
+# abzuschliessen.
 
 python3 "$SCRIPT_DIR/configure_permissions.py"
+
+REMAINING_PERMS="$(python3 "$SCRIPT_DIR/configure_permissions.py" --pending-count)"
+if [ "$REMAINING_PERMS" -gt 0 ]; then
+  echo "⚠️  Schritt 5 (Claude-Code-Permissions) nicht abgeschlossen — $REMAINING_PERMS Regel(n) fehlen weiterhin in ~/.claude/settings.local.json."
+  echo "   Nachholen: python3 $SCRIPT_DIR/configure_permissions.py --yes   (schreibt ohne weitere Rueckfrage)"
+  echo "   oder ohne '--yes' interaktiv in einem Terminal ausfuehren."
+fi
 
 # ---------------------------------------------------------------------------
 # 6. Projekt-Bootstrap (Auto-Detect)

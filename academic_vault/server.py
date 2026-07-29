@@ -1,7 +1,7 @@
 """academic_vault MCP-Server.
 
 Stellt MCP-Tools vault.search/get_paper/add_paper/ensure_file/
-add_quote/find_quotes/get_quote/stats bereit.
+add_quote/find_quotes/get_quote/add_note/find_notes/search_notes/stats bereit.
 
 Start via: python -m academic_vault.server
 """
@@ -9,11 +9,10 @@ Start via: python -m academic_vault.server
 import json
 import logging
 import os
-import re
 from pathlib import Path
 from uuid import uuid4
 
-from .db import VALID_PAPER_TYPES, VaultDB, default_db_path
+from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset, default_db_path
 from .embedding_model import get_embedder
 from .files_api import FilesAPIClient
 
@@ -80,6 +79,57 @@ def validate_csl_json(csl_json: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _ensure_schema_for_read(db_path: str) -> None:
+    """Stellt vor einem reinen Lesezugriff sicher, dass die DB nutzbar ist.
+
+    Bewusst NICHT einfach ``VaultDB(db_path).init_schema()``: ``schema.sql``
+    enthaelt drei unbedingte ``DROP TRIGGER``+``CREATE TRIGGER``-Paare (siehe
+    Kommentar dort), die -- anders als ``CREATE TABLE IF NOT EXISTS`` -- bei
+    jedem Lauf sqlite_master schreiben. Riefe jeder Lesepfad unconditional
+    ``init_schema()``, wuerde jeder Read (get_paper, search_papers, ...) zu
+    einem DDL-Schreibvorgang (Review-Fund P1 zu PR #478/#455).
+
+    Der Guard hier prueft nur billig, ob die DB ueberhaupt schon eine
+    ``papers``-Tabelle hat. Fehlt sie (frische, leere DB-Datei -- der Fall,
+    den AC3 aus #455 abdeckt), wird einmalig der volle
+    ``VaultDB.init_schema()`` durchlaufen. Existiert sie bereits, wird nichts
+    weiter getan -- Reparatur von Bestands-Drift (fehlende Spalten/Tabellen,
+    veraltete Trigger) bleibt bewusst Aufgabe der Schreibpfade (add_paper,
+    add_quote, ...), die weiterhin unbedingt ``init_schema()`` aufrufen und
+    damit voll migrations-/reparaturfaehig bleiben (z.B. Trigger-Refresh auf
+    Bestands-DBs, Issue #373).
+
+    Zusaetzlich wird ``notes_fts`` geprueft (Review-Fund P1 zu PR #490):
+    ``notes_fts`` ist erst mit Issue #462 hinzugekommen und existiert auf
+    keinem Bestands-Vault, dessen ``papers``-Tabelle schon vorher da war.
+    Ohne diesen zweiten Guard wuerde ``search_notes()`` auf jeder solchen
+    Bestands-DB mit ``sqlite3.OperationalError: no such table: notes_fts``
+    abstuerzen statt (wie #369 fuer ``papers_fts`` etabliert) ein leeres
+    Ergebnis zu liefern -- der Schreibpfad ``add_note()`` (unbedingtes
+    ``init_schema()``) legt ``notes_fts`` erst beim ersten Schreibzugriff an,
+    ein reiner Lesezugriff (``find_notes``/``search_notes``/``get_note``)
+    kann diesem aber zeitlich vorausgehen.
+    """
+    conn = VaultDB._open(db_path)
+    try:
+        papers_exists = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='papers'"
+            ).fetchone()
+            is not None
+        )
+        notes_fts_exists = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notes_fts'"
+            ).fetchone()
+            is not None
+        )
+    finally:
+        conn.close()
+    if not papers_exists or not notes_fts_exists:
+        VaultDB(db_path).init_schema()
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -139,6 +189,7 @@ def get_quote(db_path: str, quote_id: str) -> dict | None:
     Feld aktuell nur manuell; die NLI-Klassifikation ist ein Folge-Issue.
     """
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.get_quote(quote_id)
 
 
@@ -176,6 +227,14 @@ def search_papers(
         # gueltiger MATCH-Ausdruck moeglich, daher leeres Ergebnis statt
         # sqlite3.OperationalError (Issue #369).
         return []
+    # Schema-Sicherstellung vor der rohen SQL-Query unten (Issue #455): diese
+    # Funktion umgeht VaultDB komplett und oeffnet die Connection direkt
+    # ueber VaultDB._open(), daher greift keine der init_schema()-Aufrufe in
+    # den anderen Lesepfaden. Ohne dies crasht die erste Suche auf einer
+    # frischen DB mit sqlite3.OperationalError statt ein leeres Ergebnis zu
+    # liefern. _ensure_schema_for_read() statt unbedingtem init_schema()
+    # (Review-Fund P1 zu PR #478): letzteres fuehrt bei jedem Aufruf DDL aus.
+    _ensure_schema_for_read(db_path)
     conn = VaultDB._open(db_path)
     try:
         if type_filter:
@@ -236,33 +295,6 @@ def search_papers(
         voyage_api_key=voyage_key,
         cohere_api_key=cohere_key,
     )
-
-
-_FTS5_OPERATOR_KEYWORDS = re.compile(r"\b(?:NEAR|AND|OR|NOT)\b")
-
-
-def _sanitize_fts5_query(query: str) -> str:
-    """Bereinigt Query fuer sichere FTS5-MATCH-Ausfuehrung.
-
-    FTS5-Sonderzeichen die Probleme verursachen: - / ^ * " ( ) sowie der
-    Column-Filter-Operator ':'. Zusaetzlich werden die booleschen
-    Operator-Keywords NEAR/AND/OR/NOT (nur in Grossschreibung
-    operatorwirksam) neutralisiert, damit usergenerierte Strings nicht
-    versehentlich als FTS5-Syntax interpretiert werden und einen
-    Query-Crash ausloesen.
-
-    Strategie: Sonderzeichen und Operator-Keywords durch Leerzeichen
-    ersetzen, Mehrfach-Leerzeichen kollabieren. Kleingeschriebene Woerter
-    wie 'android' oder 'and' bleiben unangetastet — nur die in FTS5
-    operatorwirksamen Grossschreibungen werden entfernt.
-    """
-    # FTS5-Sonderzeichen entfernen/ersetzen: -, ^, /, *, (, ), ", :
-    sanitized = re.sub(r'[-^/*():"]', " ", query)
-    # Boolesche Operator-Keywords (Grossschreibung) neutralisieren
-    sanitized = _FTS5_OPERATOR_KEYWORDS.sub(" ", sanitized)
-    # Mehrfache Leerzeichen zusammenfassen
-    sanitized = re.sub(r"\s+", " ", sanitized).strip()
-    return sanitized
 
 
 def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
@@ -359,6 +391,7 @@ def _maybe_extract_fulltext(db_path: str, paper_id: str, pdf_path: str | None) -
         return False
     try:
         db = VaultDB(db_path)
+        db.init_schema()
         if db.get_fulltext(paper_id) is not None:
             return False
         from .fulltext import extract_fulltext
@@ -392,6 +425,7 @@ def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
 def search_quote_text(db_path: str, verbatim: str, k: int = 5) -> list[dict]:
     """LIKE-Suche in quotes.verbatim. Gibt [{quote_id, verbatim, paper_id}] zurueck."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.search_quote_text(verbatim, k)
 
 
@@ -403,7 +437,59 @@ def find_quotes(
 ) -> list[dict]:
     """Gibt Quotes fuer ein Paper zurueck, optional per verbatim-Filter."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.find_quotes(paper_id, query, k)
+
+
+# ---------------------------------------------------------------------------
+# Notes-Funktionen (rein, testbar ohne MCP-Framework) -- Issue #462
+# ---------------------------------------------------------------------------
+
+
+def add_note(
+    db_path: str,
+    paper_id: str,
+    text: str,
+    tags: str | None = None,
+    page: int | None = None,
+) -> str:
+    """Fuegt eine Notiz/ein Exzerpt zu einer Quelle in den Vault ein.
+
+    Gibt note_id zurueck. ``page`` ist optional (AC2).
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    return db.add_note(paper_id=paper_id, text=text, tags=tags, page=page)
+
+
+def get_note(db_path: str, note_id: str) -> dict | None:
+    """Gibt vollstaendigen Note-Record als dict zurueck oder None."""
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.get_note(note_id)
+
+
+def find_notes(
+    db_path: str,
+    paper_id: str,
+    query: str | None = None,
+    k: int = 10,
+) -> list[dict]:
+    """Gibt Notizen fuer ein Paper zurueck, optional per Text-Filter (AC1)."""
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.find_notes(paper_id, query, k)
+
+
+def search_notes(db_path: str, query: str, k: int = 5) -> list[dict]:
+    """FTS5-Volltextsuche ueber alle Notizen.
+
+    AC3: macht Exzerpte beim Kapitelschreiben themenbezogen auffindbar.
+    AC4: Volltextsuche findet Notizinhalte.
+    """
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.search_notes(query, k)
 
 
 # ---------------------------------------------------------------------------
@@ -434,12 +520,14 @@ def add_figure(
 def get_figure(db_path: str, figure_id: str) -> dict | None:
     """Gibt vollstaendigen Figure-Record als dict oder None."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.get_figure(figure_id)
 
 
 def list_figures(db_path: str, paper_id: str) -> list[dict]:
     """Gibt alle Figures fuer ein Paper, nach page sortiert."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.list_figures(paper_id)
 
 
@@ -458,6 +546,7 @@ def find_figure_by_caption(
     ein In-Text-Referenz-Label ist (z. B. ``"Abb. 3.4"``), kein Caption-Fragment.
     """
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.find_figures_by_reference(caption_fragment, paper_id=paper_id)
 
 
@@ -465,17 +554,17 @@ def add_paper(
     db_path: str,
     paper_id: str,
     csl_json: str,
-    pdf_path: str | None = None,
-    doi: str | None = None,
-    isbn: str | None = None,
-    page_offset: int = 0,
-    editor: str | None = None,
-    chapter: str | None = None,
-    page_first: int | None = None,
-    page_last: int | None = None,
-    container_title: str | None = None,
-    parent_paper_id: str | None = None,
-    provenance: str | None = None,
+    pdf_path: str | None | _Unset = _UNSET,
+    doi: str | None | _Unset = _UNSET,
+    isbn: str | None | _Unset = _UNSET,
+    page_offset: int | _Unset = _UNSET,
+    editor: str | None | _Unset = _UNSET,
+    chapter: str | None | _Unset = _UNSET,
+    page_first: int | None | _Unset = _UNSET,
+    page_last: int | None | _Unset = _UNSET,
+    container_title: str | None | _Unset = _UNSET,
+    parent_paper_id: str | None | _Unset = _UNSET,
+    provenance: str | None | _Unset = _UNSET,
 ) -> None:
     """Upsert eines Papers in den Vault. Unterstuetzt type=book|chapter.
 
@@ -483,6 +572,14 @@ def add_paper(
 
     csl_json wird strikt validiert (Issue #213): Pflichtfeld 'type', gueltiger
     CSL-Typ, valides JSON. Bei Verstoss ValueError statt silent default.
+
+    Alle optionalen Parameter defaulten auf das Sentinel ``_UNSET`` statt auf
+    ``None``/``0`` (Issue #455) und werden unveraendert an ``VaultDB.add_paper()``
+    durchgereicht: ein zweiter Aufruf fuer dieselbe ``paper_id``, der ein
+    optionales Feld nicht mit uebergibt, laesst dessen Bestandswert
+    unangetastet statt ihn auf den Default zurueckzusetzen. Ein bewusst
+    geleertes Feld (explizit ``None``/``0`` uebergeben) wird weiterhin
+    geleert.
 
     Nach dem Upsert laufen zwei best-effort-Schritte, beide loggen Fehler statt
     sie zu werfen: die PDF-Volltext-Extraktion (Issue #373, abschaltbar via
@@ -507,7 +604,12 @@ def add_paper(
         parent_paper_id=parent_paper_id,
         provenance=provenance,
     )
-    _maybe_extract_fulltext(db_path, paper_id, pdf_path)
+    # _maybe_extract_fulltext() erwartet str | None -- Sentinel ("nicht
+    # uebergeben") ist fuer die Volltextextraktion aequivalent zu "kein
+    # PDF-Pfad angegeben". isinstance() statt "is _UNSET", damit mypy den
+    # else-Zweig zuverlaessig auf "str | None" narrowed.
+    resolved_pdf_path: str | None = None if isinstance(pdf_path, _Unset) else pdf_path
+    _maybe_extract_fulltext(db_path, paper_id, resolved_pdf_path)
     _maybe_ingest_embeddings(db_path, paper_id)
 
 
@@ -552,6 +654,7 @@ def add_chapter(
 def get_paper(db_path: str, paper_id: str) -> dict | None:
     """Gibt Paper-Metadata als dict zurueck oder None."""
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     return db.get_paper(paper_id)
 
 
@@ -585,18 +688,21 @@ def get_stats(db_path: str) -> dict:
 def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
     """Setzt ocr_done-Flag fuer ein Paper im Vault."""
     db = VaultDB(db_path)
+    db.init_schema()
     db.set_ocr_done(paper_id, value)
 
 
 def update_pdf_path(db_path: str, paper_id: str, new_path: str) -> None:
     """Aktualisiert pdf_path fuer ein Paper im Vault."""
     db = VaultDB(db_path)
+    db.init_schema()
     db.update_pdf_path(paper_id, new_path)
 
 
 def set_page_offset(db_path: str, paper_id: str, offset: int) -> None:
     """Setzt page_offset fuer ein Paper im Vault."""
     db = VaultDB(db_path)
+    db.init_schema()
     db.set_page_offset(paper_id, offset)
 
 
@@ -976,7 +1082,7 @@ def restore_snapshot(
         return False
 
 
-def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
+def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int | None:
     """Berechnet gedruckte Seitenzahl: printed_page = pdf_page - page_offset.
 
     Args:
@@ -985,12 +1091,18 @@ def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
         pdf_page: Seitenzahl aus Citations-API (1-basiert ab erster PDF-Seite).
 
     Returns:
-        Gedruckte Seitenzahl (>= 1).
+        Gedruckte Seitenzahl (>= 1), oder None wenn pdf_page vor dem
+        Textbeginn liegt (Vorspann -- z.B. Titelblatt, Impressum,
+        Inhaltsverzeichnis). Wird NICHT auf 1 geklemmt (Issue #464 AC2):
+        das waere von einer echten Seite 1 nicht unterscheidbar.
     """
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     offset = db.get_page_offset(paper_id)
     printed = pdf_page - offset
-    return max(1, printed)  # Nie kleiner als 1
+    if printed < 1:
+        return None
+    return printed
 
 
 def extract_fulltext_for_paper(
@@ -1018,6 +1130,7 @@ def extract_fulltext_for_paper(
     from .fulltext import extract_fulltext
 
     db = VaultDB(db_path)
+    db.init_schema()
     paper = db.get_paper(paper_id)
     if paper is None:
         raise ValueError(f"Paper unbekannt: {paper_id}")
@@ -1071,21 +1184,24 @@ def _build_mcp_server():
     def _vault_add_paper(
         paper_id: str,
         csl_json: str,
-        pdf_path: str | None = None,
-        doi: str | None = None,
-        isbn: str | None = None,
-        page_offset: int = 0,
-        editor: str | None = None,
-        chapter: str | None = None,
-        page_first: int | None = None,
-        page_last: int | None = None,
-        container_title: str | None = None,
-        parent_paper_id: str | None = None,
-        provenance: str | None = None,
+        pdf_path: str | None | _Unset = _UNSET,
+        doi: str | None | _Unset = _UNSET,
+        isbn: str | None | _Unset = _UNSET,
+        page_offset: int | _Unset = _UNSET,
+        editor: str | None | _Unset = _UNSET,
+        chapter: str | None | _Unset = _UNSET,
+        page_first: int | None | _Unset = _UNSET,
+        page_last: int | None | _Unset = _UNSET,
+        container_title: str | None | _Unset = _UNSET,
+        parent_paper_id: str | None | _Unset = _UNSET,
+        provenance: str | None | _Unset = _UNSET,
     ) -> None:
         """Upsert eines Papers. type aus csl_json; book|chapter|article-journal erlaubt.
 
         provenance: Herkunfts-Tag (z.B. "scihub") fuer Provenance-Audit (#195).
+
+        Nicht uebergebene optionale Felder lassen ihren Bestandswert beim
+        Upsert unangetastet statt ihn zu leeren (Issue #455).
         """
         add_paper(
             db_path,
@@ -1177,6 +1293,26 @@ def _build_mcp_server():
         """Gibt vollstaendigen Quote-Record zurueck."""
         return get_quote(db_path, quote_id)
 
+    @mcp.tool(name="vault.add_note")
+    def _vault_add_note(
+        paper_id: str,
+        text: str,
+        tags: str | None = None,
+        page: int | None = None,
+    ) -> str:
+        """Fuegt eine Notiz/ein Exzerpt zu einer Quelle hinzu. page optional (#462)."""
+        return add_note(db_path, paper_id=paper_id, text=text, tags=tags, page=page)
+
+    @mcp.tool(name="vault.find_notes")
+    def _vault_find_notes(paper_id: str, query: str | None = None, k: int = 10) -> list[dict]:
+        """Gibt Notizen fuer ein Paper zurueck, optional per Text-Filter."""
+        return find_notes(db_path, paper_id, query=query, k=k)
+
+    @mcp.tool(name="vault.search_notes")
+    def _vault_search_notes(query: str, k: int = 5) -> list[dict]:
+        """FTS5-Volltextsuche ueber alle Notizen (fuer Kapitelschreiben, #462)."""
+        return search_notes(db_path, query, k=k)
+
     @mcp.tool(name="vault.stats")
     def _vault_stats() -> dict:
         """Counts + Token-Ersparnis-Schaetzung."""
@@ -1198,8 +1334,10 @@ def _build_mcp_server():
         set_page_offset(db_path, paper_id, offset)
 
     @mcp.tool(name="vault.get_printed_page")
-    def _vault_get_printed_page(paper_id: str, pdf_page: int) -> int:
-        """Berechnet gedruckte Seitenzahl: printed_page = pdf_page - page_offset."""
+    def _vault_get_printed_page(paper_id: str, pdf_page: int) -> int | None:
+        """Berechnet gedruckte Seitenzahl: printed_page = pdf_page - page_offset.
+
+        None, wenn pdf_page vor dem Textbeginn liegt (Vorspann)."""
         return get_printed_page(db_path, paper_id, pdf_page)
 
     @mcp.tool(name="vault.extract_fulltext")

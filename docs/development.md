@@ -1,6 +1,6 @@
 # Entwicklung, Tests und Evals
 
-[← zurück zur README](../README.md)
+[← Doku-Übersicht](README.md)
 
 Für Beitragende. Endnutzer brauchen diese Seite nicht — der Nutzerweg läuft über
 `scripts/setup.sh` und pip, nicht über `uv`.
@@ -79,6 +79,39 @@ Die Hooks umfassen `ruff` (Lint + Format), `mypy`, `end-of-file-fixer`, `check-y
 - Jeder nicht-Draft-PR durchläuft die Review-Pipeline
   `.github/workflows/pr-deep-review.yml`; der `coordinator`-Job ist das Merge-Gate.
 
+## Versionierte `.claude/`-Dateien
+
+`.claude/` ist normalerweise ein lokaler Ordner. In diesem Repository sind fünf Dateien
+davon bewusst **versioniert** (Issue #343) — sie gehören zur Infrastruktur, nicht zur
+Arbeitsumgebung einer einzelnen Person. Die Mechanik dahinter steht in der `.gitignore`:
+`.claude/*` ist ausgeschlossen, und genau diese Einträge sind per `!`-Ausnahme wieder
+zugelassen.
+
+| Versionierte Datei | Rolle |
+|--------------------|-------|
+| `.claude/settings.json` | Verdrahtet die Hooks unten an `SessionStart`/`PreToolUse`/`PostToolUse`, aktiviert die Plugins (u. a. flowkit) und trägt die Permission-Allowlist. |
+| `.claude/hooks/pretooluse-blocker.sh` | Einzige Quelle der Wahrheit für das Gefahrenmuster-Regex der roten Linien (Force-Push auf `main`, `--no-verify`, `gh api`-Mutationen, `gh --admin`). |
+| `.claude/hooks/inject-context.sh` | `SessionStart`-Hook: meldet Branch und Arbeitsstand. Rein informativ, fail-open. |
+| `.claude/hooks/pushci-guard.sh` | Erinnert an den konfigurierten CI-Push-Alias. Reiner Komfort, fail-open. |
+| `.claude/workflow.config.json` | flowkit-Konfiguration: `areas` und `protectedAreas` (siehe [AGENTS.md](../AGENTS.md)). |
+
+**Was bricht, wenn eine dieser Dateien verschwindet:**
+
+- **CI wird rot.** Der Job `flowkit-hook-harness` in `.github/workflows/ci.yml` ruft
+  `scripts/dev/test-pretooluse-blocker.sh` auf, und dieses Harness testet die
+  *deployte* Datei `.claude/hooks/pretooluse-blocker.sh` — nicht eine Vorlage. Fehlt
+  sie, schlägt der Job fehl.
+- **Die lokale Sitzung blockiert.** `.claude/settings.json` startet den Blocker so, dass
+  ein fehlendes oder nicht ausführbares Skript jeden `Bash`-Aufruf **vorsorglich
+  ablehnt** — bewusst so gebaut, damit ein gelöschter Guard nicht stillschweigend zu
+  „keine Prüfung" wird.
+- **flowkit verliert seine Grenzen.** Ohne `.claude/workflow.config.json` kennt der
+  Workflow die geschützten Bereiche nicht mehr, und Änderungen an `vault`, `hooks`,
+  `security` oder `ci` laufen ohne die dafür vorgesehene Sonderbehandlung.
+
+Alles andere unter `.claude/` (`settings.local.json`, `worktrees/`, eigene `agents/`)
+bleibt lokal und gehört nicht ins Repository.
+
 ## Evals
 
 `evals/` und `tests/evals/` sind **keine** normale pytest-Suite, sondern
@@ -97,13 +130,13 @@ uv run pytest tests/evals/ -v
 Kein CI-Trigger — Evals laufen lokal vor jedem Release. Reports unter `docs/evals/`.
 
 **Was ohne API-Key wirklich läuft.** `uv run pytest tests/evals/` ergibt ohne
-`ANTHROPIC_API_KEY` **184 bestandene und 148 übersprungene** Tests. Davon sind
-**147 Skips API-gated** — sie kommen aus `require_api_key()` in
+`ANTHROPIC_API_KEY` **188 bestandene und 152 übersprungene** Tests. Die Skips
+kommen ganz überwiegend aus `require_api_key()` in
 `tests/evals/eval_runner.py` und bedeuten: hier wird derzeit keine
 LLM-Qualität gemessen. Von den
-37 Komponenten unter `evals/` haben genau **3** einen Runner, der offline
+40 Komponenten unter `evals/` haben genau **3** einen Runner, der offline
 Inhalt bewertet (`verbatim-guard`, `humanizer-de-pipeline`, `auto-download`);
-die übrigen 34 werden nur strukturell geprüft. Welche Komponente in welchem
+die übrigen 37 werden nur strukturell geprüft. Welche Komponente in welchem
 Zustand ist und warum, steht vollständig in
 [`docs/evals/STRATEGY.md`](evals/STRATEGY.md) — inklusive der Bezifferung
 des API-Budgets, das nötig wäre, um daraus echte Metriken zu machen. Der Guard

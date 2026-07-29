@@ -1,5 +1,7 @@
 # literature_state.md — Schema-Dokumentation
 
+[← Doku-Übersicht](README.md)
+
 `literature_state.md` ist ein read-only Snapshot-Export aus dem Vault
 (erzeugt via `node scripts/export-literature-state.mjs`). Dieses Dokument
 beschreibt das Schema der Eintraege.

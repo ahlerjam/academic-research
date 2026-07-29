@@ -53,14 +53,28 @@ def normalize_paper(data: dict[str, Any], source_module: str) -> dict[str, Any]:
     }
 
 
+_DOI_PREFIXES = (
+    "https://dx.doi.org/",
+    "http://dx.doi.org/",
+    "https://doi.org/",
+    "http://doi.org/",
+    "dx.doi.org/",
+    "doi.org/",
+    "urn:doi:",
+    "doi:",
+)
+
+
 def normalize_doi(doi: str | None) -> str | None:
-    """Normalize DOI to lowercase without URL prefix."""
+    """Normalize DOI to lowercase without URL/URN prefix or trailing punctuation."""
     if not doi:
         return None
     value = doi.strip().lower()
-    for prefix in ("https://doi.org/", "http://doi.org/"):
+    for prefix in _DOI_PREFIXES:
         if value.startswith(prefix):
             value = value[len(prefix) :]
+            break
+    value = value.rstrip(".,;")
     return value or None
 
 

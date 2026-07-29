@@ -36,11 +36,11 @@ def test_marketplace_json_version():
     )
 
 
-def test_plugin_json_description_mentions_30_skills():
-    """plugin.json description soll die aktuelle Skill-Zahl (30) nennen, nicht '13'."""
+def test_plugin_json_description_mentions_32_skills():
+    """plugin.json description soll die aktuelle Skill-Zahl (32) nennen, nicht '13'."""
     data = json.loads(PLUGIN_JSON.read_text())
     description = data["description"]
-    assert "30" in description, f"plugin.json description enthält nicht '30': '{description}'"
+    assert "32" in description, f"plugin.json description enthält nicht '32': '{description}'"
 
 
 def test_plugin_json_version_matches_marketplace():

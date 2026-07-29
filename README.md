@@ -3,7 +3,7 @@
 [![CI](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ahlerjam/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/ahlerjam/academic-research)
 [![Version](https://img.shields.io/badge/version-6.5.1-blue.svg)](CHANGELOG.md)
-[![Skills](https://img.shields.io/badge/skills-30-orange.svg)](docs/reference/skills.md)
+[![Skills](https://img.shields.io/badge/skills-32-orange.svg)](docs/reference/skills.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-8A2BE2.svg)](https://code.claude.com/docs/en/plugins)
 
@@ -14,9 +14,20 @@ Es durchsucht 15 wissenschaftliche Quellen parallel, bewertet Literatur in fünf
 Dimensionen, schreibt Kapitelentwürfe mit seitengenauen Belegen und prüft Stil, Zitate
 und Formalia — im Terminal, in normalem Deutsch.
 
-Der Unterschied zum Chat-Fenster: **Zitate kommen aus einer Datenbank, nicht aus dem
-Modellgedächtnis.** Jedes Zitat liegt mit Quelle und Seitenzahl im Vault, und ein Hook
+**Für wen:** Studierende mit Bachelor-, Master- oder Hausarbeit · Doktorand\*innen mit
+systematischem Review (PRISMA, Risk-of-Bias, Meta-Analyse) · Schüler\*innen mit
+Facharbeit. Zitierstile, Formalia-Checks und der Anti-KI-Pass sind auf
+deutschsprachige Hochschulen ausgelegt.
+
+**Der Unterschied zum Chat-Fenster:** Zitate kommen aus einer Datenbank, nicht aus dem
+Modellgedächtnis. Jedes Zitat liegt mit Quelle und Seitenzahl im Vault, und ein Hook
 blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
+
+![Terminal-Mitschnitt: Setup, erste Suche, verifiziertes Zitat im Vault, Guard blockt ein erfundenes Zitat](docs/assets/quickstart.svg)
+
+<sub>Standbild des abgenommenen Durchlaufs aus
+[docs/quickstart-protocol.md](docs/quickstart-protocol.md); Quelle ist der Mitschnitt
+[docs/assets/quickstart.cast](docs/assets/quickstart.cast).</sub>
 
 > [!WARNING]
 > **Zitate trotzdem gegenprüfen.** Der `citation-extraction`-Skill arbeitet mit der
@@ -42,22 +53,12 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 >
 > - SciHub operiert rechtlich in einer umstrittenen Zone — die Nutzung kann in deinem Land gegen das Urheberrecht verstossen.
 > - Jeder via SciHub bezogene Volltext wird im Vault mit `provenance:scihub` getaggt.
-> - Im Output erscheint stets der Hinweis: *"Quelle via SciHub bezogen — bitte zusätzlich legalen Zugriff klären."*
+> - Die rechtliche Aufklärung erfolgt **einmalig beim Opt-in** — nicht bei jedem einzelnen Fund.
+>   Läuft der Tier, geschieht das anschließend ohne wiederholte Warnhinweise (Issue #459).
 > - **Du trägst die alleinige rechtliche Verantwortung für die Nutzung des SciHub-Tiers.**
 <!-- END SCIHUB-DISCLAIMER-BLOCK -->
 
 ---
-
-## Für wen ist das?
-
-- **Studierende** mit Bachelor-, Master- oder Hausarbeit, die einen strukturierten
-  Rechercheprozess brauchen statt eines Chatverlaufs.
-- **Doktorand\*innen**, die systematische Reviews fahren: PRISMA-Flow, Risk-of-Bias,
-  Meta-Analyse.
-- **Schüler\*innen** mit Facharbeit, die sauberes Zitieren lernen wollen.
-
-Sprache und Zielgruppe sind deutsch: Zitierstile, Formalia-Checks und der Anti-KI-Pass
-sind auf deutschsprachige Hochschulen ausgelegt.
 
 ## Was es kann
 
@@ -75,8 +76,8 @@ sind auf deutschsprachige Hochschulen ausgelegt.
 ```mermaid
 graph LR
     U[Du in Claude Code] --> C[9 Slash-Commands]
-    U --> S[30 Skills<br/>selbstaktivierend]
-    C --> A[19 Agents<br/>Subagents]
+    U --> S[32 Skills<br/>selbstaktivierend]
+    C --> A[20 Agents<br/>Subagents]
     S --> A
     A --> V[(Vault<br/>SQLite + FTS5 + vec0)]
     C --> V
@@ -94,8 +95,21 @@ rufst du explizit auf. **Agents** sind Subagents, die Skills und Commands starte
 
 <!-- QUICKSTART-START -->
 
-Du brauchst **Claude Code**, **Python 3.11+** und Git. Rechne mit rund 10 Minuten, davon
-das meiste Wartezeit beim ersten Modell-Download.
+Vier Dinge müssen da sein, der Rest erweitert nur:
+
+| Voraussetzung | Status | Wofür |
+|---|---|---|
+| **Claude Code** | Pflicht | Laufzeitumgebung des Plugins |
+| **Python 3.11+** | Pflicht | Vault-MCP-Server, Such- und PDF-Skripte |
+| **Node.js** | Pflicht | Die Hooks laufen als `node …mjs` — ohne Node kein Zitat-Guard |
+| **Git** | Pflicht | Installation über den Plugin-Marketplace |
+| Modell `intfloat/multilingual-e5-small` | Pflicht, lädt sich selbst | ~470 MB einmalig beim ersten PDF; danach läuft die Vektor-Suche offline |
+| `uv` oder `pipx` | Optional | installiert die `browser-use`-CLI für die 7 Browser-Module |
+| `ocrmypdf` | Optional | OCR für gescannte PDFs ohne Textebene |
+
+Installationsbefehle und Details stehen in der
+[Installationsanleitung](docs/guide/installation.md). Rechne mit rund 10 Minuten, davon
+das meiste Wartezeit beim Modell-Download.
 
 **1. Plugin installieren** — in Claude Code:
 
@@ -136,10 +150,15 @@ Der `academic-context`-Skill fragt den Rest ab und legt dein Thesis-Profil an.
 ```
 
 Sucht parallel in 7 APIs, dedupliziert die Treffer, bewertet sie auf fünf Dimensionen und
-legt sie im Vault ab.
+legt sie im Vault ab. Das darunterliegende Suchskript meldet am Ende die Trefferzahl — so
+sieht ein geglückter Lauf aus:
 
-> Beim ersten Paper mit PDF lädt das Plugin einmalig ~470 MB Modellgewichte für die
-> Vektor-Suche herunter. Das sieht aus wie ein Hänger, ist aber Fortschritt.
+```console
+INFO:__main__:Found 15 papers (0 modules failed)
+```
+
+> Hier greift der Modell-Download aus der Tabelle oben: einmalig ~470 MB Gewichte für die
+> Vektor-Suche. Das sieht aus wie ein Hänger, ist aber Fortschritt.
 
 **6. Erstes verifiziertes Zitat holen:**
 
@@ -160,6 +179,9 @@ allen Ausgaben und den dabei gefundenen Stolperstellen steht in
 
 ## Dokumentation
 
+Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
+[docs/README.md](docs/README.md).
+
 **Loslegen**
 
 - [Installation und Migration](docs/guide/installation.md) — Voraussetzungen, was das Setup tut, Umstieg von v5
@@ -170,9 +192,9 @@ allen Ausgaben und den dabei gefundenen Stolperstellen steht in
 **Nachschlagen**
 
 - [Commands](docs/reference/commands.md) — alle 9 Slash-Commands mit Syntax und Beispielen
-- [Skills](docs/reference/skills.md) — alle 30 Skills und ihre Trigger
-- [Agents](docs/reference/agents.md) — alle 19 Subagents
-- [Vault-MCP-Server](docs/reference/vault.md) — alle 34 MCP-Tools, Volltext- und Vektor-Index
+- [Skills](docs/reference/skills.md) — alle 32 Skills und ihre Trigger
+- [Agents](docs/reference/agents.md) — alle 20 Subagents
+- [Vault-MCP-Server](docs/reference/vault.md) — alle 37 MCP-Tools, Volltext- und Vektor-Index
 - [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt
 - [Hooks-Stack](docs/reference/hooks.md) — was wann eingreift, und was geloggt wird
 - [Per-Uni-Profile](docs/reference/uni-profiles.md) — Hochschulzugänge einrichten

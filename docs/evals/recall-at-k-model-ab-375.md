@@ -1,5 +1,10 @@
 # Eval-Report — Recall@10-Goldset DE/EN + Embedding-Modell-A/B (Issue #375)
 
+> **Historisches Dokument.** Momentaufnahme eines einzelnen Laufs, nicht der
+> aktuelle Stand. Der Sollzustand steht in [`STRATEGY.md`](STRATEGY.md).
+
+[← Doku-Übersicht](../README.md)
+
 **Datum:** 2026-07-27
 **Komponente:** `compute_recall_at_k()` (`academic_vault/retrieval.py`) + drei
 Embedding-Modellkandidaten (`sentence-transformers`)

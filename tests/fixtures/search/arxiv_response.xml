@@ -1,0 +1,122 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/BYx7U7nMN/E+CoyGvKEKIm9Miqc</id>
+  <title>arXiv Query: search_query=all:climate OR all:change&amp;id_list=&amp;start=0&amp;max_results=3</title>
+  <updated>2026-07-28T20:39:31Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:climate+OR+all:change&amp;start=0&amp;max_results=3&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>3</opensearch:itemsPerPage>
+  <opensearch:totalResults>189443</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/1503.07557v1</id>
+    <title>Precipitation extremes under climate change</title>
+    <updated>2015-03-25T21:11:05Z</updated>
+    <link href="https://arxiv.org/abs/1503.07557v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1503.07557v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The response of precipitation extremes to climate change is considered using results from theory, modeling, and observations, with a focus on the physical factors that control the response. Observations and simulations with climate models show that precipitation extremes intensify in response to a warming climate. However, the sensitivity of precipitation extremes to warming remains uncertain when convection is important, and it may be higher in the tropics than the extratropics. Several physical contributions govern the response of precipitation extremes. The thermodynamic contribution is robust and well understood, but theoretical understanding of the microphysical and dynamical contributions is still being developed. Orographic precipitation extremes and snowfall extremes respond differently from other precipitation extremes and require particular attention. Outstanding research challenges include the influence of mesoscale convective organization, the dependence on the duration considered, and the need to better constrain the sensitivity of tropical precipitation extremes to warming.</summary>
+    <category term="physics.ao-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2015-03-25T21:11:05Z</published>
+    <arxiv:comment>Accepted in Current Climate Change Reports</arxiv:comment>
+    <arxiv:primary_category term="physics.ao-ph"/>
+    <arxiv:journal_ref>Current Climate Change Reports, 1, 49-59, 2015</arxiv:journal_ref>
+    <author>
+      <name>Paul A. O'Gorman</name>
+    </author>
+    <arxiv:doi>10.1007/s40641-015-0009-3</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1007/s40641-015-0009-3" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2012.10386v1</id>
+    <title>Future Climate Change Projections over the Indian Region</title>
+    <updated>2020-12-02T07:46:57Z</updated>
+    <link href="https://arxiv.org/abs/2012.10386v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2012.10386v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Assessments of impacts of climate change and future projections over the Indian region, have so far relied on a single regional climate model (RCM) - eg., the PRECIS RCM of the Hadley Centre, UK. While these assessments have provided inputs to various reports (e.g., INCCA 2010; NATCOMM2 2012), it is important to have an ensemble of climate projections drawn from multiple RCMs due to large uncertainties in regional-scale climate projections. Ensembles of multi-RCM projections driven under different perceivable socio-economic scenarios are required to capture the probable path of growth, and provide the behavior of future climate and impacts on various biophysical systems and economic sectors dependent on such systems.
+  The Centre for Climate Change Research, Indian Institute of Tropical Meteorology (CCCR-IITM) has generated an ensemble of high resolution downscaled projections of regional climate and monsoon over South Asia until 2100 for the Intergovernmental Panel for Climate Change (IPCC)using a RCM (ICTP-RegCM4) at 50 km horizontal resolution, by driving the regional model with lateral and lower boundary conditions from multiple global atmosphere-ocean coupled models from the Coupled Model Intercomparison Project Phase 5 (CMIP5). The future projections are based on three Representation Concentration Pathway (RCP) scenarios (viz., RCP2.6, RCP4.5, RCP8.5) of the IPCC.</summary>
+    <category term="physics.ao-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="physics.geo-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-12-02T07:46:57Z</published>
+    <arxiv:comment>"17 pages, chapter in Climate Change over INDIA: An Interim Report (2017), pp 11-27; see http://cccr.tropmet.res.in/home/docs/cccr/climate-change-report-2017.pdf"</arxiv:comment>
+    <arxiv:primary_category term="physics.ao-ph"/>
+    <arxiv:journal_ref>Climate Change over INDIA: An Interim Report (2017), pp 11-27</arxiv:journal_ref>
+    <author>
+      <name>J. Sanjay</name>
+    </author>
+    <author>
+      <name>R. Krishnan</name>
+    </author>
+    <author>
+      <name>M. V. S. Ramarao</name>
+    </author>
+    <author>
+      <name>R. Mahesh</name>
+    </author>
+    <author>
+      <name>Bhupendra Bahadur Singh</name>
+    </author>
+    <author>
+      <name>Jayashri Patel</name>
+    </author>
+    <author>
+      <name>Sandip Ingle</name>
+    </author>
+    <author>
+      <name>Preethi Bhaskar</name>
+    </author>
+    <author>
+      <name>J. V. Revadekar</name>
+    </author>
+    <author>
+      <name>T. P. Sabin</name>
+    </author>
+    <author>
+      <name>M. Mujumdar</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2008.01035v1</id>
+    <title>Invasive species, extreme fire risk, and toxin release under a changing climate</title>
+    <updated>2020-08-03T17:22:18Z</updated>
+    <link href="https://arxiv.org/abs/2008.01035v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2008.01035v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Mediterranean ecosystems such as those found in California, Central Chile, Southern Europe, and Southwest Australia host numerous, diverse, fire-adapted micro-ecosystems. These micro-ecosystems are as diverse as mountainous conifer to desert-like chaparral communities. Over the last few centuries, human intervention, invasive species, and climate warming have drastically affected the composition and health of Mediterranean ecosystems on almost every continent. Increased fuel load from fire suppression policies and the continued range expansion of non-native insects and plants, some driven by long-term drought, produced the deadliest wildfire season on record in 2018. As a consequence of these fires, a large number of structures are destroyed, releasing household chemicals into the environment as uncontrolled toxins. The mobilization of these materials can lead to health risks and disruption in both human and natural systems. This article identifies drivers that led to a structural weakening of the mosaic of fire-adapted ecosystems in California, and subsequently increased the risk of destructive and explosive wildfires throughout the state. Under a new climate regime, managing the impacts on systems moving out-of-phase with natural processes may protect lives and ensure the stability of ecosystem services.</summary>
+    <category term="q-bio.PE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="physics.bio-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-08-03T17:22:18Z</published>
+    <arxiv:comment>13 pages, one image</arxiv:comment>
+    <arxiv:primary_category term="q-bio.PE"/>
+    <author>
+      <name>Kimberley Miner</name>
+    </author>
+    <author>
+      <name>Laura Meyerson</name>
+    </author>
+    <author>
+      <name>. Climate Change Institute</name>
+    </author>
+    <author>
+      <name>School of Earth</name>
+    </author>
+    <author>
+      <name>Climate Sciences</name>
+    </author>
+    <author>
+      <name>University of Maine</name>
+    </author>
+    <author>
+      <name> Orono</name>
+    </author>
+    <author>
+      <name>ME 04469 2. Department of Natural Resources Science</name>
+    </author>
+    <author>
+      <name>University of Rhode Island</name>
+    </author>
+    <author>
+      <name> Kingston</name>
+    </author>
+    <author>
+      <name>RI 02881</name>
+    </author>
+  </entry>
+</feed>

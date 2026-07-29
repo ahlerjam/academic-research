@@ -1,16 +1,18 @@
 """
-Regressionstest fuer Issue #223 — commands/excel.md: Bash(ls) + Skill(xlsx) fehlen in allowed-tools.
+Regressionstest fuer Issue #223 — commands/excel.md: Bash(ls) + xlsx-Skill-Permission
+fehlen in allowed-tools.
 
 Problem:
   commands/excel.md listet nur `allowed-tools: Read, Write`. Der Workflow fuehrt
-  jedoch in Schritt 1 ein `ls ~/.academic-research/sessions/` per Bash aus (Zeile 35)
-  und aktiviert in Schritt 3 den vendorierten `xlsx`-Skill (Zeile 50). Ohne die
+  jedoch in Schritt 1 ein `ls ~/.academic-research/sessions/` per Bash aus
+  und aktiviert in Schritt 3 den xlsx-Skill. Ohne die
   passenden Permissions scheitern Session-Lookup und Excel-Generierung.
 
 Akzeptanzkriterium:
   `/academic-research:excel` findet die letzte Session und erzeugt die Excel-Datei
   ohne Permission-Fehler -> `allowed-tools` muss eine Bash-Permission fuer den
-  Sessions-Lookup und `Skill(xlsx)` enthalten.
+  Sessions-Lookup und die xlsx-Skill-Permission enthalten (seit Issue #445
+  `Skill(document-skills:xlsx)`, davor der nackte Name).
 
 Hinweis zum Parsing:
   Der `argument-hint`-Wert enthaelt eckige Klammern und ist daher kein valides
@@ -61,10 +63,17 @@ def test_frontmatter_has_bash_sessions_permission():
 
 
 def test_frontmatter_has_skill_xlsx_permission():
-    """allowed-tools muss Skill(xlsx) fuer die Excel-Generierung enthalten."""
+    """allowed-tools muss die xlsx-Skill-Permission fuer die Excel-Generierung enthalten.
+
+    Seit Issue #445 heisst der Skill `document-skills:xlsx` (externe
+    Plugin-Dependency statt Vendor-Kopie); der nackte Name `xlsx` waere eine
+    tote Permission.
+    """
     allowed = _frontmatter_field(COMMAND_FILE, "allowed-tools")
-    # Schritt 3 aktiviert den vendorierten xlsx-Skill.
-    assert "Skill(xlsx)" in allowed, f"'Skill(xlsx)' nicht in allowed-tools: {allowed!r}"
+    # Schritt 3 aktiviert den externen xlsx-Skill.
+    assert "Skill(document-skills:xlsx)" in allowed, (
+        f"'Skill(document-skills:xlsx)' nicht in allowed-tools: {allowed!r}"
+    )
 
 
 def test_frontmatter_keeps_read_and_write():

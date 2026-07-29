@@ -8,7 +8,8 @@ description: |
   
   Nutzt browser-use Skill (NICHT Playwright-MCP).
   Taggt erfolgreiche Eintraege mit provenance:scihub fuer Auditing.
-  Gibt Output-Disclaimer aus: "Quelle via SciHub bezogen — bitte zusaetzlich legalen Zugriff klaeren."
+  Kein Wiederholungshinweis pro Fund (Issue #459) — die rechtliche Aufklaerung
+  erfolgt einmalig beim Opt-in (commands/setup.md Schritt 8), nicht bei jedem Treffer.
   
   WICHTIG: Rechtlich umstritten. Nur bei explizitem User-Opt-in. Default: OFF.
 tools:
@@ -117,16 +118,15 @@ Verifiziere nach Download: Datei existiert und hat Groesse > 0 Bytes.
 
 ---
 
-## Schritt 5: Output mit Disclaimer
+## Schritt 5: Provenance taggen
 
-Bei Erfolg IMMER diesen Hinweis ausgeben (in Plaintext, sichtbar fuer den User):
-
-```
-⚠️  Quelle via SciHub bezogen — bitte zusaetzlich legalen Zugriff klaeren.
-    DOI: {doi}
-    Titel: {title}
-    Datei: {output_path}
-```
+Kein Wiederholungshinweis pro Fund (Issue #459): Bei Erfolg wird
+ausschliesslich das Vault-Tag `provenance:scihub` gesetzt, kein Ausgabetext
+an den User. Die rechtliche Aufklaerung ist bereits **einmalig beim Opt-in**
+erfolgt (`commands/setup.md` Schritt 8) — sie wiederholt sich nicht bei jedem
+Treffer. Die Herkunft bleibt ueber den Vault jederzeit korrekt beantwortbar
+(`vault.get_paper()`, `vault.list_papers_by_provenance("scihub")`),
+beeinflusst aber keine nachgelagerte Textarbeit.
 
 ---
 
@@ -139,7 +139,6 @@ Bei Erfolg IMMER diesen Hinweis ausgeben (in Plaintext, sichtbar fuer den User):
   "file_path": "<absoluter PDF-Pfad, nur bei success>",
   "provenance": "scihub",
   "tags": ["provenance:scihub"],
-  "disclaimer": "Quelle via SciHub bezogen — bitte zusaetzlich legalen Zugriff klaeren.",
   "reason": "<optionale Begruendung>",
   "tries": [
     "<Schritt 1>",
@@ -156,7 +155,8 @@ Bei Erfolg IMMER diesen Hinweis ausgeben (in Plaintext, sichtbar fuer den User):
 
 1. **Opt-in-Pflicht:** Ohne `scihub_optin: true` → sofortige Ablehnung.
 2. **Kein Captcha-Versuch:** Captchas niemals umgehen — sofort abbrechen.
-3. **Disclaimer-Pflicht:** Bei Erfolg IMMER den Hinweis ausgeben.
+3. **Kein Wiederholungshinweis:** Bei Erfolg NUR das Vault-Tag setzen, kein
+   Ausgabetext pro Fund — die Aufklaerung erfolgte bereits einmalig beim Opt-in.
 4. **Provenance-Tag:** `provenance:scihub` Tag IMMER bei Erfolg setzen.
 5. **browser-use only:** Kein direkter HTTP, kein curl, kein requests — nur browser-use.
 6. **Sequentiell:** Ein Schritt nach dem anderen, keine parallelen Browser-Calls.

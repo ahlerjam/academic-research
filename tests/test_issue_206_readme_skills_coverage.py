@@ -1,9 +1,8 @@
 """Regressions-Guard fuer Issue #206 — README-Skills-Coverage.
 
 Die README-Skills-Tabelle (Sektion "Skills-Uebersicht") muss JEDEN
-plugin-eigenen Skill (skills/*/SKILL.md, ohne reine Vendor-Skills wie xlsx)
-dokumentieren. Ausserdem muessen Badge und TOC-Eintrag den korrekten Count
-(28 inkl. xlsx-Vendor) tragen.
+plugin-eigenen Skill (skills/*/SKILL.md) dokumentieren. Ausserdem muessen
+Badge und TOC-Eintrag den korrekten Count tragen.
 
 Befund vor dem Fix: book-handler, cluster-visualizer, latex-export und
 notebook-bundle fehlten komplett, Badge stand auf 23+, TOC auf "23+".
@@ -18,8 +17,8 @@ REPO_ROOT = Path(__file__).parent.parent
 README = REPO_ROOT / "README.md"
 SKILLS_DIR = REPO_ROOT / "skills"
 
-# Reiner Vendor-Skill (Claude-eigener document-skill), nicht plugin-eigen.
-VENDORED_SKILLS = {"xlsx", "_common"}
+# Kein eigenstaendiger Skill, nur geteilte Markdown-Fragmente.
+VENDORED_SKILLS = {"_common"}
 
 # Skills, deren Fehlen Issue #206 explizit benennt.
 ISSUE_206_SKILLS = {
@@ -53,10 +52,10 @@ def test_issue_206_named_skills_documented():
     )
 
 
-def test_skills_badge_count_is_30():
+def test_skills_badge_count_is_32():
     text = README.read_text(encoding="utf-8")
-    assert re.search(r"img\.shields\.io/badge/skills-30", text), (
-        "Skills-Badge muss auf 'skills-30' stehen (30 SKILL.md inkl. xlsx-Vendor)."
+    assert re.search(r"img\.shields\.io/badge/skills-32", text), (
+        "Skills-Badge muss auf 'skills-32' stehen (32 SKILL.md, Stand Issue #460)."
     )
 
 
