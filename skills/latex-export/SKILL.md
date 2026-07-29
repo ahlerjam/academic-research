@@ -16,9 +16,14 @@ allowed-tools:
 
 ## Workflow
 
-1. `${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/render_tex.py` aus `kapitel/` → `.tex` (Pandoc bevorzugt, Custom-Fallback)
-2. `${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/build_bib.py` → `.bib` aus Vault (biblatex, DIN-1505)
+`/academic-research:latex --kapitel <n>|all --output <datei.tex> [--bib <datei.bib>] [--template <uni>]`
+ruft `${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/export_thesis.py` auf:
+
+1. Kapitel aus `kapitel/` auflösen (`<n>` oder `all`, numerisch sortiert)
+2. `render_tex.py` je Kapitel → `.tex` (Pandoc bevorzugt, Custom-Fallback), verkettet
 3. Optional: Uni-Template `~/.academic-research/library-profiles/<uni>.tex.template`
+   (`%%CONTENT%%`-Platzhalter; fehlt sie, Export ohne Vorlage)
+4. `build_bib.py` → `.bib` aus Vault, Pfad unabhängig von `--output`
 
 ## Abgrenzung zu citation-extraction
 

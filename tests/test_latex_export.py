@@ -65,6 +65,24 @@ def run_hook(
     )
 
 
+def _write_chapter(kapitel_dir: Path, filename: str, heading: str) -> Path:
+    """Schreibt eine Kapitel-Markdown-Fixture-Datei fuer export_thesis-Tests."""
+    kapitel_dir.mkdir(parents=True, exist_ok=True)
+    path = kapitel_dir / filename
+    path.write_text(f"# {heading}\n\nInhalt von {heading}.\n", encoding="utf-8")
+    return path
+
+
+def _fake_build_bib(db_path: str, output_path: str) -> None:
+    """Test-Stub fuer build_bib_from_vault: schreibt eine leere .bib-Datei
+    ohne echten Vault-Zugriff. Das Vault-Verhalten selbst ist bereits in
+    TestBuildBib abgedeckt -- hier geht es nur um die CLI-Verkabelung
+    von --bib (Issue #467)."""
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("", encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # render_tex Tests
 # ---------------------------------------------------------------------------
@@ -580,6 +598,453 @@ class TestBuildBib:
 # ---------------------------------------------------------------------------
 # verbatim-guard: *.tex-Pfade sind geschuetzt
 # ---------------------------------------------------------------------------
+
+
+class TestResolveChapters:
+    """Tests fuer export_thesis.resolve_chapters (--kapitel <n>|all, Issue #467)."""
+
+    def test_resolve_single_chapter_by_number(self, tmp_path):
+        from export_thesis import resolve_chapters
+
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "1.md", "Einleitung")
+        _write_chapter(kap_dir, "2.md", "Methodik")
+
+        result = resolve_chapters(kap_dir, "2")
+        assert [p.name for p in result] == ["2.md"]
+
+    def test_resolve_single_chapter_matches_zero_padded_filename(self, tmp_path):
+        """--kapitel 3 findet auch kapitel/03-methodik.md (uneinheitliche
+        Namenskonvention im Repo, siehe Plan-Risiko #1)."""
+        from export_thesis import resolve_chapters
+
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "01-einleitung.md", "Einleitung")
+        _write_chapter(kap_dir, "03-methodik.md", "Methodik")
+
+        result = resolve_chapters(kap_dir, "3")
+        assert [p.name for p in result] == ["03-methodik.md"]
+
+    def test_resolve_all_chapters_sorted_numerically(self, tmp_path):
+        """--kapitel all liefert alle Kapitel numerisch (nicht alphabetisch)
+        sortiert -- 2 vor 10."""
+        from export_thesis import resolve_chapters
+
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "10.md", "Zehn")
+        _write_chapter(kap_dir, "2.md", "Zwei")
+        _write_chapter(kap_dir, "1.md", "Eins")
+
+        result = resolve_chapters(kap_dir, "all")
+        assert [p.name for p in result] == ["1.md", "2.md", "10.md"]
+
+    def test_resolve_unknown_chapter_raises_clear_error(self, tmp_path):
+        from export_thesis import ChapterResolutionError, resolve_chapters
+
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "1.md", "Einleitung")
+
+        with pytest.raises(ChapterResolutionError, match="5"):
+            resolve_chapters(kap_dir, "5")
+
+    def test_resolve_all_on_empty_dir_raises_clear_error(self, tmp_path):
+        from export_thesis import ChapterResolutionError, resolve_chapters
+
+        kap_dir = tmp_path / "kapitel"
+        kap_dir.mkdir()
+
+        with pytest.raises(ChapterResolutionError):
+            resolve_chapters(kap_dir, "all")
+
+    def test_resolve_missing_directory_raises_clear_error(self, tmp_path):
+        from export_thesis import ChapterResolutionError, resolve_chapters
+
+        with pytest.raises(ChapterResolutionError):
+            resolve_chapters(tmp_path / "does-not-exist", "1")
+
+
+class TestApplyTemplate:
+    """Tests fuer export_thesis.apply_template (Uni-Vorlagen-Slot, Issue #467)."""
+
+    def test_template_replaces_content_placeholder(self, tmp_path):
+        from export_thesis import apply_template
+
+        profiles_dir = tmp_path / "library-profiles"
+        profiles_dir.mkdir()
+        (profiles_dir / "lmu.tex.template").write_text(
+            "\\documentclass{report}\n\\begin{document}\n%%CONTENT%%\n\\end{document}\n",
+            encoding="utf-8",
+        )
+
+        content, message = apply_template("\\chapter{Einleitung}", "lmu", profiles_dir)
+        assert "\\chapter{Einleitung}" in content
+        assert "%%CONTENT%%" not in content
+        assert message is None
+
+    def test_missing_template_falls_back_with_message(self, tmp_path):
+        from export_thesis import apply_template
+
+        profiles_dir = tmp_path / "library-profiles"
+        profiles_dir.mkdir()
+
+        content, message = apply_template("\\chapter{Einleitung}", "unbekannt", profiles_dir)
+        assert content == "\\chapter{Einleitung}"
+        assert message is not None
+        assert "Template `unbekannt` fehlt" in message
+
+    def test_no_template_uni_is_passthrough(self, tmp_path):
+        """Ohne --template bleibt der Content unveraendert, keine Meldung."""
+        from export_thesis import apply_template
+
+        content, message = apply_template("\\chapter{X}", None, tmp_path)
+        assert content == "\\chapter{X}"
+        assert message is None
+
+
+class TestExportThesisIntegration:
+    """End-to-End-Tests fuer export_thesis() -- Issue #467 Akzeptanzkriterien.
+
+    build_bib_from_vault wird gemockt (Stub schreibt eine leere .bib-Datei):
+    das Vault-Verhalten selbst ist bereits in TestBuildBib abgedeckt, hier
+    geht es ausschliesslich um die Verkabelung der vier dokumentierten
+    CLI-Parameter.
+    """
+
+    @staticmethod
+    def _make_project(tmp_path):
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "1.md", "Einleitung")
+        _write_chapter(kap_dir, "2.md", "Methodik")
+        _write_chapter(kap_dir, "3.md", "Ergebnisse")
+        return kap_dir
+
+    def test_export_single_chapter_by_number(self, tmp_path):
+        """AC1: Einzelkapitel-Export ueber --kapitel <n>."""
+        from export_thesis import export_thesis
+
+        kap_dir = self._make_project(tmp_path)
+        out = tmp_path / "output" / "kap2.tex"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="2",
+                output_path=out,
+                bib_path=tmp_path / "output" / "refs.bib",
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        assert out.exists()
+        content = out.read_text(encoding="utf-8")
+        assert r"\chapter{Methodik}" in content
+        assert r"\chapter{Einleitung}" not in content
+        assert r"\chapter{Ergebnisse}" not in content
+        assert len(result.chapters) == 1
+
+    def test_export_all_chapters_concatenates_in_order(self, tmp_path):
+        """AC1: --kapitel all exportiert alle Kapitel in korrekter Reihenfolge."""
+        from export_thesis import export_thesis
+
+        kap_dir = self._make_project(tmp_path)
+        out = tmp_path / "output" / "thesis.tex"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            export_thesis(
+                kapitel_dir=kap_dir,
+                selector="all",
+                output_path=out,
+                bib_path=tmp_path / "output" / "refs.bib",
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        content = out.read_text(encoding="utf-8")
+        einleitung_pos = content.index(r"\chapter{Einleitung}")
+        methodik_pos = content.index(r"\chapter{Methodik}")
+        ergebnisse_pos = content.index(r"\chapter{Ergebnisse}")
+        assert einleitung_pos < methodik_pos < ergebnisse_pos
+
+    def test_output_path_is_respected(self, tmp_path):
+        """AC2: Ausgabepfad ist frei bestimmbar -- Datei liegt exakt am
+        angegebenen Pfad, nicht am Default."""
+        from export_thesis import export_thesis
+
+        kap_dir = self._make_project(tmp_path)
+        custom_out = tmp_path / "beliebig" / "verschachtelt" / "kapitel2.tex"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="2",
+                output_path=custom_out,
+                bib_path=tmp_path / "output" / "refs.bib",
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        assert custom_out.exists()
+        assert result.output_path == custom_out
+        assert not (tmp_path / "output" / "thesis.tex").exists()
+
+    def test_template_applied_replaces_placeholder(self, tmp_path):
+        """AC3: Hinterlegte Uni-Vorlage wird angewendet."""
+        from export_thesis import export_thesis
+
+        kap_dir = self._make_project(tmp_path)
+        profiles_dir = tmp_path / "library-profiles"
+        profiles_dir.mkdir()
+        (profiles_dir / "lmu.tex.template").write_text(
+            "\\documentclass{report}\n\\begin{document}\n%%CONTENT%%\n\\end{document}\n",
+            encoding="utf-8",
+        )
+        out = tmp_path / "output" / "thesis.tex"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="1",
+                output_path=out,
+                bib_path=tmp_path / "output" / "refs.bib",
+                template_uni="lmu",
+                profiles_dir=profiles_dir,
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        content = out.read_text(encoding="utf-8")
+        assert content.startswith("\\documentclass{report}")
+        assert r"\chapter{Einleitung}" in content
+        assert result.template_message is None
+
+    def test_missing_template_falls_back_with_message(self, tmp_path):
+        """AC3: Fehlt die Vorlage, erklaert eine Meldung den Fallback --
+        kein Absturz, Export findet trotzdem statt."""
+        from export_thesis import export_thesis
+
+        kap_dir = self._make_project(tmp_path)
+        profiles_dir = tmp_path / "library-profiles"
+        profiles_dir.mkdir()
+        out = tmp_path / "output" / "thesis.tex"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="1",
+                output_path=out,
+                bib_path=tmp_path / "output" / "refs.bib",
+                template_uni="unbekannte-uni",
+                profiles_dir=profiles_dir,
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        assert out.exists()
+        content = out.read_text(encoding="utf-8")
+        assert r"\chapter{Einleitung}" in content
+        assert result.template_message is not None
+        assert "unbekannte-uni" in result.template_message
+
+    def test_bib_path_independent_of_output_path(self, tmp_path):
+        """AC4 / getrennte Literaturverzeichnis-Steuerung: --bib wird
+        unabhaengig von --output verkabelt."""
+        from export_thesis import export_thesis
+
+        kap_dir = self._make_project(tmp_path)
+        out = tmp_path / "irgendwo" / "thesis.tex"
+        bib_out = tmp_path / "ganz-anderswo" / "quellen.bib"
+
+        with patch("export_thesis.build_bib_from_vault") as mock_build_bib:
+            mock_build_bib.side_effect = _fake_build_bib
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="1",
+                output_path=out,
+                bib_path=bib_out,
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        assert result.bib_path == bib_out
+        mock_build_bib.assert_called_once_with("irrelevant.db", str(bib_out))
+
+    def test_bib_default_path_used_when_not_specified(self, tmp_path, monkeypatch):
+        """AC4: Ohne --bib wird der dokumentierte Default output/refs.bib
+        verwendet (unabhaengig vom --output-Verzeichnis)."""
+        from export_thesis import export_thesis
+
+        monkeypatch.chdir(tmp_path)
+        kap_dir = self._make_project(tmp_path)
+        out = tmp_path / "output" / "thesis.tex"
+
+        with patch("export_thesis.build_bib_from_vault") as mock_build_bib:
+            mock_build_bib.side_effect = _fake_build_bib
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="1",
+                output_path=out,
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        assert result.bib_path == Path("output/refs.bib")
+        mock_build_bib.assert_called_once_with("irrelevant.db", "output/refs.bib")
+
+    def test_export_uses_default_vault_db_path_when_not_specified(self, tmp_path, monkeypatch):
+        """Ohne explizite vault_db_path wird academic_vault.db.default_db_path()
+        (Single Source of Truth, respektiert VAULT_DB_PATH) verwendet."""
+        from export_thesis import export_thesis
+
+        # chdir noetig: ohne --bib faellt export_thesis() auf den relativen
+        # Default-Pfad DEFAULT_BIB_PATH ("output/refs.bib") zurueck -- ohne
+        # chdir wuerde dieser Test sonst eine echte Datei ins Repo schreiben.
+        monkeypatch.chdir(tmp_path)
+        kap_dir = self._make_project(tmp_path)
+        out = tmp_path / "output" / "thesis.tex"
+        env_db_path = str(tmp_path / "env_vault.db")
+        monkeypatch.setenv("VAULT_DB_PATH", env_db_path)
+
+        captured = {}
+
+        def fake_build_bib(db_path, output_path):
+            captured["db_path"] = db_path
+            _fake_build_bib(db_path, output_path)
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=fake_build_bib):
+            export_thesis(
+                kapitel_dir=kap_dir,
+                selector="1",
+                output_path=out,
+                force_custom=True,
+            )
+
+        assert captured["db_path"] == env_db_path
+
+    def test_all_documented_parameters_functional(self, tmp_path):
+        """AC4: Alle vier dokumentierten Parameter (--kapitel, --output,
+        --bib, --template) sind gemeinsam funktionsfaehig."""
+        from export_thesis import export_thesis
+
+        kap_dir = self._make_project(tmp_path)
+        profiles_dir = tmp_path / "library-profiles"
+        profiles_dir.mkdir()
+        (profiles_dir / "tum.tex.template").write_text(
+            "\\documentclass{book}\n\\begin{document}\n%%CONTENT%%\n\\end{document}\n",
+            encoding="utf-8",
+        )
+        out = tmp_path / "custom" / "thesis.tex"
+        bib_out = tmp_path / "custom" / "refs.bib"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            result = export_thesis(
+                kapitel_dir=kap_dir,
+                selector="all",  # --kapitel
+                output_path=out,  # --output
+                bib_path=bib_out,  # --bib
+                template_uni="tum",  # --template
+                profiles_dir=profiles_dir,
+                vault_db_path="irrelevant.db",
+                force_custom=True,
+            )
+
+        # --kapitel all
+        assert len(result.chapters) == 3
+        # --output
+        assert out.exists()
+        # --bib (unabhaengig von --output)
+        assert bib_out.exists()
+        # --template
+        content = out.read_text(encoding="utf-8")
+        assert content.startswith("\\documentclass{book}")
+        assert r"\chapter{Einleitung}" in content
+        assert r"\chapter{Methodik}" in content
+        assert r"\chapter{Ergebnisse}" in content
+
+
+class TestExportThesisCLI:
+    """Tests fuer die argparse-CLI (export_thesis.main), Issue #467."""
+
+    def test_required_args_missing_exits_nonzero(self):
+        from export_thesis import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main([])
+        assert exc_info.value.code == 2
+
+    def test_cli_wires_all_four_documented_flags(self, tmp_path, monkeypatch):
+        """--kapitel/--output/--bib/--template ueber die echte CLI (main())."""
+        from export_thesis import main
+
+        monkeypatch.chdir(tmp_path)
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "1.md", "Einleitung")
+        profiles_dir = tmp_path / "library-profiles"
+        profiles_dir.mkdir()
+        (profiles_dir / "lmu.tex.template").write_text(
+            "\\documentclass{report}\n\\begin{document}\n%%CONTENT%%\n\\end{document}\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("export_thesis.DEFAULT_PROFILES_DIR", profiles_dir)
+
+        out = tmp_path / "custom.tex"
+        bib_out = tmp_path / "custom.bib"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            exit_code = main(
+                [
+                    "--kapitel",
+                    "1",
+                    "--output",
+                    str(out),
+                    "--bib",
+                    str(bib_out),
+                    "--template",
+                    "lmu",
+                ]
+            )
+
+        assert exit_code == 0
+        assert out.exists()
+        assert bib_out.exists()
+        content = out.read_text(encoding="utf-8")
+        assert content.startswith("\\documentclass{report}")
+        assert r"\chapter{Einleitung}" in content
+
+    def test_cli_missing_template_falls_back_without_crash(self, tmp_path, monkeypatch, capsys):
+        """AC3 ueber die CLI: unbekanntes --template bricht main() nicht ab
+        und gibt eine verstaendliche Meldung aus (exit 0, Fallback-Export)."""
+        from export_thesis import main
+
+        monkeypatch.chdir(tmp_path)
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "1.md", "Einleitung")
+        profiles_dir = tmp_path / "library-profiles"
+        profiles_dir.mkdir()
+        monkeypatch.setattr("export_thesis.DEFAULT_PROFILES_DIR", profiles_dir)
+
+        out = tmp_path / "thesis.tex"
+
+        with patch("export_thesis.build_bib_from_vault", side_effect=_fake_build_bib):
+            exit_code = main(["--kapitel", "1", "--output", str(out), "--template", "unbekannt"])
+
+        assert exit_code == 0
+        assert out.exists()
+        captured = capsys.readouterr()
+        assert "Template `unbekannt` fehlt" in captured.err
+
+    def test_cli_unknown_chapter_exits_with_error_message(self, tmp_path, monkeypatch, capsys):
+        """AC1: Nicht existierendes Kapitel -> klare Fehlermeldung, Exit != 0."""
+        from export_thesis import main
+
+        monkeypatch.chdir(tmp_path)
+        kap_dir = tmp_path / "kapitel"
+        _write_chapter(kap_dir, "1.md", "Einleitung")
+
+        exit_code = main(["--kapitel", "99", "--output", str(tmp_path / "out.tex")])
+
+        assert exit_code != 0
+        captured = capsys.readouterr()
+        assert "99" in captured.err
 
 
 class TestVerbatimGuardTex:
