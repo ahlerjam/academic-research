@@ -4,7 +4,8 @@ model: sonnet
 description: |
   Master-Orchestrator fuer den Universal Book Fetcher (F16). Koordiniert
   OA-Subagenten (doabooks-fetcher, oapen-fetcher, tib-fetcher, kvk-fetcher),
-  Verlags-Subagenten (springer-book, degruyter, nationallizenzen, ebook-central),
+  Verlags-Subagenten (springer-book, degruyter, nationallizenzen, ebook-central,
+  cambridge-core, oxford-academic, jstor),
   auth-helper und generic-fetcher strikt sequentiell.
   Kein eigener Browser-Aufruf. Gibt strukturierten Output mit tries-Array zurueck.
 tools:
@@ -18,6 +19,9 @@ tools:
   - "Agent(degruyter)"
   - "Agent(nationallizenzen)"
   - "Agent(ebook-central)"
+  - "Agent(cambridge-core)"
+  - "Agent(oxford-academic)"
+  - "Agent(jstor)"
   - "Agent(auth-helper)"
   - "Agent(generic-fetcher)"
   - "Agent(scihub-fetcher)"
@@ -117,6 +121,9 @@ Pruefe fuer jeden Verlags-Subagenten: Ist der zugehoerige Host in `licensed_site
 | `Agent(degruyter)` | `degruyter.com` |
 | `Agent(nationallizenzen)` | `nationallizenzen.de` |
 | `Agent(ebook-central)` | `ebookcentral.proquest.com` |
+| `Agent(cambridge-core)` | `cambridge.org` |
+| `Agent(oxford-academic)` | `academic.oup.com` |
+| `Agent(jstor)` | `jstor.org` |
 
 Rufe nur lizenzierte Verlags-Subagenten auf (sequentiell in der Tabellenreihenfolge).
 

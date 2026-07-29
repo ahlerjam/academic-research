@@ -1,0 +1,8 @@
+uni: test-uni-new-publishers
+auth_type: Shibboleth
+auth_url: https://login.test-uni.de/idp/
+licensed_sites:
+  - cambridge.org
+  - academic.oup.com
+  - jstor.org
+bib_pickup_url: https://lib.test-uni.de/fernleihe

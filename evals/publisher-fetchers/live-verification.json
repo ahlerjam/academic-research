@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-29",
+  "recorded_by": "Zweite Fix-Runde zu PR #500 (Issue #449)",
+  "environment": {
+    "transport": "curl 8.x, HTTP/2, keine Zugangsdaten, kein Cookie-Jar, keine Institutions-IP",
+    "platform": "macOS 15 (darwin 25.5.0)",
+    "network": "privates Endnutzer-Netz",
+    "pdf_inspection": "pypdf (Runtime-Dependency, pyproject.toml) — Seitenzahl aus dem geoeffneten Dokument, nicht geschaetzt"
+  },
+  "purpose": "AC1 aus Issue #449 ('Fuer jede der drei Plattformen loest der zugehoerige Agent einen bekannten Testtitel zu einem Volltext auf — oder dokumentiert belegt, warum das technisch nicht moeglich ist') ist eine Aussage ueber das echte Netz. Diese Datei ist das Artefakt dazu: pro Agent ein realer Lauf gegen die echte Plattform mit vollstaendiger URL-Kette, HTTP-Status und der SHA-256-Pruefsumme der tatsaechlich empfangenen Bytes. Wer den Lauf nachvollziehen will, faehrt tests/test_issue_449_live_fetch.py mit RUN_LIVE_PUBLISHER_FETCH=1.",
+  "why_this_file_exists": "Die erste Fix-Runde zu PR #500 hat dieselben drei Laeufe wirklich gefahren, den Beleg aber nur als Prosa in evals.json/CHANGELOG.md abgelegt — inklusive JSTOR-Block-Referenz, Client-IP und Uhrzeit. Diese drei Angaben sind pro Request neu und darum per Konstruktion von niemandem nachpruefbar, auch nicht vom Autor selbst (zwei Abrufe im Abstand von Sekunden liefern zwei verschiedene Block-Referenzen). Abgesichert war das durch einen Test, der lediglich pruefte, ob das Wort 'verifiziert' in der Notiz vorkommt — er blieb gruen, wenn man die Notiz durch eine beliebige Unwahrheit ersetzte. Praezise Zahlen sind kein Beleg, solange sie niemand nachfahren kann. Was hier steht, ist deshalb auf stabile, wiederholbar pruefbare Groessen beschraenkt.",
+  "verdict_vocabulary": {
+    "pdf_verified": "Ein PDF wurde real und ohne Login empfangen, beginnt mit %PDF- und liess sich mit pypdf oeffnen. AC1 fuer diesen Agenten belegt (Hauptpfad).",
+    "captcha_verified": "Die Plattform hat den Volltext-Zugriff mit einer Bot-Challenge beantwortet. AC1 fuer diesen Agenten ueber die im Issue ausdruecklich zugelassene Alternative belegt ('dokumentiert belegt, warum das technisch nicht moeglich ist')."
+  },
+  "runs": [
+    {
+      "agent": "cambridge-core",
+      "eval_case": "pf-06",
+      "platform": "Cambridge Core",
+      "verdict": "pdf_verified",
+      "expected_status": "success",
+      "item": {
+        "title": "Open Access and the Humanities",
+        "creator": "Martin Paul Eve",
+        "edition": "Cambridge University Press, 2014",
+        "doi": "10.1017/CBO9781316161012",
+        "license": "CC-BY-SA (Open-Access-Badge auf der Buchseite)"
+      },
+      "url_chain": [
+        "https://doi.org/10.1017/CBO9781316161012",
+        "https://www.cambridge.org/core/books/open-access-and-the-humanities/02BD7DB4A5172A864C432DBFD86E5FB4",
+        "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/02BD7DB4A5172A864C432DBFD86E5FB4/9781107097896AR.pdf/Open_Access_and_the_Humanities.pdf?event-type=FTLA"
+      ],
+      "artifact": {
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "bytes": 2576510,
+        "magic": "%PDF-1.6",
+        "sha256": "b8f3a400106a81562e5fd1639bafe69a864e935db8a39bdaccfee31a36e6792b",
+        "pages": 228,
+        "pdf_title": "OPEN ACCESS AND THE HUMANITIES",
+        "sha256_stable": true,
+        "sha256_stability_note": "Empirisch geprueft: zwei vollstaendige Abrufe am 2026-07-29 lieferten byteweise dieselbe Datei. Das PDF traegt keinen abruf-abhaengigen Stempel. sha256 ist hier ein hartes Vergleichskriterium."
+      },
+      "no_login_evidence": "Anfrage ohne Cookie-Jar und ohne Zugangsdaten; Seite 1 des empfangenen PDF traegt den Vermerk 'https://doi.org/10.1017/CBO9781316161012 Published online by Cambridge University Press' und bindet das Dokument damit an genau die DOI des Eval-Falls.",
+      "notes": "Der Link ist auf der Buchseite woertlich als 'Full book PDF' ausgezeichnet — derselbe Einstieg, den agents/cambridge-core.md beschreibt. Die Buchseiten-ID (02BD7DB4...) stammt aus der DOI-Aufloesung, nicht aus einer Vermutung."
+    },
+    {
+      "agent": "oxford-academic",
+      "eval_case": "pf-07",
+      "platform": "Oxford Academic (Oxford Scholarship Online)",
+      "verdict": "pdf_verified",
+      "expected_status": "success",
+      "item": {
+        "title": "Praiseworthiness: The Lighter Side of Moral Responsibility",
+        "creator": "Zoe Johnson King",
+        "edition": "Oxford University Press, 2025-11-06",
+        "doi": "10.1093/oso/9780198919810.001.0001",
+        "license": "cc-by-nc-nd (access_type 'Open Access' im dataLayer der Buchseite)"
+      },
+      "url_chain": [
+        "https://doi.org/10.1093/oso/9780198919810.001.0001",
+        "https://academic.oup.com/book/61726",
+        "https://academic.oup.com/book/61726/book-pdf/65531314/9780198919827_web.pdf"
+      ],
+      "artifact": {
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "bytes": 11420088,
+        "magic": "%PDF-1.7",
+        "sha256": "0a271e0edda896c0c6307495d261da294dcb1f88f13c0bf837f6e1e7d5eae90d",
+        "pages": 225,
+        "pdf_title": "Praiseworthiness",
+        "sha256_stable": false,
+        "sha256_stability_note": "Empirisch geprueft: Oxford stempelt auf Seite 1 'Downloaded ... by guest on <Datum>'. Damit aendern sich die Bytes taeglich und sha256 kann kein hartes Kriterium sein. Der Live-Test vergleicht hier Seitenzahl, PDF-Titel und den 'by guest'-Stempel und meldet Pruefsummen-Drift nur als Hinweis."
+      },
+      "no_login_evidence": "Anfrage ohne Cookie-Jar und ohne Zugangsdaten; Seite 1 des empfangenen PDF traegt den vom Verlag eingestempelten Vermerk 'Downloaded from https://academic.oup.com/book/61726 by guest' — 'by guest' ist Oxfords eigene Kennzeichnung fuer eine nicht angemeldete Sitzung und damit der belastbarste Beleg fuer den Login-freien Bezug.",
+      "doi_correction": "Die urspruengliche PR-#500-Fassung nannte 10.1093/oso/9780190247249.001.0001. Diese DOI loest real auf academic.oup.com/book/5107 auf und gehoert zu 'Philosophies of Qualitative Research' von Svend Brinkmann (2017) — ein regulaeres, kostenpflichtiges OSO-Buch, keine Open-Access-Publikation. Gegengeprueft ueber Crossref-Content-Negotiation (Accept: application/vnd.citationstyles.csl+json auf doi.org), also unabhaengig von der Verlagsseite und von jedem nachvollziehbar.",
+      "notes": "Die Buchseite enthaelt reCAPTCHA-Markup, das aber allein zum 'gift access'-Dialog gehoert (Container js-gift-recaptcha-container) und keine Bot-Challenge vor dem Volltext ist — der PDF-Abruf lief ohne jede Challenge durch. Ohne diese Unterscheidung waere die Seite leicht faelschlich als captcha-behaftet einzustufen."
+    },
+    {
+      "agent": "jstor",
+      "eval_case": "pf-08",
+      "platform": "JSTOR",
+      "verdict": "captcha_verified",
+      "expected_status": "captcha",
+      "item": {
+        "title": "Afghanistan's Islam (UC Press, auf JSTOR je Kapitel als OPEN ACCESS gelistet)",
+        "doi": "10.1525/j.ctt1kc6k3q"
+      },
+      "url_chain": [
+        "https://www.jstor.org/stable/pdf/10.1525/j.ctt1kc6k3q.1.pdf"
+      ],
+      "artifact": {
+        "http_status": 403,
+        "content_type": "text/html",
+        "page_title": "JSTOR: Access Check",
+        "stable_markers": [
+          "Access Check",
+          "px-captcha-error",
+          "reCAPTCHA",
+          "Our systems have detected unusual traffic activity from your network"
+        ],
+        "captured_page": "tests/fixtures/publisher_fetchers/jstor_access_check.html"
+      },
+      "volatile_fields_excluded": {
+        "fields": [
+          "Block Reference",
+          "VID",
+          "IP",
+          "Date and time"
+        ],
+        "reason": "Diese vier Felder der Challenge-Seite sind pro Request neu. Zwei Abrufe im Abstand von Sekunden lieferten am 2026-07-29 die Block-Referenzen #01fcee53-... und #105599dd-... — verschiedene Werte fuer denselben Vorgang. Ein festgehaltener Einzelwert ist darum kein Beleg, sondern nur eine Zahl, die niemand nachpruefen kann. In der eingecheckten Fixture sind sie neutralisiert (REDACTED-*), damit niemand versucht, gegen sie zu vergleichen — und damit keine Client-IP im Repo landet.",
+        "evidence_is_instead": "Der reproduzierbare Teil: Status 403, Seitentitel 'JSTOR: Access Check' und die PerimeterX-Marker im DOM. Diese Signale sind bei jedem Abruf identisch."
+      },
+      "reproducibility": "Bei jedem anonymen Abruf reproduzierbar — der 403 kam beim allerersten Request, ohne vorangehende Last. Genau deshalb ist er eine Aussage ueber JSTORs Bot-Erkennung und nicht ueber unser Anfragetempo.",
+      "why_this_still_satisfies_ac1": "Issue #449 laesst fuer AC1 ausdruecklich die Alternative 'dokumentiert belegt, warum das technisch nicht moeglich ist' zu. Genau dieser Fall liegt vor: Die Kapitel sind auf JSTOR als OPEN ACCESS ausgezeichnet, der Volltext-Endpunkt antwortet anonym trotzdem mit einer Bot-Challenge. about.jstor.org/terms untersagt automatisiertes/systematisches Herunterladen zudem ausdruecklich; die Challenge zu umgehen waere ein Verstoss. agents/jstor.md meldet darum ehrlich status:captcha, statt das Tempo zu erhoehen oder die Challenge zu umgehen.",
+      "notes": "Der 403 belegt NICHT, dass der Titel unerreichbar ist — ueber die regulaere Browser-Oberflaeche im Menschentempo (der Weg, den agents/jstor.md beschreibt) kann derselbe Inhalt sehr wohl zugaenglich sein. Belegt ist allein: der direkte, anonyme Zugriff auf den PDF-Endpunkt wird mit einer Challenge beantwortet."
+    }
+  ]
+}

@@ -16,6 +16,9 @@ PUBLISHER_DOMAIN_MAP = {
     "degruyter.com": "degruyter",
     "nationallizenzen.de": "nationallizenzen",
     "ebookcentral.proquest.com": "ebook-central",
+    "cambridge.org": "cambridge-core",
+    "academic.oup.com": "oxford-academic",
+    "jstor.org": "jstor",
 }
 
 

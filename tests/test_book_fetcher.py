@@ -184,6 +184,123 @@ class TestBookFetcherRouting(unittest.TestCase):
         self.assertEqual(result["tries"][-1]["subagent"], "generic-fetcher")
 
 
+class TestNewPublisherFetchersRouting(unittest.TestCase):
+    """Issue #449: Cambridge Core, Oxford Academic, JSTOR als Verlags-Subagenten."""
+
+    NEW_AGENTS = ("cambridge-core", "oxford-academic", "jstor")
+    OA_SUBAGENTS = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+
+    def _router(self, profile_file):
+        return BookFetcherRouter(profile=_load_yaml(profile_file))
+
+    def test_licensed_publisher_subagents_include_new_agents_when_licensed(self):
+        """AC2 (positiv): Bei passender Lizenz stehen die drei neuen Subagenten in der Kandidatenliste."""
+        router = self._router("active_profile_new_publishers.yaml")
+        subagents = router._get_licensed_publisher_subagents()
+        for name in self.NEW_AGENTS:
+            self.assertIn(name, subagents)
+
+    def test_licensed_publisher_subagents_exclude_new_agents_when_not_licensed(self):
+        """AC2: Ohne passende Lizenz im Uni-Profil werden die neuen Subagenten nicht dispatcht."""
+        router = self._router("active_profile_no_licensed.yaml")
+        subagents = router._get_licensed_publisher_subagents()
+        for name in self.NEW_AGENTS:
+            self.assertNotIn(name, subagents)
+
+    def test_cambridge_core_licensed_success_routes_through_master(self):
+        router = self._router("active_profile_new_publishers.yaml")
+        meta_only = {"status": "metadata_only", "source_subagent": "x", "url": "https://x.com"}
+        cambridge_success = _load_json("cambridge_core_success.json")
+
+        def side_effect(subagent, payload):
+            if subagent in self.OA_SUBAGENTS:
+                return dict(meta_only, source_subagent=subagent)
+            if subagent == "cambridge-core":
+                return cambridge_success
+            raise AssertionError(f"Unexpected subagent call: {subagent}")
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            result = router.fetch("978-1-316-16101-2", output_path="/tmp/cambridge.pdf")
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source"], "cambridge-core")
+        self.assertIn("cambridge-core", [t["subagent"] for t in result["tries"]])
+
+    def test_oxford_academic_licensed_success_routes_through_master(self):
+        router = self._router("active_profile_new_publishers.yaml")
+        meta_only = {"status": "metadata_only", "source_subagent": "x", "url": "https://x.com"}
+        oxford_success = _load_json("oxford_academic_success.json")
+
+        def side_effect(subagent, payload):
+            if subagent in self.OA_SUBAGENTS:
+                return dict(meta_only, source_subagent=subagent)
+            if subagent == "cambridge-core":
+                # Kommt in PUBLISHER_DOMAIN_MAP vor oxford-academic -- wird zuerst
+                # probiert, liefert hier aber keinen Treffer.
+                return {"status": "no_match", "source_subagent": "cambridge-core"}
+            if subagent == "oxford-academic":
+                return oxford_success
+            raise AssertionError(f"Unexpected subagent call: {subagent}")
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            result = router.fetch("978-0-19-024724-9", output_path="/tmp/oxford.pdf")
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source"], "oxford-academic")
+        self.assertIn("oxford-academic", [t["subagent"] for t in result["tries"]])
+
+    def test_jstor_licensed_success_routes_through_master(self):
+        router = self._router("active_profile_new_publishers.yaml")
+        meta_only = {"status": "metadata_only", "source_subagent": "x", "url": "https://x.com"}
+        jstor_success = _load_json("jstor_success.json")
+
+        def side_effect(subagent, payload):
+            if subagent in self.OA_SUBAGENTS:
+                return dict(meta_only, source_subagent=subagent)
+            if subagent in ("cambridge-core", "oxford-academic"):
+                # Kommen in PUBLISHER_DOMAIN_MAP vor jstor -- werden zuerst
+                # probiert, liefern hier aber keinen Treffer.
+                return {"status": "no_match", "source_subagent": subagent}
+            if subagent == "jstor":
+                return jstor_success
+            raise AssertionError(f"Unexpected subagent call: {subagent}")
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            result = router.fetch("Afghanistan's Islam", output_path="/tmp/jstor.pdf")
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source"], "jstor")
+        self.assertIn("jstor", [t["subagent"] for t in result["tries"]])
+
+    def test_new_publishers_metadata_only_without_license_falls_through_to_generic(self):
+        """AC2 (negativ, End-to-End): Ohne Lizenz landen die neuen Hosts nie beim Verlags-Schritt,
+        der Master faellt direkt auf generic-fetcher zurueck statt einen anonymen Weg zu waehlen."""
+        router = self._router("active_profile_no_licensed.yaml")
+        meta_only = {
+            "status": "metadata_only",
+            "source_subagent": "x",
+            "url": "https://www.jstor.org/stable/j.ctv1234567",
+        }
+        generic_resp = _load_json("generic_pickup.json")
+
+        called = []
+
+        def side_effect(subagent, payload):
+            called.append(subagent)
+            if subagent in self.OA_SUBAGENTS:
+                return dict(meta_only, source_subagent=subagent)
+            if subagent == "generic-fetcher":
+                return generic_resp
+            raise AssertionError(f"Unexpected subagent call: {subagent}")
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            result = router.fetch("Afghanistan's Islam", output_path="/tmp/jstor.pdf")
+
+        self.assertEqual(result["status"], "pickup_required")
+        for name in self.NEW_AGENTS:
+            self.assertNotIn(name, called)
+
+
 class TestGenericFetcherAuthRoute(unittest.TestCase):
     """Issue #448: generic-fetcher meldet auth_required -> auth-helper -> genau ein Retry."""
 
