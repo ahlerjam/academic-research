@@ -891,4 +891,24 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit_code = main()
+    # #465/#487: run_search()/main() halten das Zeitbudget zuverlaessig ein,
+    # aber ein regulaeres sys.exit() (bzw. jeder normale Interpreter-Shutdown)
+    # nicht -- concurrent.futures.thread registriert ueber
+    # threading._register_atexit() einen globalen Hook (_python_exit), der
+    # VOR dem Join aller nicht-Daemon-Threads laeuft und dabei ALLE je
+    # gestarteten ThreadPoolExecutor-Worker-Threads joint, unabhaengig davon,
+    # ob executor.shutdown(wait=False, cancel_futures=True) schon aufgerufen
+    # wurde: cancel_futures=True storniert nur noch nicht gestartete Futures,
+    # ein Worker-Thread, der bereits in einem blockierenden Request steckt
+    # (die Quelle, die gerade das Budget gerissen hat), laeuft unveraendert
+    # weiter und haelt so den Prozessexit auf -- der eigentliche, von
+    # commands/search.md abgewartete Aufrufpfad ist genau dieser Prozess,
+    # nicht main() als Python-Funktion. os._exit() umgeht den kompletten
+    # Interpreter-Finalisierungspfad (inkl. dieses Hooks) und terminiert
+    # sofort; stdout/stderr davor flushen, da os._exit() keine Puffer mehr
+    # schreibt (main() hat alle Ausgaben zu diesem Zeitpunkt bereits per
+    # sys.stdout.write()/save_json()s mit-with-geschlossenem open() erledigt).
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_exit_code)
