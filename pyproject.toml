@@ -133,6 +133,16 @@ filterwarnings = [
 ]
 
 # ---------------------------------------------------------------------------
+# coverage.py (Issue #469 AC4)
+# ---------------------------------------------------------------------------
+# --cov-Ziele werden per CLI in .github/workflows/ci.yml gesetzt (scripts,
+# academic_vault, .github/scripts/flowkit_review, skills). omit haelt den
+# vendorierten, von Lint/Typecheck ohnehin ausgeschlossenen xlsx-Skriptpfad
+# (siehe AGENTS.md "Verzeichnisgrenzen") aus dem Report.
+[tool.coverage.run]
+omit = ["skills/xlsx/scripts/office/*"]
+
+# ---------------------------------------------------------------------------
 # ruff — Linter + Formatter
 # ---------------------------------------------------------------------------
 [tool.ruff]

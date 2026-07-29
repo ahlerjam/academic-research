@@ -133,6 +133,17 @@ jobs:
       - name: PreToolUse-Blocker Regression-Harness
         run: bash scripts/dev/test-pretooluse-blocker.sh
 
+  # 4d. Shell-Syntax-Gate: bash -n ueber alle *.sh-Skripte im Repo (#469 AC3)
+  shell-syntax:
+    name: Shell-Syntax (bash -n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Regression-Harness (beweist Fehlererkennung an kaputter Fixture)
+        run: bash scripts/dev/test-check-shell-syntax.sh
+      - name: bash -n ueber alle *.sh-Dateien
+        run: bash scripts/dev/check-shell-syntax.sh
+
   # 5. Vollstaendige Test-Suite auf macOS + Ubuntu, Python-Matrix 3.11/3.12/3.13
   #    Mindestversion 3.11 ist konsistent mit README.md und pyproject.toml (#201).
   #    3.14 folgt, sobald actions/setup-python es als stable fuehrt.
@@ -173,9 +184,18 @@ jobs:
           uv pip install --python "$HOME/.academic-research/venv/bin/python" "mcp==1.28.1"
           "$HOME/.academic-research/venv/bin/python" -c "from mcp.server.fastmcp import FastMCP; import mcp.client.stdio"
       - name: pytest mit Coverage
+        # --cov-Ziele erweitert (#469 AC4): .github/scripts/flowkit_review (bislang
+        # komplett unerfasst, siehe die neuen Tests in
+        # tests/test_issue_469_flowkit_review_pipeline.py) und skills/ (hat bereits
+        # laufende Tests, z.B. test_cluster_visualizer.py, test_prisma_flow.py,
+        # test_zotero_import.py, die vorher unsichtbar blieben). Der ausgewiesene
+        # Gesamt-Coverage-Wert sinkt dadurch sichtbar -- gewollt (Ehrlichkeit der
+        # Zahl), keine Regression: bislang unsichtbare 0%-Dateien (u.a. merge.py,
+        # apply_verdicts.py, render.py in flowkit_review) fliessen jetzt erstmals ein.
         run: |
           uv run pytest tests/ -p no:cacheprovider \
             --cov=scripts --cov=academic_vault \
+            --cov=.github/scripts/flowkit_review --cov=skills \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml
       - name: Coverage-Report zu Codecov hochladen
