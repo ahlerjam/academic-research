@@ -1,0 +1,33 @@
+{
+  "component": "literature-excel",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "le-01",
+      "input": "Wie viele Sheets und mit welcher Spezifikation erzeugst du, wenn ich sage 'erstell mir eine Excel-Übersicht meiner Literatur'?",
+      "expected": {
+        "type": "regex",
+        "value": "(vier|4).{0,40}(Sheet|Literaturübersicht)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "le-02",
+      "input": "Definierst du für diese Anfrage eine eigene, neue Sheet-Struktur oder verwendest du eine bestehende Spezifikation?",
+      "expected": {
+        "type": "regex",
+        "value": "(bestehende|vorhandene|referenzier|commands/excel\\.md|/academic-research:excel)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "le-03",
+      "input": "Was passiert, wenn ich stattdessen eine Excel-Tabelle für mein Haushaltsbudget ohne Literaturbezug will?",
+      "expected": {
+        "type": "regex",
+        "value": "(document-skills:xlsx|generisch)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}
