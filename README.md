@@ -53,7 +53,8 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 >
 > - SciHub operiert rechtlich in einer umstrittenen Zone — die Nutzung kann in deinem Land gegen das Urheberrecht verstossen.
 > - Jeder via SciHub bezogene Volltext wird im Vault mit `provenance:scihub` getaggt.
-> - Im Output erscheint stets der Hinweis: *"Quelle via SciHub bezogen — bitte zusätzlich legalen Zugriff klären."*
+> - Die rechtliche Aufklärung erfolgt **einmalig beim Opt-in** — nicht bei jedem einzelnen Fund.
+>   Läuft der Tier, geschieht das anschließend ohne wiederholte Warnhinweise (Issue #459).
 > - **Du trägst die alleinige rechtliche Verantwortung für die Nutzung des SciHub-Tiers.**
 <!-- END SCIHUB-DISCLAIMER-BLOCK -->
 

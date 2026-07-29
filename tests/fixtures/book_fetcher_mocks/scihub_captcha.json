@@ -1,0 +1,5 @@
+{
+  "status": "captcha",
+  "source": "scihub-fetcher",
+  "reason": "Captcha erkannt, manueller Eingriff noetig"
+}
