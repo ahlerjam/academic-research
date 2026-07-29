@@ -1,0 +1,27 @@
+{
+  "component": "word-export",
+  "should_trigger": [
+    "Exportiere mein Kapitel als Word-Datei.",
+    "Ich brauche meine Thesis als .docx.",
+    "Wandle das Kapitel in ein Word-Dokument um.",
+    "Erzeuge eine Abgabe als PDF aus meinen Kapiteln.",
+    "Kann ich meine Arbeit als Word exportieren?",
+    "Baue mir ein .docx mit Titelblatt und Literaturverzeichnis.",
+    "Ich brauche die Arbeit im Word-Format fuer die Abgabe.",
+    "Exportiere alle Kapitel als eine Word-Datei mit Formatvorlagen.",
+    "Mach aus dem Kapitel ein docx mit eidesstattlicher Erklaerung.",
+    "Konvertiere mein Markdown-Kapitel zu Word."
+  ],
+  "should_not_trigger": [
+    "Schreibe Kapitel 3 meiner Arbeit.",
+    "Erstelle einen Foliensatz fuer das Kolloquium.",
+    "Exportiere mein Kapitel als .tex.",
+    "Pruefe meinen Text auf KI-Muster.",
+    "Welches Thema soll ich nehmen?",
+    "Suche Open-Access-Paper zu Microservices.",
+    "Generiere einen Arbeitstitel.",
+    "Erstelle eine Excel-Literaturuebersicht.",
+    "Pruefe die Formalia meiner Abgabe.",
+    "Schaerfe meine Forschungsfrage."
+  ]
+}

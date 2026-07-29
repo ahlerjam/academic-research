@@ -1,0 +1,24 @@
+{
+  "component": "slide-export",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "sx-01",
+      "input": "Baue eine Folie aus diesem Kapitel mit genau einer Kernaussage:\n\n# Methodik\n\nDie Untersuchung nutzt eine qualitative Fallstudie mit fuenf Unternehmen. Die Datenerhebung erfolgte per Interview.",
+      "expected": {
+        "type": "regex",
+        "value": "(Kernaussage|core_statement|Folie)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "sx-02",
+      "input": "Wie viele Folien entstehen aus drei Kapiteln im slide-export-Workflow?",
+      "expected": {
+        "type": "regex",
+        "value": "(drei|3)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}
