@@ -1,6 +1,6 @@
 # Walkthrough — von der Themenfindung bis zur Abgabe
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Der [Quickstart in der README](../../README.md#quickstart) bringt dich bis zum ersten
 verifizierten Zitat. Diese Seite zeigt den vollständigen Weg durch eine Arbeit. Du musst

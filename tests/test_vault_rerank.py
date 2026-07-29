@@ -4,8 +4,12 @@ TDD: Tests werden zuerst geschrieben (RED), dann Implementierung (GREEN).
 """
 
 import json
+import logging
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -256,26 +260,115 @@ class TestRerankerIntegration:
         assert reranked[1]["paper_id"] == "p001"
         assert reranked[2]["paper_id"] == "p002"
 
-    def test_rerank_fallback_when_no_api_key(self):
-        """Reranker gibt RRF-Ergebnis unveraendert zurueck wenn API-Key fehlt."""
+    def test_rerank_fallback_when_no_api_key_uses_local_bge(self):
+        """Ohne API-Key greift der lokale bge-reranker-v2-m3-Fallback (#376, AC2).
+
+        Regression: vorher fiel `apply_reranker` ohne Key komplett auf die
+        unveraenderte RRF-Reihenfolge zurueck (kostenfreies Reranking war nie
+        wirksam). Gemockt wird nur das Backend (`_get_local_reranker`), damit
+        der Test ohne Modell-Download deterministisch bleibt.
+        """
         from academic_vault.retrieval import apply_reranker
 
         candidates = [
-            {"paper_id": "p001", "rrf_score": 0.02},
-            {"paper_id": "p002", "rrf_score": 0.015},
+            {"paper_id": "p001", "text": "Unrelated snippet.", "rrf_score": 0.02},
+            {"paper_id": "p002", "text": "Highly relevant snippet.", "rrf_score": 0.015},
         ]
 
-        # Kein API-Key → kein Reranking
-        result = apply_reranker(
-            query="test query",
-            candidates=candidates,
-            voyage_api_key=None,
-            cohere_api_key=None,
-        )
+        mock_reranker = MagicMock()
+        # p002 bekommt den hoeheren Score -> Rangfolge kehrt sich gegenueber RRF um
+        mock_reranker.compute_score.return_value = [0.1, 0.9]
 
-        # Unveraenderte Reihenfolge
-        assert result[0]["paper_id"] == "p001"
-        assert result[1]["paper_id"] == "p002"
+        with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
+            result = apply_reranker(
+                query="test query",
+                candidates=candidates,
+                voyage_api_key=None,
+                cohere_api_key=None,
+            )
+
+        assert result[0]["paper_id"] == "p002", "lokaler Reranker hat Rangfolge nicht angewendet"
+        assert result[1]["paper_id"] == "p001"
+        assert all(r["reranked"] is True for r in result)
+        assert all(r["reranker"] == "local-bge" for r in result)
+
+    def test_rerank_local_bge_not_used_when_voyage_key_set(self):
+        """Der lokale Fallback darf NUR greifen, wenn beide Cloud-Keys fehlen (Plan-Risiko #3).
+
+        Ein fehlgeschlagener Voyage-Aufruf darf NICHT still durch den lokalen
+        Reranker ersetzt werden -- sonst wuerde AC3 (`reranked: false` bei
+        ungueltigem VOYAGE_API_KEY) durch einen stillen Erfolg verdeckt.
+        """
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [{"paper_id": "p001", "text": "x", "rrf_score": 0.02}]
+
+        with (
+            patch("academic_vault.retrieval._get_voyage_client") as mock_voyage,
+            patch("academic_vault.retrieval._get_local_reranker") as mock_local,
+        ):
+            mock_voyage_instance = MagicMock()
+            mock_voyage_instance.rerank.side_effect = RuntimeError("Voyage API down")
+            mock_voyage.return_value = mock_voyage_instance
+
+            apply_reranker(
+                query="test",
+                candidates=candidates,
+                voyage_api_key="invalid-key",
+                cohere_api_key=None,
+            )
+
+        mock_local.assert_not_called()
+
+    def test_rerank_fallback_when_no_reranker_available_returns_unranked(self, caplog):
+        """Kein API-Key UND kein lokales Backend -> unveraenderte RRF-Reihenfolge (Fixrunde #422).
+
+        Regression: der urspruengliche `test_rerank_fallback_when_no_api_key`
+        deckte genau diesen Degradationspfad ab (beide Cloud-Keys fehlen,
+        Reranking bleibt wirkungslos), wurde aber ersatzlos durch
+        `test_rerank_fallback_when_no_api_key_uses_local_bge` ersetzt -- das
+        mockt einen FUNKTIONIERENDEN lokalen Reranker und prueft damit einen
+        anderen Zweig. Der Pfad "kein Reranker verfuegbar" blieb dadurch ohne
+        jede Absicherung, obwohl er der Normalfall jeder `setup.sh`-Installation
+        ist: `FlagEmbedding` ist bewusst kein uv-/pip-verwalteter Dependency
+        (weder in `pyproject.toml` noch in `scripts/requirements.txt`, nur
+        manuell per `pip install FlagEmbedding` nachinstallierbar -- vgl.
+        Fixrunde PR #422), also schlaegt `_get_local_reranker()` dort immer
+        fehl.
+
+        Bewusst KEIN Patch von `_get_local_reranker`: die autouse-Fixture
+        `block_real_local_reranker_backend` (tests/conftest.py) blockiert das
+        echte Backend bereits -- genau das Verhalten, das ein fehlendes
+        `rerank-local`-Extra in der Praxis erzeugt.
+        """
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [
+            {"paper_id": "p001", "text": "Unrelated snippet.", "rrf_score": 0.02},
+            {"paper_id": "p002", "text": "Highly relevant snippet.", "rrf_score": 0.015},
+        ]
+
+        with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+            result = apply_reranker(
+                query="test query",
+                candidates=candidates,
+                voyage_api_key=None,
+                cohere_api_key=None,
+            )
+
+        assert [r["paper_id"] for r in result] == ["p001", "p002"], (
+            "RRF-Reihenfolge muss unveraendert bleiben, wenn kein Reranker verfuegbar ist"
+        )
+        assert all(r["reranked"] is False for r in result), (
+            "reranked muss False sein, wenn weder Cloud- noch lokaler Reranker verfuegbar sind"
+        )
+        assert all(r["reranker"] == "none" for r in result)
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("lokaler reranker" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Log-Hinweis fuer den blockierten lokalen Reranker: "
+            f"{[r.message for r in warnings]}"
+        )
 
     def test_rerank_voyage_preferred_over_cohere(self):
         """Voyage wird bevorzugt wenn beide API-Keys verfuegbar sind."""
@@ -317,7 +410,11 @@ class TestRerankerFallbackStructure:
     """Regressionstests fuer #233: Fallback liefert enriched-Struktur (inkl. text)."""
 
     def test_fallback_no_api_key_returns_text_field(self):
-        """Ohne Reranker-Key muss jeder Kandidat ein text-Feld haben (#233)."""
+        """Ohne Reranker-Key muss jeder Kandidat ein text-Feld haben (#233).
+
+        Seit #376 greift ohne Cloud-Key der lokale bge-reranker-v2-m3-Fallback
+        -- gemockt, damit der Test ohne Modell-Download deterministisch bleibt.
+        """
         from academic_vault.retrieval import apply_reranker
 
         # Kandidaten OHNE text-Feld (wie aus RRF-Fusion)
@@ -326,18 +423,23 @@ class TestRerankerFallbackStructure:
             {"paper_id": "p002", "snippet": "Convolutional networks.", "rrf_score": 0.015},
         ]
 
-        result = apply_reranker(
-            query="test query",
-            candidates=candidates,
-            voyage_api_key=None,
-            cohere_api_key=None,
-        )
+        mock_reranker = MagicMock()
+        mock_reranker.compute_score.return_value = [0.5, 0.5]
+
+        with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
+            result = apply_reranker(
+                query="test query",
+                candidates=candidates,
+                voyage_api_key=None,
+                cohere_api_key=None,
+            )
 
         # Fallback-Pfad muss enriched-Struktur liefern: text-Feld vorhanden
+        by_id = {e["paper_id"]: e for e in result}
         for entry in result:
             assert "text" in entry, "Fallback-Kandidat ohne text-Feld (#233)"
-        assert result[0]["text"] == "Transformer networks."
-        assert result[1]["text"] == "Convolutional networks."
+        assert by_id["p001"]["text"] == "Transformer networks."
+        assert by_id["p002"]["text"] == "Convolutional networks."
 
     def test_fallback_on_voyage_exception_returns_text_field(self):
         """Wenn Voyage eine Exception wirft, muss der Fallback enriched liefern (#233)."""
@@ -363,7 +465,7 @@ class TestRerankerFallbackStructure:
         assert result[0]["text"] == "Dense retrieval."
 
     def test_fallback_structure_matches_reranker_path(self):
-        """Fallback-Pfad liefert dieselben Keys wie der Reranker-Pfad (#233)."""
+        """Fallback-Pfad (lokaler Reranker) liefert dieselben Keys wie der Voyage-Pfad (#233)."""
         from academic_vault.retrieval import apply_reranker
 
         candidates = [
@@ -388,13 +490,16 @@ class TestRerankerFallbackStructure:
                 cohere_api_key=None,
             )
 
-        # Fallback-Pfad — kein Key
-        fallback = apply_reranker(
-            query="q",
-            candidates=candidates,
-            voyage_api_key=None,
-            cohere_api_key=None,
-        )
+        # Fallback-Pfad — kein Key, lokaler Reranker gemockt (#376)
+        mock_local = MagicMock()
+        mock_local.compute_score.return_value = [0.5, 0.5]
+        with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_local):
+            fallback = apply_reranker(
+                query="q",
+                candidates=candidates,
+                voyage_api_key=None,
+                cohere_api_key=None,
+            )
 
         # Beide Pfade muessen das text-Feld enthalten
         reranked_text_keys = {"text" in e for e in reranked}
@@ -534,3 +639,288 @@ class TestRecallEval:
         # RRF soll mindestens so gut wie FTS5 sein
         assert recall_rrf >= recall_fts
         assert recall_rrf > 0.0, "RRF findet p001 nicht"
+
+
+# ---------------------------------------------------------------------------
+# Tests: Lokaler Reranker-Fallback bge-reranker-v2-m3 (#376)
+# ---------------------------------------------------------------------------
+
+
+class TestLocalBgeReranker:
+    """Unit-Tests fuer rerank_with_local_bge (gemocktes Backend, kein Modell-Download)."""
+
+    def test_rerank_with_local_bge_deterministic_scores(self):
+        """rerank_with_local_bge sortiert nach den (gemockten) Backend-Scores."""
+        from academic_vault.retrieval import rerank_with_local_bge
+
+        candidates = [
+            {"paper_id": "p001", "text": "Transformer neural networks."},
+            {"paper_id": "p002", "text": "Convolutional networks for images."},
+            {"paper_id": "p003", "text": "Attention mechanism for NLP."},
+        ]
+
+        mock_reranker = MagicMock()
+        # p003 bekommt hoechsten Score, dann p001, dann p002
+        mock_reranker.compute_score.return_value = [0.4, 0.1, 0.9]
+
+        with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
+            reranked = rerank_with_local_bge(
+                query="transformer attention NLP",
+                candidates=candidates,
+            )
+
+        assert reranked[0]["paper_id"] == "p003"
+        assert reranked[1]["paper_id"] == "p001"
+        assert reranked[2]["paper_id"] == "p002"
+        # Backend bekommt Query/Text als Paar-Liste
+        call_args = mock_reranker.compute_score.call_args
+        pairs = call_args[0][0]
+        assert pairs == [
+            ["transformer attention NLP", "Transformer neural networks."],
+            ["transformer attention NLP", "Convolutional networks for images."],
+            ["transformer attention NLP", "Attention mechanism for NLP."],
+        ]
+
+    def test_rerank_with_local_bge_single_candidate_scalar_score(self):
+        """Backend gibt bei genau einem Kandidaten einen Skalar zurueck (kein List) -- muss klappen."""
+        from academic_vault.retrieval import rerank_with_local_bge
+
+        candidates = [{"paper_id": "p001", "text": "Solo candidate."}]
+
+        mock_reranker = MagicMock()
+        mock_reranker.compute_score.return_value = 0.42  # Skalar statt Liste
+
+        with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
+            reranked = rerank_with_local_bge(query="q", candidates=candidates)
+
+        assert reranked[0]["paper_id"] == "p001"
+        assert reranked[0]["rerank_score"] == 0.42
+
+    def test_rerank_with_local_bge_raises_when_backend_unavailable(self):
+        """rerank_with_local_bge wirft, wenn das Backend nicht ladbar ist (analog Voyage/Cohere)."""
+        from academic_vault.retrieval import rerank_with_local_bge
+
+        with patch("academic_vault.retrieval._get_local_reranker", return_value=None):
+            with pytest.raises(RuntimeError):
+                rerank_with_local_bge(query="q", candidates=[{"paper_id": "p001", "text": "x"}])
+
+
+# ---------------------------------------------------------------------------
+# Tests: Sichtbares Fehlverhalten statt stillem except (#376, AC3)
+# ---------------------------------------------------------------------------
+
+
+class TestRerankerVisibleFailure:
+    """AC3: Ungueltiger VOYAGE_API_KEY -> reranked: false + sichtbarer Log, kein stiller Fehler."""
+
+    def test_invalid_voyage_key_returns_reranked_false_with_warning_log(self, caplog):
+        """Voyage-Exception fuehrt zu reranked=False + WARNING-Log (kein `except Exception: pass`)."""
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [
+            {"paper_id": "p001", "text": "Some document text."},
+        ]
+
+        with patch("academic_vault.retrieval._get_voyage_client") as mock_voyage:
+            mock_instance = MagicMock()
+            mock_instance.rerank.side_effect = RuntimeError("401 Unauthorized: invalid API key")
+            mock_voyage.return_value = mock_instance
+
+            with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+                result = apply_reranker(
+                    query="test",
+                    candidates=candidates,
+                    voyage_api_key="invalid-voyage-key",
+                    cohere_api_key=None,
+                )
+
+        assert all(entry["reranked"] is False for entry in result), (
+            "reranked muss False sein, wenn Voyage fehlschlaegt und kein Fallback greift (AC3)"
+        )
+        assert all(entry["reranker"] == "none" for entry in result)
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("voyage" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Voyage-Log-Hinweis gefunden (AC3): {[r.message for r in warnings]}"
+        )
+
+    def test_invalid_cohere_key_returns_reranked_false_with_warning_log(self, caplog):
+        """Gleiche Garantie fuer Cohere: kein stiller except, sondern reranked=False + Log."""
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [{"paper_id": "p001", "text": "Some document text."}]
+
+        with patch("academic_vault.retrieval._get_cohere_client") as mock_cohere:
+            mock_instance = MagicMock()
+            mock_instance.rerank.side_effect = RuntimeError("401 Unauthorized: invalid API key")
+            mock_cohere.return_value = mock_instance
+
+            with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+                result = apply_reranker(
+                    query="test",
+                    candidates=candidates,
+                    voyage_api_key=None,
+                    cohere_api_key="invalid-cohere-key",
+                )
+
+        assert all(entry["reranked"] is False for entry in result)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("cohere" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Cohere-Log-Hinweis gefunden: {[r.message for r in warnings]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Live-Tests gegen die echten Voyage/Cohere-APIs (#376, AC3-Beweis,
+# Fixrunde PR #422)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    os.environ.get("VAULT_RERANK_CLOUD_LIVE_TEST") != "1",
+    reason="Live-API-Test nur mit VAULT_RERANK_CLOUD_LIVE_TEST=1 (echter "
+    "Netzwerk-Call gegen Voyage/Cohere mit absichtlich ungueltigem Key).",
+)
+class TestRerankerVisibleFailureLive:
+    """AC3 woertlich: ein *Live*-Test mit ungueltigem Key statt nur eines Mocks.
+
+    `TestRerankerVisibleFailure` oben mockt `_get_voyage_client`/
+    `_get_cohere_client` mit einem generischen `RuntimeError` als
+    `side_effect` -- das landet immer im catch-all `except Exception` in
+    `apply_reranker`, nie in den eigens eingefuehrten benannten Handlern
+    `except VoyageError`/`except CohereApiError`. Faellt bei einer
+    kuenftigen SDK-Version der Importpfad `voyageai.error.VoyageError` bzw.
+    `cohere.core.api_error.ApiError` still auf den Platzhalter zurueck
+    (retrieval.py, `try: from voyageai.error import VoyageError`), schluege
+    dort KEIN Test an.
+
+    Diese Klasse macht echte Netzwerk-Aufrufe gegen die realen SDKs mit
+    absichtlich ungueltigem Key und beweist direkt (per `isinstance` gegen
+    die tatsaechlich geworfene Exception), dass die reale Fehlerklasse der
+    API eine Unterklasse der importierten Basisklasse ist -- der benannte
+    Handler wird also wirklich getroffen, nicht nur der Catch-all.
+    """
+
+    def test_voyage_invalid_key_live_raises_named_voyage_error(self):
+        """Echter Voyage-Call mit ungueltigem Key wirft eine VoyageError-Instanz."""
+        pytest.importorskip("voyageai")
+        import voyageai.error
+        from academic_vault.retrieval import VoyageError, rerank_with_voyage
+
+        with pytest.raises(VoyageError) as exc_info:
+            rerank_with_voyage(
+                query="test query",
+                candidates=[{"paper_id": "p001", "text": "Some document text."}],
+                api_key="invalid-voyage-key-for-ac3-live-test",
+            )
+
+        # Beweis, dass es sich um die echte SDK-Klasse handelt, nicht um den
+        # nie ausgeloesten Platzhalter aus retrieval.py.
+        assert type(exc_info.value).__module__.startswith("voyageai")
+        assert isinstance(exc_info.value, voyageai.error.VoyageError)
+
+    def test_voyage_invalid_key_live_apply_reranker_returns_reranked_false(self, caplog):
+        """apply_reranker() mit echtem ungueltigem Voyage-Key: reranked=False + WARNING (AC3)."""
+        pytest.importorskip("voyageai")
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [{"paper_id": "p001", "text": "Some document text about machine learning."}]
+
+        with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+            result = apply_reranker(
+                query="test",
+                candidates=candidates,
+                voyage_api_key="invalid-voyage-key-for-ac3-live-test",
+                cohere_api_key=None,
+            )
+
+        assert all(entry["reranked"] is False for entry in result)
+        assert all(entry["reranker"] == "none" for entry in result)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("voyage" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Voyage-Log-Hinweis (Live) gefunden: {[r.message for r in warnings]}"
+        )
+
+    def test_cohere_invalid_key_live_raises_named_cohere_error(self):
+        """Echter Cohere-Call mit ungueltigem Key wirft eine CohereApiError-Instanz."""
+        pytest.importorskip("cohere")
+        import cohere.core.api_error
+        from academic_vault.retrieval import CohereApiError, rerank_with_cohere
+
+        with pytest.raises(CohereApiError) as exc_info:
+            rerank_with_cohere(
+                query="test query",
+                candidates=[{"paper_id": "p001", "text": "Some document text."}],
+                api_key="invalid-cohere-key-for-ac3-live-test",
+            )
+
+        assert type(exc_info.value).__module__.startswith("cohere")
+        assert isinstance(exc_info.value, cohere.core.api_error.ApiError)
+
+    def test_cohere_invalid_key_live_apply_reranker_returns_reranked_false(self, caplog):
+        """apply_reranker() mit echtem ungueltigem Cohere-Key: reranked=False + WARNING (AC3)."""
+        pytest.importorskip("cohere")
+        from academic_vault.retrieval import apply_reranker
+
+        candidates = [{"paper_id": "p001", "text": "Some document text about machine learning."}]
+
+        with caplog.at_level(logging.WARNING, logger="academic_vault.retrieval"):
+            result = apply_reranker(
+                query="test",
+                candidates=candidates,
+                voyage_api_key=None,
+                cohere_api_key="invalid-cohere-key-for-ac3-live-test",
+            )
+
+        assert all(entry["reranked"] is False for entry in result)
+        assert all(entry["reranker"] == "none" for entry in result)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("cohere" in r.message.lower() for r in warnings), (
+            f"Kein sichtbarer Cohere-Log-Hinweis (Live) gefunden: {[r.message for r in warnings]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Live-Test gegen das echte bge-reranker-v2-m3-Modell (#376, AC2-Beweis)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    os.environ.get("VAULT_RERANK_LOCAL_LIVE_TEST") != "1",
+    reason="Live-Modelltest nur mit VAULT_RERANK_LOCAL_LIVE_TEST=1 (laedt bge-reranker-v2-m3)",
+)
+def test_local_bge_reranker_real_model_reorders_candidates():
+    """Echtes bge-reranker-v2-m3-Modell veraendert die unrerankte RRF-Reihenfolge (AC2).
+
+    Setup: ein eindeutig relevanter Kandidat steht in der RRF-Eingabe absichtlich
+    HINTER einem irrelevanten Kandidaten. Der lokale Reranker muss ihn nach vorne
+    holen -- der Beweis, dass der kostenfreie Fallback tatsaechlich wirkt (nicht
+    nur strukturell durchgereicht wird).
+    """
+    pytest.importorskip("FlagEmbedding")
+    from academic_vault.retrieval import rerank_with_local_bge, reset_local_reranker_cache
+
+    reset_local_reranker_cache()
+    query = "What are the health benefits of regular exercise?"
+    candidates = [
+        # Absichtlich VORNE (simuliert schlechte RRF-Platzierung), aber irrelevant.
+        {
+            "paper_id": "p_irrelevant",
+            "text": "The history of Renaissance oil painting techniques in 15th century Florence.",
+        },
+        # Absichtlich HINTEN, aber hochrelevant.
+        {
+            "paper_id": "p_relevant",
+            "text": (
+                "Regular physical exercise improves cardiovascular health, strengthens muscles, "
+                "and reduces the risk of chronic diseases such as diabetes and hypertension."
+            ),
+        },
+    ]
+    rrf_order = [c["paper_id"] for c in candidates]
+
+    reranked = rerank_with_local_bge(query=query, candidates=candidates)
+    reranked_order = [c["paper_id"] for c in reranked]
+
+    assert reranked_order != rrf_order, "lokaler Reranker hat die RRF-Reihenfolge nicht veraendert"
+    assert reranked_order[0] == "p_relevant", "relevanter Kandidat wurde nicht nach vorne gerankt"

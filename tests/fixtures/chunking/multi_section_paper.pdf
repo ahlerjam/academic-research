@@ -1,0 +1,135 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R] /Count 6 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 838 >>
+stream
+BT
+/F1 12 Tf
+14 TL
+72 720 Td
+(Abstract) Tj
+T*
+(retrieval0 systems1 combine2 dense3 and4 sparse5 representations6 to7 improve8 semantic9 search10 over11 large12 document13 collections14 researchers15 evaluate16 different17 chunking18 strategies19 observe20 that21 overlapping22 windows23 preserve24 context25 across26 boundaries27 the28 proposed29 approach30 uses31 a32 sliding33 window34 with35 fixed36 overlap37 ratio38 balance39 redundancy40 against41 recall42 retrieval43 systems44 combine45 dense46 and47 sparse48 representations49 to50 improve51 semantic52 search53 over54 large55 document56 collections57 researchers58 evaluate59 different60 chunking61 strategies62 observe63 that64 overlapping65 windows66 preserve67 context68 across69 boundaries70 the71 proposed72 approach73 uses74 a75 sliding76 window77 with78 fixed79) Tj
+T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 3527 >>
+stream
+BT
+/F1 12 Tf
+14 TL
+72 720 Td
+(1 Introduction) Tj
+T*
+(overlap80 ratio81 balance82 redundancy83 against84 recall85 retrieval86 systems87 combine88 dense89 and90 sparse91 representations92 to93 improve94 semantic95 search96 over97 large98 document99 collections100 researchers101 evaluate102 different103 chunking104 strategies105 observe106 that107 overlapping108 windows109 preserve110 context111 across112 boundaries113 the114 proposed115 approach116 uses117 a118 sliding119 window120 with121 fixed122 overlap123 ratio124 balance125 redundancy126 against127 recall128 retrieval129 systems130 combine131 dense132 and133 sparse134 representations135 to136 improve137 semantic138 search139 over140 large141 document142 collections143 researchers144 evaluate145 different146 chunking147 strategies148 observe149 that150 overlapping151 windows152 preserve153 context154 across155 boundaries156 the157 proposed158 approach159 uses160 a161 sliding162 window163 with164 fixed165 overlap166 ratio167 balance168 redundancy169 against170 recall171 retrieval172 systems173 combine174 dense175 and176 sparse177 representations178 to179 improve180 semantic181 search182 over183 large184 document185 collections186 researchers187 evaluate188 different189 chunking190 strategies191 observe192 that193 overlapping194 windows195 preserve196 context197 across198 boundaries199 the200 proposed201 approach202 uses203 a204 sliding205 window206 with207 fixed208 overlap209 ratio210 balance211 redundancy212 against213 recall214 retrieval215 systems216 combine217 dense218 and219 sparse220 representations221 to222 improve223 semantic224 search225 over226 large227 document228 collections229 researchers230 evaluate231 different232 chunking233 strategies234 observe235 that236 overlapping237 windows238 preserve239 context240 across241 boundaries242 the243 proposed244 approach245 uses246 a247 sliding248 window249 with250 fixed251 overlap252 ratio253 balance254 redundancy255 against256 recall257 retrieval258 systems259 combine260 dense261 and262 sparse263 representations264 to265 improve266 semantic267 search268 over269 large270 document271 collections272 researchers273 evaluate274 different275 chunking276 strategies277 observe278 that279 overlapping280 windows281 preserve282 context283 across284 boundaries285 the286 proposed287 approach288 uses289 a290 sliding291 window292 with293 fixed294 overlap295 ratio296 balance297 redundancy298 against299 recall300 retrieval301 systems302 combine303 dense304 and305 sparse306 representations307 to308 improve309 semantic310 search311 over312 large313 document314 collections315 researchers316 evaluate317 different318 chunking319 strategies320 observe321 that322 overlapping323 windows324 preserve325 context326 across327 boundaries328 the329 proposed330 approach331 uses332 a333 sliding334 window335 with336 fixed337 overlap338 ratio339 balance340 redundancy341 against342 recall343 retrieval344 systems345 combine346 dense347 and348 sparse349 representations350 to351 improve352 semantic353 search354 over355 large356 document357 collections358 researchers359 evaluate360 different361 chunking362 strategies363 observe364 that365 overlapping366 windows367 preserve368 context369 across370 boundaries371 the372 proposed373 approach374 uses375 a376 sliding377 window378 with379 fixed380 overlap381 ratio382 balance383 redundancy384 against385 recall386 retrieval387 systems388 combine389 dense390 and391 sparse392 representations393 to394 improve395 semantic396 search397 over398 large399) Tj
+T*
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 3569 >>
+stream
+BT
+/F1 12 Tf
+14 TL
+72 720 Td
+(2 Related Work) Tj
+T*
+(document400 collections401 researchers402 evaluate403 different404 chunking405 strategies406 observe407 that408 overlapping409 windows410 preserve411 context412 across413 boundaries414 the415 proposed416 approach417 uses418 a419 sliding420 window421 with422 fixed423 overlap424 ratio425 balance426 redundancy427 against428 recall429 retrieval430 systems431 combine432 dense433 and434 sparse435 representations436 to437 improve438 semantic439 search440 over441 large442 document443 collections444 researchers445 evaluate446 different447 chunking448 strategies449 observe450 that451 overlapping452 windows453 preserve454 context455 across456 boundaries457 the458 proposed459 approach460 uses461 a462 sliding463 window464 with465 fixed466 overlap467 ratio468 balance469 redundancy470 against471 recall472 retrieval473 systems474 combine475 dense476 and477 sparse478 representations479 to480 improve481 semantic482 search483 over484 large485 document486 collections487 researchers488 evaluate489 different490 chunking491 strategies492 observe493 that494 overlapping495 windows496 preserve497 context498 across499 boundaries500 the501 proposed502 approach503 uses504 a505 sliding506 window507 with508 fixed509 overlap510 ratio511 balance512 redundancy513 against514 recall515 retrieval516 systems517 combine518 dense519 and520 sparse521 representations522 to523 improve524 semantic525 search526 over527 large528 document529 collections530 researchers531 evaluate532 different533 chunking534 strategies535 observe536 that537 overlapping538 windows539 preserve540 context541 across542 boundaries543 the544 proposed545 approach546 uses547 a548 sliding549 window550 with551 fixed552 overlap553 ratio554 balance555 redundancy556 against557 recall558 retrieval559 systems560 combine561 dense562 and563 sparse564 representations565 to566 improve567 semantic568 search569 over570 large571 document572 collections573 researchers574 evaluate575 different576 chunking577 strategies578 observe579 that580 overlapping581 windows582 preserve583 context584 across585 boundaries586 the587 proposed588 approach589 uses590 a591 sliding592 window593 with594 fixed595 overlap596 ratio597 balance598 redundancy599 against600 recall601 retrieval602 systems603 combine604 dense605 and606 sparse607 representations608 to609 improve610 semantic611 search612 over613 large614 document615 collections616 researchers617 evaluate618 different619 chunking620 strategies621 observe622 that623 overlapping624 windows625 preserve626 context627 across628 boundaries629 the630 proposed631 approach632 uses633 a634 sliding635 window636 with637 fixed638 overlap639 ratio640 balance641 redundancy642 against643 recall644 retrieval645 systems646 combine647 dense648 and649 sparse650 representations651 to652 improve653 semantic654 search655 over656 large657 document658 collections659 researchers660 evaluate661 different662 chunking663 strategies664 observe665 that666 overlapping667 windows668 preserve669 context670 across671 boundaries672 the673 proposed674 approach675 uses676 a677 sliding678 window679 with680 fixed681 overlap682 ratio683 balance684 redundancy685 against686 recall687 retrieval688 systems689 combine690 dense691 and692 sparse693 representations694 to695 improve696 semantic697 search698 over699 large700 document701 collections702 researchers703 evaluate704 different705 chunking706 strategies707 observe708 that709 overlapping710 windows711 preserve712 context713 across714 boundaries715 the716 proposed717 approach718 uses719) Tj
+T*
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 3574 >>
+stream
+BT
+/F1 12 Tf
+14 TL
+72 720 Td
+(3 Method) Tj
+T*
+(a720 sliding721 window722 with723 fixed724 overlap725 ratio726 balance727 redundancy728 against729 recall730 retrieval731 systems732 combine733 dense734 and735 sparse736 representations737 to738 improve739 semantic740 search741 over742 large743 document744 collections745 researchers746 evaluate747 different748 chunking749 strategies750 observe751 that752 overlapping753 windows754 preserve755 context756 across757 boundaries758 the759 proposed760 approach761 uses762 a763 sliding764 window765 with766 fixed767 overlap768 ratio769 balance770 redundancy771 against772 recall773 retrieval774 systems775 combine776 dense777 and778 sparse779 representations780 to781 improve782 semantic783 search784 over785 large786 document787 collections788 researchers789 evaluate790 different791 chunking792 strategies793 observe794 that795 overlapping796 windows797 preserve798 context799 across800 boundaries801 the802 proposed803 approach804 uses805 a806 sliding807 window808 with809 fixed810 overlap811 ratio812 balance813 redundancy814 against815 recall816 retrieval817 systems818 combine819 dense820 and821 sparse822 representations823 to824 improve825 semantic826 search827 over828 large829 document830 collections831 researchers832 evaluate833 different834 chunking835 strategies836 observe837 that838 overlapping839 windows840 preserve841 context842 across843 boundaries844 the845 proposed846 approach847 uses848 a849 sliding850 window851 with852 fixed853 overlap854 ratio855 balance856 redundancy857 against858 recall859 retrieval860 systems861 combine862 dense863 and864 sparse865 representations866 to867 improve868 semantic869 search870 over871 large872 document873 collections874 researchers875 evaluate876 different877 chunking878 strategies879 observe880 that881 overlapping882 windows883 preserve884 context885 across886 boundaries887 the888 proposed889 approach890 uses891 a892 sliding893 window894 with895 fixed896 overlap897 ratio898 balance899 redundancy900 against901 recall902 retrieval903 systems904 combine905 dense906 and907 sparse908 representations909 to910 improve911 semantic912 search913 over914 large915 document916 collections917 researchers918 evaluate919 different920 chunking921 strategies922 observe923 that924 overlapping925 windows926 preserve927 context928 across929 boundaries930 the931 proposed932 approach933 uses934 a935 sliding936 window937 with938 fixed939 overlap940 ratio941 balance942 redundancy943 against944 recall945 retrieval946 systems947 combine948 dense949 and950 sparse951 representations952 to953 improve954 semantic955 search956 over957 large958 document959 collections960 researchers961 evaluate962 different963 chunking964 strategies965 observe966 that967 overlapping968 windows969 preserve970 context971 across972 boundaries973 the974 proposed975 approach976 uses977 a978 sliding979 window980 with981 fixed982 overlap983 ratio984 balance985 redundancy986 against987 recall988 retrieval989 systems990 combine991 dense992 and993 sparse994 representations995 to996 improve997 semantic998 search999 over1000 large1001 document1002 collections1003 researchers1004 evaluate1005 different1006 chunking1007 strategies1008 observe1009 that1010 overlapping1011 windows1012 preserve1013 context1014 across1015 boundaries1016 the1017 proposed1018 approach1019 uses1020 a1021 sliding1022 window1023 with1024 fixed1025 overlap1026 ratio1027 balance1028 redundancy1029 against1030 recall1031 retrieval1032 systems1033 combine1034 dense1035 and1036 sparse1037 representations1038 to1039) Tj
+T*
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 3885 >>
+stream
+BT
+/F1 12 Tf
+14 TL
+72 720 Td
+(4 Experiments) Tj
+T*
+(improve1040 semantic1041 search1042 over1043 large1044 document1045 collections1046 researchers1047 evaluate1048 different1049 chunking1050 strategies1051 observe1052 that1053 overlapping1054 windows1055 preserve1056 context1057 across1058 boundaries1059 the1060 proposed1061 approach1062 uses1063 a1064 sliding1065 window1066 with1067 fixed1068 overlap1069 ratio1070 balance1071 redundancy1072 against1073 recall1074 retrieval1075 systems1076 combine1077 dense1078 and1079 sparse1080 representations1081 to1082 improve1083 semantic1084 search1085 over1086 large1087 document1088 collections1089 researchers1090 evaluate1091 different1092 chunking1093 strategies1094 observe1095 that1096 overlapping1097 windows1098 preserve1099 context1100 across1101 boundaries1102 the1103 proposed1104 approach1105 uses1106 a1107 sliding1108 window1109 with1110 fixed1111 overlap1112 ratio1113 balance1114 redundancy1115 against1116 recall1117 retrieval1118 systems1119 combine1120 dense1121 and1122 sparse1123 representations1124 to1125 improve1126 semantic1127 search1128 over1129 large1130 document1131 collections1132 researchers1133 evaluate1134 different1135 chunking1136 strategies1137 observe1138 that1139 overlapping1140 windows1141 preserve1142 context1143 across1144 boundaries1145 the1146 proposed1147 approach1148 uses1149 a1150 sliding1151 window1152 with1153 fixed1154 overlap1155 ratio1156 balance1157 redundancy1158 against1159 recall1160 retrieval1161 systems1162 combine1163 dense1164 and1165 sparse1166 representations1167 to1168 improve1169 semantic1170 search1171 over1172 large1173 document1174 collections1175 researchers1176 evaluate1177 different1178 chunking1179 strategies1180 observe1181 that1182 overlapping1183 windows1184 preserve1185 context1186 across1187 boundaries1188 the1189 proposed1190 approach1191 uses1192 a1193 sliding1194 window1195 with1196 fixed1197 overlap1198 ratio1199 balance1200 redundancy1201 against1202 recall1203 retrieval1204 systems1205 combine1206 dense1207 and1208 sparse1209 representations1210 to1211 improve1212 semantic1213 search1214 over1215 large1216 document1217 collections1218 researchers1219 evaluate1220 different1221 chunking1222 strategies1223 observe1224 that1225 overlapping1226 windows1227 preserve1228 context1229 across1230 boundaries1231 the1232 proposed1233 approach1234 uses1235 a1236 sliding1237 window1238 with1239 fixed1240 overlap1241 ratio1242 balance1243 redundancy1244 against1245 recall1246 retrieval1247 systems1248 combine1249 dense1250 and1251 sparse1252 representations1253 to1254 improve1255 semantic1256 search1257 over1258 large1259 document1260 collections1261 researchers1262 evaluate1263 different1264 chunking1265 strategies1266 observe1267 that1268 overlapping1269 windows1270 preserve1271 context1272 across1273 boundaries1274 the1275 proposed1276 approach1277 uses1278 a1279 sliding1280 window1281 with1282 fixed1283 overlap1284 ratio1285 balance1286 redundancy1287 against1288 recall1289 retrieval1290 systems1291 combine1292 dense1293 and1294 sparse1295 representations1296 to1297 improve1298 semantic1299 search1300 over1301 large1302 document1303 collections1304 researchers1305 evaluate1306 different1307 chunking1308 strategies1309 observe1310 that1311 overlapping1312 windows1313 preserve1314 context1315 across1316 boundaries1317 the1318 proposed1319 approach1320 uses1321 a1322 sliding1323 window1324 with1325 fixed1326 overlap1327 ratio1328 balance1329 redundancy1330 against1331 recall1332 retrieval1333 systems1334 combine1335 dense1336 and1337 sparse1338 representations1339 to1340 improve1341 semantic1342 search1343 over1344 large1345 document1346 collections1347 researchers1348 evaluate1349 different1350 chunking1351 strategies1352 observe1353 that1354 overlapping1355 windows1356 preserve1357 context1358 across1359) Tj
+T*
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 15 0 R >>
+endobj
+15 0 obj
+<< /Length 1952 >>
+stream
+BT
+/F1 12 Tf
+14 TL
+72 720 Td
+(5 Conclusion) Tj
+T*
+(boundaries1360 the1361 proposed1362 approach1363 uses1364 a1365 sliding1366 window1367 with1368 fixed1369 overlap1370 ratio1371 balance1372 redundancy1373 against1374 recall1375 retrieval1376 systems1377 combine1378 dense1379 and1380 sparse1381 representations1382 to1383 improve1384 semantic1385 search1386 over1387 large1388 document1389 collections1390 researchers1391 evaluate1392 different1393 chunking1394 strategies1395 observe1396 that1397 overlapping1398 windows1399 preserve1400 context1401 across1402 boundaries1403 the1404 proposed1405 approach1406 uses1407 a1408 sliding1409 window1410 with1411 fixed1412 overlap1413 ratio1414 balance1415 redundancy1416 against1417 recall1418 retrieval1419 systems1420 combine1421 dense1422 and1423 sparse1424 representations1425 to1426 improve1427 semantic1428 search1429 over1430 large1431 document1432 collections1433 researchers1434 evaluate1435 different1436 chunking1437 strategies1438 observe1439 that1440 overlapping1441 windows1442 preserve1443 context1444 across1445 boundaries1446 the1447 proposed1448 approach1449 uses1450 a1451 sliding1452 window1453 with1454 fixed1455 overlap1456 ratio1457 balance1458 redundancy1459 against1460 recall1461 retrieval1462 systems1463 combine1464 dense1465 and1466 sparse1467 representations1468 to1469 improve1470 semantic1471 search1472 over1473 large1474 document1475 collections1476 researchers1477 evaluate1478 different1479 chunking1480 strategies1481 observe1482 that1483 overlapping1484 windows1485 preserve1486 context1487 across1488 boundaries1489 the1490 proposed1491 approach1492 uses1493 a1494 sliding1495 window1496 with1497 fixed1498 overlap1499 ratio1500 balance1501 redundancy1502 against1503 recall1504 retrieval1505 systems1506 combine1507 dense1508 and1509 sparse1510 representations1511 to1512 improve1513 semantic1514 search1515 over1516 large1517 document1518 collections1519) Tj
+T*
+ET
+endstream
+endobj
+xref
+0 16
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000148 00000 n 
+0000000218 00000 n 
+0000000344 00000 n 
+0000001233 00000 n 
+0000001359 00000 n 
+0000004938 00000 n 
+0000005064 00000 n 
+0000008685 00000 n 
+0000008813 00000 n 
+0000012440 00000 n 
+0000012568 00000 n 
+0000016506 00000 n 
+0000016634 00000 n 
+trailer
+<< /Size 16 /Root 1 0 R >>
+startxref
+18639
+%%EOF

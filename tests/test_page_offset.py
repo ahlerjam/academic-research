@@ -6,12 +6,16 @@ extrahierten Textes (reportlab: y=40 = unten, aber pypdf liest
 aufsteigend nach y, also erscheint y=40 zuerst).
 """
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 # scripts/ zum Python-Pfad hinzufuegen
 
+ROOT = Path(__file__).parent.parent
+SCRIPT = ROOT / "scripts" / "page_offset.py"
 FIXTURES = Path(__file__).parent / "fixtures" / "page_offset"
 
 
@@ -75,6 +79,73 @@ def test_large_offset_twenty_five():
 
 
 # ---------------------------------------------------------------------------
+# /PageLabels-Baum Tests (#384)
+# ---------------------------------------------------------------------------
+
+
+def test_page_labels_arabic_start_offset():
+    """PDF mit /PageLabels-Baum (3 Roemisch-Vorseiten + Decimal ab Index 3,
+    Start 1) und OHNE extrahierbaren Seiten-Text: offset=3 muss direkt aus
+    dem Label-Baum kommen, ein Test-Erfolg ueber die Text-Heuristik ist
+    ausgeschlossen, da die Seiten keinen Text enthalten (AC1)."""
+    from page_offset import detect_page_offset
+
+    pdf = _require_fixture("page_labels.pdf")
+    offset = detect_page_offset(str(pdf))
+    assert offset == 3, f"Erwartet offset=3 aus /PageLabels-Baum, erhalten {offset}"
+
+
+def test_detect_offset_from_page_labels_direct():
+    """_detect_offset_from_page_labels() liefert den Offset direkt (ohne
+    Umweg ueber detect_page_offset) fuer ein PDF mit Label-Baum."""
+    from page_offset import _detect_offset_from_page_labels
+
+    pdf = _require_fixture("page_labels.pdf")
+    result = _detect_offset_from_page_labels(str(pdf))
+    assert result == 3, f"Erwartet 3, erhalten {result}"
+
+
+def test_no_page_labels_falls_back_without_error():
+    """PDF ohne /PageLabels-Baum: _detect_offset_from_page_labels() liefert
+    None (kein Fehler), detect_page_offset() faellt auf die bestehende
+    Text-Heuristik zurueck (AC2)."""
+    from page_offset import _detect_offset_from_page_labels, detect_page_offset
+
+    pdf = _require_fixture("no_preface.pdf")
+    assert _detect_offset_from_page_labels(str(pdf)) is None
+    offset = detect_page_offset(str(pdf))
+    assert offset == 0, f"Erwartet offset=0 (Fallback-Heuristik), erhalten {offset}"
+
+
+def test_page_labels_to_vault_get_printed_page():
+    """Label-Fixture end-to-end: detect_page_offset() -> add_paper() ->
+    server.set_page_offset() -> server.get_printed_page() liefert die
+    korrekte gedruckte Seite (AC3)."""
+    import json
+    import tempfile
+
+    from academic_vault.server import add_paper, get_printed_page
+    from academic_vault.server import set_page_offset as srv_set_offset
+
+    from page_offset import detect_page_offset
+
+    pdf = _require_fixture("page_labels.pdf")
+    offset = detect_page_offset(str(pdf))
+    assert offset == 3
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        db_path = tf.name
+
+    csl = json.dumps({"type": "book", "title": "PageLabels Test"})
+    add_paper(db_path, "page_labels_test_2024", csl)
+    srv_set_offset(db_path, "page_labels_test_2024", offset)
+
+    # pdf_page=6 (1-basiert) -> printed_page = 6 - 3 = 3
+    result = get_printed_page(db_path, "page_labels_test_2024", pdf_page=6)
+    assert result == 3, f"Erwartet 3, erhalten {result}"
+
+
+# ---------------------------------------------------------------------------
 # validate_offset Tests
 # ---------------------------------------------------------------------------
 
@@ -97,6 +168,49 @@ def test_validate_offset_wrong_rejects():
     pdf = _require_fixture("ten_prefaces.pdf")
     result = validate_offset(str(pdf), offset=0, check_pages=[11, 12])
     assert result is False, "validate_offset soll False fuer falschen Offset zurueckgeben"
+
+
+# ---------------------------------------------------------------------------
+# CLI --validate Tests (Regression #384: Label-Offset darf nicht als
+# INKONSISTENT gemeldet werden, nur weil die Text-Heuristik nicht greift)
+# ---------------------------------------------------------------------------
+
+
+def test_cli_validate_label_offset_nicht_pruefbar_statt_inkonsistent():
+    """--validate meldet bei Label-Baum-Offset NICHT PRUEFBAR, nie INKONSISTENT.
+
+    page_labels.pdf hat einen korrekten /PageLabels-Baum (offset=3), aber
+    keinen per Text-Heuristik extrahierbaren Seitentext. Vor dem Fix gab die
+    CLI hier faelschlich 'Validierung: INKONSISTENT' fuer einen korrekten
+    Offset aus (#384-Regressionsfund)."""
+    pdf = _require_fixture("page_labels.pdf")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(pdf), "--validate"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "page_offset: 3" in result.stdout
+    assert "INKONSISTENT" not in result.stdout, (
+        f"Korrekter Label-Offset darf nicht als INKONSISTENT gemeldet werden:\n{result.stdout}"
+    )
+    assert "NICHT PRUEFBAR" in result.stdout
+
+
+def test_cli_validate_text_heuristik_offset_bleibt_pruefbar():
+    """--validate prueft weiterhin real, wenn der Offset aus der Text-Heuristik
+    stammt (kein /PageLabels-Baum vorhanden) -- Bestandsverhalten unveraendert."""
+    pdf = _require_fixture("ten_prefaces.pdf")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(pdf), "--validate"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "page_offset: 10" in result.stdout
+    assert "Validierung: OK" in result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -185,3 +299,26 @@ def test_server_get_printed_page_zero_offset():
 
     result = get_printed_page(db_path, "zero_offset_2024", pdf_page=42)
     assert result == 42, f"Erwartet 42 (kein Offset), erhalten {result}"
+
+
+def test_server_get_printed_page_front_matter_returns_none():
+    """Issue #464 AC2: eine Seitenanfrage, die vor dem Textbeginn (Vorspann)
+    liegt, liefert einen erkennbaren Sonderfall (None) statt der Seitenzahl
+    eins. Vor dem Fix klemmte max(1, printed) jede Vorspann-Seite still auf
+    1 -- nicht unterscheidbar von einer echten Seite 1."""
+    import json
+    import tempfile
+
+    from academic_vault.server import add_paper, get_printed_page
+    from academic_vault.server import set_page_offset as srv_set_offset
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        db_path = tf.name
+
+    csl = json.dumps({"type": "book", "title": "Front Matter Test"})
+    add_paper(db_path, "front_matter_2024", csl)
+    srv_set_offset(db_path, "front_matter_2024", 10)
+
+    # pdf_page=5 (1-basiert) liegt vor dem Offset (10) -> im Vorspann.
+    result = get_printed_page(db_path, "front_matter_2024", pdf_page=5)
+    assert result is None, f"Erwartet None (Vorspann-Sonderfall), erhalten {result}"

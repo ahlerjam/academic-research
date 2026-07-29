@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+<lst name="responseHeader">
+	<bool name="zkConnected">true</bool>
+	<int name="status">0</int>
+	<int name="QTime">128</int>
+	<lst name="params">
+		<str name="q">creator:summann</str>
+		<str name="facet">true</str>
+		<arr name="facet.field">
+			<str>f_dcsubject</str>
+			<str>f_dcyear</str>
+		</arr>
+		<str name="facet.limit">10</str>
+		<str name="facet.mincount">1</str>
+		<str name="facet.sort">count</str>
+		<str name="fl">dccollection,dccontenttype,dccontinent,dccountry,dccreator,dcdate,dcdescription,dcdocid,dcdoi,dcformat,dcidentifier,dclang,dclanguage,dclink,dcperson,dcpublisher,dcrights,dcsource,dcsubject,dctitle,dcyear,dctype,dcclasscode,dctypenorm,dcdeweyfull,dcdeweyhuns,dcdeweytens,dcdeweyones,dcautoclasscode,dcrelation,dccontributor,dccoverage,dchdate,dcoa,dcrightsnorm</str>
+		<str name="fq">collection:ftubbiepub</str>
+	</lst>
+</lst>
+<result name="response" numFound="70" start="0" maxScore="8.910765">
+	<doc>
+		<date name="dchdate">2019-09-23T12:46:37Z</date>
+		<str name="dcdocid">a3e98a979171fc179135968f2e5bbf5d7e8696f2ff964b6f02050bb479bcdf8b</str>
+		<str name="dccontinent">ceu</str>
+		<str name="dccountry">de</str>
+		<str name="dccollection">ftubbiepub</str>
+		<str name="dcprovider">PUB - Publications at Bielefeld University</str>
+		<str name="dctitle">10 years BASE: A contribution to the worldwide development of repositories</str>
+		<arr name="dccreator">
+			<str>Pieper, Dirk</str>
+			<str>Summann, Friedrich</str>
+		</arr>
+		<arr name="dcperson">
+			<str>Pieper, Dirk</str>
+			<str>Summann, Friedrich</str>
+		</arr>
+		<arr name="dcauthorid">
+			<str>Pieper, Dirk | orcid:0000-0002-6083-9348</str>
+			<str>Summann, Friedrich | orcid:0000-0002-6297-3348</str>
+		</arr>
+		<arr name="dcsubject">
+			<str>Bielefeld Academic Search Engine</str>
+			<str>ddc:020</str>
+		</arr>
+		<str name="dcdate">2014</str>
+		<int name="dcyear">2014</int>
+		<arr name="dctype">
+			<str>info:eu-repo/semantics/conferenceObject</str>
+			<str>doc-type:conferenceObject</str>
+			<str>text</str>
+		</arr>
+		<arr name="dctypenorm">
+			<str>13</str>
+		</arr>
+		<arr name="dcidentifier">
+			<str>https://pub.uni-bielefeld.de/record/2710028</str>
+		</arr>
+		<str name="dclink">https://pub.uni-bielefeld.de/record/2710028</str>
+		<str name="dcsource">Pieper D, Summann F. 10 years BASE: A contribution to the worldwide development of repositories. Presented at the China IR Seminar 2014.</str>
+		<arr name="dclanguage">
+			<str>eng</str>
+		</arr>
+		<str name="dcrights">info:eu-repo/semantics/openAccess</str>
+		<arr name="dcdeweyfull">
+			<str>020</str>
+		</arr>
+		<arr name="dcdeweyhuns">
+			<str>0</str>
+		</arr>
+		<arr name="dcdeweytens">
+			<str>02</str>
+		</arr>
+		<arr name="dcdeweyones">
+			<str>020</str>
+		</arr>
+		<arr name="dcclasscode">
+			<str>020</str>
+		</arr>
+		<int name="dcoa">1</int>
+		<arr name="dclang">
+			<str>eng</str>
+		</arr>
+	</doc>
+</result>
+<lst name="facet_counts">
+	<lst name="facet_queries"/>
+	<lst name="facet_fields">
+		<lst name="f_dcsubject">
+			<int name="ddc:020">42</int>
+			<int name="Bielefeld Academic Search Engine">12</int>
+			<int name="ddc:004">9</int>
+			<int name="Repositories">3</int>
+			<int name="Bibliothek">2</int>
+			<int name="Communication">2</int>
+			<int name="Comunicazione">2</int>
+			<int name="Informatica">2</int>
+			<int name="Informatics">2</int>
+			<int name="Informatik">2</int>
+		</lst>
+		<lst name="f_dcyear">
+			<int name="1994">5</int>
+			<int name="2009">5</int>
+			<int name="2014">5</int>
+			<int name="2017">5</int>
+			<int name="2004">4</int>
+			<int name="2005">4</int>
+			<int name="2006">4</int>
+			<int name="2013">4</int>
+			<int name="2015">4</int>
+			<int name="2016">4</int>
+		</lst>
+	</lst>
+	<lst name="facet_ranges"/>
+	<lst name="facet_intervals"/>
+	<lst name="facet_heatmaps"/>
+</lst>
+</response>

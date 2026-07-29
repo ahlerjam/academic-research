@@ -1,0 +1,7 @@
+{
+  "status": "success",
+  "source": "scihub-fetcher",
+  "file_path": "/tmp/scihub-out.pdf",
+  "provenance": "scihub",
+  "tags": ["provenance:scihub"]
+}

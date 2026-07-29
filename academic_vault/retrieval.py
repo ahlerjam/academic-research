@@ -1,17 +1,54 @@
-"""Hybrid Retrieval: Reciprocal-Rank-Fusion + optionaler Reranker (#109).
+"""Hybrid Retrieval: Reciprocal-Rank-Fusion + optionaler Reranker (#109, #376).
 
 Implementiert:
 - reciprocal_rank_fusion(vec_results, fts_results, k=60, top_n=N)
 - apply_reranker(query, candidates, voyage_api_key, cohere_api_key)
 - rerank_with_voyage(query, candidates, api_key)
 - rerank_with_cohere(query, candidates, api_key)
+- rerank_with_local_bge(query, candidates)
 - compute_recall_at_k(retrieved_ids, relevant_ids, k)
 
 RRF-Formel: score(d) = 1/(k + rank_vec(d)) + 1/(k + rank_fts(d))
 Standard-Konstante k=60 nach Cormack et al. 2009.
+
+Reranker-Prioritaetskette (#376): Voyage > Cohere > lokaler
+``BAAI/bge-reranker-v2-m3``-Fallback (NUR wenn *beide* Cloud-Keys fehlen) >
+unveraendert. ``voyageai``/``cohere`` sind optionale Extras (``rerank-cloud``
+in pyproject.toml) -- kein stiller ``except Exception: pass`` mehr: jede
+Fehlstufe loggt eine WARNING und das zurueckgegebene Kandidaten-Dict traegt
+``reranked`` (bool) + ``reranker`` (str) als sichtbaren Beleg statt eines
+verschleierten Fallbacks.
 """
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
+
+# Lokaler Reranker-Fallback (Apache-2.0, kostenfrei) -- greift nur, wenn weder
+# VOYAGE_API_KEY noch COHERE_API_KEY gesetzt sind (siehe apply_reranker).
+LOCAL_RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
+ENV_LOCAL_RERANKER_MODEL = "VAULT_RERANK_LOCAL_MODEL"
+
+# Spezifische SDK-Fehlerbasisklassen fuer benanntes Exception-Handling statt
+# eines stillen `except Exception: pass` (#376). Beide SDKs sind optionale
+# Extras (rerank-cloud) -- ist eines nicht installiert, faellt die jeweilige
+# Basisklasse auf einen nie ausgeloesten Platzhalter zurueck; der eigentliche
+# ImportError wird in apply_reranker ohnehin separat gefangen.
+try:
+    from voyageai.error import VoyageError
+except ImportError:  # voyageai ist optionales Extra, evtl. nicht installiert
+
+    class VoyageError(Exception):  # type: ignore[no-redef]
+        """Platzhalter, wenn das voyageai-SDK nicht installiert ist."""
+
+
+try:
+    from cohere.core.api_error import ApiError as CohereApiError
+except ImportError:  # cohere ist optionales Extra, evtl. nicht installiert
+
+    class CohereApiError(Exception):  # type: ignore[no-redef]
+        """Platzhalter, wenn das cohere-SDK nicht installiert ist."""
 
 
 def _get_voyage_client(api_key: str | None = None):
@@ -24,8 +61,8 @@ def _get_voyage_client(api_key: str | None = None):
 
         key = api_key or os.environ.get("VOYAGE_API_KEY", "")
         return voyageai.Client(api_key=key)
-    except ImportError:
-        raise ImportError("voyageai SDK nicht installiert. Bitte 'pip install voyageai'.")
+    except ImportError as err:
+        raise ImportError("voyageai SDK nicht installiert. Bitte 'pip install voyageai'.") from err
 
 
 def _get_cohere_client(api_key: str | None = None):
@@ -38,8 +75,62 @@ def _get_cohere_client(api_key: str | None = None):
 
         key = api_key or os.environ.get("COHERE_API_KEY", "")
         return cohere.Client(api_key=key)
-    except ImportError:
-        raise ImportError("cohere SDK nicht installiert. Bitte 'pip install cohere'.")
+    except ImportError as err:
+        raise ImportError("cohere SDK nicht installiert. Bitte 'pip install cohere'.") from err
+
+
+def _load_local_reranker_backend(model_id: str):
+    """Laedt das FlagEmbedding-Backend fuer den lokalen Reranker.
+
+    Separate Funktion, damit Tests das Fehlen bzw. Scheitern des Backends
+    deterministisch simulieren koennen, ohne echte Modellgewichte zu laden —
+    analog ``embedding_model._load_backend_model``. Die autouse-Fixture in
+    tests/conftest.py haengt sich genau hier ein.
+    """
+    from FlagEmbedding import FlagReranker
+
+    return FlagReranker(model_id, use_fp16=True)
+
+
+# Cache pro Modell-ID: ``None`` bedeutet "Backend fehlt" und wird bewusst
+# mitgecacht, analog embedding_model._EMBEDDER_CACHE.
+_LOCAL_RERANKER_CACHE: dict[str, object | None] = {}
+
+
+def reset_local_reranker_cache() -> None:
+    """Leert den Cache des lokalen Rerankers (Tests, Modellwechsel zur Laufzeit)."""
+    _LOCAL_RERANKER_CACHE.clear()
+
+
+def _get_local_reranker(model_id: str | None = None):
+    """Gibt den lokalen bge-reranker-v2-m3 zurueck oder ``None`` (Degradationspfad).
+
+    Analog ``embedding_model.get_embedder()``: ``None`` ist ein Degradations-,
+    kein Absturzpfad -- fehlt das FlagEmbedding-Backend (kein uv-Extra, nur
+    manuell per ``pip install FlagEmbedding`` installierbar, siehe
+    pyproject.toml) oder schlaegt der Modell-Download fehl, wird das geloggt
+    und ``apply_reranker`` faellt auf die unrerankte Reihenfolge zurueck statt
+    abzustuerzen.
+    """
+    key = model_id or os.environ.get(ENV_LOCAL_RERANKER_MODEL) or LOCAL_RERANKER_MODEL_ID
+    if key in _LOCAL_RERANKER_CACHE:
+        return _LOCAL_RERANKER_CACHE[key]
+
+    reranker: object | None
+    try:
+        reranker = _load_local_reranker_backend(key)
+    except Exception as exc:
+        logger.warning(
+            "Lokaler Reranker '%s' nicht nutzbar (%s: %s) — kein kostenfreies "
+            "Reranking, RRF-Reihenfolge bleibt unveraendert.",
+            key,
+            type(exc).__name__,
+            exc,
+        )
+        reranker = None
+
+    _LOCAL_RERANKER_CACHE[key] = reranker
+    return reranker
 
 
 def rrf_score(
@@ -197,6 +288,54 @@ def rerank_with_cohere(
     return reranked
 
 
+def rerank_with_local_bge(
+    query: str,
+    candidates: list[dict],
+    model_id: str | None = None,
+) -> list[dict]:
+    """Rerankt Kandidaten via lokalem ``BAAI/bge-reranker-v2-m3`` (Apache-2.0, #376).
+
+    Kostenfreier Fallback ohne Cloud-API-Key: laedt/nutzt das FlagEmbedding-
+    Backend (kein uv-Extra, manuelles Opt-in, siehe pyproject.toml) ueber den
+    lazy Singleton :func:`_get_local_reranker`.
+
+    Args:
+        query: Suchquery.
+        candidates: Liste von Dicts mit 'paper_id' und 'text'.
+        model_id: Optionale Modell-Override (Standard: ``LOCAL_RERANKER_MODEL_ID``).
+
+    Returns:
+        Kandidaten-Liste, absteigend nach lokalem Rerank-Score sortiert.
+
+    Raises:
+        RuntimeError: Wenn das lokale Backend nicht ladbar ist (analog dem
+            ``ImportError`` von :func:`rerank_with_voyage`/:func:`rerank_with_cohere`
+            — wird von :func:`apply_reranker` gefangen und auf die naechste
+            Stufe (bzw. das unveraenderte Ergebnis) zurueckgefallen).
+    """
+    reranker = _get_local_reranker(model_id)
+    if reranker is None:
+        raise RuntimeError(
+            f"Lokaler Reranker '{model_id or LOCAL_RERANKER_MODEL_ID}' nicht verfuegbar "
+            "(FlagEmbedding fehlt oder Modell-Download fehlgeschlagen)."
+        )
+
+    pairs = [[query, c["text"]] for c in candidates]
+    scores = reranker.compute_score(pairs, normalize=True)
+    # Backend gibt bei genau einem Paar einen Skalar statt einer Liste zurueck.
+    if isinstance(scores, int | float):
+        scores = [scores]
+
+    reranked: list[dict] = []
+    for c, score in zip(candidates, scores, strict=True):
+        entry = dict(c)
+        entry["rerank_score"] = float(score)
+        reranked.append(entry)
+
+    reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
+    return reranked
+
+
 def apply_reranker(
     query: str,
     candidates: list[dict],
@@ -205,7 +344,16 @@ def apply_reranker(
 ) -> list[dict]:
     """Wendet optionalen Reranker an.
 
-    Prioritaet: Voyage > Cohere > Kein Reranking (Fallback auf RRF-Order).
+    Prioritaet: Voyage > Cohere > lokaler ``bge-reranker-v2-m3``-Fallback (NUR
+    wenn *beide* Cloud-Keys fehlen) > unveraendert.
+
+    Jeder zurueckgegebene Kandidat traegt zusaetzlich:
+    - ``reranked`` (bool): ob dieser Kandidat tatsaechlich reranked wurde.
+    - ``reranker`` (str): ``"voyage"`` / ``"cohere"`` / ``"local-bge"`` / ``"none"``.
+
+    Jede Fehlstufe wird geloggt (``logger.warning``, #376) statt still
+    verschluckt zu werden — der Aufrufer erfaehrt ueber ``reranked: false``
+    UND das Log, dass kein Reranking stattgefunden hat.
 
     Args:
         query: Suchquery.
@@ -214,7 +362,8 @@ def apply_reranker(
         cohere_api_key: Cohere API-Key oder None.
 
     Returns:
-        Rerankte oder unveraenderte Kandidaten-Liste.
+        Rerankte oder unveraenderte Kandidaten-Liste (immer mit 'text',
+        'reranked', 'reranker').
     """
     # text-Feld sicherstellen: Reranker-APIs brauchen Dokumenttext
     enriched = []
@@ -226,16 +375,73 @@ def apply_reranker(
 
     if voyage_api_key:
         try:
-            return rerank_with_voyage(query, enriched, api_key=voyage_api_key)
-        except Exception:
-            pass
+            reranked = rerank_with_voyage(query, enriched, api_key=voyage_api_key)
+        except ImportError as exc:
+            logger.warning("Voyage-Reranking uebersprungen: SDK nicht installiert (%s).", exc)
+        except VoyageError as exc:
+            logger.warning(
+                "Voyage-Reranking fehlgeschlagen (%s: %s) — Fallback auf naechste Stufe.",
+                type(exc).__name__,
+                exc,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Voyage-Reranking fehlgeschlagen (%s: %s) — Fallback auf naechste Stufe.",
+                type(exc).__name__,
+                exc,
+            )
+        else:
+            for entry in reranked:
+                entry["reranked"] = True
+                entry["reranker"] = "voyage"
+            return reranked
 
     if cohere_api_key:
         try:
-            return rerank_with_cohere(query, enriched, api_key=cohere_api_key)
-        except Exception:
-            pass
+            reranked = rerank_with_cohere(query, enriched, api_key=cohere_api_key)
+        except ImportError as exc:
+            logger.warning("Cohere-Reranking uebersprungen: SDK nicht installiert (%s).", exc)
+        except CohereApiError as exc:
+            logger.warning(
+                "Cohere-Reranking fehlgeschlagen (%s: %s) — Fallback auf naechste Stufe.",
+                type(exc).__name__,
+                exc,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Cohere-Reranking fehlgeschlagen (%s: %s) — Fallback auf naechste Stufe.",
+                type(exc).__name__,
+                exc,
+            )
+        else:
+            for entry in reranked:
+                entry["reranked"] = True
+                entry["reranker"] = "cohere"
+            return reranked
 
+    # Lokaler Fallback greift NUR, wenn beide Cloud-Keys fehlen -- ein
+    # fehlgeschlagener Voyage/Cohere-Aufruf darf NICHT still durch den
+    # lokalen Reranker ersetzt werden (sonst waere AC3 -- 'reranked: false'
+    # bei ungueltigem Cloud-Key -- durch einen stillen Erfolg verdeckt).
+    if not voyage_api_key and not cohere_api_key:
+        try:
+            reranked = rerank_with_local_bge(query, enriched)
+        except Exception as exc:
+            logger.warning(
+                "Lokaler Reranker fehlgeschlagen (%s: %s) — kein Reranking, "
+                "RRF-Reihenfolge bleibt unveraendert.",
+                type(exc).__name__,
+                exc,
+            )
+        else:
+            for entry in reranked:
+                entry["reranked"] = True
+                entry["reranker"] = "local-bge"
+            return reranked
+
+    for entry in enriched:
+        entry["reranked"] = False
+        entry["reranker"] = "none"
     return enriched
 
 

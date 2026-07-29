@@ -1,6 +1,6 @@
 # Installation und Migration
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Der Kurzweg steht in der README (Quickstart). Diese Seite erklärt die Voraussetzungen im
 Detail, was das Setup genau tut, und wie eine Migration von v5 abläuft.
@@ -11,12 +11,44 @@ Detail, was das Setup genau tut, und wie eine Migration von v5 abläuft.
 |-----------|-------|--------------|
 | **Claude Code** | CLI zum Ausführen | [Installations-Anleitung](https://code.claude.com/docs/en/quickstart) |
 | **Python 3.11+** | Vault-MCP-Server, Suchskripte | `brew install python@3.11` (macOS) |
+| **Node.js** | Alle Hooks sind `.mjs` und werden in `hooks/hooks.json` als `node …` gestartet — ohne Node greifen `verbatim-guard` und `claim-drift-guard` nicht | `brew install node` (macOS); CI testet gegen Node 20 |
 | **Git** | Plugin-Marketplace-Install | auf macOS/Linux meist vorinstalliert |
 | **`uv` oder `pipx`** *(optional)* | Automatische `browser-use`-Installation | `brew install pipx` oder `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+
+**Einmaliger Modell-Download.** Beim ersten Paper mit PDF lädt das Plugin die Gewichte
+des Embedding-Modells `intfloat/multilingual-e5-small` (~470 MB) nach
+`~/.academic-research/models`. Das braucht einmalig Netz und dauert spürbar; danach
+laufen Volltext- und Vektor-Suche offline. Ohne diesen Download bleibt der Vektor-Index
+leer — die Volltextsuche (FTS5) funktioniert trotzdem. Ein anderes Modell lässt sich über
+`VAULT_EMBEDDING_MODEL` setzen, siehe [Vault-Referenz](../reference/vault.md).
 
 `uv`/`pipx` sind optional: fehlen sie, überspringt das Setup die `browser-use`-CLI und
 sagt das auch. Die 7 API-Suchmodule und der gesamte Vault-/Schreib-Workflow laufen
 trotzdem — nur die 7 Browser-Module (`--mode deep`) stehen dann nicht bereit.
+
+## Zugangsdaten
+
+Drei getrennte Wege legen Zugangsdaten ab. Alle drei sind optional — ohne sie laufen
+Vault, Schreib-Workflow und Open-Access-Quellen unverändert, nur die jeweils daran
+hängenden Quellen fehlen bzw. Rate-Limits greifen strenger.
+
+1. **Umgebungsvariablen pro Suchquelle** — `SS_API_KEY` (Semantic Scholar, verhindert
+   429-Fehler bei viel Suchvolumen) und `ANTHROPIC_API_KEY` (Batch-API in
+   `scripts/batch_api.py`). Selbst in der Shell setzen (z. B. `export SS_API_KEY=…` in
+   `~/.zshrc`). Zuständig: die 7 API-Suchmodule.
+2. **Per-Uni-Profil** — `~/.academic-research/library-profiles/active.yaml`, Feld
+   `credentials_keys`. Der `auth-helper`-Subagent liest die dort genannten Feldnamen zur
+   Laufzeit direkt aus derselben YAML-Datei aus. **Doku-Drift, noch nicht bereinigt:**
+   `config/library-profiles/_schema.json` beschreibt `credentials_keys` als „Schlüssel
+   für OS-Keychain“, an anderer Stelle kursiert „Namen von Umgebungsvariablen“ — beides
+   trifft den tatsächlichen Code nicht. Zuständig: der `book-fetcher`-Workflow
+   (Shibboleth/EZproxy/HAN der mitgelieferten Profile), siehe
+   [Per-Uni-Profile](../reference/uni-profiles.md).
+3. **HAN-Credential-Datei** — `~/.academic-research/`, Keys `han_user`/`han_password`
+   (Dateiname siehe `config/browser_guides/han_login.md`). Institutionsspezifisch und
+   komplett getrennt von Weg 2, obwohl beide denselben HAN-Login-Anwendungsfall
+   abdecken. Zuständig: die Tiefensuche-Auth-Module `ebscohost`, `proquest` und `opac`
+   (`--mode deep`), siehe [Suchquellen](../reference/search.md).
 
 **Optionale Zusatzpakete:**
 
@@ -25,6 +57,20 @@ trotzdem — nur die 7 Browser-Module (`--mode deep`) stehen dann nicht bereit.
   `scripts/requirements.txt` und kommt daher über das Setup mit. Wer eine eigene
   Python-Umgebung nutzt, installiert es selbst: `pip install 'pyzotero>=1.5'`. Fehlt es,
   bricht der Skill mit genau dieser Aufforderung ab — er zieht nichts selbsttätig nach.
+- **`hallucinator-cli`** *(optional, [gianlucasb/hallucinator](https://github.com/gianlucasb/hallucinator),
+  **AGPL-3.0**)* — zusätzliche, kostenlose Offline-Absicherung gegen fabrizierte
+  Referenzen (Titel/Autor/DOI), ergänzend zum `verbatim-guard`-Hook. Separat vom
+  Nutzer installieren — das Upstream-README nennt dafür **ausschließlich** das
+  Installer-Skript `curl -sSf https://hallucinator.science/install-cli.sh | sh`.
+  **Nicht ausreichend:** Das gleichnamige PyPI-Paket liefert nur die
+  Python-Bindings (Modul `hallucinator`, PyO3) und legt **kein**
+  `hallucinator-cli` im PATH ab; ein Crate `hallucinator` existiert auf
+  crates.io **nicht**. Bewusst **nicht** in
+  `pyproject.toml`/`scripts/requirements.txt` gebundelt und nicht im Repo
+  vendored, um die AGPL-Copyleft-Reichweite nicht auf dieses Plugin
+  auszudehnen. `scripts/hallucinator_check.py` ruft das Binary rein als
+  Subprozess auf und bricht bei fehlender Installation mit klarer
+  Fehlermeldung ab (kein Crash).
 
 ## Schritt 1 — Plugin-Marketplace registrieren
 
@@ -59,11 +105,30 @@ Der Command ruft `scripts/setup.sh`. Was dabei passiert (in dieser Reihenfolge):
    eines von beiden vorhanden ist.
 5. Prüft, ob der globale `browser-use`-Claude-Skill unter `~/.claude/skills/browser-use/`
    liegt (wird separat von Anthropic bereitgestellt, nicht Teil dieses Plugins).
-6. Trägt Claude-Code-Permissions in `~/.claude/settings.local.json` ein.
+6. Zeigt die neu zu setzenden Claude-Code-Permissions an und trägt sie erst
+   nach Bestätigung in `~/.claude/settings.local.json` ein (siehe Hinweis
+   unten).
 7. Fragt (bei leerem Ordner): *„Hier einen Facharbeit-Arbeitsordner initialisieren?"*
 8. Fragt nach dem **SciHub-Tier** — Default ist *aus*.
 
 Das Setup ist **idempotent**: mehrfach aufrufbar, ohne etwas zu zerstören.
+
+> **Schritt 6 ist benutzerweit, nicht projektbezogen:** `~/.claude/settings.local.json`
+> gilt für **alle** Claude-Code-Projekte auf diesem Rechner, nicht nur für
+> academic-research. Das Setup zeigt deshalb die einzelnen neuen Regeln vor
+> dem Schreiben an (`scripts/configure_permissions.py`) und schreibt erst nach
+> expliziter Bestätigung — läuft `setup.sh` ohne Terminal (Pipe, CI, u. a. der
+> primäre `/academic-research:setup`-Aufruf durch Claude Code selbst), greift
+> der sichere Default: **kein** automatisches Schreiben, sichtbar gemeldet
+> samt Nachhol-Befehl (`configure_permissions.py --yes`). Läuft `/setup` über
+> Claude Code, holt Claude die Bestätigung in diesem Fall selbst per
+> `AskUserQuestion` ein, bevor `configure_permissions.py --yes` schreibt
+> (siehe `commands/setup.md`). Keine der gesetzten Regeln erlaubt pauschale
+> Codeausführung (z. B. kein `Bash(python3 *)` mehr, nur eng gescopte Muster
+> wie `Bash(~/.academic-research/venv/bin/python *)`).
+> **Rücknahme:** Die betreffenden Zeilen aus dem `permissions.allow`-Array in
+> `~/.claude/settings.local.json` manuell entfernen (oder — falls dort keine
+> anderen Projekt-Berechtigungen stehen — die ganze Datei löschen).
 
 > **Stolperstelle:** Schritt 7 und 8 sind interaktive Fragen. Läuft `setup.sh` ohne
 > Terminal (Pipe, CI), greift jeweils der sichere Default — der Arbeitsordner wird dann

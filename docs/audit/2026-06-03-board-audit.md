@@ -1,12 +1,18 @@
 # Issue-Board-Audit — academic-research (Stand 2026-06-03)
 
+> **Historisches Dokument.** Momentaufnahme des Issue-Boards vom 2026-06-03,
+> nicht der aktuelle Stand. Issue-Nummern, Urteile und Zählungen unten sind seither
+> überholt — maßgeblich sind das GitHub-Board und [CHANGELOG.md](../../CHANGELOG.md).
+
+[← Doku-Übersicht](../README.md)
+
 Erzeugt aus dem orchestrierten Audit-Workflow (`wf_790b500e-3c9`): 74 Agenten,
 9 Issue-Audit-Gruppen + 8 Subsystem-Scans + adversarische Gegenprüfung jedes
 Findings + Vollständigkeits-Zweitdurchlauf. Jede Behauptung ist gegen den
 aktuellen Code (Branch `main`) verifiziert.
 
-> **Status dieses Files:** untracked Arbeitsdokument. Quelle der Wahrheit für die
-> anschließende Board-Erstellung. Kann nach Umsetzung gelöscht oder committet werden.
+> **Status dieses Files:** versioniertes Arbeitsdokument. Es war die Grundlage für die
+> anschließende Board-Erstellung und wird als Beleg dieser Entscheidungen aufbewahrt.
 
 ---
 

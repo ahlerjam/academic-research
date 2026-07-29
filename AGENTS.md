@@ -1,6 +1,6 @@
 # academic-research — Agent Guide
 
-Claude-Code-Plugin für akademisches Arbeiten: 28 Skills, 19 Agents,
+Claude-Code-Plugin für akademisches Arbeiten: 32 Skills, 20 Agents,
 9 Slash-Commands, MCP-Server `academic_vault/` (SQLite+FTS5+sqlite-vec).
 Details: README.md (lang!), CHANGELOG.md.
 
@@ -8,18 +8,24 @@ Details: README.md (lang!), CHANGELOG.md.
 - Setup (frischer Worktree, vor dem ersten Gate): `uv sync --extra dev`
   (Pins in pyproject.toml + uv.lock; Endnutzer-Weg bleibt scripts/setup.sh + pip)
 - Tests: `uv run pytest tests/` (Matrix-CI: Ubuntu+macOS, py3.11-3.13)
-- Lint: `uv run ruff check .` und `uv run ruff format --check .` (format ist
-  CI-blockierend; check wird blockierend, sobald #340 abgearbeitet ist)
+- Lint: `uv run ruff check .` und `uv run ruff format --check .` (beide
+  CI-blockierend seit #340)
 - Types: `uv run mypy` (Konfig in pyproject.toml; blockierend nach #341)
 - Hooks-Syntax: `node --check hooks/*.mjs`
 - Hook-Harness: `bash scripts/dev/test-pretooluse-blocker.sh` (testet die
   DEPLOYTE Datei `.claude/hooks/pretooluse-blocker.sh`; CI-blockierend)
+- Shell-Syntax-Gate: `bash scripts/dev/check-shell-syntax.sh` (`bash -n` ueber
+  alle `git ls-files '*.sh'`; CI-blockierend seit #469; Regression-Harness:
+  `bash scripts/dev/test-check-shell-syntax.sh`)
 - Push: `git push` (kein lokales CI-Gate konfiguriert)
 
 ## Verzeichnisgrenzen (wichtig)
 - `tests/` = klassisches pytest; `evals/` = LLM-Verhaltens-Evals (KEIN normales pytest).
-- Vendored / von Lint+Typecheck ausgeschlossen: `skills/xlsx/scripts/office/`,
-  Referenzdateien unter `skills/humanizer-de/references/`.
+- Vendored / von Lint+Typecheck ausgeschlossen: Referenzdateien unter
+  `skills/humanizer-de/references/`.
+- Excel-Backend ist das externe Plugin `document-skills` (Marketplace
+  `anthropic-agent-skills`), deklariert als Dependency in
+  `.claude-plugin/plugin.json` — nicht im Repo mitgeliefert (#445).
 - `docs/superpowers/` = HISTORISCHE Planungsdokumente, nicht aktueller Sollzustand.
 - `scripts/bootstrap/CLAUDE.md` ist eine Endnutzer-Vorlage, keine Repo-Anleitung.
 

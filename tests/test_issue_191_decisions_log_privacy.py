@@ -88,9 +88,9 @@ def test_log_hash_is_stable_for_same_content(tmp_path):
     _write_md(tmp_path, log_file, "# Stabil\nGleicher Inhalt")
     _write_md(tmp_path, log_file, "# Stabil\nGleicher Inhalt")
 
-    lines = [l for l in log_file.read_text().strip().splitlines() if l.strip()]
+    lines = [line for line in log_file.read_text().strip().splitlines() if line.strip()]
     assert len(lines) >= 2
-    hashes = [re.search(r"[0-9a-f]{64}", l).group(0) for l in lines[:2]]
+    hashes = [re.search(r"[0-9a-f]{64}", line).group(0) for line in lines[:2]]
     assert hashes[0] == hashes[1], "Hash nicht stabil fuer gleichen Inhalt"
 
 

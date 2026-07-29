@@ -24,6 +24,10 @@ Bereitgestellte Fixtures:
   - sample_pdf           Pfad auf tests/fixtures/sample_book.pdf
   - library_profile_tum  geparstes config/library-profiles/tum.yaml als dict
   - fake_embedder        deterministischer Offline-Embedder (384d, kein Modell-Download)
+
+Autouse-Fixtures (kein expliziter Import noetig, greifen automatisch):
+  - block_real_embedding_backend        blockt echtes e5-Embedding-Modell (#372)
+  - block_real_local_reranker_backend   blockt echtes bge-reranker-v2-m3-Modell (#376)
 """
 
 import hashlib
@@ -119,7 +123,13 @@ def fake_embedder():
 
 @pytest.fixture(autouse=True)
 def block_real_embedding_backend(monkeypatch):
-    """Verhindert, dass die Suite das echte e5-Modell laedt (#372).
+    """Verhindert, dass die Suite echte e5-Artefakte laedt (#372, #374).
+
+    Blockiert zwei Ladepfade: die Modellgewichte (``_load_backend_model``, #372)
+    und den Tokenizer, den das Chunking fuer exakte Tokenbudgets nutzt
+    (``chunking._load_tokenizer``, #374). Ohne den zweiten Guard zoege jeder
+    ``chunk_pages``-Aufruf Tokenizer-Dateien von HuggingFace; das Chunking
+    faellt stattdessen auf ``approximate_token_count`` zurueck.
 
     ``sentence-transformers`` ist seit #372 eine harte Dependency, also laeuft
     ``get_embedder()`` in der CI nicht mehr in einen ImportError. Ohne diesen
@@ -156,10 +166,69 @@ def block_real_embedding_backend(monkeypatch):
 
     monkeypatch.setattr(em, "_load_backend_model", _blocked)
     em.reset_embedder_cache()
+
+    try:
+        import academic_vault.chunking as chunking
+    except Exception:
+        chunking = None
+    if chunking is not None:
+        monkeypatch.setattr(chunking, "_load_tokenizer", _blocked)
+        chunking.reset_token_counter_cache()
+
     try:
         yield
     finally:
         em.reset_embedder_cache()
+        if chunking is not None:
+            chunking.reset_token_counter_cache()
+
+
+# ---------------------------------------------------------------------------
+# Lokaler Reranker-Backend-Guard (Issue #376)
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def block_real_local_reranker_backend(monkeypatch):
+    """Verhindert, dass die Suite das echte bge-reranker-v2-m3-Modell laedt (#376).
+
+    Seit #376 ruft ``search_papers(..., rerank=True)`` ``apply_reranker`` immer
+    auf -- auch ohne Cloud-API-Keys. Ohne diesen Guard wuerde jeder derartige
+    Testaufruf versuchen, ``BAAI/bge-reranker-v2-m3`` (FlagEmbedding-Backend)
+    von HuggingFace zu laden, sobald FlagEmbedding manuell installiert ist
+    (kein uv-Extra, vgl. pyproject.toml) -- die Suite waere netzabhaengig und
+    um Groessenordnungen langsamer.
+
+    Analog ``block_real_embedding_backend``: gepatcht wird bewusst nur
+    ``_load_local_reranker_backend`` (die unterste Schicht), Tests, die den
+    lokalen Reranker ueber ``_get_local_reranker`` mocken, bleiben unberuehrt.
+
+    Ausnahme: mit ``VAULT_RERANK_LOCAL_LIVE_TEST=1`` greift der Guard nicht —
+    das ist das bestehende Gate des Live-Tests gegen das echte Modell.
+    """
+    import os
+
+    if os.environ.get("VAULT_RERANK_LOCAL_LIVE_TEST") == "1":
+        yield
+        return
+
+    try:
+        import academic_vault.retrieval as retrieval
+    except Exception:
+        yield
+        return
+
+    def _blocked(*_args, **_kwargs):
+        raise RuntimeError(
+            "Lokaler Reranker im Testlauf blockiert (tests/conftest.py). Tests "
+            "mocken _get_local_reranker; fuer das echte Modell "
+            "VAULT_RERANK_LOCAL_LIVE_TEST=1 setzen."
+        )
+
+    monkeypatch.setattr(retrieval, "_load_local_reranker_backend", _blocked)
+    retrieval.reset_local_reranker_cache()
+    try:
+        yield
+    finally:
+        retrieval.reset_local_reranker_cache()
 
 
 # ---------------------------------------------------------------------------

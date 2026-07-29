@@ -1,20 +1,17 @@
-"""Regressionstest fuer Issue #196 — Hardening-Buendel (M2/M5/M6/L5).
+"""Regressionstest fuer Issue #196 — Hardening-Buendel (M2/M6/L5).
 
-Deckt die vier Hardening-Punkte ab:
+Deckt drei der urspruenglich vier Hardening-Punkte ab (M5 — Profile-Owner-Check
+im inzwischen als verwaiste Parallellogik entfernten Auth-Helper-Modul —
+entfaellt seit Issue #377):
   M2 — FTS5-Query-Sanitizer erweitern (", :, NEAR, AND, OR, NOT)
-  M5 — check_profile_permissions mit Owner-Check (st_uid == geteuid)
   M6 — scripts/setup.sh nutzt set -euo pipefail
   L5 — mid-session-reinforcement.mjs schreibt State mit 0600
 
 Alle Tests sind ohne externe Abhaengigkeiten (kein API-Key, keine DB) lauffaehig.
 """
 
-import os
 import re
 from pathlib import Path
-from unittest import mock
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -71,52 +68,6 @@ class TestFts5SanitizerHardening:
             assert forbidden not in out
         for op in ("AND", "OR", "NOT", "NEAR"):
             assert not re.search(rf"\b{op}\b", out)
-
-
-# ---------------------------------------------------------------------------
-# M5 — Profile-Owner-Check
-# ---------------------------------------------------------------------------
-
-
-class TestProfileOwnerCheck:
-    """check_profile_permissions muss zusaetzlich den Owner pruefen."""
-
-    def _write_profile(self, tmp_path: Path) -> Path:
-        p = tmp_path / "active.yaml"
-        p.write_text("uni: test\n", encoding="utf-8")
-        os.chmod(p, 0o600)
-        return p
-
-    def test_passes_for_own_0600_file(self, tmp_path):
-        """Eigene 0600-Datei besteht weiterhin."""
-        from scripts.auth_helper_lib import check_profile_permissions
-
-        profile = self._write_profile(tmp_path)
-        check_profile_permissions(str(profile))  # darf nicht werfen
-
-    def test_raises_when_owner_differs(self, tmp_path):
-        """Gehoert die Datei einem anderen UID, muss PermissionError fliegen."""
-        from scripts.auth_helper_lib import check_profile_permissions
-
-        profile = self._write_profile(tmp_path)
-
-        real_stat = os.stat(str(profile))
-        foreign_uid = os.geteuid() + 1
-
-        # st_uid auf fremde UID faken, Mode bleibt 0600
-        fake = mock.Mock()
-        fake.st_mode = real_stat.st_mode
-        fake.st_uid = foreign_uid
-
-        with mock.patch("scripts.auth_helper_lib.os.stat", return_value=fake):
-            with pytest.raises(PermissionError):
-                check_profile_permissions(str(profile))
-
-    def test_owner_check_uses_geteuid(self):
-        """Quelltext referenziert os.geteuid() und st_uid — belegt den Check."""
-        src = (REPO_ROOT / "scripts" / "auth_helper_lib.py").read_text(encoding="utf-8")
-        assert "geteuid" in src
-        assert "st_uid" in src
 
 
 # ---------------------------------------------------------------------------

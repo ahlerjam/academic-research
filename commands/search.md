@@ -1,13 +1,13 @@
 ---
 description: Search academic papers across multiple APIs (Semantic Scholar, CrossRef, OpenAlex, BASE, EconBiz, EconStor, arXiv)
 disable-model-invocation: true
-allowed-tools: Read, Write, Bash(~/.academic-research/venv/bin/python *), Bash(browser-use:*), Bash(browser-use *), Agent(query-generator, relevance-scorer)
+allowed-tools: Read, Write, Bash(~/.academic-research/venv/bin/python *), Bash(browser-use:*), Bash(browser-use *), Bash(SESSION_DIR=~/.academic-research/sessions/*), Bash(mkdir -p "$SESSION_DIR/pdfs"), Agent(query-generator, relevance-scorer), AskUserQuestion
 argument-hint: "<query>" [--mode quick|standard|deep|metadata] [--modules crossref,openalex,...] [--limit N] [--batch] [--interactive]
 ---
 
 # Akademische Paper-Suche
 
-Parallele Suche über 7 API-Quellen. Optional werden Queries mit dem `query-generator`-Agent erweitert.
+Parallele Suche über bis zu 8 API-Quellen (7 laufen automatisch je Modus, `dblp` optional per `--modules dblp`). Optional werden Queries mit dem `query-generator`-Agent erweitert.
 
 ## Verwendung
 
@@ -66,12 +66,62 @@ Ausgabe nach `$SESSION_DIR/queries.json` speichern.
   --output "$SESSION_DIR/api_results.json"
 ```
 
+Neben `api_results.json` schreibt `search.py` seit #456 zusätzlich eine Sidecar-Statusdatei
+`$SESSION_DIR/api_results_status.json` (`requested_modules`, `failed_modules`,
+`skipped_modules`, `papers_per_module`). Fällt eine Quelle ganz oder teilweise aus, steht sie
+dort explizit in `failed_modules` — bei Bedarf im Ergebnis-Digest erwähnen, statt eine
+leere/kleinere Trefferzahl kommentarlos hinzunehmen.
+
+Seit #465 hat der Gesamtlauf zusätzlich ein Zeitbudget: `--time-budget SEKUNDEN` (Default 60s)
+begrenzt die Wartezeit über alle Module hinweg — eine Quelle, die das Budget überschreitet, wird
+abgebrochen, ihre bis dahin gefundenen Treffer bleiben verloren (nicht: der ganze Lauf), und sie
+erscheint in `skipped_modules` statt in `failed_modules` (getrennte Kennzeichnung: Zeitüberschreitung
+ist kein Fehler der Quelle). `--fallback-time-budget SEKUNDEN` (Default 20s) begrenzt zusätzlich enger
+den EconStor-OAI-PMH-Fallback (der REST-Endpunkt liefert aktuell durchgehend HTTP 405, der Fallback
+läuft also praktisch bei jedem EconStor-Aufruf). Beide Flags sind optional; ohne sie greifen die
+Default-Werte automatisch.
+
 ### Schritt 4: Browser-Suche (standard-/deep-Modus, falls nicht `--no-browser`)
 
 Für jedes Browser-Modul in fester Reihenfolge:
 
 1. **No-Auth zuerst:** `google_scholar` → `springer` → `oecd` → `repec`
 2. **Auth danach:** `ebscohost` → `proquest` → `opac`
+
+#### Consent-Gate vor den Auth-Modulen (Hochschul-Zugangsdaten)
+
+Bevor das erste Auth-Modul (`ebscohost`, `proquest`, `opac`) startet, muss eine
+einmalige, erklärte Zustimmung vorliegen — diese Module verwenden per
+HAN-Login (`config/browser_guides/han_login.md`) Hochschul-Zugangsdaten in
+Browser-Sessions gegen externe Plattformen. Es gelten dabei unverändert die
+Nutzungsbedingungen von **EBSCOhost**, **ProQuest** und dem **HAN**-Proxy
+deiner Hochschule.
+
+```bash
+~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/deep_search_consent.py --check
+```
+
+Gibt das Skript `no` aus (noch keine gespeicherte Zustimmung): **AskUserQuestion**-Gate mit Erklärungstext:
+
+> Die Tiefensuche greift für EBSCOhost, ProQuest und den Hochschul-OPAC auf
+> Browser-Sessions zu, die deine Hochschul-Zugangsdaten (HAN-Login) verwenden.
+> Dabei gelten unverändert die Nutzungsbedingungen von EBSCOhost, ProQuest und
+> dem HAN-Proxy deiner Hochschule. Zugangsdaten werden nie im Klartext an das
+> LLM übergeben (siehe `auth-helper`) — sie laufen ausschließlich über lokale
+> Shell-Umgebungsvariablen direkt in die Login-Formulare. Jetzt zustimmen?
+
+Optionen:
+1. **Zustimmen** — Zustimmung wird gespeichert, alle drei Auth-Module laufen wie geplant.
+2. **Ablehnen** — nur `ebscohost`, `proquest` und `opac` werden für diesen Lauf übersprungen; No-Auth-Module und alle 7 API-Module laufen unverändert weiter. Keine Zustimmung wird gespeichert — die Frage erscheint beim nächsten Tiefensuche-Lauf erneut.
+
+Bei "Zustimmen":
+
+```bash
+~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/deep_search_consent.py --record
+```
+
+Gibt der erste Check bereits `yes` aus, liegt die Zustimmung schon aus einem
+früheren Lauf vor — kein erneutes Fragen, direkt weiter mit den Auth-Modulen.
 
 Pro Modul:
 
@@ -124,6 +174,16 @@ save_prisma_counters('$SESSION_DIR', counters)
 
 Die Zähler werden in `$SESSION_DIR/prisma_counters.json` gespeichert.
 
+Lief das Screening über den `parallel-screening`-Skill, sind die Zähler bereits
+im Ledger protokolliert — dann statt der Handzählung:
+
+```bash
+~/.academic-research/venv/bin/python \
+  ${CLAUDE_PLUGIN_ROOT}/skills/parallel-screening/scripts/screening_ledger.py \
+  counters --session-dir "$SESSION_DIR" --n-identified "${N_IDENTIFIED}" \
+  > "$SESSION_DIR/prisma_counters.json"
+```
+
 ### Schritt 8: Relevanz-Scoring (Standard vs. Batch)
 
 **Standard (< 50 Paper oder kein `--batch`):**  
@@ -149,7 +209,37 @@ print('Abholung via: /history --batch', job['batch_id'])
 Job-ID wird in `$SESSION_DIR/batch.json` gespeichert. Abholung über
 `/history --batch <id>` (sobald Batch-Status `ended` ist, ca. 1 h).
 
-### Schritt 9: Interactive Mode — Phase 1 (nur bei `--interactive`)
+### Schritt 9: Session-Index aktualisieren
+
+Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
+im Index unter `~/.academic-research/session_index.json` fortgeschrieben
+(Upsert per Session-Pfad). Der Index liegt bewusst **nicht** unter
+`~/.academic-research/sessions/` — dieses Verzeichnis lesen `score.md`/
+`excel.md` per `ls -t ... | head -1`, und eine Geschwisterdatei dort würde
+als jeweils zuletzt beschriebene Datei jeden echten Sitzungsordner dauerhaft
+überholen (PR #486 Review, #466):
+
+```bash
+~/.academic-research/venv/bin/python -c "
+import sys
+sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts')
+from session_index import DEFAULT_INDEX_PATH, build_session_entry, update_session_index
+entry = build_session_entry(
+    '$SESSION_DIR',
+    query='$QUERY',
+    mode='$MODE',
+    n_hits=${N_HITS},
+)
+update_session_index(DEFAULT_INDEX_PATH, entry)
+"
+```
+
+`N_HITS` ist die Anzahl der final in `$SESSION_DIR/papers.json` (bzw. bei
+laufendem Batch-Job in `$SESSION_DIR/ranked.json`) enthaltenen Paper. Die
+Anzahl beschaffter Volltexte wird automatisch aus `$SESSION_DIR/pdfs/*.pdf`
+gezählt.
+
+### Schritt 10: Interactive Mode — Phase 1 (nur bei `--interactive`)
 
 Falls `--interactive=off` (Standard): diesen Schritt überspringen.
 
@@ -177,7 +267,7 @@ Optionen:
 
 Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
 
-### Schritt 10: Ergebnisse anzeigen
+### Schritt 11: Ergebnisse anzeigen
 
 Eine formatierte Tabelle mit Rang, Titel, Jahr, Score, Cluster und Quellmodul ausgeben.
 Pfad des Session-Verzeichnisses melden.

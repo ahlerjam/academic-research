@@ -1,0 +1,25 @@
+{
+  "component": "github-repo-research",
+  "should_trigger": [
+    "Analysiere dieses GitHub-Repo: https://github.com/foo/bar.",
+    "Kannst du dieses Repo analysieren und schauen ob es ein Paper dazu gibt?",
+    "Welches Paper gehoert zu diesem Repository?",
+    "Finde das Paper zu diesem Repo: https://github.com/foo/bar.",
+    "Ich will von diesem GitHub-Repository aus recherchieren -- welche Publikation steckt dahinter?",
+    "Gibt es verlinkte Publikationen in diesem Repo?",
+    "Nutze dieses Code-Repository als Themenfindung fuer meine Arbeit.",
+    "Schau in der README nach einem arXiv-Link und lege das Paper im Vault an."
+  ],
+  "should_not_trigger": [
+    "Importiere meine Zotero-Bibliothek.",
+    "Extrahiere Zitate aus dem PDF.",
+    "Schreibe Kapitel 2.",
+    "Welches Thema soll ich nehmen?",
+    "Exportiere nach LaTeX.",
+    "Pruefe meinen Text auf Plagiate.",
+    "Erstelle ein Poster.",
+    "Schaerfe meine Forschungsfrage.",
+    "Generiere einen Titel.",
+    "Importiere diese Leseliste als PDF."
+  ]
+}

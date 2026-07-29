@@ -162,15 +162,14 @@ class BookFetcherRouter:
         if best_metadata_url:
             generic_payload["url"] = best_metadata_url
 
-        resp = self.dispatch_subagent("generic-fetcher", generic_payload)
+        resp = self._try_generic(generic_payload, tries)
         status = resp.get("status", "no_match")
-        tries.append(self._try_entry("generic-fetcher", status))
 
         if status == "success":
             return {
                 "status": "success",
                 "source": "generic-fetcher",
-                "file_path": resp.get("pdf_path"),
+                "file_path": self._pdf_path(resp),
                 "tries": tries,
             }
 
@@ -182,8 +181,7 @@ class BookFetcherRouter:
                 "tries": tries,
             }
 
-        # pickup_required oder no_match -- immer pickup_required mit Hinweis
-        return {
+        pickup_result = {
             "status": "pickup_required",
             "source": "generic-fetcher",
             "reason": resp.get("reason", "Keine downloadbare Quelle gefunden"),
@@ -194,6 +192,104 @@ class BookFetcherRouter:
                 "identifier_type": id_type,
             },
         }
+
+        # ----------------------------------------------------------
+        # Schritt 4: SciHub-Last-Resort (Issue #459)
+        # ----------------------------------------------------------
+        # Ausschliesslich ueber das Flag gesteuert -- kein weiterer Laufzeit-
+        # Dialog. Fehlt der Key oder ist er falsy, wird scihub-fetcher NIE
+        # dispatcht (Safety-Default).
+        if self.profile.get("scihub_optin", False):
+            scihub_result = self._try_scihub(id_type, id_value, output_path, tries)
+            if scihub_result is not None:
+                return scihub_result
+
+        # pickup_required oder no_match -- immer pickup_required mit Hinweis
+        return pickup_result
+
+    @staticmethod
+    def _pdf_path(resp: dict):
+        """Der Agent-Prompt nennt das Feld `file_path`; Altfixtures nutzen `pdf_path`."""
+        return resp.get("file_path") or resp.get("pdf_path")
+
+    def _try_generic(self, payload: dict, tries: list) -> dict:
+        """Ruft generic-fetcher auf und loest `auth_required` mit genau EINEM Retry auf.
+
+        `auth_required` ist ein reiner Innen-Status (Issue #448): der Master
+        reicht ihn an `auth-helper` weiter und wiederholt den Aufruf einmalig mit
+        dem `session_context` -- nach aussen bleibt das Enum aus commands/fetch.md.
+        """
+        resp = self.dispatch_subagent("generic-fetcher", payload)
+        status = resp.get("status", "no_match")
+        tries.append(self._try_entry("generic-fetcher", status))
+
+        if status != "auth_required":
+            return resp
+
+        auth_resp = self.dispatch_subagent(
+            "auth-helper",
+            {
+                "target_url": resp.get("url", ""),
+                "profile_path": "~/.academic-research/library-profiles/active.yaml",
+            },
+        )
+        auth_status = auth_resp.get("status", "auth_failed")
+        tries.append(self._try_entry("auth-helper", auth_status))
+
+        if auth_status == "captcha":
+            return {"status": "captcha", "reason": "CAPTCHA beim Login"}
+
+        if auth_status != "authenticated":
+            return {
+                "status": "pickup_required",
+                "reason": resp.get("reason", "Authentifizierung fehlgeschlagen"),
+            }
+
+        retry_payload = dict(payload)
+        retry_payload["session_context"] = auth_resp.get("session_context")
+        retry_resp = self.dispatch_subagent("generic-fetcher", retry_payload)
+        tries.append(self._try_entry("generic-fetcher", retry_resp.get("status", "no_match")))
+        return retry_resp
+
+    def _try_scihub(self, id_type: str, id_value: str, output_path: str, tries: list):
+        """Last-Resort-Dispatch an scihub-fetcher (Issue #459).
+
+        Wird nur aufgerufen, wenn `scihub_optin: true` gesetzt ist (Aufrufer
+        prueft das Flag). Kein zusaetzlicher Bestaetigungs-Call davor -- die
+        Aktivierungsentscheidung ist bereits durch das Flag getroffen.
+
+        Gibt das finale Ergebnis zurueck bei success/captcha, sonst None
+        (Aufrufer faellt auf das bestehende pickup_required zurueck).
+        """
+        payload = {"output_path": output_path}
+        if id_type == "doi":
+            payload["doi"] = id_value
+        else:
+            payload["title"] = id_value
+
+        resp = self.dispatch_subagent("scihub-fetcher", payload)
+        status = resp.get("status", "no_match")
+        tries.append(self._try_entry("scihub-fetcher", status))
+
+        if status == "success":
+            return {
+                "status": "success",
+                "source": "scihub-fetcher",
+                "file_path": resp.get("file_path"),
+                "tries": tries,
+            }
+
+        if status == "captcha":
+            return {
+                "status": "captcha",
+                "source": "scihub-fetcher",
+                "reason": resp.get("reason", "CAPTCHA erkannt"),
+                "tries": tries,
+            }
+
+        # no_match / opted_out / error -- kein Sonderfall, Aufrufer faellt
+        # auf das bereits vorhandene pickup_required zurueck.
+        return None
 
     def _get_licensed_publisher_subagents(self) -> list:
         """Gibt die Verlags-Subagenten zurueck, deren Host in licensed_sites ist."""

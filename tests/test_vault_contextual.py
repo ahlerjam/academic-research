@@ -323,9 +323,19 @@ class TestVaultSearchWithRerank:
         assert isinstance(results, list)
 
     def test_search_papers_rerank_true_without_api_key_returns_rrf(self, tmp_path):
-        """search_papers mit rerank=True aber ohne API-Key gibt RRF-Result zurueck (Fallback)."""
+        """search_papers mit rerank=True aber ohne API-Key nutzt den lokalen Reranker-Fallback (#376).
+
+        Der lokale bge-reranker-v2-m3 wird gemockt, damit dieser Test kein
+        echtes Modell laedt (die autouse-Fixture in conftest.py blockt das
+        Backend zwar ohnehin, aber ein expliziter Mock macht das erwartete
+        Reranking-Ergebnis fuer diesen Test deterministisch und dokumentiert
+        die Erwartung an der Stelle, wo sie gebraucht wird).
+        """
         db_path = _make_db(tmp_path)
         _add_paper(db_path, "p001", "Hybrid Retrieval", "BM25 and dense retrieval combined.")
+
+        mock_local_reranker = MagicMock()
+        mock_local_reranker.compute_score.return_value = [0.5]
 
         with patch.dict("os.environ", {}, clear=False):
             # VOYAGE_API_KEY und COHERE_API_KEY nicht gesetzt
@@ -336,14 +346,20 @@ class TestVaultSearchWithRerank:
 
             from academic_vault.server import search_papers
 
-            results = search_papers(db_path, "hybrid retrieval", k=5, rerank=True)
+            with patch(
+                "academic_vault.retrieval._get_local_reranker",
+                return_value=mock_local_reranker,
+            ):
+                results = search_papers(db_path, "hybrid retrieval", k=5, rerank=True)
 
         assert isinstance(results, list)
-        # Fallback zu RRF — kein Crash
+        assert len(results) == 1
+        assert results[0]["reranked"] is True
+        assert results[0]["reranker"] == "local-bge"
 
     def test_search_papers_signature_accepts_rerank(self, tmp_path):
         """search_papers akzeptiert rerank-Parameter ohne TypeError."""
-        db_path = _make_db(tmp_path)
+        _make_db(tmp_path)
         import inspect
 
         from academic_vault.server import search_papers

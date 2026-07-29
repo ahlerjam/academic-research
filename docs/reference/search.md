@@ -1,15 +1,23 @@
 # Suchquellen, Scoring und Cluster
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
-## Suchquellen (14)
+Woher die Literatur kommt, wie Treffer bewertet werden und wie daraus Themencluster
+entstehen. Maßgeblich für die Modulliste ist immer der `MODULES`-Dispatch in
+`scripts/search.py` — diese Seite gibt ihn wieder.
 
-Das Plugin sucht in 14 Quellen: **7 API-Quellen** laufen immer und parallel, 7 weitere
-Module steuert die `browser-use`-CLI an (nur im `--mode deep`).
+## Suchquellen (15)
 
-### API-Module (automatisch, parallel)
+Das Plugin sucht in bis zu 15 Quellen: **8 API-Quellen** sind registriert, davon laufen
+7 in jedem Modus immer automatisch und parallel; das achte Modul (`dblp`) ist optional
+per `--modules dblp` wählbar (kein automatisches Umschalten je nach Themengebiet). 7
+weitere Module steuert die `browser-use`-CLI an (nur im `--mode deep`).
 
-Registriert im `MODULES`-Dispatch von `scripts/search.py` — das ist die maßgebliche Liste.
+### API-Module
+
+Registriert im `MODULES`-Dispatch von `scripts/search.py` — das ist die maßgebliche
+Liste. `dblp` läuft nur, wenn es explizit per `--modules dblp` ausgewählt wird (siehe
+`commands/search.md`); die übrigen sieben laufen automatisch in jedem Modus.
 
 | Modul | Quelle | Disziplin |
 |-------|--------|-----------|
@@ -20,6 +28,7 @@ Registriert im `MODULES`-Dispatch von `scripts/search.py` — das ist die maßge
 | `econbiz` | ZBW Suchportal | Wirtschaft |
 | `econstor` | OA-Wirtschafts-Repository | Wirtschaft |
 | `arxiv` | arXiv Preprints | CS, ML, Physik, Mathe |
+| `dblp` | DBLP Computer Science Bibliography | Informatik |
 
 ### Browser-Module (`browser-use`-CLI)
 
@@ -38,6 +47,26 @@ Auth-Module danach.
 
 > Ohne installierte `browser-use`-CLI werden die Browser-Module übersprungen; die
 > API-Suche funktioniert unverändert weiter. Das Setup meldet das explizit.
+
+Woher die Auth-Module (`ebscohost`, `proquest`, `opac`) ihre HAN-Zugangsdaten nehmen und
+wie sich das vom Per-Uni-Profil unterscheidet, steht gesammelt unter
+[Zugangsdaten](../guide/installation.md#zugangsdaten).
+
+### Zustimmung für Hochschul-Zugangsdaten (Auth-Module)
+
+`ebscohost`, `proquest` und `opac` verwenden per HAN-Login
+(`config/browser_guides/han_login.md`) Hochschul-Zugangsdaten in
+Browser-Sessions. Dabei gelten unverändert die Nutzungsbedingungen der
+jeweiligen Plattform — **EBSCOhost**, **ProQuest** und der **HAN**-Proxy der
+Hochschule.
+
+Vor dem allerersten Zugriff auf eines dieser drei Module im `--mode deep`
+holt `commands/search.md` eine einmalige, erklärte Zustimmung ein
+(`scripts/deep_search_consent.py`, `AskUserQuestion`-Gate). Die Zustimmung
+wird in `~/.academic-research/consent.json` gespeichert und danach **nicht
+erneut abgefragt**. Bei Ablehnung werden nur die drei Auth-Module für den
+aktuellen Lauf übersprungen — No-Auth-Module und alle 7 API-Module laufen
+unverändert weiter.
 
 ## 5D-Scoring
 

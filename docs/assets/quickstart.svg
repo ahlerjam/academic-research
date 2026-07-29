@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="910" height="622" viewBox="0 0 910 622" role="img" aria-label="academic-research — Quickstart (Mitschnitt aus docs/quickstart-protocol.md)">
+  <title>academic-research — Quickstart (Mitschnitt aus docs/quickstart-protocol.md)</title>
+  <rect x="0.5" y="0.5" width="909" height="621" rx="10" fill="#0d1117" stroke="#30363d"/>
+  <path d="M0.5 10.5a10 10 0 0 1 10-10h889a10 10 0 0 1 10 10v22h-909z" fill="#161b22" stroke="#30363d"/>
+  <circle cx="20" cy="16" r="6" fill="#ff5f57"/>
+  <circle cx="38" cy="16" r="6" fill="#febc2e"/>
+  <circle cx="56" cy="16" r="6" fill="#28c840"/>
+  <text x="455" y="21" fill="#8b949e" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" text-anchor="middle">academic-research — Quickstart (Mitschnitt aus docs/quickstart-protocol.md)</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="14" xml:space="preserve">
+    <text x="18" y="60"><tspan fill="#3fb950">$ </tspan><tspan fill="#f0f6fc">bash scripts/setup.sh</tspan></text>
+    <text x="18" y="80"><tspan fill="#3fb950">✅ Python environment: ready</tspan></text>
+    <text x="18" y="100"><tspan fill="#d29922">⚠️  browser-use CLI nicht installiert — Browser-Suchmodule (Scholar, EBSCO, …) werden übersprungen.</tspan></text>
+    <text x="18" y="120"><tspan fill="#3fb950">✅ Permissions updated (8 new rules added)</tspan></text>
+    <text x="18" y="140"><tspan fill="#39c5cf">ℹ️  SciHub Opt-in: deaktiviert (Default)</tspan></text>
+    <text x="18" y="160"><tspan fill="#c9d1d9">Setup complete: .../.academic-research</tspan></text>
+    <text x="18" y="200"><tspan fill="#3fb950">$ </tspan><tspan fill="#f0f6fc">python search.py --query "DevOps Governance Mittelstand" --modules crossref,openalex,arxiv --limit 5</tspan></text>
+    <text x="18" y="220"><tspan fill="#8b949e">INFO:__main__:Found 15 papers (0 modules failed)</tspan></text>
+    <text x="18" y="260"><tspan fill="#3fb950">$ </tspan><tspan fill="#f0f6fc">vault.add_paper('vaswani2017', csl_json, pdf_path='sample_book.pdf')</tspan></text>
+    <text x="18" y="280"><tspan fill="#8b949e">-&gt; ok</tspan></text>
+    <text x="18" y="320"><tspan fill="#3fb950">$ </tspan><tspan fill="#f0f6fc">vault.add_quote('vaswani2017', verbatim, 'citations-api',</tspan></text>
+    <text x="18" y="340"><tspan fill="#f0f6fc">                  api_response_id='msg_01demo', printed_page=1)</tspan></text>
+    <text x="18" y="360"><tspan fill="#8b949e">-&gt; quote_id: 7dfe57e3-27c9-4a03-adc2-e9f95972d1c5</tspan></text>
+    <text x="18" y="400"><tspan fill="#3fb950">$ </tspan><tspan fill="#f0f6fc">vault.get_quote(quote_id)</tspan></text>
+    <text x="18" y="420"><tspan fill="#8b949e">-&gt; printed_page     : 1</tspan></text>
+    <text x="18" y="440"><tspan fill="#8b949e">-&gt; extraction_method: citations-api</tspan></text>
+    <text x="18" y="480"><tspan fill="#3fb950">$ </tspan><tspan fill="#f0f6fc">node hooks/verbatim-guard.mjs   # Write auf kapitel/01-einleitung.md</tspan></text>
+    <text x="18" y="500"><tspan fill="#ff7b72">[Vault-Guard] BLOCKIERT: Zitat nicht im Vault verifiziert.</tspan></text>
+    <text x="18" y="520"><tspan fill="#8b949e">Zitat: "Transformer sind das Ende der Rekurrenz"</tspan></text>
+    <text x="18" y="540"><tspan fill="#ff7b72">-&gt; exit 2 (blockiert)</tspan></text>
+    <text x="18" y="580"><tspan fill="#3fb950">$ </tspan><tspan fill="#f0f6fc">node hooks/verbatim-guard.mjs   # Write mit dem verifizierten Verbatim</tspan></text>
+    <text x="18" y="600"><tspan fill="#3fb950">-&gt; exit 0 (kein Einspruch)</tspan></text>
+  </g>
+</svg>

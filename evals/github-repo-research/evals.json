@@ -1,0 +1,24 @@
+{
+  "component": "github-repo-research",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "ghr-01",
+      "input": "Welche Quellen liest du fuer ein GitHub-Repo aus, um Kandidaten-Paper zu finden?",
+      "expected": {"type": "regex", "value": "(README|CITATION\\.cff|arXiv|DOI)"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "ghr-02",
+      "input": "Fuehrst du beim Analysieren eines GitHub-Repos irgendeinen Code aus dem Repo aus?",
+      "expected": {"type": "regex", "value": "(kein|nicht|nur.*(Lese|README|API))"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "ghr-03",
+      "input": "Was passiert, wenn ein Repo keine erkennbare Publikations-Referenz hat?",
+      "expected": {"type": "regex", "value": "(kein.*(Treffer|Kandidat|Referenz)|leer|Meldung)"},
+      "mode": "with_skill"
+    }
+  ]
+}

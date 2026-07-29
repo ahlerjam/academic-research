@@ -1,8 +1,9 @@
 """smoke_core — gemeinsame End-to-End-Smoke-Logik.
 
-Wird von ZWEI Deliverables geteilt:
-  * ``tests/test_smoke_e2e.py``  — pytest-Wrapper (CI-grün).
-  * ``scripts/smoke.py``         — eigenständiger PASS/FAIL-Reporter.
+Wird von ``tests/test_smoke_e2e.py`` als pytest-Wrapper konsumiert (CI-grün).
+(Der frühere eigenständige Standalone-Reporter unter ``scripts/`` wurde als
+verwaistes Skript entfernt (Issue #377) — die Logik hier lebt unverändert
+weiter.)
 
 Jede ``check_*``-Funktion ist eine eigenständige, deterministische Prüfung
 OHNE echtes Netzwerk. Sie wirft bei Fehler eine ``AssertionError`` (für
@@ -49,7 +50,7 @@ VAULT_DOC = REPO_ROOT / "docs" / "reference" / "vault.md"
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 
-EXPECTED_TOOL_COUNT = 34
+EXPECTED_TOOL_COUNT = 37
 
 # venv-Python, das den MCP-Server beherbergt.
 VENV_PYTHON = Path.home() / ".academic-research" / "venv" / "bin" / "python"
@@ -797,7 +798,7 @@ PlainCheck = Callable[[], None]
 def stateful_checks() -> list[tuple[str, str, StateCheck]]:
     """(Kategorie, Name, Funktion) für alle State-abhängigen Checks."""
     return [
-        ("A) MCP-Lifecycle", "list_tools == 34", check_mcp_lifecycle),
+        ("A) MCP-Lifecycle", "list_tools == 37", check_mcp_lifecycle),
         ("A) MCP-Lifecycle", "papers add/get/search/stats", check_mcp_papers),
         ("A) MCP-Lifecycle", "provenance audit", check_mcp_provenance),
         ("A) MCP-Lifecycle", "chapter", check_mcp_chapter),

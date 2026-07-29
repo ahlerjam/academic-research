@@ -1,11 +1,26 @@
-"""Regressionstest fuer Issue #235: pandas + openpyxl ungenutzt.
+"""Regressionstest fuer Issue #235: pandas ungenutzt.
 
-`pandas` und `openpyxl` standen in `scripts/requirements.txt`, werden aber
-von keinem `scripts/*.py` importiert (`openpyxl` nur im separaten Skill
-`skills/xlsx`). Dieser Test sichert ab, dass
+`pandas` und `openpyxl` standen in `scripts/requirements.txt`, wurden aber
+von keinem `scripts/*.py` importiert. Issue #235 entfernte beide.
 
-1. `scripts/requirements.txt` weder `pandas` noch `openpyxl` listet, und
-2. kein `scripts/`-Code `pandas` oder `openpyxl` importiert,
+Fuer `openpyxl` war das zu kurz gegriffen: das Excel-Backend
+`document-skills:xlsx` (genutzt von `/excel` und `/pickup`) fuehrt Python mit
+`openpyxl` im lokalen Environment aus, importiert es aber ausserhalb von
+`scripts/` — der damalige Scan sah diesen Konsumenten nicht. Ohne die
+Dependency ist die Excel-Erzeugung in jeder Installation ueber den
+dokumentierten Setup-Weg (`scripts/requirements.txt`) defekt
+(`ModuleNotFoundError`). Issue #367 hat `openpyxl` deshalb wieder
+aufgenommen; dieser Test prueft ab jetzt nur noch `pandas`.
+
+Seit Issue #445 liegt das Backend nicht mehr als Vendor-Kopie im Repo,
+sondern als Plugin-Dependency `document-skills@anthropic-agent-skills`. An
+der `openpyxl`-Pflicht aendert das nichts: der Skill laeuft weiterhin im
+lokalen Python-Environment des Nutzers.
+
+Dieser Test sichert ab, dass
+
+1. `scripts/requirements.txt` kein `pandas` listet, und
+2. kein `scripts/`-Code `pandas` importiert,
 
 sodass nur tatsaechlich genutzte Pakete im Top-Level-Requirements stehen.
 """
@@ -19,9 +34,10 @@ REPO_ROOT = Path(__file__).parent.parent
 REQUIREMENTS = REPO_ROOT / "scripts" / "requirements.txt"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 
-# Pakete, die laut Akzeptanzkriterien NICHT mehr im Top-Level-Requirements
-# stehen duerfen, weil sie von scripts/ nicht importiert werden.
-UNUSED_PACKAGES = ("pandas", "openpyxl")
+# Pakete, die laut Akzeptanzkriterien NICHT im Top-Level-Requirements stehen
+# duerfen, weil sie von scripts/ nicht importiert werden. `openpyxl` ist seit
+# Issue #367 bewusst ausgenommen (Konsument: document-skills:xlsx, s. Docstring).
+UNUSED_PACKAGES = ("pandas",)
 
 
 def _listed_packages() -> set[str]:

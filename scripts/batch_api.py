@@ -19,9 +19,12 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import anthropic
+from anthropic.types.beta import BetaTextBlock
+from anthropic.types.beta.messages import BetaMessageBatchSucceededResult
+from anthropic.types.beta.messages.batch_create_params import Request
 
 BATCH_THRESHOLD = 50
 _BATCH_JSON = "batch.json"
@@ -33,7 +36,7 @@ _SCORING_SYSTEM = (
 )
 
 
-def _build_request(paper: dict[str, Any], query: str, custom_id: str, model: str) -> dict[str, Any]:
+def _build_request(paper: dict[str, Any], query: str, custom_id: str, model: str) -> Request:
     """Build a single Message Batches API request for one paper."""
     title = paper.get("title") or "Kein Titel"
     abstract = paper.get("abstract") or "Kein Abstract verfügbar"
@@ -83,7 +86,9 @@ def submit_batch(
     key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     client = anthropic.Anthropic(api_key=key)
 
-    requests = [_build_request(paper, query, f"paper_{i}", model) for i, paper in enumerate(papers)]
+    requests: list[Request] = [
+        _build_request(paper, query, f"paper_{i}", model) for i, paper in enumerate(papers)
+    ]
 
     response = client.beta.messages.batches.create(requests=requests)
 
@@ -149,9 +154,14 @@ def fetch_batch_results(batch_id: str, api_key: str | None = None) -> dict[str, 
     for entry in client.beta.messages.batches.results(batch_id):
         if getattr(entry.result, "type", None) != "succeeded":
             continue
-        message = entry.result.message
+        # Laufzeit-Discriminator-Check oben grenzt bereits auf den
+        # "succeeded"-Fall ein; cast() (kein isinstance()) narrowt das fuer
+        # mypy, ohne die Mock-basierten Tests zu beeinflussen (#341).
+        succeeded = cast(BetaMessageBatchSucceededResult, entry.result)
         text = "".join(
-            block.text for block in message.content if getattr(block, "type", None) == "text"
+            cast(BetaTextBlock, block).text
+            for block in succeeded.message.content
+            if getattr(block, "type", None) == "text"
         )
         try:
             parsed = json.loads(text)

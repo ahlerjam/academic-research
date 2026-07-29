@@ -77,6 +77,11 @@ def test_hook_failopen_when_vault_missing():
     assert result.returncode == 0, (
         f"Erwartet 0 (fail-open), got {result.returncode}. stderr: {result.stderr}"
     )
+    # Issue #381 (AC1): Wortlaut-Pin, damit der "DB fehlt"-Fall nicht mit dem
+    # "Exception bei vorhandener DB"-Fall verschmilzt.
+    assert "Vault-DB nicht gefunden" in result.stderr, (
+        f"Erwartet 'DB fehlt'-Wortlaut in stderr, got: {result.stderr}"
+    )
 
 
 def test_hook_ignores_non_protected_path():
@@ -191,6 +196,10 @@ def test_hook_blocks_unrelated_reference_despite_vault_entry(vault_with_divergen
         f"stderr: {result.stderr}"
     )
     assert "[Figure-Guard] BLOCKIERT" in result.stderr
+    # Issue #381 (AC3): auch die Figure-Guard-Block-Message ohne Bypass-Marker-Wortlaut.
+    assert "vault-guard: skip" not in result.stderr, (
+        f"Bypass-Marker-Wortlaut sollte aus der Figure-Block-Message entfernt sein: {result.stderr}"
+    )
 
 
 def test_existing_quote_check_still_works(tmp_path):
@@ -216,6 +225,10 @@ def test_existing_quote_check_still_works(tmp_path):
         env_overrides={"VAULT_DB_PATH": db_path},
     )
     assert result.returncode == 2, f"Erwartet exit 2 (Quote-Block), got {result.returncode}"
+    # Issue #381 (AC3): Block-Message darf den Bypass-Marker-Wortlaut nicht mehr nennen.
+    assert "vault-guard: skip" not in result.stderr, (
+        f"Bypass-Marker-Wortlaut sollte aus der Block-Message entfernt sein: {result.stderr}"
+    )
 
 
 # ---------------------------------------------------------------------------

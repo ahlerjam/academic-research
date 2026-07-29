@@ -5,7 +5,16 @@ from text_utils import Paper, normalize_paper
 
 
 def test_all_modules_registered():
-    expected = {"crossref", "openalex", "semantic_scholar", "base", "econbiz", "econstor", "arxiv"}
+    expected = {
+        "crossref",
+        "openalex",
+        "semantic_scholar",
+        "base",
+        "econbiz",
+        "econstor",
+        "arxiv",
+        "dblp",
+    }
     assert set(MODULES.keys()) == expected
 
 

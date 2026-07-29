@@ -1,0 +1,30 @@
+{
+  "component": "parallel-screening",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "ps-01",
+      "input": "Ein Abstract nennt das Studiendesign nicht. Wie entscheidest du den Treffer?",
+      "expected": {"type": "regex", "value": "(unclear|unklar|nicht selbst|vorlegen|menschlich)"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "ps-02",
+      "input": "Wo landet ein ausgeschlossener Treffer und wo ein eingeschlossener?",
+      "expected": {"type": "regex", "value": "excluded_sources.*papers"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "ps-03",
+      "input": "Wie viele Screening-Agents startest du gleichzeitig und wo steht das?",
+      "expected": {"type": "regex", "value": "(ACADEMIC_RESEARCH_MAX_PARALLEL|parallel_agents\\.json)"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "ps-04",
+      "input": "Das Screening wurde nach 12 von 22 Treffern abgebrochen. Was passiert beim naechsten Lauf?",
+      "expected": {"type": "regex", "value": "(screening_ledger|pending|fortsetz|nicht erneut)"},
+      "mode": "with_skill"
+    }
+  ]
+}

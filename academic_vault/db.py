@@ -5,6 +5,7 @@ Context-Manager-Klasse mit sqlite-vec-Fallback und FTS5-Volltext-Suche.
 
 import contextlib
 import json
+import logging
 import math
 import os
 import re
@@ -16,6 +17,8 @@ from uuid import uuid4
 
 from .embedding_model import EMBEDDING_DIM, deserialize_f32, serialize_f32
 
+logger = logging.getLogger(__name__)
+
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 # vec0-Spiegel der chunk_embeddings-Vektoren (Issue #372). Die DDL steht hier
@@ -26,6 +29,104 @@ _CHUNK_VECTORS_DDL = (
 )
 
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
+
+# Erlaubte Werte fuer `quotes.stance` (Issue #400): Haltung eines Zitats zur
+# zitierenden Aussage. Gespiegelt vom CHECK-Constraint in schema.sql bzw.
+# migrate.add_stance_column() -- der Constraint ist die zweite
+# Verteidigungslinie fuer Direkt-Inserts, die Python-Validierung in
+# `add_quote()` liefert die lesbare Fehlermeldung. Die automatische Befuellung
+# per lokaler NLI-Klassifikation ist ein Folge-Issue; bis dahin bleibt das Feld
+# NULL, sofern es nicht manuell gesetzt wird.
+VALID_STANCES = frozenset({"supports", "contrasts", "mentions"})
+
+# Schema-Versions-Gate (Issue #368): ueber PRAGMA user_version verfolgt.
+# Unversionierte/Legacy-DBs haben user_version=0 (SQLite-Default) und liegen
+# damit garantiert unter diesem Wert. Hochzaehlen, sobald schema.sql um
+# Spalten/Tabellen erweitert wird, die eine Bestands-Migration brauchen --
+# und der neue migrate.py-Helfer in apply_pending_migrations() ergaenzt wird.
+# 2 = quotes.stance (Issue #400).
+# 3 = notes.page + notes_fts-Backfill fuer Bestandsnotizen (Issue #462).
+CURRENT_SCHEMA_VERSION = 3
+
+# Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
+# (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
+# jeder Helfer kapselt sein `ALTER TABLE` in `except sqlite3.OperationalError:
+# pass` (migrate.py) -- das faengt nicht nur "duplicate column name", sondern
+# z. B. auch "database is locked". Vor dem Stempeln wird deshalb per
+# `PRAGMA table_info(<tabelle>)` verifiziert, dass die Migration tatsaechlich
+# gegriffen hat, statt dem Rueckgabewert (`None`, kein Erfolgssignal) blind zu
+# vertrauen -- sonst schliesst sich das Versions-Gate unwiderruflich, obwohl
+# die Spalten weiterhin fehlen.
+_LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
+    "papers": frozenset(
+        {
+            "parent_paper_id",
+            "provenance",
+            "editor",
+            "chapter",
+            "page_first",
+            "page_last",
+            "container_title",
+        }
+    ),
+    "quotes": frozenset({"stance"}),
+    "notes": frozenset({"page"}),
+}
+
+
+class _Unset:
+    """Sentinel-Typ fuer optionale ``add_paper()``-Parameter (Issue #455).
+
+    Unterscheidet "Parameter nicht uebergeben" (Wert bleibt beim Upsert
+    unangetastet) von "bewusst auf None/0 gesetzt" (Wert wird explizit
+    geleert). Ein nacktes ``object()`` waere hierfuer ungeeignet, weil sich
+    damit kein praeziser Typ (``str | None | _Unset``) fuer mypy formulieren
+    laesst. Muss durch alle drei Aufrufebenen durchgereicht werden
+    (``VaultDB.add_paper`` -> ``server.add_paper`` -> MCP-Tool-Wrapper
+    ``_vault_add_paper``), sonst geht die Unterscheidung auf einer
+    Zwischenschicht verloren.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<UNSET>"
+
+
+_UNSET = _Unset()
+
+# Optionale papers-Spalten, die von add_paper()'s Sentinel-Logik erfasst
+# werden, in der Reihenfolge, in der sie im INSERT/UPDATE auftauchen.
+_OPTIONAL_PAPER_COLUMNS: tuple[str, ...] = (
+    "doi",
+    "isbn",
+    "pdf_path",
+    "page_offset",
+    "editor",
+    "chapter",
+    "page_first",
+    "page_last",
+    "container_title",
+    "parent_paper_id",
+    "provenance",
+)
+
+# Defaults fuer eine echte Neuanlage (Sentinel -> dieser Wert), identisch zu
+# den frueheren Funktions-Defaults -- bei einer Erstanlage ohne uebergebenen
+# Wert soll sich am Ergebnis nichts aendern.
+_OPTIONAL_PAPER_DEFAULTS: dict[str, object] = {
+    "doi": None,
+    "isbn": None,
+    "pdf_path": None,
+    "page_offset": 0,
+    "editor": None,
+    "chapter": None,
+    "page_first": None,
+    "page_last": None,
+    "container_title": None,
+    "parent_paper_id": None,
+    "provenance": None,
+}
 
 
 class VaultLockedError(RuntimeError):
@@ -88,6 +189,37 @@ def escape_like(value: str) -> str:
         .replace("%", _LIKE_ESCAPE_CHAR + "%")
         .replace("_", _LIKE_ESCAPE_CHAR + "_")
     )
+
+
+_FTS5_OPERATOR_KEYWORDS = re.compile(r"\b(?:NEAR|AND|OR|NOT)\b")
+
+
+def _sanitize_fts5_query(query: str) -> str:
+    """Bereinigt Query fuer sichere FTS5-MATCH-Ausfuehrung.
+
+    FTS5-Sonderzeichen die Probleme verursachen: - / ^ * " ( ) sowie der
+    Column-Filter-Operator ':'. Zusaetzlich werden die booleschen
+    Operator-Keywords NEAR/AND/OR/NOT (nur in Grossschreibung
+    operatorwirksam) neutralisiert, damit usergenerierte Strings nicht
+    versehentlich als FTS5-Syntax interpretiert werden und einen
+    Query-Crash ausloesen.
+
+    Strategie: Sonderzeichen und Operator-Keywords durch Leerzeichen
+    ersetzen, Mehrfach-Leerzeichen kollabieren. Kleingeschriebene Woerter
+    wie 'android' oder 'and' bleiben unangetastet — nur die in FTS5
+    operatorwirksamen Grossschreibungen werden entfernt.
+
+    Gemeinsam genutzt von server.search_papers() und VaultDB.search_notes()
+    (Issue #462) -- lebt hier statt in server.py, weil VaultDB (db.py) nicht
+    von server.py importieren darf (Zirkularimport).
+    """
+    # FTS5-Sonderzeichen entfernen/ersetzen: -, ^, /, *, (, ), ", :
+    sanitized = re.sub(r'[-^/*():"]', " ", query)
+    # Boolesche Operator-Keywords (Grossschreibung) neutralisieren
+    sanitized = _FTS5_OPERATOR_KEYWORDS.sub(" ", sanitized)
+    # Mehrfache Leerzeichen zusammenfassen
+    sanitized = re.sub(r"\s+", " ", sanitized).strip()
+    return sanitized
 
 
 def project_slug(cwd: str | None = None) -> str:
@@ -257,11 +389,38 @@ class VaultDB:
         return self.vec_available
 
     def init_schema(self) -> None:
-        """Erstellt alle Tabellen gemaess schema.sql. Versucht vec0 zu erstellen."""
+        """Erstellt alle Tabellen gemaess schema.sql, migriert Bestands-DBs (#368).
+
+        `CREATE TABLE IF NOT EXISTS` (schema.sql) deckt neue Tabellen und
+        frische DBs bereits vollstaendig ab, kann aber bestehende Tabellen
+        nicht um neue Spalten erweitern. Ein Versions-Gate ueber
+        `PRAGMA user_version` schliesst diese Luecke: Eine DB, deren
+        `papers`-Tabelle schon vor dem DDL-Lauf existierte (Legacy-Schema,
+        z.B. prae-#195 ohne `parent_paper_id`/`provenance`) und deren
+        `user_version` noch unter `CURRENT_SCHEMA_VERSION` liegt, bekommt
+        einmalig die additiven `migrate.py`-Helfer nachgezogen -- statt bei
+        `add_paper()` mit `sqlite3.OperationalError` abzustuerzen.
+
+        Bei bereits aktueller `user_version` ist der Aufruf ein billiger
+        PRAGMA-Read ohne weitere Schreiboperation: `init_schema()` ist ein
+        Hot-Path (server.py ruft ihn ~17x auf), wiederholte Aufrufe duerfen
+        keine ALTER-Versuche o.ae. wiederholen.
+        """
         ddl = _SCHEMA_PATH.read_text(encoding="utf-8")
         with self._connection(commit=True) as conn:
             # vec-Extension auf derselben Connection laden (optional)
             self.load_vec_extension(conn)
+
+            # Fresh-DB-Erkennung *vor* dem DDL-Lauf: existierte "papers" schon,
+            # koennte es sich um ein Legacy-Schema handeln, das Migrationshelfer
+            # braucht. Eine echte Neuanlage bekommt schema.sql komplett (inkl.
+            # aller Spalten) und braucht keine Helfer.
+            papers_existed_before = (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='papers'"
+                ).fetchone()
+                is not None
+            )
 
             # Basis-Schema ausfuehren (ohne vec0-Block — der ist auskommentiert)
             conn.executescript(ddl)
@@ -277,6 +436,58 @@ class VaultDB:
                 except sqlite3.OperationalError:
                     self.vec_available = False
 
+        if not papers_existed_before:
+            # Echte Neuanlage: schema.sql deckt alle Spalten bereits ab,
+            # Migrationshelfer sind nicht noetig -- Version direkt setzen.
+            with self._connection(commit=True) as conn:
+                conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+            return
+
+        with self._connection() as conn:
+            current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if current_version >= CURRENT_SCHEMA_VERSION:
+            return  # bereits migriert -- kein weiterer Schreibzugriff
+
+        # Legacy-DB unter der aktuellen Schema-Version: Migrationshelfer
+        # ausserhalb jeder offenen self._connection() ausfuehren. Die Helfer
+        # oeffnen ihre eigenen kurzlebigen sqlite3-Connections (migrate.py);
+        # das darf sich nicht mit einer hier noch offenen Schreibtransaktion
+        # ueberschneiden (Issue #368, Plan-Risikonotiz).
+        from . import migrate
+
+        migrate.apply_pending_migrations(self.db_path)
+
+        # Nicht blind vertrauen: apply_pending_migrations() gibt kein
+        # Erfolgssignal zurueck, und jeder Helfer schluckt *jeden*
+        # sqlite3.OperationalError (nicht nur "duplicate column name") als
+        # vermeintliche Idempotenz. Erst per PRAGMA table_info(papers)
+        # verifizieren, dass die Migration tatsaechlich gegriffen hat, bevor
+        # der Stempel gesetzt wird -- sonst schliesst sich das Versions-Gate
+        # unwiderruflich (Review-Fund PR #427: user_version wuerde auch nach
+        # fehlgeschlagener Migration gestempelt, AC1 dauerhaft verletzt).
+        with self._connection(commit=True) as conn:
+            missing: list[str] = []
+            for table, required in _LEGACY_MIGRATION_COLUMNS.items():
+                present = {
+                    row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+                }
+                missing += [f"{table}.{col}" for col in sorted(required - present)]
+
+            if not missing:
+                conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
+            else:
+                # Stempel bewusst auslassen: user_version bleibt unter
+                # CURRENT_SCHEMA_VERSION, damit der naechste init_schema()-Aufruf
+                # die Migration erneut versucht statt sie faelschlich als
+                # erledigt zu betrachten.
+                logger.warning(
+                    "Migration auf Schema-Version %d nicht verifizierbar -- "
+                    "es fehlen weiterhin Spalten %s. user_version bleibt "
+                    "unveraendert, naechster init_schema()-Aufruf migriert erneut (#368).",
+                    CURRENT_SCHEMA_VERSION,
+                    missing,
+                )
+
     # ------------------------------------------------------------------
     # Papers CRUD
     # ------------------------------------------------------------------
@@ -285,17 +496,17 @@ class VaultDB:
         self,
         paper_id: str,
         csl_json: str,
-        doi: str | None = None,
-        isbn: str | None = None,
-        pdf_path: str | None = None,
-        page_offset: int = 0,
-        editor: str | None = None,
-        chapter: str | None = None,
-        page_first: int | None = None,
-        page_last: int | None = None,
-        container_title: str | None = None,
-        parent_paper_id: str | None = None,
-        provenance: str | None = None,
+        doi: str | None | _Unset = _UNSET,
+        isbn: str | None | _Unset = _UNSET,
+        pdf_path: str | None | _Unset = _UNSET,
+        page_offset: int | _Unset = _UNSET,
+        editor: str | None | _Unset = _UNSET,
+        chapter: str | None | _Unset = _UNSET,
+        page_first: int | None | _Unset = _UNSET,
+        page_last: int | None | _Unset = _UNSET,
+        container_title: str | None | _Unset = _UNSET,
+        parent_paper_id: str | None | _Unset = _UNSET,
+        provenance: str | None | _Unset = _UNSET,
     ) -> None:
         """Upsert eines Papers in die papers-Tabelle.
 
@@ -307,6 +518,14 @@ class VaultDB:
         defaulted (Issue #213, Security Round-2 M3), sondern als ValueError
         gemeldet. Fehlt das Feld 'type' komplett, gilt weiterhin der
         DB-Default 'article-journal'.
+
+        Alle optionalen Parameter defaulten auf das Sentinel ``_UNSET``
+        statt auf ``None``/``0`` (Issue #455): Ein zweiter Upsert-Aufruf fuer
+        dieselbe ``paper_id``, der ein optionales Feld nicht mit uebergibt,
+        laesst dessen Bestandswert unangetastet -- vorher wurde jedes nicht
+        uebergebene Feld stillschweigend auf seinen Default zurueckgesetzt.
+        Ein bewusst geleertes Feld (explizit ``None``/``0`` uebergeben) wird
+        weiterhin geleert, weil dieser Wert von ``_UNSET`` unterscheidbar ist.
         """
         try:
             csl = json.loads(csl_json)
@@ -321,51 +540,64 @@ class VaultDB:
                 f"Ungueltiger type '{paper_type}' -- erlaubt: {sorted(VALID_PAPER_TYPES)}"
             )
 
+        supplied: dict[str, object] = {
+            "doi": doi,
+            "isbn": isbn,
+            "pdf_path": pdf_path,
+            "page_offset": page_offset,
+            "editor": editor,
+            "chapter": chapter,
+            "page_first": page_first,
+            "page_last": page_last,
+            "container_title": container_title,
+            "parent_paper_id": parent_paper_id,
+            "provenance": provenance,
+        }
+        # Werte fuer den INSERT-Zweig (Neuanlage): bei nicht uebergebenen
+        # (Sentinel-)Feldern der bisherige Default -- fuer eine echte
+        # Neuanlage aendert sich dadurch nichts am Ergebnis.
+        insert_values = {
+            col: (_OPTIONAL_PAPER_DEFAULTS[col] if val is _UNSET else val)
+            for col, val in supplied.items()
+        }
+        # Nur tatsaechlich uebergebene Spalten landen im UPDATE SET -- das
+        # ist der Kern des Fixes: nicht uebergebene optionale Felder
+        # behalten beim Upsert ihren Bestandswert.
+        provided_columns = [col for col, val in supplied.items() if val is not _UNSET]
+
         now = int(time.time())
+        set_clauses = ["type = excluded.type", "csl_json = excluded.csl_json"]
+        set_clauses += [f"{col} = excluded.{col}" for col in provided_columns]
+        set_clauses.append("updated_at = excluded.updated_at")
+
+        columns = [
+            "paper_id",
+            "type",
+            "csl_json",
+            *_OPTIONAL_PAPER_COLUMNS,
+            "added_at",
+            "updated_at",
+        ]
+        placeholders = ", ".join("?" for _ in columns)
+        values = (
+            paper_id,
+            paper_type,
+            csl_json,
+            *(insert_values[col] for col in _OPTIONAL_PAPER_COLUMNS),
+            now,
+            now,
+        )
+
         with self._connection(commit=True) as conn:
             self._raise_if_locked(conn)
             conn.execute(
-                """
-                INSERT INTO papers
-                  (paper_id, type, csl_json, doi, isbn, pdf_path, page_offset,
-                   editor, chapter, page_first, page_last, container_title,
-                   parent_paper_id, provenance,
-                   added_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                f"""
+                INSERT INTO papers ({", ".join(columns)})
+                VALUES ({placeholders})
                 ON CONFLICT(paper_id) DO UPDATE SET
-                  type            = excluded.type,
-                  csl_json        = excluded.csl_json,
-                  doi             = excluded.doi,
-                  isbn            = excluded.isbn,
-                  pdf_path        = excluded.pdf_path,
-                  page_offset     = excluded.page_offset,
-                  editor          = excluded.editor,
-                  chapter         = excluded.chapter,
-                  page_first      = excluded.page_first,
-                  page_last       = excluded.page_last,
-                  container_title = excluded.container_title,
-                  parent_paper_id = excluded.parent_paper_id,
-                  provenance      = excluded.provenance,
-                  updated_at      = excluded.updated_at
+                  {", ".join(set_clauses)}
                 """,
-                (
-                    paper_id,
-                    paper_type,
-                    csl_json,
-                    doi,
-                    isbn,
-                    pdf_path,
-                    page_offset,
-                    editor,
-                    chapter,
-                    page_first,
-                    page_last,
-                    container_title,
-                    parent_paper_id,
-                    provenance,
-                    now,
-                    now,
-                ),
+                values,
             )
 
     def get_paper(self, paper_id: str) -> dict | None:
@@ -432,8 +664,27 @@ class VaultDB:
         section: str | None = None,
         context_before: str | None = None,
         context_after: str | None = None,
+        stance: str | None = None,
     ) -> None:
-        """INSERT eines Quotes in die quotes-Tabelle."""
+        """INSERT eines Quotes in die quotes-Tabelle.
+
+        Args:
+            stance: Optionale Haltung des Zitats zur zitierenden Aussage
+                (`VALID_STANCES`), sonst `None` (Issue #400). Die Validierung
+                liegt hier statt allein im CHECK-Constraint, damit jeder
+                Aufrufweg (MCP-Tool wie direkte ``VaultDB``-Nutzung) dieselbe
+                lesbare Meldung bekommt statt eines rohen
+                ``sqlite3.IntegrityError``.
+
+        Raises:
+            ValueError: Wenn ``stance`` weder ``None`` noch einer der Werte aus
+                ``VALID_STANCES`` ist.
+        """
+        if stance is not None and stance not in VALID_STANCES:
+            raise ValueError(
+                f"Ungueltiger stance '{stance}' -- erlaubt: {sorted(VALID_STANCES)} oder None"
+            )
+
         now = int(time.time())
         with self._connection(commit=True) as conn:
             self._raise_if_locked(conn)
@@ -442,8 +693,8 @@ class VaultDB:
                 INSERT INTO quotes
                   (quote_id, paper_id, verbatim, pdf_page, printed_page,
                    section, context_before, context_after,
-                   extraction_method, api_response_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   extraction_method, api_response_id, created_at, stance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     quote_id,
@@ -457,6 +708,7 @@ class VaultDB:
                     extraction_method,
                     api_response_id,
                     now,
+                    stance,
                 ),
             )
 
@@ -495,6 +747,94 @@ class VaultDB:
                     "SELECT * FROM quotes WHERE paper_id = ? LIMIT ?",
                     (paper_id, k),
                 ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Notes CRUD + FTS5-Suche (Issue #462)
+    # ------------------------------------------------------------------
+
+    def add_note(
+        self,
+        paper_id: str,
+        text: str,
+        tags: str | None = None,
+        page: int | None = None,
+    ) -> str:
+        """INSERT einer Notiz/eines Exzerpts. Gibt note_id (UUID) zurueck.
+
+        Args:
+            page: Optionale Seitenangabe (AC2) -- Notizen ohne konkreten
+                Seitenbezug (z. B. quellenuebergreifende Synthese) bleiben
+                zulaessig, ``page`` defaultet auf ``None``.
+        """
+        note_id = str(uuid4())
+        now = int(time.time())
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute(
+                """
+                INSERT INTO notes (note_id, paper_id, text, tags, created_at, page)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (note_id, paper_id, text, tags, now, page),
+            )
+        return note_id
+
+    def get_note(self, note_id: str) -> dict | None:
+        """Gibt Note-Record als dict zurueck oder None."""
+        with self._connection() as conn:
+            row = conn.execute("SELECT * FROM notes WHERE note_id = ?", (note_id,)).fetchone()
+        return dict(row) if row is not None else None
+
+    def find_notes(
+        self,
+        paper_id: str,
+        query: str | None = None,
+        k: int = 10,
+    ) -> list[dict]:
+        """Notizen fuer ein Paper, optional per text-LIKE-Filter (Muster find_quotes)."""
+        with self._connection() as conn:
+            if query:
+                rows = conn.execute(
+                    "SELECT * FROM notes WHERE paper_id = ? "
+                    "AND text LIKE ? ESCAPE '\\' ORDER BY created_at LIMIT ?",
+                    (paper_id, f"%{escape_like(query)}%", k),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM notes WHERE paper_id = ? ORDER BY created_at LIMIT ?",
+                    (paper_id, k),
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    def search_notes(self, query: str, k: int = 5) -> list[dict]:
+        """FTS5-Volltextsuche in notes_fts. Gibt [{note_id, paper_id, snippet, score}] zurueck.
+
+        Analog zu ``server.search_papers()``, aber ohne Rerank-/Hybrid-Pfad
+        (Issue #462 AC3+AC4): Notizen sind kurze, manuell verfasste
+        Exzerpte -- BM25 allein deckt "Exzerpte beim Kapitelschreiben
+        auffindbar" bereits ab, eine vec0-Embedding-Pipeline waere hier
+        unverhaeltnismaessig. Leere/rein aus FTS5-Sonderzeichen bestehende
+        Queries liefern ``[]`` statt ``sqlite3.OperationalError`` (Muster
+        Issue #369).
+        """
+        sanitized = _sanitize_fts5_query(query)
+        if not sanitized:
+            return []
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT note_id,
+                       paper_id,
+                       snippet(notes_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
+                       rank AS score
+                FROM notes_fts
+                WHERE notes_fts MATCH ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (sanitized, k),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def set_ocr_done(self, paper_id: str, value: int = 1) -> None:

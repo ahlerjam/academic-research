@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 import yaml
 
+from tests.helpers.book_fetcher_router import BookFetcherRouter
+
 # Path to fixtures
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "book_fetcher_mocks"
 
@@ -22,10 +24,6 @@ def _load_json(name):
 
 def _load_yaml(name):
     return yaml.safe_load((FIXTURES / name).read_text())
-
-
-# Import will fail until Task 3 creates the module -- that's expected (RED)
-from tests.helpers.book_fetcher_router import BookFetcherRouter
 
 
 class TestBookFetcherInputParsing(unittest.TestCase):
@@ -184,6 +182,126 @@ class TestBookFetcherRouting(unittest.TestCase):
         self.assertIn("identifier", result["pickup_hint"])
         # generic-fetcher must be last in tries
         self.assertEqual(result["tries"][-1]["subagent"], "generic-fetcher")
+
+
+class TestGenericFetcherAuthRoute(unittest.TestCase):
+    """Issue #448: generic-fetcher meldet auth_required -> auth-helper -> genau ein Retry."""
+
+    OA_SUBAGENTS = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+
+    def _router(self):
+        return BookFetcherRouter(profile=_load_yaml("active_profile_no_licensed.yaml"))
+
+    def _dispatcher(self, generic_second):
+        """Baut ein side_effect, das OA scheitern laesst und generic-fetcher steuert."""
+        calls = []
+        auth_req = _load_json("generic_auth_required.json")
+        auth_ok = _load_json("auth_helper_authenticated.json")
+        generic_calls = [0]
+
+        def side_effect(subagent, payload):
+            calls.append((subagent, dict(payload)))
+            if subagent in self.OA_SUBAGENTS:
+                return {"status": "no_match", "source_subagent": subagent}
+            if subagent == "generic-fetcher":
+                generic_calls[0] += 1
+                return auth_req if generic_calls[0] == 1 else generic_second
+            if subagent == "auth-helper":
+                return auth_ok
+            raise AssertionError(f"Unexpected subagent: {subagent}")
+
+        return side_effect, calls
+
+    def test_auth_required_triggers_auth_helper_and_single_retry(self):
+        router = self._router()
+        side_effect, calls = self._dispatcher(_load_json("generic_success.json"))
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            result = router.fetch("Advanced Topics in AI", output_path="/tmp/out.pdf")
+
+        self.assertEqual(result["status"], "success", result)
+        self.assertEqual(result["file_path"], "/tmp/out.pdf")
+
+        tail = [(t["subagent"], t["status"]) for t in result["tries"]][-3:]
+        self.assertEqual(
+            tail,
+            [
+                ("generic-fetcher", "auth_required"),
+                ("auth-helper", "authenticated"),
+                ("generic-fetcher", "success"),
+            ],
+        )
+        # Genau ein Retry -- nicht mehr.
+        generic_calls = [c for c in calls if c[0] == "generic-fetcher"]
+        self.assertEqual(len(generic_calls), 2, generic_calls)
+        # Der auth-helper bekommt die Profil-Route aus der auth_required-Antwort.
+        auth_call = next(c for c in calls if c[0] == "auth-helper")
+        self.assertEqual(
+            auth_call[1]["target_url"],
+            "https://publisher.example.org.proxy.ub.tum.de/book/9780123",
+        )
+        # Die bestehende Session wird an den Retry weitergereicht.
+        self.assertNotIn("session_context", generic_calls[0][1])
+        self.assertEqual(generic_calls[1][1]["session_context"], "browser-use:active:tum")
+
+    def test_auth_required_never_leaks_to_the_master_output(self):
+        """Der Retry scheitert -- der Master meldet trotzdem einen der vier /fetch-Stati."""
+        router = self._router()
+        generic_pickup = _load_json("generic_pickup.json")
+        side_effect, _ = self._dispatcher(generic_pickup)
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            result = router.fetch("Advanced Topics in AI", output_path="/tmp/out.pdf")
+
+        self.assertEqual(result["status"], "pickup_required", result)
+        self.assertIn("pickup_hint", result)
+
+    def test_master_status_enum_matches_fetch_command(self):
+        """Das nach aussen gemeldete Status-Enum bleibt das 4er-Set aus commands/fetch.md."""
+        fetch_md = (pathlib.Path(__file__).parent.parent / "commands" / "fetch.md").read_text()
+        for status in ("success", "pickup_required", "captcha", "no_match"):
+            self.assertIn(status, fetch_md)
+        self.assertNotIn("auth_required", fetch_md)
+
+    def test_session_context_is_not_passed_without_authentication(self):
+        """Ohne auth_required gibt es keinen session_context im generic-fetcher-Payload."""
+        router = self._router()
+        seen = []
+
+        def side_effect(subagent, payload):
+            seen.append((subagent, dict(payload)))
+            if subagent in self.OA_SUBAGENTS:
+                return {"status": "no_match", "source_subagent": subagent}
+            if subagent == "generic-fetcher":
+                return _load_json("generic_pickup.json")
+            raise AssertionError(f"Unexpected subagent: {subagent}")
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            router.fetch("Advanced Topics in AI", output_path="/tmp/out.pdf")
+
+        generic_payloads = [p for name, p in seen if name == "generic-fetcher"]
+        self.assertEqual(len(generic_payloads), 1)
+        self.assertNotIn("session_context", generic_payloads[0])
+
+
+class TestBookFetcherPromptDocumentsGenericAuth(unittest.TestCase):
+    """agents/book-fetcher.md muss den neuen generic-fetcher-Pfad beschreiben."""
+
+    def setUp(self):
+        self.body = (
+            pathlib.Path(__file__).parent.parent / "agents" / "book-fetcher.md"
+        ).read_text()
+
+    def test_prompt_documents_generic_auth_required(self):
+        step5 = self.body.split("## Schritt 5", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("auth_required", step5)
+        self.assertIn("auth-helper", step5)
+        self.assertIn("session_context", step5)
+        self.assertIn("einmalig", step5.lower())
+
+    def test_prompt_keeps_outward_status_enum_at_four(self):
+        schema = self.body.split("## Output-Schema", 1)[1].split("\n## ", 1)[0]
+        self.assertNotIn("auth_required", schema)
 
 
 class TestBookFetcherAgentMarkdown(unittest.TestCase):

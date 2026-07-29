@@ -2,6 +2,9 @@ anthropic>=0.40
 httpx>=0.28.1
 pypdf>=4.0.0
 pyyaml>=6.0.3
+# Pflicht-Dependency des Excel-Backends document-skills:xlsx, das /excel und
+# /pickup aufrufen — Issue #367, Backend extern seit #445.
+openpyxl>=3.1.5
 # requests>=2.32.4: CVE-2024-35195 (cert verification bypass), CVE-2024-47081 (.netrc credential leak)
 requests>=2.32.4
 # lxml>=5.2.0: CVE-2022-2309 (NULL pointer deref)
@@ -9,7 +12,9 @@ lxml>=5.2.0
 # Barcode-Generierung fuer /academic-research:pickup (Skill: barcode_utils)
 python-barcode[images]>=0.16.1
 # academic-vault MCP-Server (Vault): FastMCP-SDK + Vektor-Suche-Extension
-mcp>=1.0
+# <2: mcp 2.0.0 (PyPI) entfernt mcp.server.fastmcp, das academic_vault/server.py
+# importiert — der Server startet sonst nur noch mit "mcp SDK nicht installiert".
+mcp>=1.0,<2
 sqlite-vec>=0.1.0
 # strikte csl_json-Validierung in vault.add_paper (Issue #213)
 jsonschema>=4.0
@@ -24,3 +29,12 @@ pyzotero>=1.5
 # installiert Torch vorher separat:
 #   pip install --index-url https://download.pytorch.org/whl/cpu torch
 sentence-transformers>=3.0
+# HINWEIS (Issue #376, P1-Fix Fixrunde PR #422): bewusst KEIN
+# `transformers<5.0`-Cap hier. Der lokale Reranker-Fallback (FlagEmbedding
+# 1.4.0, optional per `pip install FlagEmbedding`) braucht zwar
+# transformers<5.0 (ruft intern Tokenizer.prepare_for_model() auf, das in
+# transformers>=5.x entfernt wurde), aber FlagEmbedding steht hier ohnehin
+# nicht drin -- ein globaler Cap wuerde jede Installation (auch ohne den
+# lokalen Reranker) unnoetig auf die aeltere transformers-Version zwingen.
+# Wer FlagEmbedding manuell nachinstalliert, deckelt transformers im selben
+# Schritt: `pip install 'FlagEmbedding>=1.3,<2.0' 'transformers<5.0'`.

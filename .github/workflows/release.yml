@@ -38,6 +38,18 @@ jobs:
             exit 1
           fi
           echo "Marketplace-Version stimmt ueberein."
+      - name: pyproject.toml-Version vs. plugin.json vergleichen
+        run: |
+          set -euo pipefail
+          PLUGIN="$(jq -r '.version' .claude-plugin/plugin.json)"
+          PYPROJECT="$(grep -m1 '^version' pyproject.toml | sed -E 's/^version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/')"
+          echo "plugin.json:    $PLUGIN"
+          echo "pyproject.toml: $PYPROJECT"
+          if [ "$PLUGIN" != "$PYPROJECT" ]; then
+            echo "::error::pyproject.toml version ($PYPROJECT) stimmt nicht mit plugin.json version ($PLUGIN) ueberein."
+            exit 1
+          fi
+          echo "pyproject.toml-Version stimmt ueberein."
 
   marketplace-notice:
     name: Marketplace-Update-Notice

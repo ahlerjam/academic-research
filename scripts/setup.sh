@@ -8,9 +8,32 @@
 #   4. Check: globaler browser-use Claude-Skill
 #   5. Claude-Code-Permissions via configure_permissions.py
 #   6. Projekt-Bootstrap (Auto-Detect) via project_bootstrap.py
-#   7. SciHub Opt-in (F18) via scihub_optin.py
+#   7. Uni-Profil-Setup (F16.5) via uni_profile_setup.py
+#   8. SciHub Opt-in (F18) via scihub_optin.py
 
 set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Argumente parsen (--uni <profil>; sonstige deklarierte, aber (noch) nicht
+# eigenstaendig implementierte Flags wie --skip-browser/--enable-scihub
+# werden toleriert statt hart abzubrechen, vgl. commands/setup.md).
+# ---------------------------------------------------------------------------
+
+UNI_PROFILE=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --uni)
+      UNI_PROFILE="$2"
+      shift 2
+      ;;
+    --skip-browser|--enable-scihub)
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
 # Unter 'set -u' (nounset) bricht jede Referenz auf eine unbelegte Variable ab.
 # Externe Variablen daher defensiv absichern: $HOME muss gesetzt sein, sonst
@@ -23,6 +46,25 @@ fi
 
 BASE="${HOME}/.academic-research"
 SCRIPT_DIR="$(cd "$(dirname "${0:-.}")" && pwd)"
+
+# ---------------------------------------------------------------------------
+# 0. Node.js pruefen (vgl. #468)
+# ---------------------------------------------------------------------------
+# 5 der 7 Hooks sind '.mjs'-Dateien und werden in hooks/hooks.json per
+# 'node ...' gestartet — darunter der beworbene Halluzinationsschutz
+# (verbatim-guard, claim-drift-guard). Fehlt Node, fallen diese Hooks sonst
+# lautlos aus, ohne dass der Nutzer je einen Hinweis bekommt. Analog zum
+# browser-use-Muster (Abschnitt 3) bricht das Setup deswegen NICHT hart ab —
+# venv, Permissions, Bootstrap, Uni-Profil und SciHub-Opt-in sind
+# node-unabhaengig — sondern warnt nur deutlich mit Installationsweg.
+if ! command -v node &>/dev/null; then
+  echo "⚠️  Node.js nicht gefunden — 5 der 7 Hooks (u. a. verbatim-guard, claim-drift-guard) laufen NICHT."
+  echo "   Installieren: brew install node (macOS) oder https://nodejs.org/"
+else
+  echo "✅ Node.js: gefunden ($(node --version))"
+fi
+
+echo ""
 
 # ---------------------------------------------------------------------------
 # 1. Datenverzeichnis + Python venv
@@ -114,10 +156,25 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 5. Claude-Code-Permissions
+# 5. Claude-Code-Permissions (benutzerweit, nicht projektbezogen)
 # ---------------------------------------------------------------------------
+# configure_permissions.py zeigt die neu zu setzenden Regeln an und schreibt
+# sie erst nach Bestaetigung (Issue #458). Bei nicht-interaktivem stdin
+# (Pipe/CI, u.a. der primaere /setup-Aufruf durch Claude Code) greift der
+# sichere Default: kein Schreiben, Exit-Code bleibt 0 (bricht setup.sh unter
+# 'set -euo pipefail' NICHT ab). In diesem Fall bleiben pending Regeln offen —
+# das wird unten sichtbar gemeldet, inkl. Nachhol-Befehl. commands/setup.md
+# instruiert Claude Code, diesen Fall per AskUserQuestion + '--yes' selbst
+# abzuschliessen.
 
 python3 "$SCRIPT_DIR/configure_permissions.py"
+
+REMAINING_PERMS="$(python3 "$SCRIPT_DIR/configure_permissions.py" --pending-count)"
+if [ "$REMAINING_PERMS" -gt 0 ]; then
+  echo "⚠️  Schritt 5 (Claude-Code-Permissions) nicht abgeschlossen — $REMAINING_PERMS Regel(n) fehlen weiterhin in ~/.claude/settings.local.json."
+  echo "   Nachholen: python3 $SCRIPT_DIR/configure_permissions.py --yes   (schreibt ohne weitere Rueckfrage)"
+  echo "   oder ohne '--yes' interaktiv in einem Terminal ausfuehren."
+fi
 
 # ---------------------------------------------------------------------------
 # 6. Projekt-Bootstrap (Auto-Detect)
@@ -128,7 +185,24 @@ python3 "$SCRIPT_DIR/configure_permissions.py"
 echo ""
 
 # ---------------------------------------------------------------------------
-# 7. SciHub Opt-in (F18)
+# 7. Uni-Profil-Setup (F16.5)
+# ---------------------------------------------------------------------------
+# Mit --uni <profil>: kopiert config/library-profiles/<profil>.yaml nicht-
+# interaktiv nach ~/.academic-research/library-profiles/active.yaml.
+# Ohne --uni: fragt interaktiv (Opt-in), ob jetzt ein Hochschul-Profil gewaehlt
+# werden soll. Bei Opt-out oder nicht-interaktivem stdin (z.B. CI) bleibt das
+# aktive Profil leer/Default, ohne Fehler.
+
+if [ -n "$UNI_PROFILE" ]; then
+  "$BASE/venv/bin/python" "$SCRIPT_DIR/uni_profile_setup.py" --uni "$UNI_PROFILE"
+else
+  "$BASE/venv/bin/python" "$SCRIPT_DIR/uni_profile_setup.py"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 8. SciHub Opt-in (F18)
 # ---------------------------------------------------------------------------
 # Fragt interaktiv, ob der rechtlich umstrittene SciHub-Last-Resort-Tier
 # aktiviert werden soll, und schreibt das Ergebnis als scihub_optin nach

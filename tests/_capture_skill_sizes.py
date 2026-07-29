@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 SKILLS_DIR = Path("skills")
-VENDORED = {"xlsx", "_common"}
+VENDORED = {"_common"}
 data = {}
 for p in sorted(SKILLS_DIR.glob("*/SKILL.md")):
     if p.parent.name not in VENDORED:
