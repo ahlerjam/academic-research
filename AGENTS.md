@@ -1,6 +1,6 @@
 # academic-research — Agent Guide
 
-Claude-Code-Plugin für akademisches Arbeiten: 34 Skills, 21 Agents,
+Claude-Code-Plugin für akademisches Arbeiten: 35 Skills, 21 Agents,
 11 Slash-Commands, MCP-Server `academic_vault/` (SQLite+FTS5+sqlite-vec).
 Details: README.md (lang!), CHANGELOG.md.
 
