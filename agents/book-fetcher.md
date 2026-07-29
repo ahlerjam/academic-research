@@ -20,6 +20,7 @@ tools:
   - "Agent(ebook-central)"
   - "Agent(auth-helper)"
   - "Agent(generic-fetcher)"
+  - "Agent(scihub-fetcher)"
 maxTurns: 8
 ---
 
@@ -169,12 +170,49 @@ nie im Master-Output: du loest ihn immer zu einem der vier Stati unten auf.
 
 ---
 
+## Schritt 6: SciHub-Last-Resort (F18, Issue #459)
+
+**Aktivierungsbedingung:** `generic-fetcher` (Schritt 5) endete NICHT mit
+`success` oder `captcha` (also `pickup_required` oder `no_match`) UND
+`scihub_optin: true` steht im in Schritt 2 gelesenen Profil.
+
+Die Aktivierung haengt **ausschliesslich** an diesem Konfigurationsschluessel.
+Kein `AskUserQuestion`, keine Rueckfrage, keine Bestaetigung zur Laufzeit —
+die Entscheidung ist mit dem Flag bereits getroffen. Ist `scihub_optin` nicht
+gesetzt oder `false`: diesen Schritt vollstaendig ueberspringen,
+`Agent(scihub-fetcher)` wird dann **nie** aufgerufen.
+
+Ist die Bedingung erfuellt, rufe `Agent(scihub-fetcher)` auf:
+
+```json
+{
+  "doi": "<identifier_value, falls identifier_type == doi, sonst weglassen>",
+  "title": "<identifier_value, falls identifier_type != doi, sonst weglassen>",
+  "output_path": "<output_path>"
+}
+```
+
+Trage das Ergebnis in `tries` ein.
+
+- `status: success` → Master-Status `success`, `source: scihub-fetcher`,
+  `file_path` aus der Antwort uebernehmen.
+- `status: captcha` → **SOFORT stoppen**, `{status: captcha, source: scihub-fetcher}`
+  zurueckgeben.
+- `status: no_match` / `opted_out` / `error` → kein Sonderfall. Das bereits
+  ermittelte `pickup_required`-Ergebnis aus Schritt 5 bleibt gueltig.
+
+`scihub-fetcher` taggt erfolgreiche Funde selbst mit `provenance:scihub` im
+Vault (Auditing bleibt vollstaendig erhalten); der Master gibt dieses Tag
+nicht gesondert weiter, es ist ueber `vault.get_paper()` abfragbar.
+
+---
+
 ## Output-Schema (IMMER dieses Format zurueckgeben)
 
 ```json
 {
   "status": "success | pickup_required | captcha | no_match",
-  "source": "<subagent-name der den Endstatus lieferte>",
+  "source": "<subagent-name der den Endstatus lieferte, inkl. scihub-fetcher>",
   "file_path": "<absoluter PDF-Pfad, nur bei success>",
   "reason": "<optionale Beschreibung>",
   "tries": [
@@ -218,6 +256,11 @@ generic-fetcher:
   -- no_match --> status: no_match (kein Treffer in allen Quellen)
   -- auth_required --> auth-helper --> genau ein Retry (mit session_context)
                        --> danach success oder pickup_required
+
+scihub-fetcher (nur wenn scihub_optin: true, sonst uebersprungen):
+  -- success --> status: success
+  -- captcha --> status: captcha (sofort)
+  -- no_match / opted_out / error --> bisheriges pickup_required bleibt gueltig
 ```
 
 ---
@@ -230,3 +273,6 @@ generic-fetcher:
 4. **tries vollstaendig:** Jeder Subagenten-Aufruf (inkl. auth-helper und Retries) erscheint im tries-Array.
 5. **Sofort-Stop bei captcha:** Bei captcha sofort zurueckgeben, nicht weiter versuchen.
 6. **Einmaliger Retry:** Nach auth-helper --> success nur EIN weiterer Versuch pro Verlags-Subagent.
+7. **SciHub nur ueber Flag:** `Agent(scihub-fetcher)` wird ausschliesslich durch
+   `scihub_optin: true` im aktiven Profil gesteuert — kein Laufzeit-Dialog, keine
+   Rueckfrage. Fehlt das Flag oder ist es `false`, bleibt der Schritt komplett aus.

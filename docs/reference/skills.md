@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **30 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **31 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -32,6 +32,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `source-quality-audit` | *„Quellenqualität"*, *„Peer-Review prüfen"* | 5-Dimensionen-Score 0–100 |
 | `citation-extraction` | *„Zitate finden"*, *„Literaturverzeichnis erstellen"* | Citations-API, seitengenau, 8 Formate |
 | `reading-notes` | *„Notiz zu einer Quelle anlegen"*, *„Kernbefund festhalten"* | Strukturiertes Exzerpt (Kernbefund/Methode/Verwendbarkeit) via `vault.add_note()` ([SKILL.md](../../skills/reading-notes/SKILL.md)) |
+| `extraction-matrix` | *„Extraktionsmatrix erstellen"*, *„Studien vergleichen"* | Studienvergleich als Matrix (Zeilen = Quellen, Spalten aus Schlüsselkonzepten + Standardmerkmalen), Tabelle + Arbeitsblatt-Export ([SKILL.md](../../skills/extraction-matrix/SKILL.md)) |
 | `zotero-import` | *„Zotero importieren"*, *„Bibliothek einlesen"* | pyzotero-Pull mit Vault-Dedup |
 | `reading-list-import` | *„Literaturliste importieren"*, *„Quellenliste"* | PDF/Markdown/Text → Vault |
 | `citation-style-import` | *„eigenen Zitierstil"*, *„CSL laden"* | CSL-Repository → Vault-Stilregeln |

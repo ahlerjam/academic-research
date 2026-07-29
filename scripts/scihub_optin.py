@@ -77,8 +77,10 @@ def main() -> int:
     if enabled:
         print(f"✅ SciHub Opt-in: aktiviert (scihub_optin: true in {active})")
         print(
-            '   Hinweis: Bei jedem SciHub-Fund erscheint *"Quelle via SciHub bezogen — '
-            'bitte zusätzlich legalen Zugriff klären."*'
+            "   Hinweis: Die rechtliche Aufklärung (dieser Dialog) erfolgt einmalig hier "
+            "beim Opt-in — läuft der Tier anschließend, geschieht das ohne wiederholte "
+            "Warnhinweise pro Fund. Die Herkunft bleibt im Vault als "
+            "provenance:scihub nachvollziehbar."
         )
     else:
         print(f"ℹ️  SciHub Opt-in: deaktiviert (Default) (scihub_optin: false in {active})")

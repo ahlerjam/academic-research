@@ -10,6 +10,45 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Neuer Skill `extraction-matrix` für die Synthese-Phase (#463):** Zwischen
+  „Quellen gesammelt" und „Kapitel geschrieben" fehlte bisher der Schritt, in
+  dem Befunde über mehrere Studien hinweg vergleichbar gemacht werden. Der
+  neue Skill leitet die Spalten der Extraktionsmatrix aus den
+  Schlüsselkonzepten in `academic_context.md` ab, ergänzt um die
+  Standardmerkmale Methode, Stichprobe, Erhebungszeitraum und Kernbefund;
+  die Zeilen kommen aus dem Paper-Inventar in `literature_state.md`. Jede
+  Zelle wird ausschließlich aus vorhandenen `vault.find_notes()`/
+  `vault.find_quotes()`-Belegen befüllt, fehlende Angaben werden explizit als
+  `— fehlend —` markiert statt ergänzt zu werden; Quellen ganz ohne Notiz
+  oder Zitat bleiben als eigene Zeile mit „Grundlage fehlt"-Hinweis sichtbar
+  statt zu verschwinden. Ausgabe als Markdown-Tabelle zur Übernahme in
+  `kapitel/literatur.md` sowie als Arbeitsblatt über den externen
+  `document-skills:xlsx`-Skill (Verfügbarkeitsprüfung + Fallback-Hinweis,
+  gleiches Muster wie `commands/excel.md`). Statistische Auswertung oder
+  Interpretation der Matrix bleibt explizit out of scope (Meta-Analyse-Pfad).
+  Skill-Zähler 30 → 31 in `docs/reference/skills.md`, `README.md` und
+  `.claude-plugin/plugin.json`.
+
+- **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
+  `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,
+  war aber in keinem Orchestrator-Pfad erreichbar — `agents/book-fetcher.md`
+  kannte kein `Agent(scihub-fetcher)` (Luecke bestand bereits seit F18/#161).
+  Neuer Schritt 6 in `book-fetcher.md` dispatcht `scihub-fetcher` als
+  Last-Resort nach `generic-fetcher`, ausschließlich gesteuert durch
+  `scihub_optin: true` im aktiven Uni-Profil — kein Laufzeit-Dialog, keine
+  Rueckfrage; fehlt das Flag, wird der Agent nie aufgerufen. Der bislang bei
+  jedem erfolgreichen Fund ausgegebene Warnhinweis in `scihub-fetcher.md`
+  entfaellt; die rechtliche Aufklaerung bleibt einmalig beim Opt-in
+  (`commands/setup.md` Schritt 8) bestehen, erfolgreiche Funde setzen nur noch
+  das Vault-Tag `provenance:scihub`. `commands/fetch.md` schreibt das
+  `Quelle`-Feld nicht mehr in den `literature_state.md`-Block, den
+  `chapter-writer` und `citation-extraction` als Kontext lesen duerfen — beide
+  Skills erhalten zusaetzlich eine explizite Provenance-Blindheits-Regel
+  ("Wichtige Regeln"), damit der Beschaffungskanal Zitierweise und
+  Textbehandlung nie beeinflusst. Die Herkunft bleibt vollstaendig im Vault
+  nachvollziehbar (`vault.get_paper()`, `vault.list_papers_by_provenance()`,
+  Anschluss an #195). Neu: `tests/test_issue_459_scihub_wiring.py`.
+
 - **`/history` verdrahtet den Sitzungs-Index tatsächlich (#466):** Neues Modul
   `scripts/session_index.py` kapselt Lesen/Schreiben/Filtern/Wiederherstellen
   von `~/.academic-research/session_index.json` — bisher schrieb keine Stelle
