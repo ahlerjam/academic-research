@@ -55,8 +55,11 @@ def _command_subsection(section_text: str, name: str) -> str:
     return rest[:end]
 
 
-def test_all_nine_commands_present_in_commands_dir() -> None:
-    """Sanity: genau die im Issue genannten 9 Commands existieren."""
+def test_all_commands_present_in_commands_dir() -> None:
+    """Sanity: die im Issue #209 genannten 9 Commands plus spaetere Neuzugaenge.
+
+    Urspruenglich (#209) exakt 9 Commands; #446 fuegt `word`/`slides` hinzu.
+    """
     assert set(ALL_COMMANDS) == {
         "excel",
         "fetch",
@@ -67,6 +70,8 @@ def test_all_nine_commands_present_in_commands_dir() -> None:
         "score",
         "search",
         "setup",
+        "word",
+        "slides",
     }, f"Unerwartete Command-Liste: {ALL_COMMANDS}"
 
 

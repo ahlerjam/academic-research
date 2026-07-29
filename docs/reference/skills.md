@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **29 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **31 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -65,6 +65,8 @@ Diese Skills sind per Default aus. Sie laufen erst, wenn im Projekt-State der pa
 | `conference-poster` | *„Poster"*, *„Konferenz-Poster"* | A0-Poster (LaTeX tikzposter / PowerPoint) |
 | `reviewer-response` | *„Response-Letter"*, *„Reviewer-Kommentare"* | Point-by-point Response |
 | `latex-export` | *„Thesis als .tex"*, *„Kapitel exportieren"*, *„BibTeX aus Vault"* | Markdown-Kapitel → `.tex` (Pandoc/Custom) + `.bib` aus Vault (biblatex, DIN-1505) ([SKILL.md](../../skills/latex-export/SKILL.md)) |
+| `word-export` | *„Kapitel als Word exportieren"*, *„Thesis als .docx"*, *„Abgabe als PDF"* | Markdown-Kapitel + Vault-Bibliografie → `.docx` mit echten Formatvorlagen (Titelblatt, Verzeichnisse, eidesstattliche Erklärung), optional PDF ([SKILL.md](../../skills/word-export/SKILL.md)) |
+| `slide-export` | *„Foliensatz erstellen"*, *„Kolloquium-Präsentation"*, *„Konferenz-Slides"* | Markdown-Kapitel → `.pptx` mit einer Kernaussage pro Folie ([SKILL.md](../../skills/slide-export/SKILL.md)) |
 | `notebook-bundle` | *„NotebookLM Bundle"*, *„PDF-Bundle exportieren"*, *„Riesen-PDF aufteilen"* | Konkateniertes PDF (Cover + TOC) der Paper für NotebookLM-Upload ([SKILL.md](../../skills/notebook-bundle/SKILL.md)) |
 | `cluster-visualizer` | *„zeige Cluster"*, *„visualisiere"*, *„Mindmap"*, *„Netzwerk der Quellen"* | Cluster-JSON → Mermaid-`graph-LR`-Diagramm, optional PNG via mmdc ([SKILL.md](../../skills/cluster-visualizer/SKILL.md)) |
 
@@ -84,9 +86,11 @@ Plugin-Abhängigkeit mitgezogen (`dependencies` in `.claude-plugin/plugin.json`)
 | Skill | Herkunft | Zweck |
 |-------|----------|-------|
 | `document-skills:xlsx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Excel-Erzeugung für `/academic-research:excel` und `/academic-research:pickup` |
+| `document-skills:docx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Word-Erzeugung für `/academic-research:word` (`word-export`-Skill) |
+| `document-skills:pptx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Foliensatz-Erzeugung für `/academic-research:slides` (`slide-export`-Skill) |
 
-Fehlt die Abhängigkeit, melden beide Commands den Nachinstallations-Weg, statt einen
-Tool-Fehler durchzureichen:
+Fehlt die Abhängigkeit, melden die jeweiligen Commands den Nachinstallations-Weg,
+statt einen Tool-Fehler durchzureichen:
 
 ```bash
 claude plugin marketplace add anthropics/skills
