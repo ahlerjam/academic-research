@@ -1,0 +1,93 @@
+name: Eval-Behavior (manuell, real)
+
+# Separat auslösbarer Lauf fuer die Verhaltens-Evals unter tests/evals/ (Issue #470).
+# Bewusst NICHT auf push/pull_request verdrahtet: die API-gateten Evals kosten
+# echtes Anthropic-Budget (~400 Aufrufe pro Vollauf, vgl. docs/evals/STRATEGY.md
+# Abschnitt "API-Budget") und sollen nicht bei jedem Commit laufen (Issue-Scope
+# "Out"). ci.yml bleibt unangetastet -- der reguläre `pytest tests/`-Lauf dort
+# ruft tests/evals/ weiterhin ohne ANTHROPIC_API_KEY auf und skippt die
+# API-gateten Faelle wie bisher.
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: >-
+          Optional: nur Tests filtern, deren Name dieses Muster enthaelt
+          (pytest -k), z.B. ein einzelner evals/-Komponentenname. Leer = alle
+          Verhaltens-Evals unter tests/evals/.
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-behavior-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  eval-behavior:
+    name: Verhaltens-Evals real ausfuehren
+    runs-on: ubuntu-latest
+    # Harter Budget-Deckel (Issue #470 AC2): ein Vollauf (~400 API-Aufrufe,
+    # ueberwiegend Haiku-Trigger-Klassifikation) braucht in der Praxis wenige
+    # Minuten; 30 Minuten sind ein grosszuegiger, aber endlicher Deckel gegen
+    # einen haengenden Lauf, der sonst unbegrenzt Budget verbrennen wuerde.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          python-version: "3.12"
+
+      - name: Vorbedingung -- ANTHROPIC_API_KEY muss gesetzt sein
+        # Kein taeuschend gruener All-Skip-Lauf (das genaue Problem, das #470
+        # behebt): fehlt das Secret, bricht der Job sichtbar ab statt
+        # "0 failed, N skipped" als Erfolg zu melden.
+        env:
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: |
+          set -euo pipefail
+          if [ "${HAS_KEY}" != "true" ]; then
+            echo "::error::ANTHROPIC_API_KEY ist nicht als Repo-Secret hinterlegt. Dieser Lauf wuerde sonst taeuschend gruen durchlaufen (0 real geprueft, N geskippt) -- genau das Muster, das Issue #470 behebt. Secret ist Operator-Entscheidung (docs/evals/STRATEGY.md, Abschnitt API-Budget)."
+            exit 1
+          fi
+
+      - name: pytest tests/evals/ (real, mit API-Key)
+        id: run_evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -o pipefail
+          FILTER="${{ inputs.component }}"
+          if [ -n "${FILTER}" ]; then
+            uv run pytest tests/evals/ -k "${FILTER}" -v \
+              --junitxml=eval-results.xml 2>&1 | tee eval-output.log
+          else
+            uv run pytest tests/evals/ -v \
+              --junitxml=eval-results.xml 2>&1 | tee eval-output.log
+          fi
+
+      - name: Ergebnis nach GITHUB_STEP_SUMMARY schreiben
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "## Verhaltens-Evals -- Ergebnis" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          if [ -f eval-results.xml ]; then
+            python3 scripts/dev/summarize_eval_junit.py eval-results.xml >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**eval-results.xml wurde nicht erzeugt -- Lauf ist vorzeitig abgebrochen.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Ergebnis-Artefakte hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-behavior-results
+          path: |
+            eval-results.xml
+            eval-output.log
+          retention-days: 30
+          if-no-files-found: warn
