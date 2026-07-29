@@ -1,0 +1,25 @@
+{
+  "component": "reading-notes",
+  "should_trigger": [
+    "Ich lese gerade diese Quelle -- leg mir dazu eine Notiz an.",
+    "Erstell ein Exzerpt fuer dieses Paper: Kernbefund, Methode, Verwendbarkeit.",
+    "Halt den Kernbefund dieser Studie fest.",
+    "Fasse diese Quelle zusammen und ordne sie fuer meine Arbeit ein.",
+    "Was hatte ich mir zu dieser Studie schon notiert?",
+    "Durchsuche meine Notizen zu diesem Paper nach Stichprobengroesse.",
+    "Leg eine Notiz zu dieser Quelle auf Seite 42 an.",
+    "Schreib mir ein strukturiertes Exzerpt zu diesem Artikel."
+  ],
+  "should_not_trigger": [
+    "Extrahiere ein woertliches Zitat aus dem PDF.",
+    "Schreibe das Einleitungskapitel.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Erstelle das Literaturverzeichnis.",
+    "Pruefe meinen Text auf Plagiate.",
+    "Welches Thema soll ich fuer die Arbeit nehmen?",
+    "Exportiere die Kapitel nach LaTeX.",
+    "Baue ein PRISMA-Flussdiagramm.",
+    "Generiere einen Titelvorschlag.",
+    "Erstelle ein Konferenz-Poster."
+  ]
+}

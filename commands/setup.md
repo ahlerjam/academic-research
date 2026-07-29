@@ -74,7 +74,7 @@ Das Skript übernimmt in acht Schritten:
    ```
 
    - **`N` (Default):** `scihub_optin: false` in `~/.academic-research/library-profiles/active.yaml` — SciHub bleibt deaktiviert.
-   - **`j`:** `scihub_optin: true` — SciHub wird als letzter Fallback in der Fetch-Pipeline aktiviert. Bei jedem SciHub-Fund erscheint der Hinweis: *"Quelle via SciHub bezogen — bitte zusätzlich legalen Zugriff klären."*
+   - **`j`:** `scihub_optin: true` — SciHub wird als letzter Fallback in der Fetch-Pipeline aktiviert. Die rechtliche Aufklärung (dieser Dialog) erfolgt einmalig hier beim Opt-in — läuft der Tier anschließend, geschieht das ohne wiederholte Warnhinweise pro Fund. Die Herkunft bleibt im Vault als `provenance:scihub` nachvollziehbar.
 
 ## Interpretation der Ausgabe
 

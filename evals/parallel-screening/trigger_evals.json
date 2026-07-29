@@ -1,0 +1,25 @@
+{
+  "component": "parallel-screening",
+  "should_trigger": [
+    "Screene diese 22 Treffer gegen meine Einschlusskriterien.",
+    "Kannst du das Screening parallelisieren? Das dauert sonst ewig.",
+    "Entscheide fuer alle Treffer aus der Suche Ein- oder Ausschluss.",
+    "Mach eine Verzerrungsbewertung fuer diese acht Studien.",
+    "Risk-of-Bias fuer mehrere Paper auf einmal, bitte.",
+    "Das Screening ist gestern abgebrochen -- setz da fort, wo es aufgehoert hat.",
+    "Wie viele Agents laufen beim Screening gleichzeitig?",
+    "Welche Treffer konntest du nicht entscheiden?"
+  ],
+  "should_not_trigger": [
+    "Schreibe das Methodikkapitel.",
+    "Rendere mir das PRISMA-Flussdiagramm.",
+    "Formuliere meine Forschungsfrage praeziser.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Extrahiere ein woertliches Zitat aus diesem PDF.",
+    "Pruefe meinen Text auf Plagiate.",
+    "Erstelle ein Konferenz-Poster.",
+    "Exportiere die Kapitel nach LaTeX.",
+    "Erstelle eine Extraktionsmatrix ueber meine Quellen.",
+    "Generiere einen Titelvorschlag fuer die Arbeit."
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "component": "extraction-matrix",
+  "should_trigger": [
+    "Erstell mir eine Extraktionsmatrix aus meinen Vault-Quellen.",
+    "Ich will meine Studien tabellarisch vergleichen.",
+    "Stell mir eine Merkmalstabelle aus meinen Quellen zusammen.",
+    "Gegenueberstellung der Kernbefunde all meiner Papers als Tabelle bitte.",
+    "Baue eine Datenextraktionstabelle fuer die Synthese-Phase.",
+    "Vergleiche Methode und Stichprobe ueber alle meine Quellen hinweg.",
+    "Ich brauche eine Uebersichtstabelle: Quelle mal Schluesselkonzept.",
+    "Exportiere die Extraktionsmatrix als Arbeitsblatt."
+  ],
+  "should_not_trigger": [
+    "Leg mir eine Notiz zu dieser einen Quelle an.",
+    "Extrahiere ein woertliches Zitat aus dem PDF.",
+    "Welche Themen fehlen noch in meiner Literaturbasis?",
+    "Baue ein PRISMA-Flussdiagramm.",
+    "Schreibe das Einleitungskapitel.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Pruefe meinen Text auf Plagiate.",
+    "Welches Thema soll ich fuer die Arbeit nehmen?",
+    "Wie gut ist die Qualitaet dieser einzelnen Quelle?",
+    "Erstelle das Literaturverzeichnis."
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "component": "reading-notes",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "rn-01",
+      "input": "Welche drei Felder haelt eine Notiz mit diesem Skill fest?",
+      "expected": {"type": "regex", "value": "Kernbefund.*Methode.*Verwendbarkeit"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "rn-02",
+      "input": "Muss ich dir die Seitenzahl fuer eine Notiz angeben?",
+      "expected": {"type": "regex", "value": "(nein|nicht|optional|freiwillig)"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "rn-03",
+      "input": "Ist eine Notiz aus diesem Skill dasselbe wie ein woertliches Zitat?",
+      "expected": {"type": "regex", "value": "(nein|nicht|eigene[n]? Worte|citation-extraction)"},
+      "mode": "with_skill"
+    }
+  ]
+}

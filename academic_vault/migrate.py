@@ -338,6 +338,62 @@ def add_v64_tables(db_path: str) -> None:
         conn.close()
 
 
+def add_note_page_column(db_path: str) -> None:
+    """Fuegt die page-Spalte zu notes hinzu. Idempotent (try/except). (#462)
+
+    Optionale Seitenangabe eines Exzerpts. Default NULL fuer bestehende
+    Notizen -- eine Seitenangabe ist nie Pflicht (AC2). Aufruf-Sicher: kann
+    mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute("ALTER TABLE notes ADD COLUMN page INTEGER")
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_notes_fts(db_path: str) -> None:
+    """Legt notes_fts an (falls fehlend) und zieht Bestandsnotizen nach. (#462)
+
+    ``schema.sql`` legt ``notes_fts`` bereits bei jedem ``init_schema()``-Lauf
+    an (``CREATE VIRTUAL TABLE IF NOT EXISTS``), aber die Trigger
+    ``notes_ai``/``notes_au`` befuellen den Index nur fuer INSERTs/UPDATEs
+    *nach* ihrer Erstellung -- Notizen, die schon vor der notes_fts-Einfuehrung
+    in ``notes`` lagen, blieben sonst dauerhaft unsichtbar fuer
+    ``vault.search_notes()`` (AC4). Der Backfill hier ist idempotent (per
+    ``NOT IN`` werden bereits indizierte note_ids uebersprungen), daher
+    unproblematisch bei wiederholtem Aufruf ueber das Versions-Gate.
+    Aufruf-Sicher: kann mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts "
+                "USING fts5(note_id, paper_id, text, tags)"
+            )
+            conn.execute(
+                """
+                INSERT INTO notes_fts (note_id, paper_id, text, tags)
+                SELECT note_id, paper_id, text, tags FROM notes
+                WHERE note_id NOT IN (SELECT note_id FROM notes_fts)
+                """
+            )
+            conn.commit()
+        except _sqlite3.OperationalError:
+            pass  # notes_fts fehlt/notes-Tabelle fehlt -- idempotent uebersprungen
+    finally:
+        conn.close()
+
+
 def apply_pending_migrations(db_path: str) -> None:
     """Buendelt die bekannten additiven Bestands-Migrationshelfer (Issue #368).
 
@@ -357,6 +413,8 @@ def apply_pending_migrations(db_path: str) -> None:
     add_figures_table(db_path)
     add_v64_tables(db_path)
     add_stance_column(db_path)
+    add_note_page_column(db_path)
+    add_notes_fts(db_path)
 
 
 def add_chunk_vectors_table(db_path: str) -> int:

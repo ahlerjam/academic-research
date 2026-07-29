@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import functools
 import json
 import logging
 import os
@@ -124,6 +125,17 @@ ARXIV_NS = "http://www.w3.org/2005/Atom"
 # Schleife unbegrenzt paginiert.
 OAI_MAX_PAGES = 5  # max. resumptionToken-Runden (inkl. Erstabfrage)
 OAI_MAX_RECORDS = 1000  # max. insgesamt geparste Records pro Fallback
+
+# Zeitbudgets fuer den Gesamtlauf und den EconStor-OAI-PMH-Fallback (#465):
+# eine einzelne langsame Quelle darf den ganzen Suchlauf nicht mehr um
+# Minuten verzoegern. DEFAULT_TIME_BUDGET_S gilt fuer run_search() ueber
+# alle Module hinweg; ECONSTOR_FALLBACK_TIME_BUDGET_S ist bewusst enger und
+# greift zusaetzlich, direkt in der resumptionToken-Schleife von
+# search_econstor() -- unabhaengig davon, wie grosszuegig das Gesamtbudget
+# ist. Beide sind ueber CLI-Flags konfigurierbar (--time-budget,
+# --fallback-time-budget).
+DEFAULT_TIME_BUDGET_S = 60.0
+ECONSTOR_FALLBACK_TIME_BUDGET_S = 20.0
 
 log = logging.getLogger(__name__)
 
@@ -424,8 +436,20 @@ def search_econbiz(query: str, limit: int) -> list[dict[str, Any]]:
     return results
 
 
-def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
-    """Search EconStor via REST API with OAI-PMH fallback."""
+def search_econstor(
+    query: str,
+    limit: int,
+    fallback_time_budget: float = ECONSTOR_FALLBACK_TIME_BUDGET_S,
+) -> list[dict[str, Any]]:
+    """Search EconStor via REST API with OAI-PMH fallback.
+
+    Args:
+        query: Search query.
+        limit: Max results.
+        fallback_time_budget: Engeres Zeitbudget (Sekunden) fuer die
+            OAI-PMH-resumptionToken-Schleife (#465) -- unabhaengig vom
+            Mengenlimit OAI_MAX_PAGES/OAI_MAX_RECORDS aus #236.
+    """
     results: list[dict[str, Any]] = []
     with httpx.Client(timeout=TIMEOUT) as client:
         rest_resp = client.get(
@@ -447,7 +471,17 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
             query_lower = query.lower()
             resumption_token: str | None = None
             records_seen = 0
+            deadline = time.monotonic() + fallback_time_budget
             for _ in range(OAI_MAX_PAGES):
+                if time.monotonic() >= deadline:
+                    log.warning(
+                        "Module 'econstor': OAI-PMH fallback skipped remaining pages "
+                        "-- exceeded fallback time budget of %.1fs, returning %d hit(s) "
+                        "so far",
+                        fallback_time_budget,
+                        len(items),
+                    )
+                    break
                 if resumption_token:
                     oai_params: dict[str, str] = {
                         "verb": "ListRecords",
@@ -460,7 +494,11 @@ def search_econstor(query: str, limit: int) -> list[dict[str, Any]]:
                     params=oai_params,
                 )
                 oai_resp.raise_for_status()
-                root = ET.fromstring(oai_resp.text)
+                # Rohe Bytes statt oai_resp.text: httpx dekodiert .text ohne
+                # charset-Angabe im Content-Type immer als UTF-8 -- Expat
+                # wertet dagegen die <?xml ... encoding="..."?>-Deklaration
+                # im Prolog selbst aus (Issue #464 AC1).
+                root = ET.fromstring(oai_resp.content)
                 page_done = False
                 for record in root.findall(".//oai:record", ns):
                     if records_seen >= OAI_MAX_RECORDS or len(items) >= limit:
@@ -565,7 +603,9 @@ def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
     with httpx.Client(timeout=TIMEOUT) as client:
         resp = client.get(url, params=params)
         resp.raise_for_status()
-    root = ET.fromstring(resp.text)
+    # Rohe Bytes statt resp.text (Issue #464 AC1, siehe Kommentar oben bei
+    # search_econstor).
+    root = ET.fromstring(resp.content)
     results: list[dict[str, Any]] = []
     for entry in root.findall(f"{{{ARXIV_NS}}}entry"):
         try:
@@ -628,12 +668,23 @@ MODULES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
 # ---------------------------------------------------------------------------
 
 
-def _run_module(module_name: str, query: str, limit: int) -> tuple[str, list[dict[str, Any]], bool]:
-    """Run one search module, return (name, papers, failed)."""
+def _run_module(
+    module_name: str,
+    query: str,
+    limit: int,
+    fn: Callable[[str, int], list[dict[str, Any]]] | None = None,
+) -> tuple[str, list[dict[str, Any]], bool]:
+    """Run one search module, return (name, papers, failed).
+
+    `fn` overrides the MODULES-registry lookup -- used by run_search() to
+    bind a narrower fallback_time_budget onto search_econstor() (#465)
+    without changing the generic (str, int) -> list[dict] module signature.
+    """
+    fn = fn or MODULES[module_name]
     max_attempts = 3 if module_name == "semantic_scholar" else 1
     for attempt in range(max_attempts):
         try:
-            return module_name, MODULES[module_name](query, limit), False
+            return module_name, fn(query, limit), False
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429 and attempt < max_attempts - 1:
                 delay = 2**attempt * 2
@@ -648,11 +699,26 @@ def _run_module(module_name: str, query: str, limit: int) -> tuple[str, list[dic
     return module_name, [], True
 
 
+def _module_fn(
+    module_name: str, fallback_time_budget: float | None
+) -> Callable[[str, int], list[dict[str, Any]]] | None:
+    """Bind a narrower OAI-PMH fallback budget onto search_econstor(), if
+    requested (#465). Returns None (= use the MODULES-registry default) for
+    every other module or when no override is requested."""
+    if module_name == "econstor" and fallback_time_budget is not None:
+        return functools.partial(search_econstor, fallback_time_budget=fallback_time_budget)
+    return None
+
+
 def run_search(
     query: str,
     modules: list[str],
     limit: int = 50,
     queries_map: dict[str, str] | None = None,
+    *,
+    time_budget: float | None = None,
+    fallback_time_budget: float | None = None,
+    skipped_out: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Run search across multiple modules in parallel.
 
@@ -661,22 +727,69 @@ def run_search(
         modules: List of module names to search.
         limit: Max results per module.
         queries_map: Optional module-specific queries (from query-generator).
+        time_budget: Optional overall wall-clock budget in seconds (#465).
+            Default None reproduces the old, unbounded blocking behaviour --
+            existing callers (e.g. anchor_paper.py) that don't pass this
+            keyword are unaffected. Modules still running when the budget
+            elapses are reported via `skipped_out`, not `failed`.
+        fallback_time_budget: Optional narrower budget forwarded to
+            search_econstor()'s OAI-PMH resumptionToken loop.
+        skipped_out: Optional output list; module names skipped due to
+            `time_budget` are appended here. Kept separate from the return
+            value so the 2-tuple return signature stays unchanged (call
+            sites like anchor_paper.py unpack `raw_hits, failed = ...`).
 
     Returns:
         Tuple of (all_papers, failed_modules).
     """
     all_results: list[dict[str, Any]] = []
     failed: list[str] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(modules))) as executor:
-        futures = []
+
+    if time_budget is None:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(modules))) as executor:
+            futures = []
+            for m in modules:
+                q = (queries_map or {}).get(m, query)
+                fn = _module_fn(m, fallback_time_budget)
+                futures.append(executor.submit(_run_module, m, q, limit, fn))
+            for future in concurrent.futures.as_completed(futures):
+                name, papers, did_fail = future.result()
+                all_results.extend(papers)
+                if did_fail:
+                    failed.append(name)
+        return all_results, failed
+
+    # Budget gesetzt: concurrent.futures.wait(..., timeout=...) statt
+    # unbegrenztem as_completed(). Nicht fertige Futures werden NICHT per
+    # .result() abgewartet, sondern als "skipped" gewertet. shutdown(wait=
+    # False, cancel_futures=True) gibt den Aufrufer sofort frei -- ein
+    # `with`-Block wuerde beim Exit shutdown(wait=True) rufen und das Budget
+    # damit wirkungslos machen.
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(modules)))
+    future_to_name: dict[concurrent.futures.Future, str] = {}
+    try:
         for m in modules:
             q = (queries_map or {}).get(m, query)
-            futures.append(executor.submit(_run_module, m, q, limit))
-        for future in concurrent.futures.as_completed(futures):
+            fn = _module_fn(m, fallback_time_budget)
+            future = executor.submit(_run_module, m, q, limit, fn)
+            future_to_name[future] = m
+        done, not_done = concurrent.futures.wait(future_to_name, timeout=time_budget)
+        for future in done:
             name, papers, did_fail = future.result()
             all_results.extend(papers)
             if did_fail:
                 failed.append(name)
+        for future in not_done:
+            name = future_to_name[future]
+            log.warning(
+                "Module '%s' skipped -- exceeded overall time budget of %.1fs",
+                name,
+                time_budget,
+            )
+            if skipped_out is not None:
+                skipped_out.append(name)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
     return all_results, failed
 
 
@@ -692,6 +805,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--queries-file", help="JSON file with module-specific queries")
     parser.add_argument("--output")
+    parser.add_argument(
+        "--time-budget",
+        type=float,
+        default=DEFAULT_TIME_BUDGET_S,
+        help=(
+            "Gesamtzeitbudget in Sekunden ueber alle Module (#465); "
+            f"Default: {DEFAULT_TIME_BUDGET_S}"
+        ),
+    )
+    parser.add_argument(
+        "--fallback-time-budget",
+        type=float,
+        default=ECONSTOR_FALLBACK_TIME_BUDGET_S,
+        help=(
+            "Engeres Zeitbudget in Sekunden fuer den EconStor-OAI-PMH-Fallback "
+            f"(#465); Default: {ECONSTOR_FALLBACK_TIME_BUDGET_S}"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -713,7 +844,16 @@ def main() -> int:
             log.exception("Failed to load queries file")
             return 1
 
-    papers, failed = run_search(args.query, requested, args.limit, queries_map)
+    skipped: list[str] = []
+    papers, failed = run_search(
+        args.query,
+        requested,
+        args.limit,
+        queries_map,
+        time_budget=args.time_budget,
+        fallback_time_budget=args.fallback_time_budget,
+        skipped_out=skipped,
+    )
     papers_per_module = {
         m: sum(1 for p in papers if p.get("source_module") == m) for m in requested
     }
@@ -724,7 +864,20 @@ def main() -> int:
             len(requested),
             ", ".join(sorted(failed)),
         )
-    log.info("Found %d papers (%d modules failed)", len(papers), len(failed))
+    if skipped:
+        log.warning(
+            "%d/%d modules skipped (time budget of %.1fs exceeded): %s",
+            len(skipped),
+            len(requested),
+            args.time_budget,
+            ", ".join(sorted(skipped)),
+        )
+    log.info(
+        "Found %d papers (%d modules failed, %d modules skipped)",
+        len(papers),
+        len(failed),
+        len(skipped),
+    )
 
     output_text = json.dumps(papers, ensure_ascii=False, indent=2)
     if args.output:
@@ -732,6 +885,7 @@ def main() -> int:
         status = {
             "requested_modules": requested,
             "failed_modules": sorted(failed),
+            "skipped_modules": sorted(skipped),
             "papers_per_module": papers_per_module,
         }
         status_path = Path(args.output).with_name(Path(args.output).stem + "_status.json")
@@ -739,8 +893,28 @@ def main() -> int:
     else:
         sys.stdout.write(output_text + "\n")
 
-    return 1 if len(failed) == len(requested) else 0
+    return 1 if len(failed) + len(skipped) >= len(requested) else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit_code = main()
+    # #465/#487: run_search()/main() halten das Zeitbudget zuverlaessig ein,
+    # aber ein regulaeres sys.exit() (bzw. jeder normale Interpreter-Shutdown)
+    # nicht -- concurrent.futures.thread registriert ueber
+    # threading._register_atexit() einen globalen Hook (_python_exit), der
+    # VOR dem Join aller nicht-Daemon-Threads laeuft und dabei ALLE je
+    # gestarteten ThreadPoolExecutor-Worker-Threads joint, unabhaengig davon,
+    # ob executor.shutdown(wait=False, cancel_futures=True) schon aufgerufen
+    # wurde: cancel_futures=True storniert nur noch nicht gestartete Futures,
+    # ein Worker-Thread, der bereits in einem blockierenden Request steckt
+    # (die Quelle, die gerade das Budget gerissen hat), laeuft unveraendert
+    # weiter und haelt so den Prozessexit auf -- der eigentliche, von
+    # commands/search.md abgewartete Aufrufpfad ist genau dieser Prozess,
+    # nicht main() als Python-Funktion. os._exit() umgeht den kompletten
+    # Interpreter-Finalisierungspfad (inkl. dieses Hooks) und terminiert
+    # sofort; stdout/stderr davor flushen, da os._exit() keine Puffer mehr
+    # schreibt (main() hat alle Ausgaben zu diesem Zeitpunkt bereits per
+    # sys.stdout.write()/save_json()s mit-with-geschlossenem open() erledigt).
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_exit_code)

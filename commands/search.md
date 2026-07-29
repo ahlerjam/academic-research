@@ -68,9 +68,18 @@ Ausgabe nach `$SESSION_DIR/queries.json` speichern.
 
 Neben `api_results.json` schreibt `search.py` seit #456 zusätzlich eine Sidecar-Statusdatei
 `$SESSION_DIR/api_results_status.json` (`requested_modules`, `failed_modules`,
-`papers_per_module`). Fällt eine Quelle ganz oder teilweise aus, steht sie dort explizit in
-`failed_modules` — bei Bedarf im Ergebnis-Digest erwähnen, statt eine leere/kleinere Trefferzahl
-kommentarlos hinzunehmen.
+`skipped_modules`, `papers_per_module`). Fällt eine Quelle ganz oder teilweise aus, steht sie
+dort explizit in `failed_modules` — bei Bedarf im Ergebnis-Digest erwähnen, statt eine
+leere/kleinere Trefferzahl kommentarlos hinzunehmen.
+
+Seit #465 hat der Gesamtlauf zusätzlich ein Zeitbudget: `--time-budget SEKUNDEN` (Default 60s)
+begrenzt die Wartezeit über alle Module hinweg — eine Quelle, die das Budget überschreitet, wird
+abgebrochen, ihre bis dahin gefundenen Treffer bleiben verloren (nicht: der ganze Lauf), und sie
+erscheint in `skipped_modules` statt in `failed_modules` (getrennte Kennzeichnung: Zeitüberschreitung
+ist kein Fehler der Quelle). `--fallback-time-budget SEKUNDEN` (Default 20s) begrenzt zusätzlich enger
+den EconStor-OAI-PMH-Fallback (der REST-Endpunkt liefert aktuell durchgehend HTTP 405, der Fallback
+läuft also praktisch bei jedem EconStor-Aufruf). Beide Flags sind optional; ohne sie greifen die
+Default-Werte automatisch.
 
 ### Schritt 4: Browser-Suche (standard-/deep-Modus, falls nicht `--no-browser`)
 
@@ -165,6 +174,16 @@ save_prisma_counters('$SESSION_DIR', counters)
 
 Die Zähler werden in `$SESSION_DIR/prisma_counters.json` gespeichert.
 
+Lief das Screening über den `parallel-screening`-Skill, sind die Zähler bereits
+im Ledger protokolliert — dann statt der Handzählung:
+
+```bash
+~/.academic-research/venv/bin/python \
+  ${CLAUDE_PLUGIN_ROOT}/skills/parallel-screening/scripts/screening_ledger.py \
+  counters --session-dir "$SESSION_DIR" --n-identified "${N_IDENTIFIED}" \
+  > "$SESSION_DIR/prisma_counters.json"
+```
+
 ### Schritt 8: Relevanz-Scoring (Standard vs. Batch)
 
 **Standard (< 50 Paper oder kein `--batch`):**  
@@ -190,7 +209,37 @@ print('Abholung via: /history --batch', job['batch_id'])
 Job-ID wird in `$SESSION_DIR/batch.json` gespeichert. Abholung über
 `/history --batch <id>` (sobald Batch-Status `ended` ist, ca. 1 h).
 
-### Schritt 9: Interactive Mode — Phase 1 (nur bei `--interactive`)
+### Schritt 9: Session-Index aktualisieren
+
+Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
+im Index unter `~/.academic-research/session_index.json` fortgeschrieben
+(Upsert per Session-Pfad). Der Index liegt bewusst **nicht** unter
+`~/.academic-research/sessions/` — dieses Verzeichnis lesen `score.md`/
+`excel.md` per `ls -t ... | head -1`, und eine Geschwisterdatei dort würde
+als jeweils zuletzt beschriebene Datei jeden echten Sitzungsordner dauerhaft
+überholen (PR #486 Review, #466):
+
+```bash
+~/.academic-research/venv/bin/python -c "
+import sys
+sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts')
+from session_index import DEFAULT_INDEX_PATH, build_session_entry, update_session_index
+entry = build_session_entry(
+    '$SESSION_DIR',
+    query='$QUERY',
+    mode='$MODE',
+    n_hits=${N_HITS},
+)
+update_session_index(DEFAULT_INDEX_PATH, entry)
+"
+```
+
+`N_HITS` ist die Anzahl der final in `$SESSION_DIR/papers.json` (bzw. bei
+laufendem Batch-Job in `$SESSION_DIR/ranked.json`) enthaltenen Paper. Die
+Anzahl beschaffter Volltexte wird automatisch aus `$SESSION_DIR/pdfs/*.pdf`
+gezählt.
+
+### Schritt 10: Interactive Mode — Phase 1 (nur bei `--interactive`)
 
 Falls `--interactive=off` (Standard): diesen Schritt überspringen.
 
@@ -218,7 +267,7 @@ Optionen:
 
 Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
 
-### Schritt 10: Ergebnisse anzeigen
+### Schritt 11: Ergebnisse anzeigen
 
 Eine formatierte Tabelle mit Rang, Titel, Jahr, Score, Cluster und Quellmodul ausgeben.
 Pfad des Session-Verzeichnisses melden.
