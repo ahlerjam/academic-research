@@ -90,7 +90,7 @@
         "path": "$.status",
         "check": "equals:success"
       },
-      "notes": "Verifiziert (browser-use, isolierte Session, 29.07.2026, keine Zugangsdaten): Buchseite cambridge.org/core/product/identifier/9781316161012/type/book zeigt 'Open Access'-Badge; der 'Full book PDF'-Link liefert ein echtes, vollstaendiges 228-Seiten-PDF (Martin Paul Eve, 'Open Access and the Humanities', CUP 2014, CC-BY-SA) ohne Login. Discovery-/Download-Flow deckungsgleich mit agents/cambridge-core.md nachvollzogen. Fix-Runde PR #500: ersetzt die vorherige, nie ausgefuehrte Existenzpruefung durch den real belegten Zielwert."
+      "notes": "Live belegt (2026-07-29, anonym, ohne Zugangsdaten): Die DOI 10.1017/CBO9781316161012 loest auf die Buchseite auf; der dort woertlich als 'Full book PDF' ausgezeichnete Link liefert HTTP 200, application/pdf, 2.576.510 Bytes, 228 Seiten (mit pypdf geoeffnet, nicht geschaetzt). Seite 1 nennt dieselbe DOI und bindet das PDF an diesen Fall. Vollstaendige URL-Kette und SHA-256 in evals/publisher-fetchers/live-verification.json (Lauf 'cambridge-core'); nachfahrbar mit RUN_LIVE_PUBLISHER_FETCH=1 uv run pytest tests/test_issue_449_live_fetch.py."
     },
     {
       "id": "pf-07",
@@ -105,7 +105,7 @@
         "path": "$.status",
         "check": "equals:success"
       },
-      "notes": "KORRIGIERT (Fix-Runde PR #500): die urspruengliche DOI 10.1093/oso/9780190247249.001.0001 fuehrte real zu 'Philosophies of Qualitative Research' (Leavy, Hrsg.) -- ein regulaeres, bezahlpflichtiges OSO-Buch ohne jedes OA-/Free-/Unlocked-Badge, keine Commit-to-Open-Publikation. Ersetzt durch einen ueber die offizielle Titelliste academic.oup.com/commit-to-open/pages/collections verifizierten realen Commit-to-Open-Titel: 'Praiseworthiness: The Lighter Side of Moral Responsibility' (Zoe Johnson King, OUP, veroeffentlicht 06.11.2025), academic.oup.com/book/61726. Verifiziert (browser-use, isolierte Session, 29.07.2026, keine Zugangsdaten): direkter PDF-Download liefert ein echtes, vollstaendiges 225-Seiten-PDF ohne Login -- Discovery-/Download-Flow deckungsgleich mit agents/oxford-academic.md nachvollzogen."
+      "notes": "DOI korrigiert (Fix-Runde PR #500): Die urspruengliche 10.1093/oso/9780190247249.001.0001 gehoert real zu 'Philosophies of Qualitative Research' (Svend Brinkmann, 2017), einem kostenpflichtigen OSO-Buch ohne OA-Badge — gegengeprueft ueber Crossref-Content-Negotiation, also unabhaengig von der Verlagsseite. Ersetzt durch 'Praiseworthiness: The Lighter Side of Moral Responsibility' (Zoe Johnson King, OUP 2025, cc-by-nc-nd). Live belegt (2026-07-29, anonym): HTTP 200, application/pdf, 11.420.088 Bytes, 225 Seiten; Seite 1 traegt Oxfords eigenen Stempel 'Downloaded from https://academic.oup.com/book/61726 by guest' — 'by guest' belegt den Bezug ohne Login. Details in live-verification.json (Lauf 'oxford-academic')."
     },
     {
       "id": "pf-08",
@@ -120,7 +120,7 @@
         "path": "$.status",
         "check": "equals:captcha"
       },
-      "notes": "Verifiziert (browser-use, isolierte Session, 29.07.2026, keine Zugangsdaten): jstor.org/content/oa_book_edited/10.1525/j.ctt1kc6k3q zeigt echte 'OPEN ACCESS'-Badges je Kapitel; der direkte Zugriff auf den PDF-Endpunkt (jstor.org/stable/pdf/10.1525/j.ctt1kc6k3q.1.pdf) loeste jedoch beim allerersten Request JSTORs reCAPTCHA 'Access Check' aus (Block-Referenz #54030350-8b3b-11f1-9e43-eab9a1861140, IP 147.161.231.116, 29.07.2026 10:50 UTC) -- JSTORs aggressive Bot-Erkennung damit empirisch bestaetigt statt nur behauptet. status:captcha ist hier der belegte, erwartete Zielwert (AC1-Alternative), nicht success -- konsistent mit dem in agents/jstor.md dokumentierten hohen Anti-Scraping-Risiko."
+      "notes": "Live belegt (2026-07-29, anonym): Der direkte Zugriff auf den Volltext-Endpunkt beantwortet JSTOR schon beim ersten Request mit HTTP 403 und der Bot-Challenge 'JSTOR: Access Check' (PerimeterX, Marker px-captcha-error + reCAPTCHA im DOM). Die Seite selbst ist als Fixture eingecheckt (tests/fixtures/publisher_fetchers/jstor_access_check.html) und wird in tests/test_issue_449_fetcher_evidence.py gegen die Captcha-Erkennung des Repos gefahren — die Tatsache wird geprueft, nicht die Formulierung. Bewusst NICHT als Beleg gefuehrt: Block-Referenz, VID, IP und Uhrzeit der Challenge-Seite; sie sind pro Request neu (zwei Abrufe im Sekundenabstand ergaben zwei verschiedene Block-Referenzen) und darum von niemandem nachpruefbar. Da about.jstor.org/terms automatisiertes Herunterladen ausdruecklich untersagt, meldet agents/jstor.md ehrlich status:captcha, statt die Challenge zu umgehen — die von AC1 zugelassene Alternative 'dokumentiert belegt, warum das technisch nicht moeglich ist'."
     }
   ]
 }

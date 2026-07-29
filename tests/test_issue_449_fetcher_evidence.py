@@ -1,102 +1,226 @@
 """
-Regressionstest fuer die Fix-Runde zu PR #500 (Issue #449).
+Beleg-Kopplung fuer die drei neuen Verlags-Fetcher (Issue #449, PR #500).
 
-Review-Fund: Die Eval-Cases pf-06/07/08 (cambridge-core/oxford-academic/jstor)
-pruefen nur, dass ein `status`-Feld existiert -- eine triviale Aussage, die auch
-von `no_match`/`captcha` erfuellt wird. Zudem verwies pf-07 auf eine DOI, die
-tatsaechlich zu einem regulaeren, bezahlpflichtigen Oxford-Academic-Buch fuehrt
-(keine Commit-to-Open-OA-Publikation) -- das Gegenteil dessen, was die Notiz
-behauptete.
+Diese Datei ist das Ergebnis zweier Review-Runden, und die zweite ist der
+eigentliche Grund fuer ihre heutige Form.
 
-Nach echter, manueller Verifikation via browser-use (29.07.2026, isolierte
-Session, keine Zugangsdaten) haelt dieser Test die konkreten, belegten
-Erwartungswerte fest:
-- cambridge-core (pf-06): OA-Badge + "Full book PDF" liefert ein echtes,
-  vollstaendiges 228-Seiten-PDF ohne Login -> erwartet: success.
-- oxford-academic (pf-07): DOI korrigiert auf einen verifizierten realen
-  Commit-to-Open-Titel (academic.oup.com/commit-to-open/pages/collections);
-  direkter PDF-Download (225 Seiten) ohne Login -> erwartet: success.
-- jstor (pf-08): direkter Zugriff auf den PDF-Endpunkt loeste beim allerersten
-  Request JSTORs reCAPTCHA "Access Check" aus (Block-Referenz
-  #54030350-8b3b-11f1-9e43-eab9a1861140, IP 147.161.231.116,
-  29.07.2026 10:50 UTC) -- das dokumentierte, jetzt belegte AC1-Alternativergebnis
-  -> erwartet: captcha (nicht success).
+**Erste Runde** bemaengelte zu Recht, dass pf-06/07/08 in
+``evals/publisher-fetchers/evals.json`` nur die Existenz eines ``status``-Felds
+prueften — eine Aussage, die auch ``no_match`` erfuellt.
+
+**Zweite Runde** bemaengelte, dass die Antwort darauf keinen pruefbaren Beleg
+schuf, sondern nur Prosa: Die Notizen behaupteten reale Laeufe (228-Seiten-PDF,
+225-Seiten-PDF, JSTOR-CAPTCHA) und untermauerten sie mit JSTOR-Block-Referenz,
+Client-IP und Uhrzeit. Diese drei Angaben sind pro Request neu — zwei Abrufe im
+Abstand von Sekunden liefern zwei verschiedene Block-Referenzen. Sie sind damit
+per Konstruktion von niemandem nachpruefbar, auch nicht vom Autor selbst.
+Abgesichert war die Behauptung ausgerechnet durch einen Test, der pruefte, ob das
+Wort ``verifiziert`` in der Notiz vorkommt. Der blieb gruen, wenn man die Notiz
+durch eine beliebige Unwahrheit ersetzte — ein Test ueber den Wortlaut einer
+Behauptung, nicht ueber die behauptete Tatsache.
+
+Die Laeufe selbst waren echt; falsch war die Form des Belegs. Deshalb gilt hier:
+
+* Der Beleg liegt als maschinell pruefbares Artefakt in
+  ``evals/publisher-fetchers/live-verification.json`` (URL-Kette, HTTP-Status,
+  Bytes, SHA-256, Seitenzahl) — nachfahrbar mit
+  ``RUN_LIVE_PUBLISHER_FETCH=1 uv run pytest tests/test_issue_449_live_fetch.py``.
+* Der JSTOR-Fall haengt an einer **echt aufgezeichneten** Challenge-Seite
+  (``tests/fixtures/publisher_fetchers/jstor_access_check.html``), die hermetisch
+  gegen die Captcha-Erkennung des Repos gefahren wird. Das prueft die behauptete
+  Tatsache, nicht ihre Formulierung.
+* Einmalige Bezeichner (Block-Referenz, IP, Uhrzeit) sind als Beleg ausdruecklich
+  verboten — ``test_no_single_use_identifiers_are_presented_as_evidence`` faellt
+  um, wenn sie zurueckkehren.
+
+Keine Assertion hier prueft, ob ein bestimmtes Wort in einer Notiz steht.
 """
 
 import json
+import re
 from pathlib import Path
+
+import pytest
+
+from tests.helpers.generic_fetcher_nav import GenericFetcherNavigator
 
 REPO_ROOT = Path(__file__).parent.parent
 EVALS_PATH = REPO_ROOT / "evals" / "publisher-fetchers" / "evals.json"
+RECORD_PATH = REPO_ROOT / "evals" / "publisher-fetchers" / "live-verification.json"
+JSTOR_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "publisher_fetchers" / "jstor_access_check.html"
 
-# DOI aus der urspruenglichen PR-#500-Fassung von pf-07. Fuehrt tatsaechlich zu
-# "Philosophies of Qualitative Research" (Leavy, Hrsg.) -- ein regulaeres,
-# bezahlpflichtiges OSO-Buch ohne jedes OA-/Free-/Unlocked-Badge, keine
-# Commit-to-Open-Publikation. Darf nach der Korrektur nicht wieder auftauchen.
+#: DOI aus der urspruenglichen PR-#500-Fassung von pf-07. Sie loest real auf
+#: academic.oup.com/book/5107 auf und gehoert zu "Philosophies of Qualitative
+#: Research" (Svend Brinkmann, 2017) — ein kostenpflichtiges OSO-Buch, keine
+#: Open-Access-Publikation. Gegengeprueft ueber Crossref-Content-Negotiation.
 WRONG_OXFORD_DOI = "10.1093/oso/9780190247249.001.0001"
 
 EVIDENCE_CASES = ("pf-06", "pf-07", "pf-08")
 
-
-def _load_cases() -> dict:
-    data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
-    return {case["id"]: case for case in data["cases"]}
-
-
-def test_new_publisher_cases_use_non_trivial_status_check():
-    """pf-06/07/08 duerfen 'status' nicht nur auf Existenz pruefen.
-
-    'exists' wird auch von no_match/captcha erfuellt und ist damit keine
-    Aussage ueber echte Volltext-Aufloesung. Nach echter Verifikation muss
-    jeder Case einen konkreten Zielwert (equals:<status>) tragen.
-    """
-    cases = _load_cases()
-    for case_id in EVIDENCE_CASES:
-        check = cases[case_id]["expected"]["check"]
-        assert check.startswith("equals:"), (
-            f"{case_id}: 'check' muss ein konkretes 'equals:<status>' sein, "
-            f"nicht die triviale Existenzpruefung ('{check}'), die von jedem "
-            f"Status inkl. no_match/captcha erfuellt wird."
-        )
+#: Muster fuer Angaben, die sich pro Request aendern. Als Beleg wertlos, weil
+#: niemand — auch der Autor nicht — sie ein zweites Mal erzeugen kann.
+SINGLE_USE_PATTERNS = {
+    "Block-Referenz/GUID": re.compile(
+        r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
+    ),
+    "IPv4-Adresse": re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+    "Uhrzeit-Stempel": re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:UTC|GMT)\b", re.IGNORECASE),
+}
 
 
-def test_cambridge_core_case_expects_verified_success():
-    """cambridge-core: real verifiziert (echtes 228-Seiten-PDF, kein Login)."""
-    cases = _load_cases()
-    assert cases["pf-06"]["expected"]["check"] == "equals:success"
+def _cases() -> dict:
+    return {
+        case["id"]: case for case in json.loads(EVALS_PATH.read_text(encoding="utf-8"))["cases"]
+    }
 
 
-def test_oxford_academic_case_does_not_use_wrong_doi():
+def _record() -> dict:
+    return json.loads(RECORD_PATH.read_text(encoding="utf-8"))
+
+
+def _runs() -> dict:
+    return {run["eval_case"]: run for run in _record()["runs"]}
+
+
+# ---------------------------------------------------------------------------
+# Die Eval-Faelle tragen konkrete Zielwerte (Fund der ersten Runde)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("case_id", EVIDENCE_CASES)
+def test_evidence_cases_use_non_trivial_status_check(case_id: str):
+    """``exists`` wird auch von ``no_match`` erfuellt und ist keine Aussage."""
+    check = _cases()[case_id]["expected"]["check"]
+    assert check.startswith("equals:"), (
+        f"{case_id}: 'check' muss ein konkretes 'equals:<status>' sein, nicht die "
+        f"triviale Existenzpruefung ('{check}'), die jeder Status erfuellt."
+    )
+
+
+def test_oxford_case_does_not_use_the_paywalled_doi():
     """Regression: die urspruengliche DOI referenziert kein OA-Buch."""
-    cases = _load_cases()
-    assert cases["pf-07"]["input"]["doi"] != WRONG_OXFORD_DOI
+    assert _cases()["pf-07"]["input"]["doi"] != WRONG_OXFORD_DOI
 
 
-def test_oxford_academic_case_expects_verified_success():
-    """oxford-academic: real verifiziert nach DOI-Korrektur (225-Seiten-PDF)."""
-    cases = _load_cases()
-    assert cases["pf-07"]["expected"]["check"] == "equals:success"
+# ---------------------------------------------------------------------------
+# Jeder Zielwert haengt an einem nachfahrbaren Artefakt (Fund der zweiten Runde)
+# ---------------------------------------------------------------------------
 
 
-def test_jstor_case_documents_verified_captcha_outcome():
-    """jstor: reales, reproduziertes CAPTCHA statt nur behauptetes Risiko.
+@pytest.mark.parametrize("case_id", EVIDENCE_CASES)
+def test_every_evidence_case_has_a_live_verification_run(case_id: str):
+    """Ein Zielwert ohne hinterlegten Lauf ist wieder nur eine Behauptung."""
+    runs = _runs()
+    assert case_id in runs, (
+        f"{case_id}: kein Eintrag in {RECORD_PATH.name}. Ein 'equals:<status>' "
+        f"ohne nachfahrbaren Lauf ist eine Behauptung, kein Beleg."
+    )
+    case = _cases()[case_id]
+    expected = case["expected"]["check"].split(":", 1)[1]
+    assert runs[case_id]["expected_status"] == expected, (
+        f"{case_id}: Eval erwartet '{expected}', der aufgezeichnete Lauf aber "
+        f"'{runs[case_id]['expected_status']}' — Beleg und Erwartung sind entkoppelt."
+    )
+    assert runs[case_id]["agent"] == case["agent"]
 
-    AC1 erlaubt fuer JSTOR ausdruecklich `status: captcha` als dokumentierte
-    Alternative zu `success` -- vorausgesetzt, sie ist belegt und nicht nur
-    behauptet. Das ist jetzt der Fall (siehe Notiz im Case).
+
+@pytest.mark.parametrize("case_id", ("pf-06", "pf-07"))
+def test_pdf_runs_record_a_checkable_artifact(case_id: str):
+    """Volltext-Erfolg heisst: empfangene Bytes, benannt und pruefsummiert."""
+    run = _runs()[case_id]
+    assert run["verdict"] == "pdf_verified"
+    artifact = run["artifact"]
+    assert artifact["http_status"] == 200
+    assert artifact["content_type"] == "application/pdf"
+    assert artifact["magic"].startswith("%PDF-")
+    assert artifact["bytes"] > 10_000
+    assert artifact["pages"] > 0
+    assert re.fullmatch(r"[0-9a-f]{64}", artifact["sha256"]), (
+        f"{case_id}: 'sha256' muss eine echte Pruefsumme der empfangenen Bytes "
+        f"sein — der einzige Wert, an dem sich ein Nachfahrer festhalten kann."
+    )
+    assert run["url_chain"], f"{case_id}: ohne URL-Kette ist der Lauf nicht nachfahrbar."
+    assert run["url_chain"][-1].startswith("https://")
+
+
+def test_recorded_doi_matches_the_eval_input():
+    """Der Beleg muss zu dem Titel gehoeren, den der Eval-Fall anfordert."""
+    for case_id in ("pf-06", "pf-07"):
+        assert _runs()[case_id]["item"]["doi"] == _cases()[case_id]["input"]["doi"]
+
+
+def test_no_single_use_identifiers_are_presented_as_evidence():
+    """Der Kernfund der zweiten Runde, als Regel festgehalten.
+
+    Block-Referenz, Client-IP und Uhrzeit wirken wie harte Evidenz, sind aber
+    pro Request neu und darum unpruefbar — und die IP hat in einem oeffentlichen
+    Repo ohnehin nichts verloren. Beleg gehoert an stabile Signale (HTTP-Status,
+    Seitentitel, DOM-Marker, Pruefsumme).
     """
-    cases = _load_cases()
-    assert cases["pf-08"]["expected"]["check"] == "equals:captcha"
+    haystacks = {
+        "evals.json (Notizen der Faelle)": "\n".join(
+            _cases()[case_id]["notes"] for case_id in EVIDENCE_CASES
+        ),
+        RECORD_PATH.name: json.dumps(
+            [run for run in _record()["runs"] if run["eval_case"] != "pf-08"],
+            ensure_ascii=False,
+        ),
+    }
+    for where, text in haystacks.items():
+        for label, pattern in SINGLE_USE_PATTERNS.items():
+            found = pattern.search(text)
+            assert not found, (
+                f"{where}: {label} '{found.group(0)}' wird als Beleg gefuehrt. "
+                f"Solche Werte sind pro Request neu und von niemandem nachpruefbar. "
+                f"Beleg gehoert an stabile Signale — siehe "
+                f"'volatile_fields_excluded' in {RECORD_PATH.name}."
+            )
 
 
-def test_evidence_notes_reference_real_verification():
-    """Die Notizen muessen den echten Verifikationsnachweis referenzieren,
-    nicht nur eine vage Status-Enum-Erwartung -- sonst kann die naechste
-    Aenderung stillschweigend zur unbelegten Behauptung zurueckfallen."""
-    cases = _load_cases()
-    for case_id in EVIDENCE_CASES:
-        notes = cases[case_id]["notes"].lower()
-        assert "verifiziert" in notes, (
-            f"{case_id}: Notiz muss den echten Verifikationsnachweis "
-            f"referenzieren ('verifiziert'), nicht nur recherchiert/behauptet."
+def test_jstor_run_names_its_volatile_fields_instead_of_using_them():
+    """Der JSTOR-Lauf darf die fluechtigen Felder nur als Ausschluss fuehren."""
+    excluded = _runs()["pf-08"]["volatile_fields_excluded"]
+    assert set(excluded["fields"]) >= {"Block Reference", "IP", "Date and time"}
+    assert excluded["reason"].strip()
+
+
+# ---------------------------------------------------------------------------
+# Die behauptete Tatsache selbst, hermetisch gegen echtes aufgezeichnetes DOM
+# ---------------------------------------------------------------------------
+
+
+def test_jstor_fixture_is_a_real_captured_challenge():
+    """Die Fixture muss die echte Challenge sein — mit neutralisierten Feldern."""
+    html = JSTOR_FIXTURE.read_text(encoding="utf-8")
+    for marker in _runs()["pf-08"]["artifact"]["stable_markers"]:
+        assert marker in html, (
+            f"Fixture enthaelt das aufgezeichnete Stabil-Signal {marker!r} nicht — "
+            f"Beleg und Aufzeichnung sind auseinandergelaufen."
         )
+    assert "REDACTED-CLIENT-IP" in html, "Client-IP muss in der Fixture neutralisiert sein."
+    for label, pattern in SINGLE_USE_PATTERNS.items():
+        assert not pattern.search(html), f"Fixture enthaelt noch {label} im Klartext."
+
+
+def test_repo_captcha_detection_recognises_the_real_jstor_page():
+    """Die Kernaussage von pf-08, gegen echtes DOM statt gegen einen Satz.
+
+    ``status: captcha`` ist nur dann der richtige Ausgang, wenn die
+    Captcha-Erkennung des Repos die reale JSTOR-Challenge auch wirklich als
+    solche erkennt. Faellt diese Assertion, ist entweder die Erkennung kaputt
+    oder JSTOR hat die Seite umgebaut — beides muss auffallen.
+    """
+    navigator = GenericFetcherNavigator(profile={}, pages={})
+    signal = navigator.detect_captcha(JSTOR_FIXTURE.read_text(encoding="utf-8"))
+    assert signal is not None, (
+        "Die reale JSTOR-Challenge wird von detect_captcha() nicht erkannt — "
+        "damit waere 'equals:captcha' fuer pf-08 nicht belegt."
+    )
+
+
+def test_jstor_challenge_answers_the_fulltext_endpoint_with_403():
+    """Die Challenge muss am Volltext-Endpunkt haengen, nicht irgendwo."""
+    run = _runs()["pf-08"]
+    assert run["artifact"]["http_status"] == 403
+    assert run["url_chain"][-1].endswith(".pdf")
+    assert run["why_this_still_satisfies_ac1"].strip()
