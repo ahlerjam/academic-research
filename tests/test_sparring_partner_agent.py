@@ -14,8 +14,17 @@ Deckt die statisch (ohne API-Key) pruefbaren Teile der Akzeptanzkriterien ab:
   Nachbar-Skills/-Agenten namentlich.
 
 Der inhaltliche Teil (AC2/AC3b/AC4b/AC5 -- echtes Modellverhalten) liegt in
-evals/sparring-partner/evals.json + tests/evals/test_sparring_partner_evals.py
-(API-gated, siehe docs/evals/STRATEGY.md).
+evals/sparring-partner/evals.json, geprueft durch:
+
+- tests/evals/test_sparring_partner_recording.py (CI-fest, offline): prueft
+  fuenf real aufgenommene, an agents/sparring-partner.md sha256-gepinnte
+  Transkripte (evals/sparring-partner/recordings.json) gegen expected --
+  PR #494 Fix-Runde, Antwort auf den AC-Verifier-Befund "kein tatsaechlicher
+  Modell-Output".
+- tests/evals/test_sparring_partner_evals.py (API-gated, Live-Re-Validierung
+  gegen echtes `opus`, skippt ohne ANTHROPIC_API_KEY).
+
+Siehe docs/evals/STRATEGY.md (Status `metric`).
 """
 
 from __future__ import annotations

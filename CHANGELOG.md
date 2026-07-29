@@ -25,7 +25,13 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `evals/sparring-partner/evals.json` (inkl. bewusst tautologischer
   Forschungsfrage), `tests/evals/test_sparring_partner_evals.py` (API-gated) und
   `tests/test_sparring_partner_agent.py` (Frontmatter-/Struktur-Guards, CI-fest).
-  `docs/evals/STRATEGY.md` führt die Komponente als `structural`.
+  Fix-Runde (AC-Verifier zu PR #494): `evals/sparring-partner/recordings.json`
+  hält fünf real aufgenommene, sha256-an den Agent-Text gepinnte Transkripte;
+  `evals/sparring-partner/runner.py` + `tests/evals/test_sparring_partner_recording.py`
+  prüfen sie offline und CI-fest gegen `evals.json::expected` — damit liegt
+  tatsächlicher, geprüft-passender Modell-Output vor statt nur eines nie
+  ausgeführten API-gated Test-Gerüsts. `docs/evals/STRATEGY.md` führt die
+  Komponente entsprechend als `metric`.
 
 - **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
   `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,
