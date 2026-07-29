@@ -3,14 +3,14 @@
 [![CI](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ahlerjam/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/ahlerjam/academic-research)
 [![Version](https://img.shields.io/badge/version-6.5.1-blue.svg)](CHANGELOG.md)
-[![Skills](https://img.shields.io/badge/skills-32-orange.svg)](docs/reference/skills.md)
+[![Skills](https://img.shields.io/badge/skills-34-orange.svg)](docs/reference/skills.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-8A2BE2.svg)](https://code.claude.com/docs/en/plugins)
 
 **Dein Forschungsassistent in Claude Code — von der Themenfindung bis zur Abgabe.**
 
 Ein Claude-Code-Plugin für akademische Arbeiten: Facharbeit, Bachelor, Master, Diss.
-Es durchsucht 14 wissenschaftliche Quellen parallel, bewertet Literatur in fünf
+Es durchsucht 15 wissenschaftliche Quellen parallel, bewertet Literatur in fünf
 Dimensionen, schreibt Kapitelentwürfe mit seitengenauen Belegen und prüft Stil, Zitate
 und Formalia — im Terminal, in normalem Deutsch.
 
@@ -64,24 +64,24 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 
 | | |
 |---|---|
-| **Suchen** | 14 Quellen parallel — 7 API-Quellen immer, 7 Browser-Module auf Wunsch. Dedupliziert, 5D-bewertet, geclustert. |
+| **Suchen** | 15 Quellen parallel — 8 API-Quellen registriert (7 automatisch je Modus, `dblp` optional für Informatik-Themen via `--modules dblp`), 7 Browser-Module auf Wunsch. Dedupliziert, 5D-bewertet, geclustert. |
 | **Belegen** | Vault-MCP-Server (SQLite + FTS5 + Vektor-Suche). Zitate mit Seitenzahl und Herkunft. Hook blockt unbelegte Zitate. |
 | **Beschaffen** | Buch-Pipeline über TIB, Springer, OAPEN, DOAB, KVK und weitere — mit deinem Hochschulzugang. |
 | **Schreiben** | Kapitelentwürfe aus Vault-Quellen, Exposé, Gliederung, Methodikberatung. |
 | **Prüfen** | Anti-KI-Audit (`humanizer-de`), Plagiatsnähe, Stilmetriken, Formalia-Check. |
-| **Abgeben** | LaTeX-Export mit biblatex, Excel-Literaturübersicht, Material-Passport mit Repro-Lock. |
+| **Abgeben** | LaTeX-/Word-/Slide-Export, Excel-Literaturübersicht, Material-Passport mit Repro-Lock. |
 
 ## Wie es aufgebaut ist
 
 ```mermaid
 graph LR
-    U[Du in Claude Code] --> C[9 Slash-Commands]
-    U --> S[32 Skills<br/>selbstaktivierend]
+    U[Du in Claude Code] --> C[11 Slash-Commands]
+    U --> S[34 Skills<br/>selbstaktivierend]
     C --> A[21 Agents<br/>Subagents]
     S --> A
     A --> V[(Vault<br/>SQLite + FTS5 + vec0)]
     C --> V
-    A --> Q[14 Suchquellen]
+    A --> Q[15 Suchquellen]
     Q --> V
     V --> H{{verbatim-guard<br/>Hook}}
     H --> K[kapitel/*.md]
@@ -179,6 +179,9 @@ allen Ausgaben und den dabei gefundenen Stolperstellen steht in
 
 ## Dokumentation
 
+Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
+[docs/README.md](docs/README.md).
+
 **Loslegen**
 
 - [Installation und Migration](docs/guide/installation.md) — Voraussetzungen, was das Setup tut, Umstieg von v5
@@ -188,8 +191,8 @@ allen Ausgaben und den dabei gefundenen Stolperstellen steht in
 
 **Nachschlagen**
 
-- [Commands](docs/reference/commands.md) — alle 9 Slash-Commands mit Syntax und Beispielen
-- [Skills](docs/reference/skills.md) — alle 32 Skills und ihre Trigger
+- [Commands](docs/reference/commands.md) — alle 11 Slash-Commands mit Syntax und Beispielen
+- [Skills](docs/reference/skills.md) — alle 34 Skills und ihre Trigger
 - [Agents](docs/reference/agents.md) — alle 21 Subagents
 - [Vault-MCP-Server](docs/reference/vault.md) — alle 37 MCP-Tools, Volltext- und Vektor-Index
 - [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt

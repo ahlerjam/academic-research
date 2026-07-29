@@ -1,0 +1,33 @@
+{
+  "component": "word-export",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "wx-01",
+      "input": "Erstelle aus diesem Kapitel ein Word-Dokument mit echten Ueberschriften-Formatvorlagen:\n\n# Einleitung\n\nDiese Arbeit untersucht DevOps-Governance in KMU.\n\n## Motivation\n\nText.",
+      "expected": {
+        "type": "regex",
+        "value": "(HeadingLevel|Formatvorlage|Heading 1|Ueberschrift)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "wx-02",
+      "input": "Welche Bausteine gehoeren in das Titelblatt eines Word-Exports der Abschlussarbeit?",
+      "expected": {
+        "type": "regex",
+        "value": "(Titel|Autor|Betreuer|Hochschule)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "wx-03",
+      "input": "Woher kommen die Zitierstil-Regeln fuer das Literaturverzeichnis im Word-Export?",
+      "expected": {
+        "type": "regex",
+        "value": "citation-extraction"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

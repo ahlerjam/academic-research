@@ -22,10 +22,9 @@ FH Leibniz).
 
 ## Abgrenzung
 
-Prüft Formalia der Enddatei gegen Hochschul-Regeln.
-Für Abstract, Keywords, Management-Summary → `abstract-generator`.
-Für den Titel selbst → `title-generator`.
-Für Kontextdaten (Arbeitstyp, Hochschule) → `academic-context`.
+Prüft Formalia gegen Hochschul-Regeln. Abstract/Keywords → `abstract-generator`.
+Titel → `title-generator`. Kontextdaten → `academic-context`.
+`.docx`/PDF-Export → `word-export`.
 
 ## Variant-Selector
 

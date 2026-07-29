@@ -9,8 +9,15 @@ Umzug nicht wieder ein Dutzend Dateien anfasst, sind die Pfade hier gebuendelt.
 ``DOC_SURFACE`` ist die Menge aller Nutzerdoku-Dateien (README + docs/). Sie
 dient Guards, die nur "irgendwo dokumentiert" verlangen (z. B. keine
 Title-Case-Skillnamen in Prosa).
+
+Seit Issue #452 kommt die Navigationsschicht dazu: ``INDEX`` (die Einstiegsseite
+``docs/README.md``), ``structured_pages()`` (Seiten mit einheitlicher
+Grundstruktur) und ``historical_docs()`` (historische Dokumente und
+Momentaufnahmen). Beide Listen werden aus ``git ls-files docs`` abgeleitet und
+nicht gepflegt — eine neue Seite faellt automatisch in die passende Klasse.
 """
 
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -54,6 +61,107 @@ LINKED_DOCS = (
     DEVELOPMENT_DOC,
     QUICKSTART_PROTOCOL_DOC,
 )
+
+
+#: Einstiegsseite der Dokumentation (Issue #452).
+INDEX = DOCS_DIR / "README.md"
+
+#: Weitere Seiten, die die Einstiegsseite fuehrt, aber die README nicht verlinkt.
+SKIP_REASONS_DOC = DOCS_DIR / "SKIP_REASONS.md"
+LITERATURE_STATE_DOC = DOCS_DIR / "literature-state-schema.md"
+NOTEBOOK_BUNDLE_DOC = DOCS_DIR / "skills" / "notebook-bundle.md"
+EVALS_INDEX_DOC = DOCS_DIR / "evals" / "README.md"
+EVAL_STRATEGY_DOC = DOCS_DIR / "evals" / "STRATEGY.md"
+EVAL_TEMPLATE_DOC = DOCS_DIR / "evals" / "TEMPLATE.md"
+SUPERPOWERS_INDEX_DOC = DOCS_DIR / "superpowers" / "README.md"
+
+#: Linktext des Breadcrumbs, der jede Seite zur Einstiegsseite zurueckfuehrt.
+BREADCRUMB_TEXT = "← Doku-Übersicht"
+
+#: Kennzeichnung am Seitenanfang historischer Dokumente / Momentaufnahmen.
+HISTORICAL_MARKER = "Historisches Dokument"
+
+#: Ueberschrift, unter der die Einstiegsseite historische Dokumente sammelt.
+HISTORICAL_SECTION = "Historisches und Momentaufnahmen"
+
+#: Ueberschrift des `.claude/`-Abschnitts in docs/development.md.
+CLAUDE_DIR_SECTION = "Versionierte `.claude/`-Dateien"
+
+#: Dateien unter docs/evals/, die aktueller Sollzustand sind (keine Reports).
+_CURRENT_EVAL_DOCS = {"README.md", "STRATEGY.md", "TEMPLATE.md"}
+
+#: Dateien, die bewusst keiner Seitenstruktur folgen (Vorlage zum Kopieren).
+_LAYOUT_EXEMPT = {EVAL_TEMPLATE_DOC}
+
+
+def _git_ls_files(*patterns: str) -> list[Path]:
+    """Repo-Pfade zu den Patterns: bereits getrackt oder neu und nicht ignoriert.
+
+    ``--others --exclude-standard`` nimmt neue, noch nicht committete Dateien mit
+    — sonst pruefte kein Guard eine gerade angelegte Seite, und der Fehler faende
+    sich erst in CI. Ignorierte Pfade bleiben aussen vor: ``docs/superpowers/plans/``
+    und ``docs/superpowers/specs/`` liegen lokal, gehoeren aber nicht zur
+    ausgelieferten Doku.
+    """
+    out = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", *patterns],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return sorted({REPO_ROOT / rel for rel in out.split("\0") if rel})
+
+
+def repo_docs() -> list[Path]:
+    """Alle zum Repo gehoerenden Dateien unter docs/ (inkl. assets/)."""
+    return _git_ls_files("docs")
+
+
+def repo_markdown() -> list[Path]:
+    """Alle Markdown-Dateien des Repos — Quelle eingehender Links."""
+    return _git_ls_files("*.md")
+
+
+def committed_paths(*patterns: str) -> list[str]:
+    """Nur bereits committete Pfade — fuer Aussagen ueber den Versionsstand."""
+    out = subprocess.run(
+        ["git", "ls-files", "-z", *patterns],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return sorted(rel for rel in out.split("\0") if rel)
+
+
+def is_historical(path: Path) -> bool:
+    """True fuer historische Planungsdokumente und Eval-Momentaufnahmen."""
+    rel = path.relative_to(DOCS_DIR)
+    if not rel.parts:
+        return False
+    top = rel.parts[0]
+    if top in {"superpowers", "audit"}:
+        return True
+    return top == "evals" and rel.name not in _CURRENT_EVAL_DOCS
+
+
+def historical_docs() -> list[Path]:
+    """Dokumente, die eine Kennzeichnung am Seitenanfang brauchen."""
+    return [p for p in repo_docs() if p.suffix == ".md" and is_historical(p)]
+
+
+def structured_pages() -> list[Path]:
+    """Seiten, die der einheitlichen Grundstruktur folgen muessen.
+
+    Ausgenommen sind die Einstiegsseite selbst, historische Dokumente (sie
+    tragen stattdessen den Marker) und die Eval-Report-Vorlage.
+    """
+    return [
+        p
+        for p in repo_docs()
+        if p.suffix == ".md" and p != INDEX and not is_historical(p) and p not in _LAYOUT_EXEMPT
+    ]
 
 
 def doc_surface() -> list[Path]:

@@ -1,6 +1,6 @@
 # Hooks-Stack
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Das Plugin verdrahtet 6 Claude-Code-Events in `hooks/hooks.json`. Maßgeblich ist immer
 diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von

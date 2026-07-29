@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Multi-source academic paper search — v4 rewrite.
 
-Searches across 7 API sources in parallel:
-  CrossRef, OpenAlex, Semantic Scholar, BASE, EconBiz, EconStor, arXiv
+Searches across 8 API sources in parallel:
+  CrossRef, OpenAlex, Semantic Scholar, BASE, EconBiz, EconStor, arXiv, DBLP
 
 Usage:
   python search.py --query "DevOps Governance" --modules crossref,openalex --limit 50
@@ -648,6 +648,59 @@ def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
     return results
 
 
+def search_dblp(query: str, limit: int) -> list[dict[str, Any]]:
+    """Search DBLP publication API (computer science venues/conferences).
+
+    Pattern adapted from JeanDiable/academic-research-plugin (MIT),
+    lib/paper_search.py.
+    """
+    url = "https://dblp.org/search/publ/api"
+    with httpx.Client(timeout=TIMEOUT) as client:
+        resp = client.get(url, params={"q": query, "format": "json", "h": limit})
+        resp.raise_for_status()
+        payload = resp.json()
+    time.sleep(0.5)
+    hits = payload.get("result", {}).get("hits", {}) or {}
+    items = hits.get("hit", []) or []
+    results: list[dict[str, Any]] = []
+    for item in items:
+        info = item.get("info", {}) or {}
+        author_data = (info.get("authors") or {}).get("author") or []
+        if isinstance(author_data, dict):
+            author_data = [author_data]
+        authors = [a.get("text") for a in author_data if isinstance(a, dict) and a.get("text")]
+        year_raw = info.get("year")
+        year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
+        venue_raw = info.get("venue")
+        venue = venue_raw[0] if isinstance(venue_raw, list) and venue_raw else venue_raw
+        ee_raw = info.get("ee")
+        if isinstance(ee_raw, list):
+            # Mehrere Links (z.B. DOI-Resolver + OA-/arXiv-Kopie): DOI-Link
+            # bevorzugen, sonst erstes Element. Analoge Skalar/Array-Quirk
+            # wie bei venue/authors.author.
+            ee = next((e for e in ee_raw if isinstance(e, str) and "doi.org" in e), None)
+            if ee is None:
+                ee = ee_raw[0] if ee_raw else None
+        else:
+            ee = ee_raw
+        results.append(
+            normalize_paper(
+                {
+                    "doi": info.get("doi"),
+                    "title": info.get("title"),
+                    "authors": authors,
+                    "year": year,
+                    "abstract": None,
+                    "venue": venue,
+                    "citations": 0,
+                    "url": ee or info.get("url"),
+                },
+                "dblp",
+            )
+        )
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Module registry
 # ---------------------------------------------------------------------------
@@ -660,6 +713,7 @@ MODULES: dict[str, Callable[[str, int], list[dict[str, Any]]]] = {
     "econbiz": search_econbiz,
     "econstor": search_econstor,
     "arxiv": search_arxiv,
+    "dblp": search_dblp,
 }
 
 

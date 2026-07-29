@@ -1,6 +1,10 @@
 # Troubleshooting
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
+
+Bekannte Fehlerbilder und ihre Behebung, sortiert nach der Stelle, an der sie auftreten:
+Setup, Suche, Download, Vault, Zitate. Steht dein Problem nicht dabei, hilft ein Blick in
+die [Installationsanleitung](installation.md) oder ein Issue im Repository.
 
 ## Setup und Umgebung
 
@@ -28,7 +32,7 @@
 
 | Problem | Lösung |
 |---------|--------|
-| Vault-Suche liefert keine Treffer | `vault.stats()` prüfen. `paper_count: 0` → noch nichts importiert; sonst evtl. `--migrate-v5` nötig |
+| Vault-Suche liefert keine Treffer | `vault.stats()` prüfen. `paper_count: 0` → noch nichts importiert; sonst evtl. `python academic_vault/migrate.py --state literature_state.md --db <vault.db>` nachholen ([installation.md](installation.md#update-und-migration-von-v5)) |
 | Suche findet nur Titel, keinen Volltext | Volltext-Backfill laufen lassen (Befehl in [vault.md](../reference/vault.md#pdf-volltext-index)) |
 | Vektor-Suche wirkt wirkungslos | Log prüfen: fehlt `sentence-transformers` oder scheitert der Modell-Download, fällt der Vault auf FTS5-only zurück |
 | Verbatim-Guard blockt den Kapitel-Write | Das ist der Normalfall bei einem nicht belegten Zitat: Zitat via `quote-extractor` aus dem PDF holen, dann erneut schreiben |

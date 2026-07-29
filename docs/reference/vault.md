@@ -1,6 +1,6 @@
 # Vault-MCP-Server
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Der **Vault** (`academic_vault/`) ist die Kernkomponente seit v6.0. Er ersetzt die
 flachen Markdown-Dateien durch eine SQLite-Datenbank mit FTS5-Volltext-Index und

@@ -1,13 +1,13 @@
 # Commands / Slash-Commands
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin bringt
-**9 Slash-Commands** mit (`commands/*.md`).
+**11 Slash-Commands** mit (`commands/*.md`).
 
 | Command | Beschreibung |
 |---------|-------------|
-| `/academic-research:search` | Literatursuche über 7 APIs + optional 7 Browser-Module |
+| `/academic-research:search` | Literatursuche über 7 APIs (+ `dblp` optional) + optional 7 Browser-Module |
 | `/academic-research:score` | Re-Scoring und Cluster-Zuweisung |
 | `/academic-research:excel` | Professionelle Excel-Datei (4 Sheets) |
 | `/academic-research:setup` | Installer: venv, Browser, Vault, Hooks, Per-Uni-Profil |
@@ -16,9 +16,13 @@ Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin 
 | `/academic-research:pickup` | Bibliotheks-Pickup-Excel für nicht-OA-Quellen |
 | `/academic-research:humanize` | Anti-KI-Audit-Pass via humanizer-de |
 | `/academic-research:latex` | LaTeX-Export (`*.tex` + `*.bib`) |
+| `/academic-research:word` | Word-Export (`*.docx`, optional PDF) mit echten Formatvorlagen |
+| `/academic-research:slides` | Foliensatz (`*.pptx`) aus Kapiteln, eine Kernaussage pro Folie |
 
 Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispiel(e)** und
 **Skills/Agents** (was unter der Haube läuft).
+
+## Command-Referenz
 
 ### `/academic-research:setup`
 
@@ -172,6 +176,57 @@ Neu in v6.5: exportiert Markdown-Kapitel nach LaTeX.
 Uni-Template-Wrapping und `build_bib.py` (`.bib` aus dem Vault, Pfad
 unabhängig von `--output`). Der `verbatim-guard`-Hook blockiert `.tex`-Writes
 mit nicht-verifizierten Zitaten.
+
+### `/academic-research:word`
+
+Neu in Issue #446: exportiert Markdown-Kapitel nach Word (`.docx`) mit echten
+Formatvorlagen für Überschriftenebenen, Titelblatt, Inhaltsverzeichnis und
+eidesstattlicher Erklärung; optional zusätzlich als PDF.
+
+**Syntax:** `/academic-research:word --kapitel <n>|all --output <datei.docx> [--format docx|pdf] [--template <uni>]`
+
+**Beispiele:**
+
+```bash
+# Alle Kapitel als Word-Dokument
+/academic-research:word --kapitel all --output output/thesis.docx
+
+# Einzelnes Kapitel, zusaetzlich als PDF
+/academic-research:word --kapitel 3 --output output/kap3.docx --format pdf
+```
+
+**Skills/Agents:** Lädt den `word-export`-Skill (`skills/word-export/`).
+`collect_references.py` importiert `build_bib.get_all_papers()` aus
+`latex-export` (geteilte Vault-Query, keine zweite Implementierung) und lädt die
+Zitierstil-Regeln unverändert aus `citation-extraction/references/<style>.md`.
+`\cite{key}`-Marker aus `kapitel/*.md` werden vor dem Rendern zu Klartext-
+Kurzzitaten aufgelöst. Die `.docx` selbst erzeugt `render_docx.py`
+deterministisch (echte `Heading 1`…`Heading 6`-Formatvorlagen, Word-native
+Inhaltsverzeichnis-Feldfunktion, Titelblatt, Literaturverzeichnis,
+eidesstattliche Erklärung) — der externe `document-skills:docx`-Skill bleibt für
+optionale Layout-Verfeinerung auf der erzeugten Datei.
+
+### `/academic-research:slides`
+
+Neu in Issue #446: erzeugt einen Foliensatz (`.pptx`) aus vorhandenen Kapiteln
+— eine Kernaussage pro Folie, als Ausgangspunkt für Kolloquium und Konferenz.
+
+**Syntax:** `/academic-research:slides --kapitel <n>|all --output <datei.pptx> [--kolloquium|--konferenz]`
+
+**Beispiele:**
+
+```bash
+# Foliensatz aus allen Kapiteln fuer das Kolloquium
+/academic-research:slides --kapitel all --output output/kolloquium.pptx --kolloquium
+```
+
+**Skills/Agents:** Lädt den `slide-export`-Skill (`skills/slide-export/`).
+`build_slide_deck.py` importiert `resolve_chapters()` aus
+`latex-export/export_thesis.py` und extrahiert je Kapitel Titel + ersten
+Kernsatz als Folien-Zwischenrepräsentation; `render_pptx.py` rendert daraus das
+`.pptx` deterministisch (eine Folie je Kapitel, mit `--kolloquium`/`--konferenz`
+zusätzlich Deckblatt und Agenda). Der externe `document-skills:pptx`-Skill
+bleibt für optionale Designvorlagen auf dem erzeugten Deck.
 
 ### `/academic-research:history`
 
