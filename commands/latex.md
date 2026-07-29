@@ -21,9 +21,9 @@ Exportiert Kapitel des aktuellen Projekts als `.tex`-Dateien und generiert eine 
 
 | Parameter | Typ | Standard | Beschreibung |
 |-----------|-----|---------|--------------|
-| `--kapitel` | `<n>` oder `all` | — | Kapitel-Nummer oder `all` für alle |
-| `--output` | Dateipfad | `output/thesis.tex` | Ausgabedatei |
-| `--bib` | Dateipfad | `output/refs.bib` | BibTeX-Ausgabe |
+| `--kapitel` | `<n>` oder `all` | — (Pflicht) | Kapitel-Nummer oder `all` für alle |
+| `--output` | Dateipfad | — (Pflicht) | Ausgabedatei |
+| `--bib` | Dateipfad | `output/refs.bib` | BibTeX-Ausgabe, unabhängig vom `--output`-Pfad |
 | `--template` | Uni-Kürzel | — | Template aus `~/.academic-research/library-profiles/<uni>.tex.template` |
 
 ## Beispiele
@@ -41,11 +41,44 @@ Exportiert Kapitel des aktuellen Projekts als `.tex`-Dateien und generiert eine 
 
 ## Ablauf
 
-1. Skill `skills/latex-export/SKILL.md` wird geladen
-2. Kapitel-Dateien aus `kapitel/` werden gelesen
-3. `render_tex.py` konvertiert Markdown → LaTeX (Pandoc oder Custom-Renderer)
-4. `build_bib.py` generiert `.bib` aus Vault-Papers
-5. Optional: Template wird um generierten Content gewickelt
+### Schritt 1 — Argumente parsen
+
+- `KAPITEL` = Wert von `--kapitel` (Pflicht: Zahl oder `all`)
+- `OUTPUT` = Wert von `--output` (Pflicht: Zielpfad der `.tex`-Datei)
+- `BIB` = Wert von `--bib` (optional, Default `output/refs.bib`,
+  unabhängig von `OUTPUT`)
+- `TEMPLATE` = Wert von `--template` (optional, Uni-Kürzel)
+
+### Schritt 2 — Skill laden
+
+Skill `skills/latex-export/SKILL.md` wird geladen (Vorbedingungen,
+Fehlerpfade, Abgrenzung zu `citation-extraction`).
+
+### Schritt 3 — Export ausführen
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/export_thesis.py" \
+  --kapitel "$KAPITEL" --output "$OUTPUT" \
+  ${BIB:+--bib "$BIB"} ${TEMPLATE:+--template "$TEMPLATE"}
+```
+
+Das Skript bündelt intern:
+1. Kapitel-Resolution aus `kapitel/` (Einzelkapitel oder alle, numerisch
+   sortiert)
+2. `render_tex.render_markdown_to_tex()` je Kapitel (Pandoc oder
+   Custom-Renderer) + Verkettung in Datei-Reihenfolge
+3. Optional: Uni-Template-Wrapping (`%%CONTENT%%`-Ersetzung); fehlt das
+   Template, wird ohne Vorlage exportiert und eine Meldung auf stderr
+   ausgegeben (kein Abbruch)
+4. `build_bib.build_bib_from_vault()` → `.bib` nach `BIB` (unabhängig von
+   `OUTPUT`)
+
+### Schritt 4 — Ergebnis zeigen
+
+Bei Erfolg (Exit-Code 0): Pfade von `.tex` und `.bib` sowie Kapitelanzahl
+ausgeben. Erschien eine Template-Fallback-Meldung auf stderr, diese
+zusätzlich anzeigen. Bei Exit-Code ≠ 0: die vom Skript ausgegebene
+`FEHLER:`-Meldung (z. B. unbekanntes Kapitel) unverändert weitergeben.
 
 ## Renderer
 

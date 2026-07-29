@@ -6,9 +6,9 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **30 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count,
-inklusive dem vendorierten `xlsx/`). Das Verzeichnis `skills/_common/` enthält nur
-geteilte Markdown-Fragmente und zählt nicht als Skill.
+Insgesamt **29 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
+als Skill.
 
 Die Spalte „Aktiviert bei" listet reale Trigger-Phrasen: jede davon steht auch in der
 `description` der jeweiligen `SKILL.md` — `tests/test_skills_manifest.py` erzwingt das,
@@ -76,8 +76,19 @@ Diese Skills sind per Default aus. Sie laufen erst, wenn im Projekt-State der pa
 | `title-generator` | *„Titelvorschläge"*, *„Arbeitstitel"* | 5–7 Varianten mit Rationale |
 | `submission-checker` | *„abgabefertig"*, *„Formalia prüfen"* | Formalia-Check, Default: FH Leibniz |
 
-## Vendorierte Skills
+## Externe Skills (Plugin-Dependencies)
+
+Diese Skills liegen nicht im Repository, sondern werden bei der Installation als
+Plugin-Abhängigkeit mitgezogen (`dependencies` in `.claude-plugin/plugin.json`).
 
 | Skill | Herkunft | Zweck |
 |-------|----------|-------|
-| `xlsx` | Claude-eigener document-skill, im Plugin mitgeliefert | Excel-Erzeugung für `/academic-research:excel` und `/academic-research:pickup` — kein externes Plugin nötig |
+| `document-skills:xlsx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Excel-Erzeugung für `/academic-research:excel` und `/academic-research:pickup` |
+
+Fehlt die Abhängigkeit, melden beide Commands den Nachinstallations-Weg, statt einen
+Tool-Fehler durchzureichen:
+
+```bash
+claude plugin marketplace add anthropics/skills
+claude plugin install document-skills@anthropic-agent-skills
+```

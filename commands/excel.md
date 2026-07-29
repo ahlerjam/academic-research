@@ -1,23 +1,43 @@
 ---
-description: Generate or update a literature Excel spreadsheet via the vendored xlsx skill
+description: Generate or update a literature Excel spreadsheet via the document-skills:xlsx skill
 disable-model-invocation: true
-allowed-tools: Read, Write, Bash(ls ~/.academic-research/sessions/*), Skill(xlsx)
+allowed-tools: Read, Write, Bash(ls ~/.academic-research/sessions/*), Skill(document-skills:xlsx)
 argument-hint: [--papers papers.json] [--output literature.xlsx] [--context]
 ---
 
 # Literatur-Excel-Generator
 
-Erstellt ein formatiertes Excel-Workbook aus gescorten Papers. Die eigentliche Excel-Generierung übernimmt der plugin-intern vendorierte `xlsx`-Skill unter `${CLAUDE_PLUGIN_ROOT}/skills/xlsx/` — keine externe Plugin-Installation nötig.
+Erstellt ein formatiertes Excel-Workbook aus gescorten Papers.
+
+## Excel-Backend
+
+<!-- xlsx-backend:start -->
+Die Excel-Erzeugung übernimmt der externe Skill `document-skills:xlsx` aus dem
+Marketplace `anthropic-agent-skills` (Repository `anthropics/skills`). Das Plugin
+`academic-research` deklariert ihn als Abhängigkeit in `.claude-plugin/plugin.json`
+— eine frische Installation zieht ihn automatisch mit, sofern der Marketplace
+bereits hinzugefügt ist. Der Skill führt Python mit `openpyxl` und `pandas` im
+lokalen Environment aus; beide Pakete installiert `/academic-research:setup` mit.
+
+**Vor dem ersten Skill-Aufruf prüfen:** Ist der Skill `document-skills:xlsx` aufrufbar?
+Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzureichen:
+
+> Das Excel-Backend `document-skills:xlsx` ist nicht installiert — es wird
+> deshalb keine Excel-Datei erzeugt. So installierst du es nach:
+>
+> ```bash
+> claude plugin marketplace add anthropics/skills
+> claude plugin install document-skills@anthropic-agent-skills
+> ```
+>
+> Danach `/reload-plugins` ausführen und den Command erneut aufrufen.
+<!-- xlsx-backend:end -->
 
 ## Verwendung
 
 - `/academic-research:excel` — Aus letzter Session generieren
 - `/academic-research:excel --papers papers.json --output my_literature.xlsx`
 - `/academic-research:excel --context` — Kapitel-Zuordnung aus akademischem Kontext mitnehmen
-
-## Voraussetzung
-
-Der `xlsx`-Skill ist im Plugin eingebunden (`skills/xlsx/`) und steht ohne weitere Installation zur Verfügung. Das Setup benötigt `python3` mit `openpyxl` — wird über `/academic-research:setup` mit installiert.
 
 ## Erwartete Sheets
 
@@ -47,7 +67,7 @@ Wenn `--context` gesetzt:
 
 ### Schritt 3: xlsx-Skill aktivieren
 
-Der vendorierte `xlsx`-Skill liegt unter `${CLAUDE_PLUGIN_ROOT}/skills/xlsx/SKILL.md`. Wende ihn auf die strukturierten Paper-Daten an.
+Führe zuerst die Verfügbarkeitsprüfung aus dem Abschnitt „Excel-Backend" durch. Wende dann `document-skills:xlsx` auf die strukturierten Paper-Daten an.
 
 **Input:** Strukturierte Paper-Daten (siehe Schritt 2) plus Sheet-Spezifikation (welche Sheets, welche Spalten, welche Farbcodierung).
 

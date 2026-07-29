@@ -91,8 +91,8 @@ Command-Logik direkt.
 /academic-research:excel --context --output my_literature.xlsx
 ```
 
-**Skills/Agents:** Nutzt den plugin-intern vendorierten `xlsx`-Skill (`skills/xlsx/`) —
-kein externes Plugin nötig.
+**Skills/Agents:** Nutzt den `document-skills:xlsx`-Skill (Plugin-Dependency, siehe
+[Externe Skills](skills.md#externe-skills-plugin-dependencies)).
 
 ### `/academic-research:pickup`
 
@@ -105,8 +105,9 @@ kein externes Plugin nötig.
 /academic-research:pickup
 ```
 
-**Skills/Agents:** Nutzt den `document-skills:xlsx`-Skill für die 4-Sheet-Excel-Datei
-sowie `scripts/barcode_utils.py` für Code128-Barcodes (optional via
+**Skills/Agents:** Nutzt den `document-skills:xlsx`-Skill (Plugin-Dependency, siehe
+[Externe Skills](skills.md#externe-skills-plugin-dependencies)) für die
+4-Sheet-Excel-Datei sowie `scripts/barcode_utils.py` für Code128-Barcodes (optional via
 `python-barcode[images]`).
 
 ### `/academic-research:fetch`
@@ -166,9 +167,11 @@ Neu in v6.5: exportiert Markdown-Kapitel nach LaTeX.
 ```
 
 **Skills/Agents:** Lädt den `latex-export`-Skill (`skills/latex-export/`):
-`render_tex.py` (Markdown → `.tex`, Pandoc oder Custom-Renderer) und `build_bib.py`
-(`.bib` aus dem Vault). Der `verbatim-guard`-Hook blockiert `.tex`-Writes mit
-nicht-verifizierten Zitaten.
+`export_thesis.py` orchestriert Kapitel-Auswahl, `render_tex.py`
+(Markdown → `.tex`, Pandoc oder Custom-Renderer), optionales
+Uni-Template-Wrapping und `build_bib.py` (`.bib` aus dem Vault, Pfad
+unabhängig von `--output`). Der `verbatim-guard`-Hook blockiert `.tex`-Writes
+mit nicht-verifizierten Zitaten.
 
 ### `/academic-research:history`
 
