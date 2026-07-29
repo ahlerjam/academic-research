@@ -20,7 +20,7 @@ from tests.helpers import docs as _docs
 SKILLS_DIR = Path(__file__).parent.parent / "skills"
 # Die Skills-Tabelle liegt seit dem README-Relaunch (#402) unter docs/reference/.
 SKILLS_DOC_PATH = _docs.SKILLS_DOC
-VENDORED_SKILLS = {"xlsx", "_common", "humanizer-de"}
+VENDORED_SKILLS = {"_common", "humanizer-de"}
 ALL_SKILLS = sorted(
     p for p in SKILLS_DIR.glob("*/SKILL.md") if p.parent.name not in VENDORED_SKILLS
 )

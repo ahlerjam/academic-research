@@ -23,7 +23,7 @@ import pytest
 
 SKILLS_DIR = Path(__file__).parent.parent / "skills"
 # Vendored / fremde Skills folgen nicht der deutschen Trigger-Konvention.
-VENDORED_SKILLS = {"xlsx", "_common", "humanizer-de"}
+VENDORED_SKILLS = {"_common", "humanizer-de"}
 ALL_SKILLS = sorted(
     p for p in SKILLS_DIR.glob("*/SKILL.md") if p.parent.name not in VENDORED_SKILLS
 )

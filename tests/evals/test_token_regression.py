@@ -20,7 +20,7 @@ import pytest
 
 BASELINE_FILE = Path(__file__).parent.parent / "baselines" / "tokens.json"
 SKILLS_DIR = Path(__file__).parent.parent.parent / "skills"
-VENDORED_SKILLS = {"xlsx", "_common", "humanizer-de"}
+VENDORED_SKILLS = {"_common", "humanizer-de"}
 THRESHOLD = 1.20  # 20 % Anstieg gegenueber Baseline ist erlaubt, mehr nicht.
 CHARS_PER_TOKEN = 4  # cl100k-Proxy, identisch zum Kommentar in test_skills_manifest.py.
 
