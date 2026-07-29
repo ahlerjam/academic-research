@@ -1,49 +1,94 @@
 {
   "component": "sparring-partner",
   "component_type": "agent",
+  "criteria_note": "Jedes expected-Kriterium ist mit Negativkontrollen in counter_examples.json als unterscheidungsfaehig nachgewiesen (tests/evals/test_sparring_partner_criteria.py). Vor Issue #454/PR #494 prueften die Kriterien nur Formatmarker: eine rein bestaetigende Antwort ('SCHWÄCHE: keine nennenswerte') bestand sp-01/sp-02/sp-05, Kapitel-Prosa bestand sp-04, sobald 'chapter-writer' irgendwo vorkam. value ist eine UND-Liste, reject eine NOR-Liste.",
   "prompts": [
     {
       "id": "sp-01",
       "input": "Meine Forschungsfrage: 'Ist Nachhaltigkeit wichtig für Unternehmen?' Was hältst du davon?",
+      "ac": ["AC2", "AC5"],
       "expected": {
         "type": "regex",
-        "value": "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S"
+        "value": [
+          "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S",
+          "(?ism)^SCHW[ÄA]CHE:\\s*(?:(?!^ALTERNATIVE:)[\\s\\S]){80,}?^ALTERNATIVE:",
+          "(?ism)^ALTERNATIVE:\\s*(?:(?!^GEGENPOSITION:)[\\s\\S]){60,}?^GEGENPOSITION:"
+        ],
+        "reject": [
+          "(?im)^SCHW[ÄA]CHE:\\s*\\n?\\s*(keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^ALTERNATIVE:\\s*\\n?\\s*(keine|nicht n[öo]tig|nichts|unver[äa]ndert|w[üu]rde ich (so|unver[äa]ndert)|so lassen)"
+        ]
       },
       "mode": "with_skill"
     },
     {
       "id": "sp-02",
       "input": "Kein academic_context.md vorhanden, Vault ist leer. Meine Forschungsfrage: 'Ist Digitalisierung gut für Unternehmen?' Widersprichst du mir?",
+      "ac": ["AC2", "AC5", "AC3-Degradationsfall"],
       "expected": {
         "type": "regex",
-        "value": "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S"
+        "value": [
+          "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S",
+          "(?ism)^SCHW[ÄA]CHE:\\s*(?:(?!^ALTERNATIVE:)[\\s\\S]){80,}?^ALTERNATIVE:",
+          "(?i)HINWEIS:[^\\n]*(vault leer|kein academic_context)"
+        ],
+        "reject": [
+          "(?im)^SCHW[ÄA]CHE:\\s*\\n?\\s*(keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^ALTERNATIVE:\\s*\\n?\\s*(keine|nicht n[öo]tig|nichts|unver[äa]ndert|w[üu]rde ich (so|unver[äa]ndert)|so lassen)",
+          "[A-ZÄÖÜ][a-zäöüß]{2,}\\s+(?:und\\s+[A-ZÄÖÜ][a-zäöüß]{2,}\\s+)?\\((?:19|20)\\d{2}\\)"
+        ]
       },
       "mode": "with_skill"
     },
     {
       "id": "sp-03",
       "input": "academic_context.md: Thema 'Auswirkungen von generativer KI auf die Produktivität in der Softwareentwicklung', Betreuer Prof. Klein. Vault-Treffer zu 'KI Produktivität': paper_id=meier2024, Titel 'Review-Mehraufwand bei KI-generiertem Code', Kernbefund: Produktivitätsgewinne werden durch erhöhten Review-Aufwand teilweise kompensiert. Meine These: 'KI-Tools erhöhen die Produktivität in der Softwareentwicklung durchgängig.' Nimm Stellung.",
+      "ac": ["AC3"],
       "expected": {
         "type": "regex",
-        "value": "(?i)meier|review-mehraufwand|review-aufwand"
+        "value": [
+          "(?ims)^GEGENPOSITION:\\s*(?:(?!^ANSCHLUSSFRAGEN:)[\\s\\S])*?(meier|review-mehraufwand|review-aufwand)",
+          "(?ism)^SCHW[ÄA]CHE:\\s*(?:(?!^ALTERNATIVE:)[\\s\\S]){80,}?^ALTERNATIVE:"
+        ],
+        "reject": [
+          "(?im)^SCHW[ÄA]CHE:\\s*\\n?\\s*(keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^GEGENPOSITION:\\s*\\n?\\s*(keine\\b|sehe ich keine|nichts)"
+        ]
       },
       "mode": "with_skill"
     },
     {
       "id": "sp-04",
       "input": "Schreib mir das Grundlagenkapitel zu Change Management.",
+      "ac": ["AC4"],
       "expected": {
         "type": "regex",
-        "value": "chapter-writer"
+        "value": [
+          "chapter-writer",
+          "(?i)(schreibe? keine kapitel|keine kapitel-prosa|nicht meine aufgabe|daf[üu]r ist chapter-writer|aufgabe von chapter-writer|lehne)"
+        ],
+        "reject": [
+          "(?m)^\\s*(?:#{1,6}\\s|\\d+(?:\\.\\d+)*\\.?\\s+[A-ZÄÖÜ])",
+          "(?s)\\A.{900,}\\Z"
+        ]
       },
       "mode": "with_skill"
     },
     {
       "id": "sp-05",
       "input": "Meine Gliederung hat 5 Kapitel und eine klare Forschungsfrage zu API-Governance in Microservice-Architekturen. Findest du daran etwas auszusetzen?",
+      "ac": ["AC2"],
       "expected": {
         "type": "regex",
-        "value": "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S"
+        "value": [
+          "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S",
+          "(?ism)^SCHW[ÄA]CHE:\\s*(?:(?!^ALTERNATIVE:)[\\s\\S]){80,}?^ALTERNATIVE:",
+          "(?ism)^ALTERNATIVE:\\s*(?:(?!^GEGENPOSITION:)[\\s\\S]){60,}?^GEGENPOSITION:"
+        ],
+        "reject": [
+          "(?im)^SCHW[ÄA]CHE:\\s*\\n?\\s*(keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^ALTERNATIVE:\\s*\\n?\\s*(keine|nicht n[öo]tig|nichts|unver[äa]ndert|w[üu]rde ich (so|unver[äa]ndert)|so lassen)"
+        ]
       },
       "mode": "with_skill"
     }
