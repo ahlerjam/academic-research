@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/verbatim-guard.mjs",
-            "timeout": 15
+            "timeout": 30
           },
           {
             "type": "command",
