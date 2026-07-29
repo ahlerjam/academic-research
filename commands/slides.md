@@ -66,7 +66,9 @@ Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzur
 
 - `KAPITEL` = Wert von `--kapitel` (Pflicht: Zahl oder `all`)
 - `OUTPUT` = Wert von `--output` (Pflicht: Zielpfad der `.pptx`-Datei)
-- `RAHMEN` = `kolloquium` | `konferenz` | keiner (Flags)
+- `RAHMEN` = `kolloquium` | `konferenz` | leer (Flags)
+- `PAYLOAD` = Ablagepfad der JSON-Zwischenrepräsentation aus Schritt 3
+  (z. B. `${OUTPUT%.pptx}.payload.json`)
 
 ### Schritt 2 — Skill laden
 
@@ -76,25 +78,25 @@ Fehlerpfade, Abgrenzung zu `word-export`/`latex-export`).
 ### Schritt 3 — Folien-Zwischenrepräsentation bauen
 
 ```bash
-python3 - <<'PY'
-import sys
-sys.path.insert(0, "${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts")
-from build_slide_deck import resolve_chapters, extract_slide_data
-
-chapters = resolve_chapters("kapitel", "$KAPITEL")
-slides = extract_slide_data(chapters)
-# slides = [{"title": ..., "core_statement": ..., "source": ...}, ...]
-PY
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts/build_slide_deck.py" \
+  --kapitel "$KAPITEL" --payload "$PAYLOAD" --rahmen "$RAHMEN"
 ```
 
-Fehlt bei einem Kapitel die Kernaussage (`core_statement == ""`), den User um
-eine Kernaussage bitten statt eine zu erfinden.
+Ergebnis ist die JSON-Datei unter `PAYLOAD` mit
+`slides[]` (`title`, `core_statement`, `source`) und `rahmen`. Die
+Kapitel-Auflösung ist `export_thesis.resolve_chapters()` — dieselbe wie bei
+`latex-export`/`word-export`, kein zweiter Nachbau.
+
+Bei Exit-Code ≠ 0 die vom Skript ausgegebene `FEHLER:`-Meldung (z. B. unbekanntes
+Kapitel) unverändert weitergeben — kein Stacktrace. Fehlt bei einem Kapitel die
+Kernaussage (`core_statement == ""`, das Skript meldet das auf stderr), den User
+um eine Kernaussage bitten statt eine zu erfinden.
 
 ### Schritt 4 — `document-skills:pptx` aufrufen
 
-Ein Slide je Eintrag aus Schritt 3: `title` als Folientitel, `core_statement`
-als zentrale Aussage. Bei `--kolloquium`/`--konferenz` zusätzlich Deckblatt-
-und Agenda-Folie voranstellen.
+Ein Slide je Eintrag aus `slides` in Schritt 3: `title` als Folientitel,
+`core_statement` als zentrale Aussage. Bei `rahmen` = `kolloquium`/`konferenz`
+zusätzlich Deckblatt- und Agenda-Folie voranstellen. Zielpfad ist `OUTPUT`.
 
 ### Schritt 5 — Ergebnis zeigen
 

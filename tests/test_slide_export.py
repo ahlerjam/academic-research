@@ -83,6 +83,33 @@ class TestCoreStatementExtraction:
         md = (FIXTURES_DIR / "3-ergebnisse.md").read_text(encoding="utf-8")
         assert extract_core_statement(md) == ""
 
+    # -- Fixrunde PR #488: der Live-Lauf des dokumentierten Aufrufwegs hat einen
+    # rohen \cite{}-Marker in der Kernaussage gezeigt -- also LaTeX-Syntax auf
+    # einer PowerPoint-Folie. slide-export fuehrt bewusst kein
+    # Literaturverzeichnis (SKILL.md, Abgrenzung) und hat keinen Vault-Zugriff,
+    # deshalb wird der Marker entfernt statt aufgeloest.
+
+    def test_cite_marker_is_stripped_from_core_statement(self):
+        from build_slide_deck import extract_core_statement
+
+        md = "# Einleitung\n\nDevOps-Governance ist kaum untersucht \\cite{smith2023,jones2022}.\n"
+        result = extract_core_statement(md)
+        assert result == "DevOps-Governance ist kaum untersucht."
+        assert "\\cite" not in result
+
+    def test_citep_with_locator_is_stripped_from_core_statement(self):
+        from build_slide_deck import extract_core_statement
+
+        md = "# Methodik\n\nDer Reifegrad variiert stark \\citep[S. 12]{smith2023}.\n"
+        assert extract_core_statement(md) == "Der Reifegrad variiert stark."
+
+    def test_sentence_end_after_marker_is_still_detected(self):
+        """Ohne Marker-Entfernung endet der 'erste Satz' schon am Punkt in '[S. 12]'."""
+        from build_slide_deck import extract_core_statement
+
+        md = "# Kapitel\n\nErster Satz \\citep[S. 12]{a}. Zweiter Satz.\n"
+        assert extract_core_statement(md) == "Erster Satz."
+
 
 class TestExtractSlideData:
     def test_one_core_statement_per_slide(self):

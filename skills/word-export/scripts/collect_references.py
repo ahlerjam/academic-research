@@ -20,6 +20,7 @@ Oeffentliche API:
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -27,19 +28,34 @@ from pathlib import Path
 
 # Geschwister-Skill latex-export liefert die kanonische Vault-Query. Import
 # statt Kopie ist hartes Muss (nicht nur Empfehlung), siehe Modul-Docstring.
-_LATEX_EXPORT_SCRIPTS = Path(__file__).resolve().parent.parent.parent / "latex-export" / "scripts"
+_SKILLS_ROOT = Path(__file__).resolve().parent.parent.parent
+_PLUGIN_ROOT = _SKILLS_ROOT.parent
+_LATEX_EXPORT_SCRIPTS = _SKILLS_ROOT / "latex-export" / "scripts"
 if str(_LATEX_EXPORT_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_LATEX_EXPORT_SCRIPTS))
+if str(_PLUGIN_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PLUGIN_ROOT))
 
 from build_bib import get_all_papers  # noqa: E402  (bewusster Re-Export)
+from export_thesis import ChapterResolutionError, resolve_chapters  # noqa: E402
+from render_tex import LATEX_CITATION_COMMANDS  # noqa: E402
+
+#: Default-Referenzverzeichnis: citation-extraction ist Single Source of Truth
+#: fuer die Zitierstil-Regeln (siehe Modul-Docstring).
+DEFAULT_REFERENCES_DIR = _SKILLS_ROOT / "citation-extraction" / "references"
+DEFAULT_KAPITEL_DIR = "kapitel"
+DEFAULT_ACADEMIC_CONTEXT = "academic_context.md"
 
 __all__ = [
     "get_all_papers",
+    "resolve_chapters",
     "resolve_citation_style",
     "load_style_rules",
     "collect_references",
     "resolve_cite_markers",
+    "build_payload",
     "StyleRulesNotFoundError",
+    "ChapterResolutionError",
 ]
 
 
@@ -131,17 +147,24 @@ def collect_references(
 # \cite{key}-Marker-Aufloesung fuer den docx-Pfad (Plan-Risiko #1)
 # ---------------------------------------------------------------------------
 
-# Gleiche Kommando-Allowlist wie render_tex.py (_LATEX_SAFE_COMMANDS): rohe
-# LaTeX-Zitationsmarker aus kapitel/*.md (Issue #386) sind fuer Word bedeutungs-
-# los und muessen vor dem Einfuegen in einen docx-js-Absatz aufgeloest werden,
-# sonst tauchen rohe \\cite{...}-Strings im Word-Dokument auf.
+# Kommandoliste IMPORTIERT statt kopiert (LATEX_CITATION_COMMANDS aus
+# render_tex.py) -- eine zweite, handgepflegte Allowlist wuerde bei kuenftigen
+# Erweiterungen lautlos auseinanderdriften. Rohe LaTeX-Zitationsmarker aus
+# kapitel/*.md (Issue #386) sind fuer Word bedeutungslos und muessen vor dem
+# Einfuegen in einen docx-js-Absatz aufgeloest werden, sonst tauchen rohe
+# \\cite{...}-Strings im Word-Dokument auf.
 _CITE_MARKER_RE = re.compile(
-    r"\\(?:cite|citep|citet|parencite|footcite)\*?(?:\[[^\[\]]*\])*\{([^{}]+)\}"
+    r"\\(?:" + "|".join(LATEX_CITATION_COMMANDS) + r")\*?(?:\[[^\[\]]*\])*\{([^{}]+)\}"
 )
 
 
-def _short_reference(paper: dict) -> str:
-    """Baut ein Klartext-Kurzzitat '(Nachname Jahr)' aus dem CSL-JSON eines Papers."""
+def _short_reference_body(paper: dict) -> str:
+    """Baut den Kurzbeleg-Rumpf 'Nachname Jahr' aus dem CSL-JSON eines Papers.
+
+    Ohne Klammern, damit Mehrfachzitate zu EINEM Klammerausdruck mit
+    Semikolon-getrennten Belegen zusammengefasst werden koennen -- so schreiben
+    es die Autor-Jahr-Stile (APA7, Harvard, Chicago) vor.
+    """
     try:
         csl = json.loads(paper.get("csl_json", "{}"))
     except json.JSONDecodeError:
@@ -158,22 +181,192 @@ def _short_reference(paper: dict) -> str:
     issued = csl.get("issued", {})
     date_parts = issued.get("date-parts", [[]])
     year = str(date_parts[0][0]) if date_parts and date_parts[0] else "o. J."
-    return f"({name} {year})"
+    return f"{name} {year}"
+
+
+def _short_reference(paper: dict) -> str:
+    """Klartext-Kurzzitat '(Nachname Jahr)' fuer einen einzelnen Key."""
+    return f"({_short_reference_body(paper)})"
 
 
 def resolve_cite_markers(text: str, papers: list[dict]) -> str:
     """Ersetzt \\cite{key}-Marker (und Varianten) durch Klartext-Kurzzitate.
 
-    Unbekannte Keys werden durch '(? key)' ersetzt statt den Marker roh stehen
+    Mehrfachzitate (``\\cite{a,b}`` -- gueltiges BibTeX/biblatex und in
+    kapitel/*.md real vorhanden, Issue #386) werden Key fuer Key aufgeloest und
+    zu einem Klammerausdruck zusammengefasst: ``(Smith 2023; Jones et al. 2022)``.
+    Die Key-Liste als Ganzes nachzuschlagen wuerde selbst bei zwei im Vault
+    bekannten Papers den Platzhalter ``(? a,b)`` ins Word-Dokument schreiben.
+
+    Unbekannte Keys werden durch '? key' ersetzt statt den Marker roh stehen
     zu lassen -- sichtbarer Hinweis statt stillem LaTeX-Leck ins Word-Dokument.
     """
     by_id = {p.get("paper_id"): p for p in papers}
 
     def _replace(match: re.Match[str]) -> str:
-        key = match.group(1).strip()
-        paper = by_id.get(key)
-        if paper is None:
-            return f"(? {key})"
-        return _short_reference(paper)
+        keys = [key.strip() for key in match.group(1).split(",")]
+        keys = [key for key in keys if key]
+        if not keys:
+            return match.group(0)
+        parts = []
+        for key in keys:
+            paper = by_id.get(key)
+            parts.append(f"? {key}" if paper is None else _short_reference_body(paper))
+        return f"({'; '.join(parts)})"
 
     return _CITE_MARKER_RE.sub(_replace, text)
+
+
+# ---------------------------------------------------------------------------
+# CLI: der von commands/word.md dokumentierte Aufrufweg (Fixrunde PR #488)
+# ---------------------------------------------------------------------------
+#
+# Vorher enthielt commands/word.md einen Inline-Python-Block in einem
+# QUOTIERTEN Heredoc (`python3 - <<'PY'`). Ein quotierter Delimiter schaltet
+# jede Shell-Expansion ab: ${CLAUDE_PLUGIN_ROOT}, $KAPITEL und $VAULT_DB_PATH
+# blieben literal stehen, der erste Import starb mit einem rohen
+# ModuleNotFoundError -- bevor `document-skills:docx` erreicht wurde.
+# Gegenmittel ist dasselbe Muster wie bei latex-export nach #467/#485: eine
+# echte argparse-CLI, die als normale Kommandozeile aufgerufen wird (Argumente
+# expandiert die Shell dort ganz normal) und Fehler als "FEHLER: ..." meldet
+# statt als Traceback (AC6).
+
+
+def _resolve_vault_db_path(explicit: str | None) -> str:
+    """Kanonischer Vault-Pfad -- identische Quelle wie der .bib-Pfad (AC3).
+
+    Ohne ``--vault-db`` gilt ``academic_vault.db.default_db_path()``: exakt der
+    Aufloeser, den ``latex-export/scripts/export_thesis.py`` fuer die
+    ``.bib``-Erzeugung nutzt (Issue #190). Damit ist die Literatureintrag-Menge
+    im docx per Konstruktion dieselbe wie im LaTeX-Pfad -- vorher stand hier
+    ``$VAULT_DB_PATH``, eine im Command nirgends definierte Variable.
+    """
+    if explicit:
+        return explicit
+    from academic_vault.db import default_db_path
+
+    return default_db_path()
+
+
+def build_payload(
+    selector: str,
+    kapitel_dir: Path | str = DEFAULT_KAPITEL_DIR,
+    academic_context_path: Path | str = DEFAULT_ACADEMIC_CONTEXT,
+    references_dir: Path | str = DEFAULT_REFERENCES_DIR,
+    vault_db_path: str | None = None,
+) -> dict:
+    """Alles, was `document-skills:docx` zum Rendern braucht, als ein dict.
+
+    Enthaelt die Kapitel mit bereits aufgeloesten \\cite{}-Markern, die
+    Paper-Rohdaten und den unveraenderten Stilregel-Text. Bewusst KEINE
+    fertig formatierten Literatureintraege -- das Rendern bleibt Aufgabe des
+    Agenten mit den geladenen Stilregeln (keine zweite Stilregel-
+    Implementierung neben citation-extraction, siehe Modul-Docstring).
+    """
+    chapters = resolve_chapters(str(kapitel_dir), selector)
+
+    context_path = Path(academic_context_path)
+    academic_context_text = (
+        context_path.read_text(encoding="utf-8") if context_path.is_file() else ""
+    )
+
+    resolved_db_path = _resolve_vault_db_path(vault_db_path)
+    refs = collect_references(resolved_db_path, academic_context_text, references_dir)
+
+    messages: list[str] = []
+    if not context_path.is_file():
+        messages.append(
+            f"'{context_path}' fehlt - Zitationsstil faellt auf {DEFAULT_STYLE_FILE} zurueck."
+        )
+    if not refs["papers"]:
+        messages.append(
+            "Vault leer - Papers via `add` hinzufuegen (Literaturverzeichnis bleibt leer)."
+        )
+
+    return {
+        "chapters": [
+            {
+                "source": chapter.name,
+                "path": str(chapter),
+                "body": resolve_cite_markers(chapter.read_text(encoding="utf-8"), refs["papers"]),
+            }
+            for chapter in chapters
+        ],
+        "papers": refs["papers"],
+        "style_file": refs["style_file"],
+        "style_rules": refs["style_rules"],
+        "vault_db_path": resolved_db_path,
+        "messages": messages,
+    }
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Bereitet Kapitel + Vault-Bibliografie fuer den document-skills:docx-Schritt "
+            "von /academic-research:word auf (Issue #446)."
+        ),
+    )
+    parser.add_argument("--kapitel", required=True, help="Kapitel-Nummer oder 'all'")
+    parser.add_argument(
+        "--payload",
+        required=True,
+        help="Zieldatei fuer die JSON-Zwischenrepraesentation",
+    )
+    parser.add_argument("--kapitel-dir", default=DEFAULT_KAPITEL_DIR)
+    parser.add_argument("--academic-context", default=DEFAULT_ACADEMIC_CONTEXT)
+    parser.add_argument("--references-dir", default=str(DEFAULT_REFERENCES_DIR))
+    parser.add_argument(
+        "--vault-db",
+        default=None,
+        help="Vault-Pfad (Default: academic_vault.db.default_db_path(), wie latex-export)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_arg_parser().parse_args(argv)
+
+    try:
+        payload = build_payload(
+            selector=args.kapitel,
+            kapitel_dir=args.kapitel_dir,
+            academic_context_path=args.academic_context,
+            references_dir=args.references_dir,
+            vault_db_path=args.vault_db,
+        )
+    except (ChapterResolutionError, StyleRulesNotFoundError) as exc:
+        print(f"FEHLER: {exc}", file=sys.stderr)
+        return 1
+    except ImportError as exc:
+        # Vault-Modul nicht importierbar -> verstaendliche Meldung statt
+        # Traceback (AC6).
+        print(
+            f"FEHLER: Vault-Modul 'academic_vault' nicht ladbar ({exc}). "
+            "Plugin-Installation pruefen (scripts/setup.sh).",
+            file=sys.stderr,
+        )
+        return 1
+    except OSError as exc:
+        print(f"FEHLER: {exc}", file=sys.stderr)
+        return 1
+
+    payload_path = Path(args.payload)
+    if payload_path.parent != Path(""):
+        payload_path.parent.mkdir(parents=True, exist_ok=True)
+    payload_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    print(
+        f"Vorbereitet: {payload_path} "
+        f"({len(payload['chapters'])} Kapitel, {len(payload['papers'])} Literatureintraege, "
+        f"Stil {payload['style_file']})"
+    )
+    for message in payload["messages"]:
+        print(message, file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -21,17 +21,24 @@ allowed-tools:
 
 1. Backend-Verfügbarkeit prüfen (Abschnitt „Slide-Backend" unten) — vor dem
    ersten `document-skills:pptx`-Aufruf.
-2. Kapitel auflösen: `${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts/build_slide_deck.py`
-   exportiert `resolve_chapters()` — Re-Export aus `latex-export/scripts/export_thesis.py`,
+2. Folien-Zwischenrepräsentation bauen — **eine echte CLI, kein Inline-Python**:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts/build_slide_deck.py" \
+     --kapitel "$KAPITEL" --payload "$PAYLOAD" --rahmen "$RAHMEN"
+   ```
+
+   Exit-Code ≠ 0 → die `FEHLER:`-Meldung des Skripts unverändert weitergeben
+   (kein Stacktrace). Kapitel-Auflösung ist `export_thesis.resolve_chapters()` —
    dieselbe `--kapitel <n>|all`-Semantik wie `latex-export`/`word-export`, kein
    zweiter Nachbau.
-3. Folien-Zwischenrepräsentation bauen: `extract_slide_data(chapters)` liefert
-   pro Kapitel-Datei genau einen Eintrag `{title, core_statement, source}` —
+3. Die Payload enthält `slides[]` mit
+   pro Kapitel-Datei genau einem Eintrag `{title, core_statement, source}` —
    `title` aus der ersten H1-Überschrift (Fallback: Dateiname), `core_statement`
    aus dem ersten Fließtext-Satz nach der Überschrift. Kapitel ohne Fließtext
-   (nur Überschrift/Liste) liefern einen leeren `core_statement` — in dem Fall
-   den User um eine Kernaussage bitten statt eine zu erfinden (Preamble „Keine
-   Fabrikation").
+   (nur Überschrift/Liste) liefern einen leeren `core_statement` — das Skript
+   meldet das auf stderr; in dem Fall den User um eine Kernaussage bitten statt
+   eine zu erfinden (Preamble „Keine Fabrikation").
 4. `document-skills:pptx` aufrufen: ein Slide je Eintrag, Titel als Folientitel,
    `core_statement` als einzige zentrale Aussage (kein Fließtext-Absatz auf der
    Folie — Design-Leitplanken für Kernaussage-Folien kommen aus

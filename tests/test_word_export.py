@@ -114,6 +114,56 @@ class TestReferenceCountParity:
         assert bib_content == ""
         assert result["papers"] == []
 
+    def test_payload_without_explicit_db_uses_canonical_vault_resolver(self, tmp_path, monkeypatch):
+        """AC3: ohne --vault-db greift derselbe Aufloeser wie im .bib-Pfad.
+
+        Fixrunde PR #488: commands/word.md uebergab ``$VAULT_DB_PATH`` -- eine
+        Variable, die im Command nirgends gesetzt wurde. Damit landete ein
+        leerer Pfad in der Vault-Query und die Entrymengen-Garantie docx<->LaTeX
+        war nie hergestellt. Jetzt faellt das Skript auf
+        ``academic_vault.db.default_db_path()`` zurueck -- exakt die Quelle, die
+        ``latex-export/scripts/export_thesis.py`` fuer die .bib nutzt (#190).
+        """
+        from academic_vault.db import VaultDB, default_db_path
+        from academic_vault.server import add_paper
+        from build_bib import get_all_papers
+        from collect_references import build_payload
+
+        db_path = tmp_path / "vault.db"
+        monkeypatch.setenv("VAULT_DB_PATH", str(db_path))
+        assert default_db_path() == str(db_path)
+
+        db = VaultDB(str(db_path))
+        db.init_schema()
+        add_paper(
+            db_path=str(db_path),
+            paper_id="smith2023",
+            csl_json=json.dumps(
+                {
+                    "title": "DevOps Governance",
+                    "type": "article-journal",
+                    "author": [{"family": "Smith", "given": "John"}],
+                    "issued": {"date-parts": [[2023]]},
+                }
+            ),
+        )
+
+        kapitel_dir = tmp_path / "kapitel"
+        kapitel_dir.mkdir()
+        (kapitel_dir / "1-einleitung.md").write_text("# Einleitung\n\nText.\n", encoding="utf-8")
+
+        payload = build_payload(
+            selector="all",
+            kapitel_dir=kapitel_dir,
+            academic_context_path=FIXTURES_DIR / "academic_context_default.md",
+            references_dir=CITATION_REFERENCES_DIR,
+        )
+
+        assert payload["vault_db_path"] == default_db_path()
+        assert [p["paper_id"] for p in payload["papers"]] == [
+            p["paper_id"] for p in get_all_papers(str(db_path))
+        ]
+
 
 # ---------------------------------------------------------------------------
 # AC2 — Zitationsstil-Regeln stammen aus citation-extraction/references/*.md
@@ -218,6 +268,36 @@ class TestCiteMarkerResolution:
         result = resolve_cite_markers(r"Unbekannt \cite{ghost2099}.", self.PAPERS)
         assert result == "Unbekannt (? ghost2099)."
         assert "\\cite" not in result
+
+    # -- Mehrfachzitate: \cite{a,b} ist gueltiges BibTeX/biblatex und kommt in
+    # kapitel/*.md (Issue #386) real vor. Vor der Fixrunde wurde die komplette
+    # Key-Liste als EIN Key nachgeschlagen -> "(? smith2023,jones2022)", also
+    # ein sichtbar kaputter Platzhalter, obwohl beide Keys im Vault stehen.
+
+    def test_resolves_multi_key_cite_marker(self):
+        from collect_references import resolve_cite_markers
+
+        result = resolve_cite_markers(r"Beide \cite{smith2023,jones2022}.", self.PAPERS)
+        assert result == "Beide (Smith 2023; Jones et al. 2022)."
+        assert "?" not in result
+
+    def test_resolves_multi_key_cite_marker_with_whitespace(self):
+        from collect_references import resolve_cite_markers
+
+        result = resolve_cite_markers(r"Beide \citep{smith2023, jones2022}.", self.PAPERS)
+        assert result == "Beide (Smith 2023; Jones et al. 2022)."
+
+    def test_multi_key_cite_marks_only_the_unknown_key(self):
+        from collect_references import resolve_cite_markers
+
+        result = resolve_cite_markers(r"Gemischt \cite{smith2023,ghost2099}.", self.PAPERS)
+        assert result == "Gemischt (Smith 2023; ? ghost2099)."
+
+    def test_multi_key_cite_keeps_key_order_and_drops_empty_entries(self):
+        from collect_references import resolve_cite_markers
+
+        result = resolve_cite_markers(r"\cite{jones2022,,smith2023}", self.PAPERS)
+        assert result == "(Jones et al. 2022; Smith 2023)"
 
     def test_fixture_chapter_has_no_raw_cite_after_resolution(self):
         from collect_references import resolve_cite_markers

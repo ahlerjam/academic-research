@@ -21,22 +21,33 @@ allowed-tools:
 
 1. Backend-Verfügbarkeit prüfen (Abschnitt „Word-Backend" unten) — vor dem
    ersten `document-skills:docx`-Aufruf.
-2. Kapitel aus `kapitel/` auflösen: `${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/export_thesis.py`
-   exportiert `resolve_chapters()` — dieselbe `--kapitel <n>|all`-Auflösung
-   wie `latex-export`, kein zweiter Nachbau.
-3. `\cite{key}`-Marker je Kapitel auflösen: `${CLAUDE_PLUGIN_ROOT}/skills/word-export/scripts/collect_references.py`
-   Funktion `resolve_cite_markers(text, papers)` — LaTeX-Zitationsmarker
-   (Issue #386) sind für Word bedeutungslos und werden zu Klartext-Kurzzitaten
-   `(Nachname Jahr)`; unbekannte Keys werden sichtbar als `(? key)` markiert,
-   nie stillschweigend fallengelassen.
-4. Bibliografie sammeln: `collect_references(db_path, academic_context_text, references_dir)`
-   liefert `{papers, style_file, style_rules}`. `papers` kommt aus
-   `latex-export/scripts/build_bib.get_all_papers()` (geteilte Vault-Query,
-   **Import, keine Kopie** — sonst bricht AC „gleiche Entrymenge docx↔LaTeX"
-   lautlos bei künftigen Vault-Änderungen). `style_rules` ist der **unveränderte**
-   Inhalt der passenden `citation-extraction/references/<style>.md`-Datei
-   (Zuordnung über `Zitationsstil` in `./academic_context.md`, Default `apa.md`).
-5. `document-skills:docx` aufrufen und rendern:
+2. Kapitel + Bibliografie in einem Schritt vorbereiten — **eine echte CLI, kein
+   Inline-Python**:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/word-export/scripts/collect_references.py" \
+     --kapitel "$KAPITEL" --payload "$PAYLOAD"
+   ```
+
+   Ergebnis ist eine JSON-Datei mit `chapters[]` (`source`, `path`, `body`),
+   `papers`, `style_file`, `style_rules`, `vault_db_path`, `messages`.
+   Exit-Code ≠ 0 → die `FEHLER:`-Meldung des Skripts unverändert weitergeben
+   (kein Stacktrace); `messages` anzeigen und weitermachen.
+3. Was das Skript intern garantiert:
+   - Kapitel-Auflösung über `export_thesis.resolve_chapters()` — dieselbe
+     `--kapitel <n>|all`-Semantik wie `latex-export`, kein zweiter Nachbau.
+   - `\cite{key}`-Marker (Issue #386) → Klartext-Kurzzitate `(Nachname Jahr)`;
+     Mehrfachzitate `\cite{a,b}` → `(Alpha 2020; Beta 2021)`, unbekannte Keys
+     sichtbar als `? key`, nie stillschweigend fallengelassen.
+   - `papers` aus `latex-export/scripts/build_bib.get_all_papers()` gegen
+     `academic_vault.db.default_db_path()` (geteilte Vault-Query **und**
+     geteilter Pfad-Auflöser, **Import statt Kopie** — sonst bricht AC „gleiche
+     Entrymenge docx↔LaTeX" lautlos bei künftigen Vault-Änderungen). Override
+     nur für Tests: `--vault-db <pfad>`.
+   - `style_rules` = **unveränderter** Inhalt der passenden
+     `citation-extraction/references/<style>.md`-Datei (Zuordnung über
+     `Zitationsstil` in `./academic_context.md`, Default `apa.md`).
+4. `document-skills:docx` aufrufen und aus der Payload rendern:
    - **Überschriftenebenen als echte Formatvorlagen** — `HeadingLevel.HEADING_1`
      bis `HEADING_6` (bzw. das äquivalente Styles-API des Backends), niemals
      manuelles Fett/Größe. Das ist Voraussetzung dafür, dass Word ein
@@ -48,7 +59,7 @@ allowed-tools:
      erfundene FH-spezifische Wortlaut-Fabrikation (siehe Fehlerpfade).
    - **Verzeichnisse**: Inhaltsverzeichnis über die Formatvorlagen-Struktur
      (Word-native Feldfunktion, kein statischer Text).
-   - **Literaturverzeichnis**: `papers` + `style_rules` aus Schritt 4 als
+   - **Literaturverzeichnis**: `papers` + `style_rules` aus der Payload als
      Word-Absätze rendern — der Agent wendet die geladenen Stilregeln beim
      Rendern an, `collect_references.py` liefert keine fertig formatierten
      Strings (keine zweite Stilregel-Implementierung neben
@@ -56,7 +67,7 @@ allowed-tools:
    - **Eidesstattliche Erklärung**: letzte Seite, generischer Wortlaut +
      Ort-/Datum-/Unterschriftsfeld (hochschulspezifischer Wortlaut ist
      eigenes Issue, siehe Abgrenzung).
-6. `--format pdf`: dieselbe erzeugte `.docx` per `soffice --headless --convert-to pdf`
+5. `--format pdf`: dieselbe erzeugte `.docx` per `soffice --headless --convert-to pdf`
    konvertieren (kein eigener PDF-Renderer). Fehlt LibreOffice/`soffice`,
    Meldung statt Absturz (siehe Fehlerpfade).
 
