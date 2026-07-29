@@ -5,6 +5,12 @@
  * Blockiert Write-Calls auf kapitel/*.md und *.tex, wenn der Content
  * Anführungszeichen-Spans enthält, die nicht im Vault verifiziert sind.
  *
+ * Drei additive Prüfstufen (jede läuft erst, wenn die vorige durch ist):
+ *   1. Wörtliche Zitate  — Anführungszeichen-Spans gegen quotes.verbatim
+ *   2. Figure-Referenzen — "Abb. 3.4" gegen figures.caption
+ *   3. Klammer-Belege    — "(Müller 2021, S. 45)" gegen papers.csl_json,
+ *      mit externer Kaskade als Fallback (Issue #378)
+ *
  * Protokoll:
  *   - Eingabe: JSON via stdin (Claude Code PreToolUse-Format)
  *   - Ausgabe: JSON via stdout (hookSpecificOutput für Block-Hinweis)
@@ -31,6 +37,8 @@ import { existsSync, appendFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
+import { extractCitations, markSpans } from './citation-parse.mjs';
+import { loadConfig, resolveCitations } from './citation-cascade.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -99,15 +107,41 @@ const WRITE_LIKE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
  *   - Edit:      tool_input.new_string
  *   - MultiEdit: alle edits[].new_string (zusammengefuegt)
  */
-function extractContent(toolName, toolInput) {
+/**
+ * Die zu pruefenden Textstuecke eines Tool-Calls, in Reihenfolge.
+ *
+ * Einzige Quelle fuer BEIDE Richtungen: extractContent joint sie zum
+ * Pruef-Text, buildUpdatedInput spleisst die Markierungen wieder hinein.
+ * Liefen Join und Split auseinander, zeigten die Beleg-Offsets ins Leere.
+ */
+function collectSegments(toolName, toolInput) {
   if (toolName === 'MultiEdit' && Array.isArray(toolInput.edits)) {
-    return toolInput.edits.map((e) => e?.new_string || '').join('\n');
+    return toolInput.edits.map((e) => e?.new_string || '');
   }
   if (toolName === 'Edit') {
-    return toolInput.new_string || '';
+    return [toolInput.new_string || ''];
   }
   // Write (und Fallback)
-  return toolInput.content || '';
+  return [toolInput.content || ''];
+}
+
+// Trennzeichen zwischen zwei Segmenten im Pruef-Text. Genau ein Zeichen —
+// die Offset-Rechnung in segmentBases() zaehlt es mit.
+const SEGMENT_SEPARATOR = '\n';
+
+/** Startoffset jedes Segments im gejointen Pruef-Text. */
+function segmentBases(segments) {
+  const bases = [];
+  let offset = 0;
+  for (const segment of segments) {
+    bases.push(offset);
+    offset += segment.length + SEGMENT_SEPARATOR.length;
+  }
+  return bases;
+}
+
+function extractContent(toolName, toolInput) {
+  return collectSegments(toolName, toolInput).join(SEGMENT_SEPARATOR);
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +299,300 @@ function logBypassUsage(filePath) {
 }
 
 // ---------------------------------------------------------------------------
+// Klammer-Zitat-Verifikation (Issue #378)
+// ---------------------------------------------------------------------------
+
+// Obergrenze der pro Write GEPRÜFTEN Belege. Verhindert, dass ein sehr grosses
+// Kapitel den Hook-Timeout sprengt. Überzählige Belege werden NICHT still
+// übergangen — das wäre ein lautloses Loch im Guard: genug Belege vor einem
+// erfundenen, und der erfundene läuft ungeprüft durch. Stattdessen zählen sie
+// wie ein API-Ausfall als "ungeprüft" ([UNVERIFIED] statt Block) und der Hook
+// meldet die Kappung auf stderr.
+const DEFAULT_MAX_CITATIONS_PER_WRITE = 100;
+
+/** Pruefkontingent pro Write; per Env übersteuerbar (Default 100). */
+function maxCitationsPerWrite(env = process.env) {
+  const raw = env.ACADEMIC_CITATION_MAX_PER_WRITE;
+  if (raw === undefined || raw === '') return DEFAULT_MAX_CITATIONS_PER_WRITE;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_MAX_CITATIONS_PER_WRITE;
+}
+
+/**
+ * Reaktion auf ein sauberes Negativ bei der MEHRDEUTIGEN Beleg-Form
+ * "(Wort Jahr)": ``"block"`` (Default) oder ``"mark"``.
+ *
+ * AC2 aus #378 nennt "erfundener Autor/Jahr" ohne Vorbehalt zur Form — und
+ * genau die nackte Form ist der Halluzinationsfall, gegen den der Guard
+ * antritt. Der frühere feste Deckel auf [UNVERIFIED] liess ihn durch.
+ *
+ * Das Gegenargument ("(Fukushima 2011) koennte Prosa sein") bleibt richtig,
+ * traegt aber keinen Deckel mehr: derselbe Code schreibt diese Prosa im
+ * Soft-Fail bereits um. Wer den Eingriff in moeglicherweise unbeteiligten Text
+ * akzeptiert, kann ihn nicht als Grund gegen den sichtbaren, nichts
+ * schreibenden Block anfuehren. Der Trade-off wird deshalb zur Politik des
+ * Schreibenden statt zu einer stillen Entscheidung des Hooks:
+ * ``ACADEMIC_CITATION_AMBIGUOUS=mark`` fuer prosa-lastige Texte.
+ *
+ * Unberuehrt bleibt in beiden Politiken die fehlende Evidenz: ``unavailable``
+ * und "ungeprueft (Kontingent)" markieren weiter (AC3).
+ */
+function ambiguousPolicy(env = process.env) {
+  return (env.ACADEMIC_CITATION_AMBIGUOUS || 'block').toLowerCase() === 'mark' ? 'mark' : 'block';
+}
+
+/**
+ * Ein Eintrag je BELEG (nicht je Fundstelle), in Reihenfolge des ersten
+ * Vorkommens. Der Parser liefert bewusst jede Fundstelle einzeln; Vault-Lookup
+ * und Kaskade sollen trotzdem nur einmal je Beleg laufen.
+ */
+function uniqueByKey(citations) {
+  const byKey = new Map();
+  for (const citation of citations) {
+    if (!byKey.has(citation.key)) byKey.set(citation.key, citation);
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Prüft alle Belege in EINEM Python-Subprozess (nicht einer pro Beleg —
+ * sonst dominieren Interpreter-Starts das Hook-Timeout).
+ * Gibt Map key -> "verified" | "page-mismatch" | "no-match" | "unavailable"
+ * zurück; "unavailable" bedeutet Python/Vault-Fehler (fail-open).
+ */
+function verifyCitationsInVault(citations) {
+  const statuses = new Map();
+  const pyCode = [
+    'import sys, json',
+    `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
+    'from academic_vault.server import verify_citation',
+    'items = json.loads(sys.argv[2])',
+    'print(json.dumps([verify_citation(sys.argv[1], i["family"], i["year"], i["page"])["status"] '
+      + 'for i in items]))',
+  ].join('; ');
+
+  const payload = JSON.stringify(
+    citations.map((c) => ({ family: c.family, year: c.year, page: c.page })),
+  );
+
+  try {
+    const output = execFileSync('python3', ['-c', pyCode, VAULT_DB, payload], {
+      encoding: 'utf-8',
+      timeout: 10000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const parsed = JSON.parse(output.trim());
+    citations.forEach((c, i) => statuses.set(c.key, parsed[i] || 'unavailable'));
+  } catch (err) {
+    warnFailOpen('Citation-Guard', 'lookup-error', err.message);
+    for (const c of citations) statuses.set(c.key, 'unavailable');
+  }
+  return statuses;
+}
+
+const UNVERIFIED_MARKER = ' [UNVERIFIED]';
+
+/**
+ * Baut das vollständige updatedInput-Objekt für den Soft-Fail — je nach Tool
+ * wird content (Write), new_string (Edit) oder edits[].new_string (MultiEdit)
+ * markiert. Alle übrigen Felder bleiben unverändert erhalten.
+ *
+ * Die Zuordnung Fundstelle → Segment läuft über die Basis-Offsets aus
+ * segmentBases(), nicht über eine Textsuche. Nur so landet der Marker an genau
+ * der Stelle, die geprüft wurde: ein identischer Beleg-String in einem
+ * maskierten Bereich (Code-Fence, \cite{...}, Literaturverzeichnis) oder in
+ * einem anderen Edit bleibt unangetastet, und mehrfach vorkommende Belege
+ * werden alle markiert statt nur der erste.
+ */
+function buildUpdatedInput(toolName, toolInput, citations) {
+  const segments = collectSegments(toolName, toolInput);
+  const bases = segmentBases(segments);
+  const marked = segments.map((segment, i) => {
+    const base = bases[i];
+    const local = citations
+      .filter((c) => c.start >= base && c.end <= base + segment.length)
+      .map((c) => ({ ...c, start: c.start - base, end: c.end - base }));
+    if (local.length === 0) return segment;
+    return markSpans(segment, local, UNVERIFIED_MARKER, (msg) => {
+      process.stderr.write(`[Citation-Guard] Warnung: Markierung übersprungen — ${msg}\n`);
+    });
+  });
+
+  if (toolName === 'MultiEdit' && Array.isArray(toolInput.edits)) {
+    return {
+      ...toolInput,
+      edits: toolInput.edits.map((edit, i) => ({ ...edit, new_string: marked[i] })),
+    };
+  }
+  if (toolName === 'Edit') {
+    return { ...toolInput, new_string: marked[0] };
+  }
+  return { ...toolInput, content: marked[0] };
+}
+
+function blockCitation(citation, reasonLine) {
+  const pageInfo = citation.page == null ? '' : `, S. ${citation.page}`;
+  const msg = [
+    '[Citation-Guard] BLOCKIERT: Klammer-Beleg nicht verifiziert.',
+    `Beleg: ${citation.raw}`,
+    `Grund: ${reasonLine}`,
+    `Erwartet: Paper von ${citation.family} (${citation.year}${pageInfo}) im Vault.`,
+    'Bitte Quelle über vault.add_paper() einpflegen oder den Beleg korrigieren.',
+    // Der Block auf der mehrdeutigen Form kann echte Prosa treffen
+    // ("(Rio 1992)"). Wer das regelmässig schreibt, braucht den Schalter — und
+    // muss ihn aus der Meldung erfahren, sonst bleibt nur der Bypass, der den
+    // Guard für die GANZE Datei abschaltet.
+    ...(citation.confidence === 'weak'
+      ? ['Mehrdeutige Form "(Wort Jahr)": ACADEMIC_CITATION_AMBIGUOUS=mark setzt '
+        + 'sie auf [UNVERIFIED] herab, statt sie zu blockieren.']
+      : []),
+    'Bypass: <!-- vault-guard: skip --> im Content ergänzen (nur für Ausnahmefälle).',
+  ].join('\n');
+  process.stderr.write(`${msg}\n`);
+  console.log(JSON.stringify({
+    decision: 'block',
+    reason: msg,
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason: msg,
+    },
+  }));
+  process.exit(2);
+}
+
+/**
+ * Führt den Klammer-Beleg-Check aus. Blockiert (exit 2) bei sauberem Negativ,
+ * markiert bei probable/unavailable mit [UNVERIFIED] (exit 0) und gibt sonst
+ * die Kontrolle zurück.
+ */
+async function runCitationCheck(toolName, toolInput, content) {
+  const occurrences = extractCitations(content);
+  if (occurrences.length === 0) return;
+
+  if (!existsSync(VAULT_DB)) {
+    warnFailOpen('Citation-Guard', 'missing-db', VAULT_DB);
+    return;
+  }
+
+  // Geprüft wird jede erkannte Form. Ein sauberes Negativ blockt sie auch —
+  // die eindeutige (Seite, Signalwort, Co-Autor) immer, die mehrdeutige
+  // "(Wort Jahr)" abhängig von ACADEMIC_CITATION_AMBIGUOUS (Default block,
+  // siehe ambiguousPolicy). Ein Vault- oder Kaskaden-Treffer schweigt in beiden
+  // Fällen — das hält echte Prosa aus dem Block heraus, sobald der Name
+  // überhaupt als Autor existiert ("(Fukushima 2011)", "(Bologna 1999)").
+  const policy = ambiguousPolicy();
+  const strongKeys = new Set(
+    occurrences.filter((c) => c.confidence === 'strong').map((c) => c.key),
+  );
+  const mayBlock = (citation) => policy === 'block' || strongKeys.has(citation.key);
+
+  // Geprüft wird je BELEG, markiert wird je FUNDSTELLE. Derselbe Beleg dreimal
+  // im Kapitel kostet einen Lookup, bekommt aber drei Marker.
+  // Eindeutige Belege zuerst: unter ACADEMIC_CITATION_AMBIGUOUS=mark sind sie
+  // die einzigen, aus denen ein Block folgen kann, und dürfen deshalb nicht von
+  // mehrdeutigen Klammern aus dem Prüfkontingent verdrängt werden (sonst genügt
+  // genug harmlose Prosa vor einem erfundenen Beleg, um den Guard auszuhebeln).
+  const distinct = uniqueByKey(occurrences)
+    .map((citation, index) => ({ citation, index }))
+    .sort((a, b) => {
+      const byStrength = Number(strongKeys.has(b.citation.key))
+        - Number(strongKeys.has(a.citation.key));
+      return byStrength || a.index - b.index;
+    })
+    .map((entry) => entry.citation);
+
+  // Kappung: was nicht mehr ins Kontingent passt, gilt als ungeprüft — nicht
+  // als geprüft-und-in-Ordnung.
+  const limit = maxCitationsPerWrite();
+  const checked = distinct.slice(0, limit);
+  const overflow = distinct.slice(limit);
+  const reasons = new Map();
+  const markKeys = new Set();
+  for (const citation of overflow) {
+    reasons.set(citation.key, `ungeprüft (Kontingent ${limit} erschöpft)`);
+    markKeys.add(citation.key);
+  }
+  if (overflow.length > 0) {
+    process.stderr.write(
+      `[Citation-Guard] Warnung: ${distinct.length} Belege überschreiten das Prüfkontingent `
+      + `von ${limit} (ACADEMIC_CITATION_MAX_PER_WRITE). Die überzähligen ${overflow.length} `
+      + 'werden ungeprüft mit [UNVERIFIED] markiert.\n'
+    );
+  }
+
+  const vaultStatus = verifyCitationsInVault(checked);
+  const unresolved = [];
+  for (const citation of checked) {
+    const status = vaultStatus.get(citation.key);
+    // "unavailable" = Python/Vault-Fehler → fail-open wie beim Quote-Check.
+    if (status === 'verified' || status === 'unavailable') continue;
+    if (status === 'page-mismatch') {
+      if (mayBlock(citation)) {
+        blockCitation(
+          citation,
+          `Seite ${citation.page} liegt außerhalb der im Vault hinterlegten Seiten.`,
+        );
+      }
+      reasons.set(citation.key, 'Seite außerhalb der Vault-Seiten (mehrdeutige Form)');
+      markKeys.add(citation.key);
+      continue;
+    }
+    unresolved.push(citation);
+  }
+
+  if (unresolved.length > 0) {
+    const config = loadConfig();
+    const cascade = await resolveCitations(unresolved, config);
+    for (const citation of unresolved) {
+      const result = cascade.get(citation.key) || { status: 'no-match', score: 0 };
+      if (result.status === 'confirmed') continue;
+      // Sauberes Negativ = Halluzinations-Nachweis, und der gilt unabhängig von
+      // der Form: "(Fantasius 2087)" ist genau der Fall, gegen den der Guard
+      // antritt. "unavailable" dagegen ist fehlende Evidenz, kein Gegenbeweis —
+      // deshalb steht die Politik NUR auf "no-match".
+      if (result.status === 'no-match' && mayBlock(citation)) {
+        blockCitation(
+          citation,
+          config.enabled
+            ? `Weder im Vault noch über arXiv/CrossRef/Semantic Scholar auffindbar `
+              + `(bester Score ${result.score} < ${config.probableMin}).`
+            : 'Nicht im Vault (externe Kaskade per ACADEMIC_CITATION_CASCADE=off deaktiviert).',
+        );
+      }
+      // Erreichbar nur unter ACADEMIC_CITATION_AMBIGUOUS=mark: mehrdeutige Form
+      // mit sauberem Negativ — nicht geblockt, aber auch nicht durchgewunken.
+      const ambiguousNote =
+        result.status === 'no-match' ? ', mehrdeutige Form — nicht blockiert' : '';
+      reasons.set(citation.key, `${result.status} (Score ${result.score})${ambiguousNote}`);
+      markKeys.add(citation.key);
+    }
+  }
+  if (markKeys.size === 0) return;
+
+  // Markiert wird jede Fundstelle des betroffenen Belegs; die Begründung nennt
+  // ihn einmal.
+  const toMark = occurrences.filter((c) => markKeys.has(c.key));
+  const reason = [
+    '[Citation-Guard] Belege konnten nicht abschließend verifiziert werden und '
+      + 'wurden mit [UNVERIFIED] markiert:',
+    ...distinct
+      .filter((c) => markKeys.has(c.key))
+      .map((c) => `  ${c.raw} — ${reasons.get(c.key)}`),
+  ].join('\n');
+  process.stderr.write(`${reason}\n`);
+  console.log(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'allow',
+      permissionDecisionReason: reason,
+      updatedInput: buildUpdatedInput(toolName, toolInput, toMark),
+    },
+  }));
+  process.exit(0);
+}
+
+// ---------------------------------------------------------------------------
 // Haupt-Logik
 // ---------------------------------------------------------------------------
 
@@ -345,6 +673,11 @@ async function main() {
       process.exit(2);
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Klammer-Beleg-Check (additiv, nach Quote- und Figure-Check; Issue #378)
+  // ---------------------------------------------------------------------------
+  await runCitationCheck(toolName, toolInput, content);
 
   process.exit(0);
 }
