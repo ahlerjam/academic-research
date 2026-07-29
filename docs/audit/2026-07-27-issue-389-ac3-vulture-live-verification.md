@@ -1,5 +1,11 @@
 # Issue #389 / PR #415 — AC3+AC4 Live-Verifikationsbeleg (Stand 2026-07-27)
 
+> **Historisches Dokument.** Verifikationsbeleg vom 2026-07-27, kein aktueller
+> Sollzustand. Massgeblich fuer den aktuellen AC3/AC4-Stand sind PR #415 und
+> CHANGELOG.md.
+
+[← Doku-Übersicht](../README.md)
+
 > **Status dieses Files:** committeter Belegnachweis für einen abgeschlossenen
 > Verifikationsschritt (nicht "untracked Arbeitsdokument" wie
 > `2026-06-03-board-audit.md`). Wird durch
