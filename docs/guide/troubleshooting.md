@@ -1,6 +1,10 @@
 # Troubleshooting
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
+
+Bekannte Fehlerbilder und ihre Behebung, sortiert nach der Stelle, an der sie auftreten:
+Setup, Suche, Download, Vault, Zitate. Steht dein Problem nicht dabei, hilft ein Blick in
+die [Installationsanleitung](installation.md) oder ein Issue im Repository.
 
 ## Setup und Umgebung
 

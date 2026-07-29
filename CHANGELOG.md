@@ -114,6 +114,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **`docs/` ist eine navigierbare Referenz statt eines gewachsenen Ordners (#452):**
+  Neue Einstiegsseite `docs/README.md` mit drei Lesepfaden (Erstnutzer,
+  Fortgeschrittene, Beitragende) plus einem eigenen Abschnitt für Historisches; von
+  dort ist jede Datei unter `docs/` in höchstens zwei Klicks erreichbar. Die bisher
+  neun verwaisten Dateien (u. a. `docs/evals/README.md`, `docs/literature-state-schema.md`,
+  `docs/skills/notebook-bundle.md`, `docs/superpowers/README.md`) hängen jetzt am
+  Linkgraphen. Alle Referenz- und Anleitungsseiten folgen derselben Grundstruktur —
+  H1, Breadcrumb `[← Doku-Übersicht]` auf die Einstiegsseite, Lead-Absatz, dann die
+  Abschnitte; die 13 bisherigen `[← zurück zur README]`-Backlinks zeigen entsprechend
+  auf die Übersicht statt auf die README. Historische Dokumente und Momentaufnahmen
+  tragen die Kennzeichnung jetzt am **Seitenanfang** statt irgendwo im Fließtext
+  (`docs/evals/v6.2-tier-eval.md` hatte sie in Zeile 67) und stehen auf der
+  Einstiegsseite getrennt von der gültigen Referenz. `docs/audit/2026-06-03-board-audit.md`
+  beschrieb sich selbst als „untracked Arbeitsdokument", obwohl die Datei versioniert
+  ist — korrigiert. Neuer Abschnitt „Versionierte `.claude/`-Dateien" in
+  `docs/development.md`: welche fünf Pfade die `.gitignore`-Allowlist zulässt (#343),
+  wozu jeder dient und was ihr Entfernen konkret bricht (CI-Job `flowkit-hook-harness`
+  über `scripts/dev/test-pretooluse-blocker.sh`, vorsorgliche Bash-Blockade durch
+  `.claude/settings.json`, verlorene `protectedAreas` für flowkit). Alle fünf
+  Akzeptanzkriterien sind als Guards in `tests/test_issue_452_docs_structure.py`
+  festgeschrieben (BFS über den Linkgraphen, Inbound-Map über alle Markdown-Dateien
+  des Repos, Marker-Position, Drift-Check gegen `git ls-files .claude`,
+  Layout-Prüfung je Seite); die Seitenlisten in `tests/helpers/docs.py` werden aus
+  `git ls-files` abgeleitet, eine neue Seite fällt damit automatisch unter die Guards.
 - **`prisma-flow` kennt uneindeutige Fälle (#460):** `render_flow.py` liest
   optional `n_unclear_screening`. Uneindeutige Treffer zählen nicht mehr als
   Volltextkandidaten, sondern bekommen einen eigenen Knoten

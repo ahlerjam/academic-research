@@ -1,6 +1,6 @@
 # Installation und Migration
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Der Kurzweg steht in der README (Quickstart). Diese Seite erklärt die Voraussetzungen im
 Detail, was das Setup genau tut, und wie eine Migration von v5 abläuft.

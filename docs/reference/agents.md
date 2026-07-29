@@ -1,6 +1,6 @@
 # Agents
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Agents sind LLM-Subagents. Anders als Skills aktivieren sie sich nicht selbst — sie
 werden von einem Command oder einem Skill gestartet und laufen in eigenem Kontext.
