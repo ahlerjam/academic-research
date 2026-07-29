@@ -21,6 +21,13 @@ Arbeite ausschließlich mit Inhalten aus `./writing_state.md` (Arbeitstext)
 und `./academic_context.md` (Forschungsfrage, Methodik). Fehlen Daten: frag
 den User, rate nicht.
 
+## Provenance-Blindheit
+
+Der Beschaffungsweg einer Quelle (z. B. `provenance:scihub` im Vault)
+beeinflusst nie Zitierweise oder Textbehandlung — maßgeblich ist
+ausschließlich das Paper selbst: Autor, Jahr, DOI. Gilt insbesondere für
+`chapter-writer` und `citation-extraction` (Issue #459).
+
 ## Aktivierung
 
 - Der User aktiviert einen Skill dieses Plugins explizit oder durch Trigger-Phrase

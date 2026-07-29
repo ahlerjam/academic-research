@@ -154,3 +154,18 @@ def test_setup_sh_prints_scihub_status_markers():
     assert "SciHub Opt-in" in content, (
         "setup.sh muss SciHub-Opt-in-Status melden (setup.md Interpretationstabelle)"
     )
+
+
+# ---------------------------------------------------------------------------
+# 5. Opt-in-Dialog verspricht keinen (nicht mehr existierenden) Pro-Fund-Hinweis
+#    (Regression zu PR #493 / Issue #459: der Warnhinweis erfolgt einmalig beim
+#    Opt-in, nicht mehr wiederholt pro SciHub-Fund im Fetch-Output.)
+# ---------------------------------------------------------------------------
+
+
+def test_optin_script_does_not_promise_per_find_disclaimer():
+    content = OPTIN_SCRIPT.read_text(encoding="utf-8")
+    assert "Bei jedem SciHub-Fund" not in content, (
+        "scripts/scihub_optin.py darf keinen Pro-Fund-Warnhinweis mehr versprechen "
+        "(agents/scihub-fetcher.md Schritt 5 gibt ihn seit #459 nicht mehr aus)"
+    )

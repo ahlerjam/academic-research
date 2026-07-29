@@ -98,9 +98,15 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 - **Typ:** book
 - **ISBN/DOI:** <identifier_value>
 - **PDF:** <file_path>
-- **Quelle:** <source>
 - **Hinzugefuegt:** <heutiges Datum ISO-8601>
 ```
+
+**Kein `Quelle`-Feld im persistenten Block** (Issue #459): der Beschaffungsweg
+(welcher Subagent das PDF geliefert hat) fliesst bewusst nicht in
+`literature_state.md` ein, weil `chapter-writer` und `citation-extraction`
+diese Datei als Kontext lesen duerfen — der Kanal darf Zitierweise und
+Textbehandlung nicht beeinflussen. Die Provenienz bleibt vollstaendig im
+Vault erhalten (`vault.get_paper()`, `vault.list_papers_by_provenance()`).
 
 3. Ausgabe an User:
 ```
