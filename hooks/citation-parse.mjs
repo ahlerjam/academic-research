@@ -135,9 +135,17 @@ export function maskSkipRegions(text) {
 const PARTICLE_ALT = [...NAME_PARTICLES].sort((a, b) => b.length - a.length).join('|');
 const NAME = String.raw`(?:(?:${PARTICLE_ALT})\s+)?\p{Lu}[\p{L}'’-]+`;
 
-// Co-Autoren-Kette: "/Schmidt", " & Schmidt", ", Schmidt", " und Schmidt",
-// " u. a.", " et al." — der Name ist optional, damit "u. a." allein greift.
-const COAUTHORS = String.raw`(?:\s*(?:\/|&|,|und|u\.\s?a\.|et\s+al\.)\s*(?:${NAME})?)*`;
+// "und andere"-Marker: stehen fuer sich, ohne folgenden Namen.
+const ET_AL = String.raw`(?:u\.\s?a\.|et\s+al\.)`;
+
+// Co-Autoren-Kette: "/Schmidt", " & Schmidt", ", Schmidt", " und Schmidt" —
+// nach einem Trennzeichen MUSS ein Name folgen. Ohne diese Pflicht verschluckt
+// die Kette das Komma vor der Jahreszahl ("(Paris, 2015)"), und der leere
+// Zweitautor liest sich anschliessend wie ein Co-Autoren-Marker: die Klammer
+// gilt als eindeutiger Beleg und wird hart geblockt, obwohl sie Prosa ist.
+// Standardformen wie "(Müller, 2021)" bleiben erkannt — das Komma faengt das
+// optionale ",?" vor dem Jahr (siehe PAREN_CITATION).
+const COAUTHORS = String.raw`(?:\s*(?:(?:\/|&|,|und)\s*(?:${NAME})|${ET_AL}))*`;
 
 // Signalwoerter, die einem Beleg vorangehen duerfen.
 const SIGNAL = String.raw`(?:vgl\.|vergleiche|siehe|s\.|cf\.|zit\.\s*nach|nach)`;
@@ -190,6 +198,9 @@ function nonAuthorToken(token) {
 // Ein Signalwort am Anfang des Belegs (mit oder ohne oeffnende Klammer).
 const SIGNAL_PREFIX = new RegExp(String.raw`^\(?\s*(?:${SIGNAL})`, 'u');
 
+// "u. a."/"et al." im Co-Autoren-Teil — eindeutiger Marker auch ohne Namen.
+const ET_AL_TEST = new RegExp(ET_AL, 'u');
+
 function parsePage(match) {
   const raw = match[4] ?? match[5];
   if (raw === undefined) return null;
@@ -206,18 +217,25 @@ function buildCitation(match, raw, start) {
   if (NON_AUTHOR_TOKENS.has(nonAuthorToken(family.split(/\s+/).pop()))) return null;
   const year = Number.parseInt(match[3], 10);
   if (!Number.isFinite(year) || year < 1400 || year > 2200) return null;
-  const coauthors = (match[2] || '')
+  const coauthorText = (match[2] || '').trim();
+  const coauthors = coauthorText
     .split(/\/|&|,|\bund\b|u\.\s?a\.|et\s+al\./u)
     .map((part) => part.trim())
     .filter(Boolean);
   const page = parsePage(match);
-  // Belegstaerke: Seitenangabe, Signalwort oder Co-Autoren-Marker ("/", "&",
-  // "u. a.", "et al.") kommen in Fliesstext nicht versehentlich vor — dort ist
-  // die Zitierabsicht eindeutig. Die nackte Form "(Wort Jahr)" ist dagegen
-  // lexikalisch nicht von Prosa zu trennen: "(Fukushima 2011)",
-  // "(Corona 2020)". Der Aufrufer darf daraus deshalb keinen Hard-Block
-  // ableiten (siehe verbatim-guard.mjs::runCitationCheck).
-  const strong = page !== null || SIGNAL_PREFIX.test(raw) || (match[2] || '').trim().length > 0;
+  // Belegstaerke: Seitenangabe, Signalwort, ein wirklich gelesener Zweitautor
+  // oder ein "u. a."/"et al."-Marker kommen in Fliesstext nicht versehentlich
+  // vor — dort ist die Zitierabsicht eindeutig. Bewusst NICHT aus dem rohen
+  // Treffertext abgeleitet: ein Trennzeichen ohne folgenden Namen ist kein
+  // Co-Autor (siehe COAUTHORS). Die nackte Form "(Wort Jahr)" ist lexikalisch
+  // nicht von Prosa zu trennen ("(Fukushima 2011)", "(Corona 2020)"); der
+  // Aufrufer prueft sie zwar, darf daraus aber keinen Hard-Block ableiten
+  // (siehe verbatim-guard.mjs::runCitationCheck).
+  const strong =
+    page !== null
+    || SIGNAL_PREFIX.test(raw)
+    || coauthors.length > 0
+    || ET_AL_TEST.test(coauthorText);
   return {
     raw,
     start,

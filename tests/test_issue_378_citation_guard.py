@@ -985,13 +985,16 @@ def test_date_and_status_words_are_not_citations(empty_vault, content):
         "Der Beschluss (Bologna 1999) reformierte die Studienstruktur.",
     ],
 )
-def test_bare_word_year_is_neither_blocked_nor_marked(empty_vault, content):
+def test_bare_word_year_is_never_hard_blocked(empty_vault, content):
     """``(Wort Jahr)`` ohne Signalwort, Seite oder Co-Autor ist mehrdeutig.
 
     Ereignis- und Ortsnamen sind von Autorennamen lexikalisch nicht zu
-    unterscheiden. Wer diese Form nicht als Beleg lesen kann, darf sie weder
-    hart blocken noch mit ``[UNVERIFIED]`` beschriften: die Markierung landet
-    sonst mitten in legitimer Prosa und veraendert den Text des Nutzers.
+    unterscheiden — aus dieser Form darf deshalb nie ein Hard-Block folgen, auch
+    nicht bei komplett leerer Evidenzlage (leerer Vault, Kaskade aus). Was der
+    Guard hier hoechstens tun darf, ist anhaengen: ``[UNVERIFIED]`` hinter der
+    Klammer, kein Eingriff in den uebrigen Satz. Dass ein Treffer die Markierung
+    verhindert, zeigen ``test_bare_word_year_with_a_known_author_stays_untouched``
+    (Kaskade) und ``test_bare_form_with_vault_hit_stays_untouched`` (Vault).
     """
     result = run_hook(
         write_payload(content),
@@ -1000,27 +1003,63 @@ def test_bare_word_year_is_neither_blocked_nor_marked(empty_vault, content):
     assert result.returncode == 0, (
         f"Prosa {content!r} hart geblockt: exit {result.returncode}. {result.stderr}"
     )
+    if "updatedInput" in result.stdout:
+        assert_marker_only(updated_content(result), content)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Der Reaktorunfall (Fukushima 2011) veraenderte die Energiedebatte.",
+        "Der Beschluss (Bologna 1999) reformierte die Studienstruktur.",
+    ],
+)
+def test_bare_word_year_with_a_known_author_stays_untouched(empty_vault, content):
+    """Prosa-Schutz im Regelbetrieb: der Treffer haelt den Marker heraus.
+
+    ``Fukushima`` und ``Bologna`` sind zugleich Orte UND reale Nachnamen. Steht
+    zur Wort-Jahr-Kombination irgendwo ein Paper, bestaetigt die Kaskade sie und
+    der Guard schweigt — die haeufigen Prosa-Faelle bleiben unberuehrt, ohne dass
+    die Form pauschal von der Pruefung ausgenommen werden muss.
+    """
+    year = int(re.search(r"\d{4}", content).group(0))
+    family = re.search(r"\((\w+)", content).group(1)
+    with CascadeStub(
+        {
+            "arxiv": {
+                "status": 200,
+                "entries": [
+                    {"title": "Reaktorsicherheit", "year": year, "authors": [f"K. {family}"]}
+                ],
+            }
+        }
+    ) as stub:
+        env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
+        env.update(stub.env())
+        result = run_hook(write_payload(content), env_overrides=env)
+    assert result.returncode == 0, f"Prosa geblockt: exit {result.returncode}. {result.stderr}"
     assert "[UNVERIFIED]" not in result.stdout, (
-        f"Prosa {content!r} wurde im Text markiert — Textmutation statt Beleg-Pruefung."
+        f"Bestaetigte Wort-Jahr-Form trotzdem markiert: {result.stdout!r}"
     )
 
 
-def test_bare_citation_leaves_content_untouched(empty_vault):
-    """Der mehrdeutige Fall wird uebergangen, nicht umgeschrieben.
+def test_bare_citation_is_marked_but_not_rewritten(empty_vault):
+    """Der mehrdeutige Fall wird markiert, aber sonst nicht angefasst.
 
-    Gegenprobe zur frueheren Fassung, die hier ``[UNVERIFIED]`` anhaengte:
-    ``(Fantasius 1999)`` ist entweder ein Beleg oder Prosa — solange der Guard
-    das nicht entscheiden kann, ist Nichtstun die einzige folgenlose Reaktion.
+    Fruehere Fassung: uebergehen. Das riss ein AC2-Loch — ein erfundenes
+    ``(Fantasius 1999)`` lief unblockiert UND unmarkiert durch. Der Marker ist
+    die eine Reaktion, die zur Evidenzlage passt; alles darueber hinaus
+    (Umschreiben, Block) waere ein Eingriff, den die Form nicht traegt.
     """
     content = "Der Befund (Fantasius 1999) belegt die These eindeutig."
     result = run_hook(
         write_payload(content),
         env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
     )
-    assert result.returncode == 0, f"Erwartet 0 (Durchlauf), got {result.returncode}."
-    assert "updatedInput" not in result.stdout, (
-        f"Mehrdeutiger Beleg wurde umgeschrieben: {result.stdout!r}"
-    )
+    assert result.returncode == 0, f"Erwartet 0 (kein Hard-Block), got {result.returncode}."
+    marked = updated_content(result)
+    assert "(Fantasius 1999) [UNVERIFIED]" in marked, f"Nicht markiert: {result.stdout!r}"
+    assert_marker_only(marked, content)
 
 
 @pytest.mark.parametrize(
@@ -1088,7 +1127,9 @@ def test_uncorroborated_bare_form_stays_out_of_the_block(vault_with_mueller):
     """Gegenprobe: die Aufwertung greift nur beim korroborierten Familiennamen.
 
     Derselbe Text, aber der Prosa-Fall traegt einen anderen Namen — er darf von
-    der Zitierabsicht des Müller-Belegs nicht angesteckt werden.
+    der Zitierabsicht des Müller-Belegs nicht angesteckt werden und deshalb
+    keinen Hard-Block ausloesen. Markiert werden darf er (der Vault kennt
+    ``Fukushima`` nicht); der uebrige Satz bleibt unangetastet.
     """
     content = (
         "Der Befund (Müller 2021, S. 45) ist gut belegt.\n"
@@ -1101,7 +1142,11 @@ def test_uncorroborated_bare_form_stays_out_of_the_block(vault_with_mueller):
     assert result.returncode == 0, (
         f"Prosa neben einem echten Beleg geblockt: exit {result.returncode}. {result.stderr}"
     )
-    assert "[UNVERIFIED]" not in result.stdout, "Prosa neben einem echten Beleg markiert"
+    marked = updated_content(result)
+    assert "(Müller 2021, S. 45) [UNVERIFIED]" not in marked, (
+        f"Vault-Treffer trotzdem markiert: {marked!r}"
+    )
+    assert_marker_only(marked, content)
 
 
 # ---------------------------------------------------------------------------
@@ -1453,3 +1498,185 @@ def test_narrative_citation_survives_line_break_and_signal_words():
         assert data[name][0]["family"] == expected_family, f"{name}: {data[name]}"
         assert data[name][0]["page"] == 7, f"{name}: Seite nicht erkannt, got {data[name]}"
         assert data[name][0]["ok"], f"{name}: Span-Invariante verletzt"
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde 3: confidence steuert die REAKTIONSSTAERKE, nicht das Ob der Pruefung
+#
+# Zwei Befunde, eine Wurzel — ``confidence`` wurde als Ja/Nein-Tor benutzt:
+#
+#   (a) Falsch-negativ: die unkorroborierte nackte Form "(Wort Jahr)" wurde vor
+#       jeder Verifikation ausgefiltert. Ein frei erfundenes "(Fantasius 2087)"
+#       lief unblockiert UND unmarkiert durch (AC2-Loch).
+#   (b) Falsch-positiv: ``COAUTHORS`` liess das Trennzeichen ohne folgenden
+#       Namen zu, und ``strong`` las das rohe Trennzeichen statt einen wirklich
+#       gelesenen Zweitautor. Prosa wie "(Paris, 2015)" galt dadurch als
+#       eindeutiger Beleg und wurde hart geblockt.
+#
+# Neue Regel: geprueft wird jede erkannte Form. ``strong`` darf blocken,
+# ``weak`` hoechstens ``[UNVERIFIED]`` setzen.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Der Vertrag (Paris, 2015) veraenderte die Klimapolitik weltweit.",
+        "Die Erklaerung (Bologna, 1999) reformierte die Studienstruktur.",
+        "Die Konferenz (Rio, 1992) setzte den Rahmen fuer spaetere Gipfel.",
+    ],
+)
+def test_comma_before_year_is_never_a_hard_block(empty_vault, content):
+    """(b) Ein Komma vor der Jahreszahl ist kein Co-Autoren-Marker.
+
+    ``(Paris, 2015)`` hat exakt die Form von ``(Müller, 2021)``: ein Name, ein
+    Komma, ein Jahr. Ohne zweiten Namen belegt das Komma keine Zitierabsicht —
+    es trennt nur. Wer daraus einen eindeutigen Beleg macht, blockt jede
+    Ort-Komma-Jahr-Nennung in Prosa.
+    """
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode != 2, (
+        f"Prosa {content!r} hart geblockt: exit {result.returncode}. {result.stderr}"
+    )
+
+
+def test_coauthor_marker_requires_a_second_name():
+    """(b) Parser-Ebene: nur ein wirklich gelesener Zweitautor macht ``strong``.
+
+    Gegenprobe in beide Richtungen — ``u. a.``/``et al.`` bleiben eindeutige
+    Marker ohne folgenden Namen, ein blosses Trennzeichen wird keiner.
+    """
+    source = """
+    import { extractCitations } from './hooks/citation-parse.mjs';
+    const cases = {
+      commaOnly: 'Der Vertrag (Paris, 2015) galt.',
+      commaAuthor: 'Der Befund (Müller, 2021) gilt.',
+      slashPair: 'Der Befund (Müller/Schmidt 2019) gilt.',
+      commaPair: 'Der Befund (Müller, Schmidt 2019) gilt.',
+      etAl: 'Der Befund (Müller u. a. 2021) gilt.',
+    };
+    const out = {};
+    for (const [name, content] of Object.entries(cases)) {
+      out[name] = extractCitations(content).map((c) => ({
+        family: c.family,
+        authors: c.authors,
+        confidence: c.confidence,
+        ok: content.slice(c.start, c.end) === c.raw,
+      }));
+    }
+    console.log(JSON.stringify(out));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    data = json.loads(result.stdout)
+    for name in data:
+        assert len(data[name]) == 1, f"{name}: erwartet genau eine Fundstelle, got {data[name]}"
+        assert data[name][0]["ok"], f"{name}: Span-Invariante verletzt"
+    assert data["commaOnly"][0]["confidence"] == "weak", (
+        f"Komma ohne Zweitautor als eindeutiger Beleg gelesen: {data['commaOnly']}"
+    )
+    assert data["commaOnly"][0]["authors"] == ["Paris"], (
+        f"Leerer Co-Autor mitgeschleppt: {data['commaOnly']}"
+    )
+    assert data["commaAuthor"][0]["confidence"] == "weak", (
+        f"(Name, Jahr) ist lexikalisch dieselbe Form wie (Ort, Jahr): {data['commaAuthor']}"
+    )
+    for name, expected in (("slashPair", "Schmidt"), ("commaPair", "Schmidt")):
+        assert data[name][0]["confidence"] == "strong", f"{name}: {data[name]}"
+        assert expected in data[name][0]["authors"], f"{name}: Zweitautor fehlt, {data[name]}"
+    assert data["etAl"][0]["confidence"] == "strong", (
+        f"'u. a.' ist ein eindeutiger Marker auch ohne Namen: {data['etAl']}"
+    )
+
+
+def test_bare_invented_citation_is_marked_instead_of_passing_silently(empty_vault):
+    """(a) AC2: der erfundene nackte Beleg verlaesst den Guard nicht spurlos.
+
+    ``(Fantasius 2087)`` ist mehrdeutig — deshalb kein Hard-Block. Mehrdeutig
+    ist aber kein Grund, gar nicht erst nachzusehen: findet weder Vault noch
+    Kaskade etwas, ist das dieselbe Evidenzlage wie ein ungeprueft gebliebener
+    Beleg und bekommt dieselbe Reaktion — ``[UNVERIFIED]``.
+    """
+    content = "Der Befund (Fantasius 2087) belegt die These eindeutig."
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 0, (
+        f"Mehrdeutige Form hart geblockt: exit {result.returncode}. {result.stderr}"
+    )
+    marked = updated_content(result)
+    assert "(Fantasius 2087) [UNVERIFIED]" in marked, (
+        f"Erfundener nackter Beleg lief unmarkiert durch: {result.stdout!r}"
+    )
+    assert_marker_only(marked, content)
+
+
+def test_bare_form_with_vault_hit_stays_untouched(vault_with_mueller):
+    """(a) Gegenprobe: was der Vault kennt, wird nicht angefasst.
+
+    Der Schutz vor Marker-Rauschen ist der tatsaechliche Treffer — nicht das
+    Ausfiltern der Form vor jeder Pruefung.
+    """
+    content = "Der Befund (Müller 2021) ist gut belegt und mehrfach repliziert."
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": vault_with_mueller, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 0, f"Vault-Treffer geblockt: {result.stderr}"
+    assert "updatedInput" not in result.stdout, f"Vault-Treffer wurde markiert: {result.stdout!r}"
+
+
+def test_bare_form_is_checked_against_the_cascade(empty_vault):
+    """(a) Die nackte Form erreicht die Kaskade ueberhaupt.
+
+    Vorher filterte ``runCitationCheck`` sie vor jedem Lookup weg — bestehende
+    Kaskaden-Tests auf dieser Form liefen dadurch ins Leere. Der Nachweis haengt
+    hier an ``stub.hits``, nicht am Exit-Code allein.
+    """
+    content = "Der Befund (Müller 2021) ist mehrfach repliziert worden."
+    with CascadeStub(
+        {
+            "arxiv": {
+                "status": 200,
+                "entries": [
+                    {"title": "Digitale Transformation", "year": 2021, "authors": ["Anna Müller"]}
+                ],
+            }
+        }
+    ) as stub:
+        env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
+        env.update(stub.env())
+        result = run_hook(write_payload(content), env_overrides=env)
+    assert "arxiv" in stub.hits, f"Nackte Form nie an die Kaskade gestellt (hits={stub.hits})"
+    assert result.returncode == 0, f"Kaskaden-Treffer geblockt: {result.stderr}"
+    assert "[UNVERIFIED]" not in result.stdout, (
+        f"Bestaetigter Beleg trotzdem markiert: {result.stdout!r}"
+    )
+
+
+def test_strong_citation_keeps_priority_in_the_budget(empty_vault):
+    """Die nun mitgeprueften nackten Formen duerfen den Block nicht verdraengen.
+
+    Kontingent 2, davor 110 mehrdeutige Klammern: haette die Textreihenfolge
+    Vorrang vor der Belegstaerke, fiele der eindeutige erfundene Beleg aus dem
+    Kontingent und der Hard-Block verschwaende hinter genug harmloser Prosa.
+    """
+    content = (
+        _many_bare_parentheses(110) + "\nDer Befund (Fantasius 1999, S. 12) belegt die These.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides={
+            "VAULT_DB_PATH": empty_vault,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_MAX_PER_WRITE": "2",
+        },
+    )
+    assert result.returncode == 2, (
+        f"Eindeutiger Beleg aus dem Kontingent verdraengt: exit {result.returncode}. "
+        f"stdout={result.stdout[:300]!r} stderr={result.stderr[:300]!r}"
+    )

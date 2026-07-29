@@ -436,23 +436,7 @@ function blockCitation(citation, reasonLine) {
  * die Kontrolle zurück.
  */
 async function runCitationCheck(toolName, toolInput, content) {
-  const extracted = extractCitations(content);
-
-  // Mehrdeutige Formen aussortieren, bevor irgendetwas passiert. Die nackte
-  // Klammer "(Wort Jahr)" ohne Seite, Signalwort, Co-Autor und ohne einen
-  // gleichnamigen eindeutigen Beleg im selben Dokument ist von Prosa nicht zu
-  // trennen ("(Fukushima 2011)", "(Bologna 1999)"). Dafür gibt es genau eine
-  // folgenlose Reaktion: übergehen. Ein Block stoppt legitimen Fließtext, ein
-  // [UNVERIFIED] schreibt einen Marker in einen Satz, der gar kein Beleg ist —
-  // beides sind Eingriffe auf einer Evidenzlage, die keinen Eingriff trägt.
-  const occurrences = extracted.filter((c) => c.confidence === 'strong');
-  const ambiguous = extracted.length - occurrences.length;
-  if (ambiguous > 0) {
-    process.stderr.write(
-      `[Citation-Guard] Hinweis: ${ambiguous} mehrdeutige "(Wort Jahr)"-Klammer(n) `
-      + 'nicht geprüft (nicht von Fließtext unterscheidbar).\n'
-    );
-  }
+  const occurrences = extractCitations(content);
   if (occurrences.length === 0) return;
 
   if (!existsSync(VAULT_DB)) {
@@ -460,9 +444,33 @@ async function runCitationCheck(toolName, toolInput, content) {
     return;
   }
 
+  // Die Belegstärke steuert die REAKTION, nicht das Ob der Prüfung. Geprüft
+  // wird jede erkannte Form — die nackte Klammer "(Wort Jahr)" ist zwar nicht
+  // sicher als Beleg lesbar, aber ein frei erfundenes "(Fantasius 2087)" darf
+  // deswegen nicht spurlos durchlaufen. Blocken darf nur die eindeutige Form
+  // (Seite, Signalwort, Co-Autor); bei der mehrdeutigen bleibt es bei
+  // [UNVERIFIED], weil ein Hard-Block sonst legitimen Fließtext wie
+  // "(Fukushima 2011)" stoppen würde. Ein Vault- oder Kaskaden-Treffer schweigt
+  // in beiden Fällen — das hält den Marker aus echter Prosa heraus, sobald der
+  // Name überhaupt als Autor existiert.
+  const blockableKeys = new Set(
+    occurrences.filter((c) => c.confidence === 'strong').map((c) => c.key),
+  );
+
   // Geprüft wird je BELEG, markiert wird je FUNDSTELLE. Derselbe Beleg dreimal
   // im Kapitel kostet einen Lookup, bekommt aber drei Marker.
-  const distinct = uniqueByKey(occurrences);
+  // Eindeutige Belege zuerst: sie sind die einzigen, aus denen ein Block folgen
+  // kann, und dürfen deshalb nicht von mehrdeutigen Klammern aus dem
+  // Prüfkontingent verdrängt werden (sonst genügt genug harmlose Prosa vor
+  // einem erfundenen Beleg, um den Guard auszuhebeln).
+  const distinct = uniqueByKey(occurrences)
+    .map((citation, index) => ({ citation, index }))
+    .sort((a, b) => {
+      const byStrength = Number(blockableKeys.has(b.citation.key))
+        - Number(blockableKeys.has(a.citation.key));
+      return byStrength || a.index - b.index;
+    })
+    .map((entry) => entry.citation);
 
   // Kappung: was nicht mehr ins Kontingent passt, gilt als ungeprüft — nicht
   // als geprüft-und-in-Ordnung.
@@ -490,10 +498,15 @@ async function runCitationCheck(toolName, toolInput, content) {
     // "unavailable" = Python/Vault-Fehler → fail-open wie beim Quote-Check.
     if (status === 'verified' || status === 'unavailable') continue;
     if (status === 'page-mismatch') {
-      blockCitation(
-        citation,
-        `Seite ${citation.page} liegt außerhalb der im Vault hinterlegten Seiten.`,
-      );
+      if (blockableKeys.has(citation.key)) {
+        blockCitation(
+          citation,
+          `Seite ${citation.page} liegt außerhalb der im Vault hinterlegten Seiten.`,
+        );
+      }
+      reasons.set(citation.key, 'Seite außerhalb der Vault-Seiten (mehrdeutige Form)');
+      markKeys.add(citation.key);
+      continue;
     }
     unresolved.push(citation);
   }
@@ -506,7 +519,7 @@ async function runCitationCheck(toolName, toolInput, content) {
       if (result.status === 'confirmed') continue;
       // Sauberes Negativ auf einer eindeutigen Beleg-Form = Halluzinations-
       // Nachweis. "unavailable" dagegen ist fehlende Evidenz, kein Gegenbeweis.
-      if (result.status === 'no-match') {
+      if (result.status === 'no-match' && blockableKeys.has(citation.key)) {
         blockCitation(
           citation,
           config.enabled
@@ -515,7 +528,11 @@ async function runCitationCheck(toolName, toolInput, content) {
             : 'Nicht im Vault (externe Kaskade per ACADEMIC_CITATION_CASCADE=off deaktiviert).',
         );
       }
-      reasons.set(citation.key, `${result.status} (Score ${result.score})`);
+      // Mehrdeutige Form mit sauberem Negativ: nicht blockierbar, aber auch
+      // nicht durchwinkbar — sie wird wie jeder ungeprüfte Beleg markiert.
+      const ambiguousNote =
+        result.status === 'no-match' ? ', mehrdeutige Form — nicht blockiert' : '';
+      reasons.set(citation.key, `${result.status} (Score ${result.score})${ambiguousNote}`);
       markKeys.add(citation.key);
     }
   }
