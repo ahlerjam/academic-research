@@ -23,6 +23,9 @@ _ALLOWED_HTTP = (
     "http://www.loc.gov/MARC21/slim",
     "http://www.loc.gov/zing/srw/",
     "http://doi.org/",
+    # dx.doi.org-Praefix-Stripping (Issue #457) — ebenfalls kein Netzwerk-Endpoint,
+    # nur eine bekannte alternative DOI-Resolver-Schreibweise, die normalisiert wird.
+    "http://dx.doi.org/",
     # SVG-Namespace im Demo-Renderer (#451) — ebenfalls ein Namespace-Bezeichner,
     # der so im Dokument stehen MUSS; https:// waere schlicht ein anderer Name.
     "http://www.w3.org/2000/svg",
