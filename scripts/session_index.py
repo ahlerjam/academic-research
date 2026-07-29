@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """Session index for /academic-research:history (#466).
 
-Reads/writes ``~/.academic-research/sessions/index.json`` — the index that
+Reads/writes ``~/.academic-research/session_index.json`` — the index that
 `/history` lists, searches and restores from. Before this module existed,
 nothing ever wrote to that file, so `/history` always found it empty
 regardless of how many searches had run.
+
+Deliberately NOT stored inside ``~/.academic-research/sessions/`` (PR #486
+review, #466): `score.md`/`excel.md` pick the "latest" session via
+``ls -t ~/.academic-research/sessions/ | head -1``, which sorts by mtime
+without distinguishing files from directories. `search.md` step 9 writes
+this index last in every search run — after the session directory itself —
+so a sibling ``index.json`` inside ``sessions/`` would permanently outrank
+every session directory in that listing, breaking the default
+`/search` -> `/score`/`/excel` flow (``.../index.json/deduped.json`` does
+not exist).
 
 Usage:
   from session_index import (
@@ -33,7 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_INDEX_PATH = Path.home() / ".academic-research" / "sessions" / "index.json"
+DEFAULT_INDEX_PATH = Path.home() / ".academic-research" / "session_index.json"
 
 
 def load_session_index(index_path: str | Path = DEFAULT_INDEX_PATH) -> list[dict[str, Any]]:

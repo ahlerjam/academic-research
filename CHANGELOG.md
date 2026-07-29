@@ -12,16 +12,23 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 - **`/history` verdrahtet den Sitzungs-Index tatsächlich (#466):** Neues Modul
   `scripts/session_index.py` kapselt Lesen/Schreiben/Filtern/Wiederherstellen
-  von `~/.academic-research/sessions/index.json` — bisher schrieb keine Stelle
+  von `~/.academic-research/session_index.json` — bisher schrieb keine Stelle
   im Plugin je in diese Datei, weshalb `/history` trotz durchgeführter Suchen
-  immer leer blieb. `commands/search.md` schreibt am Ende jedes Laufs (neuer
-  Schritt 9) per `update_session_index()`/`build_session_entry()` einen
-  Eintrag mit Query, Modus, Trefferzahl und automatisch gezählter
-  Volltext-Anzahl (`$SESSION_DIR/pdfs/*.pdf`) fort — ein Upsert nach
-  `session_path`, atomarer Write (tmp-Datei + rename). `commands/history.md`
-  liest/durchsucht diesen Index jetzt über `load_session_index()` +
-  `search_session_index()` statt per rohem `cat`; ein zwischenzeitlich
-  gelöschter oder verschobener Sitzungsordner wird über
+  immer leer blieb. Der Index liegt bewusst außerhalb von
+  `~/.academic-research/sessions/`: `score.md`/`excel.md` wählen die
+  "neueste" Session per `ls -t ~/.academic-research/sessions/ | head -1`
+  (sortiert nach mtime, ohne zwischen Dateien und Verzeichnissen zu
+  unterscheiden); eine Geschwisterdatei dort würde als zuletzt beschriebene
+  Datei jeden echten Sitzungsordner dauerhaft überholen und den
+  Default-Fluss `/search` -> `/score`/`/excel` brechen (PR #486 Review,
+  live reproduziert, vor Merge behoben). `commands/search.md` schreibt am
+  Ende jedes Laufs (neuer Schritt 9) per `update_session_index()`/
+  `build_session_entry()` einen Eintrag mit Query, Modus, Trefferzahl und
+  automatisch gezählter Volltext-Anzahl (`$SESSION_DIR/pdfs/*.pdf`) fort —
+  ein Upsert nach `session_path`, atomarer Write (tmp-Datei + rename).
+  `commands/history.md` liest/durchsucht diesen Index jetzt über
+  `load_session_index()` + `search_session_index()` statt per rohem `cat`;
+  ein zwischenzeitlich gelöschter oder verschobener Sitzungsordner wird über
   `annotate_missing_sessions()` als `missing` markiert und mit
   Klartext-Hinweis ausgegeben statt einen Fehler zu werfen. Neuer Flag
   `--restore-session <id>` (bewusst anders benannt als `--restore <ts>`, das

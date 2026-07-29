@@ -169,6 +169,59 @@ def test_restore_session_makes_entry_latest_by_mtime(tmp_path):
     assert latest_after == older, "restore_session must bump mtime so it sorts as latest"
 
 
+def test_default_index_path_does_not_shadow_ls_t_session_pick(tmp_path):
+    """DEFAULT_INDEX_PATH darf `~/.academic-research/sessions/` nicht kontaminieren.
+
+    score.md/excel.md wählen die "neueste" Session per
+    `ls -t ~/.academic-research/sessions/ | head -1` — sortiert nach mtime,
+    ohne zwischen Dateien und Verzeichnissen zu unterscheiden. `search.md`
+    Schritt 9 schreibt `index.json` (via `update_session_index`) als
+    allerletzten Schritt jedes Suchlaufs, also NACH dem Anlegen des
+    Sitzungsordners. Läge der Index als Geschwisterdatei direkt in
+    `sessions/`, wäre seine mtime dauerhaft die neueste in diesem
+    Verzeichnis, sodass `ls -t | head -1` immer `index.json` statt eines
+    echten Sitzungsordners liefert -- der Default-Fluss `/search` ->
+    `/score`/`/excel` bricht dann mit einem nicht existierenden Pfad
+    (`.../index.json/deduped.json`). Live reproduziert (PR #486 Review).
+    """
+    import importlib
+    import os
+    import subprocess
+
+    import session_index as si
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    original_home = os.environ.get("HOME")
+    os.environ["HOME"] = str(fake_home)
+    try:
+        importlib.reload(si)
+
+        sessions_dir = fake_home / ".academic-research" / "sessions"
+        session_dir = sessions_dir / "2026-03-17T09-12-00Z"
+        session_dir.mkdir(parents=True)
+
+        entry = si.build_session_entry(session_dir, query="q", mode="standard", n_hits=1)
+        si.update_session_index(si.DEFAULT_INDEX_PATH, entry)
+
+        # Reproduziert wortgetreu score.md:42 / excel.md:55.
+        result = subprocess.run(
+            ["ls", "-t", str(sessions_dir)], capture_output=True, text=True, check=True
+        )
+        latest_name = result.stdout.splitlines()[0]
+        assert latest_name == session_dir.name, (
+            f"ls -t liefert {latest_name!r} statt des Sitzungsordners "
+            f"{session_dir.name!r} -- DEFAULT_INDEX_PATH kontaminiert das "
+            "sessions/-Verzeichnis, das score.md/excel.md per `ls -t` scannen."
+        )
+    finally:
+        if original_home is not None:
+            os.environ["HOME"] = original_home
+        else:
+            os.environ.pop("HOME", None)
+        importlib.reload(si)
+
+
 # ---------------------------------------------------------------------------
 # Akzeptanzkriterium 3: Suche über die Historie findet Sessions per Suchbegriff
 # ---------------------------------------------------------------------------

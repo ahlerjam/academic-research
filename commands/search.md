@@ -193,8 +193,12 @@ Job-ID wird in `$SESSION_DIR/batch.json` gespeichert. Abholung über
 ### Schritt 9: Session-Index aktualisieren
 
 Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
-im Index unter `~/.academic-research/sessions/index.json` fortgeschrieben
-(Upsert per Session-Pfad):
+im Index unter `~/.academic-research/session_index.json` fortgeschrieben
+(Upsert per Session-Pfad). Der Index liegt bewusst **nicht** unter
+`~/.academic-research/sessions/` — dieses Verzeichnis lesen `score.md`/
+`excel.md` per `ls -t ... | head -1`, und eine Geschwisterdatei dort würde
+als jeweils zuletzt beschriebene Datei jeden echten Sitzungsordner dauerhaft
+überholen (PR #486 Review, #466):
 
 ```bash
 ~/.academic-research/venv/bin/python -c "
