@@ -49,6 +49,15 @@ def merge_group(group: list[dict[str, Any]]) -> dict[str, Any]:
     )[0]
     merged = dict(best)
 
+    # DOI fallback: the "best" record may itself lack a DOI even though another
+    # record in the group carries one (e.g. a source without DOI coverage had
+    # the most complete metadata otherwise). Never drop a known DOI on merge.
+    if not merged.get("doi"):
+        for paper in group:
+            if paper.get("doi"):
+                merged["doi"] = paper["doi"]
+                break
+
     # Consolidate authors from all duplicates
     all_authors: list[str] = []
     for paper in group:
@@ -100,6 +109,12 @@ def _group_by_title(
 def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[dict[str, Any]]:
     """Deduplicate papers: DOI-first, then title similarity.
 
+    Hits without a DOI are first matched by title against the already-formed
+    DOI groups (same similarity function/threshold as the title-only pass) so
+    that a source without DOI coverage still merges into the right cluster
+    instead of surviving as a separate entry. Only the remainder is grouped
+    among themselves by title.
+
     Returns deduplicated list.
     """
     doi_groups: dict[str, list[dict[str, Any]]] = {}
@@ -114,8 +129,23 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
         else:
             no_doi.append(paper)
 
+    unmatched: list[dict[str, Any]] = []
+    for paper in no_doi:
+        title = (paper.get("title") or "").strip()
+        matched_doi = None
+        if title:
+            for doi, group in doi_groups.items():
+                rep_title = (group[0].get("title") or "").strip()
+                if rep_title and _title_similarity(title, rep_title) >= threshold:
+                    matched_doi = doi
+                    break
+        if matched_doi is not None:
+            doi_groups[matched_doi].append(paper)
+        else:
+            unmatched.append(paper)
+
     deduped = [merge_group(group) for group in doi_groups.values()]
-    for group in _group_by_title(no_doi, threshold):
+    for group in _group_by_title(unmatched, threshold):
         deduped.append(merge_group(group))
 
     log.info("Dedup: %d → %d papers", len(papers), len(deduped))
