@@ -35,6 +35,7 @@ gespeichert:
 | `n_excluded_screening` | Beim Titel/Abstract-Screening ausgeschlossen (relevance-scorer < 0.5) |
 | `n_excluded_eligibility` | Bei der Volltextprüfung ausgeschlossen (quality-reviewer: Reject) |
 | `n_included` | Schließlich eingeschlossene Studien |
+| `n_unclear_screening` | Optional: am Material nicht entscheidbar, wartet auf den Menschen (#460) |
 
 ## Workflow
 
@@ -46,6 +47,13 @@ import json, pathlib
 session_dir = "$SESSION_DIR"  # aus /search Session
 counters = json.loads(pathlib.Path(f"{session_dir}/prisma_counters.json").read_text())
 ```
+
+**Quelle:** Lief das Screening über `parallel-screening`, kommen die Zähler aus
+`$SESSION_DIR/screening_ledger.jsonl` statt aus einer Handzählung —
+`screening_ledger.py counters --session-dir "$SESSION_DIR"` schreibt sie direkt
+in `prisma_counters.json`. Uneindeutige Fälle (`n_unclear_screening`) sind
+weder ein- noch ausgeschlossen: sie bekommen einen eigenen Knoten und zählen
+nicht als Volltextkandidaten.
 
 Alternativ: Wenn kein `prisma_counters.json` vorhanden, den User um die
 Zählwerte bitten oder aus dem angezeigten Ergebnis-Summary ableiten.
