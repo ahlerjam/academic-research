@@ -214,6 +214,86 @@ class TestStyleRulesFromReferenceFile:
 
 
 # ---------------------------------------------------------------------------
+# Review-Fund (PR #488, flowkit-Runde): parse_context_fields() filterte nur
+# "[...]"-Platzhalter, nicht das real ausgelieferte "TODO"-Format aus
+# scripts/bootstrap/academic_context.stub.md -- Titelblatt zeigte woertlich
+# "TODO (Default: Leibniz FH Hannover)" statt "[bitte ergaenzen]".
+# ---------------------------------------------------------------------------
+
+
+class TestParseContextFieldsTodoPlaceholder:
+    def test_todo_values_are_filtered_like_bracket_placeholders(self):
+        from collect_references import parse_context_fields
+
+        text = (
+            "- Universität: TODO (Default: Leibniz FH Hannover)\n"
+            "- Studiengang: TODO\n"
+            "- Thema: Reale Abschlussarbeit\n"
+        )
+        fields = parse_context_fields(text)
+        assert "Universität" not in fields
+        assert "Studiengang" not in fields
+        assert fields["Thema"] == "Reale Abschlussarbeit"
+
+    def test_bootstrap_stub_yields_no_todo_context_fields(self):
+        """Die tatsaechlich ausgelieferte Vorlage (scripts/bootstrap/
+        academic_context.stub.md) hat fuer alle Titelblatt-Felder nur "TODO"
+        stehen -- parse_context_fields() darf keinen dieser Werte durchreichen.
+
+        `humanizer_de` ist absichtlich kein TODO-Feld in der Vorlage und bleibt
+        deshalb zurecht erhalten (kein Titelblatt-Feld, siehe render_docx.py
+        _TITLE_PAGE_FIELDS) -- dieser Test prueft gezielt die TODO-Felder.
+        """
+        from collect_references import parse_context_fields
+
+        stub_path = WORKTREE / "scripts" / "bootstrap" / "academic_context.stub.md"
+        text = stub_path.read_text(encoding="utf-8")
+        fields = parse_context_fields(text)
+        todo_keys = {"Universität", "Studiengang", "Zitationsstil", "Sprache", "Typ", "Thema"}
+        leaked = todo_keys & fields.keys()
+        assert not leaked, f"TODO-Platzhalter haetten gefiltert werden muessen, blieb: {leaked}"
+
+    def test_bootstrap_stub_renders_bitte_ergaenzen_not_todo_on_title_page(self, tmp_path):
+        """End-to-End (Recommendation aus dem Review-Fund): unausgefuellte
+        Bootstrap-Vorlage -> build_payload() -> render_docx() -> Titelblatt zeigt
+        den dokumentierten Platzhalter, nicht das rohe TODO-Wort."""
+        docx = pytest.importorskip("docx", reason="python-docx nicht installiert (uv sync)")
+        from academic_vault.db import VaultDB
+        from collect_references import build_payload
+        from render_docx import render_docx
+
+        db_path = tmp_path / "vault.db"
+        VaultDB(str(db_path)).init_schema()
+
+        kapitel_dir = tmp_path / "kapitel"
+        kapitel_dir.mkdir()
+        (kapitel_dir / "1-einleitung.md").write_text("# Einleitung\n\nText.\n", encoding="utf-8")
+
+        stub_path = WORKTREE / "scripts" / "bootstrap" / "academic_context.stub.md"
+
+        payload = build_payload(
+            selector="all",
+            kapitel_dir=kapitel_dir,
+            academic_context_path=stub_path,
+            references_dir=CITATION_REFERENCES_DIR,
+            vault_db_path=str(db_path),
+        )
+        assert (
+            not {"Universität", "Studiengang", "Zitationsstil", "Sprache", "Typ", "Thema"}
+            & payload["context"].keys()
+        )
+
+        out_path = tmp_path / "export.docx"
+        render_docx(payload, out_path)
+
+        reopened = docx.Document(str(out_path))
+        body_texts = [p.text for p in reopened.paragraphs]
+        joined = "\n".join(body_texts)
+        assert "TODO" not in joined, f"Rohes TODO auf dem Titelblatt gelandet:\n{joined}"
+        assert "[bitte ergaenzen]" in joined
+
+
+# ---------------------------------------------------------------------------
 # Plan-Risiko #1 — \\cite{key}-Marker-Aufloesung fuer den docx-Pfad
 # ---------------------------------------------------------------------------
 

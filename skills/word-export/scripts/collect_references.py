@@ -100,14 +100,18 @@ def parse_context_fields(academic_context_text: str) -> dict[str, str]:
 
     Liefert nur ausgefuellte Felder: die Vorlage aus academic-context/SKILL.md
     schreibt unbeantwortete Punkte als "[...]" -- die als Wert durchzureichen
-    ergaebe spaeter ein Titelblatt mit "Hochschule: [...]". Ein weggelassenes
+    ergaebe spaeter ein Titelblatt mit "Hochschule: [...]". Die tatsaechlich
+    ausgelieferte Bootstrap-Vorlage (scripts/bootstrap/academic_context.stub.md)
+    schreibt stattdessen unbeantwortete Punkte als "TODO" bzw.
+    "TODO (Default: ...)" -- deckungsgleich mit resolve_citation_style() weiter
+    unten wird auch dieses Format als Nicht-Wert behandelt. Ein weggelassenes
     Feld rendert render_docx.py stattdessen als sichtbare Leerstelle
     ("[bitte ergaenzen]") -- keine erfundenen Titelblatt-Angaben.
     """
     fields: dict[str, str] = {}
     for key, value in _CONTEXT_FIELD_RE.findall(academic_context_text or ""):
         cleaned = value.strip()
-        if not cleaned or cleaned.startswith("["):
+        if not cleaned or cleaned.startswith("[") or cleaned.upper().startswith("TODO"):
             continue
         fields[key.strip()] = cleaned
     return fields
