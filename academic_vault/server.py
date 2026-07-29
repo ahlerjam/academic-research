@@ -1082,7 +1082,7 @@ def restore_snapshot(
         return False
 
 
-def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
+def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int | None:
     """Berechnet gedruckte Seitenzahl: printed_page = pdf_page - page_offset.
 
     Args:
@@ -1091,13 +1091,18 @@ def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int:
         pdf_page: Seitenzahl aus Citations-API (1-basiert ab erster PDF-Seite).
 
     Returns:
-        Gedruckte Seitenzahl (>= 1).
+        Gedruckte Seitenzahl (>= 1), oder None wenn pdf_page vor dem
+        Textbeginn liegt (Vorspann -- z.B. Titelblatt, Impressum,
+        Inhaltsverzeichnis). Wird NICHT auf 1 geklemmt (Issue #464 AC2):
+        das waere von einer echten Seite 1 nicht unterscheidbar.
     """
     db = VaultDB(db_path)
     _ensure_schema_for_read(db_path)
     offset = db.get_page_offset(paper_id)
     printed = pdf_page - offset
-    return max(1, printed)  # Nie kleiner als 1
+    if printed < 1:
+        return None
+    return printed
 
 
 def extract_fulltext_for_paper(
@@ -1329,8 +1334,10 @@ def _build_mcp_server():
         set_page_offset(db_path, paper_id, offset)
 
     @mcp.tool(name="vault.get_printed_page")
-    def _vault_get_printed_page(paper_id: str, pdf_page: int) -> int:
-        """Berechnet gedruckte Seitenzahl: printed_page = pdf_page - page_offset."""
+    def _vault_get_printed_page(paper_id: str, pdf_page: int) -> int | None:
+        """Berechnet gedruckte Seitenzahl: printed_page = pdf_page - page_offset.
+
+        None, wenn pdf_page vor dem Textbeginn liegt (Vorspann)."""
         return get_printed_page(db_path, paper_id, pdf_page)
 
     @mcp.tool(name="vault.extract_fulltext")

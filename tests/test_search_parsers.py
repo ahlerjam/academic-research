@@ -399,6 +399,37 @@ def test_arxiv_skips_broken_item_keeps_rest(monkeypatch):
     assert len(results) == len(entries) - 1
 
 
+def test_arxiv_parses_iso8859_1_response_without_charset_header(monkeypatch):
+    """Issue #464 AC1: eine XML-Antwort mit abweichender Zeichenkodierung
+    (ISO-8859-1) und OHNE charset-Angabe im HTTP-Content-Type muss anhand
+    der im XML-Prolog deklarierten Kodierung korrekt dekodiert werden.
+
+    Vor dem Fix wird resp.text (immer UTF-8-dekodiert von httpx mangels
+    charset-Header) an ET.fromstring() uebergeben -- der Umlaut wird dabei
+    zu Mojibake. Nach dem Fix gehen die rohen Bytes (resp.content) an
+    ET.fromstring(), Expat wertet die Prolog-Deklaration selbst aus."""
+    body = (
+        '<?xml version="1.0" encoding="ISO-8859-1"?>\n'
+        f'<feed xmlns="{ARXIV_NS}">\n'
+        "  <entry>\n"
+        "    <id>http://arxiv.org/abs/2401.00001v1</id>\n"
+        "    <title>Über Klimaänderungen in Süddeutschland</title>\n"
+        "    <summary>Zusammenfassung mit Umlauten: Größe, Wärme.</summary>\n"
+        "    <author><name>Müller, Jürgen</name></author>\n"
+        "    <published>2024-01-01T00:00:00Z</published>\n"
+        '    <link title="pdf" href="http://arxiv.org/pdf/2401.00001v1"/>\n'
+        "  </entry>\n"
+        "</feed>\n"
+    ).encode("iso-8859-1")
+    _patch_client(monkeypatch, _xml_handler(body))
+
+    results = search.search_arxiv("climate change", limit=3)
+
+    assert len(results) == 1
+    assert results[0]["title"] == "Über Klimaänderungen in Süddeutschland"
+    assert results[0]["authors"] == ["Müller, Jürgen"]
+
+
 # ---------------------------------------------------------------------------
 # AC3-Provenienz-Guard (Review-Finding zu PR #477 / Issue #456): ein Test darf
 # sich nur dann "..._parses_real_fixture" nennen, wenn die benutzte Fixture
