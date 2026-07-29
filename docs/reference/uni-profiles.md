@@ -1,6 +1,9 @@
 # Per-Uni-Profile
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
+
+Wie ein Hochschulzugang eingerichtet wird, was ein Profil beschreibt und was ohne Profil
+weiterhin funktioniert. Wer nur Open-Access-Quellen nutzt, braucht diese Seite nicht.
 
 ## Per-Uni-Profile
 

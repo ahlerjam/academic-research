@@ -1,5 +1,11 @@
 # Eval-Strategie
 
+[← Doku-Übersicht](../README.md)
+
+Der Sollzustand für alles unter `evals/`: welche Komponente real gemessen wird, welche
+nur strukturell geprüft ist und was echte Läufe an API-Budget kosten. Diese Seite altert
+nicht wie ein Report — sie wird von einem Guard gegen das Dateisystem gehalten.
+
 **Issue:** #390 — echte Qualitätsmetriken statt stillschweigender Schema-Checks
 **Guard:** `tests/evals/test_eval_strategy.py` (prüft diese Tabelle gegen das Dateisystem)
 

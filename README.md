@@ -179,6 +179,9 @@ allen Ausgaben und den dabei gefundenen Stolperstellen steht in
 
 ## Dokumentation
 
+Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
+[docs/README.md](docs/README.md).
+
 **Loslegen**
 
 - [Installation und Migration](docs/guide/installation.md) — Voraussetzungen, was das Setup tut, Umstieg von v5

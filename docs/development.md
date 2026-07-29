@@ -1,6 +1,6 @@
 # Entwicklung, Tests und Evals
 
-[← zurück zur README](../README.md)
+[← Doku-Übersicht](README.md)
 
 Für Beitragende. Endnutzer brauchen diese Seite nicht — der Nutzerweg läuft über
 `scripts/setup.sh` und pip, nicht über `uv`.
@@ -78,6 +78,39 @@ Die Hooks umfassen `ruff` (Lint + Format), `mypy`, `end-of-file-fixer`, `check-y
   (CI-erzwungen).
 - Jeder nicht-Draft-PR durchläuft die Review-Pipeline
   `.github/workflows/pr-deep-review.yml`; der `coordinator`-Job ist das Merge-Gate.
+
+## Versionierte `.claude/`-Dateien
+
+`.claude/` ist normalerweise ein lokaler Ordner. In diesem Repository sind fünf Dateien
+davon bewusst **versioniert** (Issue #343) — sie gehören zur Infrastruktur, nicht zur
+Arbeitsumgebung einer einzelnen Person. Die Mechanik dahinter steht in der `.gitignore`:
+`.claude/*` ist ausgeschlossen, und genau diese Einträge sind per `!`-Ausnahme wieder
+zugelassen.
+
+| Versionierte Datei | Rolle |
+|--------------------|-------|
+| `.claude/settings.json` | Verdrahtet die Hooks unten an `SessionStart`/`PreToolUse`/`PostToolUse`, aktiviert die Plugins (u. a. flowkit) und trägt die Permission-Allowlist. |
+| `.claude/hooks/pretooluse-blocker.sh` | Einzige Quelle der Wahrheit für das Gefahrenmuster-Regex der roten Linien (Force-Push auf `main`, `--no-verify`, `gh api`-Mutationen, `gh --admin`). |
+| `.claude/hooks/inject-context.sh` | `SessionStart`-Hook: meldet Branch und Arbeitsstand. Rein informativ, fail-open. |
+| `.claude/hooks/pushci-guard.sh` | Erinnert an den konfigurierten CI-Push-Alias. Reiner Komfort, fail-open. |
+| `.claude/workflow.config.json` | flowkit-Konfiguration: `areas` und `protectedAreas` (siehe [AGENTS.md](../AGENTS.md)). |
+
+**Was bricht, wenn eine dieser Dateien verschwindet:**
+
+- **CI wird rot.** Der Job `flowkit-hook-harness` in `.github/workflows/ci.yml` ruft
+  `scripts/dev/test-pretooluse-blocker.sh` auf, und dieses Harness testet die
+  *deployte* Datei `.claude/hooks/pretooluse-blocker.sh` — nicht eine Vorlage. Fehlt
+  sie, schlägt der Job fehl.
+- **Die lokale Sitzung blockiert.** `.claude/settings.json` startet den Blocker so, dass
+  ein fehlendes oder nicht ausführbares Skript jeden `Bash`-Aufruf **vorsorglich
+  ablehnt** — bewusst so gebaut, damit ein gelöschter Guard nicht stillschweigend zu
+  „keine Prüfung" wird.
+- **flowkit verliert seine Grenzen.** Ohne `.claude/workflow.config.json` kennt der
+  Workflow die geschützten Bereiche nicht mehr, und Änderungen an `vault`, `hooks`,
+  `security` oder `ci` laufen ohne die dafür vorgesehene Sonderbehandlung.
+
+Alles andere unter `.claude/` (`settings.local.json`, `worktrees/`, eigene `agents/`)
+bleibt lokal und gehört nicht ins Repository.
 
 ## Evals
 

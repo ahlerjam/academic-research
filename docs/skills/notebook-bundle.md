@@ -1,5 +1,11 @@
 # NotebookLM-Bundle — Benutzerhandbuch
 
+[← Doku-Übersicht](../README.md)
+
+Wie aus Vault-Quellen ein Bundle für NotebookLM entsteht, wofür die Antworten taugen —
+und wofür ausdrücklich nicht. Lies den Hinweis zur Verbatim-Garantie, bevor du eine
+NotebookLM-Antwort in einer Arbeit verwendest.
+
 ## Wichtiger Hinweis: Keine Verbatim-Garantie
 
 **Dieses Bundle ist ein Triage-Tool, kein Zitat-Pfad.**

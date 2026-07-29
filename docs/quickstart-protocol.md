@@ -1,6 +1,6 @@
 # Quickstart-Protokoll — realer Durchlauf
 
-[← zurück zur README](../README.md)
+[← Doku-Übersicht](README.md)
 
 Protokoll des Durchlaufs, mit dem der [Quickstart der README](../README.md#quickstart)
 abgenommen wurde: frische Installation → Setup → erstes Paper im Vault → erstes
