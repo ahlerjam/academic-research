@@ -88,24 +88,24 @@
       "expected": {
         "type": "json_field",
         "path": "$.status",
-        "check": "exists"
+        "check": "equals:success"
       },
-      "notes": "Recherchiert (WebSearch): Martin Paul Eve, 'Open Access and the Humanities', CUP 2014, CC-BY-SA, frei auf Cambridge Core. Erwartet status in {success, metadata_only, no_match, captcha, pickup_required}."
+      "notes": "Verifiziert (browser-use, isolierte Session, 29.07.2026, keine Zugangsdaten): Buchseite cambridge.org/core/product/identifier/9781316161012/type/book zeigt 'Open Access'-Badge; der 'Full book PDF'-Link liefert ein echtes, vollstaendiges 228-Seiten-PDF (Martin Paul Eve, 'Open Access and the Humanities', CUP 2014, CC-BY-SA) ohne Login. Discovery-/Download-Flow deckungsgleich mit agents/cambridge-core.md nachvollzogen. Fix-Runde PR #500: ersetzt die vorherige, nie ausgefuehrte Existenzpruefung durch den real belegten Zielwert."
     },
     {
       "id": "pf-07",
       "description": "oxford-academic: Commit-to-Open-OA-Buch via Oxford Scholarship Online",
       "agent": "oxford-academic",
       "input": {
-        "doi": "10.1093/oso/9780190247249.001.0001",
+        "doi": "10.1093/oso/9780198919810.001.0001",
         "output_path": "/tmp/pf-07-oxford-oa.pdf"
       },
       "expected": {
         "type": "json_field",
         "path": "$.status",
-        "check": "exists"
+        "check": "equals:success"
       },
-      "notes": "Recherchiert (WebSearch): OSO-Titel aus dem 'Commit to Open'-Programm, DOI-Praefix 10.1093/oso bestaetigt. Erwartet status in Enum."
+      "notes": "KORRIGIERT (Fix-Runde PR #500): die urspruengliche DOI 10.1093/oso/9780190247249.001.0001 fuehrte real zu 'Philosophies of Qualitative Research' (Leavy, Hrsg.) -- ein regulaeres, bezahlpflichtiges OSO-Buch ohne jedes OA-/Free-/Unlocked-Badge, keine Commit-to-Open-Publikation. Ersetzt durch einen ueber die offizielle Titelliste academic.oup.com/commit-to-open/pages/collections verifizierten realen Commit-to-Open-Titel: 'Praiseworthiness: The Lighter Side of Moral Responsibility' (Zoe Johnson King, OUP, veroeffentlicht 06.11.2025), academic.oup.com/book/61726. Verifiziert (browser-use, isolierte Session, 29.07.2026, keine Zugangsdaten): direkter PDF-Download liefert ein echtes, vollstaendiges 225-Seiten-PDF ohne Login -- Discovery-/Download-Flow deckungsgleich mit agents/oxford-academic.md nachvollzogen."
     },
     {
       "id": "pf-08",
@@ -118,9 +118,9 @@
       "expected": {
         "type": "json_field",
         "path": "$.status",
-        "check": "exists"
+        "check": "equals:captcha"
       },
-      "notes": "Recherchiert (WebFetch von jstor.org/publisher/ucal): als 'OPEN ACCESS' gelistet unter UC Press. JSTORs Nutzungsbedingungen untersagen ausdruecklich automatisiertes/systematisches Herunterladen (about.jstor.org/terms) -- Agent nutzt daher ausschliesslich browser-use im Menschentempo. Sollte JSTORs bekannt aggressives Anti-Scraping (CAPTCHA/Rate-Limiting) hier zuschlagen, ist status:captcha statt success eine erwartete, dokumentierte Alternative (AC1)."
+      "notes": "Verifiziert (browser-use, isolierte Session, 29.07.2026, keine Zugangsdaten): jstor.org/content/oa_book_edited/10.1525/j.ctt1kc6k3q zeigt echte 'OPEN ACCESS'-Badges je Kapitel; der direkte Zugriff auf den PDF-Endpunkt (jstor.org/stable/pdf/10.1525/j.ctt1kc6k3q.1.pdf) loeste jedoch beim allerersten Request JSTORs reCAPTCHA 'Access Check' aus (Block-Referenz #54030350-8b3b-11f1-9e43-eab9a1861140, IP 147.161.231.116, 29.07.2026 10:50 UTC) -- JSTORs aggressive Bot-Erkennung damit empirisch bestaetigt statt nur behauptet. status:captcha ist hier der belegte, erwartete Zielwert (AC1-Alternative), nicht success -- konsistent mit dem in agents/jstor.md dokumentierten hohen Anti-Scraping-Risiko."
     }
   ]
 }
