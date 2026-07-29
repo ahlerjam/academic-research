@@ -21,7 +21,7 @@
 | Browser-Module funktionieren nicht | `uv tool install browser-use && browser-use doctor` |
 | Browser-Module fehlen ganz | Ohne `uv`/`pipx` überspringt das Setup die CLI. Nachinstallieren, dann `--mode deep` erneut |
 | Keine Ergebnisse bei der Suche | Breitere Query; `--no-expand` nutzt die Roh-Query ohne Expansion |
-| Semantic Scholar 429-Fehler | `SS_API_KEY`-Umgebungsvariable setzen |
+| Semantic Scholar 429-Fehler | `SS_API_KEY`-Umgebungsvariable setzen, siehe [Zugangsdaten](installation.md#zugangsdaten) |
 | Excel leer | Zuerst `/academic-research:search` ausführen — ohne Session gibt es nichts zu exportieren |
 
 ## Vault und Zitate
@@ -33,7 +33,7 @@
 | Vektor-Suche wirkt wirkungslos | Log prüfen: fehlt `sentence-transformers` oder scheitert der Modell-Download, fällt der Vault auf FTS5-only zurück |
 | Verbatim-Guard blockt den Kapitel-Write | Das ist der Normalfall bei einem nicht belegten Zitat: Zitat via `quote-extractor` aus dem PDF holen, dann erneut schreiben |
 | Zitat steht im Vault, wird trotzdem geblockt | Der Guard vergleicht wortwörtlich — Anführungszeichen, Auslassungen und Umbrüche müssen exakt passen |
-| `book-fetcher` schlägt immer fehl | Per-Uni-Profil prüfen: `cat ~/.academic-research/library-profiles/active.yaml` |
+| `book-fetcher` schlägt immer fehl | Per-Uni-Profil prüfen: `cat ~/.academic-research/library-profiles/active.yaml`, siehe [Zugangsdaten](installation.md#zugangsdaten) |
 
 ## Skills
 
