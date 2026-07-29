@@ -1,7 +1,7 @@
 """academic_vault MCP-Server.
 
 Stellt MCP-Tools vault.search/get_paper/add_paper/ensure_file/
-add_quote/find_quotes/get_quote/stats bereit.
+add_quote/find_quotes/get_quote/add_note/find_notes/search_notes/stats bereit.
 
 Start via: python -m academic_vault.server
 """
@@ -9,11 +9,10 @@ Start via: python -m academic_vault.server
 import json
 import logging
 import os
-import re
 from pathlib import Path
 from uuid import uuid4
 
-from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _Unset, default_db_path
+from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset, default_db_path
 from .embedding_model import get_embedder
 from .files_api import FilesAPIClient
 
@@ -99,6 +98,17 @@ def _ensure_schema_for_read(db_path: str) -> None:
     add_quote, ...), die weiterhin unbedingt ``init_schema()`` aufrufen und
     damit voll migrations-/reparaturfaehig bleiben (z.B. Trigger-Refresh auf
     Bestands-DBs, Issue #373).
+
+    Zusaetzlich wird ``notes_fts`` geprueft (Review-Fund P1 zu PR #490):
+    ``notes_fts`` ist erst mit Issue #462 hinzugekommen und existiert auf
+    keinem Bestands-Vault, dessen ``papers``-Tabelle schon vorher da war.
+    Ohne diesen zweiten Guard wuerde ``search_notes()`` auf jeder solchen
+    Bestands-DB mit ``sqlite3.OperationalError: no such table: notes_fts``
+    abstuerzen statt (wie #369 fuer ``papers_fts`` etabliert) ein leeres
+    Ergebnis zu liefern -- der Schreibpfad ``add_note()`` (unbedingtes
+    ``init_schema()``) legt ``notes_fts`` erst beim ersten Schreibzugriff an,
+    ein reiner Lesezugriff (``find_notes``/``search_notes``/``get_note``)
+    kann diesem aber zeitlich vorausgehen.
     """
     conn = VaultDB._open(db_path)
     try:
@@ -108,9 +118,15 @@ def _ensure_schema_for_read(db_path: str) -> None:
             ).fetchone()
             is not None
         )
+        notes_fts_exists = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notes_fts'"
+            ).fetchone()
+            is not None
+        )
     finally:
         conn.close()
-    if not papers_exists:
+    if not papers_exists or not notes_fts_exists:
         VaultDB(db_path).init_schema()
 
 
@@ -281,33 +297,6 @@ def search_papers(
     )
 
 
-_FTS5_OPERATOR_KEYWORDS = re.compile(r"\b(?:NEAR|AND|OR|NOT)\b")
-
-
-def _sanitize_fts5_query(query: str) -> str:
-    """Bereinigt Query fuer sichere FTS5-MATCH-Ausfuehrung.
-
-    FTS5-Sonderzeichen die Probleme verursachen: - / ^ * " ( ) sowie der
-    Column-Filter-Operator ':'. Zusaetzlich werden die booleschen
-    Operator-Keywords NEAR/AND/OR/NOT (nur in Grossschreibung
-    operatorwirksam) neutralisiert, damit usergenerierte Strings nicht
-    versehentlich als FTS5-Syntax interpretiert werden und einen
-    Query-Crash ausloesen.
-
-    Strategie: Sonderzeichen und Operator-Keywords durch Leerzeichen
-    ersetzen, Mehrfach-Leerzeichen kollabieren. Kleingeschriebene Woerter
-    wie 'android' oder 'and' bleiben unangetastet — nur die in FTS5
-    operatorwirksamen Grossschreibungen werden entfernt.
-    """
-    # FTS5-Sonderzeichen entfernen/ersetzen: -, ^, /, *, (, ), ", :
-    sanitized = re.sub(r'[-^/*():"]', " ", query)
-    # Boolesche Operator-Keywords (Grossschreibung) neutralisieren
-    sanitized = _FTS5_OPERATOR_KEYWORDS.sub(" ", sanitized)
-    # Mehrfache Leerzeichen zusammenfassen
-    sanitized = re.sub(r"\s+", " ", sanitized).strip()
-    return sanitized
-
-
 def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
     """Vektor-KNN ueber chunk_embeddings fuer das Hybrid-Retrieval (Issue #372).
 
@@ -450,6 +439,57 @@ def find_quotes(
     db = VaultDB(db_path)
     _ensure_schema_for_read(db_path)
     return db.find_quotes(paper_id, query, k)
+
+
+# ---------------------------------------------------------------------------
+# Notes-Funktionen (rein, testbar ohne MCP-Framework) -- Issue #462
+# ---------------------------------------------------------------------------
+
+
+def add_note(
+    db_path: str,
+    paper_id: str,
+    text: str,
+    tags: str | None = None,
+    page: int | None = None,
+) -> str:
+    """Fuegt eine Notiz/ein Exzerpt zu einer Quelle in den Vault ein.
+
+    Gibt note_id zurueck. ``page`` ist optional (AC2).
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    return db.add_note(paper_id=paper_id, text=text, tags=tags, page=page)
+
+
+def get_note(db_path: str, note_id: str) -> dict | None:
+    """Gibt vollstaendigen Note-Record als dict zurueck oder None."""
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.get_note(note_id)
+
+
+def find_notes(
+    db_path: str,
+    paper_id: str,
+    query: str | None = None,
+    k: int = 10,
+) -> list[dict]:
+    """Gibt Notizen fuer ein Paper zurueck, optional per Text-Filter (AC1)."""
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.find_notes(paper_id, query, k)
+
+
+def search_notes(db_path: str, query: str, k: int = 5) -> list[dict]:
+    """FTS5-Volltextsuche ueber alle Notizen.
+
+    AC3: macht Exzerpte beim Kapitelschreiben themenbezogen auffindbar.
+    AC4: Volltextsuche findet Notizinhalte.
+    """
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.search_notes(query, k)
 
 
 # ---------------------------------------------------------------------------
@@ -1252,6 +1292,26 @@ def _build_mcp_server():
     def _vault_get_quote(quote_id: str) -> dict | None:
         """Gibt vollstaendigen Quote-Record zurueck."""
         return get_quote(db_path, quote_id)
+
+    @mcp.tool(name="vault.add_note")
+    def _vault_add_note(
+        paper_id: str,
+        text: str,
+        tags: str | None = None,
+        page: int | None = None,
+    ) -> str:
+        """Fuegt eine Notiz/ein Exzerpt zu einer Quelle hinzu. page optional (#462)."""
+        return add_note(db_path, paper_id=paper_id, text=text, tags=tags, page=page)
+
+    @mcp.tool(name="vault.find_notes")
+    def _vault_find_notes(paper_id: str, query: str | None = None, k: int = 10) -> list[dict]:
+        """Gibt Notizen fuer ein Paper zurueck, optional per Text-Filter."""
+        return find_notes(db_path, paper_id, query=query, k=k)
+
+    @mcp.tool(name="vault.search_notes")
+    def _vault_search_notes(query: str, k: int = 5) -> list[dict]:
+        """FTS5-Volltextsuche ueber alle Notizen (fuer Kapitelschreiben, #462)."""
+        return search_notes(db_path, query, k=k)
 
     @mcp.tool(name="vault.stats")
     def _vault_stats() -> dict:

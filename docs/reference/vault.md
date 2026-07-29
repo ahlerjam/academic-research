@@ -94,9 +94,9 @@ Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers`
 python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
 ```
 
-## MCP-Tools (alle 34)
+## MCP-Tools (alle 37)
 
-Der Server registriert **34 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **37 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -120,6 +120,14 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.search_quote_text(verbatim, k=5)` | LIKE-Volltextsuche in `quotes.verbatim` (prüft, ob ein Zitat existiert) | `vault.search_quote_text("Attention is all", k=3)` |
 | `vault.find_quotes(paper_id, query=None, k=10)` | Gibt Quotes für ein Paper zurück (optional Ähnlichkeitssuche) | `vault.find_quotes("vaswani2017", query="self-attention")` |
 | `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` |
+
+**Notizen & Exzerpte** (Issue #462)
+
+| Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
+|------|-------------|------|
+| `vault.add_note(paper_id, text, tags=None, page=None)` | Fügt ein Exzerpt zu einer Quelle hinzu; `page` optional; gibt `note_id` zurück | `vault.add_note("vaswani2017", "Kernbefund: ...", page=5)` |
+| `vault.find_notes(paper_id, query=None, k=10)` | Gibt Notizen für ein Paper zurück, optional per Text-Filter (LIKE) | `vault.find_notes("vaswani2017", query="Methode")` |
+| `vault.search_notes(query, k=5)` | FTS5-Volltextsuche über alle Notizen — macht Exzerpte beim Kapitelschreiben themenbezogen auffindbar | `vault.search_notes("Reliabilität", k=5)` |
 
 **Figures & Tabellen** (v6.1 Figure-Verifier)
 

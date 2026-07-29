@@ -81,8 +81,9 @@ Bevor geschrieben wird, erstelle einen kurzen internen Plan:
 2. **Quellen-Mapping via Vault** — pro Unterabschnitt:
    `vault.search("<Kapitelthema>", k=5)` → `[paper_id, snippet]`, dann
    `vault.find_quotes(paper_id, query="<Unterabschnitts-Frage>", k=3)` →
-   `[verbatim, page, quote_id]`. Ergebnis: ~1700 Token Quellen-Kontext statt
-   vollständigem `literature_state.md`-Dump.
+   `[verbatim, page, quote_id]` (+ `vault.search_notes()`: Exzerpte).
+   Ergebnis: ~1700 Token Quellen-Kontext statt vollständigem
+   `literature_state.md`-Dump.
 3. **Argumentationsfluss** — wie das Kapitel zur Forschungsfrage beiträgt
 4. **Schlüsseldefinitionen** — einzuführende oder referenzierte Begriffe
 
@@ -94,16 +95,16 @@ Schreibe das Kapitel Abschnitt für Abschnitt. Je Abschnitt:
 
 1. Text in der Sprache der Arbeit entwerfen (Default: Deutsch)
 2. In-Text-Zitate im konfigurierten Zitationsstil einbauen (Default: APA7)
-3. Formales akademisches Register — keine Umgangssprache, keine Ich-Form (außer die Methodik verlangt es)
+3. Formales akademisches Register — keine Umgangssprache, keine Ich-Form (außer bei Methodik)
 4. Wo sinnvoll, explizit an die Forschungsfrage anknüpfen
 5. Entwurf dem User zur Durchsicht vorlegen
 
 #### Schreibrichtlinien
 
 - **Absatzstruktur** — Topic Sentence, Ausarbeitung, Evidenz, Synthese
-- **Zitationsdichte** — In Theoriekapiteln min. ein Zitat pro substanzieller Aussage; weniger in Methodik/Analyse
+- **Zitationsdichte** — Theoriekapitel: min. ein Zitat pro substanzieller Aussage; weniger in Methodik/Analyse
 - **Übergänge** — Jeder Abschnitt endet mit einer Brücke zum nächsten
-- **Hedging-Sprache** — Angemessene Abschwächung ("deutet darauf hin", "weist darauf hin", "laut")
+- **Hedging-Sprache** — Angemessene Abschwächung ("deutet darauf hin", "laut")
 - **Keine Füllwörter** — Jeder Satz trägt zur Argumentation bei
 
 #### Quellenintegration
