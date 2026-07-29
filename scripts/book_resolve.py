@@ -51,19 +51,58 @@ def _marc_all_fields(record_el, tag: str, subfield_code: str, ns: str) -> list:
     return results
 
 
+def _isbn10_to_isbn13(core9: str) -> str | None:
+    """Konvertiert die 9-stellige ISBN-10-Kernziffernfolge (ohne Pruefziffer)
+    in die vollstaendige ISBN-13 (Praefix 978 + neu berechnete Pruefziffer).
+    Gibt None, wenn core9 keine 9 Ziffern sind."""
+    if len(core9) != 9 or not core9.isdigit():
+        return None
+    prefixed = "978" + core9
+    total = sum((1 if i % 2 == 0 else 3) * int(d) for i, d in enumerate(prefixed))
+    check_digit = (10 - total % 10) % 10
+    return prefixed + str(check_digit)
+
+
+def _isbn_to_isbn13(norm: str) -> str | None:
+    """Normalisiert eine bereits von Trennzeichen befreite, grossgeschriebene
+    ISBN-10- oder ISBN-13-Zeichenkette auf die ISBN-13-Form (fuer den
+    Vergleich zwischen beiden Formaten). Gibt None bei unbekanntem Format
+    (z. B. ISBN-10 mit ungueltiger Pruefziffer-Position)."""
+    if len(norm) == 13 and norm.isdigit():
+        return norm
+    if len(norm) == 10:
+        return _isbn10_to_isbn13(norm[:9])
+    return None
+
+
 def _isbn_matches(requested: str, candidates: list) -> bool:
     """Prueft, ob eine der gelieferten Kennungen zur angefragten ISBN passt.
 
     Issue #464 AC3: Google Books' q=isbn:... und OpenLibrarys
     bibkeys-Lookup sind keine garantiert exakten Index-Abfragen -- der
-    erste/einzige Treffer kann ein Fremdtreffer sein. Vergleich ohne
-    Bindestriche; leere `candidates` gelten NICHT als Mismatch (fehlende
-    Kennung != abweichende Kennung, sonst False Positives bei
-    unvollstaendigen Datensaetzen)."""
+    erste/einzige Treffer kann ein Fremdtreffer sein. Vergleich
+    kennzeichenunabhaengig (Bindestriche/Leerzeichen entfernt,
+    grossgeschrieben fuer die 'X'-Pruefziffer) und formatunabhaengig
+    (ISBN-10 <-> ISBN-13 werden ueber die ISBN-13-Form abgeglichen); leere
+    `candidates` gelten NICHT als Mismatch (fehlende Kennung != abweichende
+    Kennung, sonst False Positives bei unvollstaendigen Datensaetzen)."""
     if not candidates:
         return True
-    norm_requested = requested.replace("-", "")
-    return any(norm_requested == str(c).replace("-", "") for c in candidates if c)
+
+    def _norm(value: str) -> str:
+        return value.replace("-", "").replace(" ", "").upper()
+
+    norm_requested = _norm(requested)
+    requested_13 = _isbn_to_isbn13(norm_requested)
+    for c in candidates:
+        if not c:
+            continue
+        norm_c = _norm(str(c))
+        if norm_c == norm_requested:
+            return True
+        if requested_13 is not None and requested_13 == _isbn_to_isbn13(norm_c):
+            return True
+    return False
 
 
 def _parse_name(raw: str) -> dict:
@@ -192,9 +231,18 @@ def resolve_openlibrary(isbn: str | None = None) -> dict | None:
     item = data[key]
 
     # Issue #464 AC3: gelieferten Treffer gegen die angefragte ISBN pruefen,
-    # bevor seine Metadaten uebernommen werden.
+    # bevor seine Metadaten uebernommen werden. Die reale jscmd=data-Antwort
+    # fuehrt Kennungen unter item["identifiers"]["isbn_13"/"isbn_10"], nicht
+    # auf oberster Ebene (empirisch verifiziert); oberste Ebene bleibt als
+    # Fallback erhalten fuer abweichende/aeltere Antwortformen.
+    identifiers = item.get("identifiers") or {}
     norm_isbn = isbn.replace("-", "")
-    candidate_isbns = list(item.get("isbn_13", [])) + list(item.get("isbn_10", []))
+    candidate_isbns = (
+        list(item.get("isbn_13", []))
+        + list(item.get("isbn_10", []))
+        + list(identifiers.get("isbn_13", []))
+        + list(identifiers.get("isbn_10", []))
+    )
     if not _isbn_matches(norm_isbn, candidate_isbns):
         print(
             f"[WARN] OpenLibrary Fremdtreffer: angefragt {norm_isbn}, "
@@ -219,7 +267,7 @@ def resolve_openlibrary(isbn: str | None = None) -> dict | None:
     if year_digits:
         csl["issued"] = {"date-parts": [[int(year_digits)]]}
 
-    isbn13 = item.get("isbn_13", [])
+    isbn13 = item.get("isbn_13") or identifiers.get("isbn_13") or []
     if isbn13:
         csl["ISBN"] = isbn13[0]
 
