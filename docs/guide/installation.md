@@ -26,6 +26,30 @@ leer — die Volltextsuche (FTS5) funktioniert trotzdem. Ein anderes Modell läs
 sagt das auch. Die 7 API-Suchmodule und der gesamte Vault-/Schreib-Workflow laufen
 trotzdem — nur die 7 Browser-Module (`--mode deep`) stehen dann nicht bereit.
 
+## Zugangsdaten
+
+Drei getrennte Wege legen Zugangsdaten ab. Alle drei sind optional — ohne sie laufen
+Vault, Schreib-Workflow und Open-Access-Quellen unverändert, nur die jeweils daran
+hängenden Quellen fehlen bzw. Rate-Limits greifen strenger.
+
+1. **Umgebungsvariablen pro Suchquelle** — `SS_API_KEY` (Semantic Scholar, verhindert
+   429-Fehler bei viel Suchvolumen) und `ANTHROPIC_API_KEY` (Batch-API in
+   `scripts/batch_api.py`). Selbst in der Shell setzen (z. B. `export SS_API_KEY=…` in
+   `~/.zshrc`). Zuständig: die 7 API-Suchmodule.
+2. **Per-Uni-Profil** — `~/.academic-research/library-profiles/active.yaml`, Feld
+   `credentials_keys`. Der `auth-helper`-Subagent liest die dort genannten Feldnamen zur
+   Laufzeit direkt aus derselben YAML-Datei aus. **Doku-Drift, noch nicht bereinigt:**
+   `config/library-profiles/_schema.json` beschreibt `credentials_keys` als „Schlüssel
+   für OS-Keychain“, an anderer Stelle kursiert „Namen von Umgebungsvariablen“ — beides
+   trifft den tatsächlichen Code nicht. Zuständig: der `book-fetcher`-Workflow
+   (Shibboleth/EZproxy/HAN der mitgelieferten Profile), siehe
+   [Per-Uni-Profile](../reference/uni-profiles.md).
+3. **HAN-Credential-Datei** — `~/.academic-research/`, Keys `han_user`/`han_password`
+   (Dateiname siehe `config/browser_guides/han_login.md`). Institutionsspezifisch und
+   komplett getrennt von Weg 2, obwohl beide denselben HAN-Login-Anwendungsfall
+   abdecken. Zuständig: die Tiefensuche-Auth-Module `ebscohost`, `proquest` und `opac`
+   (`--mode deep`), siehe [Suchquellen](../reference/search.md).
+
 **Optionale Zusatzpakete:**
 
 - `ocrmypdf` — OCR für Scan-PDFs ohne Text-Layer: `brew install ocrmypdf`
