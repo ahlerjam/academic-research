@@ -68,9 +68,18 @@ Ausgabe nach `$SESSION_DIR/queries.json` speichern.
 
 Neben `api_results.json` schreibt `search.py` seit #456 zusätzlich eine Sidecar-Statusdatei
 `$SESSION_DIR/api_results_status.json` (`requested_modules`, `failed_modules`,
-`papers_per_module`). Fällt eine Quelle ganz oder teilweise aus, steht sie dort explizit in
-`failed_modules` — bei Bedarf im Ergebnis-Digest erwähnen, statt eine leere/kleinere Trefferzahl
-kommentarlos hinzunehmen.
+`skipped_modules`, `papers_per_module`). Fällt eine Quelle ganz oder teilweise aus, steht sie
+dort explizit in `failed_modules` — bei Bedarf im Ergebnis-Digest erwähnen, statt eine
+leere/kleinere Trefferzahl kommentarlos hinzunehmen.
+
+Seit #465 hat der Gesamtlauf zusätzlich ein Zeitbudget: `--time-budget SEKUNDEN` (Default 60s)
+begrenzt die Wartezeit über alle Module hinweg — eine Quelle, die das Budget überschreitet, wird
+abgebrochen, ihre bis dahin gefundenen Treffer bleiben verloren (nicht: der ganze Lauf), und sie
+erscheint in `skipped_modules` statt in `failed_modules` (getrennte Kennzeichnung: Zeitüberschreitung
+ist kein Fehler der Quelle). `--fallback-time-budget SEKUNDEN` (Default 20s) begrenzt zusätzlich enger
+den EconStor-OAI-PMH-Fallback (der REST-Endpunkt liefert aktuell durchgehend HTTP 405, der Fallback
+läuft also praktisch bei jedem EconStor-Aufruf). Beide Flags sind optional; ohne sie greifen die
+Default-Werte automatisch.
 
 ### Schritt 4: Browser-Suche (standard-/deep-Modus, falls nicht `--no-browser`)
 
