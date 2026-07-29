@@ -7,7 +7,7 @@ Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin 
 
 | Command | Beschreibung |
 |---------|-------------|
-| `/academic-research:search` | Literatursuche über 7 APIs + optional 7 Browser-Module |
+| `/academic-research:search` | Literatursuche über 7 APIs (+ `dblp` optional) + optional 7 Browser-Module |
 | `/academic-research:score` | Re-Scoring und Cluster-Zuweisung |
 | `/academic-research:excel` | Professionelle Excel-Datei (4 Sheets) |
 | `/academic-research:setup` | Installer: venv, Browser, Vault, Hooks, Per-Uni-Profil |
