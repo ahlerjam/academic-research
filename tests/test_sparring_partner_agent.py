@@ -16,16 +16,21 @@ Deckt die statisch (ohne API-Key) pruefbaren Teile der Akzeptanzkriterien ab:
 Der inhaltliche Teil (AC2/AC3b/AC4b/AC5 -- echtes Modellverhalten) liegt in
 evals/sparring-partner/evals.json, geprueft durch:
 
+- tests/evals/test_sparring_partner_criteria.py (CI-fest, offline): weist mit
+  neun format-konformen Negativkontrollen nach, dass die Kriterien ueberhaupt
+  zwischen Widerspruch und Bestaetigung unterscheiden. Vor Issue #454 taten sie
+  das nicht -- eine reine Bestaetigung bestand sp-01/sp-02/sp-05.
 - tests/evals/test_sparring_partner_recording.py (CI-fest, offline): prueft
-  fuenf an agents/sparring-partner.md sha256-gepinnte Transkripte
-  (evals/sparring-partner/recordings.json) gegen expected -- ein Snapshot-/
-  Konsistenz-Check, kein unabhaengiger Verhaltensbeleg (Transkript und
-  Erwartung stammen aus derselben Sitzung, siehe recordings.json::provenance).
+  fuenf an agents/sparring-partner.md sha256-gepinnte Transkripte aus echten,
+  blinden Modellaufrufen (evals/sparring-partner/record.py) gegen expected --
+  die Kriterien waren vor der Aufnahme committed und dem Aufnahme-Subprozess
+  nicht bekannt (siehe recordings.json::provenance).
 - tests/evals/test_sparring_partner_evals.py (API-gated, Live-Aufruf gegen
-  `model="claude-opus-4-6"`, skippt ohne ANTHROPIC_API_KEY) -- das ist der
-  eigentliche inhaltliche AC-Beleg.
+  `model="claude-opus-4-6"`, skippt ohne ANTHROPIC_API_KEY) -- Nachweis fuer
+  den Anthropic-API-Aufrufweg.
 
-Siehe docs/evals/STRATEGY.md (Status `structural`).
+Siehe docs/evals/STRATEGY.md (Status `structural`: pro pytest-Lauf wird kein
+Modell befragt).
 """
 
 from __future__ import annotations

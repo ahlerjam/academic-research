@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Eval-Runner fuer sparring-partner (Issue #454 / PR #494 Fix-Runde).
 
 Der AC-Verifier markierte AC2/AC3/AC4/AC5 als "verfehlt": Die einzige inhaltliche
@@ -6,22 +5,26 @@ Evidenz war die API-gated Suite tests/evals/test_sparring_partner_evals.py, die
 ohne ANTHROPIC_API_KEY (kein Workflow unter .github/workflows/ setzt ihn) niemals
 laeuft -- "Es existiert im PR keinerlei tatsaechlicher Modell-Output."
 
-Dieser Runner prueft stattdessen fuenf real aufgenommene Transkripte
-(evals/sparring-partner/recordings.json) gegen die expected-Vorgaben aus
-evals/sparring-partner/evals.json. Die Transkripte wurden waehrend der PR-#494-
-Fix-Runde von einer echten Claude-Session erzeugt: Body von
-agents/sparring-partner.md als System-Prompt, Eval-Input als User-Message, echte
-Modell-Antwort. Kein Live-Aufruf des in der Frontmatter spezifizierten
-``model: opus`` per Anthropic-API (Provenienz siehe recordings.json::provenance).
+Dieser Runner prueft zwei Dinge, beide offline und ohne API-Key:
+
+1. **Transkripte**: fuenf real aufgenommene Antworten
+   (evals/sparring-partner/recordings.json) gegen evals/sparring-partner/evals.json.
+   Die Transkripte stammen aus echten, blinden Modellaufrufen
+   (evals/sparring-partner/record.py, Claude-Code-CLI headless); die Kriterien
+   waren vor der Aufnahme committed und dem Aufnahme-Subprozess nicht bekannt.
+2. **Negativkontrollen**: neun format-konforme Antworten aus
+   evals/sparring-partner/counter_examples.json, die von den Kriterien ABGELEHNT
+   werden muessen. Das ist der Fehlerpfad, der dem Runner vorher fehlte -- vor
+   Issue #454 bestand eine rein bestaetigende Antwort sp-01/sp-02/sp-05 und
+   Kapitel-Prosa bestand sp-04, sobald irgendwo "chapter-writer" vorkam. Die
+   Kriterien maassen Formattreue statt Verhalten, und zwar auf beiden Pfaden:
+   auch mit gesetztem API-Key waere eine sykophantische Antwort durchgegangen.
 
 Was dieser Runner NICHT prueft: ob das Modell auf abweichende Formulierungen der
-gleichen fuenf Prompts genauso reagieren wuerde, oder ob kuenftige Prompts das tun.
-Transkript (recordings.json) und Erwartung (evals.json::expected) stammen aus
-derselben Sitzung -- kein unabhaengiger Verhaltensbeleg, sondern ein Snapshot-/
-Konsistenz-Check (Status ``structural`` in docs/evals/STRATEGY.md, nicht ``metric``).
-Das ist eine eingefrorene Stichprobe, kein Live-Judge -- deshalb der Hash-Pin unten:
-Aendert sich agents/sparring-partner.md, meldet run_eval_cases() den Drift, statt
-die veraltete Aufnahme stillschweigend weiter bestehen zu lassen.
+gleichen fuenf Prompts genauso reagieren wuerde. Das bleibt eine Stichprobe,
+kein Live-Judge (Status ``structural`` in docs/evals/STRATEGY.md) -- deshalb der
+Hash-Pin: Aendert sich agents/sparring-partner.md, meldet run_eval_cases() den
+Drift, statt die veraltete Aufnahme stillschweigend weiter bestehen zu lassen.
 
 Aufruf: python3 evals/sparring-partner/runner.py
 """

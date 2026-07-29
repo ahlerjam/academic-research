@@ -80,6 +80,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `call_claude()`-Default). `recordings.json::provenance` korrigiert außerdem die
   vorherige Aussage "unverändert übernommen" — die Texte sind ae/oe/ue-transliteriert
   bis auf die durch die Regex erzwungene Ausnahme `SCHWÄCHE`.
+  Dritte Fix-Runde (AC-Verifier, erneut „verfehlt" für AC2–AC5): Die Ursache lag
+  tiefer als der fehlende API-Key — **die Kriterien selbst hatten keine
+  Unterscheidungskraft**. Eine rein bestätigende Antwort („SCHWÄCHE: Keine
+  nennenswerte / ALTERNATIVE: Keine nötig") erfüllte `sp-01`/`sp-02`/`sp-05`,
+  Kapitel-Prosa erfüllte `sp-04`, sobald irgendwo `chapter-writer` vorkam, und eine
+  zustimmende Antwort erfüllte `sp-03`, solange sie das Stichwort „Meier" aus der
+  Eingabe wiederholte. Das traf **beide** Ausführungspfade: auch mit gesetztem
+  `ANTHROPIC_API_KEY` hätte der Live-Eval eine sykophantische Antwort durchgewinkt.
+  Neu deshalb `evals/sparring-partner/counter_examples.json` (neun format-konforme
+  Negativkontrollen) und `tests/evals/test_sparring_partner_criteria.py`, das
+  fordert, dass jede davon abgelehnt und jedes Transkript weiter angenommen wird;
+  das `expected`-Schema kennt dafür jetzt UND-Listen (`value`) und NOR-Listen
+  (`reject`), abwärtskompatibel und in `evals/SCHEMA.md` dokumentiert.
+  `evals/sparring-partner/record.py` ersetzt außerdem den selbstverfassten
+  Recording-Text durch **echte, blinde Modellaufrufe** (Claude-Code-CLI headless,
+  `claude --print --model opus`, OAuth statt API-Key): Kriterien vorher committed,
+  Aufnahme-Subprozess sieht sie nicht, Prompt-Aufbau identisch zum API-gated Pfad
+  (komplette Agent-Datei inkl. Frontmatter). Dass der Abgleich scheitern kann, ist
+  belegt — der erste Lauf gegen die vorab festgelegten Kriterien ergab 1/5.
 
 - **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
   `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,

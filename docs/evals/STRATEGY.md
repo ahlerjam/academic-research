@@ -96,7 +96,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `research-question-refiner` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Schärfung einer Forschungsfrage hat keine eindeutige Musterlösung. Ohne Key Skip. |
 | `reviewer-response` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Antwortschreiben an Gutachter sind Fließtext-Urteile. Ohne Key Skip. |
 | `source-quality-audit` | structural | `tests/evals/test_source_quality_audit_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die harten Kriterien (DOI, Peer-Review-Flag) prüft der Vault; die Evals bewerten die Einordnung. Ohne Key Skip. |
-| `sparring-partner` | structural | `tests/evals/test_sparring_partner_recording.py` (Snapshot/Fixture, CI-fest), `tests/evals/test_sparring_partner_evals.py` (API-gated) | `recordings.json` hält fünf in derselben Sitzung wie `evals.json::expected` verfasste Transkripte (sha256-gepinnt an `agents/sparring-partner.md`, Drift schlägt fehl statt still zu bestehen) — das ist ein Konsistenz-Check zwischen eingefrorenem Text und Regex, kein unabhängiger Verhaltensbeleg: Transkript und Erwartung stammen aus derselben Quelle, der einzige echte Fehlerpfad ist der Hash-Pin (Coordinator-Gate-Befund, PR #494, Issue #454). Der inhaltliche AC-Beleg bleibt `tests/evals/test_sparring_partner_evals.py` — API-gated, Live-Aufruf gegen echtes Modell, ohne Key Skip. |
+| `sparring-partner` | structural | `tests/evals/test_sparring_partner_criteria.py` (Negativkontrollen, CI-fest), `tests/evals/test_sparring_partner_recording.py` (Snapshot, CI-fest), `tests/evals/test_sparring_partner_evals.py` (API-gated) | `recordings.json` hält fünf Transkripte aus **echten, blinden Modellaufrufen** (`evals/sparring-partner/record.py`, Claude-Code-CLI headless): die Kriterien waren vor der Aufnahme committed, der Aufnahme-Subprozess sah sie nicht. Dass der Abgleich scheitern kann, ist belegt — der erste Lauf gegen die vorab festgelegten Kriterien ergab 1/5. Zusätzlich prüfen neun format-konforme Negativkontrollen (`counter_examples.json`), dass die Kriterien überhaupt unterscheiden: vor Issue #454 bestand eine rein bestätigende Antwort sp-01/02/05 und Kapitel-Prosa bestand sp-04 — die Kriterien maßen Formattreue statt Verhalten, auf **beiden** Pfaden. Status bleibt `structural`, weil pro pytest-Lauf kein Modell befragt wird: die Transkripte sind eine eingefrorene Stichprobe aus fünf Prompts, und das im Frontmatter deklarierte Read-/Vault-Tooling war im Aufnahmelauf abgeschaltet (Material inline im Prompt). Der Nachweis für den Anthropic-API-Aufrufweg bleibt `tests/evals/test_sparring_partner_evals.py` — ohne Key Skip. |
 | `style-evaluator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Stilurteil über Fließtext; der einzige offline messbare Teilaspekt ist als `humanizer-de-pipeline` abgedeckt. Ohne Key Skip. |
 | `submission-checker` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Einreichungsrichtlinien in natürlicher Sprache, die je Journal variieren. Ohne Key Skip. |
 | `title-generator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Titelqualität ist ein Geschmacks- und Präzisionsurteil ohne Referenzlösung. Ohne Key Skip. |
@@ -105,8 +105,10 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 
 **Bilanz:** 3 × `metric`, 44 × `structural`, 0 × `removed` (Stand Issue #446:
 `word-export`/`slide-export` neu, beide `structural`; Stand Issue #454:
-`sparring-partner` neu, `structural` — der Recording-Runner ist ein
-Snapshot/Fixture-Check, kein unabhängiger Verhaltensbeleg, siehe Zeile oben).
+`sparring-partner` neu, `structural` — die Transkripte stammen aus echten,
+blinden Modellaufrufen gegen vorab committete Kriterien, aber pro pytest-Lauf
+wird kein Modell befragt; gemessen wird offline die Unterscheidungskraft der
+Kriterien gegen neun Negativkontrollen, siehe Zeile oben).
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).

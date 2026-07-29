@@ -1,37 +1,34 @@
 """pytest-Integration fuer den sparring-partner-Recording-Snapshot (PR #494, Issue #454).
 
-Kontext: Ein AC-Verifier-Lauf (PR #494, Kommentar vom 2026-07-29) markierte AC2/AC3/AC4/AC5
-als "verfehlt", weil die einzige inhaltliche Evidenz tests/evals/test_sparring_partner_evals.py
-war -- API-gated, ohne ANTHROPIC_API_KEY (kein Workflow unter .github/workflows/ setzt ihn)
-niemals ausgefuehrt.
+Kontext: Ein AC-Verifier-Lauf (PR #494) markierte AC2/AC3/AC4/AC5 als "verfehlt", weil die
+einzige inhaltliche Evidenz tests/evals/test_sparring_partner_evals.py war -- API-gated,
+ohne ANTHROPIC_API_KEY (kein Workflow unter .github/workflows/ setzt ihn) niemals ausgefuehrt.
 
-evals/sparring-partner/recordings.json haelt daraufhin fuenf Transkripte fest, die eine
-Claude-Session waehrend der PR-#494-Fix-Runde erzeugt hat: Agent-Body aus
-agents/sparring-partner.md als System-Prompt, die fuenf Eval-Inputs aus
-evals/sparring-partner/evals.json als User-Message. Kein Live-Aufruf des in der Frontmatter
-spezifizierten ``model: opus`` per Anthropic-API (Provenienz inkl. Einschraenkungen ist in
-recordings.json::provenance offengelegt).
+evals/sparring-partner/recordings.json haelt daraufhin fuenf Transkripte aus **echten,
+blinden Modellaufrufen** fest, erzeugt von evals/sparring-partner/record.py ueber die
+Claude-Code-CLI headless (``claude --print --model opus``, OAuth-Session). System-Prompt ist
+die komplette Datei agents/sparring-partner.md inkl. Frontmatter -- identisch zu dem, was
+load_agent_content() dem API-gated Pfad uebergibt; die frueher beanstandete Prompt-Divergenz
+zwischen beiden Pfaden besteht nicht mehr.
 
-**Was dieser Test NICHT ist:** ein unabhaengiger Verhaltensbeleg. Transkript
-(recordings.json) und Erwartung (evals.json::expected) stammen aus derselben Sitzung --
-wer die Regex geschrieben hat, kannte die Antwort bereits. Der einzige Pfad, auf dem dieser
-Test tatsaechlich fehlschlagen kann, ist der sha256-Hash-Pin (siehe unten): Aendert sich
-agents/sparring-partner.md, ohne dass recordings.json neu aufgenommen wird, schlaegt
-test_recording_is_pinned_to_current_agent_file fehl, statt die veraltete Aufnahme
-stillschweigend weiterlaufen zu lassen. Das macht diesen Runner zu einem
-Snapshot-/Konsistenz-Check zwischen eingefrorenem Text und Regex -- deshalb fuehrt
-docs/evals/STRATEGY.md die Komponente als ``structural``, nicht als ``metric``.
+**Warum das kein Zirkelschluss mehr ist:** Die Erwartungen (evals.json::expected) und die
+Negativkontrollen (counter_examples.json) waren vor der Aufnahme committed, und der
+Aufnahme-Subprozess bekam sie nicht zu sehen -- nur System-Prompt und Eingabe. Die erste
+Fassung dieser Aufnahme war selbstverfasster Text derselben Sitzung, die auch die Regex
+geschrieben hatte; der Abgleich konnte deshalb nicht scheitern. Dass er es jetzt kann, ist
+belegt: der erste Lauf gegen die vorab festgelegten Kriterien ergab 1/5 bestanden
+(Details in recordings.json::provenance und evals.json::criteria_revision_note).
 
-Zusaetzlich unterscheidet sich der Prompt-Aufbau vom API-gated Pfad: Diese Aufnahme nutzte
-nur den Agent-Body nach dem Frontmatter-Abschluss ``---`` als System-Prompt, waehrend
-tests/evals/test_sparring_partner_evals.py ueber ``load_agent_content()``
-(tests/evals/eval_runner.py) die komplette Datei inklusive YAML-Frontmatter (mit den
-``<example>``-Bloecken) uebergibt. Beide Pfade prompten also unterschiedlich und sind keine
-austauschbare Evidenzkette (Coordinator-Gate-Befund, PR #494).
+**Was dieser Test weiterhin NICHT ist:** eine Verteilungsaussage. Fuenf Prompts sind eine
+Stichprobe; ob das Modell auf abweichende Formulierungen derselben Faelle genauso reagiert,
+ist damit nicht belegt. Der Aufnahmelauf hatte zudem keine Tools, das im Frontmatter
+deklarierte Read-/Vault-Tooling ist also nicht live erprobt (Material inline im Prompt).
+Der Nachweis fuer den Anthropic-API-Aufrufweg bleibt tests/evals/test_sparring_partner_evals.py
+-- API-gated, ohne Key Skip.
 
-Der inhaltliche AC-Beleg fuer AC2/AC3/AC5 bleibt deshalb
-tests/evals/test_sparring_partner_evals.py -- API-gated, Live-Aufruf gegen ein echtes
-Modell, ohne Key Skip.
+Dass die Kriterien ueberhaupt zwischen konformem und nicht-konformem Verhalten unterscheiden,
+prueft tests/evals/test_sparring_partner_criteria.py gegen neun Negativkontrollen. Ohne diese
+Suite belegte ein bestandener Eval nur Formattreue -- auf beiden Pfaden.
 """
 
 from __future__ import annotations
