@@ -1,6 +1,6 @@
 # Skills-Übersicht
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt die
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,

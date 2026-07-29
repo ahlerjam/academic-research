@@ -1,13 +1,13 @@
 # Commands / Slash-Commands
 
-[← zurück zur README](../../README.md)
+[← Doku-Übersicht](../README.md)
 
 Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin bringt
 **11 Slash-Commands** mit (`commands/*.md`).
 
 | Command | Beschreibung |
 |---------|-------------|
-| `/academic-research:search` | Literatursuche über 7 APIs + optional 7 Browser-Module |
+| `/academic-research:search` | Literatursuche über 7 APIs (+ `dblp` optional) + optional 7 Browser-Module |
 | `/academic-research:score` | Re-Scoring und Cluster-Zuweisung |
 | `/academic-research:excel` | Professionelle Excel-Datei (4 Sheets) |
 | `/academic-research:setup` | Installer: venv, Browser, Vault, Hooks, Per-Uni-Profil |
@@ -21,6 +21,8 @@ Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin 
 
 Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispiel(e)** und
 **Skills/Agents** (was unter der Haube läuft).
+
+## Command-Referenz
 
 ### `/academic-research:setup`
 

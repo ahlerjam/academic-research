@@ -1,5 +1,7 @@
 # Skip-Reasons
 
+[← Doku-Übersicht](README.md)
+
 Strukturierte Übersicht aller bewussten Test-Skips in `tests/`. Sie macht beim
 Review eindeutig, ob ein Skip **permanent** (umweltabhängig, nie auf jeder
 Maschine lauffähig) oder **todo** (temporär, bis ein Feature/Asset existiert) ist.
