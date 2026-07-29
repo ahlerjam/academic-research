@@ -10,6 +10,23 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`sparring-partner`-Agent als wissenschaftlicher Denk- und Impulsgeber (#454):**
+  Neuer Agent `agents/sparring-partner.md` (`model: opus`), der bei konzeptioneller
+  Arbeit widerspricht statt auszuführen: benennt Argumentationslücken, blinde
+  Flecken, Gegenpositionen und Anschlussfragen zu Themenzuschnitt, Forschungsfrage
+  und Argumentationslinie. Liest `./academic_context.md` und fragt `vault.search`/
+  `vault.get_paper` ab, um am konkreten Material zu argumentieren (Read-only,
+  kein `Write`); erzwingt ein festes Antwortformat
+  (`SCHWÄCHE:`/`ALTERNATIVE:`/`GEGENPOSITION:`/`ANSCHLUSSFRAGEN:`) statt
+  Fließtext und lehnt Kapitel-Prosa-Anfragen mit Verweis ab, statt selbst Text zu
+  produzieren. Abgrenzungsabschnitt benennt `advisor`, `research-question-refiner`,
+  `methodology-advisor` und `quality-reviewer` namentlich; die drei erstgenannten
+  Skills verweisen im Gegenzug auf den neuen Agenten zurück. Neu:
+  `evals/sparring-partner/evals.json` (inkl. bewusst tautologischer
+  Forschungsfrage), `tests/evals/test_sparring_partner_evals.py` (API-gated) und
+  `tests/test_sparring_partner_agent.py` (Frontmatter-/Struktur-Guards, CI-fest).
+  `docs/evals/STRATEGY.md` führt die Komponente als `structural`.
+
 - **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
   `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,
   war aber in keinem Orchestrator-Pfad erreichbar — `agents/book-fetcher.md`

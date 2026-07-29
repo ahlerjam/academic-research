@@ -25,6 +25,7 @@ Verfeinert bestehende Forschungsfragen (zu eng, zu weit, nicht-falsifizierbar,
 mehrdimensional).
 Für Erstanlage von Forschungsfrage, Thema oder Methodik → `academic-context`.
 Für Einbettung in die Gliederung → `advisor`.
+Widerspruch zur Frage statt Umformulierung → `sparring-partner`.
 
 ## Few-Shot-Beispiele
 

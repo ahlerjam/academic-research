@@ -77,7 +77,7 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 graph LR
     U[Du in Claude Code] --> C[9 Slash-Commands]
     U --> S[30 Skills<br/>selbstaktivierend]
-    C --> A[19 Agents<br/>Subagents]
+    C --> A[20 Agents<br/>Subagents]
     S --> A
     A --> V[(Vault<br/>SQLite + FTS5 + vec0)]
     C --> V
@@ -190,7 +190,7 @@ allen Ausgaben und den dabei gefundenen Stolperstellen steht in
 
 - [Commands](docs/reference/commands.md) — alle 9 Slash-Commands mit Syntax und Beispielen
 - [Skills](docs/reference/skills.md) — alle 30 Skills und ihre Trigger
-- [Agents](docs/reference/agents.md) — alle 19 Subagents
+- [Agents](docs/reference/agents.md) — alle 20 Subagents
 - [Vault-MCP-Server](docs/reference/vault.md) — alle 37 MCP-Tools, Volltext- und Vektor-Index
 - [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt
 - [Hooks-Stack](docs/reference/hooks.md) — was wann eingreift, und was geloggt wird

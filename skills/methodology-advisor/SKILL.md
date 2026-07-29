@@ -23,6 +23,7 @@ auf geeignete Methoden und skizziert Operationalisierung.
 Wählt und begründet Methoden passend zur Forschungsfrage.
 Für Schärfung der Forschungsfrage selbst → `research-question-refiner`.
 Für Einbettung in die Gliederung → `advisor`.
+Passt die Methode zur These? → `sparring-partner`.
 
 ## Methoden-Scoring-Matrix
 
