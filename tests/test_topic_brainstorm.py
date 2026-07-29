@@ -1,19 +1,24 @@
-"""Tests fuer Topic-Brainstorm Skill (Ticket #107 — F27).
+"""Tests fuer Topic-Brainstorm Scorer (Issue #471).
 
-TDD-First: Tests schreiben BEVOR die Implementierung existiert.
+`scorer.py` enthielt vormals eine fest kodierte `_TOPIC_DB` mit 5 Themen aus
+einem einzigen Fachbereich (Cyber Security); jede unbekannte Studienrichtung
+wurde still auf "Wirtschaftsinformatik" normalisiert. Nach #471 generiert das
+Modell (SKILL.md) die Themenkandidaten fach- und interessenspassend selbst;
+`scorer.py` normalisiert/scored ausschliesslich noch die vom Aufrufer per
+`--topics-json` gelieferten Kandidaten (Feasibility- und Novelty-Modifikatoren
+aus Budget/Datenzugang/Interessen bleiben Scorer-Arithmetik, Career-Fit und
+`reason` werden unveraendert durchgereicht).
 
-Szenario: User "Cyber Security" + "Wirtschaftsinformatik-Bachelor"
-Test 1: scorer.py gibt 5 Topic-Kandidaten zurueck
-Test 2: Jeder Kandidat hat alle 3 Scores (feasibility, novelty, career_fit) im Bereich 0-10
-Test 3: Jeder Kandidat hat 2-3 Forschungsfragen + 1 Pilot-Paper-Set
-Test 4: Top-Topic (hoechste Score-Summe) wird korrekt identifiziert
-Test 5: Top-Topic wird in academic_context.md (mock file) geschrieben
-Test 6: skill_sizes.json enthaelt 'topic-brainstorm'
+Diese Tests decken:
+- Kein Fixed-DB-Fallback mehr, keine Feld-Normalisierung (AC3)
+- `reason`-Feld pro Kandidat (AC2)
+- Fachabhaengigkeit wird durchgereicht statt auf eine Domaene normalisiert (AC1/AC4)
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,29 +26,129 @@ _WORKTREE_ROOT = Path(__file__).parent.parent
 
 _SCORER = _WORKTREE_ROOT / "skills" / "topic-brainstorm" / "scripts" / "scorer.py"
 
+# ---------------------------------------------------------------------------
+# Fixtures: zwei fachlich disjunkte Themenkandidaten-Sets (vom Modell geliefert)
+# ---------------------------------------------------------------------------
+
+_BWL_TOPICS: list[dict] = [
+    {
+        "title": "Preisstrategien im stationaeren Einzelhandel unter Inflationsdruck",
+        "keywords": ["pricing", "einzelhandel", "inflation", "bwl"],
+        "reason": "Passt zur BWL, da Preistheorie und Marktbeobachtung Kernkompetenzen des Studiengangs sind.",
+        "base_feasibility": 7.0,
+        "base_novelty": 6.0,
+        "base_career_fit": 8.5,
+        "research_questions": [
+            "Wie reagieren Einzelhaendler auf anhaltende Inflation bei der Preissetzung?",
+            "Welche Preisstrategien wirken sich am staerksten auf die Kundenbindung aus?",
+        ],
+        "pilot_papers": ["Simon & Fassnacht (2019): Preismanagement, Springer Gabler"],
+    },
+    {
+        "title": "Working-Capital-Management in mittelstaendischen Familienunternehmen",
+        "keywords": ["working capital", "mittelstand", "finanzierung", "bwl"],
+        "reason": "Kernthema der Finanzwirtschaft, direkt an BWL-Curricula anschlussfaehig.",
+        "base_feasibility": 6.5,
+        "base_novelty": 5.5,
+        "base_career_fit": 8.0,
+        "research_questions": [
+            "Welche Working-Capital-Strategien verfolgen mittelstaendische Familienunternehmen?",
+            "Wie wirkt sich das Working-Capital-Management auf die Liquiditaet in Krisenzeiten aus?",
+        ],
+        "pilot_papers": [
+            "Baños-Caballero et al. (2014): Working capital management, corporate performance"
+        ],
+    },
+    {
+        "title": "Employer Branding im Mittelstand aus Sicht der Generation Z",
+        "keywords": ["employer branding", "generation z", "personal", "bwl"],
+        "reason": "Personalwirtschaftliches Thema mit klarem BWL-Bezug und guter Datenlage per Survey.",
+        "base_feasibility": 7.5,
+        "base_novelty": 6.5,
+        "base_career_fit": 7.5,
+        "research_questions": [
+            "Welche Erwartungen stellt die Generation Z an Arbeitgeber im Mittelstand?",
+            "Wie unterscheidet sich effektives Employer Branding fuer KMU von Grosskonzernen?",
+        ],
+        "pilot_papers": ["Dabirian et al. (2017): Employee Value Proposition, Employer Branding"],
+    },
+]
+
+_INFORMATIK_TOPICS: list[dict] = [
+    {
+        "title": "Statische Analyse von Nebenlaeufigkeitsfehlern in Rust-Programmen",
+        "keywords": ["rust", "static analysis", "concurrency", "informatik"],
+        "reason": "Klassisches Informatik-Thema an der Schnittstelle Programmiersprachen/Verifikation.",
+        "base_feasibility": 6.0,
+        "base_novelty": 8.0,
+        "base_career_fit": 9.0,
+        "research_questions": [
+            "Welche Klassen von Nebenlaeufigkeitsfehlern erkennt statische Analyse in Rust zuverlaessig?",
+            "Wie vergleicht sich die Erkennungsrate mit dynamischen Verfahren?",
+        ],
+        "pilot_papers": ["Jung et al. (2018): RustBelt: Securing the Foundations of Rust, POPL"],
+    },
+    {
+        "title": "Effiziente Approximationsalgorithmen fuer Graph-Partitionierung",
+        "keywords": ["graph partitioning", "approximation", "algorithms", "informatik"],
+        "reason": "Theorie-nahes Informatik-Thema mit klarer Methodik (Algorithmenanalyse).",
+        "base_feasibility": 5.5,
+        "base_novelty": 7.5,
+        "base_career_fit": 8.5,
+        "research_questions": [
+            "Welche Approximationsguete erreichen aktuelle Heuristiken bei grossen Graphen?",
+            "Wie skaliert die Laufzeit mit der Graphgroesse in der Praxis?",
+        ],
+        "pilot_papers": ["Karypis & Kumar (1998): Multilevel k-way Partitioning Scheme"],
+    },
+    {
+        "title": "WebAssembly als Compile-Target fuer Legacy-C-Codebasen",
+        "keywords": ["webassembly", "compiler", "legacy", "informatik"],
+        "reason": "Systemnahes Informatik-Thema mit praktischer Machbarkeit ueber Open-Source-Toolchains.",
+        "base_feasibility": 7.0,
+        "base_novelty": 6.5,
+        "base_career_fit": 8.0,
+        "research_questions": [
+            "Welche Performance-Einbussen entstehen beim Kompilieren von Legacy-C-Code nach WebAssembly?",
+        ],
+        "pilot_papers": ["Haas et al. (2017): Bringing the Web up to Speed with WebAssembly, PLDI"],
+    },
+]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _run_scorer(interests: list[str], field: str, budget: str, data_access: str):
-    """Fuehrt scorer.py als Subprocess aus und gibt geparste JSON-Ausgabe zurueck."""
-    import subprocess
-
+def _run_scorer(
+    topics: list[dict],
+    interests: list[str],
+    budget: str,
+    data_access: str,
+    output_mode: str = "list",
+    extra_args: list[str] | None = None,
+):
+    """Fuehrt scorer.py als Subprocess aus, Topics per stdin (--topics-json -)."""
+    cmd = [
+        sys.executable,
+        str(_SCORER),
+        "--topics-json",
+        "-",
+        "--interests",
+        ",".join(interests),
+        "--budget",
+        budget,
+        "--data-access",
+        data_access,
+        "--output-mode",
+        output_mode,
+    ]
+    if extra_args:
+        cmd.extend(extra_args)
     result = subprocess.run(
-        [
-            sys.executable,
-            str(_SCORER),
-            "--interests",
-            ",".join(interests),
-            "--field",
-            field,
-            "--budget",
-            budget,
-            "--data-access",
-            data_access,
-        ],
+        cmd,
+        input=json.dumps(topics),
         capture_output=True,
         text=True,
     )
@@ -54,31 +159,31 @@ def _run_scorer(interests: list[str], field: str, budget: str, data_access: str)
 
 
 # ---------------------------------------------------------------------------
-# Test 1: scorer.py gibt 3-5 Topic-Kandidaten zurueck (Szenario: 5 erwartet)
+# Passthrough: scorer.py scored die uebergebenen Kandidaten, generiert keine eigenen
 # ---------------------------------------------------------------------------
 
 
-class TestScorerOutput:
-    """scorer.py gibt fuer Cyber Security + WI-Bachelor 5 Topic-Kandidaten zurueck."""
+class TestScorerPassthrough:
+    """scorer.py scored exakt die uebergebenen Kandidaten (kein Fixed-Set)."""
 
-    def test_returns_five_topics(self):
-        """Cyber Security + WI-Bachelor ergibt genau 5 Kandidaten."""
+    def test_returns_same_count_as_input(self):
         topics = _run_scorer(
-            interests=["Cyber Security"],
-            field="Wirtschaftsinformatik-Bachelor",
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
             budget="6 Monate",
-            data_access="Public Datasets",
+            data_access="Literatur-Only",
         )
         assert isinstance(topics, list), "Ausgabe muss eine Liste sein"
-        assert len(topics) == 5, f"Erwartet 5 Topics, erhalten {len(topics)}"
+        assert len(topics) == len(_BWL_TOPICS), (
+            f"Erwartet {len(_BWL_TOPICS)} Topics (Eingabegroesse), erhalten {len(topics)}"
+        )
 
     def test_topic_has_title(self):
-        """Jeder Kandidat hat ein 'title'-Feld."""
         topics = _run_scorer(
-            interests=["Cyber Security"],
-            field="Wirtschaftsinformatik-Bachelor",
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
             budget="6 Monate",
-            data_access="Public Datasets",
+            data_access="Literatur-Only",
         )
         for t in topics:
             assert "title" in t, f"Topic fehlt 'title': {t}"
@@ -88,7 +193,7 @@ class TestScorerOutput:
 
 
 # ---------------------------------------------------------------------------
-# Test 2: Alle 3 Scores pro Kandidat, Bereich 0-10
+# Scores: alle 3 Scores pro Kandidat, Bereich 0-10
 # ---------------------------------------------------------------------------
 
 
@@ -96,24 +201,22 @@ class TestScoreRanges:
     """Feasibility, Novelty, Career-Fit sind normiert auf 0-10."""
 
     def test_all_three_scores_present(self):
-        """Jeder Kandidat hat feasibility, novelty und career_fit."""
         topics = _run_scorer(
-            interests=["Cyber Security"],
-            field="Wirtschaftsinformatik-Bachelor",
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
             budget="6 Monate",
-            data_access="Public Datasets",
+            data_access="Literatur-Only",
         )
         for t in topics:
             for score_key in ("feasibility", "novelty", "career_fit"):
                 assert score_key in t, f"Kandidat '{t.get('title')}' fehlt '{score_key}'"
 
     def test_scores_normalized_0_to_10(self):
-        """Alle Scores liegen im Bereich [0, 10]."""
         topics = _run_scorer(
-            interests=["Cyber Security"],
-            field="Wirtschaftsinformatik-Bachelor",
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
             budget="6 Monate",
-            data_access="Public Datasets",
+            data_access="Literatur-Only",
         )
         for t in topics:
             for score_key in ("feasibility", "novelty", "career_fit"):
@@ -127,56 +230,161 @@ class TestScoreRanges:
 
 
 # ---------------------------------------------------------------------------
-# Test 3: 2-3 Forschungsfragen + 1 Pilot-Paper-Set pro Kandidat
+# Forschungsfragen und Pilot-Papers bleiben erhalten
 # ---------------------------------------------------------------------------
 
 
 class TestResearchQuestionsAndPapers:
-    """Jeder Kandidat hat 2-3 Forschungsfragen und ein Pilot-Paper-Set."""
+    """Jeder Kandidat behaelt seine Forschungsfragen und Pilot-Papers aus dem Input."""
 
     def test_each_topic_has_research_questions(self):
-        """Jeder Kandidat hat ein 'research_questions'-Feld mit 2-3 Eintraegen."""
         topics = _run_scorer(
-            interests=["Cyber Security"],
-            field="Wirtschaftsinformatik-Bachelor",
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
             budget="6 Monate",
-            data_access="Public Datasets",
+            data_access="Literatur-Only",
         )
         for t in topics:
             assert "research_questions" in t, (
                 f"Kandidat '{t.get('title')}' fehlt 'research_questions'"
             )
             rqs = t["research_questions"]
-            assert isinstance(rqs, list), (
-                f"'research_questions' von '{t.get('title')}' muss eine Liste sein"
-            )
-            assert 2 <= len(rqs) <= 3, (
-                f"'{t.get('title')}' hat {len(rqs)} Forschungsfragen, erwartet 2-3"
-            )
+            assert isinstance(rqs, list) and len(rqs) >= 1
             for rq in rqs:
-                assert isinstance(rq, str) and rq.strip(), (
-                    f"Forschungsfrage in '{t.get('title')}' muss ein nicht-leerer String sein"
-                )
+                assert isinstance(rq, str) and rq.strip()
 
     def test_each_topic_has_pilot_papers(self):
-        """Jeder Kandidat hat ein 'pilot_papers'-Feld mit mindestens 1 Paper."""
         topics = _run_scorer(
-            interests=["Cyber Security"],
-            field="Wirtschaftsinformatik-Bachelor",
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
             budget="6 Monate",
-            data_access="Public Datasets",
+            data_access="Literatur-Only",
         )
         for t in topics:
             assert "pilot_papers" in t, f"Kandidat '{t.get('title')}' fehlt 'pilot_papers'"
             pp = t["pilot_papers"]
-            assert isinstance(pp, list), (
-                f"'pilot_papers' von '{t.get('title')}' muss eine Liste sein"
-            )
+            assert isinstance(pp, list)
             assert len(pp) >= 1, f"'{t.get('title')}' hat kein Pilot-Paper"
 
 
 # ---------------------------------------------------------------------------
-# Test 4: Top-Topic wird korrekt identifiziert (hoechste Score-Summe)
+# AC2: Jeder Vorschlag nennt einen Grund
+# ---------------------------------------------------------------------------
+
+
+class TestReasonField:
+    """Jeder Kandidat hat ein nicht-leeres 'reason'-Feld (AC2)."""
+
+    def test_each_topic_has_reason(self):
+        topics = _run_scorer(
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
+            budget="6 Monate",
+            data_access="Literatur-Only",
+        )
+        for t in topics:
+            assert "reason" in t, f"Kandidat '{t.get('title')}' fehlt 'reason'"
+            assert isinstance(t["reason"], str) and t["reason"].strip(), (
+                f"'reason' von '{t.get('title')}' muss ein nicht-leerer String sein"
+            )
+
+    def test_reason_matches_input_reason(self):
+        """Der Scorer erfindet keine eigene Begruendung, sondern reicht sie durch."""
+        topics = _run_scorer(
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
+            budget="6 Monate",
+            data_access="Literatur-Only",
+        )
+        input_reasons = {t["title"]: t["reason"] for t in _BWL_TOPICS}
+        for t in topics:
+            assert t["reason"] == input_reasons[t["title"]], (
+                f"'reason' fuer '{t['title']}' wurde veraendert statt durchgereicht"
+            )
+
+
+# ---------------------------------------------------------------------------
+# AC1 + AC4: Fachabhaengigkeit wird durchgereicht, nicht auf eine Domaene normalisiert
+# ---------------------------------------------------------------------------
+
+
+class TestFieldDependency:
+    """Zwei fachlich unterschiedliche Kandidaten-Sets bleiben unveraendert und disjunkt."""
+
+    def test_scorer_preserves_field_specific_titles_without_normalizing(self):
+        """Titel im Output entsprechen exakt den Titeln im Input (kein Fallback/Rewrite)."""
+        for fixture in (_BWL_TOPICS, _INFORMATIK_TOPICS):
+            topics = _run_scorer(
+                fixture,
+                interests=["Forschung"],
+                budget="6 Monate",
+                data_access="Literatur-Only",
+            )
+            input_titles = {t["title"] for t in fixture}
+            output_titles = {t["title"] for t in topics}
+            assert output_titles == input_titles, (
+                f"Scorer hat Titel veraendert/normalisiert: {output_titles} != {input_titles}"
+            )
+
+    def test_two_different_fields_yield_different_titles(self):
+        """BWL- und Informatik-Kandidaten sind disjunkt — keine Normalisierung auf eine Domaene."""
+        bwl_topics = _run_scorer(
+            _BWL_TOPICS,
+            interests=["Forschung"],
+            budget="6 Monate",
+            data_access="Literatur-Only",
+        )
+        informatik_topics = _run_scorer(
+            _INFORMATIK_TOPICS,
+            interests=["Forschung"],
+            budget="6 Monate",
+            data_access="Literatur-Only",
+        )
+        bwl_titles = {t["title"] for t in bwl_topics}
+        informatik_titles = {t["title"] for t in informatik_topics}
+        assert bwl_titles.isdisjoint(informatik_titles), (
+            "BWL- und Informatik-Themenvorschlaege ueberschneiden sich — "
+            "deutet auf Normalisierung/Fixed-Set hin"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3: Keine feste Themenliste mehr im Code
+# ---------------------------------------------------------------------------
+
+
+class TestNoHardcodedTopicDatabase:
+    """scorer.py enthaelt keine fest kodierte Themen-DB und keine Feld-Normalisierung mehr."""
+
+    def test_topic_db_symbol_removed(self):
+        source = _SCORER.read_text(encoding="utf-8")
+        assert "_TOPIC_DB" not in source, "'_TOPIC_DB' darf nicht mehr in scorer.py vorkommen"
+
+    def test_old_fixed_titles_removed(self):
+        source = _SCORER.read_text(encoding="utf-8")
+        for old_title in (
+            "Cyber Security Awareness in KMU",
+            "Ransomware-Resilienz in Kritischen Infrastrukturen",
+            "Zero-Trust-Architektur in Cloud-nativen Unternehmensumgebungen",
+            "Phishing-Erkennung mittels Machine Learning",
+            "Datenschutz und DSGVO-Compliance in agilen Softwareentwicklungsprozessen",
+        ):
+            assert old_title not in source, (
+                f"Alter Fixed-Titel noch in scorer.py vorhanden: {old_title!r}"
+            )
+
+    def test_field_normalization_removed(self):
+        source = _SCORER.read_text(encoding="utf-8")
+        assert "_normalize_field" not in source, (
+            "'_normalize_field' (stiller Fach-Fallback) darf nicht mehr existieren"
+        )
+        assert "_FIELD_NORMALIZE" not in source, (
+            "'_FIELD_NORMALIZE'-Mapping darf nicht mehr existieren"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Top-Topic wird korrekt identifiziert (hoechste Score-Summe)
 # ---------------------------------------------------------------------------
 
 
@@ -184,31 +392,13 @@ class TestTopTopicIdentification:
     """Das Top-Topic ist das mit der hoechsten Summe der drei Scores."""
 
     def test_top_topic_has_highest_total_score(self):
-        """scorer.py gibt ein 'top_topic'-Feld mit dem Titel des besten Kandidaten."""
-        import subprocess
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(_SCORER),
-                "--interests",
-                "Cyber Security",
-                "--field",
-                "Wirtschaftsinformatik-Bachelor",
-                "--budget",
-                "6 Monate",
-                "--data-access",
-                "Public Datasets",
-                "--output-mode",
-                "full",
-            ],
-            capture_output=True,
-            text=True,
+        data = _run_scorer(
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
+            budget="6 Monate",
+            data_access="Literatur-Only",
+            output_mode="full",
         )
-        assert result.returncode == 0, (
-            f"scorer.py exitcode {result.returncode}\nSTDERR: {result.stderr}"
-        )
-        data = json.loads(result.stdout)
         assert "topics" in data, "Vollstaendige Ausgabe muss 'topics' enthalten"
         assert "top_topic" in data, "Vollstaendige Ausgabe muss 'top_topic' enthalten"
         topics = data["topics"]
@@ -226,7 +416,7 @@ class TestTopTopicIdentification:
 
 
 # ---------------------------------------------------------------------------
-# Test 5: Top-Topic wird in academic_context.md (mock file) geschrieben
+# academic_context.md wird geschrieben (unveraenderter Mechanismus)
 # ---------------------------------------------------------------------------
 
 
@@ -234,85 +424,47 @@ class TestAcademicContextWrite:
     """scorer.py --write-context schreibt das Top-Topic in academic_context.md."""
 
     def test_writes_top_topic_to_academic_context(self, tmp_path):
-        """Mit --write-context wird das Top-Topic in die angegebene Datei geschrieben."""
-        import subprocess
-
         ctx_file = tmp_path / "academic_context.md"
         ctx_file.write_text(
-            "---\nname: academic-context\n---\n\n### Profil\n- Studiengang: Wirtschaftsinformatik\n\n### Arbeit\n- Thema: [noch offen]\n",
+            "---\nname: academic-context\n---\n\n### Profil\n- Studiengang: BWL\n\n### Arbeit\n- Thema: [noch offen]\n",
             encoding="utf-8",
         )
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(_SCORER),
-                "--interests",
-                "Cyber Security",
-                "--field",
-                "Wirtschaftsinformatik-Bachelor",
-                "--budget",
-                "6 Monate",
-                "--data-access",
-                "Public Datasets",
-                "--output-mode",
-                "full",
-                "--write-context",
-                str(ctx_file),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, (
-            f"scorer.py exitcode {result.returncode}\nSTDERR: {result.stderr}"
+        _run_scorer(
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
+            budget="6 Monate",
+            data_access="Literatur-Only",
+            output_mode="full",
+            extra_args=["--write-context", str(ctx_file)],
         )
 
         content = ctx_file.read_text(encoding="utf-8")
-        assert "Cyber Security" in content or "Thema:" in content, (
-            "academic_context.md enthaelt kein Thema nach Write-Context"
-        )
-        # Kernanforderung: Thema-Zeile aktualisiert (nicht mehr "[noch offen]")
+        assert "Thema:" in content
         assert "[noch offen]" not in content, (
             "academic_context.md Thema-Zeile wurde nicht aktualisiert"
         )
 
     def test_creates_context_file_if_missing(self, tmp_path):
-        """Existiert academic_context.md nicht, wird sie mit dem Top-Topic angelegt."""
-        import subprocess
-
         ctx_file = tmp_path / "academic_context.md"
         # Datei existiert NICHT
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(_SCORER),
-                "--interests",
-                "Cyber Security",
-                "--field",
-                "Wirtschaftsinformatik-Bachelor",
-                "--budget",
-                "6 Monate",
-                "--data-access",
-                "Public Datasets",
-                "--output-mode",
-                "full",
-                "--write-context",
-                str(ctx_file),
-            ],
-            capture_output=True,
-            text=True,
+        _run_scorer(
+            _BWL_TOPICS,
+            interests=["Preisstrategie"],
+            budget="6 Monate",
+            data_access="Literatur-Only",
+            output_mode="full",
+            extra_args=["--write-context", str(ctx_file)],
         )
-        assert result.returncode == 0, (
-            f"scorer.py exitcode {result.returncode}\nSTDERR: {result.stderr}"
-        )
+
         assert ctx_file.exists(), "academic_context.md wurde nicht angelegt"
         content = ctx_file.read_text(encoding="utf-8")
         assert "Thema:" in content, "Neu angelegte Datei muss Thema enthalten"
 
 
 # ---------------------------------------------------------------------------
-# Test 6b: SKILL.md dupliziert KEINE Scoring-Tabellen (Issue #180)
+# SKILL.md dupliziert KEINE Scoring-Tabellen (Issue #180)
 # ---------------------------------------------------------------------------
 
 
@@ -329,7 +481,6 @@ class TestNoScoringTableDuplication:
     )
 
     def test_skill_md_has_no_data_access_table_rows(self):
-        """SKILL.md enthaelt keine Datenverfuegbarkeit-Modifikator-Tabellenzeilen."""
         text = self._SKILL_MD.read_text(encoding="utf-8")
         for forbidden in (
             "| Public Datasets | +1.0 |",
@@ -342,7 +493,6 @@ class TestNoScoringTableDuplication:
             )
 
     def test_skill_md_has_no_time_budget_table_rows(self):
-        """SKILL.md enthaelt keine Zeitbudget-Modifikator-Tabellenzeilen."""
         text = self._SKILL_MD.read_text(encoding="utf-8")
         for forbidden in (
             "| 3 Monate | -1.0 |",
@@ -354,7 +504,6 @@ class TestNoScoringTableDuplication:
             )
 
     def test_skill_md_has_no_field_modifier_table(self):
-        """SKILL.md enthaelt keine Studienrichtung-Modifier-Referenz-Tabelle."""
         text = self._SKILL_MD.read_text(encoding="utf-8")
         assert "| Modifier-Referenz |" not in text, (
             "SKILL.md dupliziert Studienrichtung-Modifier-Tabelle "
@@ -362,14 +511,12 @@ class TestNoScoringTableDuplication:
         )
 
     def test_skill_md_references_scoring_criteria(self):
-        """SKILL.md verweist explizit auf references/scoring-criteria.md."""
         text = self._SKILL_MD.read_text(encoding="utf-8")
         assert "references/scoring-criteria.md" in text, (
             "SKILL.md muss auf references/scoring-criteria.md verweisen"
         )
 
     def test_scoring_tables_remain_in_reference(self):
-        """Die Scoring-Tabellen bleiben kanonisch in der Referenz erhalten."""
         ref = self._SCORING_REF.read_text(encoding="utf-8")
         assert "| Public Datasets | +1.0 |" in ref, (
             "Datenverfuegbarkeit-Tabelle fehlt in scoring-criteria.md"
@@ -378,7 +525,7 @@ class TestNoScoringTableDuplication:
 
 
 # ---------------------------------------------------------------------------
-# Test 6: skill_sizes.json enthaelt 'topic-brainstorm'
+# skill_sizes.json enthaelt 'topic-brainstorm'
 # ---------------------------------------------------------------------------
 
 
