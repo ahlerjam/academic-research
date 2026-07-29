@@ -110,7 +110,13 @@ Payload fuer jeden OA-Subagenten:
 ```
 
 **Entscheidungslogik pro OA-Subagent:**
-- `status: success` -- **SOFORT stoppen**, Ergebnis zurueckgeben (kein weiterer Subagent)
+- `status: success` -- **SOFORT stoppen**, Ergebnis zurueckgeben (kein weiterer
+  Subagent). Enthaelt die Subagenten-Antwort ein `edition`-Feld (HathiTrust-,
+  Internet-Archive- und MDZ-Fetcher liefern es bei Vollansicht, AC4 aus Issue
+  #450 -- Jahr/Ausgabe/Verlag des Digitalisats), wird es unveraendert in den
+  Master-Output uebernommen (siehe Output-Schema unten). Fehlt das Feld
+  (aeltere OA-Fetcher, Verlags-Subagenten, generic-fetcher, scihub-fetcher),
+  bleibt es im Master-Output ebenfalls weg -- kein erfundener Platzhalter.
 - `status: captcha` -- **SOFORT stoppen**, `{status: captcha}` zurueckgeben
 - `status: metadata_only` -- Merken (`oa_had_metadata_only = true`), naechsten OA-Subagenten versuchen
 - `status: no_match` -- Naechsten OA-Subagenten versuchen
@@ -226,6 +232,7 @@ nicht gesondert weiter, es ist ueber `vault.get_paper()` abfragbar.
   "status": "success | pickup_required | captcha | no_match",
   "source": "<subagent-name der den Endstatus lieferte, inkl. scihub-fetcher>",
   "file_path": "<absoluter PDF-Pfad, nur bei success>",
+  "edition": "<Jahr/Ausgabe/Verlag des Digitalisats -- nur bei success UND nur falls der liefernde Subagent ein edition-Feld gemeldet hat (AC4, Issue #450); sonst Feld weglassen>",
   "reason": "<optionale Beschreibung>",
   "tries": [
     {"subagent": "<name>", "status": "<status>", "ts": "<ISO-8601>"}

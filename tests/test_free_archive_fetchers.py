@@ -414,3 +414,40 @@ class TestTierOrderReferencesFreeArchives:
             assert f"Agent({agent_name})" in fm_raw, (
                 f"'Agent({agent_name})' fehlt im tools-Frontmatter von agents/book-fetcher.md"
             )
+
+
+# ─── Klasse 8: MDZ-Rechtehinweis-Schritt (AC1, Fix-Runde PR #498) ────────────
+
+
+class TestMdzRightsAcknowledgmentStep:
+    """AC1: Ein echter Live-Fetch (durchgefuehrt in der Fix-Runde gegen das
+    reale digitale-sammlungen.de mit Goethes 'Faust. Erster Theil', Stuttgart
+    1833, BSB-Signatur P.o.germ. 484 x-1, urn:nbn:de:bvb:12-bsb10109182-5)
+    deckte einen Schritt auf, den der Standard-Flow bisher nicht dokumentierte:
+    die Download-Zwischenseite (`download.digitale-sammlungen.de/BOOKS/
+    download.pl`) verlangt vor dem eigentlichen PDF-Link ausdruecklich, den
+    vorbelegten Rechtehinweis-Radiobutton von 'Nein' auf 'Ja' umzustellen und
+    den 'WEITER'-Button im Abschnitt 'Sofort-Download als PDF-Datei' zu
+    klicken -- auch bei gemeinfreien Werken. Ohne diesen Schritt bleibt es bei
+    der Zwischenseite, nie beim PDF."""
+
+    def setup_method(self):
+        path = AGENTS_DIR / "mdz-fetcher.md"
+        _, self.body = parse_frontmatter(path)
+
+    def test_standard_flow_documents_rights_acknowledgment_step(self):
+        flow_match = re.search(
+            r"##\s*Standard-Flow(.*?)(?:\n##\s|\Z)", self.body, re.IGNORECASE | re.DOTALL
+        )
+        assert flow_match, "Kein Standard-Flow-Abschnitt in mdz-fetcher.md"
+        lowered = flow_match.group(1).lower()
+        assert "rechtehinweis" in lowered, (
+            "Standard-Flow von mdz-fetcher.md muss den Rechtehinweis-Schritt "
+            "auf der Download-Zwischenseite dokumentieren (AC1, per Live-Fetch "
+            "in der Fix-Runde bestaetigt -- ohne 'Ja' + WEITER bleibt es bei "
+            "der Zwischenseite statt beim PDF)"
+        )
+        assert '"ja"' in lowered or "'ja'" in lowered or "auf „ja“" in lowered, (
+            "Standard-Flow muss ausdruecklich benennen, dass die Vorgabe "
+            "'Nein' auf 'Ja' umgestellt werden muss"
+        )

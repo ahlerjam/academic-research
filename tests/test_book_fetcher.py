@@ -79,6 +79,50 @@ class TestBookFetcherRouting(unittest.TestCase):
         first_call_args = mock_dispatch.call_args_list[0]
         self.assertEqual(first_call_args[0][0], "doabooks-fetcher")
 
+    def test_oa_subagent_edition_field_propagates_to_master_output(self):
+        """AC4 (Issue #450): liefert der erfolgreiche OA-Subagent ein `edition`-
+        Feld (Jahr/Ausgabe/Verlag des Digitalisats, z.B. hathitrust-fetcher),
+        muss der Master-Output dieses Feld unveraendert weiterreichen -- sonst
+        geht die Angabe an der Router-Grenze verloren, bevor sie ueberhaupt bei
+        commands/fetch.md ankommen kann."""
+        router = self._make_router()
+        hathitrust_success = {
+            "status": "success",
+            "source_subagent": "hathitrust-fetcher",
+            "pdf_path": "/tmp/kant.pdf",
+            "url": "https://babel.hathitrust.org/cgi/pt?id=example",
+            "edition": "1799, Ausgabe B, Verlag Hartknoch",
+        }
+
+        def side_effect(subagent, payload):
+            if subagent == "hathitrust-fetcher":
+                return hathitrust_success
+            return {"status": "no_match", "source_subagent": subagent}
+
+        with patch.object(router, "dispatch_subagent", side_effect=side_effect):
+            result = router.fetch("Kritik der reinen Vernunft", output_path="/tmp/kant.pdf")
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["source"], "hathitrust-fetcher")
+        self.assertEqual(
+            result.get("edition"),
+            "1799, Ausgabe B, Verlag Hartknoch",
+            "edition-Feld muss vom Subagenten-Output in den Master-Output "
+            "durchgereicht werden (AC4, Issue #450)",
+        )
+
+    def test_success_without_edition_omits_edition_key(self):
+        """Aeltere OA-Fetcher (vor #450) liefern kein edition-Feld -- der Master
+        darf dafuer keinen Platzhalter erfinden, das Feld muss schlicht fehlen."""
+        router = self._make_router()
+        doabooks_resp = _load_json("doabooks_success.json")
+
+        with patch.object(router, "dispatch_subagent", return_value=doabooks_resp):
+            result = router.fetch("978-3-16-148410-0", output_path="/tmp/out.pdf")
+
+        self.assertEqual(result["status"], "success")
+        self.assertNotIn("edition", result)
+
     def test_all_oa_metadata_only_then_springer_success(self):
         """OA subagents all return metadata_only; Springer (licensed) returns success."""
         router = self._make_router("active_profile_springer.yaml")

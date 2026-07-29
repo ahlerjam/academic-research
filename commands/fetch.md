@@ -6,7 +6,7 @@ description: >
   pickup_required (Fernleihe-Eintrag in ~/.academic-research/pickup_queue.json
   angelegt), captcha (Screenshot anzeigen, manuelle Entscheidung abwarten),
   no_match (kein Treffer -> ebenfalls pickup_required-Eintrag).
-allowed-tools: Read, Write, Agent(book-fetcher)
+allowed-tools: Read, Write, Agent(book-fetcher), mcp__academic-vault__vault_add_paper
 argument-hint: <isbn|doi|url|titel>
 ---
 
@@ -108,11 +108,34 @@ diese Datei als Kontext lesen duerfen — der Kanal darf Zitierweise und
 Textbehandlung nicht beeinflussen. Die Provenienz bleibt vollstaendig im
 Vault erhalten (`vault.get_paper()`, `vault.list_papers_by_provenance()`).
 
-3. Ausgabe an User:
+3. Vault-Eintrag anlegen (AC4, Issue #450): rufe `vault.add_paper(...)` auf,
+   damit die Ausgabe-/Jahresangabe des tatsaechlich gelieferten Digitalisats
+   im Vault landet, nicht nur in `literature_state.md`:
+
+```
+vault.add_paper(
+  paper_id  = "<sanitized identifier_value aus Schritt 2>",
+  csl_json  = "{\"type\": \"book\", \"title\": \"<result.title falls vorhanden, sonst identifier_value>\"[, \"edition\": \"<result.edition>\" nur falls result.edition gesetzt ist]}",
+  pdf_path  = "<file_path>",
+  isbn      = "<identifier_value, falls identifier_type == isbn, sonst weglassen>",
+  doi       = "<identifier_value, falls identifier_type == doi, sonst weglassen>"
+)
+```
+
+**`edition` kommt ausschliesslich aus `result.edition`** (die vom liefernden
+OA-Subagenten gemeldete Ausgabe-/Jahresangabe des Digitalisats, siehe
+`agents/book-fetcher.md`-Output-Schema) — niemals aus `identifier_value`
+bzw. der Eingabe-ISBN/dem Eingabe-Titel abgeleitet. Liefert `result` kein
+`edition`-Feld (aeltere OA-Fetcher, Verlags-Subagenten, generic-fetcher,
+scihub-fetcher), entfaellt das Feld in `csl_json` ersatzlos statt eines
+Platzhalters.
+
+4. Ausgabe an User:
 ```
 PDF heruntergeladen: <file_path>
   Quelle: <source>
   In literature_state.md aufgenommen.
+  In Vault aufgenommen (paper_id: <paper_id>).
 ```
 
 #### Bei `pickup_required` oder `no_match`

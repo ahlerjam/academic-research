@@ -49,10 +49,20 @@ Zwischenstufe wie "Suche-im-Buch".
 5. `browser-use state` → Viewer-Link bzw. Download-Icon/-Menue suchen:
    - Kein Viewer-/Download-Link vorhanden (nur OPAC-Metadaten) →
      `{"status": "metadata_only", "source_subagent": "mdz-fetcher", "url": "<detailseite-url>", "reason": "Zugriffsstufe: nur Metadaten"}`
-   - Viewer vorhanden → Download-Icon/-Menue oeffnen, "gesamtes Werk" bzw.
-     Default-Bereich waehlen.
-6. `browser-use download <pdf-link-idx> --to <output_path>`
-7. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB.
+   - Viewer vorhanden → Download-Icon/-Menue oeffnen, unter "Gesamtes
+     Digitalisat/Volltext" den Eintrag "PDF/DaFo" waehlen. Oeffnet einen
+     neuen Tab auf `download.digitale-sammlungen.de/BOOKS/download.pl?...`.
+6. **Rechtehinweis auf der Download-Zwischenseite bestaetigen** (per Live-Fetch
+   verifiziert, AC1 -- gilt auch bei gemeinfreien Werken, ist keine
+   Zugriffsbeschraenkung): die Seite zeigt zwei Radiobuttons ("Nein"
+   vorbelegt, "Nein"/"Ja" fuer "Ich versichere, den Rechtehinweis gelesen zu
+   haben und bin damit einverstanden"). "Ja" auswaehlen und den zugehoerigen
+   `WEITER`-Button im Abschnitt "Sofort-Download als PDF-Datei" klicken
+   (NICHT den WEITER-Button der DaFo-Jpeg-Option darunter). Erst danach
+   erscheint der eigentliche Link "PDF-Datei oeffnen oder herunterladen
+   (<Groesse>)".
+7. `browser-use download <pdf-link-idx> --to <output_path>`
+8. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB.
 
 ## Output-Schema
 
@@ -119,3 +129,7 @@ CAPTCHA erkannt:
 - Historische Bestaende sind haeufig ein spaeterer Nachdruck oder eine
   bestimmte Auflage — Ausgabejahr immer aus der Titelaufnahme lesen, nie aus
   der Eingabe.
+- Die Download-Zwischenseite verlangt bei JEDEM Digitalisat (auch gemeinfrei)
+  die Rechtehinweis-Bestaetigung ("Ja" statt der Vorgabe "Nein") vor dem
+  eigentlichen PDF-Link — das ist kein Zugriffshinweis und rechtfertigt kein
+  `metadata_only`, sondern ein Pflichtklick im Standard-Flow (Schritt 6).

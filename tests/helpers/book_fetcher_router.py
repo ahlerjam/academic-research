@@ -108,6 +108,25 @@ class BookFetcherRouter:
     def _try_entry(self, subagent: str, status: str) -> dict:
         return {"subagent": subagent, "status": status, "ts": self._ts()}
 
+    def _success_result(self, source: str, resp: dict, tries: list) -> dict:
+        """Baut das Master-Output-Dict fuer status=success.
+
+        `edition` (Jahr/Ausgabe/Verlag des Digitalisats, Issue #450 AC4) wird
+        nur uebernommen, wenn der liefernde Subagent das Feld tatsaechlich
+        gesetzt hat -- sonst bleibt es weg statt eines erfundenen Platzhalters.
+        Aeltere OA-Fetcher, Verlags-Subagenten, generic-fetcher und
+        scihub-fetcher liefern das Feld (noch) nicht.
+        """
+        result = {
+            "status": "success",
+            "source": source,
+            "file_path": self._pdf_path(resp),
+            "tries": tries,
+        }
+        if resp.get("edition"):
+            result["edition"] = resp["edition"]
+        return result
+
     def fetch(self, identifier_raw: str, output_path: str) -> dict:
         """
         Haupt-Routing-Funktion. Gibt das Master-Output-Schema zurueck.
@@ -137,12 +156,7 @@ class BookFetcherRouter:
             tries.append(self._try_entry(subagent, status))
 
             if status == "success":
-                return {
-                    "status": "success",
-                    "source": subagent,
-                    "file_path": resp.get("pdf_path"),
-                    "tries": tries,
-                }
+                return self._success_result(subagent, resp, tries)
 
             if status == "captcha":
                 return {
@@ -178,12 +192,7 @@ class BookFetcherRouter:
         status = resp.get("status", "no_match")
 
         if status == "success":
-            return {
-                "status": "success",
-                "source": "generic-fetcher",
-                "file_path": self._pdf_path(resp),
-                "tries": tries,
-            }
+            return self._success_result("generic-fetcher", resp, tries)
 
         if status == "captcha":
             return {
@@ -284,12 +293,7 @@ class BookFetcherRouter:
         tries.append(self._try_entry("scihub-fetcher", status))
 
         if status == "success":
-            return {
-                "status": "success",
-                "source": "scihub-fetcher",
-                "file_path": resp.get("file_path"),
-                "tries": tries,
-            }
+            return self._success_result("scihub-fetcher", resp, tries)
 
         if status == "captcha":
             return {
@@ -322,12 +326,7 @@ class BookFetcherRouter:
         tries.append(self._try_entry(pub_subagent, status))
 
         if status == "success":
-            return {
-                "status": "success",
-                "source": pub_subagent,
-                "file_path": resp.get("pdf_path"),
-                "tries": tries,
-            }
+            return self._success_result(pub_subagent, resp, tries)
 
         if status == "captcha":
             return {
@@ -365,12 +364,7 @@ class BookFetcherRouter:
                 tries.append(self._try_entry(pub_subagent, retry_status))
 
                 if retry_status == "success":
-                    return {
-                        "status": "success",
-                        "source": pub_subagent,
-                        "file_path": retry_resp.get("pdf_path"),
-                        "tries": tries,
-                    }
+                    return self._success_result(pub_subagent, retry_resp, tries)
 
                 if retry_status == "captcha":
                     return {
