@@ -7,7 +7,7 @@ argument-hint: "<query>" [--mode quick|standard|deep|metadata] [--modules crossr
 
 # Akademische Paper-Suche
 
-Parallele Suche über 7 API-Quellen. Optional werden Queries mit dem `query-generator`-Agent erweitert.
+Parallele Suche über bis zu 8 API-Quellen (7 laufen automatisch je Modus, `dblp` optional per `--modules dblp`). Optional werden Queries mit dem `query-generator`-Agent erweitert.
 
 ## Verwendung
 

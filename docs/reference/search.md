@@ -4,12 +4,16 @@
 
 ## Suchquellen (15)
 
-Das Plugin sucht in 15 Quellen: **8 API-Quellen** laufen immer und parallel, 7 weitere
-Module steuert die `browser-use`-CLI an (nur im `--mode deep`).
+Das Plugin sucht in bis zu 15 Quellen: **8 API-Quellen** sind registriert, davon laufen
+7 in jedem Modus immer automatisch und parallel; das achte Modul (`dblp`) ist optional
+per `--modules dblp` wählbar (kein automatisches Umschalten je nach Themengebiet). 7
+weitere Module steuert die `browser-use`-CLI an (nur im `--mode deep`).
 
-### API-Module (automatisch, parallel)
+### API-Module
 
-Registriert im `MODULES`-Dispatch von `scripts/search.py` — das ist die maßgebliche Liste.
+Registriert im `MODULES`-Dispatch von `scripts/search.py` — das ist die maßgebliche
+Liste. `dblp` läuft nur, wenn es explizit per `--modules dblp` ausgewählt wird (siehe
+`commands/search.md`); die übrigen sieben laufen automatisch in jedem Modus.
 
 | Modul | Quelle | Disziplin |
 |-------|--------|-----------|

@@ -151,6 +151,53 @@ def test_search_dblp_venue_as_list_is_flattened_to_string(monkeypatch):
     assert isinstance(results[0]["venue"], str)
 
 
+def test_search_dblp_ee_as_list_is_flattened_to_string(monkeypatch):
+    """DBLP liefert 'ee' (electronic edition) bei Treffern mit mehreren Links
+    (z.B. DOI-Link *und* OA-/arXiv-Link) als Liste statt String — analoge
+    Skalar/Array-Quirk zu 'venue' und 'authors.author'. Das Paper-Schema
+    (text_utils.Paper.url: str | None) erwartet einen String; ungefiltert
+    durchgereicht wuerde eine Liste ins Schema geschrieben und die
+    Direkt-PDF-Stufe (pdf.py tier_direct_url, isinstance(url, str)) faellt
+    fuer solche Treffer stillschweigend aus. Bevorzugt wird der DOI-Link,
+    falls einer in der Liste vorhanden ist.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = {
+            "result": {
+                "hits": {
+                    "@total": "1",
+                    "hit": [
+                        {
+                            "info": {
+                                "title": "Deep Residual Learning.",
+                                "venue": "CVPR",
+                                "year": "2016",
+                                "doi": "10.1109/CVPR.2016.90",
+                                "ee": [
+                                    "https://openaccess.thecvf.com/content_cvpr_2016/paper.pdf",
+                                    "https://doi.org/10.1109/CVPR.2016.90",
+                                ],
+                                "authors": {"author": {"@pid": "1/1", "text": "Alice Author"}},
+                            }
+                        }
+                    ],
+                }
+            }
+        }
+        return httpx.Response(200, json=body)
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(search.httpx, "Client", _mock_client_factory(transport))
+    monkeypatch.setattr(search.time, "sleep", lambda *a, **k: None)
+
+    results = search.search_dblp("deep residual learning", limit=1)
+
+    assert len(results) == 1
+    assert isinstance(results[0]["url"], str)
+    assert results[0]["url"] == "https://doi.org/10.1109/CVPR.2016.90"
+
+
 def test_search_dblp_http_error_is_caught_by_run_module(monkeypatch):
     """Ein HTTP-Fehler darf den Prozess nicht crashen — _run_module faengt ihn ab."""
 

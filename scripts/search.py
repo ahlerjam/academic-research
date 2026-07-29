@@ -560,6 +560,16 @@ def search_dblp(query: str, limit: int) -> list[dict[str, Any]]:
         year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
         venue_raw = info.get("venue")
         venue = venue_raw[0] if isinstance(venue_raw, list) and venue_raw else venue_raw
+        ee_raw = info.get("ee")
+        if isinstance(ee_raw, list):
+            # Mehrere Links (z.B. DOI-Resolver + OA-/arXiv-Kopie): DOI-Link
+            # bevorzugen, sonst erstes Element. Analoge Skalar/Array-Quirk
+            # wie bei venue/authors.author.
+            ee = next((e for e in ee_raw if isinstance(e, str) and "doi.org" in e), None)
+            if ee is None:
+                ee = ee_raw[0] if ee_raw else None
+        else:
+            ee = ee_raw
         results.append(
             normalize_paper(
                 {
@@ -570,7 +580,7 @@ def search_dblp(query: str, limit: int) -> list[dict[str, Any]]:
                     "abstract": None,
                     "venue": venue,
                     "citations": 0,
-                    "url": info.get("ee") or info.get("url"),
+                    "url": ee or info.get("url"),
                 },
                 "dblp",
             )
