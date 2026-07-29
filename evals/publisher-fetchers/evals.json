@@ -76,6 +76,51 @@
         "check": "equals:no_match"
       },
       "notes": "Fake-ISBN — Springer sollte 0 Treffer liefern und no_match zurueckgeben."
+    },
+    {
+      "id": "pf-06",
+      "description": "cambridge-core: Gold-OA-Buch via Cambridge Core (Open Access and the Humanities)",
+      "agent": "cambridge-core",
+      "input": {
+        "doi": "10.1017/CBO9781316161012",
+        "output_path": "/tmp/pf-06-cambridge-oa.pdf"
+      },
+      "expected": {
+        "type": "json_field",
+        "path": "$.status",
+        "check": "exists"
+      },
+      "notes": "Recherchiert (WebSearch): Martin Paul Eve, 'Open Access and the Humanities', CUP 2014, CC-BY-SA, frei auf Cambridge Core. Erwartet status in {success, metadata_only, no_match, captcha, pickup_required}."
+    },
+    {
+      "id": "pf-07",
+      "description": "oxford-academic: Commit-to-Open-OA-Buch via Oxford Scholarship Online",
+      "agent": "oxford-academic",
+      "input": {
+        "doi": "10.1093/oso/9780190247249.001.0001",
+        "output_path": "/tmp/pf-07-oxford-oa.pdf"
+      },
+      "expected": {
+        "type": "json_field",
+        "path": "$.status",
+        "check": "exists"
+      },
+      "notes": "Recherchiert (WebSearch): OSO-Titel aus dem 'Commit to Open'-Programm, DOI-Praefix 10.1093/oso bestaetigt. Erwartet status in Enum."
+    },
+    {
+      "id": "pf-08",
+      "description": "jstor: OA-Buch via JSTOR (University of California Press, Luminos)",
+      "agent": "jstor",
+      "input": {
+        "title": "Afghanistan's Islam: From Conversion to the Taliban",
+        "output_path": "/tmp/pf-08-jstor-oa.pdf"
+      },
+      "expected": {
+        "type": "json_field",
+        "path": "$.status",
+        "check": "exists"
+      },
+      "notes": "Recherchiert (WebFetch von jstor.org/publisher/ucal): als 'OPEN ACCESS' gelistet unter UC Press. JSTORs Nutzungsbedingungen untersagen ausdruecklich automatisiertes/systematisches Herunterladen (about.jstor.org/terms) -- Agent nutzt daher ausschliesslich browser-use im Menschentempo. Sollte JSTORs bekannt aggressives Anti-Scraping (CAPTCHA/Rate-Limiting) hier zuschlagen, ist status:captcha statt success eine erwartete, dokumentierte Alternative (AC1)."
     }
   ]
 }

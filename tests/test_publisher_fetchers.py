@@ -17,6 +17,9 @@ AGENTS = [
     "degruyter",
     "nationallizenzen",
     "ebook-central",
+    "cambridge-core",
+    "oxford-academic",
+    "jstor",
 ]
 
 REQUIRED_FRONTMATTER_KEYS = {"name", "model", "tools", "maxTurns", "browser-guide"}
