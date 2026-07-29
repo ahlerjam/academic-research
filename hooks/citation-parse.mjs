@@ -253,6 +253,22 @@ function buildCitation(match, raw, start) {
  *
  * ``confidence`` ist ``"strong"`` oder ``"weak"`` (siehe buildCitation).
  */
+/**
+ * True, wenn der Bereich [start, end) im maskierten Text ueber Zeichen laeuft,
+ * die im Original kein Whitespace sind — also ueber eine ausgeblendete Region
+ * (Klammerinhalt, Code, LaTeX-Makro, Kommentar, Literaturverzeichnis).
+ *
+ * Der Zeichenvergleich ist Absicht: eine blosse Whitespace-Obergrenze wuerde
+ * auch legitime Belege ueber einen Zeilenumbruch hinweg verwerfen
+ * (``vgl.\n  Schmidt 2019, S. 7``).
+ */
+function spansMaskedRegion(content, maskedText, start, end) {
+  for (let i = start; i < end; i += 1) {
+    if (maskedText[i] === ' ' && content[i] !== undefined && !/\s/u.test(content[i])) return true;
+  }
+  return false;
+}
+
 export function extractCitations(content) {
   if (!content) return [];
   const masked = maskSkipRegions(content);
@@ -280,7 +296,18 @@ export function extractCitations(content) {
   NARRATIVE_CITATION.lastIndex = 0;
   while ((match = NARRATIVE_CITATION.exec(withoutParens)) !== null) {
     const start = match.index;
-    push(buildCitation(match, content.slice(start, start + match[0].length), start));
+    const end = start + match[0].length;
+    // Maskierte Regionen sind Leerzeichen — das ``\s+`` hinter dem Signalwort
+    // springt sonst ueber eine ganze Klammer, ein ``\cite{...}`` oder einen
+    // Code-Fence hinweg und zieht Fremdtext in ``raw``. Ein solcher Treffer ist
+    // kein Beleg: er nennt einen Autor, der im Original gar nicht hinter dem
+    // Signalwort steht, und er UMSCHLIESST die echte Fundstelle. Verworfen,
+    // Suche eine Position weiter — die echte Klammer hat Pass 1 bereits.
+    if (spansMaskedRegion(content, withoutParens, start, end)) {
+      NARRATIVE_CITATION.lastIndex = start + 1;
+      continue;
+    }
+    push(buildCitation(match, content.slice(start, end), start));
   }
 
   upgradeCorroborated(citations);
@@ -299,6 +326,14 @@ export function extractCitations(content) {
  * raten. Ein fehlender Marker ist harmlos, ein Marker an falscher Stelle
  * veraendert den Text des Nutzers.
  *
+ * Die Rueckwaerts-Invariante haelt nur fuer DISJUNKTE Spans: ueberlappt ein
+ * Span einen bereits markierten, sind die Offsets im mutierten Text um die
+ * Marker-Laenge verschoben und das Einfuegen traefe mitten in ein Wort. Solche
+ * Spans werden deshalb ebenfalls verworfen und gemeldet — der Waechter oben
+ * kann das nicht sehen, weil er gegen den unveraenderten Text prueft.
+ * Der Sortier-Tie-Break auf ``end`` sorgt dafuer, dass bei gleichem Start der
+ * kuerzere (innere, praezisere) Span gewinnt.
+ *
  * @param {string} text
  * @param {Array<{raw: string, start: number, end: number}>} citations
  * @param {string} marker
@@ -308,14 +343,21 @@ export function markSpans(text, citations, marker, warn = () => {}) {
   const source = text || '';
   const spans = [...citations]
     .filter((c) => Number.isInteger(c.start) && Number.isInteger(c.end))
-    .sort((a, b) => b.start - a.start);
+    .sort((a, b) => b.start - a.start || a.end - b.end);
   let out = source;
+  // Start der zuletzt markierten Fundstelle; alles Folgende muss davor enden.
+  let lastStart = Number.POSITIVE_INFINITY;
   for (const span of spans) {
     if (source.slice(span.start, span.end) !== span.raw) {
       warn(`Span ${span.start}-${span.end} passt nicht zu ${JSON.stringify(span.raw)}`);
       continue;
     }
+    if (span.end > lastStart) {
+      warn(`Span ${span.start}-${span.end} ueberlappt eine bereits markierte Fundstelle`);
+      continue;
+    }
     out = `${out.slice(0, span.end)}${marker}${out.slice(span.end)}`;
+    lastStart = span.start;
   }
   return out;
 }

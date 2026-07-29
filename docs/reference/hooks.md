@@ -77,9 +77,14 @@ Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
 Falschtreffer produziert: die narrative Form ohne Signalwort
 (`Müller (2021) zeigt …`, kollidiert mit `Die DSGVO (2016) trat in Kraft`)
 und Körperschaftsautoren (`(Statistisches Bundesamt 2021)`). Bei Belegen mit
-Seitenbereich (`S. 45–47`) wird die erste Seite geprüft. False Positives
-blockieren den Schreibfluss und sind hier teurer als False Negatives — der
-Guard ist die letzte, nicht die einzige Verteidigungslinie.
+Seitenbereich (`S. 45–47`) wird die erste Seite geprüft. Ein Signalwort, das
+über eine nicht geprüfte Region hinweg auf einen Namen zeigt
+(`vgl. (Müller 2021, S. 45) Schmidt 2019`, `vgl. \cite{…} Schmidt 2019`),
+zählt ebenfalls nicht: der Beleg hinter der Klammer bzw. dem Makro steht dort
+nicht als Ziel des Signalworts, und die Klammer selbst hat der Klammer-Pass
+bereits erfasst. False Positives blockieren den Schreibfluss und sind hier
+teurer als False Negatives — der Guard ist die letzte, nicht die einzige
+Verteidigungslinie.
 
 **Externe Kaskade (Fallback).** Findet der Vault den Beleg nicht, laufen drei
 Stufen mit Frühausstieg: arXiv (eine gebatchte Anfrage für alle offenen

@@ -159,6 +159,11 @@ def _closed_port() -> int:
 
 def run_hook(payload: dict, env_overrides: dict | None = None) -> subprocess.CompletedProcess:
     env = os.environ.copy()
+    # Hermetisch: die Default-Schwellen-Tests (AC4) beweisen "Verhalten kippt
+    # allein ueber Env" nur, wenn kein ACADEMIC_CITATION_* aus der Shell des
+    # Entwicklers oder des CI-Runners durchschlaegt.
+    for key in [k for k in env if k.startswith("ACADEMIC_CITATION_")]:
+        del env[key]
     env["VAULT_DB_PATH"] = str(REPO_ROOT / "nonexistent_vault_for_tests.db")
     # Default in Tests: keine echte Netz-Kaskade.
     env["ACADEMIC_CITATION_CASCADE"] = "off"
@@ -183,6 +188,18 @@ def updated_content(result: subprocess.CompletedProcess) -> str:
     assert result.stdout.strip(), f"Kein stdout-JSON. stderr: {result.stderr}"
     data = json.loads(result.stdout)
     return data["hookSpecificOutput"]["updatedInput"]["content"]
+
+
+def assert_marker_only(updated: str, original: str) -> None:
+    """Invariante: der Soft-Fail haengt Marker an — er veraendert sonst nichts.
+
+    Faellt der Marker in ein Wort hinein (verschobene Offsets), schlaegt genau
+    diese Zeile an, waehrend ein blosses ``"[UNVERIFIED]" in updated`` den
+    Schaden nicht sieht.
+    """
+    assert updated.replace(" [UNVERIFIED]", "") == original, (
+        f"Text ueber die Markierung hinaus veraendert: {updated!r}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -531,6 +548,7 @@ def test_cascade_unavailable_soft_fails(empty_vault):
     marked = updated_content(result)
     assert "[UNVERIFIED]" in marked
     assert "(Fantasius 1999, S. 12) [UNVERIFIED]" in marked
+    assert_marker_only(marked, content)
 
 
 def test_cascade_http_403_soft_fails(empty_vault):
@@ -623,7 +641,9 @@ def test_cascade_connection_refused_soft_fails(empty_vault):
     assert result.returncode == 0, (
         f"Erwartet 0 (Soft-Fail), got {result.returncode}. {result.stderr}"
     )
-    assert "[UNVERIFIED]" in updated_content(result)
+    updated = updated_content(result)
+    assert "[UNVERIFIED]" in updated
+    assert_marker_only(updated, content)
 
 
 def test_soft_fail_marks_edit_new_string(empty_vault):
@@ -652,6 +672,7 @@ def test_soft_fail_marks_edit_new_string(empty_vault):
     data = json.loads(result.stdout)
     updated = data["hookSpecificOutput"]["updatedInput"]
     assert "[UNVERIFIED]" in updated["new_string"]
+    assert_marker_only(updated["new_string"], payload["tool_input"]["new_string"])
     assert updated["old_string"] == "Platzhalter", "unveraenderte Felder muessen erhalten bleiben"
 
 
@@ -686,6 +707,8 @@ def test_soft_fail_marks_multiedit_edits(empty_vault):
     edits = json.loads(result.stdout)["hookSpecificOutput"]["updatedInput"]["edits"]
     assert "[UNVERIFIED]" not in edits[0]["new_string"]
     assert "[UNVERIFIED]" in edits[1]["new_string"]
+    for got, sent in zip(edits, payload["tool_input"]["edits"], strict=True):
+        assert_marker_only(got["new_string"], sent["new_string"])
 
 
 # ---------------------------------------------------------------------------
@@ -1256,6 +1279,7 @@ def test_marker_lands_on_checked_occurrence_not_code_fence(empty_vault):
     assert "Der Befund (Fantasius 1999, S. 12) [UNVERIFIED] belegt" in updated, (
         f"Prosa-Beleg nicht markiert: {updated!r}"
     )
+    assert_marker_only(updated, content)
 
 
 def test_all_repeated_occurrences_marked(empty_vault):
@@ -1274,6 +1298,7 @@ def test_all_repeated_occurrences_marked(empty_vault):
     assert updated.count("[UNVERIFIED]") == 3, (
         f"Erwartet 3 Marker, got {updated.count('[UNVERIFIED]')}: {updated!r}"
     )
+    assert_marker_only(updated, content)
 
 
 def test_multiedit_marks_only_own_segment(empty_vault):
@@ -1294,12 +1319,137 @@ def test_multiedit_marks_only_own_segment(empty_vault):
             ],
         },
     }
+    sent = [dict(edit) for edit in payload["tool_input"]["edits"]]
     result = run_hook(payload, env_overrides=mark_env(empty_vault))
     assert result.returncode == 0, f"Erwartet Soft-Fail, got {result.returncode}: {result.stderr}"
     edits = json.loads(result.stdout)["hookSpecificOutput"]["updatedInput"]["edits"]
+    for got, original in zip(edits, sent, strict=True):
+        assert_marker_only(got["new_string"], original["new_string"])
     assert edits[0]["new_string"] == payload["tool_input"]["edits"][0]["new_string"], (
         f"Maskiertes Segment wurde verändert: {edits[0]['new_string']!r}"
     )
     assert "[UNVERIFIED]" in edits[1]["new_string"], (
         f"Eigenes Segment nicht markiert: {edits[1]['new_string']!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde 2: verschachtelte Fundstellen (Deep-Review-P1, PR #412)
+#
+# Der Narrativ-Pass laeuft auf ``withoutParens``, wo eine Klammer zu Leerzeichen
+# maskiert ist — das ``\s+`` hinter dem Signalwort sprang darueber hinweg und
+# erzeugte eine Fundstelle, die eine andere ENTHAELT. markSpans pruefte den
+# Waechter gegen den Originaltext, spleisste aber in den bereits mutierten Text:
+# der zweite Marker landete mitten im Wort ("Schmi [UNVERIFIED]dt").
+# ---------------------------------------------------------------------------
+
+OVERLAP_CONTENT = "vgl. (Müller 2021, S. 45) Schmidt 2019, S. 7 ist relevant."
+
+
+def test_overlapping_citations_never_split_a_word(empty_vault):
+    """Der Marker darf nur angehaengt werden, nie in ein Wort hineinschneiden."""
+    result = run_hook(
+        write_payload(OVERLAP_CONTENT),
+        env_overrides=mark_env(empty_vault),
+    )
+    assert result.returncode == 0, f"Erwartet Soft-Fail, got {result.returncode}: {result.stderr}"
+    updated = updated_content(result)
+    assert "Schmi [UNVERIFIED]dt" not in updated, f"Marker zerschneidet ein Wort: {updated!r}"
+    assert updated.replace(" [UNVERIFIED]", "") == OVERLAP_CONTENT, (
+        f"Text wurde ueber die Markierung hinaus veraendert: {updated!r}"
+    )
+
+
+def test_narrative_pass_does_not_swallow_a_paren_citation():
+    """Ein Narrativ-Treffer ueber einer maskierten Region ist keine Fundstelle."""
+    source = """
+    import { extractCitations } from './hooks/citation-parse.mjs';
+    const overlap = 'vgl. (Müller 2021, S. 45) Schmidt 2019, S. 7 ist relevant.';
+    const latex = 'vgl. \\\\cite{mueller2021} Schmidt 2019, S. 7 ist relevant.';
+    const dump = (content) => extractCitations(content).map((c) => ({
+      raw: c.raw,
+      ok: content.slice(c.start, c.end) === c.raw,
+    }));
+    console.log(JSON.stringify({ overlap: dump(overlap), latex: dump(latex) }));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    data = json.loads(result.stdout)
+    assert [c["raw"] for c in data["overlap"]] == ["(Müller 2021, S. 45)"], (
+        f"Erwartet genau die Klammer-Fundstelle, got {data['overlap']}"
+    )
+    assert all(c["ok"] for c in data["overlap"]), "Span-Invariante verletzt"
+    assert data["latex"] == [], (
+        f"Narrativ-Treffer ueber \\cite{{...}} darf nicht zaehlen, got {data['latex']}"
+    )
+
+
+def test_mark_spans_skips_overlapping_spans():
+    """Waechter: ueberlappende Spans werden verworfen statt geraten."""
+    source = """
+    import { markSpans } from './hooks/citation-parse.mjs';
+    const text = 'vgl. (Müller 2021, S. 45) Schmidt 2019, S. 7 ist relevant.';
+    const spans = [
+      { raw: text.slice(0, 44), start: 0, end: 44 },
+      { raw: text.slice(5, 25), start: 5, end: 25 },
+    ];
+    const warnings = [];
+    const out = markSpans(text, spans, ' [UNVERIFIED]', (m) => warnings.push(m));
+    console.log(JSON.stringify({ out, warnings: warnings.length }));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    data = json.loads(result.stdout)
+    assert (
+        data["out"] == "vgl. (Müller 2021, S. 45) [UNVERIFIED] Schmidt 2019, S. 7 ist relevant."
+    ), f"Nur der innere Span darf markiert werden, got {data['out']!r}"
+    assert data["warnings"] == 1, f"Erwartet eine Warnung, got {data['warnings']}"
+
+
+def test_mark_spans_keeps_adjacent_spans():
+    """Grenzfall: ein Span endet genau dort, wo der naechste beginnt — kein Overlap."""
+    source = """
+    import { markSpans } from './hooks/citation-parse.mjs';
+    const text = 'AAAAABBBBB';
+    const spans = [
+      { raw: 'AAAAA', start: 0, end: 5 },
+      { raw: 'BBBBB', start: 5, end: 10 },
+    ];
+    console.log(JSON.stringify({ out: markSpans(text, spans, '#') }));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    assert json.loads(result.stdout)["out"] == "AAAAA#BBBBB#"
+
+
+def test_narrative_citation_survives_line_break_and_signal_words():
+    """Kein Kollateralschaden: legitime Narrativformen bleiben erkannt."""
+    source = """
+    import { extractCitations } from './hooks/citation-parse.mjs';
+    const cases = {
+      plain: 'siehe Schmidt 2019, S. 7 ist relevant.',
+      lineBreak: 'Der Befund vgl.\\n  Schmidt 2019, S. 7 ist relevant.',
+      zitNach: 'Der Befund zit. nach Weber 2018, S. 7 ist relevant.',
+    };
+    const out = {};
+    for (const [name, content] of Object.entries(cases)) {
+      out[name] = extractCitations(content).map((c) => ({
+        family: c.family,
+        page: c.page,
+        ok: content.slice(c.start, c.end) === c.raw,
+      }));
+    }
+    console.log(JSON.stringify(out));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    data = json.loads(result.stdout)
+    for name, expected_family in (
+        ("plain", "Schmidt"),
+        ("lineBreak", "Schmidt"),
+        ("zitNach", "Weber"),
+    ):
+        assert len(data[name]) == 1, f"{name}: erwartet genau eine Fundstelle, got {data[name]}"
+        assert data[name][0]["family"] == expected_family, f"{name}: {data[name]}"
+        assert data[name][0]["page"] == 7, f"{name}: Seite nicht erkannt, got {data[name]}"
+        assert data[name][0]["ok"], f"{name}: Span-Invariante verletzt"
