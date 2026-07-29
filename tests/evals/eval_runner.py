@@ -2,6 +2,7 @@
 
 Laedt Eval-JSON-Dateien, ruft die Claude-API auf und prueft Expectations.
 """
+
 from __future__ import annotations
 
 import json
@@ -110,24 +111,37 @@ def call_claude(system: str, user: str, model: str = "claude-sonnet-4-6") -> str
         system=system,
         messages=[{"role": "user", "content": user}],
     )
-    return "".join(
-        getattr(block, "text", "") for block in resp.content
-    )
+    return "".join(getattr(block, "text", "") for block in resp.content)
 
 
 def check_expected(output: str, expected: dict[str, Any]) -> bool:
+    """Prueft eine Modell-Ausgabe gegen ein Erwartungs-Objekt aus `evals.json`.
+
+    Optionales `expected.forbidden` (Regex) ist die Negativkontrolle: trifft es,
+    ist der Case FAIL — auch wenn das Positivkriterium erfuellt ist. Eingefuehrt
+    in #471, weil ein reines Positivkriterium nicht erkennt, dass eine Antwort
+    neben passenden Inhalten auch fachfremde mitliefert (Details in
+    `evals/SCHEMA.md`).
+    """
     t = expected.get("type")
     if t == "substring":
-        return expected["value"] in output
-    if t == "regex":
-        return bool(re.search(expected["value"], output))
-    if t == "json_field":
+        matched = expected["value"] in output
+    elif t == "regex":
+        matched = bool(re.search(expected["value"], output))
+    elif t == "json_field":
         try:
             parsed = json.loads(output)
         except json.JSONDecodeError:
-            return False
-        return _jsonpath_check(parsed, expected)
-    raise ValueError(f"Unbekannter expected.type: {t}")
+            matched = False
+        else:
+            matched = _jsonpath_check(parsed, expected)
+    else:
+        raise ValueError(f"Unbekannter expected.type: {t}")
+
+    forbidden = expected.get("forbidden")
+    if matched and forbidden and re.search(forbidden, output):
+        return False
+    return matched
 
 
 def read_token_baseline(baseline_file: Path | None = None) -> dict[str, Any]:
@@ -202,9 +216,7 @@ def _jsonpath_check(obj: Any, expected: dict[str, Any]) -> bool:
         segments = re.findall(r"\.(\w+)|\[(\d+)\]", normalized)
         # Ohne Segmente, aber nicht-leerer Path = Syntaxfehler (z.B. "a.b" ohne fuehrendes .)
         if not segments:
-            raise ValueError(
-                f"Ungueltiger JSONPath: {path!r} - erwartet '$', '$.key' oder '.key'"
-            )
+            raise ValueError(f"Ungueltiger JSONPath: {path!r} - erwartet '$', '$.key' oder '.key'")
         for key, idx in segments:
             if key:
                 if not isinstance(current, dict) or key not in current:

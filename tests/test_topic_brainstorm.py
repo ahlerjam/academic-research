@@ -26,6 +26,7 @@ ist in dieser PR schon einmal fehlgeschlagen — siehe
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -35,10 +36,43 @@ _WORKTREE_ROOT = Path(__file__).parent.parent
 _SCORER = _WORKTREE_ROOT / "skills" / "topic-brainstorm" / "scripts" / "scorer.py"
 _EVALS_JSON = _WORKTREE_ROOT / "evals" / "topic-brainstorm" / "evals.json"
 
+# Die 5 Titel der in #471 geloeschten `_TOPIC_DB` — woertlich aus
+# `git show <pre-471>:skills/topic-brainstorm/scripts/scorer.py`. Der Scorer gab
+# sie fuer JEDE Studienrichtung aus; genau das ist der Bug, den #471 behebt.
+# Sie sind zugleich die Negativkontrolle der Eval-Kriterien (siehe
+# `tests/evals/test_topic_brainstorm_criteria.py`).
+ISSUE_471_FIXED_TITLES = (
+    "Cyber Security Awareness in KMU",
+    "Ransomware-Resilienz in Kritischen Infrastrukturen",
+    "Zero-Trust-Architektur in Cloud-nativen Unternehmensumgebungen",
+    "Phishing-Erkennung mittels Machine Learning",
+    "Datenschutz und DSGVO-Compliance in agilen Softwareentwicklungsprozessen",
+)
+
+# Fach-Kontrast-Paar: zwei Prompts, die dieselbe Frage fuer disjunkte Faecher
+# stellen. Nur sie brauchen eine `forbidden`-Negativkontrolle.
+_CONTRAST_PROMPT_IDS = ("tb-04", "tb-05")
+
+# Erlaubte Form eines Kriteriums dieser Komponente: flache Alternation, optional
+# mit vorangestelltem Inline-Flag. Erzwungen, damit der Echo-Guard unten die
+# geforderten Marker ueberhaupt aufzaehlen kann.
+_FLAT_ALTERNATION = re.compile(r"^(?:\(\?i\))?\(([^()]+)\)$")
+
 
 def _eval_prompts() -> list[dict]:
     """Quality-Eval-Prompts der Komponente aus evals/topic-brainstorm/evals.json."""
     return json.loads(_EVALS_JSON.read_text(encoding="utf-8"))["prompts"]
+
+
+def _criterion_alternatives(pattern: str) -> list[str]:
+    """Zaehlt die geforderten/verbotenen Marker eines flachen Alternations-Regex auf."""
+    match = _FLAT_ALTERNATION.match(pattern)
+    assert match, (
+        f"Kriterium {pattern!r} ist keine flache Alternation '(A|B|C)'. "
+        "Die Quality-Kriterien dieser Komponente muessen aufzaehlbar bleiben, "
+        "sonst kann der Echo-Guard sie nicht gegen den eigenen Prompt-Input pruefen."
+    )
+    return [alt for alt in match.group(1).split("|") if alt]
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +442,69 @@ class TestEvalContrastPromptsAreWired:
 
 
 # ---------------------------------------------------------------------------
+# AC1 (Fix-Runde 2 zu PR #484): Taugen die Kriterien ueberhaupt als Messinstrument?
+# ---------------------------------------------------------------------------
+
+
+class TestEvalCriteriaAreDiscriminative:
+    """Die Quality-Kriterien duerfen nicht durch blosses Echo des Prompts erfuellbar sein.
+
+    Ausgefuehrter Befund, der zu dieser Klasse gefuehrt hat: die Kriterien aller
+    fuenf Prompts forderten ausschliesslich Woerter, die woertlich im jeweils
+    eigenen Prompt-Input stehen (tb-04 forderte u. a. "Maschinenbau" und
+    "Fertigung" — beides steht in der Frage). Spielt man die reproduzierte
+    Ausgabe des #471-Bugs ein (die fuenf Cyber-Themen der geloeschten
+    `_TOPIC_DB`, garniert mit einem Satz "Fuer dein Maschinenbau-Studium ..."),
+    meldeten tb-01, tb-03, tb-04 und tb-05 PASS. Diese Prompts haetten den Bug
+    also auch mit `ANTHROPIC_API_KEY` nicht gefunden. Ein Echo-Kriterium trennt
+    ausserdem nicht zwischen angewandtem Skill und bloss aufgegriffener Frage:
+    liefe die Komponente je in `mode: "both"`, bestuenden beide Arme, und der in
+    `evals/SCHEMA.md` geforderte Baseline-Gap (>= 20 pp) koennte nicht
+    entstehen.
+
+    Geltungsbereich: bewusst nur `evals/topic-brainstorm/`. Ob die uebrigen
+    Komponenten dieselbe Schwaeche haben, ist eine eigene Frage und gehoert
+    nicht in den Fix zu #471.
+    """
+
+    def test_required_markers_do_not_appear_in_the_own_prompt_input(self):
+        """Kein geforderter Marker darf im eigenen Prompt stehen — sonst genuegt Echo."""
+        echoed: list[str] = []
+        for prompt in _eval_prompts():
+            expected = prompt["expected"]
+            assert expected["type"] == "regex", (
+                f"{prompt['id']}: Guard deckt nur type='regex' ab, gefunden {expected['type']!r}."
+            )
+            for alt in _criterion_alternatives(expected["value"]):
+                if re.search(alt, prompt["input"], re.IGNORECASE):
+                    echoed.append(f"{prompt['id']}: {alt!r}")
+        assert not echoed, (
+            "Diese Erfolgskriterien stehen woertlich in ihrem eigenen Prompt-Input: "
+            f"{echoed}. Eine Antwort, die nur die Frage aufgreift, besteht damit — "
+            "auch die des in #471 behobenen Fixed-Set-Verhaltens. Fordere stattdessen "
+            "Marker, die erst die Skill-Anwendung erzeugt (Rubrik-Begriffe bzw. "
+            "fachspezifisches Vokabular)."
+        )
+
+    def test_contrast_prompts_have_a_negative_control_against_the_471_regression(self):
+        """tb-04/tb-05 verbieten explizit die Themen der geloeschten `_TOPIC_DB`."""
+        by_id = {p["id"]: p for p in _eval_prompts()}
+        for pid in _CONTRAST_PROMPT_IDS:
+            forbidden = by_id[pid]["expected"].get("forbidden")
+            assert forbidden, (
+                f"{pid} hat keine Negativkontrolle (`expected.forbidden`). Ohne sie "
+                "besteht auch eine Antwort, die neben passenden Themen die alte "
+                "fachfremde Liste mitliefert."
+            )
+            _criterion_alternatives(forbidden)  # Formatpflicht auch fuer forbidden
+            uncaught = [t for t in ISSUE_471_FIXED_TITLES if not re.search(forbidden, t)]
+            assert not uncaught, (
+                f"{pid}: `forbidden` erfasst diese Titel der geloeschten `_TOPIC_DB` "
+                f"nicht: {uncaught}. Genau sie sind der Regressionsfall von #471."
+            )
+
+
+# ---------------------------------------------------------------------------
 # AC3: Keine feste Themenliste mehr im Code
 # ---------------------------------------------------------------------------
 
@@ -421,13 +518,7 @@ class TestNoHardcodedTopicDatabase:
 
     def test_old_fixed_titles_removed(self):
         source = _SCORER.read_text(encoding="utf-8")
-        for old_title in (
-            "Cyber Security Awareness in KMU",
-            "Ransomware-Resilienz in Kritischen Infrastrukturen",
-            "Zero-Trust-Architektur in Cloud-nativen Unternehmensumgebungen",
-            "Phishing-Erkennung mittels Machine Learning",
-            "Datenschutz und DSGVO-Compliance in agilen Softwareentwicklungsprozessen",
-        ):
+        for old_title in ISSUE_471_FIXED_TITLES:
             assert old_title not in source, (
                 f"Alter Fixed-Titel noch in scorer.py vorhanden: {old_title!r}"
             )

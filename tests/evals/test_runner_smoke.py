@@ -1,4 +1,5 @@
 """Smoke-Test fuer eval_runner.check_expected."""
+
 import pytest
 
 from tests.evals.eval_runner import check_expected
@@ -14,6 +15,35 @@ def test_substring_miss():
 
 def test_regex_match():
     assert check_expected("abc123", {"type": "regex", "value": r"\d+"})
+
+
+def test_forbidden_overrides_a_positive_match():
+    """`forbidden` ist die Negativkontrolle: trifft sie, ist der Case FAIL (#471)."""
+    expected = {"type": "regex", "value": "(Bauteil)", "forbidden": "(Ransomware)"}
+    assert not check_expected("Bauteil-Studie mit Ransomware-Kapitel", expected)
+
+
+def test_forbidden_absent_keeps_a_positive_match():
+    expected = {"type": "regex", "value": "(Bauteil)", "forbidden": "(Ransomware)"}
+    assert check_expected("Bauteil-Studie ohne Fremdthema", expected)
+
+
+def test_forbidden_does_not_rescue_a_failed_match():
+    """Ohne Treffer im Positivkriterium bleibt es FAIL, auch wenn nichts verboten ist."""
+    expected = {"type": "regex", "value": "(Bauteil)", "forbidden": "(Ransomware)"}
+    assert not check_expected("voellig anderer Text", expected)
+
+
+def test_forbidden_applies_to_substring_type_too():
+    expected = {"type": "substring", "value": "Thema", "forbidden": "(Phishing)"}
+    assert not check_expected("Thema: Phishing-Erkennung", expected)
+    assert check_expected("Thema: Werkstoffpruefung", expected)
+
+
+def test_unknown_expected_type_still_raises():
+    """Unbekannte Typen bleiben ein Fehler — `forbidden` darf das nicht verschlucken."""
+    with pytest.raises(ValueError, match="Unbekannter expected.type"):
+        check_expected("egal", {"type": "vibes", "value": "x", "forbidden": "(y)"})
 
 
 def test_json_field_exists():

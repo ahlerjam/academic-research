@@ -36,7 +36,27 @@ Quality-Evals pro Skill oder Agent, nach Cookbook-Pattern `skill-creator`.
 - `prompts[].expected.value`: erwarteter Substring oder Regex (bei Typ `substring`/`regex`)
 - `prompts[].expected.path`: JSONPath zum geprueften Feld (bei Typ `json_field`)
 - `prompts[].expected.check`: `"exists"` | `"non_empty"` | `"equals:<wert>"` (bei Typ `json_field`)
+- `prompts[].expected.forbidden` (optional): Regex als **Negativkontrolle**. Trifft
+  er auf die Ausgabe zu, ist der Case FAIL — unabhaengig davon, ob das
+  Positivkriterium erfuellt ist. Gilt fuer alle drei Typen.
 - `prompts[].mode`: `"with_skill"` | `"without_skill"` | `"both"`
+
+### Kriterien, die nicht per Echo erfuellbar sind
+
+Ein Positivkriterium, dessen Woerter schon im `input` stehen, misst nichts: eine
+Antwort, die bloss die Frage aufgreift, besteht — und zwar in beiden Modi, womit
+der unten geforderte Baseline-Gap `with_skill` vs. `without_skill` gar nicht
+erst entstehen kann. Fordere deshalb Marker, die erst die Anwendung des Skills
+erzeugt (Rubrik-Begriffe, fachspezifisches Vokabular), und ergaenze bei
+Kontrast-Faellen ein `forbidden` fuer das, was **nicht** vorkommen darf.
+
+Belegter Fehlerfall: `evals/topic-brainstorm/` forderte in `tb-04` u. a.
+„Maschinenbau" und „Fertigung" — beides stand woertlich in der Frage. Die
+reproduzierte Ausgabe des in #471 behobenen Bugs (fuer jedes Fach dieselben
+fuenf Cyber-Security-Themen) passierte damit vier der fuenf Prompts. Die Guards
+dazu liegen in `tests/test_topic_brainstorm.py::TestEvalCriteriaAreDiscriminative`
+und `tests/evals/test_topic_brainstorm_criteria.py`; sie gelten bislang nur fuer
+diese eine Komponente.
 
 ## `evals/<component>/trigger_evals.json`
 
