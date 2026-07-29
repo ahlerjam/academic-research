@@ -4,7 +4,7 @@
 
 Agents sind LLM-Subagents. Anders als Skills aktivieren sie sich nicht selbst — sie
 werden von einem Command oder einem Skill gestartet und laufen in eigenem Kontext.
-Das Plugin bringt **20 Agents** mit (`agents/*.md`).
+Das Plugin bringt **21 Agents** mit (`agents/*.md`).
 
 ## Recherche und Bewertung
 
@@ -14,6 +14,7 @@ Das Plugin bringt **20 Agents** mit (`agents/*.md`).
 | `relevance-scorer` | Sonnet | `/search`, `/score` | Semantische Relevanz 0–1, 10er-Batches mit Prompt-Caching |
 | `quote-extractor` | Sonnet | `citation-extraction` | Verbatim-Zitate via Citations-API + Vault-Write |
 | `quality-reviewer` | Sonnet | `chapter-writer`, `abstract-generator` | Evaluator-Optimizer-Pattern (PASS/REVISE) |
+| `screening-judge` | Sonnet | `parallel-screening` | Ein Treffer, ein Urteil: include/exclude/unclear als Ein-Fall-JSON |
 | `sparring-partner` | Opus | direkt, `advisor`/`research-question-refiner`/`methodology-advisor` | Denk- und Impulsgeber: benennt Schwächen, Gegenpositionen und Anschlussfragen, schreibt keine Kapitel-Prosa |
 
 ## Buchbeschaffung

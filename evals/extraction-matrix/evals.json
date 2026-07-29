@@ -1,0 +1,42 @@
+{
+  "component": "extraction-matrix",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "em-01",
+      "input": "Meine Schlüsselkonzepte laut academic_context.md sind 'Remote Work', 'Produktivität' und 'Teamkohäsion'. Erstelle die Spalten für meine Extraktionsmatrix.",
+      "expected": {
+        "type": "regex",
+        "value": "Remote Work.*Produktivität.*Teamkohäsion.*Methode.*Stichprobe.*Erhebungszeitraum.*Kernbefund"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "em-02",
+      "input": "Fuelle die Extraktionsmatrix fuer zwei Quellen. Quelle A hat eine Notiz mit Kernbefund, Methode und N=30 Probanden. Quelle B hat eine Notiz mit Kernbefund und Methode, aber ohne jede Stichprobenangabe. Was traegst du fuer die Stichprobe-Zelle von Quelle B ein?",
+      "expected": {
+        "type": "regex",
+        "value": "(fehlend|nicht angegeben|keine Angabe)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "em-03",
+      "input": "Exportiere meine Extraktionsmatrix als Arbeitsblatt.",
+      "expected": {
+        "type": "regex",
+        "value": "(document-skills:xlsx|Arbeitsblatt|\\.xlsx)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "em-04",
+      "input": "Ich habe drei Quellen im Vault. Quelle C hat weder eine Notiz noch ein Zitat gespeichert. Erstelle trotzdem die vollstaendige Extraktionsmatrix mit allen drei Quellen.",
+      "expected": {
+        "type": "regex",
+        "value": "(Grundlage fehlt|keine Notiz|kein Zitat)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

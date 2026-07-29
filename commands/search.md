@@ -174,6 +174,16 @@ save_prisma_counters('$SESSION_DIR', counters)
 
 Die Zähler werden in `$SESSION_DIR/prisma_counters.json` gespeichert.
 
+Lief das Screening über den `parallel-screening`-Skill, sind die Zähler bereits
+im Ledger protokolliert — dann statt der Handzählung:
+
+```bash
+~/.academic-research/venv/bin/python \
+  ${CLAUDE_PLUGIN_ROOT}/skills/parallel-screening/scripts/screening_ledger.py \
+  counters --session-dir "$SESSION_DIR" --n-identified "${N_IDENTIFIED}" \
+  > "$SESSION_DIR/prisma_counters.json"
+```
+
 ### Schritt 8: Relevanz-Scoring (Standard vs. Batch)
 
 **Standard (< 50 Paper oder kein `--batch`):**  

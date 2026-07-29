@@ -32,6 +32,11 @@ def render_prisma_flow(
     Args:
         counters: dict with keys n_identified, n_after_dedup,
                   n_excluded_screening, n_excluded_eligibility, n_included.
+                  Optional n_unclear_screening (#460): records the screening
+                  agents could not decide on the available material. They are
+                  neither included nor excluded and therefore never counted as
+                  full-text candidates; a separate node marks them as awaiting
+                  a human decision. Defaults to 0 (output unchanged).
         output_path: if given, write the Mermaid block to that file (append).
 
     Returns:
@@ -42,9 +47,15 @@ def render_prisma_flow(
     n_ex_screen = counters.get("n_excluded_screening", 0)
     n_ex_elig = counters.get("n_excluded_eligibility", 0)
     n_inc = counters.get("n_included", 0)
+    n_unclear = counters.get("n_unclear_screening", 0)
 
-    # Derived: how many records went to full-text eligibility
-    n_eligible = n_dedup - n_ex_screen
+    # Derived: how many records went to full-text eligibility.
+    # Unclear cases are still pending a human decision (#460), so they do not
+    # enter the full-text stage.
+    n_eligible = n_dedup - n_ex_screen - n_unclear
+
+    unclear_node = f'\n    G["Unklar — menschliche Entscheidung offen\\nn = {n_unclear}"]'
+    unclear_edge = '\n    B -->|"unklar"| G'
 
     mermaid = f"""\
 ```mermaid
@@ -54,13 +65,13 @@ flowchart TD
     C["Screening ausgeschlossen\\nn = {n_ex_screen}"]
     D["Volltextprüfung\\nn = {n_eligible}"]
     E["Eligibility ausgeschlossen\\nn = {n_ex_elig}"]
-    F["Eingeschlossen\\nn = {n_inc}"]
+    F["Eingeschlossen\\nn = {n_inc}"]{unclear_node if n_unclear else ""}
 
     A --> B
     B -->|"ausgeschlossen"| C
     B --> D
     D -->|"ausgeschlossen"| E
-    D --> F
+    D --> F{unclear_edge if n_unclear else ""}
 ```"""
 
     if output_path:
@@ -81,6 +92,12 @@ def main() -> int:
     parser.add_argument("--n-excluded-screening", type=int, required=True)
     parser.add_argument("--n-excluded-eligibility", type=int, required=True)
     parser.add_argument("--n-included", type=int, required=True)
+    parser.add_argument(
+        "--n-unclear-screening",
+        type=int,
+        default=0,
+        help="Unentscheidbare Screening-Faelle (#460); 0 = kein eigener Knoten",
+    )
     parser.add_argument("--output", help="Append Mermaid block to this file")
     args = parser.parse_args()
 
@@ -90,6 +107,7 @@ def main() -> int:
         "n_excluded_screening": args.n_excluded_screening,
         "n_excluded_eligibility": args.n_excluded_eligibility,
         "n_included": args.n_included,
+        "n_unclear_screening": args.n_unclear_screening,
     }
     result = render_prisma_flow(counters, output_path=args.output)
     print(result)

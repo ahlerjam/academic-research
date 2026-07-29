@@ -10,6 +10,46 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Neuer Skill `parallel-screening` + Agent `screening-judge` (#460):** Die
+  gleichförmigen Schritte der Recherche — Titel-/Abstract-Screening vieler
+  Treffer und Verzerrungsbewertung vieler Studien — laufen jetzt wellenweise
+  über Subagents statt seriell im Dialog. Der neue `screening-judge` urteilt
+  über genau einen Treffer und gibt ein festes Ein-Fall-JSON zurück
+  (`include`/`exclude`/`unclear` mit Begründung, Kriterium, Beleglage); die
+  Verzerrungsbewertung nutzt den bestehenden `risk-of-bias`-Agent unverändert
+  weiter. Die deterministische Buchführung liegt in
+  `skills/parallel-screening/scripts/screening_ledger.py`: Wellen-Planung
+  gegen ein konfigurierbares Limit (Argument > `ACADEMIC_RESEARCH_MAX_PARALLEL`
+  > `config/parallel_agents.json` > Default 4, harter Deckel 8), ein
+  append-only Ledger `$SESSION_DIR/screening_ledger.jsonl` als Protokoll
+  „welche Quelle von welchem Agent" und Resume-Basis, sowie PRISMA-Zähler
+  direkt aus dem Ledger. Geschrieben wird ausschließlich in die vorhandenen
+  Zielstrukturen: Ausschlüsse nach `excluded_sources` (mit Stufen-Präfix
+  `screening: …`), Einschlüsse bleiben in `papers`, RoB-Bewertungen im
+  bestehenden Domain-Format. Uneindeutige Fälle erreichen den Vault nie und
+  werden gesammelt zur menschlichen Entscheidung vorgelegt. Resume prüft bei
+  RoB zusätzlich `vault.list_risk_of_bias()`, weil `add_risk_of_bias` ein
+  reines INSERT ohne Idempotenz ist.
+
+- **Neuer Skill `extraction-matrix` für die Synthese-Phase (#463):** Zwischen
+  „Quellen gesammelt" und „Kapitel geschrieben" fehlte bisher der Schritt, in
+  dem Befunde über mehrere Studien hinweg vergleichbar gemacht werden. Der
+  neue Skill leitet die Spalten der Extraktionsmatrix aus den
+  Schlüsselkonzepten in `academic_context.md` ab, ergänzt um die
+  Standardmerkmale Methode, Stichprobe, Erhebungszeitraum und Kernbefund;
+  die Zeilen kommen aus dem Paper-Inventar in `literature_state.md`. Jede
+  Zelle wird ausschließlich aus vorhandenen `vault.find_notes()`/
+  `vault.find_quotes()`-Belegen befüllt, fehlende Angaben werden explizit als
+  `— fehlend —` markiert statt ergänzt zu werden; Quellen ganz ohne Notiz
+  oder Zitat bleiben als eigene Zeile mit „Grundlage fehlt"-Hinweis sichtbar
+  statt zu verschwinden. Ausgabe als Markdown-Tabelle zur Übernahme in
+  `kapitel/literatur.md` sowie als Arbeitsblatt über den externen
+  `document-skills:xlsx`-Skill (Verfügbarkeitsprüfung + Fallback-Hinweis,
+  gleiches Muster wie `commands/excel.md`). Statistische Auswertung oder
+  Interpretation der Matrix bleibt explizit out of scope (Meta-Analyse-Pfad).
+  Skill-Zähler 30 → 31 in `docs/reference/skills.md`, `README.md` und
+  `.claude-plugin/plugin.json`.
+
 - **`sparring-partner`-Agent als wissenschaftlicher Denk- und Impulsgeber (#454):**
   Neuer Agent `agents/sparring-partner.md` (`model: opus`), der bei konzeptioneller
   Arbeit widerspricht statt auszuführen: benennt Argumentationslücken, blinde
@@ -94,6 +134,14 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **Crossref-Retraction-Check im Reading-List-Import (#383):** `import_reading_list()` prüft nach jedem erfolgreichen `vault.add_paper()`-Aufruf mit DOI zusätzlich `check_retraction(doi)` gegen `api.crossref.org/works/{doi}` (Feld `message.updated-by`, `type == "retraction"`; seit 09/2023 mit Retraction-Watch-Daten integriert, kostenlos, kein API-Key). Maßgeblich ist `updated-by` — Crossref hängt dieses Feld an den zurückgezogenen Artikel, während das Gegenstück `update-to` zur Retraction-Notiz gehört und von dieser auf den Artikel zeigt. Bei Treffer wird das Paper automatisch über den neuen Wrapper `vault_add_excluded_source()` als `excluded_source` markiert. Fail-safe: Netzwerk-/Parse-Fehler bei `check_retraction()` liefern `False` und blockieren den regulären Paper-Ingest nicht. Aufgezeichnete Crossref-Payloads unter `tests/fixtures/crossref/` halten beide Richtungen fest.
 - **Eval-Strategie statt stillschweigender Schema-Checks (#390):** Neues Dokument `docs/evals/STRATEGY.md` benennt für jede der 37 Komponenten unter `evals/` genau einen Zustand — `metric` (Offline-Runner bewertet Inhalt), `structural` (nur Struktur geprüft, inhaltliche Bewertung skippt ohne `ANTHROPIC_API_KEY`, Begründung Pflicht) oder `removed`. Der neue Guard `tests/evals/test_eval_strategy.py` prüft die Tabelle gegen das Dateisystem (Set-Gleichheit in beide Richtungen, geschlossenes Status-Vokabular, Existenz genannter Runner) und erzwingt, dass kein Eval-Runner API-Budget verbraucht. Das Dokument beziffert den Budgetbedarf für reale Läufe (ca. 400 Aufrufe pro Vollauf) ausdrücklich als Operator-Entscheid und hält fest, dass Alt-Issue #55 von #390 absorbiert und geschlossen ist.
 - **Die zwei toten Eval-Definitionen haben einen echten Ausführungspfad (#390):** `evals/humanizer-de-pipeline/runner.py` misst die Tell-Dichte (Marker aus `skills/humanizer-de/references/patterns.md` pro 100 Wörter) je Vorher/Nachher-Draft-Paar; `evals/auto-download/runner.py` prüft das Tier-Routing der 20 kuratierten Quellen gegen `resolve_pdf_url()` mit gestubbten Tier-Funktionen. Beide laufen ohne Netz und ohne API-Key, beide sind über `tests/evals/test_humanizer_pipeline_evals.py` bzw. `tests/evals/test_auto_download_routing.py` in jeden `pytest`-Lauf eingebunden. Gegen Placebo-Metriken sichern Negativkontrollen: Detection-Floor und Substanz-Quotient (Humanizer, verhindert „Reduktion durch Kürzen") sowie ein Leerlauf ohne Treffer, der `(None, None)` liefern muss (auto-download).
+
+### Changed
+
+- **`prisma-flow` kennt uneindeutige Fälle (#460):** `render_flow.py` liest
+  optional `n_unclear_screening`. Uneindeutige Treffer zählen nicht mehr als
+  Volltextkandidaten, sondern bekommen einen eigenen Knoten
+  („Unklar — menschliche Entscheidung offen"). Ohne den Zähler ist der Output
+  unverändert.
 
 ### Fixed
 
