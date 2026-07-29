@@ -24,7 +24,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 HOOK_PATH = REPO_ROOT / "hooks" / "verbatim-guard.mjs"
-README = REPO_ROOT / "README.md"
+# Seit #402 ist die README nur noch Landing-Page; der Hook-Stack samt
+# Env-Variablen steht in docs/reference/hooks.md — dort prüfen die
+# Doku-Regressionstests (tests/test_readme_hook_stack_doc.py) mit.
+HOOKS_DOC = REPO_ROOT / "docs" / "reference" / "hooks.md"
 
 
 # ---------------------------------------------------------------------------
@@ -750,18 +753,18 @@ def test_probable_min_env_configurable(empty_vault):
     assert result.returncode == 2, f"Erwartet 2, got {result.returncode}. {result.stderr}"
 
 
-def test_readme_documents_citation_thresholds():
-    """AC4: README dokumentiert Schwellenwerte und Env-Variablen nachvollziehbar."""
-    text = README.read_text(encoding="utf-8")
+def test_docs_document_citation_thresholds():
+    """AC4: docs/reference/hooks.md dokumentiert Schwellen und Env-Variablen."""
+    text = HOOKS_DOC.read_text(encoding="utf-8")
     for token in (
         "ACADEMIC_CITATION_CONFIRMED_MIN",
         "ACADEMIC_CITATION_PROBABLE_MIN",
         "ACADEMIC_CITATION_CASCADE",
         "[UNVERIFIED]",
     ):
-        assert token in text, f"README dokumentiert '{token}' nicht (AC4)."
+        assert token in text, f"docs/reference/hooks.md dokumentiert '{token}' nicht (AC4)."
     section = re.search(r"### Klammer-Zitat-Validierung.*?(?=\n### |\n## |\Z)", text, re.DOTALL)
-    assert section, "README enthaelt keine Sektion '### Klammer-Zitat-Validierung'"
+    assert section, "docs/reference/hooks.md enthaelt keine Sektion '### Klammer-Zitat-Validierung'"
     assert "80" in section.group(0) and "65" in section.group(0), (
         "README nennt die Default-Schwellen 80/65 nicht."
     )
@@ -1145,11 +1148,158 @@ def test_budget_overflow_is_marked_instead_of_silently_skipped(vault_with_muelle
     )
 
 
-def test_readme_documents_citation_budget_limit():
+def test_docs_document_citation_budget_limit():
     """AC4-Analogie: die Mengenbegrenzung ist konfigurierbar UND dokumentiert."""
-    text = README.read_text(encoding="utf-8")
+    text = HOOKS_DOC.read_text(encoding="utf-8")
     section = re.search(r"### Klammer-Zitat-Validierung.*?(?=\n### |\n## |\Z)", text, re.DOTALL)
-    assert section, "README enthaelt keine Sektion '### Klammer-Zitat-Validierung'"
+    assert section, "docs/reference/hooks.md enthaelt keine Sektion '### Klammer-Zitat-Validierung'"
     assert "ACADEMIC_CITATION_MAX_PER_WRITE" in section.group(0), (
-        "README dokumentiert die Mengenbegrenzung nicht."
+        "docs/reference/hooks.md dokumentiert die Mengenbegrenzung nicht."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde: Markierung muss die GEPRUEFTE Fundstelle treffen (Blocker #378)
+#
+# Der Parser deduplizierte Belege und verwarf die Fundstelle; die Markierung
+# suchte den Beleg per indexOf im unmaskierten Text neu. Drei Ausprägungen
+# desselben Fehlers: falsches Vorkommen (Code-Fence vor Prosa), nur das erste
+# von mehreren Vorkommen, und bei MultiEdit das falsche Segment.
+# ---------------------------------------------------------------------------
+
+FENCE = "```"
+
+
+def mark_env(vault: str) -> dict:
+    """Env, die den Soft-Fail-Pfad erzwingt: leerer Vault + nicht erreichbare Kaskade.
+
+    Nur so entsteht überhaupt ein ``updatedInput`` — ein sauberes Negativ würde
+    blocken und nie markieren.
+    """
+    base = f"http://127.0.0.1:{_closed_port()}"
+    return {
+        "VAULT_DB_PATH": vault,
+        "ACADEMIC_CITATION_CASCADE": "on",
+        "ACADEMIC_CITATION_ARXIV_URL": f"{base}/arxiv",
+        "ACADEMIC_CITATION_CROSSREF_URL": f"{base}/crossref",
+        "ACADEMIC_CITATION_S2_URL": f"{base}/s2",
+    }
+
+
+def run_node(source: str) -> subprocess.CompletedProcess:
+    """Führt ein ESM-Snippet gegen die Hook-Module aus (Node-Unit über Subprozess)."""
+    return subprocess.run(
+        ["node", "--input-type=module", "-e", source],
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+        timeout=60,
+    )
+
+
+def test_extract_citations_reports_spans():
+    """Span-Invariante: content.slice(start, end) === raw für jeden Beleg."""
+    source = """
+    import { extractCitations } from './hooks/citation-parse.mjs';
+    const content = [
+      'Der Befund (Müller 2021, S. 45) gilt.',
+      'Auch vgl. Schmidt 2019 wird genannt.',
+      'Und nochmals (Müller 2021, S. 45) am Ende.',
+    ].join('\\n');
+    const cites = extractCitations(content);
+    const bad = cites.filter((c) => content.slice(c.start, c.end) !== c.raw);
+    console.log(JSON.stringify({ count: cites.length, bad: bad.length }));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    data = json.loads(result.stdout)
+    assert data["bad"] == 0, "Span zeigt nicht auf den Beleg-Text"
+    assert data["count"] == 3, (
+        f"Erwartet 3 Fundstellen (zwei identische Belege + narrativ), got {data['count']}"
+    )
+
+
+def test_mark_spans_skips_span_mismatch():
+    """Wächter: passt der Span nicht zum raw-Text, wird NICHT geraten."""
+    source = """
+    import { markSpans } from './hooks/citation-parse.mjs';
+    const text = 'Ein harmloser Satz ohne Beleg.';
+    const out = markSpans(text, [{ raw: '(Müller 2021)', start: 4, end: 17 }], ' [UNVERIFIED]');
+    console.log(JSON.stringify({ unchanged: out === text }));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    assert json.loads(result.stdout)["unchanged"], "Marker wurde an falscher Stelle gesetzt"
+
+
+def test_marker_lands_on_checked_occurrence_not_code_fence(empty_vault):
+    """Der Marker gehört an die geprüfte Prosa-Stelle, nicht in den Code-Fence.
+
+    Der Fence ist maskiert und wird gar nicht geprüft. Landet der Marker dort,
+    bleibt der wirklich ungeprüfte Beleg unmarkiert — der Write geht mit einem
+    unbelegten Zitat durch.
+    """
+    content = (
+        "Beispielausgabe:\n\n"
+        f"{FENCE}\n(Fantasius 1999, S. 12)\n{FENCE}\n\n"
+        "Der Befund (Fantasius 1999, S. 12) belegt die These.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides=mark_env(empty_vault),
+    )
+    assert result.returncode == 0, f"Erwartet Soft-Fail, got {result.returncode}: {result.stderr}"
+    updated = updated_content(result)
+    assert f"{FENCE}\n(Fantasius 1999, S. 12)\n{FENCE}" in updated, (
+        f"Code-Fence wurde verändert: {updated!r}"
+    )
+    assert "Der Befund (Fantasius 1999, S. 12) [UNVERIFIED] belegt" in updated, (
+        f"Prosa-Beleg nicht markiert: {updated!r}"
+    )
+
+
+def test_all_repeated_occurrences_marked(empty_vault):
+    """Drei identische Belege ergeben drei Marker, nicht einen."""
+    content = (
+        "Erstens (Fantasius 1999, S. 12) sagt das.\n"
+        "Zweitens (Fantasius 1999, S. 12) auch.\n"
+        "Drittens (Fantasius 1999, S. 12) ebenso.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides=mark_env(empty_vault),
+    )
+    assert result.returncode == 0, f"Erwartet Soft-Fail, got {result.returncode}: {result.stderr}"
+    updated = updated_content(result)
+    assert updated.count("[UNVERIFIED]") == 3, (
+        f"Erwartet 3 Marker, got {updated.count('[UNVERIFIED]')}: {updated!r}"
+    )
+
+
+def test_multiedit_marks_only_own_segment(empty_vault):
+    """Ein Beleg aus edits[1] darf nicht in edits[0] markiert werden."""
+    payload = {
+        "tool_name": "MultiEdit",
+        "tool_input": {
+            "file_path": "kapitel/kap1.md",
+            "edits": [
+                {
+                    "old_string": "a",
+                    "new_string": f"{FENCE}\n(Fantasius 1999, S. 12)\n{FENCE}",
+                },
+                {
+                    "old_string": "b",
+                    "new_string": "Der Befund (Fantasius 1999, S. 12) belegt die These.",
+                },
+            ],
+        },
+    }
+    result = run_hook(payload, env_overrides=mark_env(empty_vault))
+    assert result.returncode == 0, f"Erwartet Soft-Fail, got {result.returncode}: {result.stderr}"
+    edits = json.loads(result.stdout)["hookSpecificOutput"]["updatedInput"]["edits"]
+    assert edits[0]["new_string"] == payload["tool_input"]["edits"][0]["new_string"], (
+        f"Maskiertes Segment wurde verändert: {edits[0]['new_string']!r}"
+    )
+    assert "[UNVERIFIED]" in edits[1]["new_string"], (
+        f"Eigenes Segment nicht markiert: {edits[1]['new_string']!r}"
     )

@@ -201,7 +201,7 @@ function parsePage(match) {
   return page;
 }
 
-function buildCitation(match, raw) {
+function buildCitation(match, raw, start) {
   const family = match[1].trim();
   if (NON_AUTHOR_TOKENS.has(nonAuthorToken(family.split(/\s+/).pop()))) return null;
   const year = Number.parseInt(match[3], 10);
@@ -220,6 +220,13 @@ function buildCitation(match, raw) {
   const strong = page !== null || SIGNAL_PREFIX.test(raw) || (match[2] || '').trim().length > 0;
   return {
     raw,
+    start,
+    end: start + raw.length,
+    // Stabiler Identitaetsschluessel des BELEGS (nicht der Fundstelle): zwei
+    // Vorkommen desselben Belegs teilen ihn, damit Vault-Lookup und Kaskade
+    // je Beleg einmal laufen — waehrend start/end jede Fundstelle einzeln
+    // adressierbar halten. ``raw`` taugt dafuer nicht mehr als Schluessel.
+    key: `${family.toLowerCase()}|${year}|${page}`,
     family,
     authors: [family, ...coauthors],
     year,
@@ -230,22 +237,29 @@ function buildCitation(match, raw) {
 
 /**
  * Extrahiert alle Klammer-/Paraphrase-Belege aus einem Kapiteltext.
- * Gibt ein Array von {raw, family, authors, year, page, confidence} zurueck;
- * ``raw`` ist der Originaltext des Belegs (fuer die [UNVERIFIED]-Markierung),
+ *
+ * Gibt **eine Fundstelle pro Vorkommen** zurueck — bewusst ohne Deduplizierung:
+ * {raw, start, end, key, family, authors, year, page, confidence}. Es gilt die
+ * Invariante ``content.slice(start, end) === raw``; die Maskierung in
+ * :func:`maskSkipRegions` ist laengenerhaltend, deshalb sind die Offsets aus
+ * dem maskierten Text im Originaltext gueltig. ``raw`` wird trotzdem aus dem
+ * ORIGINAL geschnitten, damit ein teilweise maskierter Beleg (etwa mit einem
+ * ``\cite{...}`` in derselben Klammer) nicht die maskierte Fassung mitschleppt.
+ *
+ * Ohne die Offsets muesste der Aufrufer den Beleg zum Markieren per Textsuche
+ * wiederfinden — und traefe dabei auch Vorkommen, die hier gerade uebergangen
+ * wurden (Code-Fence, LaTeX, Literaturverzeichnis). Fuer die Kostenkontrolle
+ * dedupliziert der Aufrufer stattdessen ueber ``key``.
+ *
  * ``confidence`` ist ``"strong"`` oder ``"weak"`` (siehe buildCitation).
  */
 export function extractCitations(content) {
   if (!content) return [];
   const masked = maskSkipRegions(content);
   const citations = [];
-  const seen = new Set();
 
   const push = (citation) => {
-    if (!citation) return;
-    const key = `${citation.raw}|${citation.family}|${citation.year}|${citation.page}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    citations.push(citation);
+    if (citation) citations.push(citation);
   };
 
   // 1) Klammer-Belege
@@ -254,7 +268,10 @@ export function extractCitations(content) {
   while ((match = parens.exec(masked)) !== null) {
     const inner = match[1].trim();
     const parsed = PAREN_CITATION.exec(inner);
-    if (parsed) push(buildCitation(parsed, match[0]));
+    if (parsed) {
+      const start = match.index;
+      push(buildCitation(parsed, content.slice(start, start + match[0].length), start));
+    }
   }
 
   // 2) Narrative Belege — Klammerinhalte vorher ausblenden, damit sie nicht
@@ -262,11 +279,45 @@ export function extractCitations(content) {
   const withoutParens = masked.replace(parens, (m) => ' '.repeat(m.length));
   NARRATIVE_CITATION.lastIndex = 0;
   while ((match = NARRATIVE_CITATION.exec(withoutParens)) !== null) {
-    push(buildCitation(match, match[0]));
+    const start = match.index;
+    push(buildCitation(match, content.slice(start, start + match[0].length), start));
   }
 
   upgradeCorroborated(citations);
+  citations.sort((a, b) => a.start - b.start);
   return citations;
+}
+
+/**
+ * Haengt ``marker`` hinter jede angegebene Fundstelle an — positionsbasiert,
+ * nie per Textsuche.
+ *
+ * Wird von hinten nach vorne gespleisst, damit jedes Einfuegen die noch
+ * offenen Offsets unberuehrt laesst. Der Waechter ``text.slice(start, end)
+ * === raw`` ist Absicht: passt der Span nicht (fremder Text, verschobene
+ * Segmentgrenze), wird die Fundstelle uebersprungen und gewarnt, statt zu
+ * raten. Ein fehlender Marker ist harmlos, ein Marker an falscher Stelle
+ * veraendert den Text des Nutzers.
+ *
+ * @param {string} text
+ * @param {Array<{raw: string, start: number, end: number}>} citations
+ * @param {string} marker
+ * @param {(msg: string) => void} [warn]
+ */
+export function markSpans(text, citations, marker, warn = () => {}) {
+  const source = text || '';
+  const spans = [...citations]
+    .filter((c) => Number.isInteger(c.start) && Number.isInteger(c.end))
+    .sort((a, b) => b.start - a.start);
+  let out = source;
+  for (const span of spans) {
+    if (source.slice(span.start, span.end) !== span.raw) {
+      warn(`Span ${span.start}-${span.end} passt nicht zu ${JSON.stringify(span.raw)}`);
+      continue;
+    }
+    out = `${out.slice(0, span.end)}${marker}${out.slice(span.end)}`;
+  }
+  return out;
 }
 
 /**

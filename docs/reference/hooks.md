@@ -23,6 +23,126 @@ Das sind **5 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
 Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
 `PreToolUse` ruft zwei Skripte nacheinander auf.
 
+### Klammer-Zitat-Validierung
+
+Klammer- und Paraphrase-Belege wie `(Müller 2021, S. 45)`,
+`(Müller/Schmidt 2019)`, `(Müller u. a. 2021, S. 45–47)`, `(vgl. Müller 2021: 45)`
+oder `vgl. Schmidt 2019` werden extrahiert und gegen den Vault geprüft:
+Familienname und Jahr gegen `papers.csl_json` (Umlaut-Faltung und
+Diakritika-Strip, `Müller`/`Mueller`/`Muller` treffen denselben Eintrag), die
+Seitenzahl gegen `papers.page_first`/`page_last` bzw. `quotes.printed_page`.
+Führende **Namenspartikel** werden dabei zusätzlich weggefaltet: im Text steht
+`(von Neumann 1945)`, CSL-JSON führt das Partikel dagegen separat in
+`non-dropping-particle` und `family` bleibt `Neumann` — ohne diese Variante
+blockte der Guard Belege, deren Paper längst im Vault liegt.
+Die beiden Seitenquellen wiegen unterschiedlich: nur der vollständige
+Seitenumfang aus `page_first`/`page_last` kann eine Seite **widerlegen**.
+`quotes.printed_page` ist eine punktuelle Stichprobe der bereits extrahierten
+Stellen und kann eine Seite nur bestätigen — dass aus S. 47 noch nichts
+extrahiert wurde, sagt nichts darüber aus, ob das Werk eine S. 47 hat.
+
+**Nicht geprüft** (bewusst, gegen False Positives): Code-Fences und
+Inline-Code, LaTeX-Makros (`\cite{…}`, `\ref{…}`), nackte Jahresklammern
+(`(2021)`), Struktur-Verweise (`(siehe Kapitel 2)`, `(vgl. Abb. 3)`),
+Datums- und Standangaben (`(Januar 2021)`, `(März 2020)`, `(Stand 2021)`,
+`(Fassung 2019)`), `ebd.`/`a.a.O.` sowie alles ab der Überschrift des
+Literaturverzeichnisses. Hat der Vault zu einem Paper **keinen vollständigen
+Seitenumfang**, gilt die Seitenzahl als nicht widerlegbar (dokumentierter
+Soft-Pass).
+
+**Belegstärke entscheidet, ob überhaupt geprüft wird.** Eine Seitenangabe
+(`, S. 45`), ein Signalwort (`vgl.`, `siehe`, `zit. nach`) oder ein
+Co-Autoren-Marker (`/`, `&`, `u. a.`, `et al.`) machen die Zitierabsicht
+eindeutig — solche Belege blockieren bei sauberem Negativ. Die nackte Form
+`(Wort Jahr)` ist dagegen von Fließtext lexikalisch nicht zu trennen
+(`(Fukushima 2011)`, `(Corona 2020)`, `(Bologna 1999)`) und wird deshalb
+**gar nicht geprüft**: weder geblockt noch mit `[UNVERIFIED]` markiert. Ein
+Marker mitten in `Der Reaktorunfall (Fukushima 2011) …` wäre keine Warnung,
+sondern eine Textänderung an einer Stelle, die überhaupt kein Beleg ist —
+und eine Evidenzlage, die wir nicht eindeutig lesen können, trägt keinen
+Eingriff. Der Hook meldet die Zahl übergangener Klammern auf stderr, damit
+die Lücke sichtbar bleibt.
+
+**Korroboration hebt die Mehrdeutigkeit auf.** Kommt derselbe Familienname im
+selben Dokument mindestens einmal in einer eindeutigen Beleg-Form vor, weist
+der Text ihn selbst als zitierten Autor aus — dann gilt auch die nackte Form
+als Beleg und wird voll geprüft. `(Müller 2021, S. 45)` im Kapitel macht ein
+danebenstehendes `(Müller 2099)` blockierbar; `(Fukushima 2011)` bleibt
+unangetastet, weil `Fukushima` nirgends als zitierter Autor auftritt.
+Der Rest-False-Negative ist damit eng: ein frei erfundenes `(Fantasius 1999)`
+ohne Seitenangabe **und** ohne jeden weiteren Beleg desselben Autors im
+Dokument läuft durch.
+
+Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
+Falschtreffer produziert: die narrative Form ohne Signalwort
+(`Müller (2021) zeigt …`, kollidiert mit `Die DSGVO (2016) trat in Kraft`)
+und Körperschaftsautoren (`(Statistisches Bundesamt 2021)`). Bei Belegen mit
+Seitenbereich (`S. 45–47`) wird die erste Seite geprüft. False Positives
+blockieren den Schreibfluss und sind hier teurer als False Negatives — der
+Guard ist die letzte, nicht die einzige Verteidigungslinie.
+
+**Externe Kaskade (Fallback).** Findet der Vault den Beleg nicht, laufen drei
+Stufen mit Frühausstieg: arXiv (eine gebatchte Anfrage für alle offenen
+Belege) → CrossRef → Semantic Scholar (Fuzzy, Gate: Autoren-Überlapp
+≥ 0,6). Score-Modell pro Kandidat (0–100):
+
+| Komponente | Punkte |
+|---|---|
+| Familienname trifft | 40 |
+| Jahr exakt | 40 |
+| Jahr um genau 1 daneben | 20 |
+| Autoren-Überlapp (Jaccard) | 0–20 |
+
+**Entscheidungsmatrix.**
+
+| Ergebnis | Bedingung | Reaktion |
+|---|---|---|
+| `confirmed` | Vault-Treffer **oder** Score ≥ `ACADEMIC_CITATION_CONFIRMED_MIN` (80) | allow |
+| `probable` | Score ≥ `ACADEMIC_CITATION_PROBABLE_MIN` (65) | allow + `[UNVERIFIED]` |
+| `unavailable` | Timeout / `ECONNREFUSED` / abgebrochener Body / **jeder** Nicht-2xx-Status (5xx, 429, aber auch 403-Drosselung und 404) / HTTP 200 mit unlesbarem Body | allow + `[UNVERIFIED]` |
+| `no-match` | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer — der Beleg ist dabei immer eindeutig (Seite, Signalwort, Co-Autor oder im Dokument korroboriert) | **Block** (exit 2) |
+| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2) |
+| nicht geprüft | nackte Form `(Wort Jahr)` ohne Korroboration | allow, Text **unverändert** (stderr-Hinweis) |
+| ungeprüft (Kontingent) | mehr eindeutige Belege als `ACADEMIC_CITATION_MAX_PER_WRITE` | allow + `[UNVERIFIED]` (stderr-Warnung) |
+
+Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein
+Netzausfall darf nie wie ein Halluzinations-Nachweis wirken. Bei `probable`
+und `unavailable` schreibt der Hook den Tool-Input per
+`hookSpecificOutput.updatedInput` um und hängt ` [UNVERIFIED]` an den Beleg
+(unterstützt `Write.content`, `Edit.new_string` und `MultiEdit.edits[]`).
+
+**Konfiguration (Environment).**
+
+| Variable | Default | Bedeutung |
+|---|---|---|
+| `ACADEMIC_CITATION_CASCADE` | `on` | `off` = Kill-Switch, Vault-only, kein Netzzugriff |
+| `ACADEMIC_CITATION_CONFIRMED_MIN` | `80` | Score-Schwelle für „bestätigt" (allow) |
+| `ACADEMIC_CITATION_PROBABLE_MIN` | `65` | Score-Schwelle für „wahrscheinlich" (`[UNVERIFIED]`) |
+| `ACADEMIC_CITATION_S2_MIN_OVERLAP` | `0.6` | Autoren-Überlapp-Gate für Semantic Scholar |
+| `ACADEMIC_CITATION_TIMEOUT_MS` | `2000` | Timeout je HTTP-Request |
+| `ACADEMIC_CITATION_BUDGET_MS` | `6000` | Gesamt-Wall-Clock-Budget der Kaskade |
+| `ACADEMIC_CITATION_MAX_PER_WRITE` | `100` | Prüfkontingent je Write; darüber hinausgehende Belege gelten als **ungeprüft** und werden mit `[UNVERIFIED]` markiert, nie stillschweigend durchgewinkt |
+| `ACADEMIC_CITATION_ARXIV_URL` | arXiv-API | Base-URL, überschreibbar (Tests/Proxy) |
+| `ACADEMIC_CITATION_CROSSREF_URL` | CrossRef-API | Base-URL, überschreibbar (Tests/Proxy) |
+| `ACADEMIC_CITATION_S2_URL` | Semantic-Scholar-API | Base-URL, überschreibbar (Tests/Proxy) |
+
+Die Kaskade ist die einzige Stelle, an der ein Hook dieses Plugins ins Netz
+geht. Wer das nicht möchte, setzt `ACADEMIC_CITATION_CASCADE=off` — dann
+entscheidet allein der Vault.
+
+**Markierung trifft die geprüfte Fundstelle.** `extractCitations()` liefert zu
+jedem Beleg die Offsets `start`/`end` (Invariante: `content.slice(start, end)
+=== raw`), und die Markierung spleißt `[UNVERIFIED]` an genau diesen Spans ein
+— von hinten nach vorne, damit noch offene Offsets gültig bleiben. Eine
+Textsuche wäre an drei Stellen falsch: sie träfe ein identisches Vorkommen in
+einem maskierten Bereich (Code-Fence, `\cite{…}`, Literaturverzeichnis), sie
+markierte bei mehrfach zitiertem Beleg nur das erste Vorkommen, und bei
+`MultiEdit` landete ein Beleg aus `edits[1]` in `edits[0]`. Geprüft wird je
+Beleg (dedupliziert, ein Lookup), markiert wird je Fundstelle. Passt ein Span
+nicht zum erwarteten Text, wird die Markierung übersprungen und auf stderr
+gewarnt — nie geraten: ein fehlender Marker ist harmlos, ein Marker an
+falscher Stelle verändert den Text.
+
 ### Claim-Drift-Warnung (`claim-drift-guard.mjs`, #397)
 
 Der `verbatim-guard` prüft, ob ein Zitat **überhaupt** im Vault steht, und blockiert

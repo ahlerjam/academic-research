@@ -236,7 +236,7 @@ function classify(score, unavailable, config) {
  *
  * @param {Array} citations  Belege aus extractCitations()
  * @param {object} config    Ergebnis von loadConfig()
- * @returns {Promise<Map>}   raw -> {status, score}
+ * @returns {Promise<Map>}   citation.key -> {status, score}
  */
 export async function resolveCitations(citations, config = loadConfig()) {
   const results = new Map();
@@ -245,21 +245,21 @@ export async function resolveCitations(citations, config = loadConfig()) {
   // Kill-Switch: Vault-only. Kein Netzzugriff, kein Soft-Fail.
   if (!config.enabled) {
     for (const citation of citations) {
-      results.set(citation.raw, { status: 'no-match', score: 0 });
+      results.set(citation.key, { status: 'no-match', score: 0 });
     }
     return results;
   }
 
   const deadline = Date.now() + config.budgetMs;
   const state = new Map(
-    citations.map((c) => [c.raw, { citation: c, best: 0, unavailable: false }]),
+    citations.map((c) => [c.key, { citation: c, best: 0, unavailable: false }]),
   );
 
   const open = () =>
     [...state.values()].filter((s) => s.best < config.confirmedMin).map((s) => s.citation);
 
   const apply = (citation, candidates) => {
-    const entry = state.get(citation.raw);
+    const entry = state.get(citation.key);
     for (const candidate of candidates) {
       entry.best = Math.max(entry.best, scoreCandidate(citation, candidate));
     }
@@ -273,7 +273,7 @@ export async function resolveCitations(citations, config = loadConfig()) {
       for (const citation of pending) apply(citation, candidates);
     } catch (err) {
       if (!(err instanceof UnavailableError)) throw err;
-      for (const citation of pending) state.get(citation.raw).unavailable = true;
+      for (const citation of pending) state.get(citation.key).unavailable = true;
     }
   }
 
@@ -282,7 +282,7 @@ export async function resolveCitations(citations, config = loadConfig()) {
     pending = open();
     if (pending.length === 0) break;
     for (const citation of pending) {
-      const entry = state.get(citation.raw);
+      const entry = state.get(citation.key);
       try {
         let candidates = await stage(citation, config, deadline);
         if (stage === stageSemanticScholar) {
@@ -298,8 +298,8 @@ export async function resolveCitations(citations, config = loadConfig()) {
     }
   }
 
-  for (const [raw, entry] of state) {
-    results.set(raw, {
+  for (const [key, entry] of state) {
+    results.set(key, {
       status: classify(entry.best, entry.unavailable, config),
       score: entry.best,
     });

@@ -37,7 +37,7 @@ import { existsSync, appendFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
-import { extractCitations } from './citation-parse.mjs';
+import { extractCitations, markSpans } from './citation-parse.mjs';
 import { loadConfig, resolveCitations } from './citation-cascade.mjs';
 
 // ---------------------------------------------------------------------------
@@ -107,15 +107,41 @@ const WRITE_LIKE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
  *   - Edit:      tool_input.new_string
  *   - MultiEdit: alle edits[].new_string (zusammengefuegt)
  */
-function extractContent(toolName, toolInput) {
+/**
+ * Die zu pruefenden Textstuecke eines Tool-Calls, in Reihenfolge.
+ *
+ * Einzige Quelle fuer BEIDE Richtungen: extractContent joint sie zum
+ * Pruef-Text, buildUpdatedInput spleisst die Markierungen wieder hinein.
+ * Liefen Join und Split auseinander, zeigten die Beleg-Offsets ins Leere.
+ */
+function collectSegments(toolName, toolInput) {
   if (toolName === 'MultiEdit' && Array.isArray(toolInput.edits)) {
-    return toolInput.edits.map((e) => e?.new_string || '').join('\n');
+    return toolInput.edits.map((e) => e?.new_string || '');
   }
   if (toolName === 'Edit') {
-    return toolInput.new_string || '';
+    return [toolInput.new_string || ''];
   }
   // Write (und Fallback)
-  return toolInput.content || '';
+  return [toolInput.content || ''];
+}
+
+// Trennzeichen zwischen zwei Segmenten im Pruef-Text. Genau ein Zeichen —
+// die Offset-Rechnung in segmentBases() zaehlt es mit.
+const SEGMENT_SEPARATOR = '\n';
+
+/** Startoffset jedes Segments im gejointen Pruef-Text. */
+function segmentBases(segments) {
+  const bases = [];
+  let offset = 0;
+  for (const segment of segments) {
+    bases.push(offset);
+    offset += segment.length + SEGMENT_SEPARATOR.length;
+  }
+  return bases;
+}
+
+function extractContent(toolName, toolInput) {
+  return collectSegments(toolName, toolInput).join(SEGMENT_SEPARATOR);
 }
 
 // ---------------------------------------------------------------------------
@@ -293,9 +319,22 @@ function maxCitationsPerWrite(env = process.env) {
 }
 
 /**
+ * Ein Eintrag je BELEG (nicht je Fundstelle), in Reihenfolge des ersten
+ * Vorkommens. Der Parser liefert bewusst jede Fundstelle einzeln; Vault-Lookup
+ * und Kaskade sollen trotzdem nur einmal je Beleg laufen.
+ */
+function uniqueByKey(citations) {
+  const byKey = new Map();
+  for (const citation of citations) {
+    if (!byKey.has(citation.key)) byKey.set(citation.key, citation);
+  }
+  return [...byKey.values()];
+}
+
+/**
  * Prüft alle Belege in EINEM Python-Subprozess (nicht einer pro Beleg —
  * sonst dominieren Interpreter-Starts das Hook-Timeout).
- * Gibt Map raw -> "verified" | "page-mismatch" | "no-match" | "unavailable"
+ * Gibt Map key -> "verified" | "page-mismatch" | "no-match" | "unavailable"
  * zurück; "unavailable" bedeutet Python/Vault-Fehler (fail-open).
  */
 function verifyCitationsInVault(citations) {
@@ -320,48 +359,52 @@ function verifyCitationsInVault(citations) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const parsed = JSON.parse(output.trim());
-    citations.forEach((c, i) => statuses.set(c.raw, parsed[i] || 'unavailable'));
+    citations.forEach((c, i) => statuses.set(c.key, parsed[i] || 'unavailable'));
   } catch (err) {
-    process.stderr.write(
-      `[Citation-Guard] Warnung: Vault-Lookup fehlgeschlagen (${err.message}). Bypass aktiv.\n`
-    );
-    for (const c of citations) statuses.set(c.raw, 'unavailable');
+    warnFailOpen('Citation-Guard', 'lookup-error', err.message);
+    for (const c of citations) statuses.set(c.key, 'unavailable');
   }
   return statuses;
 }
 
-/** Hängt " [UNVERIFIED]" an jeden noch unmarkierten Beleg im Text an. */
-function markUnverified(text, citations) {
-  let out = text || '';
-  for (const citation of citations) {
-    const idx = out.indexOf(citation.raw);
-    if (idx === -1) continue;
-    const end = idx + citation.raw.length;
-    if (out.slice(end).startsWith(' [UNVERIFIED]')) continue;
-    out = `${out.slice(0, end)} [UNVERIFIED]${out.slice(end)}`;
-  }
-  return out;
-}
+const UNVERIFIED_MARKER = ' [UNVERIFIED]';
 
 /**
  * Baut das vollständige updatedInput-Objekt für den Soft-Fail — je nach Tool
  * wird content (Write), new_string (Edit) oder edits[].new_string (MultiEdit)
  * markiert. Alle übrigen Felder bleiben unverändert erhalten.
+ *
+ * Die Zuordnung Fundstelle → Segment läuft über die Basis-Offsets aus
+ * segmentBases(), nicht über eine Textsuche. Nur so landet der Marker an genau
+ * der Stelle, die geprüft wurde: ein identischer Beleg-String in einem
+ * maskierten Bereich (Code-Fence, \cite{...}, Literaturverzeichnis) oder in
+ * einem anderen Edit bleibt unangetastet, und mehrfach vorkommende Belege
+ * werden alle markiert statt nur der erste.
  */
 function buildUpdatedInput(toolName, toolInput, citations) {
+  const segments = collectSegments(toolName, toolInput);
+  const bases = segmentBases(segments);
+  const marked = segments.map((segment, i) => {
+    const base = bases[i];
+    const local = citations
+      .filter((c) => c.start >= base && c.end <= base + segment.length)
+      .map((c) => ({ ...c, start: c.start - base, end: c.end - base }));
+    if (local.length === 0) return segment;
+    return markSpans(segment, local, UNVERIFIED_MARKER, (msg) => {
+      process.stderr.write(`[Citation-Guard] Warnung: Markierung übersprungen — ${msg}\n`);
+    });
+  });
+
   if (toolName === 'MultiEdit' && Array.isArray(toolInput.edits)) {
     return {
       ...toolInput,
-      edits: toolInput.edits.map((edit) => ({
-        ...edit,
-        new_string: markUnverified(edit?.new_string || '', citations),
-      })),
+      edits: toolInput.edits.map((edit, i) => ({ ...edit, new_string: marked[i] })),
     };
   }
   if (toolName === 'Edit') {
-    return { ...toolInput, new_string: markUnverified(toolInput.new_string || '', citations) };
+    return { ...toolInput, new_string: marked[0] };
   }
-  return { ...toolInput, content: markUnverified(toolInput.content || '', citations) };
+  return { ...toolInput, content: marked[0] };
 }
 
 function blockCitation(citation, reasonLine) {
@@ -402,35 +445,39 @@ async function runCitationCheck(toolName, toolInput, content) {
   // folgenlose Reaktion: übergehen. Ein Block stoppt legitimen Fließtext, ein
   // [UNVERIFIED] schreibt einen Marker in einen Satz, der gar kein Beleg ist —
   // beides sind Eingriffe auf einer Evidenzlage, die keinen Eingriff trägt.
-  const citations = extracted.filter((c) => c.confidence === 'strong');
-  const ambiguous = extracted.length - citations.length;
+  const occurrences = extracted.filter((c) => c.confidence === 'strong');
+  const ambiguous = extracted.length - occurrences.length;
   if (ambiguous > 0) {
     process.stderr.write(
       `[Citation-Guard] Hinweis: ${ambiguous} mehrdeutige "(Wort Jahr)"-Klammer(n) `
       + 'nicht geprüft (nicht von Fließtext unterscheidbar).\n'
     );
   }
-  if (citations.length === 0) return;
+  if (occurrences.length === 0) return;
 
   if (!existsSync(VAULT_DB)) {
-    process.stderr.write(
-      `[Citation-Guard] Warnung: Vault-DB nicht gefunden (${VAULT_DB}). Bypass aktiv.\n`
-    );
+    warnFailOpen('Citation-Guard', 'missing-db', VAULT_DB);
     return;
   }
+
+  // Geprüft wird je BELEG, markiert wird je FUNDSTELLE. Derselbe Beleg dreimal
+  // im Kapitel kostet einen Lookup, bekommt aber drei Marker.
+  const distinct = uniqueByKey(occurrences);
 
   // Kappung: was nicht mehr ins Kontingent passt, gilt als ungeprüft — nicht
   // als geprüft-und-in-Ordnung.
   const limit = maxCitationsPerWrite();
-  const checked = citations.slice(0, limit);
-  const overflow = citations.slice(limit);
+  const checked = distinct.slice(0, limit);
+  const overflow = distinct.slice(limit);
   const reasons = new Map();
+  const markKeys = new Set();
   for (const citation of overflow) {
-    reasons.set(citation.raw, `ungeprüft (Kontingent ${limit} erschöpft)`);
+    reasons.set(citation.key, `ungeprüft (Kontingent ${limit} erschöpft)`);
+    markKeys.add(citation.key);
   }
   if (overflow.length > 0) {
     process.stderr.write(
-      `[Citation-Guard] Warnung: ${citations.length} Belege überschreiten das Prüfkontingent `
+      `[Citation-Guard] Warnung: ${distinct.length} Belege überschreiten das Prüfkontingent `
       + `von ${limit} (ACADEMIC_CITATION_MAX_PER_WRITE). Die überzähligen ${overflow.length} `
       + 'werden ungeprüft mit [UNVERIFIED] markiert.\n'
     );
@@ -439,7 +486,7 @@ async function runCitationCheck(toolName, toolInput, content) {
   const vaultStatus = verifyCitationsInVault(checked);
   const unresolved = [];
   for (const citation of checked) {
-    const status = vaultStatus.get(citation.raw);
+    const status = vaultStatus.get(citation.key);
     // "unavailable" = Python/Vault-Fehler → fail-open wie beim Quote-Check.
     if (status === 'verified' || status === 'unavailable') continue;
     if (status === 'page-mismatch') {
@@ -451,12 +498,11 @@ async function runCitationCheck(toolName, toolInput, content) {
     unresolved.push(citation);
   }
 
-  const toMark = [...overflow];
   if (unresolved.length > 0) {
     const config = loadConfig();
     const cascade = await resolveCitations(unresolved, config);
     for (const citation of unresolved) {
-      const result = cascade.get(citation.raw) || { status: 'no-match', score: 0 };
+      const result = cascade.get(citation.key) || { status: 'no-match', score: 0 };
       if (result.status === 'confirmed') continue;
       // Sauberes Negativ auf einer eindeutigen Beleg-Form = Halluzinations-
       // Nachweis. "unavailable" dagegen ist fehlende Evidenz, kein Gegenbeweis.
@@ -469,16 +515,21 @@ async function runCitationCheck(toolName, toolInput, content) {
             : 'Nicht im Vault (externe Kaskade per ACADEMIC_CITATION_CASCADE=off deaktiviert).',
         );
       }
-      reasons.set(citation.raw, `${result.status} (Score ${result.score})`);
-      toMark.push(citation);
+      reasons.set(citation.key, `${result.status} (Score ${result.score})`);
+      markKeys.add(citation.key);
     }
   }
-  if (toMark.length === 0) return;
+  if (markKeys.size === 0) return;
 
+  // Markiert wird jede Fundstelle des betroffenen Belegs; die Begründung nennt
+  // ihn einmal.
+  const toMark = occurrences.filter((c) => markKeys.has(c.key));
   const reason = [
     '[Citation-Guard] Belege konnten nicht abschließend verifiziert werden und '
       + 'wurden mit [UNVERIFIED] markiert:',
-    ...toMark.map((c) => `  ${c.raw} — ${reasons.get(c.raw)}`),
+    ...distinct
+      .filter((c) => markKeys.has(c.key))
+      .map((c) => `  ${c.raw} — ${reasons.get(c.key)}`),
   ].join('\n');
   process.stderr.write(`${reason}\n`);
   console.log(JSON.stringify({
