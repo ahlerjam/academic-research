@@ -319,6 +319,29 @@ function maxCitationsPerWrite(env = process.env) {
 }
 
 /**
+ * Reaktion auf ein sauberes Negativ bei der MEHRDEUTIGEN Beleg-Form
+ * "(Wort Jahr)": ``"block"`` (Default) oder ``"mark"``.
+ *
+ * AC2 aus #378 nennt "erfundener Autor/Jahr" ohne Vorbehalt zur Form — und
+ * genau die nackte Form ist der Halluzinationsfall, gegen den der Guard
+ * antritt. Der frühere feste Deckel auf [UNVERIFIED] liess ihn durch.
+ *
+ * Das Gegenargument ("(Fukushima 2011) koennte Prosa sein") bleibt richtig,
+ * traegt aber keinen Deckel mehr: derselbe Code schreibt diese Prosa im
+ * Soft-Fail bereits um. Wer den Eingriff in moeglicherweise unbeteiligten Text
+ * akzeptiert, kann ihn nicht als Grund gegen den sichtbaren, nichts
+ * schreibenden Block anfuehren. Der Trade-off wird deshalb zur Politik des
+ * Schreibenden statt zu einer stillen Entscheidung des Hooks:
+ * ``ACADEMIC_CITATION_AMBIGUOUS=mark`` fuer prosa-lastige Texte.
+ *
+ * Unberuehrt bleibt in beiden Politiken die fehlende Evidenz: ``unavailable``
+ * und "ungeprueft (Kontingent)" markieren weiter (AC3).
+ */
+function ambiguousPolicy(env = process.env) {
+  return (env.ACADEMIC_CITATION_AMBIGUOUS || 'block').toLowerCase() === 'mark' ? 'mark' : 'block';
+}
+
+/**
  * Ein Eintrag je BELEG (nicht je Fundstelle), in Reihenfolge des ersten
  * Vorkommens. Der Parser liefert bewusst jede Fundstelle einzeln; Vault-Lookup
  * und Kaskade sollen trotzdem nur einmal je Beleg laufen.
@@ -415,6 +438,14 @@ function blockCitation(citation, reasonLine) {
     `Grund: ${reasonLine}`,
     `Erwartet: Paper von ${citation.family} (${citation.year}${pageInfo}) im Vault.`,
     'Bitte Quelle über vault.add_paper() einpflegen oder den Beleg korrigieren.',
+    // Der Block auf der mehrdeutigen Form kann echte Prosa treffen
+    // ("(Rio 1992)"). Wer das regelmässig schreibt, braucht den Schalter — und
+    // muss ihn aus der Meldung erfahren, sonst bleibt nur der Bypass, der den
+    // Guard für die GANZE Datei abschaltet.
+    ...(citation.confidence === 'weak'
+      ? ['Mehrdeutige Form "(Wort Jahr)": ACADEMIC_CITATION_AMBIGUOUS=mark setzt '
+        + 'sie auf [UNVERIFIED] herab, statt sie zu blockieren.']
+      : []),
     'Bypass: <!-- vault-guard: skip --> im Content ergänzen (nur für Ausnahmefälle).',
   ].join('\n');
   process.stderr.write(`${msg}\n`);
@@ -444,30 +475,29 @@ async function runCitationCheck(toolName, toolInput, content) {
     return;
   }
 
-  // Die Belegstärke steuert die REAKTION, nicht das Ob der Prüfung. Geprüft
-  // wird jede erkannte Form — die nackte Klammer "(Wort Jahr)" ist zwar nicht
-  // sicher als Beleg lesbar, aber ein frei erfundenes "(Fantasius 2087)" darf
-  // deswegen nicht spurlos durchlaufen. Blocken darf nur die eindeutige Form
-  // (Seite, Signalwort, Co-Autor); bei der mehrdeutigen bleibt es bei
-  // [UNVERIFIED], weil ein Hard-Block sonst legitimen Fließtext wie
-  // "(Fukushima 2011)" stoppen würde. Ein Vault- oder Kaskaden-Treffer schweigt
-  // in beiden Fällen — das hält den Marker aus echter Prosa heraus, sobald der
-  // Name überhaupt als Autor existiert.
-  const blockableKeys = new Set(
+  // Geprüft wird jede erkannte Form. Ein sauberes Negativ blockt sie auch —
+  // die eindeutige (Seite, Signalwort, Co-Autor) immer, die mehrdeutige
+  // "(Wort Jahr)" abhängig von ACADEMIC_CITATION_AMBIGUOUS (Default block,
+  // siehe ambiguousPolicy). Ein Vault- oder Kaskaden-Treffer schweigt in beiden
+  // Fällen — das hält echte Prosa aus dem Block heraus, sobald der Name
+  // überhaupt als Autor existiert ("(Fukushima 2011)", "(Bologna 1999)").
+  const policy = ambiguousPolicy();
+  const strongKeys = new Set(
     occurrences.filter((c) => c.confidence === 'strong').map((c) => c.key),
   );
+  const mayBlock = (citation) => policy === 'block' || strongKeys.has(citation.key);
 
   // Geprüft wird je BELEG, markiert wird je FUNDSTELLE. Derselbe Beleg dreimal
   // im Kapitel kostet einen Lookup, bekommt aber drei Marker.
-  // Eindeutige Belege zuerst: sie sind die einzigen, aus denen ein Block folgen
-  // kann, und dürfen deshalb nicht von mehrdeutigen Klammern aus dem
-  // Prüfkontingent verdrängt werden (sonst genügt genug harmlose Prosa vor
-  // einem erfundenen Beleg, um den Guard auszuhebeln).
+  // Eindeutige Belege zuerst: unter ACADEMIC_CITATION_AMBIGUOUS=mark sind sie
+  // die einzigen, aus denen ein Block folgen kann, und dürfen deshalb nicht von
+  // mehrdeutigen Klammern aus dem Prüfkontingent verdrängt werden (sonst genügt
+  // genug harmlose Prosa vor einem erfundenen Beleg, um den Guard auszuhebeln).
   const distinct = uniqueByKey(occurrences)
     .map((citation, index) => ({ citation, index }))
     .sort((a, b) => {
-      const byStrength = Number(blockableKeys.has(b.citation.key))
-        - Number(blockableKeys.has(a.citation.key));
+      const byStrength = Number(strongKeys.has(b.citation.key))
+        - Number(strongKeys.has(a.citation.key));
       return byStrength || a.index - b.index;
     })
     .map((entry) => entry.citation);
@@ -498,7 +528,7 @@ async function runCitationCheck(toolName, toolInput, content) {
     // "unavailable" = Python/Vault-Fehler → fail-open wie beim Quote-Check.
     if (status === 'verified' || status === 'unavailable') continue;
     if (status === 'page-mismatch') {
-      if (blockableKeys.has(citation.key)) {
+      if (mayBlock(citation)) {
         blockCitation(
           citation,
           `Seite ${citation.page} liegt außerhalb der im Vault hinterlegten Seiten.`,
@@ -517,9 +547,11 @@ async function runCitationCheck(toolName, toolInput, content) {
     for (const citation of unresolved) {
       const result = cascade.get(citation.key) || { status: 'no-match', score: 0 };
       if (result.status === 'confirmed') continue;
-      // Sauberes Negativ auf einer eindeutigen Beleg-Form = Halluzinations-
-      // Nachweis. "unavailable" dagegen ist fehlende Evidenz, kein Gegenbeweis.
-      if (result.status === 'no-match' && blockableKeys.has(citation.key)) {
+      // Sauberes Negativ = Halluzinations-Nachweis, und der gilt unabhängig von
+      // der Form: "(Fantasius 2087)" ist genau der Fall, gegen den der Guard
+      // antritt. "unavailable" dagegen ist fehlende Evidenz, kein Gegenbeweis —
+      // deshalb steht die Politik NUR auf "no-match".
+      if (result.status === 'no-match' && mayBlock(citation)) {
         blockCitation(
           citation,
           config.enabled
@@ -528,8 +560,8 @@ async function runCitationCheck(toolName, toolInput, content) {
             : 'Nicht im Vault (externe Kaskade per ACADEMIC_CITATION_CASCADE=off deaktiviert).',
         );
       }
-      // Mehrdeutige Form mit sauberem Negativ: nicht blockierbar, aber auch
-      // nicht durchwinkbar — sie wird wie jeder ungeprüfte Beleg markiert.
+      // Erreichbar nur unter ACADEMIC_CITATION_AMBIGUOUS=mark: mehrdeutige Form
+      // mit sauberem Negativ — nicht geblockt, aber auch nicht durchgewunken.
       const ambiguousNote =
         result.status === 'no-match' ? ', mehrdeutige Form — nicht blockiert' : '';
       reasons.set(citation.key, `${result.status} (Score ${result.score})${ambiguousNote}`);

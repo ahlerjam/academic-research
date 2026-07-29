@@ -985,20 +985,28 @@ def test_date_and_status_words_are_not_citations(empty_vault, content):
         "Der Beschluss (Bologna 1999) reformierte die Studienstruktur.",
     ],
 )
-def test_bare_word_year_is_never_hard_blocked(empty_vault, content):
+def test_bare_word_year_stays_soft_under_the_mark_policy(empty_vault, content):
     """``(Wort Jahr)`` ohne Signalwort, Seite oder Co-Autor ist mehrdeutig.
 
     Ereignis- und Ortsnamen sind von Autorennamen lexikalisch nicht zu
-    unterscheiden — aus dieser Form darf deshalb nie ein Hard-Block folgen, auch
-    nicht bei komplett leerer Evidenzlage (leerer Vault, Kaskade aus). Was der
-    Guard hier hoechstens tun darf, ist anhaengen: ``[UNVERIFIED]`` hinter der
-    Klammer, kein Eingriff in den uebrigen Satz. Dass ein Treffer die Markierung
-    verhindert, zeigen ``test_bare_word_year_with_a_known_author_stays_untouched``
-    (Kaskade) und ``test_bare_form_with_vault_hit_stays_untouched`` (Vault).
+    unterscheiden. Wer solche Prosa schreibt, setzt
+    ``ACADEMIC_CITATION_AMBIGUOUS=mark`` — dann bleibt es auch bei komplett
+    leerer Evidenzlage (leerer Vault, Kaskade aus) beim Anhaengen:
+    ``[UNVERIFIED]`` hinter der Klammer, kein Eingriff in den uebrigen Satz.
+
+    Der Default blockt diese Form dagegen (AC2, siehe
+    ``test_bare_invented_citation_blocks_by_default``). Dass ein Treffer beide
+    Reaktionen erspart, zeigen
+    ``test_bare_word_year_with_a_known_author_stays_untouched`` (Kaskade) und
+    ``test_bare_form_with_vault_hit_stays_untouched`` (Vault).
     """
     result = run_hook(
         write_payload(content),
-        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+        env_overrides={
+            "VAULT_DB_PATH": empty_vault,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_AMBIGUOUS": "mark",
+        },
     )
     assert result.returncode == 0, (
         f"Prosa {content!r} hart geblockt: exit {result.returncode}. {result.stderr}"
@@ -1044,17 +1052,22 @@ def test_bare_word_year_with_a_known_author_stays_untouched(empty_vault, content
 
 
 def test_bare_citation_is_marked_but_not_rewritten(empty_vault):
-    """Der mehrdeutige Fall wird markiert, aber sonst nicht angefasst.
+    """Unter ``mark`` wird der mehrdeutige Fall markiert und sonst nicht angefasst.
 
     Fruehere Fassung: uebergehen. Das riss ein AC2-Loch — ein erfundenes
     ``(Fantasius 1999)`` lief unblockiert UND unmarkiert durch. Der Marker ist
-    die eine Reaktion, die zur Evidenzlage passt; alles darueber hinaus
-    (Umschreiben, Block) waere ein Eingriff, den die Form nicht traegt.
+    die schwaechste Reaktion, die noch zur Evidenzlage passt; alles darueber
+    hinaus ausser dem Block (Umschreiben) waere ein Eingriff, den die Form nicht
+    traegt.
     """
     content = "Der Befund (Fantasius 1999) belegt die These eindeutig."
     result = run_hook(
         write_payload(content),
-        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+        env_overrides={
+            "VAULT_DB_PATH": empty_vault,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_AMBIGUOUS": "mark",
+        },
     )
     assert result.returncode == 0, f"Erwartet 0 (kein Hard-Block), got {result.returncode}."
     marked = updated_content(result)
@@ -1127,9 +1140,10 @@ def test_uncorroborated_bare_form_stays_out_of_the_block(vault_with_mueller):
     """Gegenprobe: die Aufwertung greift nur beim korroborierten Familiennamen.
 
     Derselbe Text, aber der Prosa-Fall traegt einen anderen Namen — er darf von
-    der Zitierabsicht des Müller-Belegs nicht angesteckt werden und deshalb
-    keinen Hard-Block ausloesen. Markiert werden darf er (der Vault kennt
-    ``Fukushima`` nicht); der uebrige Satz bleibt unangetastet.
+    der Zitierabsicht des Müller-Belegs nicht angesteckt werden. Unter
+    ``ACADEMIC_CITATION_AMBIGUOUS=mark`` heisst das: kein Hard-Block, hoechstens
+    ein Marker (der Vault kennt ``Fukushima`` nicht); der uebrige Satz bleibt
+    unangetastet. Waere die Ansteckung da, blockte er auch unter ``mark``.
     """
     content = (
         "Der Befund (Müller 2021, S. 45) ist gut belegt.\n"
@@ -1137,7 +1151,11 @@ def test_uncorroborated_bare_form_stays_out_of_the_block(vault_with_mueller):
     )
     result = run_hook(
         write_payload(content),
-        env_overrides={"VAULT_DB_PATH": vault_with_mueller, "ACADEMIC_CITATION_CASCADE": "off"},
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_mueller,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_AMBIGUOUS": "mark",
+        },
     )
     assert result.returncode == 0, (
         f"Prosa neben einem echten Beleg geblockt: exit {result.returncode}. {result.stderr}"
@@ -1526,17 +1544,24 @@ def test_narrative_citation_survives_line_break_and_signal_words():
         "Die Konferenz (Rio, 1992) setzte den Rahmen fuer spaetere Gipfel.",
     ],
 )
-def test_comma_before_year_is_never_a_hard_block(empty_vault, content):
+def test_comma_before_year_is_not_an_unambiguous_citation(empty_vault, content):
     """(b) Ein Komma vor der Jahreszahl ist kein Co-Autoren-Marker.
 
     ``(Paris, 2015)`` hat exakt die Form von ``(Müller, 2021)``: ein Name, ein
     Komma, ein Jahr. Ohne zweiten Namen belegt das Komma keine Zitierabsicht —
-    es trennt nur. Wer daraus einen eindeutigen Beleg macht, blockt jede
-    Ort-Komma-Jahr-Nennung in Prosa.
+    es trennt nur. Wer daraus einen *eindeutigen* Beleg macht, nimmt jeder
+    Ort-Komma-Jahr-Nennung in Prosa die Wirkung von
+    ``ACADEMIC_CITATION_AMBIGUOUS=mark``: sie blockte dann trotz gesetztem
+    Schalter. Genau das prueft dieser Test — die Parser-Gegenprobe steht in
+    ``test_coauthor_marker_requires_a_second_name``.
     """
     result = run_hook(
         write_payload(content),
-        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+        env_overrides={
+            "VAULT_DB_PATH": empty_vault,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_AMBIGUOUS": "mark",
+        },
     )
     assert result.returncode != 2, (
         f"Prosa {content!r} hart geblockt: exit {result.returncode}. {result.stderr}"
@@ -1595,15 +1620,19 @@ def test_coauthor_marker_requires_a_second_name():
 def test_bare_invented_citation_is_marked_instead_of_passing_silently(empty_vault):
     """(a) AC2: der erfundene nackte Beleg verlaesst den Guard nicht spurlos.
 
-    ``(Fantasius 2087)`` ist mehrdeutig — deshalb kein Hard-Block. Mehrdeutig
-    ist aber kein Grund, gar nicht erst nachzusehen: findet weder Vault noch
-    Kaskade etwas, ist das dieselbe Evidenzlage wie ein ungeprueft gebliebener
-    Beleg und bekommt dieselbe Reaktion — ``[UNVERIFIED]``.
+    Mehrdeutig ist kein Grund, gar nicht erst nachzusehen — vor Runde 3 war die
+    Form vom Lookup ausgenommen und lief unmarkiert durch. Selbst unter der
+    schwaechstmoeglichen Politik (``mark``) bleibt eine Spur; der Default blockt
+    (``test_bare_invented_citation_blocks_by_default``).
     """
     content = "Der Befund (Fantasius 2087) belegt die These eindeutig."
     result = run_hook(
         write_payload(content),
-        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+        env_overrides={
+            "VAULT_DB_PATH": empty_vault,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_AMBIGUOUS": "mark",
+        },
     )
     assert result.returncode == 0, (
         f"Mehrdeutige Form hart geblockt: exit {result.returncode}. {result.stderr}"
@@ -1679,4 +1708,166 @@ def test_strong_citation_keeps_priority_in_the_budget(empty_vault):
     assert result.returncode == 2, (
         f"Eindeutiger Beleg aus dem Kontingent verdraengt: exit {result.returncode}. "
         f"stdout={result.stdout[:300]!r} stderr={result.stderr[:300]!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix-Runde 4: AC2 gilt auch fuer die nackte Form — der Trade-off wird
+# konfigurierbar, statt das AC unilateral einzuschraenken
+#
+# Runde 3 hatte den Halbschritt gemacht: die nackte Form "(Wort Jahr)" wird
+# zwar geprueft, aber ihre Reaktion war fest auf [UNVERIFIED] gedeckelt. Damit
+# lief genau der im Issue als Motivation genannte Fall — frei erfundener Autor
+# plus Jahr — weiter durch den Write hindurch. Das Issue kennt diese
+# Einschraenkung nicht.
+#
+# Die Rechtfertigung des Deckels ("koennte Prosa sein") traegt nicht mehr,
+# sobald derselbe Code diese Prosa bereits umschreibt: wer "(Fukushima 2011)"
+# zu "(Fukushima 2011) [UNVERIFIED]" macht, hat den Eingriff in moeglicherweise
+# unbeteiligten Text schon akzeptiert — und der Block ist der ehrlichere
+# Eingriff, weil er sichtbar ist und nichts in die Datei schreibt.
+#
+# Neue Regel: bei sauberem Negativ blockt jede Beleg-Form. Wer prosa-lastig
+# schreibt, setzt ACADEMIC_CITATION_AMBIGUOUS=mark und bekommt das bisherige
+# Verhalten zurueck. Fehlende Evidenz (unavailable, Kontingent) bleibt in
+# beiden Politiken ein Soft-Fail — AC3 steht ueber der Politik.
+# ---------------------------------------------------------------------------
+
+
+def test_bare_invented_citation_blocks_by_default(empty_vault):
+    """AC2 ohne Formvorbehalt: der erfundene nackte Beleg wird geblockt.
+
+    Wortgleicher Repro aus dem Review: leerer Vault, Kaskade aus, nackte Form
+    ohne Seite, Signalwort oder Co-Autor. Vorher Exit 0 mit Marker.
+    """
+    content = "(Fantasius 2087) zeigt einen deutlichen Effekt"
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 2, (
+        f"Erfundener nackter Beleg nicht geblockt: exit {result.returncode}. "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "(Fantasius 2087)" in result.stderr, (
+        f"Block nennt den ausloesenden Beleg nicht: {result.stderr!r}"
+    )
+
+
+def test_ambiguous_block_names_the_documented_escape(empty_vault):
+    """Ein False Positive muss ohne Quellcode-Lektuere aufloesbar sein.
+
+    Der Block auf einer mehrdeutigen Form kann Prosa treffen (``(Rio 1992)``).
+    Dann muss die Meldung den Schalter nennen, der genau diesen Fall entschaerft
+    — sonst bleibt dem Schreibenden nur der Bypass fuer den ganzen Text.
+    """
+    result = run_hook(
+        write_payload("Die Konferenz (Rio 1992) setzte den Rahmen."),
+        env_overrides={"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 2, f"Mehrdeutige Form nicht geblockt: {result.stderr!r}"
+    assert "ACADEMIC_CITATION_AMBIGUOUS" in result.stderr, (
+        f"Block auf mehrdeutiger Form nennt den Ausstieg nicht: {result.stderr!r}"
+    )
+
+
+def test_ambiguous_policy_mark_restores_the_soft_reaction(empty_vault):
+    """``ACADEMIC_CITATION_AMBIGUOUS=mark`` stellt das Markieren wieder her.
+
+    Der Schalter wirkt nur auf die mehrdeutige Form — dass die eindeutige davon
+    unberuehrt bleibt, zeigt ``test_mark_policy_never_softens_a_strong_form``.
+    """
+    content = "(Fantasius 2087) zeigt einen deutlichen Effekt"
+    result = run_hook(
+        write_payload(content),
+        env_overrides={
+            "VAULT_DB_PATH": empty_vault,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_AMBIGUOUS": "mark",
+        },
+    )
+    assert result.returncode == 0, (
+        f"mark-Politik blockt trotzdem: exit {result.returncode}. {result.stderr}"
+    )
+    marked = updated_content(result)
+    assert "(Fantasius 2087) [UNVERIFIED]" in marked, f"Nicht markiert: {result.stdout!r}"
+    assert_marker_only(marked, content)
+
+
+def test_mark_policy_never_softens_a_strong_form(empty_vault):
+    """Gegenprobe: der Schalter ist kein Kill-Switch fuer AC2 insgesamt.
+
+    Seitenangabe = unstrittige Zitierabsicht. Wer sie erfindet, bekommt den
+    Block auch unter ``mark``.
+    """
+    result = run_hook(
+        write_payload("Der Befund (Fantasius 1999, S. 12) belegt die These."),
+        env_overrides={
+            "VAULT_DB_PATH": empty_vault,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_AMBIGUOUS": "mark",
+        },
+    )
+    assert result.returncode == 2, (
+        f"Eindeutiger erfundener Beleg unter mark-Politik durchgelassen: "
+        f"exit {result.returncode}. {result.stderr}"
+    )
+
+
+def test_ambiguous_form_unavailable_still_soft_fails(empty_vault):
+    """AC3 steht ueber der Politik: fehlende Evidenz ist kein Gegenbeweis.
+
+    Die Verschaerfung gilt nur fuer das *saubere* Negativ. Antwortet die
+    Kaskade mit 503, ist ueber den Beleg nichts bekannt — dann bleibt es beim
+    Marker, auch bei der nackten Form und auch unter der Block-Politik.
+    """
+    content = "Der Befund (Fantasius 2087) belegt die These eindeutig."
+    with CascadeStub(
+        {"arxiv": {"status": 503}, "crossref": {"status": 503}, "s2": {"status": 503}}
+    ) as stub:
+        env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
+        env.update(stub.env())
+        result = run_hook(write_payload(content), env_overrides=env)
+    assert result.returncode == 0, (
+        f"API-Ausfall auf mehrdeutiger Form hart geblockt: exit {result.returncode}. "
+        f"{result.stderr}"
+    )
+    marked = updated_content(result)
+    assert "(Fantasius 2087) [UNVERIFIED]" in marked, f"Nicht markiert: {result.stdout!r}"
+    assert_marker_only(marked, content)
+
+
+def test_ambiguous_form_over_budget_still_soft_fails(vault_with_mueller):
+    """Zweite Evidenzluecke, dieselbe Regel: ungeprueft bleibt ungeprueft.
+
+    Ueber dem Pruefkontingent ist auch die nackte Form nur *ungeprueft* — die
+    Block-Politik darf daraus keinen Halluzinations-Nachweis machen.
+    """
+    content = (
+        "Der Befund (Müller 2021, S. 45) ist gut belegt.\n"
+        "Der Reaktorunfall (Fantasius 2087) veraenderte die Debatte.\n"
+    )
+    result = run_hook(
+        write_payload(content),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_mueller,
+            "ACADEMIC_CITATION_CASCADE": "off",
+            "ACADEMIC_CITATION_MAX_PER_WRITE": "1",
+        },
+    )
+    assert result.returncode == 0, (
+        f"Kontingent-Ueberhang geblockt statt markiert: exit {result.returncode}. {result.stderr}"
+    )
+    assert "(Fantasius 2087) [UNVERIFIED]" in updated_content(result), (
+        f"Ueberhang nicht markiert: {result.stdout!r}"
+    )
+
+
+def test_docs_document_ambiguous_policy():
+    """AC4-Analogie: der Trade-off ist konfigurierbar UND dokumentiert."""
+    text = HOOKS_DOC.read_text(encoding="utf-8")
+    section = re.search(r"### Klammer-Zitat-Validierung.*?(?=\n### |\n## |\Z)", text, re.DOTALL)
+    assert section, "docs/reference/hooks.md enthaelt keine Sektion '### Klammer-Zitat-Validierung'"
+    assert "ACADEMIC_CITATION_AMBIGUOUS" in section.group(0), (
+        "docs/reference/hooks.md dokumentiert die Ambiguitaets-Politik nicht."
     )

@@ -50,25 +50,47 @@ Literaturverzeichnisses. Hat der Vault zu einem Paper **keinen vollständigen
 Seitenumfang**, gilt die Seitenzahl als nicht widerlegbar (dokumentierter
 Soft-Pass).
 
-**Belegstärke entscheidet, wie hart reagiert wird — nicht, ob geprüft wird.**
-Geprüft wird jede erkannte Form. Eine Seitenangabe (`, S. 45`), ein Signalwort
-(`vgl.`, `siehe`, `zit. nach`) oder ein Co-Autoren-Marker (`/`, `&`, `u. a.`,
-`et al.`, jeweils mit tatsächlich folgendem zweiten Namen bzw. als
-`u. a.`/`et al.`) machen die Zitierabsicht eindeutig — solche Belege
-**blockieren** bei sauberem Negativ. Die nackte Form `(Wort Jahr)` ist von
-Fließtext lexikalisch nicht zu trennen (`(Fukushima 2011)`, `(Corona 2020)`,
-`(Bologna 1999)`, `(Paris, 2015)`) und kann deshalb **nie** blocken; bleibt sie
-unauflösbar, erhält sie `[UNVERIFIED]`. Nichts zu tun wäre die falsche
-Alternative: ein frei erfundenes `(Fantasius 2087)` liefe sonst unblockiert und
-unmarkiert durch, und genau das ist der Halluzinationsvektor, gegen den der
-Guard antritt.
+**Geprüft wird jede erkannte Form, und ein sauberes Negativ blockiert sie
+auch.** Ob Vault und Kaskade nichts finden, hängt nicht daran, wie der Beleg
+geschrieben ist — ein frei erfundenes `(Fantasius 2087)` ist genau der
+Halluzinationsvektor, gegen den der Guard antritt.
 
-Der Schutz vor Marker-Rauschen in echter Prosa ist der **Treffer**, nicht das
-Ausfiltern der Form: `Fukushima`, `Bologna` und `Paris` sind auch reale
-Nachnamen, zu denen Vault oder Kaskade in aller Regel ein Paper finden — dann
-schweigt der Hook. Ein Marker erscheint nur, wenn zur Wort-Jahr-Kombination
-nirgends etwas auffindbar ist. Er hängt hinter der Klammer und ändert sonst
-nichts am Satz (Invariante der Tests:
+Die **Belegstärke** klassifiziert die Form und ist der Angriffspunkt der
+einzigen Stellschraube, die es hier gibt. Eine Seitenangabe (`, S. 45`), ein
+Signalwort (`vgl.`, `siehe`, `zit. nach`) oder ein Co-Autoren-Marker (`/`, `&`,
+`u. a.`, `et al.`, jeweils mit tatsächlich folgendem zweiten Namen bzw. als
+`u. a.`/`et al.`) machen die Zitierabsicht **eindeutig**. Die nackte Form
+`(Wort Jahr)` ist dagegen von Fließtext lexikalisch nicht zu trennen
+(`(Fukushima 2011)`, `(Corona 2020)`, `(Bologna 1999)`, `(Paris, 2015)`) und
+heißt hier **mehrdeutig**.
+
+`ACADEMIC_CITATION_AMBIGUOUS` entscheidet, was aus einem sauberen Negativ auf
+der mehrdeutigen Form folgt:
+
+| Wert | Mehrdeutige Form bei `no-match` | Für wen |
+|---|---|---|
+| `block` (Default) | **Block** (exit 2), die Meldung nennt diesen Schalter | Regelfall — AC2 aus #378 macht keine Ausnahme für die Form |
+| `mark` | allow + `[UNVERIFIED]` | prosa-lastige Texte mit vielen Ort-/Ereignis-Klammern |
+
+Die eindeutige Form blockiert in **beiden** Werten — der Schalter ist kein
+Kill-Switch für die Prüfung. Und er greift nur beim *sauberen* Negativ:
+`unavailable` (API-Ausfall) und „ungeprüft" (Kontingent erschöpft) bleiben
+überall ein `[UNVERIFIED]`-Soft-Fail, denn fehlende Evidenz ist kein
+Gegenbeweis.
+
+Warum `block` der Default ist, obwohl die Form Prosa sein kann: der Hook greift
+im Soft-Fail ohnehin in genau diesen Text ein — er schreibt
+`(Fukushima 2011) [UNVERIFIED]` in die Datei. Wer diesen Eingriff akzeptiert,
+kann ihn nicht als Grund gegen den Block anführen, der sichtbar ist, nichts
+schreibt und sich in einem Zug auflösen lässt.
+
+Der eigentliche Schutz vor Fehlalarmen in echter Prosa ist der **Treffer**,
+nicht das Ausfiltern der Form: `Fukushima`, `Bologna` und `Paris` sind auch
+reale Nachnamen, zu denen Vault oder Kaskade in aller Regel ein Paper finden —
+dann schweigt der Hook vollständig. Bleibt doch etwas hängen, stehen drei Wege
+offen: Quelle in den Vault, `ACADEMIC_CITATION_AMBIGUOUS=mark` für den
+Schreibstil, `<!-- vault-guard: skip -->` für den Einzelfall. Der Marker hängt
+hinter der Klammer und ändert sonst nichts am Satz (Invariante der Tests:
 `updated.replace(' [UNVERIFIED]', '') == original`).
 
 Ein Komma vor der Jahreszahl ist dabei **kein** Co-Autoren-Marker:
@@ -78,14 +100,15 @@ mehrdeutig. Nur ein wirklich gelesener Zweitname (`(Müller/Schmidt 2019)`,
 
 **Korroboration hebt die Mehrdeutigkeit auf.** Kommt derselbe Familienname im
 selben Dokument mindestens einmal in einer eindeutigen Beleg-Form vor, weist
-der Text ihn selbst als zitierten Autor aus — dann wird auch die nackte Form
-blockierbar. `(Müller 2021, S. 45)` im Kapitel macht ein danebenstehendes
-`(Müller 2099)` zum Hard-Block; `(Fukushima 2011)` bleibt bei `[UNVERIFIED]`,
-weil `Fukushima` nirgends als zitierter Autor auftritt.
+der Text ihn selbst als zitierten Autor aus — die nackte Form zählt dann als
+eindeutig und blockiert auch unter `ACADEMIC_CITATION_AMBIGUOUS=mark`.
+`(Müller 2021, S. 45)` im Kapitel macht ein danebenstehendes `(Müller 2099)`
+zum Hard-Block; `(Fukushima 2011)` bleibt dort bei `[UNVERIFIED]`, weil
+`Fukushima` nirgends als zitierter Autor auftritt.
 
 Das Prüfkontingent (`ACADEMIC_CITATION_MAX_PER_WRITE`) vergibt eindeutige
-Belege zuerst — sonst genügte genug harmlose `(Wort Jahr)`-Prosa vor einem
-erfundenen Beleg, um den Hard-Block zu verdrängen.
+Belege zuerst — sonst genügte unter `mark` genug harmlose `(Wort Jahr)`-Prosa
+vor einem erfundenen Beleg, um den Hard-Block zu verdrängen.
 
 Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
 Falschtreffer produziert: die narrative Form ohne Signalwort
@@ -120,8 +143,8 @@ Belege) → CrossRef → Semantic Scholar (Fuzzy, Gate: Autoren-Überlapp
 | `probable` | Score ≥ `ACADEMIC_CITATION_PROBABLE_MIN` (65) | allow + `[UNVERIFIED]` |
 | `unavailable` | Timeout / `ECONNREFUSED` / abgebrochener Body / **jeder** Nicht-2xx-Status (5xx, 429, aber auch 403-Drosselung und 404) / HTTP 200 mit unlesbarem Body | allow + `[UNVERIFIED]` |
 | `no-match`, eindeutige Form | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer; Beleg trägt Seite, Signalwort, echten Co-Autor oder ist im Dokument korroboriert | **Block** (exit 2) |
-| `no-match`, nackte Form | dasselbe, aber `(Wort Jahr)` ohne Korroboration — nicht sicher als Beleg lesbar | allow + `[UNVERIFIED]` |
-| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2), bei nackter Form `[UNVERIFIED]` |
+| `no-match`, nackte Form | dasselbe, aber `(Wort Jahr)` ohne Korroboration | **Block** (exit 2) — mit `ACADEMIC_CITATION_AMBIGUOUS=mark`: allow + `[UNVERIFIED]` |
+| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2) |
 | ungeprüft (Kontingent) | mehr Belege als `ACADEMIC_CITATION_MAX_PER_WRITE` (eindeutige zuerst) | allow + `[UNVERIFIED]` (stderr-Warnung) |
 
 Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein
@@ -135,6 +158,7 @@ und `unavailable` schreibt der Hook den Tool-Input per
 | Variable | Default | Bedeutung |
 |---|---|---|
 | `ACADEMIC_CITATION_CASCADE` | `on` | `off` = Kill-Switch, Vault-only, kein Netzzugriff |
+| `ACADEMIC_CITATION_AMBIGUOUS` | `block` | Reaktion auf ein **sauberes Negativ** bei der mehrdeutigen Form `(Wort Jahr)`; `mark` setzt sie auf `[UNVERIFIED]` herab. Eindeutige Formen blockieren in beiden Werten, `unavailable`/„ungeprüft" markieren in beiden |
 | `ACADEMIC_CITATION_CONFIRMED_MIN` | `80` | Score-Schwelle für „bestätigt" (allow) |
 | `ACADEMIC_CITATION_PROBABLE_MIN` | `65` | Score-Schwelle für „wahrscheinlich" (`[UNVERIFIED]`) |
 | `ACADEMIC_CITATION_S2_MIN_OVERLAP` | `0.6` | Autoren-Überlapp-Gate für Semantic Scholar |

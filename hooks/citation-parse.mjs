@@ -19,9 +19,13 @@
  * Signalwort, Co-Autoren-Marker — oder wenn derselbe Familienname im Dokument
  * schon in einer dieser eindeutigen Formen auftaucht (siehe
  * upgradeCorroborated). Sonst "weak": die nackte Form "(Wort Jahr)" ist von
- * Prosa wie "(Fukushima 2011)" nicht zu unterscheiden. Der Aufrufer darf
- * "weak" weder blocken noch markieren — beides greift in Text ein, der
- * moeglicherweise gar kein Beleg ist.
+ * Prosa wie "(Fukushima 2011)" nicht zu unterscheiden.
+ *
+ * Das Feld KLASSIFIZIERT nur — was daraus folgt, entscheidet der Aufrufer
+ * (verbatim-guard.mjs::ambiguousPolicy). Default ist auch fuer "weak" der
+ * Block bei sauberem Negativ; "(Fantasius 2087)" ist genau der
+ * Halluzinationsfall, gegen den der Guard antritt. Wer prosa-lastig schreibt,
+ * setzt ACADEMIC_CITATION_AMBIGUOUS=mark.
  */
 
 // Deutsche Umlaut-/Ligatur-Faltung — muss mit academic_vault/db.py::_UMLAUT_FOLD
@@ -228,9 +232,9 @@ function buildCitation(match, raw, start) {
   // vor — dort ist die Zitierabsicht eindeutig. Bewusst NICHT aus dem rohen
   // Treffertext abgeleitet: ein Trennzeichen ohne folgenden Namen ist kein
   // Co-Autor (siehe COAUTHORS). Die nackte Form "(Wort Jahr)" ist lexikalisch
-  // nicht von Prosa zu trennen ("(Fukushima 2011)", "(Corona 2020)"); der
-  // Aufrufer prueft sie zwar, darf daraus aber keinen Hard-Block ableiten
-  // (siehe verbatim-guard.mjs::runCitationCheck).
+  // nicht von Prosa zu trennen ("(Fukushima 2011)", "(Corona 2020)") — was der
+  // Aufrufer daraus macht, steuert ACADEMIC_CITATION_AMBIGUOUS (siehe
+  // verbatim-guard.mjs::ambiguousPolicy).
   const strong =
     page !== null
     || SIGNAL_PREFIX.test(raw)
