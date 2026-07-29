@@ -67,12 +67,19 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Forschungsfrage), `tests/evals/test_sparring_partner_evals.py` (API-gated) und
   `tests/test_sparring_partner_agent.py` (Frontmatter-/Struktur-Guards, CI-fest).
   Fix-Runde (AC-Verifier zu PR #494): `evals/sparring-partner/recordings.json`
-  hält fünf real aufgenommene, sha256-an den Agent-Text gepinnte Transkripte;
-  `evals/sparring-partner/runner.py` + `tests/evals/test_sparring_partner_recording.py`
-  prüfen sie offline und CI-fest gegen `evals.json::expected` — damit liegt
-  tatsächlicher, geprüft-passender Modell-Output vor statt nur eines nie
-  ausgeführten API-gated Test-Gerüsts. `docs/evals/STRATEGY.md` führt die
-  Komponente entsprechend als `metric`.
+  hält fünf Transkripte fest, die während der Fix-Runde entstanden sind,
+  sha256-an den Agent-Text gepinnt; `evals/sparring-partner/runner.py` +
+  `tests/evals/test_sparring_partner_recording.py` prüfen sie offline und
+  CI-fest gegen `evals.json::expected`, damit Drift am Agent-Text auffällt
+  statt still zu bestehen. Zweite Fix-Runde (Coordinator-Gate-Befund):
+  Transkript und Erwartung stammen aus derselben Sitzung — kein unabhängiger
+  Verhaltensbeleg, nur der Hash-Pin kann real fehlschlagen; `docs/evals/STRATEGY.md`
+  führt die Komponente deshalb korrekt als `structural`, nicht `metric`. Der
+  inhaltliche AC-Beleg (AC2/AC3/AC5) bleibt `tests/evals/test_sparring_partner_evals.py`
+  (API-gated, jetzt mit explizit übergebenem `model="claude-opus-4-6"` statt dem
+  `call_claude()`-Default). `recordings.json::provenance` korrigiert außerdem die
+  vorherige Aussage "unverändert übernommen" — die Texte sind ae/oe/ue-transliteriert
+  bis auf die durch die Regex erzwungene Ausnahme `SCHWÄCHE`.
 
 - **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
   `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,

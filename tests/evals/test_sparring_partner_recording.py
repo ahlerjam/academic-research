@@ -1,32 +1,37 @@
-"""pytest-Integration fuer den sparring-partner-Recording-Eval (PR #494 Fix-Runde, Issue #454).
+"""pytest-Integration fuer den sparring-partner-Recording-Snapshot (PR #494, Issue #454).
 
-Kontext: Der AC-Verifier (PR #494, Kommentar vom 2026-07-29) markierte AC2/AC3/AC4/AC5
-als 'verfehlt', weil die einzige inhaltliche Evidenz tests/evals/test_sparring_partner_evals.py
+Kontext: Ein AC-Verifier-Lauf (PR #494, Kommentar vom 2026-07-29) markierte AC2/AC3/AC4/AC5
+als "verfehlt", weil die einzige inhaltliche Evidenz tests/evals/test_sparring_partner_evals.py
 war -- API-gated, ohne ANTHROPIC_API_KEY (kein Workflow unter .github/workflows/ setzt ihn)
-niemals ausgefuehrt: "Es existiert im PR keinerlei tatsaechlicher Modell-Output, der belegt,
-dass der Agent bei einer vorgelegten Forschungsfrage widerspricht statt zu bestaetigen."
+niemals ausgefuehrt.
 
-Dieser Runner schliesst genau diese Luecke, ohne API-Budget zu benoetigen (Issue #55/#390
-bleiben unberuehrt, siehe docs/evals/STRATEGY.md "## Alt-Issue #55"):
-evals/sparring-partner/recordings.json enthaelt fuenf real generierte Transkripte -- eine
-echte Claude-Session hat waehrend der PR-#494-Fix-Runde den Agent-Body aus
-agents/sparring-partner.md als System-Prompt genommen und auf die fuenf Eval-Inputs aus
-evals/sparring-partner/evals.json geantwortet. Das ist real ausgefuehrter, im PR vorliegender
-Modell-Output -- kein Regex-Geruest, das nie zur Ausfuehrung kommt. Kein Live-Aufruf des in
-der Frontmatter spezifizierten ``model: opus`` per Anthropic-API (Provenienz ist in
-recordings.json::provenance offengelegt, keine stillschweigende Gleichsetzung).
+evals/sparring-partner/recordings.json haelt daraufhin fuenf Transkripte fest, die eine
+Claude-Session waehrend der PR-#494-Fix-Runde erzeugt hat: Agent-Body aus
+agents/sparring-partner.md als System-Prompt, die fuenf Eval-Inputs aus
+evals/sparring-partner/evals.json als User-Message. Kein Live-Aufruf des in der Frontmatter
+spezifizierten ``model: opus`` per Anthropic-API (Provenienz inkl. Einschraenkungen ist in
+recordings.json::provenance offengelegt).
 
-Damit das nicht zur "Scheinmetrik" verkommt (stumpfes Bestehen trotz veraltetem Agent-Text),
-pinnt recordings.json den sha256 von agents/sparring-partner.md zum Aufnahmezeitpunkt --
-jede Aenderung am Agent-Text laesst test_recording_is_pinned_to_current_agent_file
-fehlschlagen und verlangt eine neue Aufnahme, statt still weiter zu "bestehen".
+**Was dieser Test NICHT ist:** ein unabhaengiger Verhaltensbeleg. Transkript
+(recordings.json) und Erwartung (evals.json::expected) stammen aus derselben Sitzung --
+wer die Regex geschrieben hat, kannte die Antwort bereits. Der einzige Pfad, auf dem dieser
+Test tatsaechlich fehlschlagen kann, ist der sha256-Hash-Pin (siehe unten): Aendert sich
+agents/sparring-partner.md, ohne dass recordings.json neu aufgenommen wird, schlaegt
+test_recording_is_pinned_to_current_agent_file fehl, statt die veraltete Aufnahme
+stillschweigend weiterlaufen zu lassen. Das macht diesen Runner zu einem
+Snapshot-/Konsistenz-Check zwischen eingefrorenem Text und Regex -- deshalb fuehrt
+docs/evals/STRATEGY.md die Komponente als ``structural``, nicht als ``metric``.
 
-evals/sparring-partner wird deshalb in docs/evals/STRATEGY.md als ``metric`` gefuehrt (nicht
-``structural``): der Runner bewertet Inhalt, laeuft bei jedem pytest-Lauf durch, ohne Netz,
-ohne API-Key -- exakt die metric-Definition aus STRATEGY.md.
-tests/evals/test_sparring_partner_evals.py (API-gated, Live-Re-Validierung gegen echtes
-``opus``) bleibt zusaetzlich bestehen fuer den Fall, dass der Operator kuenftig Budget
-bereitstellt.
+Zusaetzlich unterscheidet sich der Prompt-Aufbau vom API-gated Pfad: Diese Aufnahme nutzte
+nur den Agent-Body nach dem Frontmatter-Abschluss ``---`` als System-Prompt, waehrend
+tests/evals/test_sparring_partner_evals.py ueber ``load_agent_content()``
+(tests/evals/eval_runner.py) die komplette Datei inklusive YAML-Frontmatter (mit den
+``<example>``-Bloecken) uebergibt. Beide Pfade prompten also unterschiedlich und sind keine
+austauschbare Evidenzkette (Coordinator-Gate-Befund, PR #494).
+
+Der inhaltliche AC-Beleg fuer AC2/AC3/AC5 bleibt deshalb
+tests/evals/test_sparring_partner_evals.py -- API-gated, Live-Aufruf gegen ein echtes
+Modell, ohne Key Skip.
 """
 
 from __future__ import annotations
@@ -98,9 +103,12 @@ def test_every_eval_prompt_has_a_recorded_transcript(eval_results):
 
 @pytest.mark.parametrize("prompt_id", _prompt_ids())
 def test_recorded_transcript_matches_expected(prompt_id, eval_results):
-    """Kernmetrik: Das real aufgenommene Transkript erfuellt evals.json::expected.
+    """Snapshot-Konsistenz: Das eingefrorene Transkript erfuellt evals.json::expected.
 
-    prompt_id deckt die AC-Verifier-Punkte konkret ab:
+    Kein unabhaengiger Verhaltensbeleg (siehe Modul-Docstring) -- der einzige echte
+    Fehlerpfad ist der Hash-Pin in test_recording_is_pinned_to_current_agent_file.
+    prompt_id ordnet trotzdem den AC-Verifier-Punkten zu, die der API-gated Suite
+    (tests/evals/test_sparring_partner_evals.py) inhaltlich zugrunde liegen:
     sp-01/sp-05 -> AC2 (Schwaeche + Alternative statt Bestaetigung), sp-01 zusaetzlich
     AC5 (bewusst schwache/tautologische Forschungsfrage). sp-03 -> AC3 (Argumentation
     am konkreten Vault-Material "meier2024"/"Review-Mehraufwand"). sp-04 -> AC4 (Verweis

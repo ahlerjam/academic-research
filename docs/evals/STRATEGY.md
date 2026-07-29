@@ -96,16 +96,17 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `research-question-refiner` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Schärfung einer Forschungsfrage hat keine eindeutige Musterlösung. Ohne Key Skip. |
 | `reviewer-response` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Antwortschreiben an Gutachter sind Fließtext-Urteile. Ohne Key Skip. |
 | `source-quality-audit` | structural | `tests/evals/test_source_quality_audit_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die harten Kriterien (DOI, Peer-Review-Flag) prüft der Vault; die Evals bewerten die Einordnung. Ohne Key Skip. |
-| `sparring-partner` | metric | `evals/sparring-partner/runner.py`, `tests/evals/test_sparring_partner_recording.py` | Fünf real aufgenommene Transkripte (`recordings.json`, sha256-gepinnt an `agents/sparring-partner.md`) werden offline gegen `expected` geprüft — kein Live-`opus`-Aufruf, aber tatsächlicher, einmalig generierter Modell-Output statt reinem Regex-Gerüst (PR #494 Fix-Runde, AC-Verifier-Befund zu Issue #454). Ändert sich der Agent-Text ohne Neu-Aufnahme, schlägt der Hash-Pin fehl statt still zu bestehen. `tests/evals/test_sparring_partner_evals.py` (API-gated, Live-Re-Validierung) bleibt zusätzlich bestehen. |
+| `sparring-partner` | structural | `tests/evals/test_sparring_partner_recording.py` (Snapshot/Fixture, CI-fest), `tests/evals/test_sparring_partner_evals.py` (API-gated) | `recordings.json` hält fünf in derselben Sitzung wie `evals.json::expected` verfasste Transkripte (sha256-gepinnt an `agents/sparring-partner.md`, Drift schlägt fehl statt still zu bestehen) — das ist ein Konsistenz-Check zwischen eingefrorenem Text und Regex, kein unabhängiger Verhaltensbeleg: Transkript und Erwartung stammen aus derselben Quelle, der einzige echte Fehlerpfad ist der Hash-Pin (Coordinator-Gate-Befund, PR #494, Issue #454). Der inhaltliche AC-Beleg bleibt `tests/evals/test_sparring_partner_evals.py` — API-gated, Live-Aufruf gegen echtes Modell, ohne Key Skip. |
 | `style-evaluator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Stilurteil über Fließtext; der einzige offline messbare Teilaspekt ist als `humanizer-de-pipeline` abgedeckt. Ohne Key Skip. |
 | `submission-checker` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Einreichungsrichtlinien in natürlicher Sprache, die je Journal variieren. Ohne Key Skip. |
 | `title-generator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Titelqualität ist ein Geschmacks- und Präzisionsurteil ohne Referenzlösung. Ohne Key Skip. |
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 4 × `metric`, 42 × `structural`, 0 × `removed` (Stand Issue #446:
+**Bilanz:** 3 × `metric`, 44 × `structural`, 0 × `removed` (Stand Issue #446:
 `word-export`/`slide-export` neu, beide `structural`; Stand Issue #454:
-`sparring-partner` neu, `metric`).
+`sparring-partner` neu, `structural` — der Recording-Runner ist ein
+Snapshot/Fixture-Check, kein unabhängiger Verhaltensbeleg, siehe Zeile oben).
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).

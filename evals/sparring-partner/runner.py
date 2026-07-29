@@ -16,6 +16,9 @@ Modell-Antwort. Kein Live-Aufruf des in der Frontmatter spezifizierten
 
 Was dieser Runner NICHT prueft: ob das Modell auf abweichende Formulierungen der
 gleichen fuenf Prompts genauso reagieren wuerde, oder ob kuenftige Prompts das tun.
+Transkript (recordings.json) und Erwartung (evals.json::expected) stammen aus
+derselben Sitzung -- kein unabhaengiger Verhaltensbeleg, sondern ein Snapshot-/
+Konsistenz-Check (Status ``structural`` in docs/evals/STRATEGY.md, nicht ``metric``).
 Das ist eine eingefrorene Stichprobe, kein Live-Judge -- deshalb der Hash-Pin unten:
 Aendert sich agents/sparring-partner.md, meldet run_eval_cases() den Drift, statt
 die veraltete Aufnahme stillschweigend weiter bestehen zu lassen.
