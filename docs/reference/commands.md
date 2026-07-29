@@ -91,8 +91,8 @@ Command-Logik direkt.
 /academic-research:excel --context --output my_literature.xlsx
 ```
 
-**Skills/Agents:** Nutzt den plugin-intern vendorierten `xlsx`-Skill (`skills/xlsx/`) —
-kein externes Plugin nötig.
+**Skills/Agents:** Nutzt den `document-skills:xlsx`-Skill (Plugin-Dependency, siehe
+[Externe Skills](skills.md#externe-skills-plugin-dependencies)).
 
 ### `/academic-research:pickup`
 
@@ -105,8 +105,9 @@ kein externes Plugin nötig.
 /academic-research:pickup
 ```
 
-**Skills/Agents:** Nutzt den `document-skills:xlsx`-Skill für die 4-Sheet-Excel-Datei
-sowie `scripts/barcode_utils.py` für Code128-Barcodes (optional via
+**Skills/Agents:** Nutzt den `document-skills:xlsx`-Skill (Plugin-Dependency, siehe
+[Externe Skills](skills.md#externe-skills-plugin-dependencies)) für die
+4-Sheet-Excel-Datei sowie `scripts/barcode_utils.py` für Code128-Barcodes (optional via
 `python-barcode[images]`).
 
 ### `/academic-research:fetch`

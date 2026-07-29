@@ -27,7 +27,8 @@ dependencies = [
     "httpx>=0.28.1",
     "pypdf>=4.0.0",
     "pyyaml>=6.0.3",
-    # Pflicht-Dependency des vendorierten xlsx-Skills (/excel) — Issue #367.
+    # Pflicht-Dependency des Excel-Backends document-skills:xlsx, das /excel und
+    # /pickup aufrufen — Issue #367, Backend extern seit #445.
     "openpyxl>=3.1.5",
     # requests>=2.32.4: CVE-2024-35195 (cert verification bypass), CVE-2024-47081 (.netrc credential leak)
     "requests>=2.32.4",
@@ -136,11 +137,9 @@ filterwarnings = [
 # coverage.py (Issue #469 AC4)
 # ---------------------------------------------------------------------------
 # --cov-Ziele werden per CLI in .github/workflows/ci.yml gesetzt (scripts,
-# academic_vault, .github/scripts/flowkit_review, skills). omit haelt den
-# vendorierten, von Lint/Typecheck ohnehin ausgeschlossenen xlsx-Skriptpfad
-# (siehe AGENTS.md "Verzeichnisgrenzen") aus dem Report.
-[tool.coverage.run]
-omit = ["skills/xlsx/scripts/office/*"]
+# academic_vault, .github/scripts/flowkit_review, skills). Kein omit mehr
+# fuer den ehemals vendorierten xlsx-Excel-Skillpfad unter skills/ — der
+# wurde in #445 entvendoriert und existiert in diesem Branch nicht mehr.
 
 # ---------------------------------------------------------------------------
 # ruff — Linter + Formatter
@@ -151,7 +150,6 @@ line-length = 100
 src = ["scripts", "academic_vault", "tests"]
 extend-exclude = [
     "skills/humanizer-de",  # vendored
-    "skills/xlsx",          # vendored
     "evals",
 ]
 

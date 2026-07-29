@@ -3,20 +3,19 @@
 `pandas` und `openpyxl` standen in `scripts/requirements.txt`, wurden aber
 von keinem `scripts/*.py` importiert. Issue #235 entfernte beide.
 
-Fuer `openpyxl` war das zu kurz gegriffen: der vendorierte Skill
-`skills/xlsx/scripts/recalc.py` (genutzt vom Slash-Command `/excel`, siehe
-`commands/excel.md: allowed-tools: ... Skill(xlsx)`) braucht `openpyxl`
-zwingend, importiert es aber ausserhalb von `scripts/` — der damalige Scan
-sah diesen Konsumenten nicht. Ohne die Dependency ist `/excel` in jeder
-Installation ueber den dokumentierten Setup-Weg (`scripts/requirements.txt`)
-defekt (`ModuleNotFoundError`). Issue #367 hat `openpyxl` deshalb wieder
+Fuer `openpyxl` war das zu kurz gegriffen: das Excel-Backend
+`document-skills:xlsx` (genutzt von `/excel` und `/pickup`) fuehrt Python mit
+`openpyxl` im lokalen Environment aus, importiert es aber ausserhalb von
+`scripts/` — der damalige Scan sah diesen Konsumenten nicht. Ohne die
+Dependency ist die Excel-Erzeugung in jeder Installation ueber den
+dokumentierten Setup-Weg (`scripts/requirements.txt`) defekt
+(`ModuleNotFoundError`). Issue #367 hat `openpyxl` deshalb wieder
 aufgenommen; dieser Test prueft ab jetzt nur noch `pandas`.
 
-Hinweis: `/pickup` ist davon NICHT betroffen — es nutzt laut eigener Doku
-(`commands/pickup.md`) ausschliesslich das externe `document-skills:xlsx`-
-Plugin (kein openpyxl/pandas). Die urspruengliche PR #428 zu #367 hatte
-`/pickup` faelschlich als Mit-Betroffenen genannt; siehe
-`tests/test_issue_367_openpyxl_dependency.py` fuer den Regressions-Guard.
+Seit Issue #445 liegt das Backend nicht mehr als Vendor-Kopie im Repo,
+sondern als Plugin-Dependency `document-skills@anthropic-agent-skills`. An
+der `openpyxl`-Pflicht aendert das nichts: der Skill laeuft weiterhin im
+lokalen Python-Environment des Nutzers.
 
 Dieser Test sichert ab, dass
 
@@ -37,7 +36,7 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 # Pakete, die laut Akzeptanzkriterien NICHT im Top-Level-Requirements stehen
 # duerfen, weil sie von scripts/ nicht importiert werden. `openpyxl` ist seit
-# Issue #367 bewusst ausgenommen (Konsument: skills/xlsx/, siehe Docstring).
+# Issue #367 bewusst ausgenommen (Konsument: document-skills:xlsx, s. Docstring).
 UNUSED_PACKAGES = ("pandas",)
 
 

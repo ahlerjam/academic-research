@@ -1,7 +1,7 @@
 ---
 name: academic-research:pickup
 description: Erzeugt eine Bibliotheks-Pickup-Liste als Excel-Datei (4 Sheets nach Verfügbarkeitsstatus) aus Vault-Einträgen. Code128-Barcodes für ISBNs werden als Zellbild eingebettet.
-allowed-tools: Read, Write, Bash(python3 *)
+allowed-tools: Read, Write, Bash(python3 *), Skill(document-skills:xlsx)
 argument-hint: [--filter <verfuegbar|fernleihe|oa|lizenz>] [--output <file.xlsx>]
 ---
 
@@ -40,13 +40,31 @@ Pickup-Liste für die Bibliothek brauchst. Der Command:
    - `insert_image` für Barcode-PNGs (Bücher mit ISBN)
    - `save_workbook` → `pickup-list.xlsx`
 
-## Abhängigkeiten
+## Excel-Backend
 
-### Pflicht
+<!-- xlsx-backend:start -->
+Die Excel-Erzeugung übernimmt der externe Skill `document-skills:xlsx` aus dem
+Marketplace `anthropic-agent-skills` (Repository `anthropics/skills`). Das Plugin
+`academic-research` deklariert ihn als Abhängigkeit in `.claude-plugin/plugin.json`
+— eine frische Installation zieht ihn automatisch mit, sofern der Marketplace
+bereits hinzugefügt ist. Der Skill führt Python mit `openpyxl` und `pandas` im
+lokalen Environment aus; beide Pakete installiert `/academic-research:setup` mit.
 
-- **`document-skills:xlsx`** Plugin — Excel-Generierung (kein openpyxl/pandas)
-  - Installation: Plugin-Manager → `document-skills` installieren
-  - Prüfung: `/document-skills:xlsx` muss aufrufbar sein
+**Vor dem ersten Skill-Aufruf prüfen:** Ist der Skill `document-skills:xlsx` aufrufbar?
+Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzureichen:
+
+> Das Excel-Backend `document-skills:xlsx` ist nicht installiert — es wird
+> deshalb keine Excel-Datei erzeugt. So installierst du es nach:
+>
+> ```bash
+> claude plugin marketplace add anthropics/skills
+> claude plugin install document-skills@anthropic-agent-skills
+> ```
+>
+> Danach `/reload-plugins` ausführen und den Command erneut aufrufen.
+<!-- xlsx-backend:end -->
+
+## Weitere Abhängigkeiten
 
 ### Optional (für Barcode-PNGs)
 
@@ -58,7 +76,7 @@ Pickup-Liste für die Bibliothek brauchst. Der Command:
 ## Fehlerbehandlung
 
 - **`document-skills:xlsx` nicht verfügbar:**
-  Fehlermeldung mit Installations-Hinweis; keine Excel-Datei wird erzeugt.
+  Meldung aus dem Abschnitt „Excel-Backend" ausgeben und abbrechen.
 
 - **`python-barcode` nicht installiert:**
   Warnung im Output; Excel-Datei wird ohne Barcode-Bilder erzeugt.

@@ -8,7 +8,7 @@ Akzeptanzkriterien (aus dem Issue):
 - Beim Entfernen darf `description` nicht zerstoert werden
   (Name + Beschreibung bleiben nicht-leer).
 
-`xlsx` (proprietaer/vendored) und `_common` (kein Skill) sind ausgenommen.
+`_common` (kein Skill, nur geteilte Fragmente) ist ausgenommen.
 `humanizer-de` traegt `license: MIT` plus `vendored_from`/upstream-Felder
 und ist daher beim Pflichtfeld-Check enthalten (license vorhanden), wird
 aber nicht auf einen bestimmten License-Wert festgenagelt.
@@ -22,9 +22,8 @@ import yaml
 REPO_ROOT = Path(__file__).parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
 
-# xlsx hat eine eigene proprietaere LICENSE.txt + eigene Konventionen,
 # _common ist kein Skill (nur geteilte Fragmente).
-EXEMPT = {"xlsx", "_common"}
+EXEMPT = {"_common"}
 
 NON_EXEMPT_SKILLS = sorted(p for p in SKILLS_DIR.glob("*/SKILL.md") if p.parent.name not in EXEMPT)
 
