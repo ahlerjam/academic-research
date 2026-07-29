@@ -116,6 +116,55 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Skill-Zähler 30 → 31 in `docs/reference/skills.md`, `README.md` und
   `.claude-plugin/plugin.json`.
 
+- **`sparring-partner`-Agent als wissenschaftlicher Denk- und Impulsgeber (#454):**
+  Neuer Agent `agents/sparring-partner.md` (`model: opus`), der bei konzeptioneller
+  Arbeit widerspricht statt auszuführen: benennt Argumentationslücken, blinde
+  Flecken, Gegenpositionen und Anschlussfragen zu Themenzuschnitt, Forschungsfrage
+  und Argumentationslinie. Liest `./academic_context.md` und fragt `vault.search`/
+  `vault.get_paper` ab, um am konkreten Material zu argumentieren (Read-only,
+  kein `Write`); erzwingt ein festes Antwortformat
+  (`SCHWÄCHE:`/`ALTERNATIVE:`/`GEGENPOSITION:`/`ANSCHLUSSFRAGEN:`) statt
+  Fließtext und lehnt Kapitel-Prosa-Anfragen mit Verweis ab, statt selbst Text zu
+  produzieren. Abgrenzungsabschnitt benennt `advisor`, `research-question-refiner`,
+  `methodology-advisor` und `quality-reviewer` namentlich; die drei erstgenannten
+  Skills verweisen im Gegenzug auf den neuen Agenten zurück. Neu:
+  `evals/sparring-partner/evals.json` (inkl. bewusst tautologischer
+  Forschungsfrage), `tests/evals/test_sparring_partner_evals.py` (API-gated) und
+  `tests/test_sparring_partner_agent.py` (Frontmatter-/Struktur-Guards, CI-fest).
+  Fix-Runde (AC-Verifier zu PR #494): `evals/sparring-partner/recordings.json`
+  hält fünf Transkripte fest, die während der Fix-Runde entstanden sind,
+  sha256-an den Agent-Text gepinnt; `evals/sparring-partner/runner.py` +
+  `tests/evals/test_sparring_partner_recording.py` prüfen sie offline und
+  CI-fest gegen `evals.json::expected`, damit Drift am Agent-Text auffällt
+  statt still zu bestehen. Zweite Fix-Runde (Coordinator-Gate-Befund):
+  Transkript und Erwartung stammen aus derselben Sitzung — kein unabhängiger
+  Verhaltensbeleg, nur der Hash-Pin kann real fehlschlagen; `docs/evals/STRATEGY.md`
+  führt die Komponente deshalb korrekt als `structural`, nicht `metric`. Der
+  inhaltliche AC-Beleg (AC2/AC3/AC5) bleibt `tests/evals/test_sparring_partner_evals.py`
+  (API-gated, jetzt mit explizit übergebenem `model="claude-opus-4-6"` statt dem
+  `call_claude()`-Default). `recordings.json::provenance` korrigiert außerdem die
+  vorherige Aussage "unverändert übernommen" — die Texte sind ae/oe/ue-transliteriert
+  bis auf die durch die Regex erzwungene Ausnahme `SCHWÄCHE`.
+  Dritte Fix-Runde (AC-Verifier, erneut „verfehlt" für AC2–AC5): Die Ursache lag
+  tiefer als der fehlende API-Key — **die Kriterien selbst hatten keine
+  Unterscheidungskraft**. Eine rein bestätigende Antwort („SCHWÄCHE: Keine
+  nennenswerte / ALTERNATIVE: Keine nötig") erfüllte `sp-01`/`sp-02`/`sp-05`,
+  Kapitel-Prosa erfüllte `sp-04`, sobald irgendwo `chapter-writer` vorkam, und eine
+  zustimmende Antwort erfüllte `sp-03`, solange sie das Stichwort „Meier" aus der
+  Eingabe wiederholte. Das traf **beide** Ausführungspfade: auch mit gesetztem
+  `ANTHROPIC_API_KEY` hätte der Live-Eval eine sykophantische Antwort durchgewinkt.
+  Neu deshalb `evals/sparring-partner/counter_examples.json` (neun format-konforme
+  Negativkontrollen) und `tests/evals/test_sparring_partner_criteria.py`, das
+  fordert, dass jede davon abgelehnt und jedes Transkript weiter angenommen wird;
+  das `expected`-Schema kennt dafür jetzt UND-Listen (`value`) und NOR-Listen
+  (`reject`), abwärtskompatibel und in `evals/SCHEMA.md` dokumentiert.
+  `evals/sparring-partner/record.py` ersetzt außerdem den selbstverfassten
+  Recording-Text durch **echte, blinde Modellaufrufe** (Claude-Code-CLI headless,
+  `claude --print --model opus`, OAuth statt API-Key): Kriterien vorher committed,
+  Aufnahme-Subprozess sieht sie nicht, Prompt-Aufbau identisch zum API-gated Pfad
+  (komplette Agent-Datei inkl. Frontmatter). Dass der Abgleich scheitern kann, ist
+  belegt — der erste Lauf gegen die vorab festgelegten Kriterien ergab 1/5.
+
 - **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
   `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,
   war aber in keinem Orchestrator-Pfad erreichbar — `agents/book-fetcher.md`

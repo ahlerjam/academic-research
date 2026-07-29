@@ -33,7 +33,17 @@ Quality-Evals pro Skill oder Agent, nach Cookbook-Pattern `skill-creator`.
 - `prompts[].id`: Stabile ID (`<component-prefix>-NN`)
 - `prompts[].input`: User-Prompt, der Claude geschickt wird
 - `prompts[].expected.type`: `"substring"` | `"regex"` | `"json_field"`
-- `prompts[].expected.value`: erwarteter Substring oder Regex (bei Typ `substring`/`regex`)
+- `prompts[].expected.value`: erwarteter Substring oder Regex (bei Typ `substring`/`regex`).
+  Auch eine **Liste** zulaessig — dann muessen **alle** Eintraege zutreffen (UND).
+- `prompts[].expected.reject`: optionale Negativbedingung (String oder Liste) fuer Typ
+  `substring`/`regex` — trifft **eines** dieser Muster zu, gilt die Antwort als
+  durchgefallen. Ohne Negativbedingung misst ein Kriterium leicht nur Formattreue
+  statt Verhalten: In Issue #454 bestand eine rein bestaetigende Antwort
+  (`SCHWÄCHE: keine nennenswerte`) die Erwartung eines Agenten, der widersprechen
+  soll. Wo `reject` eingesetzt wird, gehoeren Negativkontrollen in
+  `evals/<component>/counter_examples.json` dazu, die belegen, dass das Kriterium
+  nicht-konforme Antworten tatsaechlich ablehnt (Muster: `evals/sparring-partner/`,
+  geprueft von `tests/evals/test_sparring_partner_criteria.py`).
 - `prompts[].expected.path`: JSONPath zum geprueften Feld (bei Typ `json_field`)
 - `prompts[].expected.check`: `"exists"` | `"non_empty"` | `"equals:<wert>"` (bei Typ `json_field`)
 - `prompts[].mode`: `"with_skill"` | `"without_skill"` | `"both"`

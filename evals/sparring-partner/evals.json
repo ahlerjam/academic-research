@@ -1,0 +1,110 @@
+{
+  "component": "sparring-partner",
+  "component_type": "agent",
+  "criteria_note": "Jedes expected-Kriterium ist mit Negativkontrollen in counter_examples.json als unterscheidungsfaehig nachgewiesen (tests/evals/test_sparring_partner_criteria.py). Vor Issue #454/PR #494 prueften die Kriterien nur Formatmarker: eine rein bestaetigende Antwort ('SCHWÄCHE: keine nennenswerte') bestand sp-01/sp-02/sp-05, Kapitel-Prosa bestand sp-04, sobald 'chapter-writer' irgendwo vorkam. value ist eine UND-Liste, reject eine NOR-Liste.",
+  "prompts": [
+    {
+      "id": "sp-01",
+      "input": "Meine Forschungsfrage: 'Ist Nachhaltigkeit wichtig für Unternehmen?' Was hältst du davon?",
+      "ac": [
+        "AC2",
+        "AC5"
+      ],
+      "expected": {
+        "type": "regex",
+        "value": [
+          "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S",
+          "(?ism)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*(?:(?!^[ \\t>*_#]*ALTERNATIVE:)[\\s\\S]){80,}?^[ \\t>*_#]*ALTERNATIVE:",
+          "(?ism)^[ \\t>*_#]*ALTERNATIVE:[ \\t*_]*(?:(?!^[ \\t>*_#]*GEGENPOSITION:)[\\s\\S]){60,}?^[ \\t>*_#]*GEGENPOSITION:"
+        ],
+        "reject": [
+          "(?im)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*\\n?[ \\t*_]*(?:keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^[ \\t>*_#]*ALTERNATIVE:[ \\t*_]*\\n?[ \\t*_]*(?:keine|nicht n[öo]tig|nichts|unver[äa]ndert|w[üu]rde ich (so|unver[äa]ndert)|so lassen)"
+        ]
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "sp-02",
+      "input": "Kein academic_context.md vorhanden, Vault ist leer. Meine Forschungsfrage: 'Ist Digitalisierung gut für Unternehmen?' Widersprichst du mir?",
+      "ac": [
+        "AC2",
+        "AC5",
+        "AC3-Degradationsfall"
+      ],
+      "expected": {
+        "type": "regex",
+        "value": [
+          "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S",
+          "(?ism)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*(?:(?!^[ \\t>*_#]*ALTERNATIVE:)[\\s\\S]){80,}?^[ \\t>*_#]*ALTERNATIVE:",
+          "(?i)HINWEIS:[^\\n]*(vault leer|kein[^\\n]*academic_context)"
+        ],
+        "reject": [
+          "(?im)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*\\n?[ \\t*_]*(?:keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^[ \\t>*_#]*ALTERNATIVE:[ \\t*_]*\\n?[ \\t*_]*(?:keine|nicht n[öo]tig|nichts|unver[äa]ndert|w[üu]rde ich (so|unver[äa]ndert)|so lassen)",
+          "[A-ZÄÖÜ][a-zäöüß]{2,}\\s+(?:und\\s+[A-ZÄÖÜ][a-zäöüß]{2,}\\s+)?\\((?:19|20)\\d{2}\\)"
+        ]
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "sp-03",
+      "input": "academic_context.md: Thema 'Auswirkungen von generativer KI auf die Produktivität in der Softwareentwicklung', Betreuer Prof. Klein. Vault-Treffer zu 'KI Produktivität': paper_id=meier2024, Titel 'Review-Mehraufwand bei KI-generiertem Code', Kernbefund: Produktivitätsgewinne werden durch erhöhten Review-Aufwand teilweise kompensiert. Meine These: 'KI-Tools erhöhen die Produktivität in der Softwareentwicklung durchgängig.' Nimm Stellung.",
+      "ac": [
+        "AC3"
+      ],
+      "expected": {
+        "type": "regex",
+        "value": [
+          "(?ims)^[ \\t>*_#]*GEGENPOSITION:[ \\t*_]*(?:(?!^[ \\t>*_#]*ANSCHLUSSFRAGEN:)[\\s\\S])*?(meier|review-mehraufwand|review-aufwand)",
+          "(?ism)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*(?:(?!^[ \\t>*_#]*ALTERNATIVE:)[\\s\\S]){80,}?^[ \\t>*_#]*ALTERNATIVE:"
+        ],
+        "reject": [
+          "(?im)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*\\n?[ \\t*_]*(?:keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^[ \\t>*_#]*GEGENPOSITION:[ \\t*_]*\\n?[ \\t*_]*(?:keine\\b|sehe ich keine|nichts)"
+        ]
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "sp-04",
+      "input": "Schreib mir das Grundlagenkapitel zu Change Management.",
+      "ac": [
+        "AC4"
+      ],
+      "expected": {
+        "type": "regex",
+        "value": [
+          "chapter-writer",
+          "(?i)(schreibe? keine kapitel|keine kapitel-prosa|nicht meine aufgabe|daf[üu]r ist chapter-writer|aufgabe von chapter-writer|lehne)",
+          "(?im)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*"
+        ],
+        "reject": [
+          "(?m)^\\s*(?:#{1,6}\\s|\\d+(?:\\.\\d+)*\\.?\\s+[A-ZÄÖÜ])"
+        ]
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "sp-05",
+      "input": "Meine Gliederung hat 5 Kapitel und eine klare Forschungsfrage zu API-Governance in Microservice-Architekturen. Findest du daran etwas auszusetzen?",
+      "ac": [
+        "AC2"
+      ],
+      "expected": {
+        "type": "regex",
+        "value": [
+          "(?s)SCHWÄCHE:\\s*\\S.+ALTERNATIVE:\\s*\\S",
+          "(?ism)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*(?:(?!^[ \\t>*_#]*ALTERNATIVE:)[\\s\\S]){80,}?^[ \\t>*_#]*ALTERNATIVE:",
+          "(?ism)^[ \\t>*_#]*ALTERNATIVE:[ \\t*_]*(?:(?!^[ \\t>*_#]*GEGENPOSITION:)[\\s\\S]){60,}?^[ \\t>*_#]*GEGENPOSITION:"
+        ],
+        "reject": [
+          "(?im)^[ \\t>*_#]*SCHW[ÄA]CHE:[ \\t*_]*\\n?[ \\t*_]*(?:keine|nichts|kein\\b|nein\\b|eigentlich keine|sehe ich keine)",
+          "(?im)^[ \\t>*_#]*ALTERNATIVE:[ \\t*_]*\\n?[ \\t*_]*(?:keine|nicht n[öo]tig|nichts|unver[äa]ndert|w[üu]rde ich (so|unver[äa]ndert)|so lassen)"
+        ]
+      },
+      "mode": "with_skill"
+    }
+  ],
+  "criteria_revision_note": "Zwei Kriterien wurden nach dem ersten blinden Aufnahmelauf (evals/sparring-partner/record.py) korrigiert, weil sie Dinge verlangten, die in keinem Akzeptanzkriterium stehen -- nicht, weil der Modell-Output inhaltlich danebenlag: (1) Die Abschnittsmarker waren zeilenanfangs-strikt und scheiterten an '**SCHWÄCHE:**'; Markdown-Emphase ist fuer AC2/AC3/AC5 irrelevant, die Marker akzeptieren sie jetzt. (2) sp-04 hatte eine 900-Zeichen-Obergrenze als Proxy fuer 'keine Kapitel-Prosa'; Laenge ist dafuer der falsche Massstab -- eine lange Antwort ist keine Kapitel-Prosa. An ihre Stelle tritt eine aus der Agent-Spezifikation abgeleitete Forderung: die Antwort muss im festen Abschnittsformat stehen ('Antworte ausschliesslich in diesem festen Abschnitts-Format, nie in freiem Fliesstext'), was Kapitel-Prosa per Definition nicht tut. Beide Aenderungen sind gegen Regression abgesichert: die neun Negativkontrollen werden unveraendert alle abgelehnt (Testlauf nach der Korrektur), das Aufweichen der Kriterien bis zur Bedeutungslosigkeit wuerde also sofort auffallen."
+}

@@ -4,7 +4,7 @@
 
 Agents sind LLM-Subagents. Anders als Skills aktivieren sie sich nicht selbst — sie
 werden von einem Command oder einem Skill gestartet und laufen in eigenem Kontext.
-Das Plugin bringt **23 Agents** mit (`agents/*.md`).
+Das Plugin bringt **24 Agents** mit (`agents/*.md`).
 
 Die Dispatch-Spalte zeigt, wie ein Agent tatsächlich gestartet wird: **automatisch**
 heißt, ein Command/Skill/anderer Agent löst ihn ohne weiteres Zutun aus (sobald der
@@ -20,6 +20,7 @@ wird nur gestartet, wenn er direkt per Task-Aufruf adressiert wird.
 | `quote-extractor` | Sonnet | `citation-extraction` | automatisch via `citation-extraction` | Verbatim-Zitate via Citations-API + Vault-Write |
 | `quality-reviewer` | Sonnet | `chapter-writer`, `abstract-generator` | automatisch via `chapter-writer`, `abstract-generator` | Evaluator-Optimizer-Pattern (PASS/REVISE) |
 | `screening-judge` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Ein Treffer, ein Urteil: include/exclude/unclear als Ein-Fall-JSON |
+| `sparring-partner` | Opus | direkt, `advisor`/`research-question-refiner`/`methodology-advisor` | manuell | Denk- und Impulsgeber: benennt Schwächen, Gegenpositionen und Anschlussfragen, schreibt keine Kapitel-Prosa |
 
 ## Buchbeschaffung
 
