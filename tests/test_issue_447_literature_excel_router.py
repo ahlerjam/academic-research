@@ -178,6 +178,30 @@ def test_ac1_wording_covered_by_should_trigger():
     )
 
 
+def test_ac1_phrase_is_declared_in_skill_frontmatter_not_only_in_eval_fixture():
+    """AC1-Review-Fund (PR #499): Der woertliche AC1-Satz muss im tatsaechlichen
+    Aktivierungs-Artefakt stehen, das der Skill-Dispatcher liest — dem
+    SKILL.md-Frontmatter — nicht nur im separaten Eval-Fixture
+    (``trigger_evals.json``, s. ``test_ac1_wording_covered_by_should_trigger``).
+    Die Fixture-Pruefung allein wuerde eine Drift nicht bemerken, bei der die
+    Trigger-Phrasen im Frontmatter geaendert werden, ohne dass jemand das
+    Fixture nachzieht — genau der Fall, in dem AC1 stillschweigend bricht,
+    obwohl der Eval (API-gated, s. tests/evals/test_triggers.py) weiterhin
+    nur skippt und den Bruch nie sichtbar macht.
+    """
+    text = SKILL_MD.read_text(encoding="utf-8")
+    m = re.search(r"Trigger-Phrasen:\s*(.+?)\.\n", text, re.DOTALL)
+    assert m, "SKILL.md-Frontmatter benennt keinen 'Trigger-Phrasen:'-Block."
+    trigger_block = m.group(1).lower()
+    ac1_phrase = "excel-übersicht meiner literatur"
+    assert ac1_phrase in trigger_block, (
+        "Der woertliche AC1-Wortlaut steht nicht im 'Trigger-Phrasen:'-Block "
+        "des SKILL.md-Frontmatters — dem Artefakt, das die Skill-Aktivierung "
+        "tatsaechlich steuert. Ein Eval-Fixture-Eintrag allein belegt keine "
+        "Wirkung (PR #499 Review-Fund zu AC1)."
+    )
+
+
 def test_ac2_generic_examples_covered_by_should_not_trigger():
     """Mind. ein literaturfremdes Gegenbeispiel muss vorhanden sein (AC2)."""
     data = json.loads(TRIGGER_EVALS.read_text(encoding="utf-8"))
