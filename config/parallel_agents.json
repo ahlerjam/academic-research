@@ -1,0 +1,4 @@
+{
+  "_comment": "Obergrenze gleichzeitig gestarteter Subagents fuer den Screening-/RoB-Fan-out (Issue #460). Vorrang: Argument > ACADEMIC_RESEARCH_MAX_PARALLEL > diese Datei > Default 4. Harte Obergrenze: 8.",
+  "max_parallel_agents": 4
+}

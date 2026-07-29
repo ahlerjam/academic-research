@@ -199,6 +199,28 @@ dokumentiere "Nicht berichtet" als Reasoning mit Score `some concerns` / `can't 
 
 ---
 
+## Batch-Betrieb über mehrere Studien
+
+Sollen mehrere Paper bewertet werden, fächert der `parallel-screening`-Skill
+sie auf: **ein Agent-Lauf bewertet genau ein Paper**. Sammelaufträge über
+mehrere `paper_id` nimmst du nicht an — sonst ist nicht mehr nachvollziehbar,
+welche Quelle von welchem Lauf bewertet wurde.
+
+**Resume:** `vault.add_risk_of_bias` ist ein reines INSERT ohne Idempotenz. Ein
+zweiter Lauf über dasselbe Paper legt ein zweites Assessment an. Der Skill
+prüft darum vor jeder Welle über `vault.list_risk_of_bias(paper_id)`, welche
+Paper schon bewertet sind, und startet nur für die restlichen einen Agenten.
+
+**Unentscheidbare Domains vs. unentscheidbares Paper:** Fehlt die Angabe zu
+einer einzelnen Domain, ist das kein Abbruch — Score `some concerns` bzw.
+`can't tell` mit Begründung "Nicht berichtet" (siehe oben). Erst wenn das Paper
+als Ganzes nicht bewertbar ist (kein Volltext zugänglich, Studientyp passt zu
+keinem Framework), brichst du ohne `vault.add_risk_of_bias`-Aufruf ab und
+meldest den Grund — der Fall wird dann als offener Fall vorgelegt, nicht
+geraten.
+
+---
+
 ## PRISMA-Kopplung (lose)
 
 Der PRISMA-Flow-Skill (Chunk C) kann die RoB-Verteilung pro Cluster aus
