@@ -152,6 +152,40 @@ def test_dedup_merges_no_doi_hit_into_doi_group():
     assert "Bob" in result[0]["authors"]
 
 
+def test_dedup_merges_no_doi_hit_matching_non_first_group_member():
+    """Ein Treffer ohne DOI wird auch dann gemergt, wenn sein Titel nur zum
+    ZWEITEN Mitglied der DOI-Gruppe passt, nicht zum ersten (AC2). DOI-Gruppen
+    werden per exakter DOI-Gleichheit gebildet, nicht per Titel-Ähnlichkeit —
+    Mitglieder derselben Gruppe können also unterschiedliche Titelschreibweisen
+    tragen."""
+    papers = [
+        {
+            "doi": "10.1109/TEST",
+            "title": "DevOps Governance in Large Firms",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": "https://doi.org/10.1109/test",
+            "title": "DevOps Governance in Large Organizations",
+            "authors": ["Carol"],
+            "citations": 3,
+        },
+        {
+            "doi": None,
+            "title": "DevOps Governance in Large Organizations",
+            "authors": ["Bob"],
+            "abstract": "An abstract only this source provided.",
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Carol" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
 def test_merge_group_doi_fallback_when_best_record_has_no_doi():
     """Beim Merge bleibt die DOI erhalten, auch wenn der 'vollständigste' Datensatz selbst
     keine DOI trägt (AC3)."""

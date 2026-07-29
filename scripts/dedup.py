@@ -135,8 +135,15 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
         matched_doi = None
         if title:
             for doi, group in doi_groups.items():
-                rep_title = (group[0].get("title") or "").strip()
-                if rep_title and _title_similarity(title, rep_title) >= threshold:
+                # DOI groups are formed by exact DOI equality, not title
+                # similarity — members can carry differently formatted
+                # titles, so every member (not just the first) must be
+                # checked before concluding there is no match.
+                if any(
+                    (member_title := (member.get("title") or "").strip())
+                    and _title_similarity(title, member_title) >= threshold
+                    for member in group
+                ):
                     matched_doi = doi
                     break
         if matched_doi is not None:
