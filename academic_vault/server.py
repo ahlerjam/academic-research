@@ -98,6 +98,17 @@ def _ensure_schema_for_read(db_path: str) -> None:
     add_quote, ...), die weiterhin unbedingt ``init_schema()`` aufrufen und
     damit voll migrations-/reparaturfaehig bleiben (z.B. Trigger-Refresh auf
     Bestands-DBs, Issue #373).
+
+    Zusaetzlich wird ``notes_fts`` geprueft (Review-Fund P1 zu PR #490):
+    ``notes_fts`` ist erst mit Issue #462 hinzugekommen und existiert auf
+    keinem Bestands-Vault, dessen ``papers``-Tabelle schon vorher da war.
+    Ohne diesen zweiten Guard wuerde ``search_notes()`` auf jeder solchen
+    Bestands-DB mit ``sqlite3.OperationalError: no such table: notes_fts``
+    abstuerzen statt (wie #369 fuer ``papers_fts`` etabliert) ein leeres
+    Ergebnis zu liefern -- der Schreibpfad ``add_note()`` (unbedingtes
+    ``init_schema()``) legt ``notes_fts`` erst beim ersten Schreibzugriff an,
+    ein reiner Lesezugriff (``find_notes``/``search_notes``/``get_note``)
+    kann diesem aber zeitlich vorausgehen.
     """
     conn = VaultDB._open(db_path)
     try:
@@ -107,9 +118,15 @@ def _ensure_schema_for_read(db_path: str) -> None:
             ).fetchone()
             is not None
         )
+        notes_fts_exists = (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notes_fts'"
+            ).fetchone()
+            is not None
+        )
     finally:
         conn.close()
-    if not papers_exists:
+    if not papers_exists or not notes_fts_exists:
         VaultDB(db_path).init_schema()
 
 

@@ -301,6 +301,42 @@ def test_reading_notes_skill_exists_with_structure_fields():
     assert "vault.add_note(" in text, "reading-notes/SKILL.md ruft vault.add_note() nicht auf."
 
 
+def test_search_notes_on_legacy_db_without_notes_fts_does_not_crash():
+    """P1-Regression PR #490: search_notes() auf Bestands-DB ohne vorherigen
+    init_schema()-Aufruf durfte nicht mit ``sqlite3.OperationalError: no such
+    table: notes_fts`` abstuerzen -- ``notes_fts`` existiert auf keinem Vault,
+    dessen ``papers``-Tabelle schon vor Issue #462 angelegt wurde, und reine
+    Lesepfade (``_ensure_schema_for_read``) riefen bislang nur bei fehlender
+    ``papers``-Tabelle ``init_schema()`` auf. Der Guard muss die fehlende
+    ``notes_fts``-Tabelle selbst erkennen und einmalig nachziehen -- inkl.
+    Backfill der Altnotiz, die vor der ``notes_fts``-Einfuehrung angelegt
+    wurde (AC3/AC4 gelten sonst auf Bestands-Vaults nicht).
+    """
+    db_path = _make_legacy_db_without_notes_extensions()
+    try:
+        results = vault_server.search_notes(db_path, "Notiz")
+        assert any(r["note_id"] == "legacy-note-1" for r in results)
+    finally:
+        os.unlink(db_path)
+
+
+def test_find_notes_on_legacy_db_without_prior_init_backfills_page_column():
+    """Begleitender Read-Pfad (find_notes) auf derselben Bestands-DB: crasht
+    zwar auch vorher nicht (kein notes_fts-Zugriff), aber ohne den Fix aus
+    dieser Regression liefert ``get_note``/``find_notes`` ein dict ohne
+    Schluessel 'page', weil die Spalte auf einer echten Bestands-DB fehlt.
+    Nach dem Fix zieht derselbe Read-Guard die Migration einmalig nach.
+    """
+    db_path = _make_legacy_db_without_notes_extensions()
+    try:
+        notes = vault_server.find_notes(db_path, paper_id="legacy1")
+        assert len(notes) == 1
+        assert notes[0]["note_id"] == "legacy-note-1"
+        assert notes[0]["page"] is None
+    finally:
+        os.unlink(db_path)
+
+
 def test_add_notes_fts_migration_helper_idempotent():
     """add_notes_fts() kann mehrfach aufgerufen werden ohne Fehler/Duplikate."""
     db_path, db = make_temp_db()
