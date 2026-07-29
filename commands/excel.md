@@ -9,6 +9,14 @@ argument-hint: [--papers papers.json] [--output literature.xlsx] [--context]
 
 Erstellt ein formatiertes Excel-Workbook aus gescorten Papers.
 
+## Spezifikation vs. Engine
+
+Dieser Command ist die Spezifikation: Er legt fest, welche vier Sheets mit
+welchen Spalten, 5D-Scores und welcher Cluster-Farbcodierung entstehen. Die
+eigentliche Datei erzeugt die Engine `document-skills:xlsx`, zu der auch
+natürlichsprachige literaturbezogene Anfragen ohne Slash-Command über den
+Router-Skill `literature-excel` geleitet werden (Issue #447).
+
 ## Excel-Backend
 
 <!-- xlsx-backend:start -->
