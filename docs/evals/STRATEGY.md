@@ -76,6 +76,8 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `grant-proposal` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Antragsqualität ist ein inhaltliches Urteil über Fließtext. Ohne Key Skip. |
 | `humanizer-de` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Skill selbst formuliert um (LLM-Aufgabe); die messbare Wirkung deckt `humanizer-de-pipeline` als `metric` ab. Ohne Key Skip. |
 | `latex-export` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der deterministische Export ist in `tests/test_latex_export.py` getestet; die Evals adressieren die Formulierungsebene. Ohne Key Skip. |
+| `word-export` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Bib-Selektion, Stilregel-Ladepfad und `\cite{}`-Aufloesung sind in `tests/test_word_export.py` deterministisch getestet; die Evals adressieren nur Trigger und Formulierungsebene. Ohne Key Skip. |
+| `slide-export` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Kapitel-Aufloesung und Kernaussage-Extraktion sind in `tests/test_slide_export.py` deterministisch getestet; die Evals adressieren nur Trigger und Formulierungsebene. Ohne Key Skip. |
 | `literature-gap-analysis` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Lückenanalyse ist eine Syntheseleistung über Volltexte; offline nicht bewertbar. Ohne Key Skip. |
 | `material-passport` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die Passport-Mechanik liegt im Vault (`tests/test_vault_*.py`); die Evals prüfen die Skill-Anleitung. Ohne Key Skip. |
 | `methodology-advisor` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Methodenberatung ist ein fachliches Urteil ohne eindeutige Referenzlösung. Ohne Key Skip. |
@@ -99,7 +101,8 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 3 × `metric`, 38 × `structural`, 0 × `removed`.
+**Bilanz:** 3 × `metric`, 42 × `structural`, 0 × `removed` (Stand Issue #446:
+`word-export`/`slide-export` neu, beide `structural`).
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).

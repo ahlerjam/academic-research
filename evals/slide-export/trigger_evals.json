@@ -1,0 +1,27 @@
+{
+  "component": "slide-export",
+  "should_trigger": [
+    "Erstelle einen Foliensatz aus meinen Kapiteln.",
+    "Ich brauche Slides fuer mein Kolloquium.",
+    "Baue mir eine Praesentation fuer die Konferenz.",
+    "Erzeuge ein .pptx aus meiner Thesis.",
+    "Mach aus Kapitel 3 eine Folie mit Kernaussage.",
+    "Ich brauche einen Foliensatz fuer den Vortrag.",
+    "Erstelle eine Kolloquium-Praesentation aus den Kapiteln.",
+    "Baue Konferenz-Slides aus meiner Arbeit.",
+    "Wandle meine Kapitel in einen Foliensatz um.",
+    "Erzeuge PowerPoint-Folien aus dem Kapitel."
+  ],
+  "should_not_trigger": [
+    "Schreibe Kapitel 3 meiner Arbeit.",
+    "Exportiere mein Kapitel als Word-Datei.",
+    "Exportiere mein Kapitel als .tex.",
+    "Pruefe meinen Text auf KI-Muster.",
+    "Welches Thema soll ich nehmen?",
+    "Suche Open-Access-Paper zu Microservices.",
+    "Generiere einen Arbeitstitel.",
+    "Erstelle eine Excel-Literaturuebersicht.",
+    "Pruefe die Formalia meiner Abgabe.",
+    "Schaerfe meine Forschungsfrage."
+  ]
+}
