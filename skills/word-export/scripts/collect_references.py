@@ -191,6 +191,11 @@ def _short_reference_body(paper: dict) -> str:
     Ohne Klammern, damit Mehrfachzitate zu EINEM Klammerausdruck mit
     Semikolon-getrennten Belegen zusammengefasst werden koennen -- so schreiben
     es die Autor-Jahr-Stile (APA7, Harvard, Chicago) vor.
+
+    Autor-Schwelle (Review-Fund PR #488, flowkit Runde 2): "et al." gilt in
+    diesen Autor-Jahr-Stilen erst ab DREI Autoren -- bei genau zwei werden
+    beide genannt ("Nachname & Nachname"). Vorher stand hier `len(authors) > 1`,
+    also faelschlich schon ab zwei Autoren "et al." statt beider Namen.
     """
     try:
         csl = json.loads(paper.get("csl_json", "{}"))
@@ -199,9 +204,16 @@ def _short_reference_body(paper: dict) -> str:
 
     authors = csl.get("author", [])
     if authors:
-        family = authors[0].get("family") or paper.get("paper_id", "?")
-        suffix = " et al." if len(authors) > 1 else ""
-        name = f"{family}{suffix}"
+        fallback = paper.get("paper_id", "?")
+        if len(authors) == 1:
+            name = authors[0].get("family") or fallback
+        elif len(authors) == 2:
+            first = authors[0].get("family") or fallback
+            second = authors[1].get("family") or fallback
+            name = f"{first} & {second}"
+        else:
+            family = authors[0].get("family") or fallback
+            name = f"{family} et al."
     else:
         name = paper.get("paper_id", "?")
 

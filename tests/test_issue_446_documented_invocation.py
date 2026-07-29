@@ -267,7 +267,7 @@ class TestWordCommandDocumentedInvocation:
 
         body = json.loads(payload.read_text(encoding="utf-8"))["chapters"][0]["body"]
         assert "\\cite" not in body
-        assert "(Smith 2023; Jones et al. 2022)" in body
+        assert "(Smith 2023; Jones & Lee 2022)" in body
 
     def test_bibliography_matches_latex_export_entry_set(self, tmp_path):
         """AC3 auf dem echten Aufrufweg: gleiche Vault-Quelle wie der .bib-Pfad."""

@@ -105,6 +105,27 @@ def _add_styled_paragraph(document, text: str, style: str):
     return paragraph
 
 
+def _add_heading(document, text: str, level: int):
+    """Ueberschrift mit Formatvorlagen-Fallback (Review-Fund PR #488, Runde 2).
+
+    python-docx' `add_heading()` wirft `KeyError`, wenn die zugrunde liegende
+    Formatvorlage ("Title" bei level=0, "Heading 1".."Heading 6" sonst) in
+    einer per `--template` geladenen Fremdvorlage fehlt -- ohne Abfangen ein
+    roher Traceback statt der in SKILL.md dokumentierten `FEHLER:`-Meldung
+    (AC6). Fallback analog zu `_add_styled_paragraph`: fett hervorgehobener
+    Standardabsatz statt Abbruch. Damit bleibt die Ueberschrift optisch
+    erkennbar, auch ohne aktualisiertes Word-Inhaltsverzeichnis fuer diesen
+    einen Eintrag.
+    """
+    try:
+        return document.add_heading(text, level=level)
+    except KeyError:
+        paragraph = document.add_paragraph()
+        run = paragraph.add_run(text)
+        run.bold = True
+        return paragraph
+
+
 def _add_markdown_body(document, markdown: str) -> None:
     """Rendert die Markdown-Teilmenge der Kapitel in echte Word-Absaetze.
 
@@ -131,7 +152,7 @@ def _add_markdown_body(document, markdown: str) -> None:
         heading = _HEADING_RE.match(stripped)
         if heading:
             flush()
-            document.add_heading(heading.group(2).strip(), level=len(heading.group(1)))
+            _add_heading(document, heading.group(2).strip(), level=len(heading.group(1)))
             continue
 
         bullet = _BULLET_RE.match(line)
@@ -193,7 +214,7 @@ _TITLE_PAGE_FIELDS = [
 
 
 def _add_title_page(document, context: dict) -> None:
-    document.add_heading(context.get("Thema") or "[Titel der Arbeit]", level=0)
+    _add_heading(document, context.get("Thema") or "[Titel der Arbeit]", level=0)
     for key, label in _TITLE_PAGE_FIELDS:
         value = context.get(key)
         document.add_paragraph(f"{label}: {value}" if value else f"{label}: [bitte ergaenzen]")
@@ -215,7 +236,7 @@ _DECLARATION_BODY = (
 
 def _add_declaration(document) -> None:
     document.add_page_break()
-    document.add_heading(_DECLARATION_TITLE, level=1)
+    _add_heading(document, _DECLARATION_TITLE, level=1)
     document.add_paragraph(_DECLARATION_BODY)
     document.add_paragraph("")
     document.add_paragraph("Ort, Datum")
@@ -272,14 +293,14 @@ def render_docx(payload: dict, out_path: Path | str, template: str | None = None
 
     _add_title_page(document, payload.get("context") or {})
 
-    document.add_heading("Inhaltsverzeichnis", level=1)
+    _add_heading(document, "Inhaltsverzeichnis", level=1)
     _add_toc_field(document)
     document.add_page_break()
 
     for chapter in payload.get("chapters") or []:
         _add_markdown_body(document, chapter.get("body", ""))
 
-    document.add_heading("Literaturverzeichnis", level=1)
+    _add_heading(document, "Literaturverzeichnis", level=1)
     for entry in bibliography or []:
         # Zeichengenau uebernehmen: die Stilentscheidung ist bereits gefallen.
         document.add_paragraph(str(entry))

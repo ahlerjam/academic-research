@@ -275,7 +275,7 @@ class TestCitationsAndBibliographyReachTheDocument:
         assert render_word(project, output, extra).returncode == 0
 
         texts = [p.text for p in docx.Document(str(output)).paragraphs]
-        assert any("(Smith 2023; Jones et al. 2022)" in t for t in texts), (
+        assert any("(Smith 2023; Jones & Lee 2022)" in t for t in texts), (
             "Aufgeloester Kurzbeleg fehlt im gerenderten Fliesstext (AC2)"
         )
         assert not any("\\cite" in t for t in texts), "Roher LaTeX-Marker im Word-Dokument"

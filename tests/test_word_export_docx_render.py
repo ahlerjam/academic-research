@@ -206,7 +206,7 @@ class TestRealDocxRenderFromPipeline:
         assert any("(Smith 2023)" in t for t in body_texts), (
             "Aufgeloester Kurzverweis fehlt im Fliesstext"
         )
-        assert any("(Jones et al. 2022)" in t for t in body_texts)
+        assert any("(Jones & Lee 2022)" in t for t in body_texts)
         assert not any("\\cite" in t for t in body_texts)
 
         joined = "\n".join(body_texts)
@@ -242,6 +242,63 @@ class TestRealDocxRenderFromPipeline:
 
         reopened = docx.Document(str(out_path))
         assert reopened.paragraphs  # oeffnet ohne Exception, Inhalt vorhanden
+
+
+# ---------------------------------------------------------------------------
+# AC6 — Review-Fund (PR #488, flowkit Runde 2): `add_heading()` ohne
+# KeyError-Fallback -- eine per --template geladene Fremdvorlage ohne
+# "Title"/"Heading N"-Formatvorlagen liess den Export mit rohem Traceback
+# sterben statt der in SKILL.md dokumentierten "FEHLER:"-Meldung.
+# ---------------------------------------------------------------------------
+
+
+class TestTemplateWithoutHeadingStyles:
+    def _build_template_without_heading_styles(self, path: Path) -> None:
+        """Baut ein gueltiges .docx OHNE 'Title'/'Heading N'-Formatvorlagen --
+        simuliert eine Fremdvorlage, die diese Word-Standardstile nicht kennt."""
+        from docx import Document
+        from docx.enum.style import WD_STYLE_TYPE
+
+        template = Document()
+        for style in list(template.styles):
+            if style.type == WD_STYLE_TYPE.PARAGRAPH and (
+                style.name == "Title" or style.name.startswith("Heading")
+            ):
+                style.element.getparent().remove(style.element)
+        template.save(str(path))
+
+    def test_render_docx_falls_back_instead_of_raising_keyerror(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        profiles_dir = tmp_path / ".academic-research" / "library-profiles"
+        profiles_dir.mkdir(parents=True)
+        self._build_template_without_heading_styles(profiles_dir / "leibniz.docx")
+
+        from render_docx import render_docx
+
+        out_path = tmp_path / "export.docx"
+        # Vorbedingung: die installierte python-docx-Version wirft hier
+        # tatsaechlich KeyError -- sonst waere dieser Test kein Nachweis.
+        with pytest.raises(KeyError):
+            docx.Document(str(profiles_dir / "leibniz.docx")).add_heading("x", level=0)
+
+        render_docx(
+            {
+                "chapters": [
+                    {"source": "1.md", "path": "kapitel/1.md", "body": "# Kapitel\n\nText.\n"}
+                ],
+                "papers": [],
+                "bibliography": [],
+                "style_file": "apa.md",
+                "context": {"Thema": "Testarbeit"},
+            },
+            out_path,
+            template="leibniz",
+        )
+
+        reopened = docx.Document(str(out_path))
+        assert reopened.paragraphs  # kein Absturz -- Fallback griff statt Traceback
+        assert any(p.text == "Kapitel" for p in reopened.paragraphs)
+        assert any(p.text == "Testarbeit" for p in reopened.paragraphs)
 
 
 class TestRealDocxRenderMatchesOfficeQAMethod:

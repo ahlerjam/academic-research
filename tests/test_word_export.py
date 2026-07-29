@@ -321,6 +321,19 @@ class TestCiteMarkerResolution:
                 }
             ),
         },
+        {
+            "paper_id": "brown2021",
+            "csl_json": json.dumps(
+                {
+                    "author": [
+                        {"family": "Brown", "given": "Eva"},
+                        {"family": "Green", "given": "Ida"},
+                        {"family": "White", "given": "Tom"},
+                    ],
+                    "issued": {"date-parts": [[2021]]},
+                }
+            ),
+        },
     ]
 
     def test_resolves_simple_cite_marker(self):
@@ -330,11 +343,20 @@ class TestCiteMarkerResolution:
         assert result == "Belegt durch (Smith 2023)."
         assert "\\cite" not in result
 
-    def test_resolves_multi_author_cite_marker(self):
+    def test_resolves_two_author_cite_marker_uses_ampersand(self):
+        """Review-Fund PR #488 (Runde 2): APA7/Harvard/Chicago nennen bei genau
+        ZWEI Autoren beide Namen -- "et al." gilt erst ab drei (siehe
+        test_resolves_three_author_cite_marker_uses_et_al)."""
         from collect_references import resolve_cite_markers
 
         result = resolve_cite_markers(r"Siehe \cite{jones2022}.", self.PAPERS)
-        assert result == "Siehe (Jones et al. 2022)."
+        assert result == "Siehe (Jones & Lee 2022)."
+
+    def test_resolves_three_author_cite_marker_uses_et_al(self):
+        from collect_references import resolve_cite_markers
+
+        result = resolve_cite_markers(r"Siehe \cite{brown2021}.", self.PAPERS)
+        assert result == "Siehe (Brown et al. 2021)."
 
     def test_resolves_citep_with_locator(self):
         from collect_references import resolve_cite_markers
@@ -358,14 +380,14 @@ class TestCiteMarkerResolution:
         from collect_references import resolve_cite_markers
 
         result = resolve_cite_markers(r"Beide \cite{smith2023,jones2022}.", self.PAPERS)
-        assert result == "Beide (Smith 2023; Jones et al. 2022)."
+        assert result == "Beide (Smith 2023; Jones & Lee 2022)."
         assert "?" not in result
 
     def test_resolves_multi_key_cite_marker_with_whitespace(self):
         from collect_references import resolve_cite_markers
 
         result = resolve_cite_markers(r"Beide \citep{smith2023, jones2022}.", self.PAPERS)
-        assert result == "Beide (Smith 2023; Jones et al. 2022)."
+        assert result == "Beide (Smith 2023; Jones & Lee 2022)."
 
     def test_multi_key_cite_marks_only_the_unknown_key(self):
         from collect_references import resolve_cite_markers
@@ -377,7 +399,7 @@ class TestCiteMarkerResolution:
         from collect_references import resolve_cite_markers
 
         result = resolve_cite_markers(r"\cite{jones2022,,smith2023}", self.PAPERS)
-        assert result == "(Jones et al. 2022; Smith 2023)"
+        assert result == "(Jones & Lee 2022; Smith 2023)"
 
     def test_fixture_chapter_has_no_raw_cite_after_resolution(self):
         from collect_references import resolve_cite_markers
@@ -387,7 +409,7 @@ class TestCiteMarkerResolution:
         assert "\\cite" not in result
         assert "\\citep" not in result
         assert "(Smith 2023)" in result
-        assert "(Jones et al. 2022)" in result
+        assert "(Jones & Lee 2022)" in result
 
     def test_text_without_markers_is_unchanged(self):
         from collect_references import resolve_cite_markers
