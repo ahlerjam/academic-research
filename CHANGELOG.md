@@ -10,6 +10,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Neuer Skill `extraction-matrix` für die Synthese-Phase (#463):** Zwischen
+  „Quellen gesammelt" und „Kapitel geschrieben" fehlte bisher der Schritt, in
+  dem Befunde über mehrere Studien hinweg vergleichbar gemacht werden. Der
+  neue Skill leitet die Spalten der Extraktionsmatrix aus den
+  Schlüsselkonzepten in `academic_context.md` ab, ergänzt um die
+  Standardmerkmale Methode, Stichprobe, Erhebungszeitraum und Kernbefund;
+  die Zeilen kommen aus dem Paper-Inventar in `literature_state.md`. Jede
+  Zelle wird ausschließlich aus vorhandenen `vault.find_notes()`/
+  `vault.find_quotes()`-Belegen befüllt, fehlende Angaben werden explizit als
+  `— fehlend —` markiert statt ergänzt zu werden; Quellen ganz ohne Notiz
+  oder Zitat bleiben als eigene Zeile mit „Grundlage fehlt"-Hinweis sichtbar
+  statt zu verschwinden. Ausgabe als Markdown-Tabelle zur Übernahme in
+  `kapitel/literatur.md` sowie als Arbeitsblatt über den externen
+  `document-skills:xlsx`-Skill (Verfügbarkeitsprüfung + Fallback-Hinweis,
+  gleiches Muster wie `commands/excel.md`). Statistische Auswertung oder
+  Interpretation der Matrix bleibt explizit out of scope (Meta-Analyse-Pfad).
+  Skill-Zähler 30 → 31 in `docs/reference/skills.md`, `README.md` und
+  `.claude-plugin/plugin.json`.
+
 - **SciHub-Tier still ueber das Opt-in-Flag aktiviert, Provenance bleibt aus dem Schreibkontext (#459):**
   `agents/scihub-fetcher.md` hatte bereits Opt-in-Gate und Provenance-Tagging,
   war aber in keinem Orchestrator-Pfad erreichbar — `agents/book-fetcher.md`
