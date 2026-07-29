@@ -197,7 +197,11 @@ def tier_arxiv_title(client: httpx.Client, title: str) -> str | None:
             timeout=TIMEOUT,
         )
         resp.raise_for_status()
-        root = ET.fromstring(resp.text)
+        # Rohe Bytes statt resp.text: httpx dekodiert .text ohne
+        # charset-Angabe im Content-Type immer als UTF-8 -- Expat wertet
+        # dagegen die <?xml ... encoding="..."?>-Deklaration im Prolog
+        # selbst aus (Issue #464 AC1, Konsistenz mit scripts/search.py).
+        root = ET.fromstring(resp.content)
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         for entry in root.findall("atom:entry", ns):
             for link in entry.findall("atom:link", ns):
