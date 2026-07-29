@@ -39,6 +39,10 @@ Auth-Module danach.
 > Ohne installierte `browser-use`-CLI werden die Browser-Module übersprungen; die
 > API-Suche funktioniert unverändert weiter. Das Setup meldet das explizit.
 
+Woher die Auth-Module (`ebscohost`, `proquest`, `opac`) ihre HAN-Zugangsdaten nehmen und
+wie sich das vom Per-Uni-Profil unterscheidet, steht gesammelt unter
+[Zugangsdaten](../guide/installation.md#zugangsdaten).
+
 ### Zustimmung für Hochschul-Zugangsdaten (Auth-Module)
 
 `ebscohost`, `proquest` und `opac` verwenden per HAN-Login
