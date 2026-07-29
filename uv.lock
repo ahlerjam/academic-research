@@ -32,6 +32,8 @@ dependencies = [
     { name = "openpyxl" },
     { name = "pypdf" },
     { name = "python-barcode", extra = ["images"] },
+    { name = "python-docx" },
+    { name = "python-pptx" },
     { name = "pyyaml" },
     { name = "pyzotero" },
     { name = "requests" },
@@ -46,8 +48,6 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "python-docx" },
-    { name = "python-pptx" },
     { name = "ruff" },
 ]
 rerank-cloud = [
@@ -69,8 +69,8 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "python-barcode", extras = ["images"], specifier = ">=0.16.1" },
-    { name = "python-docx", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "python-pptx", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "python-docx", specifier = ">=1.1" },
+    { name = "python-pptx", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "pyzotero", specifier = ">=1.5" },
     { name = "requests", specifier = ">=2.32.4" },

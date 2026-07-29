@@ -86,8 +86,8 @@ Plugin-Abhängigkeit mitgezogen (`dependencies` in `.claude-plugin/plugin.json`)
 | Skill | Herkunft | Zweck |
 |-------|----------|-------|
 | `document-skills:xlsx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Excel-Erzeugung für `/academic-research:excel` und `/academic-research:pickup` |
-| `document-skills:docx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Word-Erzeugung für `/academic-research:word` (`word-export`-Skill) |
-| `document-skills:pptx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Foliensatz-Erzeugung für `/academic-research:slides` (`slide-export`-Skill) |
+| `document-skills:docx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Optionale Layout-Verfeinerung für `/academic-research:word`; die `.docx` selbst erzeugt `skills/word-export/scripts/render_docx.py` |
+| `document-skills:pptx` | Plugin `document-skills` aus dem Marketplace `anthropic-agent-skills` (`anthropics/skills`) | Optionale Designvorlagen für `/academic-research:slides`; das `.pptx` selbst erzeugt `skills/slide-export/scripts/render_pptx.py` |
 
 Fehlt die Abhängigkeit, melden die jeweiligen Commands den Nachinstallations-Weg,
 statt einen Tool-Fehler durchzureichen:

@@ -27,7 +27,7 @@ Konvertierung derselben `.docx`, kein eigener PDF-Renderer).
 | `--kapitel` | `<n>` oder `all` | — (Pflicht) | Kapitel-Nummer oder `all` für alle |
 | `--output` | Dateipfad | — (Pflicht) | Ausgabedatei (`.docx`) |
 | `--format` | `docx` oder `pdf` | `docx` | `pdf` erzeugt zusätzlich eine PDF-Konvertierung derselben `.docx` |
-| `--template` | Uni-Kürzel | — | Titelblatt-Vorlage aus `~/.academic-research/library-profiles/<uni>.tex.template` (geteilter Slot mit `latex-export`) |
+| `--template` | Uni-Kürzel | — | Word-Basisvorlage aus `~/.academic-research/library-profiles/<uni>.docx` (geteilter Profil-Slot mit `latex-export`, dort die `.tex`-Variante). Fehlt sie: generisches Titelblatt + Meldung |
 
 ## Beispiele
 
@@ -106,18 +106,36 @@ Kapitel, fehlende Zitierstil-Referenzdatei) unverändert weitergeben — kein
 Stacktrace. Meldungen aus `messages` (leerer Vault, fehlende
 `academic_context.md`) anzeigen und trotzdem weitermachen.
 
-### Schritt 4 — `document-skills:docx` aufrufen
+### Schritt 4 — Dokument rendern
 
-Aus der `PAYLOAD`-JSON von Schritt 3: Formatvorlagen (`HeadingLevel.*`),
-Titelblatt, Inhaltsverzeichnis, Literaturverzeichnis (`papers` + `style_rules`,
-im Stil aus `academic_context.md` gerendert) und eidesstattliche Erklärung gemäß
-`skills/word-export/SKILL.md` erzeugen. Zielpfad ist `OUTPUT`.
+Vorher: `papers` + `style_rules` aus der Payload zu fertigen
+Literatureinträgen im Stil aus `academic_context.md` formatieren und als
+String-Liste unter dem Schlüssel `bibliography` **in dieselbe Payload-Datei
+zurückschreiben**. Die Regeln stehen unverändert in `style_rules` (Quelle:
+`citation-extraction/references/<style>.md`) — kein eigener Stil.
 
-### Schritt 5 — Optional PDF
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/word-export/scripts/render_docx.py" \
+  --payload "$PAYLOAD" --output "$OUTPUT" --format "$FORMAT" --template "$TEMPLATE"
+```
 
-Bei `--format pdf`: `soffice --headless --convert-to pdf --outdir <dir> <OUTPUT>`
-auf die erzeugte `.docx` anwenden. Fehlt `soffice`, `.docx` bleibt gültiges
-Ergebnis + Meldung (kein Abbruch).
+Das Skript erzeugt die Datei deterministisch (kein Freihand-Rendern): echte
+Formatvorlagen `Heading 1`…`Heading 6` aus den Markdown-Ebenen `#`…`######`,
+Word-native Inhaltsverzeichnis-Feldfunktion, Titelblatt aus `context`,
+Literaturverzeichnis **zeichengenau** aus `bibliography` und eidesstattliche
+Erklärung. Bei `--format pdf` konvertiert es dieselbe `.docx` per
+`soffice --headless --convert-to pdf`; fehlt LibreOffice, bleibt die `.docx`
+das gültige Ergebnis + Meldung (kein Abbruch).
+
+Bei Exit-Code ≠ 0 die `FEHLER:`-Meldung unverändert weitergeben. Fehlt
+`bibliography`, obwohl der Vault Einträge liefert, bricht das Skript bewusst ab
+— ein Literaturverzeichnis in einem nicht belegten Format wäre Fabrikation.
+
+### Schritt 5 — Optionale Layout-Verfeinerung
+
+Bei Bedarf `document-skills:docx` auf die **erzeugte** Datei anwenden
+(Hochschul-Layout, Kopf-/Fußzeilen). Optional — das Ergebnis aus Schritt 4 ist
+bereits eine vollständige, in Word öffenbare Datei.
 
 ### Schritt 6 — Ergebnis zeigen
 
@@ -125,5 +143,6 @@ Pfad(e) der erzeugten Datei(en), Kapitelanzahl, Anzahl Literatureinträge.
 
 ## Abhängigkeiten
 
+- `python-docx` (Renderer aus Schritt 4, Teil der Plugin-Installation)
 - `document-skills:docx` (siehe „Word-Backend" oben)
 - LibreOffice (`soffice`, optional, für `--format pdf`)

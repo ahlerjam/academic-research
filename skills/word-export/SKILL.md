@@ -47,29 +47,42 @@ allowed-tools:
    - `style_rules` = **unveränderter** Inhalt der passenden
      `citation-extraction/references/<style>.md`-Datei (Zuordnung über
      `Zitationsstil` in `./academic_context.md`, Default `apa.md`).
-4. `document-skills:docx` aufrufen und aus der Payload rendern:
-   - **Überschriftenebenen als echte Formatvorlagen** — `HeadingLevel.HEADING_1`
-     bis `HEADING_6` (bzw. das äquivalente Styles-API des Backends), niemals
-     manuelles Fett/Größe. Das ist Voraussetzung dafür, dass Word ein
-     automatisches Inhaltsverzeichnis erzeugen kann und die Datei ohne
-     Reparaturhinweis öffnet.
-   - **Titelblatt**: Titel, Autor:in, Betreuer:in, Hochschule aus
-     `./academic_context.md`; ohne Hochschulvorlage (`--template` nicht
-     gesetzt oder nicht gefunden) ein generischer Platzhalter-Aufbau — keine
-     erfundene FH-spezifische Wortlaut-Fabrikation (siehe Fehlerpfade).
-   - **Verzeichnisse**: Inhaltsverzeichnis über die Formatvorlagen-Struktur
-     (Word-native Feldfunktion, kein statischer Text).
-   - **Literaturverzeichnis**: `papers` + `style_rules` aus der Payload als
-     Word-Absätze rendern — der Agent wendet die geladenen Stilregeln beim
-     Rendern an, `collect_references.py` liefert keine fertig formatierten
-     Strings (keine zweite Stilregel-Implementierung neben
-     `citation-extraction`).
+4. **Stilstufe — der einzige Agentenschritt:** `papers` + `style_rules` zu
+   fertigen Literatureinträgen formatieren und als String-Liste unter
+   `bibliography` **in dieselbe Payload-Datei zurückschreiben**. `style_rules`
+   ist der unveränderte Inhalt der `citation-extraction`-Referenzdatei — keine
+   zweite Stilregel-Implementierung, weder hier noch in Python.
+5. Datei rendern — **wieder eine echte CLI, kein Freihand-Rendern**:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/word-export/scripts/render_docx.py" \
+     --payload "$PAYLOAD" --output "$OUTPUT" --format "$FORMAT" --template "$TEMPLATE"
+   ```
+
+   `render_docx.py` ist hier, was `render_tex.py` für `latex-export` ist:
+   Repo-Code erzeugt die Zieldatei deterministisch — nur deshalb ist sie prüfbar
+   (`tests/test_issue_446_render_pipeline.py` öffnet sie wieder). Garantiert:
+   - **Überschriftenebenen als echte Formatvorlagen** — Markdown `#`…`######`
+     wird zu `HeadingLevel.HEADING_1`…`HEADING_6`, niemals manuelles
+     Fett/Größe. Voraussetzung dafür, dass Word ein automatisches
+     Inhaltsverzeichnis erzeugt und die Datei ohne Reparaturhinweis öffnet.
+   - **Titelblatt** aus `context` (ausgefüllte Felder von
+     `./academic_context.md`); fehlende Felder erscheinen als sichtbare
+     Leerstelle `[bitte ergänzen]` statt erfunden. Ohne Hochschulvorlage
+     generischer Aufbau + Meldung (siehe Fehlerpfade).
+   - **Verzeichnisse**: Inhaltsverzeichnis als Word-native Feldfunktion über
+     die Formatvorlagen-Struktur, kein statischer Text.
+   - **Literaturverzeichnis**: die `bibliography`-Einträge aus Schritt 4
+     **zeichengenau und in unveränderter Reihenfolge**. Fehlen sie, obwohl der
+     Vault Papers liefert, bricht das Skript mit `FEHLER:` ab.
    - **Eidesstattliche Erklärung**: letzte Seite, generischer Wortlaut +
      Ort-/Datum-/Unterschriftsfeld (hochschulspezifischer Wortlaut ist
      eigenes Issue, siehe Abgrenzung).
-5. `--format pdf`: dieselbe erzeugte `.docx` per `soffice --headless --convert-to pdf`
-   konvertieren (kein eigener PDF-Renderer). Fehlt LibreOffice/`soffice`,
-   Meldung statt Absturz (siehe Fehlerpfade).
+   - `--format pdf`: dieselbe `.docx` per `soffice --headless --convert-to pdf`
+     (kein eigener PDF-Renderer); fehlt LibreOffice, Meldung statt Absturz.
+6. Optional: `document-skills:docx` auf die **erzeugte** Datei anwenden, wenn
+   Layout über den Basisaufbau hinaus gewünscht ist. Ohne diesen Schritt ist das
+   Ergebnis aus Schritt 5 bereits vollständig und in Word öffenbar.
 
 ## Word-Backend
 
@@ -120,6 +133,12 @@ Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzur
   nicht gefunden — PDF-Konvertierung übersprungen, `.docx` verfügbar."
 - **Zitierstil-Referenzdatei fehlt:** `collect_references.load_style_rules()`
   wirft `StyleRulesNotFoundError` mit lesbarer Meldung statt Stacktrace.
+- **`python-docx` fehlt:** `render_docx.py` meldet „FEHLER: Das Python-Paket
+  'python-docx' ist nicht installiert …" mit Nachinstallations-Hinweis statt
+  eines `ImportError`-Tracebacks (AC6).
+- **`bibliography` fehlt trotz gefüllten Vaults:** `render_docx.py` bricht mit
+  `FEHLER:` ab und nennt den fehlenden Schritt. Bewusst kein Fallback: ein
+  Literaturverzeichnis in einem nicht belegten Format wäre Fabrikation.
 
 ## Verbatim-Guard
 

@@ -49,6 +49,7 @@ DEFAULT_ACADEMIC_CONTEXT = "academic_context.md"
 __all__ = [
     "get_all_papers",
     "resolve_chapters",
+    "parse_context_fields",
     "resolve_citation_style",
     "load_style_rules",
     "collect_references",
@@ -88,6 +89,28 @@ _STYLE_FILES = {
 DEFAULT_STYLE_FILE = "apa.md"
 
 _ZITATIONSSTIL_RE = re.compile(r"^-\s*Zitationsstil:\s*(.+?)\s*$", re.MULTILINE)
+
+#: Alle "- Feld: Wert"-Zeilen aus academic_context.md (Format siehe
+#: skills/academic-context/SKILL.md).
+_CONTEXT_FIELD_RE = re.compile(r"^-\s*([^:\n]+?):\s*(.*?)\s*$", re.MULTILINE)
+
+
+def parse_context_fields(academic_context_text: str) -> dict[str, str]:
+    """Liest die "- Feld: Wert"-Zeilen aus academic_context.md als dict.
+
+    Liefert nur ausgefuellte Felder: die Vorlage aus academic-context/SKILL.md
+    schreibt unbeantwortete Punkte als "[...]" -- die als Wert durchzureichen
+    ergaebe spaeter ein Titelblatt mit "Hochschule: [...]". Ein weggelassenes
+    Feld rendert render_docx.py stattdessen als sichtbare Leerstelle
+    ("[bitte ergaenzen]") -- keine erfundenen Titelblatt-Angaben.
+    """
+    fields: dict[str, str] = {}
+    for key, value in _CONTEXT_FIELD_RE.findall(academic_context_text or ""):
+        cleaned = value.strip()
+        if not cleaned or cleaned.startswith("["):
+            continue
+        fields[key.strip()] = cleaned
+    return fields
 
 
 def resolve_citation_style(academic_context_text: str) -> str:
@@ -295,6 +318,9 @@ def build_payload(
         "papers": refs["papers"],
         "style_file": refs["style_file"],
         "style_rules": refs["style_rules"],
+        # Titelblatt-Angaben fuer render_docx.py -- ausschliesslich Felder, die
+        # academic_context.md wirklich enthaelt (siehe parse_context_fields).
+        "context": parse_context_fields(academic_context_text),
         "vault_db_path": resolved_db_path,
         "messages": messages,
     }

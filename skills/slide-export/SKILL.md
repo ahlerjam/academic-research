@@ -39,12 +39,27 @@ allowed-tools:
    (nur Überschrift/Liste) liefern einen leeren `core_statement` — das Skript
    meldet das auf stderr; in dem Fall den User um eine Kernaussage bitten statt
    eine zu erfinden (Preamble „Keine Fabrikation").
-4. `document-skills:pptx` aufrufen: ein Slide je Eintrag, Titel als Folientitel,
-   `core_statement` als einzige zentrale Aussage (kein Fließtext-Absatz auf der
-   Folie — Design-Leitplanken für Kernaussage-Folien kommen aus
-   `document-skills:pptx` selbst, hier nicht dupliziert).
-5. `--kolloquium`/`--konferenz` steuern nur den Foliensatz-Rahmen (Deckblatt,
-   Agenda-Folie, Backup-Slot); die Kern-Extraktion aus Schritt 3 bleibt gleich.
+4. Foliensatz rendern — **wieder eine echte CLI, kein Freihand-Rendern**:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts/render_pptx.py" \
+     --payload "$PAYLOAD" --output "$OUTPUT"
+   ```
+
+   `render_pptx.py` ist hier, was `render_tex.py` für `latex-export` ist:
+   Repo-Code erzeugt das Deck deterministisch — nur deshalb ist es prüfbar
+   (`tests/test_issue_446_render_pipeline.py` öffnet es wieder). Ein Slide je
+   Eintrag, `title` als Folientitel, `core_statement` als einzige zentrale
+   Aussage (kein Fließtext-Absatz auf der Folie). Kapitel ohne Kernaussage
+   ergeben eine Folie mit leerem Rumpf + Meldung auf stderr — nachfragen statt
+   erfinden.
+5. `--kolloquium`/`--konferenz` steuern nur den Rahmen: `render_pptx.py` stellt
+   Deckblatt und Agenda-Folie voran; die Kern-Extraktion bleibt gleich.
+6. Optional: `document-skills:pptx` auf das **erzeugte** Deck anwenden, wenn eine
+   Designvorlage oder Bildfolien gewünscht sind (Design-Leitplanken für
+   Kernaussage-Folien kommen von dort, hier nicht dupliziert). Ohne diesen
+   Schritt ist das Ergebnis aus Schritt 4 bereits ein vollständiger, in
+   PowerPoint öffenbarer Foliensatz.
 
 ## Slide-Backend
 
@@ -89,3 +104,6 @@ Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzur
   mit den verfügbaren Kapiteln in der Meldung (identisch zu `latex-export`).
 - **Kein Kapitel in `kapitel/`:** `ChapterResolutionError` mit „Kein Kapitel in
   '<dir>' gefunden" statt Stacktrace.
+- **`python-pptx` fehlt:** `render_pptx.py` meldet „FEHLER: Das Python-Paket
+  'python-pptx' ist nicht installiert …" mit Nachinstallations-Hinweis statt
+  eines `ImportError`-Tracebacks (AC6).

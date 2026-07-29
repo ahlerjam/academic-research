@@ -1,44 +1,41 @@
 """Echter pptx-Rendering-Nachweis fuer slide-export (Fixrunde PR #488, Issue #446).
 
-Review-Fund (PR #488): "AC4: Kein Nachweis, dass ein erzeugter Foliensatz
-sich in PowerPoint oeffnen laesst -- build_slide_deck.py liefert nur eine
-Zwischenrepraesentation, das eigentliche .pptx-Rendering laeuft ueber den
-externen, nicht getesteten Skill document-skills:pptx."
+Review-Fund (PR #488, Runde 2): "AC4: Foliensatz-Oeffnenbarkeit in PowerPoint
+ist nicht belegt -- nur ein Test-only-python-pptx-Renderer statt des echten
+Produktionspfads."
 
-Vor diesem Test stimmt das: tests/test_slide_export.py deckt nur
-extract_slide_data() (die {title, core_statement, source}-Zwischenrepraesen-
-tation) isoliert ab -- kein Test baut daraus je eine tatsaechliche Datei.
+Das stimmte: die Vorrunde hatte den Renderer als ``_render_reference_pptx`` IN
+DIESE DATEI gelegt, weil es im Repo keinen gab -- bewiesen war damit nur, dass
+der Test ein .pptx schreiben kann.
 
-Dieser Test schliesst genau diese Luecke -- mit `python-pptx` als
-Test-only-Renderer, NICHT als Ersatz fuer den Produktionspfad
-`document-skills:pptx` (der bleibt pptxgenjs/Node, siehe
-skills/slide-export/SKILL.md, Abschnitt "Slide-Backend"). python-pptx ist
-ein reines PyPI-Paket (pyproject.toml [project.optional-dependencies].dev)
-und damit -- anders als document-skills selbst -- in der CI-Matrix
-installierbar (uv sync --extra dev in .github/actions/setup-python-uv); die
-strukturellen Assertions unten laufen also in JEDEM CI-Lauf, nicht nur
-lokal.
+Behoben an der Ursache: ``skills/slide-export/scripts/render_pptx.py`` erzeugt
+das Deck jetzt als Repo-Code (dieselbe Rolle wie ``render_tex.py`` im
+LaTeX-Pfad). Diese Datei ruft ausschliesslich diesen Produktionsrenderer auf --
+kein Rendering-Code mehr im Test.
+
+Arbeitsteilung der beiden Suiten:
+  - tests/test_issue_446_render_pipeline.py faehrt den kompletten
+    dokumentierten Aufrufweg (bash-Bloecke aus commands/slides.md).
+  - diese Datei prueft den Renderer direkt gegen die Kapitel-Fixtures, inkl.
+    Grenzfall "Kapitel ohne Fliesstext".
 
 Mechanisch nachgewiesen:
-  - extract_slide_data() wird einmal wirklich gegen echte Kapitel-Fixtures
-    ausgefuehrt und das Ergebnis fliesst in einen tatsaechlich gerenderten
-    Foliensatz (vorher lief dieser Pfad nirgends).
-  - 1:1-Zuordnung Kapitel-Eintrag -> Folie bleibt im gerenderten Deck
-    erhalten (AC4).
-  - `title` landet im Titel-Platzhalter der Folie, `core_statement` im
-    Inhalts-Platzhalter -- keine Datenverluste beim Rendern.
-  - Ein Kapitel ohne Fliesstext (leerer core_statement) erzeugt trotzdem
-    eine gueltige Folie, keinen Absturz.
+  - extract_slide_data() laeuft gegen echte Kapitel-Fixtures und das Ergebnis
+    fliesst durch render_pptx() in eine tatsaechliche Datei.
+  - 1:1-Zuordnung Kapitel-Eintrag -> Folie bleibt im gerenderten Deck erhalten
+    (AC4).
+  - `title` landet im Titel-Platzhalter, `core_statement` im Inhalts-
+    Platzhalter -- keine Datenverluste beim Rendern.
+  - Ein Kapitel ohne Fliesstext (leerer core_statement) erzeugt trotzdem eine
+    gueltige Folie, keinen Absturz.
   - Die erzeugte Datei laesst sich verlustfrei wieder oeffnen (python-pptx-
-    Roundtrip) -- derselbe Repair-Hinweis-Proxy wie beim docx-Pendant, siehe
-    tests/test_word_export_docx_render.py.
+    Roundtrip) -- Repair-Hinweis-Proxy wie beim docx-Pendant.
 
 Zusaetzlich, wenn `soffice` (LibreOffice) lokal verfuegbar ist: echte
 Kompatibilitaets-Konvertierung nach PDF -- derselbe Nachweisweg, den
-document-skills:pptx selbst fuer die eigene QA vorschreibt (SKILL.md:
-"python scripts/office/soffice.py --headless --convert-to pdf deck.pptx").
-CI hat kein LibreOffice installiert, daher dort geskippt -- exakt dasselbe
-Pattern wie PDFLATEX_AVAILABLE in tests/test_latex_export.py.
+document-skills:pptx selbst fuer die eigene QA vorschreibt. CI hat kein
+LibreOffice installiert, daher dort geskippt -- exakt dasselbe Pattern wie
+PDFLATEX_AVAILABLE in tests/test_latex_export.py.
 """
 
 from __future__ import annotations
@@ -50,7 +47,7 @@ from pathlib import Path
 
 import pytest
 
-pptx = pytest.importorskip("pptx", reason="python-pptx nicht installiert (uv sync --extra dev)")
+pptx = pytest.importorskip("pptx", reason="python-pptx nicht installiert (uv sync)")
 
 WORKTREE = Path(__file__).parent.parent
 SCRIPTS_DIR = WORKTREE / "skills" / "slide-export" / "scripts"
@@ -65,30 +62,20 @@ sys.path.insert(0, str(LATEX_SCRIPTS_DIR))
 # tests/test_latex_export.py: dort nur lokal beweiskraeftig.
 SOFFICE_AVAILABLE = shutil.which("soffice") is not None
 
-#: Layout-Index "Title and Content" im Standard-python-pptx-Template --
-#: Titel- + Inhalts-Platzhalter, analog zur "eine Kernaussage pro Folie"-
-#: Vorgabe aus SKILL.md.
-_TITLE_AND_CONTENT_LAYOUT = 1
+#: Inhalts-Platzhalter im Standard-python-pptx-Template -- dort landet die
+#: Kernaussage (eine pro Folie, SKILL.md).
 _CONTENT_PLACEHOLDER_IDX = 1
 
 
 def _render_reference_pptx(slides_data: list[dict], out_path: Path) -> None:
-    """Baut aus echter extract_slide_data()-Ausgabe einen minimalen, aber
-    echten .pptx-Foliensatz.
+    """Duenne Huelle um den PRODUKTIONSRENDERER -- kein Rendering-Code im Test.
 
-    Testeigene Rendering-Referenz, kein Ersatz fuer document-skills:pptx
-    (siehe Moduldocstring). Eine Folie pro Eintrag, Titel im Titel-
-    Platzhalter, core_statement im Inhalts-Platzhalter -- bildet nur die
-    im Review bemaengelte 1:1-Zuordnung und Datenuebernahme ab.
+    Baut nur die Payload-Form auf, die build_slide_deck.py schreibt, und
+    uebergibt sie an skills/slide-export/scripts/render_pptx.py.
     """
-    presentation = pptx.Presentation()
-    layout = presentation.slide_layouts[_TITLE_AND_CONTENT_LAYOUT]
-    for entry in slides_data:
-        slide = presentation.slides.add_slide(layout)
-        slide.shapes.title.text = entry["title"]
-        slide.placeholders[_CONTENT_PLACEHOLDER_IDX].text_frame.text = entry["core_statement"]
+    from render_pptx import render_pptx
 
-    presentation.save(str(out_path))
+    render_pptx({"slides": slides_data, "rahmen": ""}, out_path)
 
 
 # ---------------------------------------------------------------------------

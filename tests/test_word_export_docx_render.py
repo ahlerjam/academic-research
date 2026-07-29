@@ -1,31 +1,32 @@
 """Echter docx-Rendering-Nachweis fuer word-export (Fixrunde PR #488, Issue #446).
 
-Review-Fund (PR #488): "AC1: Kein Nachweis, dass ein erzeugtes .docx sich in
-Word ohne Reparaturhinweis oeffnen laesst bzw. Ueberschriftenebenen als echte
-Formatvorlagen fuehrt [...]" und "AC2 (teilweise): Dass Zitate/Literatur-
-verzeichnis tatsaechlich [...] im Dokument erscheinen, ist unbelegt --
-collect_references() liefert nur Rohdaten, das Rendern passiert ausserhalb
-von Repo-Code und wird nirgends ausgefuehrt."
+Review-Fund (PR #488, Runde 2): "AC1: .docx-Erzeugung/Reparaturfreiheit in Word
+ist nicht belegt -- nur ein als 'Test-only, kein Ersatz fuer
+document-skills:docx' deklarierter Renderer existiert" und "AC2 (teilweise):
+[...] dass Zitate/Literaturverzeichnis tatsaechlich im Zielstil im gerenderten
+Dokument erscheinen, ist laut Testdocstring bewusst nicht geprueft."
 
-Vor diesem Test stimmt das: tests/test_word_export.py deckt collect_references()/
-resolve_cite_markers() nur isoliert ab (Rueckgabewerte pruefen), tests/
-test_word_export_skill_md.py prueft nur, dass SKILL.md die richtigen Woerter
-("HeadingLevel", "Titelblatt", ...) enthaelt. Keine der beiden Suiten fuehrt
-die Pipeline je gegen ein tatsaechlich gerendertes Dokument aus.
+Das stimmte: die Vorrunde hatte den Renderer als ``_render_reference_docx`` IN
+DIESE DATEI gelegt, weil es im Repo keinen gab -- bewiesen war damit nur, dass
+der Test ein .docx schreiben kann.
 
-Dieser Test schliesst genau diese Luecke -- mit `python-docx` als
-Test-only-Renderer, NICHT als Ersatz fuer den Produktionspfad
-`document-skills:docx` (der bleibt docx-js/Node, siehe
-skills/word-export/SKILL.md, Abschnitt "Word-Backend"). python-docx ist ein
-reines PyPI-Paket (pyproject.toml [project.optional-dependencies].dev) und
-damit -- anders als document-skills selbst -- in der CI-Matrix installierbar
-(uv sync --extra dev in .github/actions/setup-python-uv); die strukturellen
-Assertions unten laufen also in JEDEM CI-Lauf, nicht nur lokal.
+Behoben an der Ursache: ``skills/word-export/scripts/render_docx.py`` erzeugt
+das Dokument jetzt als Repo-Code (dieselbe Rolle wie ``render_tex.py`` im
+LaTeX-Pfad). Diese Datei ruft ausschliesslich diesen Produktionsrenderer auf --
+kein Rendering-Code mehr im Test.
+
+Arbeitsteilung der beiden Suiten:
+  - tests/test_issue_446_render_pipeline.py faehrt den kompletten
+    dokumentierten Aufrufweg (bash-Bloecke aus commands/word.md) und belegt
+    AC2 zeichengenau (Literatureintraege im Zielstil landen unveraendert im
+    Dokument, geprueft mit zwei verschiedenen Stilen).
+  - diese Datei prueft den Renderer direkt gegen einen echten In-Memory-Vault,
+    inkl. Grenzfaellen (HEADING_6, leerer Vault).
 
 Mechanisch nachgewiesen:
-  - collect_references()/resolve_cite_markers() werden einmal wirklich gegen
-    einen echten (In-Memory-)Vault ausgefuehrt und ihr Ergebnis fliesst in ein
-    tatsaechlich gerendertes .docx (AC2: "wird nirgends ausgefuehrt" behoben).
+  - collect_references()/resolve_cite_markers() laufen wirklich gegen einen
+    echten Vault und ihr Ergebnis fliesst durch render_docx() in eine
+    tatsaechliche Datei.
   - Kapitelueberschriften landen als echte Word-Formatvorlagen ("Heading 1"
     .. "Heading 6"), nicht als manuelles Fett/Groesse -- inkl. Grenzfall
     HEADING_6.
@@ -33,28 +34,24 @@ Mechanisch nachgewiesen:
     statischem Text.
   - \\cite{}-Marker sind im gerenderten Fliesstext zu Klartext aufgeloest,
     kein roher Marker mehr sichtbar.
-  - Jedes von collect_references() gelieferte Paper hat einen erkennbaren
-    Eintrag im gerenderten Literaturverzeichnis.
+  - Jedes Paper hat einen erkennbaren Eintrag im gerenderten
+    Literaturverzeichnis.
   - Die erzeugte Datei laesst sich verlustfrei wieder oeffnen (python-docx-
     Roundtrip) -- ein "Reparaturhinweis" in echtem Word korreliert praktisch
     immer mit einer kaputten Zip-/XML-Struktur, die auch dieser Roundtrip
     aufdecken wuerde.
 
-Bewusst NICHT geprueft: ob das Literaturverzeichnis exakt den Interpunktions-/
-Reihenfolge-Regeln aus style_rules (z.B. APA7) folgt. Das ist laut
-collect_references.py-Docstring explizit KEINE deterministische Python-
-Funktion, sondern eine Rendering-Entscheidung des Agenten zur Laufzeit
-("keine zweite Stilregel-Implementierung neben citation-extraction") -- eine
-zweite Formatierungs-Implementierung hier wuerde genau das Risiko wieder
-einfuehren, das collect_references.py bewusst vermeidet. Stichwortebene dazu:
-evals/word-export/evals.json (wx-03), kein pytest-Aequivalent.
+Die Stil-FORMATIERUNG der Literatureintraege bleibt bewusst ausserhalb des
+Renderers: render_docx.py uebernimmt payload["bibliography"] zeichengenau,
+formatiert also nicht selbst (keine zweite Stilregel-Implementierung neben
+citation-extraction). Dass genau diese Uebernahme zeichengenau passiert, prueft
+tests/test_issue_446_render_pipeline.py mit APA- und Harvard-Eintraegen.
 
 Zusaetzlich, wenn `soffice` (LibreOffice) lokal verfuegbar ist: echte
 Kompatibilitaets-Konvertierung nach PDF -- derselbe Nachweisweg, den
-document-skills:docx selbst fuer die eigene QA vorschreibt (SKILL.md:
-"python scripts/office/soffice.py --headless --convert-to pdf output.docx").
-CI hat kein LibreOffice installiert, daher dort geskippt -- exakt dasselbe
-Pattern wie PDFLATEX_AVAILABLE in tests/test_latex_export.py.
+document-skills:docx selbst fuer die eigene QA vorschreibt. CI hat kein
+LibreOffice installiert, daher dort geskippt -- exakt dasselbe Pattern wie
+PDFLATEX_AVAILABLE in tests/test_latex_export.py.
 """
 
 from __future__ import annotations
@@ -68,10 +65,7 @@ from pathlib import Path
 
 import pytest
 
-docx = pytest.importorskip("docx", reason="python-docx nicht installiert (uv sync --extra dev)")
-
-from docx.oxml import OxmlElement  # noqa: E402
-from docx.oxml.ns import qn  # noqa: E402
+docx = pytest.importorskip("docx", reason="python-docx nicht installiert (uv sync)")
 
 WORKTREE = Path(__file__).parent.parent
 SCRIPTS_DIR = WORKTREE / "skills" / "word-export" / "scripts"
@@ -89,33 +83,8 @@ SOFFICE_AVAILABLE = shutil.which("soffice") is not None
 
 
 # ---------------------------------------------------------------------------
-# Test-only Rendering-Referenz (KEIN Produktionspfad, siehe Moduldocstring)
+# Huelle um den PRODUKTIONSRENDERER (kein Rendering-Code im Test)
 # ---------------------------------------------------------------------------
-
-
-def _add_toc_field(document) -> None:
-    """Fuegt eine echte Word-native TOC-Feldfunktion ein (kein statischer Text).
-
-    Standard-python-docx-Rezept fuer Insert > Table of Contents; landet wie
-    beim docx-js-Produktionsrenderer als w:fldChar/w:instrText in
-    word/document.xml -- kein statischer Verzeichnis-Text.
-    """
-    paragraph = document.add_paragraph()
-    run = paragraph.add_run()
-    fld_begin = OxmlElement("w:fldChar")
-    fld_begin.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
-    instr.text = 'TOC \\o "1-6" \\h \\z \\u'
-    fld_separate = OxmlElement("w:fldChar")
-    fld_separate.set(qn("w:fldCharType"), "separate")
-    fld_end = OxmlElement("w:fldChar")
-    fld_end.set(qn("w:fldCharType"), "end")
-    r = run._r
-    r.append(fld_begin)
-    r.append(instr)
-    r.append(fld_separate)
-    r.append(fld_end)
 
 
 def _render_reference_docx(
@@ -124,30 +93,43 @@ def _render_reference_docx(
     papers: list[dict],
     out_path: Path,
 ) -> None:
-    """Baut aus echter Pipeline-Ausgabe ein minimales, aber echtes .docx.
+    """Baut die Payload-Form auf und uebergibt sie an render_docx.py.
 
-    Testeigene Rendering-Referenz, kein Ersatz fuer document-skills:docx
-    (siehe Moduldocstring). Bildet nur die im Review bemaengelten
-    strukturellen Pflichten ab: echte Heading-Formatvorlagen, TOC-Feld,
-    aufgeloester Fliesstext, ein Literaturverzeichnis-Eintrag pro Paper.
+    `papers` -> minimale Literatureintraege, wie sie die Stilstufe des Agenten
+    (Schritt 4 in commands/word.md) in die Payload zurueckschreibt. Die
+    Formatierung ist hier absichtlich trivial: geprueft wird, dass der Renderer
+    sie uebernimmt, nicht wie sie aussieht (Stilregeln gehoeren zu
+    citation-extraction, nicht in diesen Test).
     """
-    document = docx.Document()
-    document.add_heading("Inhaltsverzeichnis", level=1)
-    _add_toc_field(document)
+    from render_docx import render_docx
 
-    document.add_heading(chapter_heading, level=1)
-    document.add_paragraph(body_text)
-    document.add_heading("Unterkapitel-Ebene", level=6)  # Grenzfall HEADING_6
-
-    document.add_heading("Literaturverzeichnis", level=1)
+    bibliography = []
     for paper in papers:
         csl = json.loads(paper.get("csl_json", "{}"))
         title = csl.get("title", paper.get("paper_id", "?"))
         authors = csl.get("author", [])
         family = authors[0].get("family") if authors else paper.get("paper_id", "?")
-        document.add_paragraph(f"{family}: {title}")
+        bibliography.append(f"{family}: {title}")
 
-    document.save(str(out_path))
+    render_docx(
+        {
+            "chapters": [
+                {
+                    "source": "1-kapitel.md",
+                    "path": "kapitel/1-kapitel.md",
+                    "body": (
+                        f"# {chapter_heading}\n\n{body_text}\n\n"
+                        "###### Unterkapitel-Ebene\n\nGrenzfall HEADING_6.\n"
+                    ),
+                }
+            ],
+            "papers": papers,
+            "bibliography": bibliography,
+            "style_file": "apa.md",
+            "context": {"Thema": "Testarbeit"},
+        },
+        out_path,
+    )
 
 
 # ---------------------------------------------------------------------------

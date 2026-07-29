@@ -92,16 +92,32 @@ Kapitel) unverändert weitergeben — kein Stacktrace. Fehlt bei einem Kapitel d
 Kernaussage (`core_statement == ""`, das Skript meldet das auf stderr), den User
 um eine Kernaussage bitten statt eine zu erfinden.
 
-### Schritt 4 — `document-skills:pptx` aufrufen
+### Schritt 4 — Foliensatz rendern
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts/render_pptx.py" \
+  --payload "$PAYLOAD" --output "$OUTPUT"
+```
 
 Ein Slide je Eintrag aus `slides` in Schritt 3: `title` als Folientitel,
 `core_statement` als zentrale Aussage. Bei `rahmen` = `kolloquium`/`konferenz`
-zusätzlich Deckblatt- und Agenda-Folie voranstellen. Zielpfad ist `OUTPUT`.
+stellt das Skript Deckblatt- und Agenda-Folie voran. Kapitel ohne Kernaussage
+ergeben eine Folie mit leerem Rumpf + Meldung auf stderr — nachfragen statt
+eine Kernaussage erfinden.
 
-### Schritt 5 — Ergebnis zeigen
+Bei Exit-Code ≠ 0 die `FEHLER:`-Meldung unverändert weitergeben.
+
+### Schritt 5 — Optionale Layout-Verfeinerung
+
+Bei Bedarf `document-skills:pptx` auf das **erzeugte** Deck anwenden
+(Designvorlage, Bildfolien). Optional — das Ergebnis aus Schritt 4 ist bereits
+ein vollständiger, in PowerPoint öffenbarer Foliensatz.
+
+### Schritt 6 — Ergebnis zeigen
 
 Pfad der erzeugten `.pptx`, Anzahl Folien.
 
 ## Abhängigkeiten
 
+- `python-pptx` (Renderer aus Schritt 4, Teil der Plugin-Installation)
 - `document-skills:pptx` (siehe „Slide-Backend" oben)
