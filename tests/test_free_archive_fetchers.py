@@ -355,14 +355,21 @@ class TestEvalCases:
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
         assert isinstance(data, list), "evals.json muss ein JSON-Array sein"
 
-    def test_evals_has_five_cases(self):
+    def test_evals_has_six_cases(self):
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
-        assert len(data) == 5, f"Erwartet 5 Eval-Cases, gefunden: {len(data)}"
+        assert len(data) == 6, f"Erwartet 6 Eval-Cases, gefunden: {len(data)}"
 
     def test_eval_ids_are_correct(self):
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
         ids = [c["id"] for c in data]
-        assert ids == ["far-01", "far-02", "far-03", "far-04", "far-05"], f"Falsche IDs: {ids}"
+        assert ids == [
+            "far-01",
+            "far-02",
+            "far-03",
+            "far-04",
+            "far-05",
+            "far-06",
+        ], f"Falsche IDs: {ids}"
 
     def test_each_eval_has_required_fields(self):
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
@@ -573,9 +580,9 @@ class TestLiveVerificationRecord:
             f"{agent_name}: sha256 sieht nicht wie eine Pruefsumme aus"
         )
 
-    def test_blocked_run_does_not_pretend_to_have_a_file(self):
+    def test_rate_limited_run_does_not_pretend_to_have_a_file(self):
         run = self.runs["hathitrust-fetcher"]
-        assert run["verdict"] == "blocked_by_platform"
+        assert run["verdict"] == "rate_limited"
         assert run["artifact"]["sha256"] is None
         assert run["artifact"]["bytes"] is None
         assert run["observations"], "Eine Absage ohne Beobachtungen ist kein Befund"
@@ -625,11 +632,21 @@ class TestEvalCasesDoNotAcceptMetadataOnlyAsEquivalent:
         assert expected["pdf_min_bytes"] >= 10 * 1024
         assert expected["edition"], f"{case_id}: AC4 verlangt die Ausgabe des Digitalisats"
 
-    def test_hathitrust_case_encodes_the_observed_block(self):
-        case = next(c for c in self.cases if c["id"] == "far-01")
-        assert case["expected"]["status"] == "pickup_required"
-        assert case["expected"]["reason"] == (
-            "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"
+    def test_hathitrust_rate_limit_case_is_separate_from_the_ac1_case(self):
+        """far-01 verlangt die Beschaffung, far-06 beschreibt den 429-Ausgang.
+
+        Zusammengelegt waere das Rate-Limit wieder der Sollzustand — der Fehler,
+        den die Fix-Runde zu PR #498 behoben hat.
+        """
+        ac1 = next(c for c in self.cases if c["id"] == "far-01")
+        rate_limited = next(c for c in self.cases if c["id"] == "far-06")
+        assert ac1["expected"]["status"] == "success"
+        assert rate_limited["expected"]["status"] == "pickup_required"
+        assert rate_limited["expected"]["reason"] == (
+            "Zugriffsstufe: Vollansicht, Download vom Rate-Limit abgewiesen (HTTP 429)"
+        )
+        assert rate_limited["expected"]["min_download_attempts"] >= 2, (
+            "Ein einziger Versuch fuehrt bei einem Rate-Limit nie zu einer Datei"
         )
 
     def test_negative_controls_exist_for_restricted_access(self):

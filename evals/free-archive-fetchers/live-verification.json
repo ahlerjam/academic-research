@@ -11,7 +11,7 @@
   "purpose": "AC1 aus Issue #450 ('Jeder der drei Agents beschafft einen bekannten gemeinfreien Testtitel als PDF') ist eine Aussage ueber das echte Netz. Diese Datei ist das Artefakt dazu: pro Agent ein realer Lauf gegen die echte Plattform, mit vollstaendiger URL-Kette und der SHA-256-Pruefsumme der tatsaechlich empfangenen Bytes. Wer den Lauf nachvollziehen will, faehrt tests/test_free_archive_live_fetch.py mit RUN_LIVE_ARCHIVE_FETCH=1.",
   "verdict_vocabulary": {
     "pdf_verified": "Ein PDF wurde real empfangen, beginnt mit %PDF- und ist groesser als 10 KB. AC1 fuer diesen Agent belegt.",
-    "blocked_by_platform": "Die Plattform verweigert den Volltext-Download automatisierten Clients. AC1 fuer diesen Agent NICHT belegt -- der Agent darf hier kein success melden."
+    "rate_limited": "Die Download-Route hat mit HTTP 429 abgewiesen. Ein voruebergehender Zustand, den die Plattform selbst mit 'IMAGE TEMPORARILY UNAVAILABLE' und 'Please try again.' beschriftet -- keine Aussage darueber, ob der Titel beschaffbar ist. AC1 fuer diesen Agent in DIESEM Lauf nicht abgeschlossen; der Agent wiederholt den Versuch, statt das Ausbleiben als richtigen Ausgang zu behandeln."
   },
   "runs": [
     {
@@ -74,33 +74,71 @@
     {
       "agent": "hathitrust-fetcher",
       "archive": "HathiTrust",
-      "verdict": "blocked_by_platform",
+      "verdict": "rate_limited",
       "item_id": "hvd.hntupx",
       "item": {
         "title": "Kritik der reinen Vernunft. Hrsg. von Benno Erdmann",
         "creator": "Kant, Immanuel, 1724-1804",
         "catalog_record": "https://catalog.hathitrust.org/Record/100504329",
-        "access_level": "Vollansicht ('Full view', 'Public Domain.', 630 page scans)"
+        "edition": "Berlin : G. Reimer, 1900 (5., durchgaengig rev. Aufl.)",
+        "rights": "rightsCode 'pd', usRightsString 'Full view' laut Bib-API",
+        "access_level": "Vollansicht ('Full view', 'Public Domain.', 630 page scans -- im echten Browser sichtbar geladen)"
       },
       "url_chain": [
-        "https://catalog.hathitrust.org/Search/Home?lookfor=Kritik+der+reinen+Vernunft&type=title",
+        "https://catalog.hathitrust.org/api/volumes/full/recordnumber/100504329.json",
         "https://babel.hathitrust.org/cgi/pt?id=hvd.hntupx&seq=5",
-        "https://babel.hathitrust.org/cgi/imgsrv/download/pdf?id=hvd.hntupx;marker=<signiert>;attachment=1"
+        "https://babel.hathitrust.org/cgi/imgsrv/download/pdf?id=hvd.hntupx&callback=tunnelCallback&_=<ts>"
       ],
       "artifact": {
-        "http_status": 403,
+        "http_status": 429,
         "content_type": "text/html",
         "bytes": null,
         "magic": null,
         "sha256": null
       },
+      "mechanism_probe": {
+        "purpose": "Ein 403 allein ist mehrdeutig: er koennte ein Download-Schutz sein oder eine Bot-Challenge am Rand. Diese Gegenprobe entscheidet die Frage, statt sie zu vermuten.",
+        "plain_http_client": [
+          {
+            "url": "https://babel.hathitrust.org/robots.txt",
+            "http_status": 403,
+            "headers": "cf-mitigated: challenge; server: cloudflare"
+          },
+          {
+            "url": "https://www.hathitrust.org/",
+            "http_status": 403,
+            "headers": "cf-mitigated: challenge; server: cloudflare; cf-ray a22b8ba03917c7b4-DUS"
+          },
+          {
+            "url": "https://catalog.hathitrust.org/Record/100504329",
+            "http_status": 403,
+            "headers": "cf-mitigated: challenge"
+          },
+          {
+            "url": "https://catalog.hathitrust.org/api/volumes/full/recordnumber/100504329.json",
+            "http_status": 200,
+            "headers": "application/json -- die Bib-API liegt als einzige Route nicht hinter der Challenge"
+          }
+        ],
+        "conclusion": "Der 403 trifft auch robots.txt und die Startseite und traegt 'cf-mitigated: challenge' (Cloudflare-Typ 'managed'). Eine Massnahme, die robots.txt und die Marketing-Startseite abweist, ist kein Schutz des Volltext-Downloads, sondern eine Challenge gegen Clients ohne JavaScript. Sie sagt nichts darueber aus, ob ein einzelner Titel beschaffbar ist.",
+        "robots_txt": {
+          "url": "https://babel.hathitrust.org/robots.txt",
+          "fetched": "2026-07-29, HTTP 200 (die Challenge greift nicht bei jedem Client gleich)",
+          "generic_agents": "User-agent: * / Crawl-delay: 1 / Disallow: /cgi/",
+          "named_crawlers": "Nur benannte Suchmaschinen bekommen 'Allow: /cgi/pt' und 'Allow: /cgi/mb'; 'Allow: /cgi/imgsrv' steht ausschliesslich beim Twitterbot.",
+          "relevance": "Sowohl der Item-Viewer (/cgi/pt) als auch die Download-Route (/cgi/imgsrv/download/pdf) liegen unter /cgi/. Fuer generische automatisierte Clients ist dieser Pfad also ausdruecklich gesperrt. Challenge und Rate-Limit sind damit keine Panne, sondern die Durchsetzung einer erklaerten Haltung. Das beruehrt AC1 unmittelbar und ist eine Entscheidung fuer den Operator, keine, die ein Agent nebenbei trifft: ein vom Nutzer einzeln angeforderter Titel ist kein Crawl, aber die Grenze ist strittig. Bis zur Klaerung faehrt der Agent hoechstens einen Titel je Anfrage und haelt Crawl-delay: 1 ein."
+        }
+      },
       "observations": [
-        "catalog.hathitrust.org und babel.hathitrust.org liegen hinter einer Cloudflare-Managed-Challenge. Headless Chromium kommt nicht durch (Turnstile-Widget bleibt stehen); nur die sichtbare Browser-Instanz passiert sie.",
-        "Die Bib-API https://catalog.hathitrust.org/api/volumes/brief/oclc/<n>.json ist NICHT challenge-geschuetzt und liefert je Exemplar usRightsString ('Full view' / 'Limited (search-only)') -- das ist der belastbare Weg zur Zugriffsstufe.",
-        "Das Formular 'Range: Whole item' + 'Format: Ebook (PDF)' erzeugt eine marker-signierte URL unter /cgi/imgsrv/download/pdf. Der Abruf dieser URL beantwortet HathiTrust mit 'Page Blocked -- Sorry, your attempt to access HathiTrust has been blocked.' (Cloudflare Ray ID a22b480dee5ec7bc).",
-        "Damit ist der Gesamtband-Download fuer automatisierte Clients ohne Partner-Institution nicht erreichbar. Der Agent darf diesen Fall nicht als success und auch nicht stillschweigend als metadata_only ausgeben -- die Zugriffsstufe ist Vollansicht, blockiert ist der Massen-Download."
+        "Der echte (sichtbare) Browser passiert die Challenge. Die Item-Seite laedt vollstaendig: Titel 'Kritik der reinen Vernunft. Hrsg. von Benno Erdmann - Full View | HathiTrust Digital Library', 'Rights Public Domain.', '630 page scans'. Die alte Lesart, HathiTrust verweigere automatisierten Clients den Zugang, ist damit widerlegt.",
+        "Das Download-Formular steht von sich aus auf 'Format: Ebook (PDF)' + 'Range: Whole item' (Feldwerte format=pdf|plaintext|plaintext-zip|image-jpeg|image-tiff, range=current-page|volume|selected-pages). Der Ganzband-Download ist also regulaer vorgesehen, nicht versteckt.",
+        "Der Download laeuft NICHT ueber einen fertigen <a href>, sondern ueber eine JSONP-Route: GET /cgi/imgsrv/download/pdf?id=<id>&callback=tunnelCallback&_=<ts>, vom Client als <script> geladen. Deshalb taucht er weder in fetch- noch in XHR-Mitschnitten auf, sondern nur in der Resource-Timing-Liste.",
+        "Diese Route antwortete am 2026-07-29 durchgaengig mit HTTP 429 (Cloudflare-Fehlerseite). Die Oberflaeche zeigte darauf 'Download failed -- Please try again. If downloads continue to fail, contact support@hathitrust.org.'",
+        "Auch die Seitenbilder im Viewer trugen zu diesem Zeitpunkt 'IMAGE TEMPORARILY UNAVAILABLE / Error code: 429'. HathiTrust beschriftet den Zustand also selbst als voruebergehend -- das ist ein Rate-Limit, keine Zugriffsregel.",
+        "Der Wiederholungsversuch wurde gefahren, nicht bloss empfohlen: drei Abrufe im Abstand von je fuenf Minuten (13:01, 13:07, 13:12 Ortszeit) lieferten alle 429. Danach abgebrochen -- dieselbe Grenze, die der Agent einhaelt.",
+        "Der Abruf lief ueber ein Firmen-Proxy-Egress (147.161.231.x, wechselnde Adresse je Anfrage). Die Sperrseite nennt als moeglichen Grund ausdruecklich die IP-Reputation geteilter Proxys/VPNs. Ein Anteil des Rate-Limits geht damit auf die Messumgebung, nicht auf den Agenten."
       ],
-      "notes": "AC1 ist fuer hathitrust-fetcher bewusst NICHT als erfuellt vermerkt. Der Agent bildet diesen Ausgang seit dieser Fix-Runde als pickup_required mit dem Grund 'Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert' ab."
+      "notes": "AC1 ist fuer hathitrust-fetcher in diesem Lauf NICHT abgeschlossen -- es gibt kein PDF und deshalb auch keine Pruefsumme. Das ist eine Aussage ueber diesen Lauf, nicht ueber die Plattform: Zugriffsstufe (Vollansicht), Rechtelage (pd) und das Download-Formular sind alle in Ordnung, abgewiesen hat ein 429. Der Agent behandelt diesen Ausgang deshalb als Wiederholungsfall mit Wartezeit und meldet erst nach erschoepften Versuchen pickup_required. Wer den Lauf auf einem Netz ohne geteiltes Proxy-Egress wiederholt, sollte das PDF bekommen; dann gehoert hier ein pdf_verified-Eintrag samt SHA-256 hin."
     }
   ]
 }

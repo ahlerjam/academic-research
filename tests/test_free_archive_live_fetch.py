@@ -21,10 +21,12 @@ Abdeckung und ihre Grenzen:
   server-gerenderte Teil (Rechtehinweis-Weiche ``xdfz`` und der daraus erzeugte
   PDF-Link) ist genau der Abschnitt, an dem der Ablauf haengt, und genau der
   wird hier gefahren.
-* **HathiTrust** — nicht abgedeckt, mit Ansage. Katalog und Viewer liegen hinter
-  einer Cloudflare-Managed-Challenge, der Gesamtband-Download wird von der
-  Plattform geblockt. Der Beleg dafuer steht als ``blocked_by_platform`` in der
-  Aufzeichnung; ein Test, der das gruen meldet, waere Selbstbetrug.
+* **HathiTrust** — kein PDF, aber die Diagnose ist nachfahrbar. Am 2026-07-29
+  lieferte die Download-Route durchgaengig HTTP 429. Ein Test, der daraus ein
+  gruenes ``success`` machte, waere Selbstbetrug. Was hier stattdessen geprueft
+  wird, ist die Gegenprobe, die den 403 der Challenge vom 429 des Rate-Limits
+  trennt: die Challenge trifft auch ``robots.txt`` und die Startseite und kann
+  deshalb kein Schutz des Volltext-Downloads sein.
 """
 
 from __future__ import annotations
@@ -190,8 +192,47 @@ class TestMdzLive:
         assert _normalized_pdf_digest(payload) == artifact["sha256_normalized"]
 
 
-class TestHathiTrustLiveIsHonestlyOutOfReach:
-    def test_record_states_blocked_rather_than_claiming_success(self):
+class TestHathiTrustLiveDiagnosis:
+    """Kein PDF — aber die Deutung des Fehlschlags ist ueberpruefbar.
+
+    Der springende Punkt: ein 403 von HathiTrust ist mehrdeutig. Die vorige
+    Runde las ihn als Download-Schutz gegen automatisierte Clients. Diese
+    Gegenprobe schliesst das aus.
+    """
+
+    def test_record_states_a_rate_limit_rather_than_claiming_success(self):
         run = _run("hathitrust-fetcher")
-        assert run["verdict"] == "blocked_by_platform"
+        assert run["verdict"] == "rate_limited"
         assert run["artifact"]["sha256"] is None
+        assert run["artifact"]["http_status"] == 429
+
+    def test_robots_txt_still_disallows_cgi_for_generic_agents(self):
+        """Die Zeile, an der die Bewertung von AC1 haengt.
+
+        Ist sie eines Tages weg, aendert sich die Lage — dann darf (und soll)
+        dieser Test rot werden, damit jemand hinsieht. Ist ``robots.txt`` gerade
+        hinter der Challenge, wird nichts behauptet.
+        """
+        payload = _open("https://babel.hathitrust.org/robots.txt")
+        if payload is None or payload[0] != "text/plain":
+            pytest.skip("robots.txt liegt gerade hinter der Cloudflare-Challenge")
+        body = payload[1].decode("utf-8", "replace")
+        generic = body.split("User-agent: *")[-1]
+        assert "Disallow: /cgi/" in generic, (
+            "robots.txt sperrt /cgi/ nicht mehr fuer generische Clients — die "
+            "Bewertung von AC1 fuer HathiTrust muss neu getroffen werden"
+        )
+        assert "Crawl-delay: 1" in generic
+
+    def test_bib_api_stays_reachable_and_reports_the_access_level(self):
+        """Die Zugriffsstufe ist auch ohne Browser belastbar zu bekommen."""
+        payload = _open(
+            "https://catalog.hathitrust.org/api/volumes/full/recordnumber/100504329.json"
+        )
+        assert payload is not None, "Bib-API nicht erreichbar"
+        record = json.loads(payload[1].decode("utf-8"))
+        item = next(i for i in record["items"] if i["htid"] == "hvd.hntupx")
+        assert item["usRightsString"] == "Full view"
+        assert item["rightsCode"] == "pd", (
+            "Das belegte Exemplar muss gemeinfrei sein — sonst traegt der AC1-Case nicht"
+        )

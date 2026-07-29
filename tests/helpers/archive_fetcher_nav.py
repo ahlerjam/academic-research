@@ -75,9 +75,19 @@ ACCESS_LEVELS = {
     "mdz": ("Vollansicht", "nur Metadaten"),
 }
 
-#: HathiTrust-Sonderfall: Zugriffsstufe Vollansicht, aber der Gesamtband-Download
-#: wird von der Plattform geblockt (live belegt, siehe live-verification.json).
-HATHITRUST_BULK_BLOCK_REASON = f"{ACCESS_LEVEL_PREFIX} Vollansicht, Gesamtband-Download blockiert"
+#: HathiTrust-Sonderfall: Zugriffsstufe Vollansicht, aber die Download-Route
+#: antwortet mit einem Rate-Limit (HTTP 429). Live belegt am 2026-07-29, siehe
+#: ``live-verification.json``. Bewusst NICHT als „Sperre" formuliert: 429 ist ein
+#: voruebergehender Zustand, den HathiTrust selbst mit „IMAGE TEMPORARILY
+#: UNAVAILABLE" und „Please try again." beschriftet.
+HATHITRUST_RATE_LIMIT_REASON = (
+    f"{ACCESS_LEVEL_PREFIX} Vollansicht, Download vom Rate-Limit abgewiesen (HTTP 429)"
+)
+
+#: Wie oft der Agent es erneut versuchen soll, bevor er aufgibt. Ein einziger
+#: Versuch fuehrt bei einem Rate-Limit garantiert nie zu einer Datei — genau
+#: dieser Fehler stand vor der Fix-Runde zu PR #498 im Spiegel.
+HATHITRUST_DOWNLOAD_ATTEMPTS = 3
 
 # ---------------------------------------------------------------------------
 # DOM-Marker (live erhoben am 2026-07-29)
@@ -93,7 +103,15 @@ CAPTCHA_SIGNALS = (
 
 HATHITRUST_FULL_VIEW_SIGNALS = ("Full view", "Public Domain.")
 HATHITRUST_LIMITED_SIGNALS = ("Limited (search only)", "Limited (search-only)")
-HATHITRUST_BLOCK_SIGNALS = ("Page Blocked", "your attempt to access HathiTrust has been blocked")
+#: Antwortmarker der Download-Route, wenn das Rate-Limit greift. Die ersten
+#: beiden sind HathiTrusts eigene Beschriftung des 429 (live gesehen im Viewer),
+#: die letzten beiden die Cloudflare-Fehlerseite, die denselben Zustand traegt.
+HATHITRUST_RATE_LIMIT_SIGNALS = (
+    "Error code: 429",
+    "IMAGE TEMPORARILY UNAVAILABLE",
+    "Page Blocked",
+    "your attempt to access HathiTrust has been blocked",
+)
 
 INTERNETARCHIVE_BORROW_SIGNALS = ("Borrow for 14 days", "available for lending only")
 
@@ -243,12 +261,15 @@ class ArchiveFetcherNavigator:
                 reason="Vollansicht gemeldet, aber kein Gesamtband-Download-Link im Formular",
             )
 
-        # Der Abruf der signierten URL kann statt der Datei die Sperrseite liefern.
-        blocked = self._pages(target)
-        if blocked and _has(blocked, HATHITRUST_BLOCK_SIGNALS):
-            return self._result("pickup_required", url=url, reason=HATHITRUST_BULK_BLOCK_REASON)
-
-        return self._download(target, output_path, url, self._hathitrust_edition(html))
+        # Der Abruf der signierten URL kann statt der Datei die 429-Seite liefern.
+        # Ein Rate-Limit gibt nach kurzer Wartezeit wieder frei, deshalb wird hier
+        # erneut angeklopft statt sofort aufzugeben. Erst wenn alle Versuche
+        # dasselbe Signal liefern, ist es ein Befund.
+        for _attempt in range(HATHITRUST_DOWNLOAD_ATTEMPTS):
+            probe = self._pages(target)
+            if not (probe and _has(probe, HATHITRUST_RATE_LIMIT_SIGNALS)):
+                return self._download(target, output_path, url, self._hathitrust_edition(html))
+        return self._result("pickup_required", url=url, reason=HATHITRUST_RATE_LIMIT_REASON)
 
     @staticmethod
     def _hathitrust_volume_url(html: str, base_url: str) -> str | None:

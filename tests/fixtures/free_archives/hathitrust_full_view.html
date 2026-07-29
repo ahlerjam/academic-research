@@ -1,23 +1,43 @@
-<!-- Gekuerzte Uebernahme von https://babel.hathitrust.org/cgi/pt?id=hvd.hntupx&seq=5
-     (Live-Abruf 2026-07-29). Das Download-Formular ist woertlich uebernommen;
-     der marker-signierte Ziel-Link entsteht erst nach Absenden. -->
+<!-- Modell der Item-Seite https://babel.hathitrust.org/cgi/pt?id=hvd.hntupx&seq=5
+     nach abgeschlossenem PDF-Aufbau.
+
+     Provenienz, ehrlich benannt: Kopf, Zugriffsstufe und die Feldwerte des
+     Download-Formulars sind am 2026-07-29 im echten Browser erhoben (die Seite
+     laedt dort vollstaendig — „Full View", „Public Domain.", 630 page scans).
+     Der fertige, marker-signierte Link ist NICHT abgezogen, sondern modelliert:
+     der Aufbau laeuft ueber eine JSONP-Route
+     (/cgi/imgsrv/download/pdf?id=<id>&callback=tunnelCallback&_=<ts>), die an
+     diesem Tag durchgaengig mit HTTP 429 antwortete. Wie der Endzustand im DOM
+     genau aussieht, ist damit unbelegt — deshalb steht hier ein Modell und kein
+     behaupteter Live-Abzug.
+
+     Die Ausgabeangabe stammt aus dem Katalogsatz zu genau dieser Kennung
+     (catalog.hathitrust.org/api/volumes/full/recordnumber/100504329.json,
+     MARC 250/260: „5., durchgaengig rev. Aufl.", „Berlin, G. Reimer, 1900").
+     Die Bib-API ist die einzige HathiTrust-Route ohne Challenge und deshalb der
+     belastbare Bezugspunkt fuer AC4. -->
 <html lang="en">
 <head><title>Kritik der reinen Vernunft. Hrsg. von Benno Erdmann - Full View | HathiTrust Digital Library</title></head>
 <body>
   <h1>Kritik der reinen Vernunft. Hrsg. von Benno Erdmann</h1>
   <p>Kant, Immanuel, 1724-1804</p>
   <p>630 page scans</p>
-  <p>Published: Leipzig : Leopold Voss, 1878</p>
+  <p>Published: Berlin : G. Reimer, 1900</p>
+  <p>Edition: 5., durchg&auml;ngig rev. Aufl.</p>
   <p>Rights <a href="https://www.hathitrust.org/the-collection/search-access/access-use-policy/#pd">Public Domain.</a></p>
   <p>Full view</p>
   <form aria-label="Download options">
     <fieldset><legend>Format</legend>
-      <input name="format" type="radio" id="format-pdf" value="pdf"> <label for="format-pdf">Ebook (PDF)</label>
+      <input name="format" type="radio" id="format-pdf" value="pdf" checked> <label for="format-pdf">Ebook (PDF)</label>
       <input name="format" type="radio" id="format-plaintext" value="plaintext"> <label for="format-plaintext">Text (.txt)</label>
+      <input name="format" type="radio" id="format-plaintext-zip" value="plaintext-zip"> <label for="format-plaintext-zip">Text (.zip)</label>
+      <input name="format" type="radio" id="format-image-jpeg" value="image-jpeg"> <label for="format-image-jpeg">Image (JPEG)</label>
+      <input name="format" type="radio" id="format-image-tiff" value="image-tiff"> <label for="format-image-tiff">Image (TIFF)</label>
     </fieldset>
     <fieldset id="download-range"><legend>Range</legend>
       <input name="range" type="radio" id="range-current-page" value="current-page"> <label for="range-current-page">Current page scan (#5)</label>
-      <input name="range" type="radio" id="range-download-volume" value="volume"> <label for="range-download-volume">Whole item</label>
+      <input name="range" type="radio" id="range-download-volume" value="volume" checked> <label for="range-download-volume">Whole item</label>
+      <input name="range" type="radio" id="range-selected-pages" value="selected-pages"> <label for="range-selected-pages">Selected page scans</label>
     </fieldset>
     <button id="submit-download" type="button">Download</button>
   </form>

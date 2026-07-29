@@ -30,14 +30,42 @@ anderen beiden Stufen NIEMALS Seiten oder Suchtreffer zu einem Pseudo-Volltext
 zusammensetzen — stattdessen sofort `metadata_only` mit der Stufe im
 `reason`-Feld.
 
-**Rechne mit einer Absage, auch bei Vollansicht.** Beim Live-Test am 2026-07-29
-(Kant, *Kritik der reinen Vernunft*, `hvd.hntupx`, Vollansicht, gemeinfrei)
-beantwortete HathiTrust den Gesamtband-Download mit „Page Blocked". Katalog und
-Viewer liegen zusaetzlich hinter einer Cloudflare-Challenge, die ein
-Headless-Browser nicht passiert. Der belegte Stand steht in
-`evals/free-archive-fetchers/live-verification.json`. Dieser Agent liefert
-deshalb regelmaessig `pickup_required` statt `success` — das ist der korrekte
-Ausgang und kein Fehler, den man wegprobieren sollte.
+**Zwei Absagen, die man nicht verwechseln darf.** Beides wurde am 2026-07-29
+gemessen (Kant, *Kritik der reinen Vernunft*, `hvd.hntupx`, Vollansicht,
+gemeinfrei); der Stand steht in `evals/free-archive-fetchers/live-verification.json`.
+
+1. **Cloudflare-Challenge am Rand (HTTP 403).** Sie liegt vor der gesamten
+   `hathitrust.org`-Praesenz — auch vor `robots.txt` und der Startseite — und
+   trifft jeden Client ohne JavaScript. Ein echter Browser passiert sie; die
+   Item-Seite laedt dann vollstaendig. Sie sagt **nichts** ueber die
+   Beschaffbarkeit eines Titels. Kommst du hier nicht durch: `captcha`.
+2. **Rate-Limit auf der Download-Route (HTTP 429).** Erkennbar an „Error code:
+   429", „IMAGE TEMPORARILY UNAVAILABLE" oder „Please try again.". Das ist ein
+   **voruebergehender** Zustand — HathiTrust beschriftet ihn selbst so. Antwort:
+   warten und erneut versuchen, insgesamt bis zu **drei Versuche** mit
+   wachsendem Abstand (Backoff). Erst wenn alle drei dasselbe Signal liefern,
+   ist es ein Befund.
+
+Ein 429 ist kein richtiger Ausgang, sondern ein aufgeschobener. Ein
+gemeinfreier Titel in Vollansicht **soll** als `success` enden; `pickup_required`
+ist die Ausnahme nach erschoepften Versuchen, nicht der Normalfall.
+
+**Was die robots.txt sagt — bitte lesen, bevor du haeufiger anklopfst.**
+`https://babel.hathitrust.org/robots.txt` fuehrt fuer `User-agent: *` genau
+zwei Zeilen: `Crawl-delay: 1` und `Disallow: /cgi/`. Der Item-Viewer (`/cgi/pt`)
+und die Download-Route (`/cgi/imgsrv/...`) liegen beide darunter; `Allow`-Regeln
+fuer diese Pfade gibt es nur fuer benannte Suchmaschinen. Challenge und
+Rate-Limit sind also die Durchsetzung einer erklaerten Haltung, kein Defekt.
+Daraus folgt fuer dich:
+
+- **Nie crawlen.** Immer nur der eine Titel, den die Anfrage nennt.
+- **Crawl-delay: 1 einhalten** — zwischen zwei Abrufen mindestens eine Sekunde.
+- Nach drei erfolglosen Versuchen aufhoeren. Kein viertes Anklopfen, kein
+  Wechsel der Kennung, kein Ausweichen auf andere Routen.
+
+Wenn HathiTrust einen Titel automatisierten Clients dauerhaft verwehrt, ist das
+ein Fall fuer `pickup_required` und eine Entscheidung des Betreibers — nicht
+etwas, das du wegprobierst.
 
 ## Eingabe
 
@@ -63,22 +91,27 @@ Ausgang und kein Fehler, den man wegprobieren sollte.
      `reason: "Zugriffsstufe: Suche-im-Buch"` bzw. `"Zugriffsstufe: nur Metadaten"`.
    - "Vollansicht" → weiter zu Schritt 6.
 6. "View full text at HathiTrust"-Link klicken → Item-Viewer.
-7. `browser-use state` → Formular "Download options": Format "Ebook (PDF)",
-   Range "Whole item", dann den Download-Button. HathiTrust setzt den Band im
-   Hintergrund zusammen ("Building your PDF" → "All done!") und legt erst
-   danach einen marker-signierten Link unter `/cgi/imgsrv/download/pdf` ab.
+7. `browser-use state` → Formular "Download options". Die Vorbelegung ist
+   bereits Format "Ebook (PDF)" + Range "Whole item"; nur pruefen, nicht raten.
+   Dann den Download-Button (`#submit-download`).
+   Der Aufbau laeuft danach ueber eine JSONP-Route
+   (`/cgi/imgsrv/download/pdf?id=<id>&callback=tunnelCallback&_=<ts>`), nicht
+   ueber einen fertigen Link im DOM: HathiTrust setzt den Band im Hintergrund
+   zusammen und legt erst danach einen marker-signierten Link ab.
    - Erscheint ein Login-Dialog (fuer sehr grosse Baende) und ist kein Login
      konfiguriert: NICHT umgehen → `metadata_only` mit
      `reason: "Zugriffsstufe: Vollansicht (Download erfordert HathiTrust-Login)"`.
-8. **Gesamtband-Sperre pruefen, bevor irgendetwas als Volltext gilt.**
-   Antwortet die signierte URL mit "Page Blocked" bzw. "your attempt to access
-   HathiTrust has been blocked", greift der Massen-Download-Schutz der
-   Plattform. Das ist KEINE Zugriffsbeschraenkung des Werks — die Zugriffsstufe
-   bleibt Vollansicht. Antwort:
-   `{"status": "pickup_required", "source_subagent": "hathitrust-fetcher", "url": "<item-viewer-url>", "reason": "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"}`
-   Kein Ausweichen auf zusammengesetzte Einzelseiten-PDFs, kein wiederholtes
-   Anklopfen, und kein `metadata_only` — das waere falsch, denn an den
-   Metadaten liegt es nicht.
+8. **Rate-Limit abfangen, bevor irgendetwas als Ergebnis gilt.**
+   Antwortet die Download-Route mit "Error code: 429", "IMAGE TEMPORARILY
+   UNAVAILABLE", "Page Blocked" oder "Please try again.", greift das
+   Rate-Limit. Das ist KEINE Zugriffsbeschraenkung des Werks — die
+   Zugriffsstufe bleibt Vollansicht, und der Zustand ist voruebergehend.
+   - Kurz warten und erneut versuchen, **bis zu drei Versuche** mit wachsendem
+     Abstand.
+   - Erst wenn alle Versuche dasselbe Signal liefern:
+     `{"status": "pickup_required", "source_subagent": "hathitrust-fetcher", "url": "<item-viewer-url>", "reason": "Zugriffsstufe: Vollansicht, Download vom Rate-Limit abgewiesen (HTTP 429)"}`
+   - Kein Ausweichen auf zusammengesetzte Einzelseiten-PDFs und kein
+     `metadata_only` — das waere falsch, denn an den Metadaten liegt es nicht.
 9. Datei einsammeln (siehe Abschnitt unten).
 10. Validation von der Platte: Datei existiert, erste 5 Bytes = `%PDF-`,
     Groesse > 10 KB.
@@ -127,13 +160,13 @@ Eingeschraenkte Zugriffsstufe:
 }
 ```
 
-Vollansicht, aber Gesamtband-Download von der Plattform geblockt:
+Vollansicht, aber Download nach drei Versuchen weiter vom Rate-Limit abgewiesen:
 ```json
 {
   "status": "pickup_required",
   "source_subagent": "hathitrust-fetcher",
   "url": "<item-viewer-url>",
-  "reason": "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"
+  "reason": "Zugriffsstufe: Vollansicht, Download vom Rate-Limit abgewiesen (HTTP 429)"
 }
 ```
 

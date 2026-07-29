@@ -25,7 +25,8 @@ import pytest
 
 from tests.helpers.archive_fetcher_nav import (
     ACCESS_LEVEL_PREFIX,
-    HATHITRUST_BULK_BLOCK_REASON,
+    HATHITRUST_DOWNLOAD_ATTEMPTS,
+    HATHITRUST_RATE_LIMIT_REASON,
     MIN_PDF_BYTES,
     ArchiveFetcherNavigator,
 )
@@ -118,11 +119,12 @@ class TestPdfActuallyFetched:
         assert result["edition"] == "Stuttgart : J. G. Cotta 1833"
 
     def test_hathitrust_writes_and_verifies_pdf_when_platform_serves_it(self, tmp_path, pdf_bytes):
-        """Der Weg selbst traegt — geblockt wird er von HathiTrust, nicht vom Agenten.
+        """Der Weg selbst traegt: liefert die signierte URL die Datei, gibt es ein PDF.
 
-        Deshalb wird hier der Fall geprueft, dass die signierte URL die Datei
-        liefert. Der real beobachtete Ausgang (Sperrseite) steht in
-        :class:`TestHathiTrustBulkDownloadIsBlocked`.
+        Genau das ist der Sollzustand fuer einen gemeinfreien Titel in
+        Vollansicht (AC1). Was am 2026-07-29 dazwischenkam, war ein Rate-Limit
+        auf der Download-Route, kein Fehler des Weges — siehe
+        :class:`TestHathiTrustDownloadIsRateLimited`.
         """
         routes = {
             "/cgi/pt": (HTML_TYPE, _fixture("hathitrust_full_view.html").encode("utf-8")),
@@ -142,7 +144,9 @@ class TestPdfActuallyFetched:
         assert os.path.isfile(target)
         with open(target, "rb") as fh:
             assert fh.read() == pdf_bytes
-        assert result["edition"] == "Leipzig : Leopold Voss, 1878"
+        # AC4: die Ausgabe stammt aus dem Katalogsatz des Digitalisats
+        # (Bib-API zu hvd.hntupx, MARC 260), nicht aus der Eingabe.
+        assert result["edition"] == "Berlin : G. Reimer, 1900"
 
 
 def _mdz_routes(pdf_bytes: bytes) -> dict:
@@ -214,21 +218,22 @@ class TestAccessLevelInsteadOfPartialFulltext:
         assert not os.path.exists(target)
 
 
-class TestHathiTrustBulkDownloadIsBlocked:
-    """Der live beobachtete Ausgang: Vollansicht, aber Gesamtband-Download gesperrt.
+class TestHathiTrustDownloadIsRateLimited:
+    """Der live beobachtete Ausgang: Vollansicht, aber HTTP 429 auf der Download-Route.
 
-    Belegt am 2026-07-29 (HTTP 403, „Page Blocked", Cloudflare Ray ID
-    a22b480dee5ec7bc) — siehe ``evals/free-archive-fetchers/live-verification.json``.
-    Der Agent darf daraus weder ``success`` noch ein stilles ``metadata_only``
-    machen: die Zugriffsstufe ist Vollansicht, blockiert ist der Massen-Download.
+    Gemessen am 2026-07-29 — siehe
+    ``evals/free-archive-fetchers/live-verification.json``. Der Agent darf daraus
+    weder ``success`` noch ein stilles ``metadata_only`` machen: die
+    Zugriffsstufe ist Vollansicht, abgewiesen hat ein Rate-Limit. Er darf aber
+    auch nicht beim ersten Signal aufgeben — 429 ist voruebergehend.
     """
 
-    def test_block_page_yields_pickup_required_with_named_reason(self, tmp_path):
+    def test_persistent_rate_limit_yields_pickup_required_with_named_reason(self, tmp_path):
         routes = {
             "/cgi/pt": (HTML_TYPE, _fixture("hathitrust_full_view.html").encode("utf-8")),
             "/cgi/imgsrv/download/pdf": (
                 HTML_TYPE,
-                _fixture("hathitrust_bulk_blocked.html").encode("utf-8"),
+                _fixture("hathitrust_rate_limited.html").encode("utf-8"),
             ),
         }
         target = str(tmp_path / "kant.pdf")
@@ -242,9 +247,41 @@ class TestHathiTrustBulkDownloadIsBlocked:
             result = nav.fetch(origin.url("/cgi/pt?id=hvd.hntupx&seq=5"), target)
 
         assert result["status"] == "pickup_required", result
-        assert result["reason"] == HATHITRUST_BULK_BLOCK_REASON
+        assert result["reason"] == HATHITRUST_RATE_LIMIT_REASON
         assert "pdf_path" not in result
         assert not os.path.exists(target)
+
+    def test_rate_limit_is_retried_before_it_counts_as_a_finding(self, tmp_path, pdf_bytes):
+        """Ein Rate-Limit, das zwischendurch freigibt, endet trotzdem im PDF.
+
+        Ohne Wiederholung waere der erste 429 das Ende — und AC1 fuer HathiTrust
+        haette nie eine Chance.
+        """
+        blocked = _fixture("hathitrust_rate_limited.html")
+        item = _fixture("hathitrust_full_view.html")
+        seen: list[str] = []
+
+        def pages(url: str) -> str:
+            if "/cgi/pt" in url:
+                return item
+            seen.append(url)
+            return blocked if len(seen) < HATHITRUST_DOWNLOAD_ATTEMPTS else "<html>ok</html>"
+
+        target = str(tmp_path / "kant.pdf")
+        nav = ArchiveFetcherNavigator(
+            "hathitrust",
+            pages=pages,
+            downloads=lambda url: pdf_bytes,
+            downloads_dir=str(tmp_path / "downloads"),
+        )
+        result = nav.fetch("https://babel.hathitrust.org/cgi/pt?id=hvd.hntupx&seq=5", target)
+
+        assert result["status"] == "success", result
+        assert len(seen) == HATHITRUST_DOWNLOAD_ATTEMPTS
+        with open(target, "rb") as fh:
+            assert fh.read() == pdf_bytes
+        # AC4: die Ausgabe stammt aus dem Katalogsatz des Digitalisats.
+        assert result["edition"] == "Berlin : G. Reimer, 1900"
 
 
 # ─── Die Verifikation muss auch wirklich aussortieren ────────────────────────

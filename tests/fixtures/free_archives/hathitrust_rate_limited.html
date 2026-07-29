@@ -1,0 +1,23 @@
+<!-- Antwort der Download-Route, wenn das Rate-Limit greift.
+     Erhoben am 2026-07-29 gegen
+     /cgi/imgsrv/download/pdf?id=hvd.hntupx&callback=tunnelCallback&_=<ts>
+     -- HTTP 429, Cloudflare-Fehlerseite mit HathiTrusts eigener Beschriftung.
+
+     Wichtig fuer die Auswertung: das ist KEINE Zugriffsbeschraenkung des Werks
+     (die Zugriffsstufe bleibt Vollansicht) und auch kein Massen-Download-Schutz.
+     Die Seite nennt ihren Grund selbst -- IP-Reputation, geteilte Proxys -- und
+     der Viewer beschriftet denselben Zustand als "IMAGE TEMPORARILY
+     UNAVAILABLE / Error code: 429". Voruebergehend, also ein Wiederholungsfall.
+     Vgl. evals/free-archive-fetchers/live-verification.json#runs[hathitrust-fetcher]. -->
+<html lang="en">
+<head><title>Error - Blocked from HathiTrust</title></head>
+<body>
+  <h1>Page Blocked</h1>
+  <p>Error code: 429</p>
+  <p>Sorry, your attempt to access HathiTrust has been blocked.</p>
+  <p>Why did HathiTrust block my access to this web page?</p>
+  <p>You may have been blocked due to one of several possible reasons: Because of your IP address' reputation or location. Some data you submitted may have been flagged as suspicious.</p>
+  <p>If accessing HathiTrust through a proxy or VPN: There may have been abusive activity from others using the same proxy server or VPN.</p>
+  <p>You may be able to access the page by using a different browser or device, or by trying again later.</p>
+</body>
+</html>

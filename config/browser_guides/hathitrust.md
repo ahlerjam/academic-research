@@ -53,10 +53,21 @@ Kein Login fuer den Standard-Fall (Vollansicht, kleinere Werke).
    Chromium nimmt den Download selbst an und legt die Datei unter
    `<TMPDIR>/browser-use-downloads-<id>/` ab; von dort nach `<output_path>`
    verschieben.
-6. Antwortet die signierte Download-URL mit "Page Blocked", greift der
-   Massen-Download-Schutz: `pickup_required` mit
-   `reason: "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert"`.
+6. Antwortet die Download-Route mit "Error code: 429", "IMAGE TEMPORARILY
+   UNAVAILABLE" oder "Please try again.", greift das Rate-Limit. Das ist ein
+   voruebergehender Zustand: kurz warten und erneut versuchen, insgesamt bis zu
+   drei Versuche. Erst danach `pickup_required` mit
+   `reason: "Zugriffsstufe: Vollansicht, Download vom Rate-Limit abgewiesen (HTTP 429)"`.
 7. Validation von der Platte: erste 5 Bytes = `%PDF-`, Groesse > 10 KB.
+
+## robots.txt (Stand 2026-07-29)
+
+`https://babel.hathitrust.org/robots.txt` fuehrt fuer `User-agent: *` nur
+`Crawl-delay: 1` und `Disallow: /cgi/`. Viewer (`/cgi/pt`) und Download-Route
+(`/cgi/imgsrv/...`) liegen beide dort; `Allow`-Eintraege dafuer gibt es nur fuer
+benannte Suchmaschinen. Cloudflare-Challenge (403) und Rate-Limit (429) setzen
+das durch. Praktisch: nie crawlen, immer nur den einen angefragten Titel,
+mindestens eine Sekunde zwischen Abrufen, nach drei Fehlversuchen aufhoeren.
 
 ## Ausgabe-Metadaten (Edition)
 

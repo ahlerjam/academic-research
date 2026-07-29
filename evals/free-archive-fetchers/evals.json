@@ -1,7 +1,7 @@
 [
   {
     "id": "far-01",
-    "description": "HathiTrust-Fetcher: gemeinfreier Klassiker in Vollansicht — der Gesamtband-Download wird von der Plattform geblockt, erwartet pickup_required mit benannter Sperre",
+    "description": "HathiTrust-Fetcher: gemeinfreier Klassiker in Vollansicht (rightsCode pd) — erwartet success mit verifiziertem PDF und der Ausgabe des Digitalisats",
     "agent": "hathitrust-fetcher",
     "input": {
       "title": "Immanuel Kant: Kritik der reinen Vernunft (Hrsg. Benno Erdmann)",
@@ -9,13 +9,14 @@
       "output_path": "/tmp/eval-far-01.pdf"
     },
     "expected": {
-      "status": "pickup_required",
+      "status": "success",
       "source_subagent": "hathitrust-fetcher",
-      "reason": "Zugriffsstufe: Vollansicht, Gesamtband-Download blockiert",
-      "pdf_path_absent": true
+      "pdf_starts_with": "%PDF-",
+      "pdf_min_bytes": 10240,
+      "edition": "Berlin : G. Reimer, 1900"
     },
     "evidence": "evals/free-archive-fetchers/live-verification.json#runs[hathitrust-fetcher]",
-    "note": "Kein success und ausdruecklich auch kein metadata_only: die Zugriffsstufe IST Vollansicht, blockiert ist der Massen-Download. Live belegt am 2026-07-29 (HTTP 403, 'Page Blocked'). Wer diesen Case auf success umstellt, muss zuerst den Beleg ersetzen."
+    "note": "Dies ist der AC1-Case des hathitrust-fetcher: ein gemeinfreier Titel in Vollansicht muss beschafft werden. Die Bib-API weist hvd.hntupx als rightsCode 'pd' / usRightsString 'Full view' aus, die Item-Seite laedt im echten Browser vollstaendig und das Download-Formular steht von sich aus auf PDF + Whole item. Der Lauf vom 2026-07-29 endete dennoch ohne Datei — abgewiesen von einem Rate-Limit (HTTP 429), siehe far-06. Ein Rate-Limit ist ein Wiederholungsfall, kein Sollzustand: dieser Case bleibt deshalb auf success und ist so lange offen, bis der Lauf auf einem Netz ohne geteiltes Proxy-Egress nachgeholt ist. Die Ausgabe stammt aus dem Katalogsatz (MARC 260), nicht aus der Eingabe (AC4)."
   },
   {
     "id": "far-02",
@@ -88,5 +89,25 @@
       "pdf_path_absent": true
     },
     "note": "Negativkontrolle zu AC2. Die Kennung stammt aus derselben Trefferliste wie far-01 und war am 2026-07-29 als 'Limited (search only)' ausgezeichnet."
+  },
+  {
+    "id": "far-06",
+    "description": "HathiTrust-Fetcher: die Download-Route antwortet dauerhaft mit HTTP 429 — erwartet pickup_required erst nach erschoepften Wiederholungen, nie beim ersten Anklopfen",
+    "agent": "hathitrust-fetcher",
+    "input": {
+      "title": "Immanuel Kant: Kritik der reinen Vernunft (Hrsg. Benno Erdmann)",
+      "hathitrust_id": "hvd.hntupx",
+      "output_path": "/tmp/eval-far-06.pdf",
+      "simulate": "Download-Route liefert 'Error code: 429' bei jedem Versuch"
+    },
+    "expected": {
+      "status": "pickup_required",
+      "source_subagent": "hathitrust-fetcher",
+      "reason": "Zugriffsstufe: Vollansicht, Download vom Rate-Limit abgewiesen (HTTP 429)",
+      "pdf_path_absent": true,
+      "min_download_attempts": 3
+    },
+    "evidence": "evals/free-archive-fetchers/live-verification.json#runs[hathitrust-fetcher].mechanism_probe",
+    "note": "Abgrenzung zu far-01, nicht dessen Ersatz. Drei Dinge muessen hier zugleich gelten: (1) kein success, denn es gibt keine Datei; (2) kein metadata_only, denn an der Zugriffsstufe liegt es nicht — sie ist Vollansicht; (3) kein sofortiges Aufgeben, denn 429 ist voruebergehend und die Plattform sagt selbst 'Please try again.'. Wer diesen Case und far-01 zusammenlegt, macht ein Rate-Limit wieder zum Sollzustand — genau der Fehler, den die Fix-Runde zu PR #498 behoben hat."
   }
 ]
