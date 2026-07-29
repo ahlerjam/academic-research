@@ -87,7 +87,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `style-evaluator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Stilurteil über Fließtext; der einzige offline messbare Teilaspekt ist als `humanizer-de-pipeline` abgedeckt. Ohne Key Skip. |
 | `submission-checker` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Einreichungsrichtlinien in natürlicher Sprache, die je Journal variieren. Ohne Key Skip. |
 | `title-generator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Titelqualität ist ein Geschmacks- und Präzisionsurteil ohne Referenzlösung. Ohne Key Skip. |
-| `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
+| `topic-brainstorm` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Die Quality-Prompts (seit #471 inklusive der Fach-Kontrast-Fälle `tb-04`/`tb-05`) hingen bis #471 an gar keinem Runner und laufen seither über `test_rest_evals.py`. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
 **Bilanz:** 3 × `metric`, 37 × `structural`, 0 × `removed`.
@@ -98,14 +98,22 @@ Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).
 ## Korrektur zur Issue-Beschreibung
 
 Issue #390 nennt „14 Komponenten mit `evals.json`-Qualitäts-Prompts ganz ohne
-Ausführungspfad". Nachgezählt sind es **17**: 13 Skills
+Ausführungspfad". Nachgezählt waren es **17**: 13 Skills
 (`citation-style-import`, `cluster-visualizer`, `conference-poster`,
 `grant-proposal`, `humanizer-de`, `latex-export`, `material-passport`,
 `notebook-bundle`, `prisma-flow`, `reading-list-import`, `reviewer-response`,
 `topic-brainstorm`, `zotero-import`) plus 4 Nicht-Skills (`fetch`,
-`figure-verifier`, `oa-fetchers`, `publisher-fetchers`). Die 13 Skills laufen
+`figure-verifier`, `oa-fetchers`, `publisher-fetchers`). Diese Skills laufen
 immerhin über `tests/evals/test_triggers.py` (API-gated), die 4 Nicht-Skills
 haben ausschließlich Existenz- und Schema-Assertions.
+
+Seit Issue #471 sind es **16**: `topic-brainstorm` steht in der Komponentenliste
+von `tests/evals/test_rest_evals.py` und hat damit einen — weiterhin
+API-gateten — Ausführungspfad für seine Quality-Prompts. Aufgefallen ist die
+Lücke, weil #471 zwei Fach-Kontrast-Prompts ergänzte und der PR sie als Beleg
+anführte; sie lagen in einer Datei, die kein Runner las. Wer künftig
+Quality-Prompts ergänzt, prüft zuerst, ob die Komponente überhaupt eingesammelt
+wird — die restlichen 12 Skills der Liste oben tun es bis heute nicht.
 
 ## Zwei Schemata unter `evals/`
 
