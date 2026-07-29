@@ -1,0 +1,27 @@
+{
+  "component": "literature-excel",
+  "should_trigger": [
+    "Erstell mir eine Excel-Übersicht meiner Literatur",
+    "Erstell mir eine Excel-Uebersicht meiner Literatur",
+    "Mach mir eine Excel aus den Papers",
+    "Kannst du mir eine Excel-Tabelle aus meinen Papers bauen?",
+    "Exportiere meine Literaturliste als Excel",
+    "Ich brauche eine Paper-Liste als Excel-Tabelle",
+    "Gib mir meine Recherche als Excel-Datei",
+    "Excel-Übersicht über meine gescorten Paper bitte",
+    "Kannst du meine Quellenliste in eine Excel-Tabelle packen?",
+    "Erzeug mir ein Workbook mit meiner Literaturübersicht"
+  ],
+  "should_not_trigger": [
+    "Erstelle mir eine Excel-Tabelle für mein Haushaltsbudget",
+    "Mach mir eine Excel für meine Steuererklärung",
+    "Ich brauche eine Tabelle für meinen Urlaubsplan",
+    "Erstelle eine Excel-Datei mit einer Kontaktliste",
+    "Baue mir ein Excel-Sheet für die Inventarverwaltung",
+    "Kannst du eine leere Vorlage als xlsx anlegen?",
+    "Erzeug mir eine Pickup-Liste für die Bibliothek als Excel",
+    "Welche Methodik passt zu meinem Thema?",
+    "Suche mir Literatur zu Zero Trust",
+    "Schreib mir ein Kapitel zu Theorie X"
+  ]
+}
