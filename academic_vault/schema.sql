@@ -1,7 +1,7 @@
 -- academic_vault SQLite Schema
 -- Tabellen: papers, papers_fts, paper_fulltext, quotes, quote_embeddings,
---           decisions, notes
--- FTS5-Trigger: papers_ai, papers_ad, papers_au
+--           decisions, notes, notes_fts
+-- FTS5-Trigger: papers_ai, papers_ad, papers_au, notes_ai, notes_ad, notes_au
 
 CREATE TABLE IF NOT EXISTS papers (
   paper_id              TEXT PRIMARY KEY,
@@ -84,8 +84,49 @@ CREATE TABLE IF NOT EXISTS notes (
   paper_id   TEXT REFERENCES papers(paper_id),
   text       TEXT NOT NULL,
   tags       TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  -- Optionale Seitenangabe des Exzerpts (Issue #462, AC2). Bewusst als
+  -- LETZTE Spalte: `ALTER TABLE ... ADD COLUMN` (migrate.py) haengt sie auf
+  -- Bestands-DBs ebenfalls hinten an, so bleibt die Spaltenreihenfolge
+  -- zwischen frischer und migrierter DB identisch (Muster quotes.stance).
+  page       INTEGER
 );
+
+-- FTS5-Index fuer Notizen (Issue #462, AC4). Eigenstaendige Tabelle statt
+-- Erweiterung von papers_fts: FTS5-Virtual-Tables lassen sich nicht per
+-- ALTER TABLE ADD COLUMN erweitern (verifiziert, sqlite3 liefert dabei
+-- "OperationalError: virtual tables may not be altered"), und ein Rebuild
+-- von papers_fts waere fuer dieses Issue unverhaeltnismaessig riskant.
+-- paper_id wird -- analog zu papers_fts -- als regulaere (nicht UNINDEXED)
+-- Spalte gefuehrt, damit sie ohne Zusatz-Join direkt aus einem Suchtreffer
+-- gelesen werden kann.
+CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+  note_id,
+  paper_id,
+  text,
+  tags
+);
+
+-- FTS5-Trigger: befuellen notes_fts manuell (kein content=). Bewusst DROP +
+-- CREATE statt CREATE TRIGGER IF NOT EXISTS, siehe Kommentar bei papers_ai
+-- oben -- init_schema() fuehrt dieses Skript auch auf Bestands-DBs aus.
+DROP TRIGGER IF EXISTS notes_ai;
+CREATE TRIGGER notes_ai AFTER INSERT ON notes BEGIN
+  INSERT INTO notes_fts(note_id, paper_id, text, tags)
+  VALUES (new.note_id, new.paper_id, new.text, new.tags);
+END;
+
+DROP TRIGGER IF EXISTS notes_ad;
+CREATE TRIGGER notes_ad AFTER DELETE ON notes BEGIN
+  DELETE FROM notes_fts WHERE note_id = old.note_id;
+END;
+
+DROP TRIGGER IF EXISTS notes_au;
+CREATE TRIGGER notes_au AFTER UPDATE ON notes BEGIN
+  DELETE FROM notes_fts WHERE note_id = old.note_id;
+  INSERT INTO notes_fts(note_id, paper_id, text, tags)
+  VALUES (new.note_id, new.paper_id, new.text, new.tags);
+END;
 
 -- Kanonischer Speicher des extrahierten PDF-Volltexts (Issue #373).
 -- papers_fts ist nur der Index: die FTS-Zeile wird bei jedem UPDATE auf papers

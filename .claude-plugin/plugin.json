@@ -1,7 +1,7 @@
 {
   "name": "academic-research",
   "version": "6.5.1",
-  "description": "Modulares akademisches Forschungs-Toolkit mit 29 selbstaktivierenden Skills, Vault-MCP-Server (SQLite + FTS5 + sqlite-vec), Universal Book Fetcher (8-Tier-Pipeline), humanizer-de Anti-KI-Audit, LaTeX-Export, Per-Uni-Profile, 5D-Scoring. Durchsucht Semantic Scholar, CrossRef, OpenAlex, BASE, Google Scholar und 9 weitere wissenschaftliche Quellen.",
+  "description": "Modulares akademisches Forschungs-Toolkit mit 30 selbstaktivierenden Skills, Vault-MCP-Server (SQLite + FTS5 + sqlite-vec), Universal Book Fetcher (8-Tier-Pipeline), humanizer-de Anti-KI-Audit, LaTeX-Export, Per-Uni-Profile, 5D-Scoring. Durchsucht Semantic Scholar, CrossRef, OpenAlex, BASE, Google Scholar und 9 weitere wissenschaftliche Quellen.",
   "dependencies": [
     {
       "name": "document-skills",

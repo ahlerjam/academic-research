@@ -45,7 +45,8 @@ VALID_STANCES = frozenset({"supports", "contrasts", "mentions"})
 # Spalten/Tabellen erweitert wird, die eine Bestands-Migration brauchen --
 # und der neue migrate.py-Helfer in apply_pending_migrations() ergaenzt wird.
 # 2 = quotes.stance (Issue #400).
-CURRENT_SCHEMA_VERSION = 2
+# 3 = notes.page + notes_fts-Backfill fuer Bestandsnotizen (Issue #462).
+CURRENT_SCHEMA_VERSION = 3
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -69,6 +70,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
         }
     ),
     "quotes": frozenset({"stance"}),
+    "notes": frozenset({"page"}),
 }
 
 
@@ -187,6 +189,37 @@ def escape_like(value: str) -> str:
         .replace("%", _LIKE_ESCAPE_CHAR + "%")
         .replace("_", _LIKE_ESCAPE_CHAR + "_")
     )
+
+
+_FTS5_OPERATOR_KEYWORDS = re.compile(r"\b(?:NEAR|AND|OR|NOT)\b")
+
+
+def _sanitize_fts5_query(query: str) -> str:
+    """Bereinigt Query fuer sichere FTS5-MATCH-Ausfuehrung.
+
+    FTS5-Sonderzeichen die Probleme verursachen: - / ^ * " ( ) sowie der
+    Column-Filter-Operator ':'. Zusaetzlich werden die booleschen
+    Operator-Keywords NEAR/AND/OR/NOT (nur in Grossschreibung
+    operatorwirksam) neutralisiert, damit usergenerierte Strings nicht
+    versehentlich als FTS5-Syntax interpretiert werden und einen
+    Query-Crash ausloesen.
+
+    Strategie: Sonderzeichen und Operator-Keywords durch Leerzeichen
+    ersetzen, Mehrfach-Leerzeichen kollabieren. Kleingeschriebene Woerter
+    wie 'android' oder 'and' bleiben unangetastet — nur die in FTS5
+    operatorwirksamen Grossschreibungen werden entfernt.
+
+    Gemeinsam genutzt von server.search_papers() und VaultDB.search_notes()
+    (Issue #462) -- lebt hier statt in server.py, weil VaultDB (db.py) nicht
+    von server.py importieren darf (Zirkularimport).
+    """
+    # FTS5-Sonderzeichen entfernen/ersetzen: -, ^, /, *, (, ), ", :
+    sanitized = re.sub(r'[-^/*():"]', " ", query)
+    # Boolesche Operator-Keywords (Grossschreibung) neutralisieren
+    sanitized = _FTS5_OPERATOR_KEYWORDS.sub(" ", sanitized)
+    # Mehrfache Leerzeichen zusammenfassen
+    sanitized = re.sub(r"\s+", " ", sanitized).strip()
+    return sanitized
 
 
 def project_slug(cwd: str | None = None) -> str:
@@ -714,6 +747,94 @@ class VaultDB:
                     "SELECT * FROM quotes WHERE paper_id = ? LIMIT ?",
                     (paper_id, k),
                 ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Notes CRUD + FTS5-Suche (Issue #462)
+    # ------------------------------------------------------------------
+
+    def add_note(
+        self,
+        paper_id: str,
+        text: str,
+        tags: str | None = None,
+        page: int | None = None,
+    ) -> str:
+        """INSERT einer Notiz/eines Exzerpts. Gibt note_id (UUID) zurueck.
+
+        Args:
+            page: Optionale Seitenangabe (AC2) -- Notizen ohne konkreten
+                Seitenbezug (z. B. quellenuebergreifende Synthese) bleiben
+                zulaessig, ``page`` defaultet auf ``None``.
+        """
+        note_id = str(uuid4())
+        now = int(time.time())
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute(
+                """
+                INSERT INTO notes (note_id, paper_id, text, tags, created_at, page)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (note_id, paper_id, text, tags, now, page),
+            )
+        return note_id
+
+    def get_note(self, note_id: str) -> dict | None:
+        """Gibt Note-Record als dict zurueck oder None."""
+        with self._connection() as conn:
+            row = conn.execute("SELECT * FROM notes WHERE note_id = ?", (note_id,)).fetchone()
+        return dict(row) if row is not None else None
+
+    def find_notes(
+        self,
+        paper_id: str,
+        query: str | None = None,
+        k: int = 10,
+    ) -> list[dict]:
+        """Notizen fuer ein Paper, optional per text-LIKE-Filter (Muster find_quotes)."""
+        with self._connection() as conn:
+            if query:
+                rows = conn.execute(
+                    "SELECT * FROM notes WHERE paper_id = ? "
+                    "AND text LIKE ? ESCAPE '\\' ORDER BY created_at LIMIT ?",
+                    (paper_id, f"%{escape_like(query)}%", k),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM notes WHERE paper_id = ? ORDER BY created_at LIMIT ?",
+                    (paper_id, k),
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+    def search_notes(self, query: str, k: int = 5) -> list[dict]:
+        """FTS5-Volltextsuche in notes_fts. Gibt [{note_id, paper_id, snippet, score}] zurueck.
+
+        Analog zu ``server.search_papers()``, aber ohne Rerank-/Hybrid-Pfad
+        (Issue #462 AC3+AC4): Notizen sind kurze, manuell verfasste
+        Exzerpte -- BM25 allein deckt "Exzerpte beim Kapitelschreiben
+        auffindbar" bereits ab, eine vec0-Embedding-Pipeline waere hier
+        unverhaeltnismaessig. Leere/rein aus FTS5-Sonderzeichen bestehende
+        Queries liefern ``[]`` statt ``sqlite3.OperationalError`` (Muster
+        Issue #369).
+        """
+        sanitized = _sanitize_fts5_query(query)
+        if not sanitized:
+            return []
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT note_id,
+                       paper_id,
+                       snippet(notes_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
+                       rank AS score
+                FROM notes_fts
+                WHERE notes_fts MATCH ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (sanitized, k),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def set_ocr_done(self, paper_id: str, value: int = 1) -> None:
