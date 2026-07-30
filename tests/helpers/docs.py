@@ -39,8 +39,21 @@ GLOSSARY_DOC = REFERENCE_DIR / "glossary.md"
 # Anleitungen.
 GUIDE_DIR = DOCS_DIR / "guide"
 INSTALLATION_DOC = GUIDE_DIR / "installation.md"
+GETTING_STARTED_DOC = GUIDE_DIR / "getting-started.md"
 WALKTHROUGH_DOC = GUIDE_DIR / "walkthrough.md"
+MODEL_CHOICE_DOC = GUIDE_DIR / "model-choice.md"
+TOKEN_BUDGET_DOC = GUIDE_DIR / "token-budget.md"
+BEST_PRACTICES_DOC = GUIDE_DIR / "best-practices.md"
 TROUBLESHOOTING_DOC = GUIDE_DIR / "troubleshooting.md"
+
+#: Die Seiten des Praxis-Leitfadens (Issue #461) — untereinander verlinkt.
+PRACTICE_GUIDE_DOCS = (
+    GETTING_STARTED_DOC,
+    WALKTHROUGH_DOC,
+    MODEL_CHOICE_DOC,
+    TOKEN_BUDGET_DOC,
+    BEST_PRACTICES_DOC,
+)
 
 DEVELOPMENT_DOC = DOCS_DIR / "development.md"
 QUICKSTART_PROTOCOL_DOC = DOCS_DIR / "quickstart-protocol.md"
@@ -56,7 +69,11 @@ LINKED_DOCS = (
     UNI_PROFILES_DOC,
     GLOSSARY_DOC,
     INSTALLATION_DOC,
+    GETTING_STARTED_DOC,
     WALKTHROUGH_DOC,
+    MODEL_CHOICE_DOC,
+    TOKEN_BUDGET_DOC,
+    BEST_PRACTICES_DOC,
     TROUBLESHOOTING_DOC,
     DEVELOPMENT_DOC,
     QUICKSTART_PROTOCOL_DOC,

@@ -10,6 +10,46 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Praxis-Leitfaden: Erste Schritte, voller Durchlauf, Modellwahl, Token-Sparen
+  (#461):** Vier neue Seiten unter `docs/guide/` schließen die Lücke zwischen
+  „welche Bestandteile gibt es" (Referenz) und „wie entsteht damit eine Arbeit".
+  `getting-started.md` trägt selbsttragend von der Installation bis zum ersten
+  verifizierten Zitat, je Schritt mit Erfolgssignal. `model-choice.md` ordnet
+  sieben Aufgabentypen den Claude-Code-Modell-Aliasen zu (`haiku`, `sonnet`,
+  `opus`, `opusplan`, `fable`, `sonnet[1m]`) und erklärt `/model`, die
+  `model`-Einstellung in `.claude/settings.json` und das Subagent-Frontmatter
+  `model:` inklusive `inherit`-Default; die Empfehlungen sind an die realen
+  `model:`-Werte in `agents/*.md` gekoppelt, ein Modellwechsel im Repo macht den
+  Guard rot. Die Alias-Bedeutungen geben den Wortlaut von
+  [Model configuration](https://code.claude.com/docs/en/model-config) wieder —
+  `fable` steht dort für die schwersten und längsten Aufgaben (lange autonome
+  Läufe mit eigener Nachprüfung), nicht für kreatives Schreiben; ein Guard hält
+  die Seite auf dieser Lesart fest. `token-budget.md` benennt die vier teuren
+  Schritte und je Hebel
+  einen realen Befehl (`--mode quick`/`--mode metadata`, `--limit`,
+  `--no-expand`/`--no-browser`, `--batch`) plus die Abschnitte „eigener Kontext"
+  und „Zwischenstand sichern" gegen die echte Mechanik (`hooks/pre-compact.mjs`,
+  `/academic-research:history --restore`). `best-practices.md` sammelt bewährtes
+  Vorgehen, typische Fehler und acht konkrete Nicht-Eignungen (u. a. keine
+  Zitat-Garantie ohne Gegenprüfung, kein Plagiatsdienst-Ersatz, keine eigene
+  Datenerhebung, Office-Export nur mit dem externen Plugin `document-skills`,
+  Ausrichtung auf deutschsprachige Hochschulen, SciHub rechtlich umstritten und
+  per Default aus). `docs/guide/walkthrough.md` ist auf 23 Arbeitsschritte in
+  realer Reihenfolge umgebaut, jeder mit Beispielformulierung und
+  „Ergebnis:"-Angabe; fehlende Schritte (Screening, Quellenqualität,
+  Lesenotizen, Extraktionsmatrix, Lückenanalyse, Word-/Slides-Export) sind
+  ergänzt. Der Suchschritt nennt den realen Ablageort der Volltexte —
+  `~/.academic-research/sessions/<zeitstempel>/pdfs/` je Lauf, nicht den flachen
+  Ordner `~/.academic-research/pdfs/`, den `scripts/setup.sh` nur leer anlegt —
+  und die Abschlussmeldung im Wortlaut von `scripts/search.py`. Verlinkung aus
+  `README.md` und `docs/README.md`; Guards in
+  `tests/test_issue_461_practice_guide.py` (54 Tests) prüfen Reihenfolge der
+  Einstiegsschritte, reale Commands/Flags, Trigger-Phrasen gegen
+  `docs/reference/skills.md` bzw. `vault.*`-Tools gegen
+  `academic_vault/server.py`, Modell-Aliase gegen die Claude-Code-Doku,
+  PDF-Ablage und Erfolgssignal gegen `commands/search.md` bzw.
+  `scripts/search.py`, Token-Hebel, Querverweise und den Grenzen-Abschnitt.
+
 - **Verhaltens-Evals real ausführbar (#470):** Neuer, ausschließlich per
   `workflow_dispatch` auslösbarer Workflow `.github/workflows/eval-behavior.yml`
   führt `uv run pytest tests/evals/` mit `ANTHROPIC_API_KEY` aus den
@@ -296,6 +336,17 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **Crossref-Retraction-Check im Reading-List-Import (#383):** `import_reading_list()` prüft nach jedem erfolgreichen `vault.add_paper()`-Aufruf mit DOI zusätzlich `check_retraction(doi)` gegen `api.crossref.org/works/{doi}` (Feld `message.updated-by`, `type == "retraction"`; seit 09/2023 mit Retraction-Watch-Daten integriert, kostenlos, kein API-Key). Maßgeblich ist `updated-by` — Crossref hängt dieses Feld an den zurückgezogenen Artikel, während das Gegenstück `update-to` zur Retraction-Notiz gehört und von dieser auf den Artikel zeigt. Bei Treffer wird das Paper automatisch über den neuen Wrapper `vault_add_excluded_source()` als `excluded_source` markiert. Fail-safe: Netzwerk-/Parse-Fehler bei `check_retraction()` liefern `False` und blockieren den regulären Paper-Ingest nicht. Aufgezeichnete Crossref-Payloads unter `tests/fixtures/crossref/` halten beide Richtungen fest.
 - **Eval-Strategie statt stillschweigender Schema-Checks (#390):** Neues Dokument `docs/evals/STRATEGY.md` benennt für jede der 37 Komponenten unter `evals/` genau einen Zustand — `metric` (Offline-Runner bewertet Inhalt), `structural` (nur Struktur geprüft, inhaltliche Bewertung skippt ohne `ANTHROPIC_API_KEY`, Begründung Pflicht) oder `removed`. Der neue Guard `tests/evals/test_eval_strategy.py` prüft die Tabelle gegen das Dateisystem (Set-Gleichheit in beide Richtungen, geschlossenes Status-Vokabular, Existenz genannter Runner) und erzwingt, dass kein Eval-Runner API-Budget verbraucht. Das Dokument beziffert den Budgetbedarf für reale Läufe (ca. 400 Aufrufe pro Vollauf) ausdrücklich als Operator-Entscheid und hält fest, dass Alt-Issue #55 von #390 absorbiert und geschlossen ist.
 - **Die zwei toten Eval-Definitionen haben einen echten Ausführungspfad (#390):** `evals/humanizer-de-pipeline/runner.py` misst die Tell-Dichte (Marker aus `skills/humanizer-de/references/patterns.md` pro 100 Wörter) je Vorher/Nachher-Draft-Paar; `evals/auto-download/runner.py` prüft das Tier-Routing der 20 kuratierten Quellen gegen `resolve_pdf_url()` mit gestubbten Tier-Funktionen. Beide laufen ohne Netz und ohne API-Key, beide sind über `tests/evals/test_humanizer_pipeline_evals.py` bzw. `tests/evals/test_auto_download_routing.py` in jeden `pytest`-Lauf eingebunden. Gegen Placebo-Metriken sichern Negativkontrollen: Detection-Floor und Substanz-Quotient (Humanizer, verhindert „Reduktion durch Kürzen") sowie ein Leerlauf ohne Treffer, der `(None, None)` liefern muss (auto-download).
+
+### Fixed
+
+- **Zwei erfundene Flags in der Doku (#461):** `docs/guide/walkthrough.md` zeigte
+  `/academic-research:search --import-list <datei>` und
+  `/academic-research:fetch --isbn <nummer>` — beide Flags existieren in keinem
+  Command (`commands/search.md`, `commands/fetch.md`; `fetch` nimmt ISBN/DOI/URL
+  positionell). Ersetzt durch den realen Aufruf bzw. den
+  `reading-list-import`-Trigger;
+  `test_slash_examples_use_real_commands_and_flags` hält die Leitfaden-Seiten
+  künftig gegen die Command-Definitionen.
 
 ### Changed
 

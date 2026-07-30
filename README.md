@@ -184,10 +184,17 @@ Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
 
 **Loslegen**
 
+- [Erste Schritte](docs/guide/getting-started.md) — Installation bis erstes verifiziertes Zitat, in einem Zug
 - [Installation und Migration](docs/guide/installation.md) — Voraussetzungen, was das Setup tut, Umstieg von v5
-- [Walkthrough](docs/guide/walkthrough.md) — der komplette Weg durch eine Arbeit
+- [Walkthrough](docs/guide/walkthrough.md) — jeder Arbeitsschritt in der realen Reihenfolge
 - [Troubleshooting](docs/guide/troubleshooting.md) — wenn etwas klemmt
 - [Quickstart-Protokoll](docs/quickstart-protocol.md) — der abgenommene Durchlauf
+
+**Besser arbeiten**
+
+- [Modellwahl](docs/guide/model-choice.md) — welches Modell für welchen Arbeitsschritt
+- [Token-Budget](docs/guide/token-budget.md) — teure Schritte erkennen und eingrenzen
+- [Bewährtes Vorgehen und ehrliche Grenzen](docs/guide/best-practices.md) — auch: wofür das Plugin nicht taugt
 
 **Nachschlagen**
 
