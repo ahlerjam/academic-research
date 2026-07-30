@@ -94,9 +94,9 @@ Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers`
 python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
 ```
 
-## MCP-Tools (alle 37)
+## MCP-Tools (alle 41)
 
-Der Server registriert **37 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **41 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -128,6 +128,19 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.add_note(paper_id, text, tags=None, page=None)` | Fügt ein Exzerpt zu einer Quelle hinzu; `page` optional; gibt `note_id` zurück | `vault.add_note("vaswani2017", "Kernbefund: ...", page=5)` |
 | `vault.find_notes(paper_id, query=None, k=10)` | Gibt Notizen für ein Paper zurück, optional per Text-Filter (LIKE) | `vault.find_notes("vaswani2017", query="Methode")` |
 | `vault.search_notes(query, k=5)` | FTS5-Volltextsuche über alle Notizen — macht Exzerpte beim Kapitelschreiben themenbezogen auffindbar | `vault.search_notes("Reliabilität", k=5)` |
+
+**Eigenes Erhebungsmaterial** (Issue #473)
+
+Transkripte liegen als `papers`-Zeile mit `source_kind='primary'` im Vault — nur so
+greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbatim-guard`).
+`scripts/export-literature-state.mjs` lässt Primärmaterial im Literatur-Snapshot aus.
+
+| Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
+|------|-------------|------|
+| `vault.add_transcript_segment(paper_id, seq, text, speaker=None, timecode=None)` | Nimmt einen Transkript-Absatz belegfähig auf; `seq` ist die zitierfähige Stellenangabe („Abs. 5"), Upsert über `UNIQUE(paper_id, seq)`; gibt `segment_id` zurück | `vault.add_transcript_segment("interview-01", 5, "Die Abstimmung ist hilfreich …", speaker="B1", timecode="00:02:41")` |
+| `vault.list_transcript_segments(paper_id)` | Gibt alle Segmente eines Transkripts in `seq`-Reihenfolge zurück | `vault.list_transcript_segments("interview-01")` |
+| `vault.add_coding(paper_id, category, category_origin, segment_id=None, quote_id=None, memo=None)` | Ordnet einer Stelle eine Kategorie zu; `category_origin` ist Pflicht (`induktiv`/`deduktiv`); gibt `coding_id` zurück | `vault.add_coding("interview-01", "Teamabstimmung", "induktiv", quote_id="q-5")` |
+| `vault.list_codings(paper_id=None, category=None)` | Gibt Kodierungen zurück, optional nach Paper und/oder Kategorie gefiltert | `vault.list_codings(paper_id="interview-01")` |
 
 **Figures & Tabellen** (v6.1 Figure-Verifier)
 

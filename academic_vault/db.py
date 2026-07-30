@@ -40,6 +40,22 @@ VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 # NULL, sofern es nicht manuell gesetzt wird.
 VALID_STANCES = frozenset({"supports", "contrasts", "mentions"})
 
+# Erlaubte Werte fuer `papers.source_kind` (Issue #473): unterscheidet fremde
+# Literatur von eigenem Erhebungsmaterial (Transkript, Beobachtungsprotokoll).
+# Beides liegt in derselben Tabelle, weil nur so die Belegkette greift
+# (`quotes.paper_id` -> `papers`, verbatim-guard ueber `search_quote_text()`) --
+# ein Interviewzitat unterliegt damit derselben Nachweispflicht wie ein
+# Literaturzitat. Gespiegelt vom CHECK-Constraint in schema.sql bzw.
+# migrate.add_source_kind_column(); die Python-Validierung in `add_paper()`
+# liefert die lesbare Fehlermeldung.
+VALID_SOURCE_KINDS = frozenset({"literature", "primary"})
+
+# Erlaubte Werte fuer `codings.category_origin` (Issue #473): ob eine Kategorie
+# am Material entwickelt (induktiv) oder aus der Theorie abgeleitet (deduktiv)
+# wurde. Die Herkunft gehoert zur Methodendokumentation und wird deshalb
+# erzwungen statt optional gefuehrt.
+VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
+
 # Schema-Versions-Gate (Issue #368): ueber PRAGMA user_version verfolgt.
 # Unversionierte/Legacy-DBs haben user_version=0 (SQLite-Default) und liegen
 # damit garantiert unter diesem Wert. Hochzaehlen, sobald schema.sql um
@@ -47,7 +63,8 @@ VALID_STANCES = frozenset({"supports", "contrasts", "mentions"})
 # und der neue migrate.py-Helfer in apply_pending_migrations() ergaenzt wird.
 # 2 = quotes.stance (Issue #400).
 # 3 = notes.page + notes_fts-Backfill fuer Bestandsnotizen (Issue #462).
-CURRENT_SCHEMA_VERSION = 3
+# 4 = papers.source_kind + transcript_segments/codings (Issue #473).
+CURRENT_SCHEMA_VERSION = 4
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -63,6 +80,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
         {
             "parent_paper_id",
             "provenance",
+            "source_kind",
             "editor",
             "chapter",
             "page_first",
@@ -110,6 +128,7 @@ _OPTIONAL_PAPER_COLUMNS: tuple[str, ...] = (
     "container_title",
     "parent_paper_id",
     "provenance",
+    "source_kind",
 )
 
 # Defaults fuer eine echte Neuanlage (Sentinel -> dieser Wert), identisch zu
@@ -127,6 +146,7 @@ _OPTIONAL_PAPER_DEFAULTS: dict[str, object] = {
     "container_title": None,
     "parent_paper_id": None,
     "provenance": None,
+    "source_kind": "literature",
 }
 
 
@@ -607,12 +627,20 @@ class VaultDB:
         container_title: str | None | _Unset = _UNSET,
         parent_paper_id: str | None | _Unset = _UNSET,
         provenance: str | None | _Unset = _UNSET,
+        source_kind: str | _Unset = _UNSET,
     ) -> None:
         """Upsert eines Papers in die papers-Tabelle.
 
         type wird aus csl_json extrahiert. Erlaubte Werte: article-journal, book, chapter.
 
         provenance: Herkunfts-Tag (z.B. "scihub", "oa") fuer Audit-Zwecke (#195).
+
+        source_kind: ``"literature"`` (Default) oder ``"primary"`` fuer eigenes
+        Erhebungsmaterial (Issue #473). Beantwortet eine andere Frage als
+        ``provenance`` ("woher bezogen") -- naemlich, ob der Eintrag ueberhaupt
+        Literatur ist. Wird der Parameter beim Upsert weggelassen, bleibt der
+        Bestandswert erhalten; ein Transkript wird also nicht durch ein
+        spaeteres Metadaten-Update zur Literaturquelle.
 
         Malformed JSON wird NICHT mehr stillschweigend zu 'article-journal'
         defaulted (Issue #213, Security Round-2 M3), sondern als ValueError
@@ -640,6 +668,11 @@ class VaultDB:
                 f"Ungueltiger type '{paper_type}' -- erlaubt: {sorted(VALID_PAPER_TYPES)}"
             )
 
+        if not isinstance(source_kind, _Unset) and source_kind not in VALID_SOURCE_KINDS:
+            raise ValueError(
+                f"Ungueltiger source_kind '{source_kind}' -- erlaubt: {sorted(VALID_SOURCE_KINDS)}"
+            )
+
         supplied: dict[str, object] = {
             "doi": doi,
             "isbn": isbn,
@@ -652,6 +685,7 @@ class VaultDB:
             "container_title": container_title,
             "parent_paper_id": parent_paper_id,
             "provenance": provenance,
+            "source_kind": source_kind,
         }
         # Werte fuer den INSERT-Zweig (Neuanlage): bei nicht uebergebenen
         # (Sentinel-)Feldern der bisherige Default -- fuer eine echte
@@ -1222,6 +1256,147 @@ class VaultDB:
             if _parse_figure_reference(caption) == reference:
                 matches.append(record)
         return matches
+
+    # ------------------------------------------------------------------
+    # Empirischer Teil: Transkript-Segmente + Kodierungen (Issue #473)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _segment_id(paper_id: str, seq: int) -> str:
+        """Deterministische ``segment_id`` aus (paper_id, seq).
+
+        Bewusst kein ``uuid4()``: ein zweiter Import derselben Transkriptdatei
+        muss dieselbe Stelle wiedertreffen statt eine zweite anzulegen -- die
+        Stellenangabe "Abs. 12" waere sonst nicht mehr eindeutig.
+        """
+        return f"{paper_id}#seg-{seq}"
+
+    def add_transcript_segment(
+        self,
+        paper_id: str,
+        seq: int,
+        text: str,
+        speaker: str | None = None,
+        timecode: str | None = None,
+    ) -> str:
+        """Upsert eines Transkript-Segments. Gibt die ``segment_id`` zurueck.
+
+        ``seq`` ist die zitierfaehige Absatznummer innerhalb des Transkripts
+        und zugleich der Idempotenz-Schluessel (UNIQUE(paper_id, seq)): ein
+        erneuter Import derselben Datei aktualisiert die Zeile, statt eine
+        zweite anzulegen.
+
+        Raises:
+            ValueError: Wenn ``seq`` kleiner als 1 ist -- eine Stellenangabe
+                "Abs. 0" waere im Fliesstext nicht auffindbar.
+        """
+        if seq < 1:
+            raise ValueError(f"seq muss >= 1 sein (bekommen: {seq})")
+
+        segment_id = self._segment_id(paper_id, seq)
+        now = int(time.time())
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute(
+                """
+                INSERT INTO transcript_segments
+                  (segment_id, paper_id, seq, speaker, timecode, text, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(paper_id, seq) DO UPDATE SET
+                  speaker  = excluded.speaker,
+                  timecode = excluded.timecode,
+                  text     = excluded.text
+                """,
+                (segment_id, paper_id, seq, speaker, timecode, text, now),
+            )
+        return segment_id
+
+    def list_transcript_segments(self, paper_id: str) -> list[dict]:
+        """Gibt alle Segmente eines Transkripts in ``seq``-Reihenfolge zurueck."""
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM transcript_segments WHERE paper_id = ? ORDER BY seq",
+                (paper_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def add_coding(
+        self,
+        paper_id: str,
+        category: str,
+        category_origin: str,
+        segment_id: str | None = None,
+        quote_id: str | None = None,
+        memo: str | None = None,
+    ) -> str:
+        """INSERT einer Kategorienzuordnung. Gibt ``coding_id`` (UUID) zurueck.
+
+        Args:
+            category_origin: ``"induktiv"`` (am Material entwickelt) oder
+                ``"deduktiv"`` (aus der Theorie abgeleitet). Die Validierung
+                liegt hier statt allein im CHECK-Constraint, damit jeder
+                Aufrufweg dieselbe lesbare Meldung bekommt statt eines rohen
+                ``sqlite3.IntegrityError`` (Muster ``add_quote(stance=...)``).
+            quote_id: Ankerbeispiel. Bleibt ``None``, solange keines
+                ausgewaehlt ist -- ein Ankerzitat wird nie erfunden.
+
+        Raises:
+            ValueError: Bei leerer ``category`` oder unbekannter
+                ``category_origin``.
+        """
+        if not category.strip():
+            raise ValueError("category darf nicht leer sein")
+        if category_origin not in VALID_CATEGORY_ORIGINS:
+            raise ValueError(
+                f"Ungueltiger category_origin '{category_origin}' -- "
+                f"erlaubt: {sorted(VALID_CATEGORY_ORIGINS)}"
+            )
+
+        coding_id = str(uuid4())
+        now = int(time.time())
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute(
+                """
+                INSERT INTO codings
+                  (coding_id, paper_id, segment_id, quote_id, category,
+                   category_origin, memo, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    coding_id,
+                    paper_id,
+                    segment_id,
+                    quote_id,
+                    category.strip(),
+                    category_origin,
+                    memo,
+                    now,
+                ),
+            )
+        return coding_id
+
+    def list_codings(
+        self,
+        paper_id: str | None = None,
+        category: str | None = None,
+    ) -> list[dict]:
+        """Gibt Kodierungen zurueck, optional nach Paper und/oder Kategorie gefiltert."""
+        clauses = []
+        params: list = []
+        if paper_id is not None:
+            clauses.append("paper_id = ?")
+            params.append(paper_id)
+        if category is not None:
+            clauses.append("category = ?")
+            params.append(category)
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        with self._connection() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM codings {where} ORDER BY category, created_at",
+                params,
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
     # Decisions CRUD (v6.4)
