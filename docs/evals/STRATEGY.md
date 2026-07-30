@@ -163,6 +163,16 @@ Runner laufen offline (per Guard `test_no_eval_runner_requires_api_key`
 erzwungen), und die 147 Skips bleiben bis zu einer Operator-Entscheidung
 bestehen.
 
+**Realer Ausführungspfad (Issue #470):** `.github/workflows/eval-behavior.yml`
+ist der einzige Weg, diese ca. 400 Aufrufe tatsächlich abzurufen — ein separat
+per `workflow_dispatch` auslösbarer Job, begrenzt auf `tests/evals/` (nicht
+`tests/`), mit `timeout-minutes: 30` als hartem Deckel. Der Job bricht mit
+`::error::` ab, wenn `ANTHROPIC_API_KEY` als Repo-Secret fehlt, statt
+täuschend grün als „0 failed, N skipped" durchzulaufen. `ci.yml` bleibt davon
+unberührt: kein Key dort, weiterhin nur `push`/`pull_request`, die 147
+API-gateten Skips bestehen im regulären Lauf unverändert fort. Ob das Secret
+hinterlegt wird, bleibt — wie oben beschrieben — Operator-Entscheidung.
+
 ## Alt-Issue #55
 
 Issue #55 („Baseline-Eval v5.2.0") verlangte denselben Nachweis auf altem

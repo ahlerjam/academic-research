@@ -10,6 +10,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Verhaltens-Evals real ausführbar (#470):** Neuer, ausschließlich per
+  `workflow_dispatch` auslösbarer Workflow `.github/workflows/eval-behavior.yml`
+  führt `uv run pytest tests/evals/` mit `ANTHROPIC_API_KEY` aus den
+  Repo-Secrets aus (begrenzt auf dieses Unterverzeichnis, nicht `tests/`) und
+  bricht bei fehlendem Secret mit `::error::` hart ab, statt täuschend grün
+  als „0 failed, N skipped" durchzulaufen. `timeout-minutes: 30` deckelt das
+  Budget; Ergebnis geht als Pass/Fail-Tabelle nach `$GITHUB_STEP_SUMMARY`
+  (`scripts/dev/summarize_eval_junit.py`, parst die `--junitxml`-Ausgabe) und
+  als Artefakt (`eval-results.xml`/`eval-output.log`). `docs/evals/STRATEGY.md`
+  (Abschnitt „API-Budget") verweist jetzt auf diesen realen Pfad statt nur
+  hypothetisch ~400 Aufrufe zu beziffern. `ci.yml` bleibt unverändert — der
+  reguläre `pytest tests/`-Lauf skippt die API-gateten Evals weiterhin ohne
+  Key, unverändert bei 182 Skips. Nebenbei bereinigt: `docs/SKIP_REASONS.md`
+  enthielt vier `todo:*`-Zeilen zu bereits erledigten Voraussetzungen
+  (`ocr.py` existiert, Page-Offset-Fixtures liegen vor, Publisher-Evals-JSON
+  existiert, Token-Baseline ist erfasst — alle vier Tests laufen bereits mit
+  0 Skips) sowie eine veraltete Beschreibung des `anthropic`-Package-Imports
+  als „optional", obwohl `anthropic>=0.40` seit #390 Pflicht-Dependency ist;
+  beide Klassen sind jetzt korrigiert bzw. entfernt.
+
 - **Endphase: ehrliche Abgabeprüfung, Ausgabeformen-Erhebung, Verteidigungsvorbereitung (#472):**
   `submission-checker` behauptete bisher Prüfungen (Typografie, Zeilenabstand,
   Ränder, exakte Seitenzahl), die es am reinen Markdown-Material
