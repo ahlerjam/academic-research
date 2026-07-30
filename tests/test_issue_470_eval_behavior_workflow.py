@@ -205,8 +205,48 @@ def test_formerly_stale_rows_correspond_to_zero_skips(test_path):
 # --------------------------------------------------------------------------- #
 
 
+def _current_branch(repo_dir: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _ensure_origin_main_ref(repo_dir: Path) -> None:
+    """origin/main lokal referenzierbar machen, falls es fehlt.
+
+    In echtem CI checkt ``actions/checkout@v7.0.1`` (im ``pytest``-Job von
+    ``ci.yml``) nur den ausgeloesten Ref aus -- ohne ``fetch-depth: 0`` existiert
+    ``origin/main`` dort lokal nicht, und ``git diff origin/main`` schlaegt mit
+    ``fatal: bad revision`` fehl (reproduziert per shallow Single-Branch-Klon in
+    ``test_ci_workflow_check_recovers_missing_origin_main_ref``). ``fetch-depth: 0``
+    liesse sich nicht in ``ci.yml`` selbst ergaenzen, ohne AC4 (Diff gegen
+    ``origin/main`` == leer) zu verletzen -- deshalb wird hier gezielt nur der
+    main-Tip nachgeholt, nie ``ci.yml`` angefasst."""
+    probe = subprocess.run(
+        ["git", "rev-parse", "--verify", "-q", "origin/main"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode == 0:
+        return
+    fetch = subprocess.run(
+        ["git", "fetch", "--depth=1", "origin", "main:refs/remotes/origin/main"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+    )
+    assert fetch.returncode == 0, f"origin/main-Nachholung fehlgeschlagen: {fetch.stderr}"
+
+
 def test_ci_workflow_is_untouched_by_this_issue():
     """ci.yml bleibt gegenueber origin/main unveraendert (AC4)."""
+    _ensure_origin_main_ref(ROOT)
     result = subprocess.run(
         ["git", "diff", "origin/main", "--", str(CI_WORKFLOW.relative_to(ROOT))],
         cwd=ROOT,
@@ -216,4 +256,61 @@ def test_ci_workflow_is_untouched_by_this_issue():
     assert result.returncode == 0, f"git diff schlug fehl: {result.stderr}"
     assert result.stdout == "", (
         f"ci.yml weicht von origin/main ab -- AC4 verlangt Unveraendertheit:\n{result.stdout}"
+    )
+
+
+def test_ci_workflow_check_recovers_missing_origin_main_ref(tmp_path):
+    """Regression: shallow Single-Branch-Checkout (exakt der Zustand, den
+    ``actions/checkout`` ohne ``fetch-depth: 0`` erzeugt) hat kein lokales
+    ``origin/main`` -- ``_ensure_origin_main_ref`` muss das reparieren, ohne
+    ``ci.yml`` selbst anzufassen."""
+    branch = _current_branch(ROOT)
+    clone = tmp_path / "shallow-clone"
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "--quiet",
+            "--no-local",
+            "--depth",
+            "1",
+            "--branch",
+            branch,
+            str(ROOT),
+            str(clone),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    probe = subprocess.run(
+        ["git", "rev-parse", "--verify", "-q", "origin/main"],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+    )
+    assert probe.returncode != 0, (
+        "Testannahme verletzt: origin/main war im shallow Klon unerwartet schon vorhanden."
+    )
+    diff_before = subprocess.run(
+        ["git", "diff", "origin/main", "--", ".github/workflows/ci.yml"],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+    )
+    assert diff_before.returncode != 0, (
+        "Testannahme verletzt: git diff origin/main haette hier wie in CI mit "
+        "'fatal: bad revision' fehlschlagen muessen."
+    )
+
+    _ensure_origin_main_ref(clone)
+
+    diff_after = subprocess.run(
+        ["git", "diff", "origin/main", "--", ".github/workflows/ci.yml"],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+    )
+    assert diff_after.returncode == 0, (
+        f"git diff schlug trotz Nachholung von origin/main fehl: {diff_after.stderr}"
     )
