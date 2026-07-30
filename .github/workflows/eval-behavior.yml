@@ -58,9 +58,13 @@ jobs:
         id: run_evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Ueber env: binden statt direkt in run: zu templaten: inputs.component
+          # ist untrusted (jeder mit workflow_dispatch-Trigger-Recht setzt ihn frei).
+          # Direkte ${{ }}-Interpolation im Skripttext waere Shell-Injection mit
+          # Zugriff auf ANTHROPIC_API_KEY im selben Step.
+          FILTER: ${{ inputs.component }}
         run: |
           set -o pipefail
-          FILTER="${{ inputs.component }}"
           if [ -n "${FILTER}" ]; then
             uv run pytest tests/evals/ -k "${FILTER}" -v \
               --junitxml=eval-results.xml 2>&1 | tee eval-output.log

