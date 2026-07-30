@@ -18,17 +18,23 @@ gültig, wenn Anthropic ein neues Modell veröffentlicht:
 
 | Alias | Bedeutung |
 |---|---|
-| `haiku` | das kleinste, schnellste Modell |
-| `sonnet` | das ausgewogene Arbeitspferd |
-| `opus` | das stärkste Reasoning-Modell |
-| `best` | jeweils das leistungsstärkste verfügbare Modell |
-| `fable` | eigener Alias für kreative bzw. schreibnahe Aufgaben |
+| `haiku` | das schnelle, sparsame Haiku-Modell für einfache Aufgaben |
+| `sonnet` | das neueste Sonnet-Modell für die tägliche Arbeit |
+| `opus` | das neueste Opus-Modell für komplexes Reasoning |
+| `fable` | Fable 5 für die schwersten und längsten Aufgaben |
+| `best` | Fable 5, wo deine Organisation Zugriff darauf hat, sonst das neueste Opus-Modell |
 | `opusplan` | Opus im Plan-Modus, Sonnet in der Ausführung |
 | `sonnet[1m]`, `opus[1m]` | dieselben Modelle mit 1-Million-Token-Kontextfenster |
 | `default` | Override löschen, zurück zur Voreinstellung |
 
 Belegt in der Claude-Code-Dokumentation unter
 [Model configuration](https://code.claude.com/docs/en/model-config).
+
+Zu `fable` sagt dieselbe Seite genauer, wofür das Modell gedacht ist: für Aufgaben, die
+größer sind als eine Sitzung. Es hält lange autonome Läufe durch, recherchiert vor dem
+Handeln und prüft sein Ergebnis häufiger selbst nach als kleinere Modelle. Das ist ein
+Zuschnitt auf Umfang und Dauer — nicht auf Sprachqualität. Für einen einzelnen Absatz ist
+es die falsche Wahl, für einen Durchlauf über die ganze Arbeit die richtige.
 
 ## Empfehlung je Aufgabentyp
 
@@ -38,7 +44,8 @@ Belegt in der Claude-Code-Dokumentation unter
 | Screening, Scoring, Metadaten-Pflege | `sonnet` | Viele gleichförmige Urteile nach festen Kriterien. Braucht Sorgfalt, aber kein tiefes Reasoning — und läuft oft über hunderte Treffer, wo Geschwindigkeit zählt. |
 | Kapitelentwürfe und Argumentation | `opus` oder `opusplan` | Hier entsteht der Text, der in der Arbeit landet: Argumentationsketten, Einordnung widersprüchlicher Befunde, saubere Übergänge. Der teuerste Schritt, aber der einzige, dessen Qualität die Note trifft. |
 | Methodik- und Gliederungsberatung | `opus` | Der Nutzen liegt im Widerspruch, nicht in der Zustimmung. Schwächere Modelle bestätigen zu bereitwillig, was du ohnehin vorhattest — deshalb läuft auch der `sparring-partner`-Agent auf Opus. |
-| Stilarbeit und Anti-KI-Pass | `fable` oder `opus` | Rhythmus, Registerwechsel und Formulierungsvarianten sind Schreibaufgaben; hier zahlt sich ein sprachlich starkes Modell direkt aus. |
+| Stilarbeit und Anti-KI-Pass | `opus` | Registerbrüche und Rhythmusfehler zu erkennen verlangt dieselbe Urteilstiefe wie der Entwurf selbst. Kleinere Modelle glätten zwar, ersetzen aber gern die auffällige Formulierung durch die nächstliegende — und genau daran erkennt man KI-Text. |
+| Ein Durchlauf über die ganze Arbeit am Stück | `fable` | Die Doku ordnet Fable 5 den schwersten und längsten Aufgaben zu: lange autonome Läufe, Recherche vor dem Handeln, eigene Nachprüfung. Ein Stil- oder Konsistenzlauf über alle Kapitel ist genau so eine Aufgabe. Für einzelne Schritte ist es Verschwendung. |
 | Sehr lange Sitzungen mit vielen Quellen | `sonnet[1m]` | Das große Kontextfenster hält Vault-Ausschnitte, Kapitelstand und Kontextdatei gleichzeitig — spart Wiederholungen, kostet aber pro Nachricht mehr. Vorher [Token-Budget](token-budget.md) lesen. |
 
 ## Umschalten

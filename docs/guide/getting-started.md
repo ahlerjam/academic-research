@@ -94,7 +94,7 @@ Profil, ohne dass du es wiederholen musst.
 **Ergebnis:** Der Lauf meldet am Ende die Trefferzahl. So sieht ein geglückter Lauf aus:
 
 ```console
-INFO:__main__:Found 15 papers (0 modules failed)
+INFO:__main__:Found 15 papers (0 modules failed, 0 modules skipped)
 ```
 
 Beim ersten Paper mit PDF lädt das Plugin einmalig die Gewichte des Embedding-Modells

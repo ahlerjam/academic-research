@@ -15,12 +15,17 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   „welche Bestandteile gibt es" (Referenz) und „wie entsteht damit eine Arbeit".
   `getting-started.md` trägt selbsttragend von der Installation bis zum ersten
   verifizierten Zitat, je Schritt mit Erfolgssignal. `model-choice.md` ordnet
-  sechs Aufgabentypen den Claude-Code-Modell-Aliasen zu (`haiku`, `sonnet`,
+  sieben Aufgabentypen den Claude-Code-Modell-Aliasen zu (`haiku`, `sonnet`,
   `opus`, `opusplan`, `fable`, `sonnet[1m]`) und erklärt `/model`, die
   `model`-Einstellung in `.claude/settings.json` und das Subagent-Frontmatter
   `model:` inklusive `inherit`-Default; die Empfehlungen sind an die realen
   `model:`-Werte in `agents/*.md` gekoppelt, ein Modellwechsel im Repo macht den
-  Guard rot. `token-budget.md` benennt die vier teuren Schritte und je Hebel
+  Guard rot. Die Alias-Bedeutungen geben den Wortlaut von
+  [Model configuration](https://code.claude.com/docs/en/model-config) wieder —
+  `fable` steht dort für die schwersten und längsten Aufgaben (lange autonome
+  Läufe mit eigener Nachprüfung), nicht für kreatives Schreiben; ein Guard hält
+  die Seite auf dieser Lesart fest. `token-budget.md` benennt die vier teuren
+  Schritte und je Hebel
   einen realen Befehl (`--mode quick`/`--mode metadata`, `--limit`,
   `--no-expand`/`--no-browser`, `--batch`) plus die Abschnitte „eigener Kontext"
   und „Zwischenstand sichern" gegen die echte Mechanik (`hooks/pre-compact.mjs`,
@@ -33,12 +38,17 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   realer Reihenfolge umgebaut, jeder mit Beispielformulierung und
   „Ergebnis:"-Angabe; fehlende Schritte (Screening, Quellenqualität,
   Lesenotizen, Extraktionsmatrix, Lückenanalyse, Word-/Slides-Export) sind
-  ergänzt. Verlinkung aus `README.md` und `docs/README.md`; Guards in
-  `tests/test_issue_461_practice_guide.py` (47 Tests) prüfen Reihenfolge der
+  ergänzt. Der Suchschritt nennt den realen Ablageort der Volltexte —
+  `~/.academic-research/sessions/<zeitstempel>/pdfs/` je Lauf, nicht den flachen
+  Ordner `~/.academic-research/pdfs/`, den `scripts/setup.sh` nur leer anlegt —
+  und die Abschlussmeldung im Wortlaut von `scripts/search.py`. Verlinkung aus
+  `README.md` und `docs/README.md`; Guards in
+  `tests/test_issue_461_practice_guide.py` (54 Tests) prüfen Reihenfolge der
   Einstiegsschritte, reale Commands/Flags, Trigger-Phrasen gegen
   `docs/reference/skills.md` bzw. `vault.*`-Tools gegen
-  `academic_vault/server.py`, Modell-Aliase, Token-Hebel, Querverweise und den
-  Grenzen-Abschnitt.
+  `academic_vault/server.py`, Modell-Aliase gegen die Claude-Code-Doku,
+  PDF-Ablage und Erfolgssignal gegen `commands/search.md` bzw.
+  `scripts/search.py`, Token-Hebel, Querverweise und den Grenzen-Abschnitt.
 
 - **Fetcher-Agents für Cambridge Core, Oxford Academic und JSTOR (#449):** Drei
   neue Verlags-Subagenten (`agents/cambridge-core.md`, `agents/oxford-academic.md`,

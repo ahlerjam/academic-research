@@ -33,6 +33,31 @@ REPO_ROOT = D.REPO_ROOT
 COMMANDS_DIR = REPO_ROOT / "commands"
 AGENTS_DIR = REPO_ROOT / "agents"
 SKILLS_DIR = REPO_ROOT / "skills"
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+SEARCH_COMMAND = COMMANDS_DIR / "search.md"
+SEARCH_SCRIPT = SCRIPTS_DIR / "search.py"
+
+#: Belegte Bedeutung der Modell-Aliase laut Claude-Code-Doku "Model
+#: configuration" (https://code.claude.com/docs/en/model-config, Stand
+#: 2026-07-30, ueber context7 gegen die Seite geprueft). Je Alias die Begriffe,
+#: die in seiner Erklaerung auf der Seite vorkommen muessen. Deutet die Seite
+#: einen Alias spaeter um, wird dieser Guard rot.
+ALIAS_DOC_MARKERS = {
+    # "Uses Claude Fable 5 for your hardest and longest-running tasks";
+    # Abschnitt "Work with Fable 5": haelt lange autonome Sitzungen durch.
+    "fable": ("schwersten", "längsten"),
+    # "Uses Fable 5 where your organization has access to it, otherwise the
+    # latest Opus model" — kein pauschales "leistungsstaerkstes Modell".
+    "best": ("Fable", "Opus"),
+    # "uses opus during plan mode, then switches to sonnet for execution"
+    "opusplan": ("Plan", "Sonnet"),
+}
+
+#: Deutungen, die die offizielle Doku fuer ``fable`` NICHT hergibt. Fable 5 ist
+#: dort das Modell fuer die schwersten und laengsten Aufgaben — lange autonome
+#: Laeufe mit eigener Recherche und Selbstverifikation, kein Kreativ- oder
+#: Schreibmodell. Wer es so verkauft, empfiehlt auf einer erfundenen Grundlage.
+FABLE_UNSUPPORTED_CLAIMS = ("kreativ", "schreibnah", "sprachlich")
 
 #: Gueltige Claude-Code-Modell-Aliase (Frontmatter ``model:`` bzw. ``/model``).
 VALID_MODEL_ALIASES = {
@@ -229,12 +254,30 @@ def test_getting_started_does_not_delegate_execution() -> None:
     )
 
 
-def test_getting_started_shows_a_success_signal() -> None:
-    """Der Einstieg zeigt, woran ein geglueckter Suchlauf erkennbar ist."""
+def _search_summary_pattern() -> re.Pattern[str]:
+    """Regex der Abschlussmeldung, direkt aus dem ``log.info``-Format gebaut.
+
+    Quelle ist ``scripts/search.py``; aendert sich dort der Wortlaut, zeigt der
+    Leitfaden ab sofort ein Signal, das so nie auf dem Terminal steht — und der
+    Guard wird rot, statt die Abweichung durchzulassen.
+    """
+    match = re.search(r'"(Found %d papers[^"]*)"', _read(SEARCH_SCRIPT))
+    assert match, "Vorbedingung geaendert: scripts/search.py loggt keine 'Found ...'-Zeile mehr."
+    parts = re.split(r"(%d)", match.group(1))
+    return re.compile("".join(r"\d+" if p == "%d" else re.escape(p) for p in parts))
+
+
+def test_getting_started_shows_the_real_success_signal() -> None:
+    """Der Einstieg zeigt die Abschlussmeldung im echten Wortlaut (AC1/AC2).
+
+    Ein gekuerztes Erfolgssignal ist schlimmer als keines: Wer die gezeigte
+    Zeile nicht findet, haelt einen geglueckten Lauf fuer gescheitert.
+    """
     text = _read(D.GETTING_STARTED_DOC)
-    assert "papers (0 modules failed)" in text, (
-        f"{_rel(D.GETTING_STARTED_DOC)}: kein Erfolgssignal des Suchlaufs — ohne das "
-        "weiss niemand, ob der Schritt geklappt hat."
+    pattern = _search_summary_pattern()
+    assert pattern.search(text), (
+        f"{_rel(D.GETTING_STARTED_DOC)}: zeigt die Abschlussmeldung nicht so, wie "
+        f"{_rel(SEARCH_SCRIPT)} sie loggt (erwartetes Muster: {pattern.pattern!r})."
     )
 
 
@@ -271,6 +314,45 @@ def test_every_walkthrough_step_names_its_result() -> None:
         if "Ergebnis:" not in body
     ]
     assert not without, f"{_rel(D.WALKTHROUGH_DOC)}: Schritte ohne 'Ergebnis:'-Angabe: {without}"
+
+
+def _session_pdf_dir() -> str:
+    """Realer PDF-Ablageort eines Suchlaufs, aus ``commands/search.md`` gelesen.
+
+    Der Command legt pro Lauf ein Sitzungsverzeichnis an und schreibt die
+    Volltexte dort hinein; ``scripts/session_index.py`` zaehlt sie ebenfalls
+    unter ``<session_dir>/pdfs``. Der flache Ordner ``~/.academic-research/pdfs``
+    wird von ``scripts/setup.sh`` nur leer angelegt und nie befuellt.
+    """
+    text = _read(SEARCH_COMMAND)
+    match = re.search(r"SESSION_DIR=(\S+?)/\$\(date", text)
+    assert match, "Vorbedingung geaendert: commands/search.md setzt SESSION_DIR nicht mehr."
+    assert 'mkdir -p "$SESSION_DIR/pdfs"' in text, (
+        "Vorbedingung geaendert: commands/search.md legt kein $SESSION_DIR/pdfs mehr an."
+    )
+    return match.group(1)
+
+
+@pytest.mark.parametrize("doc", D.PRACTICE_GUIDE_DOCS, ids=lambda p: p.name)
+def test_pdf_location_is_session_scoped(doc: Path) -> None:
+    """Kein Praxisdokument schickt den Leser in einen Ordner, der leer bleibt (AC2).
+
+    ``~/.academic-research/pdfs/`` existiert zwar nach dem Setup, wird von der
+    Suche aber nie befuellt — wer dort nachsieht, haelt einen geglueckten Lauf
+    fuer gescheitert.
+    """
+    if not doc.exists():
+        pytest.skip(f"{_rel(doc)} existiert noch nicht (eigener Test deckt das ab)")
+    session_root = _session_pdf_dir()
+    wrong = [
+        m.group(1)
+        for m in re.finditer(r"`(~/\.academic-research/[^`]*pdfs/?)`", _read(doc))
+        if not m.group(1).startswith(session_root + "/")
+    ]
+    assert not wrong, (
+        f"{_rel(doc)}: nennt {wrong} als PDF-Ablage; real schreibt "
+        f"{_rel(SEARCH_COMMAND)} nach {session_root}/<zeitstempel>/pdfs/."
+    )
 
 
 @pytest.mark.parametrize("doc", D.PRACTICE_GUIDE_DOCS, ids=lambda p: p.name)
@@ -363,9 +445,72 @@ def _model_table_rows() -> list[list[str]]:
     return rows
 
 
+def _alias_table_rows() -> dict[str, str]:
+    """Alias -> Bedeutung aus der zweispaltigen Alias-Tabelle."""
+    rows: dict[str, str] = {}
+    for line in _read(D.MODEL_CHOICE_DOC).splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) != 2 or set("".join(cells)) <= set("-: "):
+            continue
+        for alias in re.findall(r"`([^`]+)`", cells[0]):
+            rows[alias] = cells[1]
+    return rows
+
+
 def test_model_choice_doc_exists() -> None:
     """Ohne Modellseite gibt es keine Empfehlung (AC3)."""
     assert D.MODEL_CHOICE_DOC.exists(), f"{_rel(D.MODEL_CHOICE_DOC)} fehlt."
+
+
+def test_alias_table_matches_the_official_model_config_doc() -> None:
+    """Die Alias-Tabelle gibt wieder, was die Claude-Code-Doku sagt (AC3).
+
+    Die Begriffe in ``ALIAS_DOC_MARKERS`` stammen woertlich aus
+    https://code.claude.com/docs/en/model-config. Erfindet die Seite eine eigene
+    Bedeutung, faellt der Guard.
+    """
+    rows = _alias_table_rows()
+    assert rows, f"{_rel(D.MODEL_CHOICE_DOC)}: keine Alias-Tabelle gefunden."
+    problems = []
+    for alias, markers in ALIAS_DOC_MARKERS.items():
+        meaning = rows.get(alias)
+        if meaning is None:
+            problems.append(f"{alias}: fehlt in der Alias-Tabelle")
+            continue
+        missing = [m for m in markers if m.lower() not in meaning.lower()]
+        if missing:
+            problems.append(f"{alias}: {missing} fehlen in {meaning!r}")
+    assert not problems, f"{_rel(D.MODEL_CHOICE_DOC)}: {problems}"
+
+
+def test_fable_is_not_sold_as_a_writing_model() -> None:
+    """``fable`` wird nicht zum Kreativmodell umgedeutet (AC3).
+
+    Die Doku ordnet Fable 5 den schwersten und laengsten Aufgaben zu — lange
+    autonome Laeufe mit eigener Verifikation. Eine Empfehlung, die stattdessen
+    mit Sprachqualitaet begruendet wird, steht auf erfundener Grundlage.
+    """
+    offenders = []
+    meaning = _alias_table_rows().get("fable", "")
+    offenders += [
+        f"Alias-Tabelle: '{c}' in {meaning!r}"
+        for c in FABLE_UNSUPPORTED_CLAIMS
+        if c in meaning.lower()
+    ]
+    for cells in _model_table_rows():
+        if "`fable`" not in cells[1]:
+            continue
+        reason = cells[2]
+        offenders += [
+            f"{cells[0]!r}: '{c}' in der Begruendung"
+            for c in FABLE_UNSUPPORTED_CLAIMS
+            if c in reason.lower()
+        ]
+        if not any(m.lower() in reason.lower() for m in ALIAS_DOC_MARKERS["fable"]):
+            offenders.append(f"{cells[0]!r}: Begruendung nennt die belegte Fable-Eignung nicht")
+    assert not offenders, f"{_rel(D.MODEL_CHOICE_DOC)}: {offenders}"
 
 
 def test_model_table_covers_task_types_with_reasons() -> None:

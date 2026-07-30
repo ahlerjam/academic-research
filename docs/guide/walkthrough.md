@@ -76,8 +76,12 @@ warum die Alternativen schlechter passen.
 ```
 
 **Ergebnis:** Parallele Suche über die API-Quellen, Deduplizierung, Scoring, Ablage im
-Vault. Der Lauf meldet am Ende `Found N papers (0 modules failed)`; PDFs landen unter
-`~/.academic-research/pdfs/`.
+Vault. Der Lauf meldet am Ende `Found N papers (0 modules failed, 0 modules skipped)`.
+Jeder Lauf bekommt ein eigenes Sitzungsverzeichnis
+`~/.academic-research/sessions/<zeitstempel>/`; die beschafften Volltexte liegen darin
+unter `~/.academic-research/sessions/<zeitstempel>/pdfs/`, nicht in einem gemeinsamen
+Sammelordner. Den zuletzt angelegten Ordner findest du mit
+`ls -t ~/.academic-research/sessions/ | head -1`.
 
 Für die systematische Recherche mit Browser-Modulen (Google Scholar, Springer, TIB):
 
