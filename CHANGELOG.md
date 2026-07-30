@@ -10,6 +10,35 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Neuer Skill `latex-layout-auditor` (#392):** Read-only-Prüfung eines
+  `latex-export`-Outputs auf LaTeX-spezifische Layout-Fehler, ergänzend zu
+  `submission-checker` (der prüft Hochschul-Formalia, nicht LaTeX-Layout).
+  Zwei deterministische Regeln decken die im Issue genannten Digest-Befunde
+  zu `skills/latex-export/scripts/render_tex.py` ab: fehlendes
+  `\tightlist` ohne vorangehende `\providecommand`/`\newcommand`-Definition
+  (pdflatex-Build-Abbruch) und korrumpierte Zitationskommandos wie
+  `\textbackslash{}cite{key}` statt `\cite{key}`. Beide Bugs sind im
+  Renderpfad selbst bereits durch #386 gefixt — dieser Auditor erkennt
+  dasselbe Muster zusätzlich in beliebigen, auch manuell editierten oder
+  extern erzeugten `.tex`-Dateien, meldet sie aber nur (Scope-Abgrenzung
+  laut Issue: kein automatisches Fixen). Referenzimplementierung
+  `scripts/check_layout.py::audit_tex()` ist reine, seiteneffektfreie
+  Pruef-Logik, separat pytest-getestet; der Skill selbst bleibt
+  `allowed-tools: [Read]` und wendet dieselben Muster beim Lesen an, statt
+  das Skript zur Laufzeit auszuführen. Vier weitere Checklisten-Dimensionen
+  (Package-Konflikte, Kapitel-Nummerierungssprünge, Bildunterschriften-
+  Format, Cross-Referenzierung) sind prompt-basiert und orientieren sich am
+  30-Prinzipien-Katalog aus
+  [andrehuang/academic-writing-agents](https://github.com/andrehuang/academic-writing-agents)
+  (MIT-Lizenz, real via GitHub-API verifiziert; Wortlaut-Übernahme mit
+  Quellenhinweis laut Issue erlaubt) — Auszug in
+  `skills/latex-layout-auditor/references/academic-writing-agents-principles.md`.
+  Skill-Zahl 36 → 37 (`plugin.json`-description, `docs/reference/skills.md`,
+  `README.md`, `AGENTS.md`) — Manifest-Version bleibt bewusst bei 6.5.1
+  (Präzedenzfall #447/literature-excel bzw. #472/defense-prep). Neue
+  Fixtures `tests/fixtures/latex_layout_auditor/{missing_tightlist,
+  valid_structure}.tex`, neuer Test `tests/test_latex_layout_auditor.py`.
+
 - **Praxis-Leitfaden: Erste Schritte, voller Durchlauf, Modellwahl, Token-Sparen
   (#461):** Vier neue Seiten unter `docs/guide/` schließen die Lücke zwischen
   „welche Bestandteile gibt es" (Referenz) und „wie entsteht damit eine Arbeit".

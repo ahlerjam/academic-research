@@ -3,7 +3,7 @@
 [![CI](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ahlerjam/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/ahlerjam/academic-research)
 [![Version](https://img.shields.io/badge/version-6.5.1-blue.svg)](CHANGELOG.md)
-[![Skills](https://img.shields.io/badge/skills-36-orange.svg)](docs/reference/skills.md)
+[![Skills](https://img.shields.io/badge/skills-37-orange.svg)](docs/reference/skills.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-8A2BE2.svg)](https://code.claude.com/docs/en/plugins)
 
@@ -76,7 +76,7 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 ```mermaid
 graph LR
     U[Du in Claude Code] --> C[11 Slash-Commands]
-    U --> S[36 Skills<br/>selbstaktivierend]
+    U --> S[37 Skills<br/>selbstaktivierend]
     C --> A[24 Agents<br/>Subagents]
     S --> A
     A --> V[(Vault<br/>SQLite + FTS5 + vec0)]
@@ -199,7 +199,7 @@ Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
 **Nachschlagen**
 
 - [Commands](docs/reference/commands.md) — alle 11 Slash-Commands mit Syntax und Beispielen
-- [Skills](docs/reference/skills.md) — alle 36 Skills und ihre Trigger
+- [Skills](docs/reference/skills.md) — alle 37 Skills und ihre Trigger
 - [Agents](docs/reference/agents.md) — alle 24 Subagents
 - [Vault-MCP-Server](docs/reference/vault.md) — alle 37 MCP-Tools, Volltext- und Vektor-Index
 - [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt
