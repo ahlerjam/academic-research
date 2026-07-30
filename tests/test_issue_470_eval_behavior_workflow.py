@@ -11,7 +11,10 @@ API-Call noetig):
 2. Das Budget ist begrenzt (``timeout-minutes``) und in
    ``docs/evals/STRATEGY.md`` (Abschnitt "API-Budget") dokumentiert.
 3. ``docs/SKIP_REASONS.md`` enthaelt keine erledigten ``todo:*``-Zeilen mehr.
-4. ``ci.yml`` ist von alledem unberuehrt (Diff gegen ``origin/main`` leer).
+4. ``ci.yml`` bleibt von alledem unberuehrt -- der reguläre CI-Pfad bekommt
+   ``ANTHROPIC_API_KEY`` nicht injiziert (dauerhafte Struktur-Invariante,
+   nicht nur ein Punkt-in-Zeit-Diff gegen ``origin/main``, siehe Fix-Runde
+   PR #504 Review-Runde 3).
 """
 
 from __future__ import annotations
@@ -203,114 +206,33 @@ def test_formerly_stale_rows_correspond_to_zero_skips(test_path):
 # --------------------------------------------------------------------------- #
 # AC4 -- Regulärer Testlauf bleibt unberührt
 # --------------------------------------------------------------------------- #
+#
+# Fruehere Fassung pruefte ``git diff origin/main -- ci.yml == \"\"`` -- das ist
+# nur eine Punkt-in-Zeit-Eigenschaft DIESES PRs, keine dauerhafte Invariante:
+# der Test bleibt nach dem Merge fuer immer in ``tests/``, und jede spaetere
+# legitime ``ci.yml``-Aenderung haette ihn ab dann in allen Matrix-Legs rot
+# gefaerbt (Review-Runde 3, PR #504). Zusaetzlich brauchte der Diff-Ansatz
+# ``origin/main`` lokal referenzierbar -- in echten ``pull_request``-Laeufen
+# (``actions/checkout`` ohne ``fetch-depth: 0``, detached HEAD) war das nur per
+# Nachhol-Fetch UND ueber einen fragilen Shallow-Klon-Regressionstest
+# abzusichern, der wiederum am Branchnamen ``HEAD`` (statt einem echten Branch)
+# scheiterte. Ersetzt durch eine dauerhafte, vom PR-Stand unabhaengige
+# Struktur-Pruefung direkt am Workflow-Inhalt: kein Schritt in ``ci.yml`` darf
+# ``ANTHROPIC_API_KEY`` injizieren -- das bleibt exklusiv ``eval-behavior.yml``
+# vorbehalten (AC4-Kern: der reguläre, PR-gatete Testlauf bekommt keinen
+# Real-API-Pfad).
 
 
-def _current_branch(repo_dir: Path) -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.strip()
-
-
-def _ensure_origin_main_ref(repo_dir: Path) -> None:
-    """origin/main lokal referenzierbar machen, falls es fehlt.
-
-    In echtem CI checkt ``actions/checkout@v7.0.1`` (im ``pytest``-Job von
-    ``ci.yml``) nur den ausgeloesten Ref aus -- ohne ``fetch-depth: 0`` existiert
-    ``origin/main`` dort lokal nicht, und ``git diff origin/main`` schlaegt mit
-    ``fatal: bad revision`` fehl (reproduziert per shallow Single-Branch-Klon in
-    ``test_ci_workflow_check_recovers_missing_origin_main_ref``). ``fetch-depth: 0``
-    liesse sich nicht in ``ci.yml`` selbst ergaenzen, ohne AC4 (Diff gegen
-    ``origin/main`` == leer) zu verletzen -- deshalb wird hier gezielt nur der
-    main-Tip nachgeholt, nie ``ci.yml`` angefasst."""
-    probe = subprocess.run(
-        ["git", "rev-parse", "--verify", "-q", "origin/main"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-    )
-    if probe.returncode == 0:
-        return
-    fetch = subprocess.run(
-        ["git", "fetch", "--depth=1", "origin", "main:refs/remotes/origin/main"],
-        cwd=repo_dir,
-        capture_output=True,
-        text=True,
-    )
-    assert fetch.returncode == 0, f"origin/main-Nachholung fehlgeschlagen: {fetch.stderr}"
-
-
-def test_ci_workflow_is_untouched_by_this_issue():
-    """ci.yml bleibt gegenueber origin/main unveraendert (AC4)."""
-    _ensure_origin_main_ref(ROOT)
-    result = subprocess.run(
-        ["git", "diff", "origin/main", "--", str(CI_WORKFLOW.relative_to(ROOT))],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, f"git diff schlug fehl: {result.stderr}"
-    assert result.stdout == "", (
-        f"ci.yml weicht von origin/main ab -- AC4 verlangt Unveraendertheit:\n{result.stdout}"
-    )
-
-
-def test_ci_workflow_check_recovers_missing_origin_main_ref(tmp_path):
-    """Regression: shallow Single-Branch-Checkout (exakt der Zustand, den
-    ``actions/checkout`` ohne ``fetch-depth: 0`` erzeugt) hat kein lokales
-    ``origin/main`` -- ``_ensure_origin_main_ref`` muss das reparieren, ohne
-    ``ci.yml`` selbst anzufassen."""
-    branch = _current_branch(ROOT)
-    clone = tmp_path / "shallow-clone"
-    subprocess.run(
-        [
-            "git",
-            "clone",
-            "--quiet",
-            "--no-local",
-            "--depth",
-            "1",
-            "--branch",
-            branch,
-            str(ROOT),
-            str(clone),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    probe = subprocess.run(
-        ["git", "rev-parse", "--verify", "-q", "origin/main"],
-        cwd=clone,
-        capture_output=True,
-        text=True,
-    )
-    assert probe.returncode != 0, (
-        "Testannahme verletzt: origin/main war im shallow Klon unerwartet schon vorhanden."
-    )
-    diff_before = subprocess.run(
-        ["git", "diff", "origin/main", "--", ".github/workflows/ci.yml"],
-        cwd=clone,
-        capture_output=True,
-        text=True,
-    )
-    assert diff_before.returncode != 0, (
-        "Testannahme verletzt: git diff origin/main haette hier wie in CI mit "
-        "'fatal: bad revision' fehlschlagen muessen."
-    )
-
-    _ensure_origin_main_ref(clone)
-
-    diff_after = subprocess.run(
-        ["git", "diff", "origin/main", "--", ".github/workflows/ci.yml"],
-        cwd=clone,
-        capture_output=True,
-        text=True,
-    )
-    assert diff_after.returncode == 0, (
-        f"git diff schlug trotz Nachholung von origin/main fehl: {diff_after.stderr}"
-    )
+def test_ci_workflow_does_not_wire_the_real_api_key():
+    """Dauerhafte Invariante (AC4): kein Step in ci.yml setzt ANTHROPIC_API_KEY --
+    die API-gateten Evals bleiben exklusiv ueber eval-behavior.yml real ausfuehrbar."""
+    assert CI_WORKFLOW.is_file(), f"{CI_WORKFLOW} fehlt."
+    data = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+    for job_name, job in (data.get("jobs") or {}).items():
+        for step in job.get("steps", []):
+            env = step.get("env", {}) or {}
+            assert "ANTHROPIC_API_KEY" not in env, (
+                f"ci.yml-Job {job_name!r}, Step {step.get('name')!r} setzt "
+                "ANTHROPIC_API_KEY -- die API-gateten Evals duerfen nur ueber "
+                "eval-behavior.yml real laufen (AC4)."
+            )
