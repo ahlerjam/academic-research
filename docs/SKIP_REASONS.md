@@ -15,15 +15,11 @@ Skip soll wegfallen, sobald das genannte Artefakt vorhanden ist.
 
 | Test / Datei | Skip-Grund | Reason-Text | Klasse |
 | --- | --- | --- | --- |
-| `tests/evals/eval_runner.py` | Kein `ANTHROPIC_API_KEY` in CI | `ANTHROPIC_API_KEY nicht gesetzt - Eval uebersprungen` | permanent |
-| `tests/evals/eval_runner.py` | `anthropic`-Package optional | `anthropic-Package nicht installiert` | permanent |
+| `tests/evals/eval_runner.py` | Kein `ANTHROPIC_API_KEY` in CI | `ANTHROPIC_API_KEY nicht gesetzt - Eval uebersprungen` | permanent (im regulären `pytest tests/`-Lauf; der separate `eval-behavior.yml`-Workflow, Issue #470, setzt den Key und führt real aus) |
+| `tests/evals/eval_runner.py` | `anthropic`-Package fehlt | `anthropic-Package nicht installiert` | permanent (defensiver Fallback; `anthropic>=0.40` ist seit #390 Pflicht-Dependency in `pyproject.toml`, dieser Zweig greift nur bei kaputter Installation) |
 | `tests/evals/eval_runner.py` | Eval-Datei (`evals.json`) fehlt | `Eval-Datei fehlt: <path>` | permanent |
 | `tests/evals/test_triggers.py` | Keine `trigger_evals.json` für Skill | `Keine trigger_evals.json fuer <skill>` | permanent |
-| `tests/evals/test_token_regression.py` | Keine Token-Baseline erfasst | `tokens.json fehlt -- noch keine Baseline` | permanent |
 | `tests/evals/test_*_evals.py` | Prompt nicht für aktiven Mode | `Prompt <id> nicht fuer Mode <mode>` | permanent |
-| `tests/test_ocr_detection.py` | `ocr.py` noch nicht vorhanden | `ocr.py noch nicht implementiert` | todo:ocr |
-| `tests/test_publisher_fetchers.py` | `evals.json` für Publisher fehlt | `evals.json noch nicht vorhanden` | todo:publisher-evals |
-| `tests/test_page_offset.py` | Fixture/Asset fehlt | (mehrzeilig) | todo:page-offset-fixture |
 | `tests/test_project_bootstrap.py` | `git` nicht im PATH (CI-Umgebung) | `git not in PATH` | permanent |
 
 ## Regenerieren
