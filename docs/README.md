@@ -12,13 +12,24 @@ ganz oben einen Hinweis und stehen unten im eigenen Abschnitt.
 
 ## Ich fange gerade an
 
-1. [Installation und Migration](guide/installation.md) — Voraussetzungen, was das Setup
-   wirklich tut, Umstieg von v5.
-2. [Walkthrough](guide/walkthrough.md) — der komplette Weg durch eine Arbeit, von der
-   Themenfindung bis zur Abgabe.
-3. [Troubleshooting](guide/troubleshooting.md) — wenn etwas klemmt.
-4. [Quickstart-Protokoll](quickstart-protocol.md) — ein realer Durchlauf mit allen
+1. [Erste Schritte](guide/getting-started.md) — von der Installation bis zum ersten
+   verifizierten Zitat, in einem Zug und ohne Sprung auf andere Seiten.
+2. [Installation und Migration](guide/installation.md) — Voraussetzungen im Detail, was
+   das Setup wirklich tut, Umstieg von v5.
+3. [Walkthrough](guide/walkthrough.md) — jeder Arbeitsschritt in der realen Reihenfolge,
+   mit Beispielformulierung und erwartetem Ergebnis.
+4. [Troubleshooting](guide/troubleshooting.md) — wenn etwas klemmt.
+5. [Quickstart-Protokoll](quickstart-protocol.md) — ein realer Durchlauf mit allen
    Ausgaben, zum Abgleich mit deiner eigenen Installation.
+
+Der Praxis-Leitfaden geht darüber hinaus:
+
+- [Modellwahl](guide/model-choice.md) — welches Modell für welchen Arbeitsschritt, und wie
+  du umschaltest.
+- [Token-Budget](guide/token-budget.md) — welche Schritte teuer sind, wie du sie
+  eingrenzt, wie du Zwischenstände sicherst.
+- [Bewährtes Vorgehen und ehrliche Grenzen](guide/best-practices.md) — was funktioniert,
+  was regelmäßig schiefgeht und wofür das Plugin nicht taugt.
 
 Neue Begriffe schlägst du unterwegs im [Glossar](reference/glossary.md) nach.
 

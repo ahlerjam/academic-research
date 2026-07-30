@@ -1,142 +1,274 @@
-# Walkthrough — von der Themenfindung bis zur Abgabe
+# Walkthrough — jeder Arbeitsschritt in der realen Reihenfolge
 
 [← Doku-Übersicht](../README.md)
 
-Der [Quickstart in der README](../../README.md#quickstart) bringt dich bis zum ersten
-verifizierten Zitat. Diese Seite zeigt den vollständigen Weg durch eine Arbeit. Du musst
-die Schritte nicht der Reihe nach abarbeiten — spring dahin, wo du gerade stehst.
+Diese Seite ist der vollständige Durchlauf durch eine Arbeit, in der Reihenfolge, in der
+die Schritte tatsächlich anfallen. Zu jedem Schritt steht eine Formulierung, die du so
+übernehmen kannst, und darunter, was dabei herauskommt — damit du merkst, wenn etwas
+anderes passiert als erwartet.
 
-Voraussetzung: Setup ist gelaufen, du bist in deinem Projektordner
-(siehe [Installation](installation.md)).
+Du musst nicht bei 1 anfangen: Spring dahin, wo du gerade stehst. Voraussetzung ist nur,
+dass Setup und Kontext stehen — das erledigt [Erste Schritte](getting-started.md).
+Welches Modell sich je Schritt lohnt, steht in [Modellwahl](model-choice.md); wo die
+teuren Stellen liegen, in [Token-Budget](token-budget.md).
+
+Skills aktivieren sich selbst, sobald die passende Formulierung fällt — die Beispiele
+unten enthalten deshalb bewusst die realen Trigger-Phrasen aus der
+[Skills-Übersicht](../reference/skills.md). Commands rufst du dagegen explizit auf.
 
 ## 1. Kontext einrichten
 
 ```
-Ich schreibe eine Bachelorarbeit über DevOps-Governance
-im deutschen Mittelstand. Leibniz FH, Wirtschaftsinformatik, 60 Seiten.
+Richte den Kontext für meine Arbeit ein: Bachelorarbeit über DevOps-Governance im
+deutschen Mittelstand, Leibniz FH, Wirtschaftsinformatik, 60 Seiten.
 ```
 
-Der `academic-context`-Skill fragt durch: Forschungsfrage, Arbeitstyp, Hochschule,
-Disziplin, Methodik, Gliederung. Das Ergebnis landet in `<projekt>/academic_context.md`
-und wird ab da von allen anderen Skills gelesen.
+Der `academic-context`-Skill fragt durch, was noch fehlt: Forschungsfrage, Arbeitstyp,
+Hochschule, Disziplin, Methodik, Gliederung.
+
+**Ergebnis:** `<projekt>/academic_context.md` ist gefüllt und wird ab jetzt von allen
+anderen Skills gelesen. Ohne diesen Schritt raten alle folgenden Schritte.
 
 ## 2. Thema finden
 
-Noch kein Thema? Der `topic-brainstorm`-Skill hilft:
+Nur nötig, wenn das Thema noch offen ist:
 
 ```
-Ich studiere Wirtschaftsinformatik im 5. Semester — welches Thema könnte passen?
+Welches Thema passt zu mir? Wirtschaftsinformatik, 5. Semester, Interesse an
+Governance und Automatisierung.
 ```
 
-Liefert 3–5 Kandidaten mit Feasibility/Novelty/Career-Fit-Scores und je 2–3
-Forschungsfragen.
+**Ergebnis:** 3–5 Themenkandidaten mit Feasibility-, Novelty- und Career-Fit-Score und je
+zwei bis drei möglichen Forschungsfragen.
 
 ## 3. Forschungsfrage schärfen
 
 ```
-Ist meine Forschungsfrage gut? „Wie wirkt sich DevOps auf KMU aus?"
+Hilf mir, die Forschungsfrage zu formulieren: „Wie wirkt sich DevOps auf KMU aus?"
 ```
 
-`research-question-refiner` prüft Spezifität, Beantwortbarkeit, Falsifizierbarkeit.
+**Ergebnis:** Eine Bewertung auf Spezifität, Beantwortbarkeit und Falsifizierbarkeit plus
+eine geschärfte Fassung. Erwarte Widerspruch — eine Frage, die alles offenlässt, kommt
+umformuliert zurück.
 
-## 4. Literatur suchen
+## 4. Gliederung und Exposé
+
+```
+Bau mir eine Gliederung für die Arbeit und daraus ein Exposé.
+```
+
+**Ergebnis:** Ein Kapitelgerüst, gegen sieben Kriterien geprüft (Logik, Gewichtung,
+Abdeckung der Forschungsfrage), und ein Exposé-Entwurf im Dialog.
+
+## 5. Methodik wählen
+
+```
+Welche Methodik passt zu dieser Forschungsfrage — qualitativ, quantitativ, Mixed?
+```
+
+**Ergebnis:** Ein Methodenvorschlag mit Scoring über vier Dimensionen und der Begründung,
+warum die Alternativen schlechter passen.
+
+## 6. Literatur suchen
 
 ```
 /academic-research:search "DevOps Governance Mittelstand KMU" --mode standard
 ```
 
-Sucht parallel in 7 APIs, dedupliziert, scort auf 5 Dimensionen. PDFs landen in
+**Ergebnis:** Parallele Suche über die API-Quellen, Deduplizierung, Scoring, Ablage im
+Vault. Der Lauf meldet am Ende `Found N papers (0 modules failed)`; PDFs landen unter
 `~/.academic-research/pdfs/`.
 
-Für die systematische Suche mit Browser-Modulen (Google Scholar, Springer, TIB usw.):
+Für die systematische Recherche mit Browser-Modulen (Google Scholar, Springer, TIB):
 
 ```
 /academic-research:search "IT Compliance KMU" --mode deep
 ```
 
-Details zu Modi und Quellen: [Suchquellen und Scoring](../reference/search.md).
+Das ist der teuerste Suchmodus — Details zu Modi und Quellen stehen in
+[Suchquellen und Scoring](../reference/search.md).
 
-## 5. Buch beschaffen
-
-```
-/academic-research:fetch "IT-Governance im Mittelstand" --isbn 978-3-658-12345-6
-```
-
-Der `book-fetcher`-Agent probiert TIB, Springer, OAPEN, KVK und weitere Quellen gemäß
-deinem Per-Uni-Profil.
-
-## 6. Literaturliste aus einem Handout importieren
+## 7. Literaturliste aus einem Handout übernehmen
 
 ```
-/academic-research:search --import-list literaturliste.pdf
+Literaturliste importieren: Übernimm literaturliste.pdf ins Vault.
 ```
 
-Oder über den `reading-list-import`-Skill: *„Importiere diese Quellenliste ins Vault."*
+**Ergebnis:** Die Einträge aus PDF, Markdown oder Text landen als Paper-Datensätze im
+Vault, dedupliziert gegen den vorhandenen Bestand. Hast du eine Zotero-Bibliothek, sag
+stattdessen *„Zotero importieren"*.
 
-## 7. Vault abfragen
+## 8. Bücher beschaffen
 
 ```
-Welche Quellen im Vault behandeln IT-Governance?
+/academic-research:fetch 978-3-658-12345-6
 ```
 
-Der Vault antwortet mit Snippet und Seite, ohne dass PDFs erneut hochgeladen werden.
+Der `book-fetcher`-Agent probiert TIB, Springer, OAPEN, DOAB, KVK und weitere Quellen
+gemäß deinem Per-Uni-Profil. Statt der ISBN gehen auch DOI, URL oder Freitext-Titel.
 
-## 8. Papers bewerten und Excel exportieren
+**Ergebnis:** Status `success` (PDF im Vault), `pickup_required` (Fernleihe-Eintrag in
+`~/.academic-research/pickup_queue.json`), `captcha` oder `no_match`. Bei
+`pickup_required` baust du dir mit `/academic-research:pickup` die Bibliotheksliste.
+
+## 9. Treffermenge screenen
+
+Bei großen Treffermengen (systematisches Review):
+
+```
+Ich muss viele Treffer screenen — bitte Screening parallelisieren nach meinen
+Ein- und Ausschlusskriterien.
+```
+
+**Ergebnis:** Der `screening-judge`-Agent bewertet die Treffer aufgefächert auf Subagents,
+schreibt ein Ledger mit Ein-/Ausschluss samt Begründung und aktualisiert die
+PRISMA-Zähler. Der Lauf ist wiederaufnehmbar — ein Abbruch kostet dich das Ledger nicht.
+
+## 10. Quellenqualität prüfen
+
+```
+Prüf die Quellenqualität der Top-20-Treffer.
+```
+
+**Ergebnis:** Ein Score von 0–100 über fünf Dimensionen je Quelle, mit Begründung. Damit
+sortierst du aus, bevor du Lesezeit investierst.
+
+## 11. Lesenotizen anlegen
+
+```
+Notiz zu einer Quelle anlegen: Kernbefund, Methode und Verwendbarkeit für
+mein Kapitel 3.
+```
+
+**Ergebnis:** Ein strukturiertes Exzerpt im Vault (`vault.add_note()`), auffindbar über
+`vault.search_notes()`. Das ist der Schritt, den man am ehesten überspringt und später am
+meisten vermisst.
+
+## 12. Vault abfragen
+
+```
+Welche Quellen im Vault behandeln IT-Governance im Mittelstand?
+```
+
+**Ergebnis:** Der Vault antwortet über `vault.search()` mit Snippet, Quelle und Seite —
+ohne dass PDFs erneut hochgeladen werden. Das ist der Kern des Token-Sparens: Du arbeitest
+mit Ausschnitten statt mit ganzen Dokumenten.
+
+## 13. Studien vergleichen
+
+```
+Extraktionsmatrix erstellen: Studien vergleichen über die eingeschlossenen Quellen.
+```
+
+**Ergebnis:** Eine Matrix mit Quellen als Zeilen und den Schlüsselkonzepten als Spalten,
+als Tabelle und als Arbeitsblatt exportierbar.
+
+## 14. Bewerten und als Excel exportieren
 
 ```
 /academic-research:score
-/academic-research:excel
+/academic-research:excel --output literatur.xlsx
 ```
 
-## 9. Kapitel schreiben
+**Ergebnis:** Erst das Relevanz-Scoring über den `relevance-scorer`-Agent, dann eine
+Excel-Übersicht deiner Literatur. Der Excel-Teil braucht das externe Plugin
+`document-skills` — fehlt es, nennt der Command den Nachinstallations-Befehl.
+
+## 15. Literaturlücken finden
 
 ```
-Schreib mir einen Entwurf für das Methodik-Kapitel.
+Zeig mir die Literaturlücken pro Kapitel.
 ```
 
-`chapter-writer` nutzt Vault-Zitate via `vault.find_quotes()` — seitengenau und gegen den
-Vault geprüft. Der `verbatim-guard`-Hook blockt jeden Kapitel-Write mit einem Zitat, das
-nicht im Vault steht.
+**Ergebnis:** Ein Coverage-Bericht je Kapitel: wo die Belege dünn sind, welche Konzepte
+gar nicht gedeckt sind. Daraus wird die nächste Suchrunde.
 
-## 10. Anti-KI-Audit mit humanizer-de
+## 16. Zitate extrahieren
+
+```
+Zitate finden zur Forschungsfrage: drei wörtliche Belege aus den drei
+wichtigsten Quellen, mit Seitenzahl.
+```
+
+**Ergebnis:** Seitengenaue Belege im Vault. Ohne diesen Schritt bleibt der nächste
+blockiert — der `verbatim-guard`-Hook lässt keinen Kapitel-Write mit einem Zitat durch,
+das nicht im Vault steht.
+
+## 17. Kapitel schreiben
+
+```
+Kapitel schreiben: Entwurf für das Methodik-Kapitel, gestützt auf die Quellen im Vault.
+```
+
+**Ergebnis:** Ein Entwurf, dessen Zitate über `vault.find_quotes()` belegt sind. Der
+Entwurf landet in `<projekt>/kapitel/`. Das ist der teuerste Einzelschritt im ganzen
+Durchlauf — pro Kapitel eine eigene Session lohnt sich.
+
+## 18. Anti-KI-Audit
 
 ```
 /academic-research:humanize kapitel/03-methodik.md --mode deep
 ```
 
-Erzeugt `kapitel/03-methodik.humanized.md` und `kapitel/03-methodik.diff.md` mit
-Severity-Ranking der KI-Muster.
+**Ergebnis:** `kapitel/03-methodik.humanized.md` und `kapitel/03-methodik.diff.md` mit
+einem Severity-Ranking der gefundenen KI-Muster. `--mode deep` ist gründlicher und
+teurer; für einen ersten Blick reicht der Standardmodus.
 
-## 11. PRISMA-Flow (für Systematic Reviews)
+## 19. Plagiatsnähe prüfen
+
+```
+Plagiat prüfen: Ist Kapitel 3 zu nah am Original meiner Hauptquelle?
+```
+
+**Ergebnis:** Ein N-Gramm-Overlap gegen die Vault-Quellen mit den kritischen Stellen.
+Das ersetzt keinen Plagiatsdienst deiner Hochschule — siehe
+[Grenzen](best-practices.md#wofür-das-plugin-nicht-geeignet-ist).
+
+## 20. PRISMA-Flow (nur systematische Reviews)
 
 ```
 Erstelle den PRISMA-Flow für meine Literaturrecherche.
 ```
 
-Der `prisma-flow`-Skill rendert das Mermaid-Diagramm und die 27-Punkte-Checkliste.
+**Ergebnis:** Das Mermaid-Flussdiagramm mit den realen Zählern aus dem Screening plus die
+27-Punkte-Checkliste.
 
-## 12. Abstract, Titel, Formalia-Check
+## 21. Abstract, Titel, Formalia
 
 ```
-Schreib ein IMRaD-Abstract (DE + EN).
-Ich brauche 5 Titelvorschläge.
-Ist die Arbeit abgabefertig? FH-Leibniz-Formalia prüfen.
+Abstract schreiben (IMRaD, DE und EN).
+Ich brauche Titelvorschläge.
+Ist die Arbeit abgabefertig? Formalia prüfen nach FH-Leibniz-Vorgaben.
 ```
 
-## 13. LaTeX-Export
+**Ergebnis:** Ein IMRaD-Abstract in beiden Sprachen, fünf bis sieben Titelvarianten mit
+Begründung und ein Formalia-Bericht mit den konkreten Verstößen.
+
+## 22. Exportieren
 
 ```
 /academic-research:latex --kapitel all --output thesis.tex
+/academic-research:word --kapitel all --output thesis.docx --format pdf
+/academic-research:slides --kapitel all --output kolloquium.pptx --kolloquium
 ```
 
-Erzeugt `thesis.tex` und `thesis.bib` (biblatex, DIN-1505-Stil).
+**Ergebnis:** `thesis.tex` plus `thesis.bib` (biblatex, DIN-1505), eine `.docx` mit echten
+Formatvorlagen inklusive Titelblatt und eidesstattlicher Erklärung, und ein Foliensatz mit
+einer Kernaussage pro Folie.
 
-## 14. Abgabe reproduzierbar einfrieren
+## 23. Abgabe reproduzierbar einfrieren
 
 ```
 Erstelle einen Material-Passport und sperre den Vault.
 ```
 
-Der `material-passport`-Skill schreibt `material-passport.json` und setzt den Vault-Lock
-(Repro-Lock). Danach sind keine Schreibzugriffe mehr möglich — der Stand bleibt exakt
-nachvollziehbar.
+**Ergebnis:** `material-passport.json` und ein gesetzter Repro-Lock. Danach sind keine
+Schreibzugriffe mehr möglich, und der Stand bleibt exakt nachvollziehbar. Willst du danach
+weiterarbeiten, brauchst du eine neue Vault-Kopie.
+
+## Wenn du unterbrichst
+
+Eine frühere Recherche-Session holst du dir mit
+`/academic-research:history --restore-session <id>` zurück; Snapshots listet
+`/academic-research:history --snapshots`. Wie du Zwischenstände gezielt sicherst, steht in
+[Token-Budget](token-budget.md).
