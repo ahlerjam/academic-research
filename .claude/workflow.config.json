@@ -12,7 +12,7 @@
   "protectedAreas": ["vault", "hooks", "security", "ci"],
   "areas": ["vault", "skills", "agents", "commands", "hooks", "scripts", "evals", "ci", "docs", "security"],
   "parallelism": 3,
-  "caps": { "maxParallel": 4, "issuesPerRun": 10, "groomingIssuesPerWeek": 15 },
+  "caps": { "maxParallel": 4, "issuesPerRun": 25, "groomingIssuesPerWeek": 15 },
   "budgets": {
     "S": { "turns": 20, "tokens": 200000 },
     "M": { "turns": 60, "tokens": 500000 },
