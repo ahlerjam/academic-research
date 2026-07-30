@@ -1,0 +1,33 @@
+{
+  "component": "latex-layout-auditor",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "lla-01",
+      "input": "Meine exportierte .tex enthaelt eine Liste mit \\tightlist, aber nirgendwo im Dokument steht \\providecommand{\\tightlist} oder \\newcommand{\\tightlist}. Was findest du?",
+      "expected": {
+        "type": "regex",
+        "value": "(?i)tightlist"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "lla-02",
+      "input": "Was prueft dieser Skill zusaetzlich zum submission-checker Skill?",
+      "expected": {
+        "type": "substring",
+        "value": "submission-checker"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "lla-03",
+      "input": "Findest du im Renderpfad von latex-export einen Bug, behebst du ihn dann automatisch?",
+      "expected": {
+        "type": "regex",
+        "value": "(?i)(nicht behoben|meldet|melden)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

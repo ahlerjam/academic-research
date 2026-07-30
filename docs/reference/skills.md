@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **36 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **37 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -81,6 +81,7 @@ Diese Skills sind per Default aus. Sie laufen erst, wenn im Projekt-State der pa
 | `abstract-generator` | *„Abstract schreiben"*, *„Zusammenfassung"* | IMRaD-konform, DE + EN |
 | `title-generator` | *„Titelvorschläge"*, *„Arbeitstitel"* | 5–7 Varianten mit Rationale |
 | `submission-checker` | *„abgabefertig"*, *„Formalia prüfen"* | Formalia-Check, Default: FH Leibniz -- beschränkt auf am Markdown-Material Prüfbares, Rest als „Nicht geprüft" ausgewiesen |
+| `latex-layout-auditor` | *„LaTeX-Layout prüfen / pruefen"*, *„.tex auditieren"* | Read-only Prüfung eines `.tex`-Exports auf LaTeX-Layout-Fehler: Listen-Strukturen, Zitationskommandos, Kapitel-Nummerierung, Package-Konflikte ([SKILL.md](../../skills/latex-layout-auditor/SKILL.md)) |
 | `defense-prep` | *„Verteidigung vorbereiten"*, *„Fragenkatalog Kolloquium"* | Vortragsgliederung mit Zeitrahmen + Kernaussage je Kapitel, Fragenkatalog zu Methodik/Limitationen ([SKILL.md](../../skills/defense-prep/SKILL.md)) |
 
 ## Externe Skills (Plugin-Dependencies)

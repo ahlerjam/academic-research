@@ -1,0 +1,25 @@
+{
+  "component": "latex-layout-auditor",
+  "should_trigger": [
+    "Kannst du meinen LaTeX-Export auf Layout-Fehler pruefen?",
+    "Bitte die .tex-Datei auditieren nach dem Export",
+    "Ich brauche einen Layout-Check vor der Abgabe fuer mein .tex",
+    "Hat meine .tex Kapitel-Nummerierungssprünge?",
+    "Gibt es Package-Konflikte in meiner LaTeX-Datei?",
+    "Pruefe die Listen-Struktur in meinem LaTeX-Export",
+    "Meine Liste hat vermutlich einen tightlist Fehler, kannst du das checken?",
+    "LaTeX-Layout pruefen bitte, bevor ich abgebe",
+    "Sind meine Zitationskommandos im .tex-Export korrekt oder korrumpiert?",
+    "Pruefe das Bildunterschriften-Format in meinem LaTeX-Export"
+  ],
+  "should_not_trigger": [
+    "Pruefe die Formalia meiner Abgabe gegen FH Leibniz",
+    "Exportiere meine Kapitel als .tex",
+    "Erstelle mir einen Foliensatz fuer das Kolloquium",
+    "Formatiere mein Word-Dokument fuer die Abgabe",
+    "Pruefe meinen Text auf Plagiat",
+    "Erstelle eine Vortragsgliederung fuer die Verteidigung",
+    "Wie soll ich meine Forschungsfrage schaerfen?",
+    "Schlage mir einen Titel fuer meine Arbeit vor"
+  ]
+}
