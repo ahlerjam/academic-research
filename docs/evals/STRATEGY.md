@@ -68,6 +68,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `citation-style-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Nur Trigger- und Schema-Ebene; der CSL-Import selbst hat kein projekteigenes Skript, das offline bewertbar wäre. Ohne Key Skip. |
 | `cluster-visualizer` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Bewertet Diagramm-Interpretation; die Clustering-Mathematik ist in `tests/test_cluster*.py` abgedeckt. Ohne Key Skip. |
 | `conference-poster` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Layout- und Textqualität eines Posters ist ein Gestaltungsurteil, kein Assert. Ohne Key Skip. |
+| `defense-prep` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ob Kernaussagen tatsächlich aus dem Kapiteltext belegt sind und der Fragenkatalog wirklich an Methodik/Limitationen gebunden bleibt, ist ein Modellurteil über Fließtext; die strukturellen Vorgaben (Preamble-Referenz, Nicht-Erfinden-Regel) prüft `tests/test_defense_prep.py` deterministisch. Ohne Key Skip. |
 | `extraction-matrix` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Reine Aggregation vorhandener Vault-Belege zu einer Vergleichstabelle; ob Spalten korrekt aus `academic_context.md` abgeleitet und Zellen korrekt als fehlend markiert sind, ist ein Modellurteil ohne deterministisches Surrogat. Ohne Key Skip. |
 | `fetch` | structural | `tests/test_fetch_command.py` (Schema-Assertions) | Die drei Cases prüfen Identifier-Erkennung, deren Logik ausschließlich als Prompt in `commands/fetch.md` existiert. Ein Offline-Runner müsste die Testhilfe `tests/test_fetch_command.py` gegen sich selbst prüfen — Tautologie statt Metrik. |
 | `generic-fetcher` | structural | `tests/test_generic_fetcher.py` (Navigations-Spiegel gegen einen lokalen HTTP-Ursprung) | Die vier Cases beschreiben Volltext-Beschaffung auf realen Plattformen (Zenodo, MDPI, OpenEdition Books) plus eine Paywall-Gegenprobe. Die drei Plattform-Cases laufen end-to-end: `tests/helpers/local_origin.py` serviert die gespeicherte Plattform-DOM **und** die PDF-Route auf 127.0.0.1, `tests/helpers/generic_fetcher_nav.py` holt die Datei per HTTP, schreibt sie und verifiziert sie von der Platte (existiert, > 0 Bytes, `%PDF-`); der Test vergleicht die geschriebenen Bytes mit den ausgelieferten. Der Status bleibt `structural`, weil die DOM aus Fixtures stammt und das öffentliche Netz der drei Plattformen ungetestet bleibt — ob Zenodo, MDPI oder OpenEdition heute real ausliefern, ist netzabhängig und bleibt Operator-Sache (gleiche Lage wie `oa-fetchers`/`publisher-fetchers`). |
@@ -103,12 +104,14 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 3 × `metric`, 44 × `structural`, 0 × `removed` (Stand Issue #446:
+**Bilanz:** 3 × `metric`, 45 × `structural`, 0 × `removed` (Stand Issue #446:
 `word-export`/`slide-export` neu, beide `structural`; Stand Issue #454:
 `sparring-partner` neu, `structural` — die Transkripte stammen aus echten,
 blinden Modellaufrufen gegen vorab committete Kriterien, aber pro pytest-Lauf
 wird kein Modell befragt; gemessen wird offline die Unterscheidungskraft der
-Kriterien gegen neun Negativkontrollen, siehe Zeile oben).
+Kriterien gegen neun Negativkontrollen, siehe Zeile oben; Stand Issue #472:
+`defense-prep` neu, `structural` — Kernaussage- und Fragenkatalog-Qualität
+bleiben Modellurteile, die strukturellen Vorgaben deckt `tests/test_defense_prep.py`).
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).
@@ -159,6 +162,16 @@ Issue #390 verbraucht selbst kein Budget: alle in seinem Rahmen entstandenen
 Runner laufen offline (per Guard `test_no_eval_runner_requires_api_key`
 erzwungen), und die 147 Skips bleiben bis zu einer Operator-Entscheidung
 bestehen.
+
+**Realer Ausführungspfad (Issue #470):** `.github/workflows/eval-behavior.yml`
+ist der einzige Weg, diese ca. 400 Aufrufe tatsächlich abzurufen — ein separat
+per `workflow_dispatch` auslösbarer Job, begrenzt auf `tests/evals/` (nicht
+`tests/`), mit `timeout-minutes: 30` als hartem Deckel. Der Job bricht mit
+`::error::` ab, wenn `ANTHROPIC_API_KEY` als Repo-Secret fehlt, statt
+täuschend grün als „0 failed, N skipped" durchzulaufen. `ci.yml` bleibt davon
+unberührt: kein Key dort, weiterhin nur `push`/`pull_request`, die 147
+API-gateten Skips bestehen im regulären Lauf unverändert fort. Ob das Secret
+hinterlegt wird, bleibt — wie oben beschrieben — Operator-Entscheidung.
 
 ## Alt-Issue #55
 

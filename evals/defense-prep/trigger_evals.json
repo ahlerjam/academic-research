@@ -1,0 +1,5 @@
+{
+  "component": "defense-prep",
+  "should_trigger": ["Ich muss mich auf die Verteidigung vorbereiten", "Kolloquium vorbereiten", "Was koennten die Pruefer beim Kolloquium fragen?", "Vortragsgliederung fuer die Verteidigung", "Fragenkatalog Kolloquium erstellen", "Wie lange soll ich pro Kapitel im Vortrag reden?", "Defense prep bitte", "Pruefungsgespraech vorbereiten", "Kernaussagen fuer meinen Vortrag ableiten", "Disputation vorbereiten"],
+  "should_not_trigger": ["Kapitel schreiben", "Abstract generieren", "Foliensatz erstellen", "Formalia pruefen", "Plagiat pruefen", "Forschungsfrage schaerfen", "Paper suchen", "Zitat formatieren", "Gliederung inhaltlich pruefen", "Titel vorschlagen"]
+}

@@ -1,0 +1,8 @@
+{
+  "component": "defense-prep",
+  "component_type": "skill",
+  "prompts": [
+    {"id": "dp-01", "input": "Ich habe 20 Minuten fuer mein Kolloquium. Erstelle mir eine Vortragsgliederung mit Zeitrahmen und Kernaussage je Kapitel.", "expected": {"type": "regex", "value": "(Minuten|Zeitrahmen|Min\\.)"}, "mode": "with_skill"},
+    {"id": "dp-02", "input": "Welche Fragen zur Methodik koennten die Pruefer stellen? Meine Methodik: 12 semi-strukturierte Interviews, Auswertung nach Mayring.", "expected": {"type": "substring", "value": "Mayring"}, "mode": "with_skill"}
+  ]
+}

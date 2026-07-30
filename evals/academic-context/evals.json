@@ -3,6 +3,7 @@
   "component_type": "skill",
   "prompts": [
     {"id": "ac-01", "input": "Setze meinen Context auf FH Leibniz BWL Bachelor, Thema DevOps Governance", "expected": {"type": "substring", "value": "Leibniz"}, "mode": "both"},
-    {"id": "ac-02", "input": "Aktualisiere Abgabe auf 2026-06-30", "expected": {"type": "regex", "value": "2026-06-30"}, "mode": "with_skill"}
+    {"id": "ac-02", "input": "Aktualisiere Abgabe auf 2026-06-30", "expected": {"type": "regex", "value": "2026-06-30"}, "mode": "with_skill"},
+    {"id": "ac-03", "input": "Ich moechte spaeter aus meiner Arbeit auch einen Foerderantrag ableiten koennen. Trag das in meinem Kontext ein.", "expected": {"type": "substring", "value": "output_targets"}, "mode": "with_skill"}
   ]
 }
