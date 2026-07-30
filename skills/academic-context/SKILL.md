@@ -47,6 +47,14 @@ Existiert keine `./academic_context.md` im Projekt-Ordner, sammle im Gespräch f
 8. **Betreuer** — Name (optional)
 9. **Abgabetermin** — Datum (optional)
 10. **Gliederung** — Kapitelstruktur, falls schon geplant
+11. **Gewünschte Ausgabeformen** — Mehrfachauswahl via `AskUserQuestion` aus
+    `grant-proposal` (Förderantrag), `conference-poster` (Konferenz-Poster),
+    `reviewer-response` (Response-Letter). Diese drei Skills sind Default-Off
+    und aktivieren sich erst, wenn ihr Name im Feld `output_targets` steht
+    (Opt-in-Pattern, siehe [Glossar](../../docs/reference/glossary.md)).
+    Braucht der User aktuell keine dieser Ausgabeformen, `output_targets: []`
+    eintragen — der Wert bleibt jederzeit nachträglich per Update-Aktivierung
+    erweiterbar.
 
 Schreibe die gesammelten Informationen in `./academic_context.md` mit dieser Struktur:
 
@@ -71,6 +79,10 @@ type: project
 - Methodik: [...]
 - Betreuer: [...]
 - Abgabetermin: [...]
+
+### Ausgabeformen
+output_targets:
+  - [grant-proposal | conference-poster | reviewer-response, je einmal pro gewünschter Form; leer lassen, wenn keine gebraucht wird]
 
 ### Gliederung
 [Nummerierte Gliederung, falls vorhanden]

@@ -30,6 +30,56 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   als „optional", obwohl `anthropic>=0.40` seit #390 Pflicht-Dependency ist;
   beide Klassen sind jetzt korrigiert bzw. entfernt.
 
+- **Endphase: ehrliche Abgabeprüfung, Ausgabeformen-Erhebung, Verteidigungsvorbereitung (#472):**
+  `submission-checker` behauptete bisher Prüfungen (Typografie, Zeilenabstand,
+  Ränder, exakte Seitenzahl), die es am reinen Markdown-Material
+  (`kapitel/*.md`, `writing_state.md`) gar nicht belegen kann — Layout entsteht
+  erst beim Export (`word-export`/`latex-export`). Die Checkliste ist jetzt in
+  "am Material prüfbar" (Pflichtabschnitte, Quellenzahl, Text-Ebene von
+  Abbildungen/Tabellen, Text-Präsenz der eidesstattlichen Erklärung) vs. "nicht
+  prüfbar ohne Export/explizite User-Angabe" (Seitenzahl, Formatierung)
+  getrennt; das Output-Template hat eine neue Pflicht-Sektion "Nicht geprüft".
+  Nennt der User Formatwerte explizit im Gespräch, bleibt die Prüfung dagegen
+  möglich (bestehender Eval `sc-01` bleibt PASS-fähig). Die Few-Shot-Beispiele
+  ziehen mit: das bisherige *Gut*-Beispiel führte mit "Zeilenabstand 1.0 statt
+  geforderten 1.5 (Seiten 12-18)" genau den erfundenen Layout-Befund vor, den
+  die neue Regel verbietet — es steht jetzt als *Schlecht*-Fall da, daneben ein
+  *Gut*-Beispiel für die ehrliche "NICHT GEPRÜFT"-Antwort und eines für den
+  echten Score auf Basis vom User genannter Werte. `academic-context`
+  erhebt in der Erstaktivierung neu das Feld "Gewünschte Ausgabeformen"
+  (`output_targets`), wodurch die drei bereits vorhandenen, aber mangels
+  Erhebung nie erreichbaren Default-Off-Skills `grant-proposal`/
+  `conference-poster`/`reviewer-response` überhaupt aktivierbar werden. Neuer
+  Skill `defense-prep`: leitet aus `kapitel/*.md` + dem Methodik-Feld in
+  `academic_context.md` eine Vortragsgliederung mit Zeitbudget und
+  Kernaussage je Kapitel ab, dazu einen Fragenkatalog, der an die tatsächlich
+  gewählte Methodik und die im Fazit-Kapitel benannten Limitationen gebunden
+  ist — fehlt die Limitationen-Sektion, fragt der Skill nach statt generische
+  Fragen zu erfinden. Kein Foliensatz (das deckt `slide-export`) und keine
+  automatische Bewertungsprognose (bewusster Scope-Out). Skill-Zahl 35 → 36
+  (`plugin.json`/`marketplace.json`-description, `docs/reference/skills.md`,
+  `README.md`, `AGENTS.md`) — die Manifest-*Version* bleibt bewusst bei 6.5.1
+  (Präzedenzfall #447/literature-excel: Skill-Zahl-Änderungen allein lösen
+  keinen Versionsbump aus, sonst bricht `tests/test_issue_370_version_sync.py`
+  den Gleichlauf mit `pyproject.toml` und dem obersten versionierten
+  CHANGELOG-Eintrag). Baselines für
+  `submission-checker` und `academic-context` in `tests/baselines/
+  {skill_sizes,tokens}.json` ehrlich um den Netto-Zuwachs angehoben (analoges
+  Muster zu #395/#439) — für `submission-checker` in zwei Schritten: 8897 →
+  12227 für die Ehrlichkeitsregeln, danach 12227 → 12655 für die nachgezogenen
+  Few-Shot-Beispiele (+428 Zeichen), die Reduktionsmarge gegen
+  `test_token_reduction` bleibt dabei unverändert bei 1448 Zeichen;
+  `defense-prep` erhält einen künstlich gesetzten
+  Erstwert, da es keine Vorher-Version gibt. Neue Tests:
+  `tests/test_submission_checker_honesty.py`,
+  `tests/test_academic_context_output_targets.py`, `tests/test_defense_prep.py`.
+  Neue Eval-Cases: `evals/submission-checker/evals.json` (sc-03, "Nicht
+  geprüft" ohne Export), `evals/academic-context/{evals.json,trigger_evals.json}`
+  (ac-03 + ein Trigger-Case für `output_targets`), `evals/defense-prep/*` neu
+  (Status `structural` in `docs/evals/STRATEGY.md`, Begründung: Kernaussage-
+  und Fragenkatalog-Qualität sind Modellurteile über Fließtext, die
+  strukturellen Vorgaben deckt `tests/test_defense_prep.py`).
+
 - **Fetcher-Agents für Cambridge Core, Oxford Academic und JSTOR (#449):** Drei
   neue Verlags-Subagenten (`agents/cambridge-core.md`, `agents/oxford-academic.md`,
   `agents/jstor.md`) nach dem `springer-book`/`degruyter`-Muster: Lizenz-Prüfung

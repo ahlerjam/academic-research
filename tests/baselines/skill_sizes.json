@@ -8,7 +8,7 @@
   "zotero-import": 4565,
   "cluster-visualizer": 4270,
   "abstract-generator": 10933,
-  "academic-context": 6571,
+  "academic-context": 7292,
   "advisor": 9366,
   "book-handler": 4845,
   "chapter-writer": 14588,
@@ -19,7 +19,7 @@
   "research-question-refiner": 10094,
   "source-quality-audit": 9975,
   "style-evaluator": 9427,
-  "submission-checker": 8897,
+  "submission-checker": 12655,
   "title-generator": 6713,
   "grant-proposal": 5133,
   "conference-poster": 5238,
@@ -32,5 +32,6 @@
   "reading-notes": 5968,
   "extraction-matrix": 8300,
   "parallel-screening": 8883,
-  "literature-excel": 4850
+  "literature-excel": 4850,
+  "defense-prep": 7560
 }
