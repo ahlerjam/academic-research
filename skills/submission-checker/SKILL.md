@@ -218,8 +218,19 @@ und wie der User sie prüfen lassen kann (Werte nennen oder Export abwarten).]
 
 > "Formatierung ist OK."
 
-**Gut** (Grund: dimensionaler Score mit konkretem Prüfpunkt):
+**Schlecht** (Grund: erfundener Layout-Befund -- Zeilenabstand und Seiten
+stehen im Markdown-Material nicht):
 
 > "Formatierung: PARTIAL. Zeilenabstand 1.0 statt geforderten 1.5
-> (Seiten 12-18). Fix: Absätze 12-18 markieren, Zeilenabstand in
-> Formatvorlage 'Standard' auf 1.5 setzen."
+> (Seiten 12-18)."
+
+**Gut** (Grund: ehrliche Nicht-Prüfung plus Weg zur Prüfbarkeit):
+
+> "Formatierung: NICHT GEPRÜFT. Zeilenabstand und Ränder entstehen erst
+> beim Export. Nenne mir die Werte aus dem Word-Dokument, dann gleiche ich
+> sie gegen die FH-Vorgaben ab."
+
+**Gut** (Grund: dimensionaler Score, weil der User die Werte selbst genannt hat):
+
+> "Formatierung: PARTIAL. Dein genannter Zeilenabstand 1.0 verfehlt die
+> geforderten 1.5. Fix: Formatvorlage 'Standard' auf 1.5 setzen."

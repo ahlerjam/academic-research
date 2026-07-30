@@ -20,7 +20,12 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   prüfbar ohne Export/explizite User-Angabe" (Seitenzahl, Formatierung)
   getrennt; das Output-Template hat eine neue Pflicht-Sektion "Nicht geprüft".
   Nennt der User Formatwerte explizit im Gespräch, bleibt die Prüfung dagegen
-  möglich (bestehender Eval `sc-01` bleibt PASS-fähig). `academic-context`
+  möglich (bestehender Eval `sc-01` bleibt PASS-fähig). Die Few-Shot-Beispiele
+  ziehen mit: das bisherige *Gut*-Beispiel führte mit "Zeilenabstand 1.0 statt
+  geforderten 1.5 (Seiten 12-18)" genau den erfundenen Layout-Befund vor, den
+  die neue Regel verbietet — es steht jetzt als *Schlecht*-Fall da, daneben ein
+  *Gut*-Beispiel für die ehrliche "NICHT GEPRÜFT"-Antwort und eines für den
+  echten Score auf Basis vom User genannter Werte. `academic-context`
   erhebt in der Erstaktivierung neu das Feld "Gewünschte Ausgabeformen"
   (`output_targets`), wodurch die drei bereits vorhandenen, aber mangels
   Erhebung nie erreichbaren Default-Off-Skills `grant-proposal`/
@@ -40,7 +45,11 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   CHANGELOG-Eintrag). Baselines für
   `submission-checker` und `academic-context` in `tests/baselines/
   {skill_sizes,tokens}.json` ehrlich um den Netto-Zuwachs angehoben (analoges
-  Muster zu #395/#439); `defense-prep` erhält einen künstlich gesetzten
+  Muster zu #395/#439) — für `submission-checker` in zwei Schritten: 8897 →
+  12227 für die Ehrlichkeitsregeln, danach 12227 → 12655 für die nachgezogenen
+  Few-Shot-Beispiele (+428 Zeichen), die Reduktionsmarge gegen
+  `test_token_reduction` bleibt dabei unverändert bei 1448 Zeichen;
+  `defense-prep` erhält einen künstlich gesetzten
   Erstwert, da es keine Vorher-Version gibt. Neue Tests:
   `tests/test_submission_checker_honesty.py`,
   `tests/test_academic_context_output_targets.py`, `tests/test_defense_prep.py`.
