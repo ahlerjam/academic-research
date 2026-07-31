@@ -287,6 +287,23 @@ def test_hook_blocks_unverified_quote_on_edit(tmp_path):
     )
 
 
+def test_hook_blocks_unverified_quote_in_nested_chapter_path(tmp_path):
+    """Issue #516: verschachtelte Kapitelpfade bleiben geschuetzt."""
+    db_path = _empty_vault(tmp_path, "nested_chapter_vault.db")
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": "kapitel/teil1/intro.md",
+            "content": 'Laut dem Autor "Dies ist ein sehr wichtiger Satz aus dem Buch" stimmt das.',
+        },
+    }
+    result = run_hook_raw(payload, env_overrides={"VAULT_DB_PATH": db_path})
+    assert result.returncode == 2, (
+        "Verschachtelter Kapitelpfad umgeht verbatim-guard: "
+        f"erwartet exit 2 (block), got {result.returncode}. stderr: {result.stderr}"
+    )
+
+
 def test_hook_blocks_unverified_quote_on_multiedit(tmp_path):
     """Regression #220: MultiEdit auf *.tex mit unverifiziertem Zitat -> Block (exit 2)."""
     db_path = _empty_vault(tmp_path, "empty_vault2.db")

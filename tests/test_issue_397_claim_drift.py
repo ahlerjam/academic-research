@@ -242,6 +242,26 @@ def test_claim_drift_warns_on_absolute_edit_path(vault_with_quote, tmp_path):
     assert warned(result), f"Absoluter Pfad ohne Warnung: {result.stderr}"
 
 
+def test_claim_drift_warns_on_nested_chapter_path(vault_with_quote, tmp_path):
+    """Issue #516: verschachtelte Kapitelpfade bleiben im Drift-Guard."""
+    project_dir = tmp_path / "projekt"
+    nested_dir = project_dir / "kapitel" / "teil1"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "intro.md").write_text(CHAPTER_OLD, encoding="utf-8")
+    result = run_hook(
+        edit_payload("moderaten Effekt", "starken Effekt", file_path="kapitel/teil1/intro.md"),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert warned(result), (
+        "Verschachtelter Kapitelpfad blieb im claim-drift-guard stumm. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )
+
+
 def test_claim_drift_warns_on_write_against_disk_state(vault_with_quote, tmp_path):
     """AC1: Write-Pfad vergleicht gegen den Dateizustand auf Platte."""
     project_dir = tmp_path / "projekt"
