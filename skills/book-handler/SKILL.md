@@ -58,6 +58,11 @@ vault.add_paper(
 )
 ```
 
+Ist der Sammelband selbst schon indexiert, hängen weitere Kapitel per
+`vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id, page_first,
+page_last)` daran — erbt Herausgeber und `container_title` vom Eltern-Eintrag und
+gibt die Kapitel-`paper_id` für alle Folgeschritte zurück.
+
 ### 2.5. page_offset berechnen
 
 Falls `pdf_path` gesetzt:
@@ -95,7 +100,12 @@ if detect_needs_ocr(pdf_path):
     run_ocrmypdf(pdf_path, pdf_path_ocr)
     vault.set_ocr_done(paper_id)
     vault.update_pdf_path(paper_id, pdf_path_ocr)
+    vault.extract_fulltext(paper_id)
 ```
+
+`vault.extract_fulltext` ist nach jedem `vault.update_pdf_path` Pflicht: Der
+Volltext-Index entsteht sonst nur beim Anlegen, und `vault.search` sucht weiter
+im leeren Text des Scans.
 
 ## Ausgabe
 

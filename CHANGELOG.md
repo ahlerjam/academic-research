@@ -450,6 +450,28 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Jedes Vault-MCP-Tool hat einen Aufrufer (#540):** Neun der 37 per
+  `@mcp.tool` registrierten Tools wurden von keinem Skill, Agent, Command oder
+  Hook angesprochen — sie kosteten in jeder Session Tool-Listen-Kontext, ohne
+  dass ein Workflow sie erreichte. Statt sie zu deregistrieren (was `#226` für
+  `supersede_decision`/`list_excluded_sources` explizit zurückgedreht hätte),
+  sind sie jetzt dort verdrahtet, wo die Lücke fachlich saß: `add_chapter` und
+  `extract_fulltext` in `book-handler` (Kapitel am indexierten Sammelband; der
+  Volltext-Index überlebt sonst kein `update_pdf_path` nach OCR), `get_figure`
+  als Read-back in `figure-verifier`, `is_excluded` als Vorab-Check in
+  `reading-list-import` (der Re-Import holte bis dahin aussortierte Quellen
+  zurück), `list_excluded_sources` in `prisma-flow` (PRISMA 2020 verlangt
+  Ausschlussgründe, nicht nur Zahlen), `add_score_snapshot`/`get_score_history`
+  in `source-quality-audit` und die Decision-Tools in `academic-context` —
+  letzteres füllt zugleich den bis dahin immer leeren `decisions_snapshot` des
+  Material-Passports. Registrierung und Doku bleiben unverändert (37 Tools);
+  `tests/test_issue_540_vault_tool_callers.py` hält den Vertrag: jedes
+  `@mcp.tool` braucht eine Referenz in `skills/`, `agents/`, `commands/` oder
+  `hooks/` (`docs/` zählt bewusst nicht mit, sonst wäre der Guard tautologisch
+  grün), und die Tool-Tabellen in `docs/reference/vault.md` müssen sich exakt
+  mit der Registrierung decken. `tests/baselines/*.json` um den Netto-Zuwachs
+  der fünf Skills angehoben (etabliertes Repo-Muster, vgl. #471/PR #547).
+
 - **`hooks/` trennt Hooks von Bibliotheken (#542):** Flach in `hooks/` liegen jetzt
   ausschließlich die fünf in `hooks/hooks.json` registrierten Hooks; die importierten
   Module (`citation-parse.mjs`, `citation-cascade.mjs`, `vault-bridge.mjs`) und das

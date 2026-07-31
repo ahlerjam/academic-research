@@ -102,6 +102,8 @@ ISBN-Resolution: DNB SRU + OpenLibrary + GoogleBooks → CSL-JSON
     ↓
 Fallback: minimales CSL-JSON aus geparsten Daten
     ↓
+Vault.is_excluded() je Eintrag → Treffer: überspringen
+    ↓
 Vault.add_paper() für jeden Eintrag (Dedup via DOI/ISBN)
     ↓
 Retraction-Check (nur bei DOI): Crossref update-type:retraction
@@ -130,12 +132,14 @@ und vervollständigt das Ergebnis.
 2. Format erkennen und Text extrahieren
 3. LLM-Parser aufrufen (Sonnet) — extrahiert strukturierte Liste
 4. Für jeden Eintrag: DOI/ISBN resolven → CSL-JSON
-5. `vault.add_paper()` aufrufen (idempotent: Dedup via DOI/ISBN)
-6. Bei vorhandenem DOI: Retraction-Status via Crossref prüfen (`updated-by`-Feld,
+5. `vault.is_excluded(citekey)` vorab prüfen: Treffer → überspringen und als
+   „ausgeschlossen" zählen, sonst holt der Re-Import aussortierte Quellen zurück
+6. `vault.add_paper()` aufrufen (idempotent: Dedup via DOI/ISBN)
+7. Bei vorhandenem DOI: Retraction-Status via Crossref prüfen (`updated-by`-Feld,
    `type: retraction`) — Treffer → `vault.add_excluded_source()`, Ausfall
    blockiert den Ingest nicht (fail-safe)
-7. Bei Mehrdeutigkeit (_ambiguous: true): AskUserQuestion-Tool nutzen
-8. Ergebnis melden: N importiert, M übersprungen
+8. Bei Mehrdeutigkeit (_ambiguous: true): AskUserQuestion-Tool nutzen
+9. Ergebnis melden: N importiert, M übersprungen
 
 ## Mehrdeutigkeiten
 

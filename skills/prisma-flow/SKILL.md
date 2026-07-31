@@ -58,6 +58,16 @@ nicht als Volltextkandidaten.
 Alternativ: Wenn kein `prisma_counters.json` vorhanden, den User um die
 Zählwerte bitten oder aus dem angezeigten Ergebnis-Summary ableiten.
 
+### Schritt 1.5: Ausschlussgründe aus dem Vault holen
+
+PRISMA 2020 verlangt zur Eligibility-Stufe Gründe, nicht nur eine Zahl:
+`vault.list_excluded_sources()` liefert `paper_id` + `reason`. Nach `reason`
+gruppieren und zählen → Aufschlüsselung des Eligibility-Knotens („off-topic 7,
+kein Volltext 3"). Einträge ohne Grund als „nicht dokumentiert" ausweisen, nicht
+raten. Liegt die Zahl der Vault-Ausschlüsse deutlich über
+`n_excluded_screening + n_excluded_eligibility`, stammen Einträge aus früheren
+Sessions — den User darauf hinweisen. Leere Liste → reines Zahlen-Diagramm.
+
 ### Schritt 2: Mermaid-Diagramm rendern
 
 ```bash
