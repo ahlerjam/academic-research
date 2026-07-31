@@ -111,8 +111,8 @@ im Cache → automatischer Fallback auf base64.
 Citations-API-Response) ziehen. Prüfen, ob ≥ 3 Wörter aus `paper.title`
 (jedes ≥ 4 Zeichen) dort auftauchen (case-insensitive). Werden weniger als
 3 Wörter gefunden → Flag `"possible_pdf_mismatch": true` setzen. Extraktion
-trotzdem fortführen — nicht abbrechen. Das Flag dient nur der manuellen
-Nachprüfung.
+trotzdem fortführen — nicht abbrechen; das Flag blockiert jedoch die Vault-Persistenz
+(siehe Abschnitt Vault-Persistenz / PDF-Mismatch-Gate).
 
 **Werte für `extraction_quality`:** `"high"` (sauberer Text, 2–3 gute Zitate gefunden) | `"medium"` (degradierter Text oder nur 1 Zitat) | `"low"` (nutzbar, aber schwache OCR/Formatierung) | `"failed"` (unbrauchbar — keine verwertbaren Inhalte, z. B. Scan ohne OCR oder leere Seiten)
 
@@ -183,7 +183,9 @@ Prüfen, bevor ggf. mit `mismatch_override: true` erneut aufgerufen wird.
 Ist die Bedingung erfüllt, jeden Quote via `vault.add_quote()` persistieren:
 
 ```python
-if not paper["possible_pdf_mismatch"] or input.get("mismatch_override"):
+# result: Agent-Antwort mit possible_pdf_mismatch auf oberster Ebene
+# input: User-Input mit mismatch_override aus dem aufrufenden citation-extraction-Skill
+if not result.get("possible_pdf_mismatch") or input.get("mismatch_override", False):
     quote_id = vault.add_quote(
         paper_id=paper_id,  # aus dem Input-Objekt
         verbatim=quote["text"],  # exakter Wortlaut

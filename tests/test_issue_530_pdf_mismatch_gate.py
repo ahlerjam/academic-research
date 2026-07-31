@@ -15,6 +15,7 @@ Gesamtdatei — sonst waere die Suche tautologisch (#536-Learning).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _WORKTREE_ROOT = Path(__file__).parent.parent
@@ -55,15 +56,23 @@ class TestAgentConditionalPersistence:
         assert "mismatch_override" in section, (
             "Vault-Persistenz-Abschnitt muss mismatch_override als Override-Pfad nennen"
         )
-        # Der tatsaechliche Code-Aufruf (nicht die Erwaehnung in der Prosa davor)
-        # darf nicht unbedingt (ohne Bedingungslogik) beschrieben sein.
-        add_quote_idx = section.find("quote_id = vault.add_quote(")
-        assert add_quote_idx != -1, "vault.add_quote()-Zuweisung fehlt"
-        preceding = section[:add_quote_idx]
-        assert "possible_pdf_mismatch" in preceding or "if not paper" in preceding, (
-            "vault.add_quote() muss textuell HINTER einer possible_pdf_mismatch-Bedingung "
-            "stehen, nicht unbedingt aufgerufen werden"
+        # Der tatsaechliche Code-Aufruf im Python-Code-Block (nicht die Prosa davor)
+        # muss durch eine echte Bedingung geschuetzt sein.
+        code_block_match = re.search(r"```python\s+# result:.*?(?=\n```)", section, re.DOTALL)
+        assert code_block_match, "Python-Code-Block mit Bedingungslogik nicht gefunden"
+        code_block = code_block_match.group(0)
+        # Pruefe auf die Bedingungszeile im echten Code (nicht nur in der Prosa).
+        assert re.search(r"if\s+.*mismatch", code_block, re.IGNORECASE), (
+            "Code-Block muss eine echte if-Bedingung mit 'mismatch' enthalten, "
+            "nicht nur prosa-seitige Erwaehnung"
         )
+        # Pruefe, dass vault.add_quote() NACH dieser Bedingung aufgerufen wird.
+        add_quote_idx = code_block.find("vault.add_quote(")
+        if_idx = code_block.find("if")
+        assert if_idx != -1 and add_quote_idx != -1, (
+            "Code-Block muss Bedingung vor vault.add_quote() enthalten"
+        )
+        assert if_idx < add_quote_idx, "if-Bedingung muss VOR vault.add_quote() stehen"
 
     def test_skip_path_sets_vault_quote_id_null(self):
         section = self._vault_persistenz_section()
@@ -170,17 +179,22 @@ class TestSkipOptionAndResultPresentation:
         content = _SKILL_MD.read_text(encoding="utf-8")
         step4 = _section(content, "### 4. Qualitätsprüfung", "## Export-Formate")
         lower = step4.lower()
-        assert "erfolgreich" in lower, (
-            "Schritt 4 muss eine explizite 'Erfolgreich'-Gruppierung enthalten"
-        )
-        assert "ausgelassen" in lower, (
-            "Schritt 4 muss eine explizite 'Ausgelassen'-Gruppierung enthalten"
-        )
         # Beide Gruppen muessen als getrennte Aufzaehlungspunkte auftauchen, nicht vermischt.
-        success_idx = lower.find("erfolgreich")
-        excluded_idx = lower.find("ausgelassen")
-        assert success_idx != -1 and excluded_idx != -1
-        assert success_idx != excluded_idx
+        # Suche nach Bullet-Zeilen (^- **Label**).
+        success_bullet = re.search(r"^\s*-\s+\*\*.*erfolgreich", lower, re.MULTILINE)
+        excluded_bullet = re.search(r"^\s*-\s+\*\*.*ausgelassen", lower, re.MULTILINE)
+        assert success_bullet, (
+            "Schritt 4 muss eine Bullet-Zeile mit 'erfolgreich' enthalten "
+            "(Format: - **...erfolgreich**)"
+        )
+        assert excluded_bullet, (
+            "Schritt 4 muss eine Bullet-Zeile mit 'ausgelassen' enthalten "
+            "(Format: - **...ausgelassen**)"
+        )
+        # Stelle sicher, dass beide Bullet-Zeilen voneinander getrennt sind.
+        assert success_bullet.start() != excluded_bullet.start(), (
+            "Erfolgreich- und Ausgelassen-Labels muessen als getrennte Bullet-Zeilen stehen"
+        )
 
 
 # ---------------------------------------------------------------------------
