@@ -6,7 +6,7 @@ description: >
   pickup_required (Fernleihe-Eintrag in ~/.academic-research/pickup_queue.json
   angelegt), captcha (Screenshot anzeigen, manuelle Entscheidung abwarten),
   no_match (kein Treffer -> ebenfalls pickup_required-Eintrag).
-allowed-tools: Read, Write, Agent(book-fetcher)
+allowed-tools: Read, Write, Agent(book-fetcher), mcp__academic-vault__vault_add_paper
 argument-hint: <isbn|doi|url|titel>
 ---
 
@@ -89,7 +89,52 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 #### Bei `success`
 
 1. Lese `file_path` aus dem Ergebnis.
-2. Erstelle oder appende folgenden Block an `./literature_state.md`
+2. Trage den Fund im Vault ein — rufe `mcp__academic-vault__vault_add_paper`
+   auf (Issue #450 AC4: die korrekte Ausgabe-/Jahresangabe des Digitalisats
+   muss im Vault landen, nicht nur im Agent-Output des book-fetcher stehen
+   bleiben):
+
+```json
+{
+  "paper_id": "<sanitized aus Schritt 2>",
+  "csl_json": "<JSON-String: {\"type\": \"book\"} — bei vorhandenem result.edition die drei unten beschriebenen Felder issued/publisher/edition daraus ableiten und ergaenzen>",
+  "pdf_path": "<file_path>",
+  "isbn": "<identifier_value, falls identifier_type == isbn, sonst weglassen>",
+  "doi": "<identifier_value, falls identifier_type == doi, sonst weglassen>"
+}
+```
+
+   `result.edition` (von book-fetcher gemeldet, Freitext "Jahr/Ausgabe/Verlag
+   DIESES Digitalisats" — siehe `agents/book-fetcher.md`/
+   `agents/hathitrust-fetcher.md` etc.) NICHT unveraendert als Freitext-Blob
+   in ein einzelnes CSL-Feld kopieren — der `latex-export`-Skill
+   (`skills/latex-export/scripts/build_bib.py`) liest das Jahr ausschliesslich
+   aus `csl_json.issued["date-parts"]`, nicht aus `edition`. Stattdessen
+   `result.edition` in `csl_json` zerlegen:
+
+   - **Jahr:** die letzte 4-stellige Zahl (1000–2999) im String → nach
+     `csl_json.issued = {"date-parts": [[<Jahr>]]}`.
+   - **Verlag:** der Text zwischen einem fuehrenden Ort/Doppelpunkt und dem
+     Jahr (z. B. "Printed for T. Egerton" aus
+     "London : Printed for T. Egerton, 1813", oder "Verlag der
+     Dieterichschen Buchhandlung" aus "Göttingen : Verlag der
+     Dieterichschen Buchhandlung, 1864") → nach `csl_json.publisher`.
+   - **Auflage:** nur eine tatsaechliche Ausgabebezeichnung (z. B. "3rd ed.",
+     "2. Aufl.") → nach `csl_json.edition`. Bei HathiTrust/Internet
+     Archive/MDZ fehlt eine solche Angabe im bisher beobachteten Format meist
+     vollstaendig — dann `"edition"` ganz weglassen, NIE Jahr oder Verlag
+     dort hineinschreiben.
+
+   Laesst sich in `result.edition` keine 4-stellige Zahl finden, NICHT raten:
+   den vollen String unveraendert nach `csl_json.edition` uebernehmen
+   (Fallback) und `issued`/`publisher` weglassen. Fehlt `result.edition`
+   komplett (z. B. bei einem Verlags-Treffer ohne dieses Feld), alle drei
+   Schluessel weglassen — NIE einen Platzhalter oder eine aus
+   `identifier_value` abgeleitete Angabe erfinden. Ein `title`-Feld fehlt
+   hier bewusst noch: kein Subagent liefert bislang einen Titel aus der
+   Quelle selbst — separater, vorbestehender Koordinationspunkt, nicht Teil
+   von #450.
+3. Erstelle oder appende folgenden Block an `./literature_state.md`
    (Write-Tool, append-Modus; erstelle Datei falls nicht vorhanden):
 
 ```markdown
@@ -106,12 +151,14 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 `literature_state.md` ein, weil `chapter-writer` und `citation-extraction`
 diese Datei als Kontext lesen duerfen — der Kanal darf Zitierweise und
 Textbehandlung nicht beeinflussen. Die Provenienz bleibt vollstaendig im
-Vault erhalten (`vault.get_paper()`, `vault.list_papers_by_provenance()`).
+Vault erhalten (`vault.get_paper()`, `vault.list_papers_by_provenance()`) —
+ueber den `vault_add_paper`-Aufruf aus Schritt 2 tatsaechlich geschrieben.
 
-3. Ausgabe an User:
+4. Ausgabe an User:
 ```
 PDF heruntergeladen: <file_path>
   Quelle: <source>
+  Im Vault erfasst (paper_id: <sanitized>).
   In literature_state.md aufgenommen.
 ```
 

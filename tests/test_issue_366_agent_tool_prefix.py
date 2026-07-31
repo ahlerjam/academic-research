@@ -69,6 +69,9 @@ EXPECTED_VAULT_TOOLS = {
     "figure-verifier": [
         "mcp__academic-vault__vault_ensure_file",
         "mcp__academic-vault__vault_add_figure",
+        # Read-back nach dem Schreiben (#540): der zurueckgelesene Record ist
+        # der Beleg, nicht die zurueckgegebene figure_id.
+        "mcp__academic-vault__vault_get_figure",
         "mcp__academic-vault__vault_list_figures",
     ],
 }
@@ -143,6 +146,10 @@ _LIVE_CALL_ARGS = {
         "caption": "Fig 1",
         "vlm_description": "A chart.",
     },
+    # Unbekannte figure_id: get_figure liefert dafuer regulaer None (kein
+    # Fehler) -- fuer den Dispatch-Nachweis genuegt das, ohne die im Test
+    # erzeugte ID durchreichen zu muessen.
+    "vault.get_figure": {"figure_id": "issue366-figure"},
     "vault.list_figures": {"paper_id": "issue366-paper"},
     "vault.ensure_file": {"paper_id": "issue366-paper"},
 }

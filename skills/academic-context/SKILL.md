@@ -98,6 +98,22 @@ output_targets:
 
 Lies `./academic_context.md`, identifiziere Änderungen aus dem Gespräch, aktualisiere nur betroffene Abschnitte. Typische Updates: Gliederung, Fortschritt, neue Konzepte, Forschungsfragen-Schärfung, Methodik-Entscheidung.
 
+### Decision-Log führen
+
+`./academic_context.md` hält den aktuellen Stand, nicht die Begründung. Die
+gehört ins Decision-Log des Vaults: von dort spielt `mid-session-reinforcement`
+aktive Entscheidungen im Gespräch zurück, und der Material-Passport exportiert
+sie als `decisions_snapshot`.
+
+- **Kontext lesen:** `vault.list_decisions(active_only=True)` — widerspricht eine
+  Entscheidung dem, was der User gerade sagt, ansprechen statt überschreiben.
+- **Festlegung zu Scope, Methodik, Forschungsfrage oder Zitationsstil:**
+  `vault.add_decision(category, text, rationale)`. Nur festhalten, was der User
+  entschieden hat; ohne genannte Begründung `rationale` weglassen, nicht erfinden.
+- **Revision:** neue Entscheidung anlegen, dann
+  `vault.supersede_decision(decision_id, superseded_by)` — die alte bleibt als
+  Änderungsgeschichte erhalten, statt dass nur der Endstand existiert.
+
 ### Unterstützung anderer Skills
 
 Braucht ein anderer Skill Kontext: Prüfe ob `./academic_context.md` existiert. Wenn ja — nutze sie. Wenn nein — informiere den User und biete Setup an.

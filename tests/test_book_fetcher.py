@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import yaml
 
-from tests.helpers.book_fetcher_router import BookFetcherRouter
+from tests.helpers.book_fetcher_router import OA_SUBAGENTS, BookFetcherRouter
 
 # Path to fixtures
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "book_fetcher_mocks"
@@ -90,7 +90,7 @@ class TestBookFetcherRouting(unittest.TestCase):
         springer_success = _load_json("springer_success.json")
 
         call_count = [0]
-        oa_subagents = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+        oa_subagents = set(OA_SUBAGENTS)
 
         def side_effect(subagent, payload):
             call_count[0] += 1
@@ -105,13 +105,15 @@ class TestBookFetcherRouting(unittest.TestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["source"], "springer-book")
-        # tries must show all 4 OA subagents first, then springer-book
+        # tries must show all 7 OA subagents first, then springer-book (Issue #450 AC3:
+        # freie Archive nachweislich vor lizenzpflichtigen Verlagen)
         subagent_sequence = [t["subagent"] for t in result["tries"]]
         self.assertEqual(
-            subagent_sequence[:4],
-            ["doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"],
+            subagent_sequence[:7],
+            OA_SUBAGENTS,
         )
         self.assertIn("springer-book", subagent_sequence)
+        self.assertNotIn("springer-book", subagent_sequence[:7])
 
     def test_auth_required_triggers_auth_helper_then_retry(self):
         """Springer returns auth_required -> auth-helper called -> springer retried -> success."""
@@ -120,7 +122,7 @@ class TestBookFetcherRouting(unittest.TestCase):
         auth_req = _load_json("springer_auth_required.json")
         auth_ok = _load_json("auth_helper_authenticated.json")
         springer_ok = _load_json("springer_success.json")
-        oa_subagents = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+        oa_subagents = set(OA_SUBAGENTS)
         springer_calls = [0]
 
         def side_effect(subagent, payload):
@@ -164,7 +166,7 @@ class TestBookFetcherRouting(unittest.TestCase):
             "reason": "0 results",
         }
         generic_resp = _load_json("generic_pickup.json")
-        oa_subagents = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+        oa_subagents = set(OA_SUBAGENTS)
 
         def side_effect(subagent, payload):
             if subagent in oa_subagents:
@@ -188,7 +190,7 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
     """Issue #449: Cambridge Core, Oxford Academic, JSTOR als Verlags-Subagenten."""
 
     NEW_AGENTS = ("cambridge-core", "oxford-academic", "jstor")
-    OA_SUBAGENTS = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+    OA_SUBAGENTS = set(OA_SUBAGENTS)
 
     def _router(self, profile_file):
         return BookFetcherRouter(profile=_load_yaml(profile_file))
@@ -304,7 +306,7 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
 class TestGenericFetcherAuthRoute(unittest.TestCase):
     """Issue #448: generic-fetcher meldet auth_required -> auth-helper -> genau ein Retry."""
 
-    OA_SUBAGENTS = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+    OA_SUBAGENTS = set(OA_SUBAGENTS)
 
     def _router(self):
         return BookFetcherRouter(profile=_load_yaml("active_profile_no_licensed.yaml"))

@@ -10,6 +10,79 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Fetcher-Agents für HathiTrust, Internet Archive/Open Library und MDZ (#450):**
+  Drei neue OA-Subagenten (`agents/hathitrust-fetcher.md`,
+  `agents/internetarchive-fetcher.md`, `agents/mdz-fetcher.md`) nach dem
+  `doabooks-fetcher`/`oapen-fetcher`/`tib-fetcher`-Muster: nur `browser-use`,
+  identisches 5-Status-Output-Schema (`success`/`metadata_only`/
+  `pickup_required`/`captcha`/`no_match`). Alle drei Archive digitalisieren
+  überwiegend gemeinfreie Werke, führen aber pro Treffer eine *Zugriffsstufe*
+  (Vollansicht vs. eingeschränkter Zugriff — HathiTrust "search-only",
+  Internet-Archive-Borrow/CDL, MDZ-Katalogisat ohne Digitalisat): das
+  `reason`-Feld bei `metadata_only` trägt dafür ein festes Vokabular
+  (`"Zugriffsstufe: …"`), das gesperrte 5er-Enum bleibt unangetastet. Der
+  `success`-Output bekommt zusätzlich ein `edition`-Feld — Jahr/Ausgabe/Verlag
+  werden ausdrücklich aus dem Katalog-/Metadaten-Eintrag des konkret
+  heruntergeladenen Digitalisats entnommen, nie aus der Eingabe-ISBN/-Titel
+  übernommen (AC4: verschiedene Bibliotheken digitalisieren teils
+  unterschiedliche Auflagen desselben Werks). `agents/book-fetcher.md`
+  (Schritt 3 OA-Kette + Tools-Frontmatter) und
+  `tests/helpers/book_fetcher_router.py` (`OA_SUBAGENTS`) wurden additiv um
+  die drei neuen Hosts erweitert und ans Ende der bestehenden OA-Liste
+  angehängt — lizenzfrei, daher weiterhin nachweislich vor jedem
+  Verlags-Subagenten (AC3, geprüft in
+  `tests/test_book_fetcher.py::test_all_oa_metadata_only_then_springer_success`).
+  Jeder Agent bekommt einen passenden `config/browser_guides/*.md` mit
+  Access-Level-Matrix und dem expliziten Verbot, Suchtreffer-/Snippet-Text zu
+  einem Volltext-Ersatz zusammenzusetzen (AC2). HTTP-429-Rate-Limits werden
+  als `metadata_only` mit Statuscode + Retry-Hinweis diagnostiziert statt als
+  `no_match` fehlgedeutet (Operator-Hinweis 2026-07-30 zu PR #498: ein echtes
+  HathiTrust-Rate-Limit darf den AC-Verify nicht mehr allein zum Scheitern
+  bringen). Neuer Test `tests/test_free_archive_fetchers.py` (Analog zu
+  `tests/test_oa_fetchers.py`), neue `evals/free-archive-fetchers/evals.json`
+  (3 Cases, je 1 bekannter gemeinfreier Testtitel pro Archiv, Status
+  `structural` in `docs/evals/STRATEGY.md` — netzabhängige Live-Downloads,
+  gleiche Begründung wie `oa-fetchers`). Agent-Zähler 24 → 27
+  (`docs/reference/agents.md`, `AGENTS.md`, `README.md`). Fixrunde: das
+  `edition`-Feld reicht jetzt bis in den Vault durch — `book-fetcher.md`
+  übernimmt es aus der OA-Subagenten-Antwort unverändert in sein eigenes
+  Output-Schema, und `commands/fetch.md` ruft bei `status: success`
+  tatsächlich `mcp__academic-vault__vault_add_paper` auf (`csl_json` trägt
+  `edition` nur, wenn die Quelle es meldet — nie ein erfundener Platzhalter).
+  Geprüft in `tests/test_issue_450_vault_wiring.py`, inkl. echtem
+  `add_paper()`/`get_paper()`-Roundtrip gegen eine reale `VaultDB` (AC4). Ein
+  `title`-Feld fehlt in der Kette weiterhin — kein Subagent liefert bislang
+  einen Titel aus der Quelle selbst; das bleibt ein offener, größerer
+  Koordinationspunkt außerhalb von #450.
+  **Zweite Fixrunde — AC1 real belegt statt zugesagt:** Die vorige Fassung hat
+  den geforderten Live-Nachweis mit „Realer Live-Lauf bleibt Operator-Sache"
+  beantwortet; belegt war damit nichts, denn `evals/free-archive-fetchers/evals.json`
+  ist `structural` und `docs/evals/STRATEGY.md` definiert das ausdrücklich als
+  „kein grün". Der Beleg liegt jetzt als nachfahrbares Artefakt in
+  `evals/free-archive-fetchers/live-verification.json` (URL-Kette, HTTP-Status,
+  Bytes, Prüfsumme, Seitenzahl je Lauf), nach dem Muster von Issue #449:
+  Internet Archive liefert real ein 922-seitiges Digitalisat der Erstausgabe von
+  1813 ohne Login (byteweise über zwei Abrufe reproduzierbar), MDZ das
+  Grimm-Digitalisat als Gesamtwerk-PDF mit 471 Seiten, HathiTrust antwortet am
+  Download-Endpunkt mit HTTP 403 und der Sperrseite „Error - Blocked from
+  HathiTrust" — 2 von 3 Anbietern real als PDF belegt, wie AC1 es verlangt.
+  Nachfahrbar mit `RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py`
+  (opt-in, nicht im CI); hermetisch geprüft in
+  `tests/test_issue_450_fetcher_evidence.py`.
+  Die Live-Läufe haben dabei drei Zugriffshindernisse gefunden, für die die
+  Agenten keine Regel hatten — jedes mit eigenem Test in
+  `tests/test_free_archive_fetchers.py::TestLiveObservedAccessBarriers`:
+  MDZ gibt ein PDF erst nach **Bestätigung des Rechtehinweises** heraus (das
+  Feld steht auf „Nein" vorbelegt, ohne Umstellung antwortet der Server mit
+  HTTP 200 und wieder dem Formular — der Schritt scheitert lautlos);
+  Internet Archive beantwortet den Download eines CDL-Titels mit **HTTP 401**,
+  erkennbar vorab am Metadatenfeld `access-restricted-item`, nicht nur am
+  Borrow-Button; und HathiTrusts Sperrseite ist **kein CAPTCHA** — die
+  Captcha-Erkennung des Repos schlägt an der real aufgezeichneten Seite
+  (`tests/fixtures/free_archive_fetchers/hathitrust_page_blocked.html`)
+  nicht an, weshalb `metadata_only` mit der Zugriffsstufe „Plattform-Sperre"
+  der richtige Ausgang ist und weder `captcha` noch `no_match`.
+
 - **Neuer Skill `latex-layout-auditor` (#392):** Read-only-Prüfung eines
   `latex-export`-Outputs auf LaTeX-spezifische Layout-Fehler, ergänzend zu
   `submission-checker` (der prüft Hochschul-Formalia, nicht LaTeX-Layout).
@@ -449,6 +522,28 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   künftig gegen die Command-Definitionen.
 
 ### Changed
+
+- **Jedes Vault-MCP-Tool hat einen Aufrufer (#540):** Neun der 37 per
+  `@mcp.tool` registrierten Tools wurden von keinem Skill, Agent, Command oder
+  Hook angesprochen — sie kosteten in jeder Session Tool-Listen-Kontext, ohne
+  dass ein Workflow sie erreichte. Statt sie zu deregistrieren (was `#226` für
+  `supersede_decision`/`list_excluded_sources` explizit zurückgedreht hätte),
+  sind sie jetzt dort verdrahtet, wo die Lücke fachlich saß: `add_chapter` und
+  `extract_fulltext` in `book-handler` (Kapitel am indexierten Sammelband; der
+  Volltext-Index überlebt sonst kein `update_pdf_path` nach OCR), `get_figure`
+  als Read-back in `figure-verifier`, `is_excluded` als Vorab-Check in
+  `reading-list-import` (der Re-Import holte bis dahin aussortierte Quellen
+  zurück), `list_excluded_sources` in `prisma-flow` (PRISMA 2020 verlangt
+  Ausschlussgründe, nicht nur Zahlen), `add_score_snapshot`/`get_score_history`
+  in `source-quality-audit` und die Decision-Tools in `academic-context` —
+  letzteres füllt zugleich den bis dahin immer leeren `decisions_snapshot` des
+  Material-Passports. Registrierung und Doku bleiben unverändert (37 Tools);
+  `tests/test_issue_540_vault_tool_callers.py` hält den Vertrag: jedes
+  `@mcp.tool` braucht eine Referenz in `skills/`, `agents/`, `commands/` oder
+  `hooks/` (`docs/` zählt bewusst nicht mit, sonst wäre der Guard tautologisch
+  grün), und die Tool-Tabellen in `docs/reference/vault.md` müssen sich exakt
+  mit der Registrierung decken. `tests/baselines/*.json` um den Netto-Zuwachs
+  der fünf Skills angehoben (etabliertes Repo-Muster, vgl. #471/PR #547).
 
 - **`hooks/` trennt Hooks von Bibliotheken (#542):** Flach in `hooks/` liegen jetzt
   ausschließlich die fünf in `hooks/hooks.json` registrierten Hooks; die importierten
