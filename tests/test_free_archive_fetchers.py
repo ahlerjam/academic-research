@@ -382,3 +382,96 @@ class TestEvalCases:
         for case in data:
             input_ = case.get("input", {})
             assert input_.get("title"), f"Case {case['id']}: kein Testtitel in input.title"
+
+
+# ─── Klasse 7: Zugriffshindernisse, die der Live-Lauf gefunden hat ───────────
+
+
+class TestLiveObservedAccessBarriers:
+    """Jede Regel hier stammt aus einem realen Abruf, nicht aus einer Annahme.
+
+    Die erste Fassung dieser drei Agenten kannte genau ein Hindernis: HTTP 429.
+    Der Live-Lauf zu AC1 (dokumentiert in
+    ``evals/free-archive-fetchers/live-verification.json``) hat drei andere
+    gefunden — und keines davon faellt unter eine der bestehenden Regeln. Ein
+    Agent, der auf sie stoesst, haette nach der urspruenglichen Anleitung keinen
+    zutreffenden Status zu melden gehabt.
+
+    Der Gegentest zu jeder Regel steht in
+    ``tests/test_issue_450_live_fetch.py`` und faehrt gegen das echte Netz.
+    """
+
+    def test_hathitrust_maps_the_platform_block(self):
+        """HTTP 403 Sperrseite — weder CAPTCHA noch Rate-Limit.
+
+        Gemessen: der Download-Endpunkt antwortet anonym mit HTTP 403 und der
+        Seite "Error - Blocked from HathiTrust". Die Captcha-Erkennung des Repos
+        schlaegt daran nicht an (siehe
+        ``tests/test_issue_450_fetcher_evidence.py::test_block_page_is_not_a_captcha``),
+        also waere ``status: captcha`` die falsche Meldung — und ``no_match``
+        waere schlicht unwahr, weil die Bib-API denselben Titel weiter aufloest.
+        """
+        content = (AGENTS_DIR / "hathitrust-fetcher.md").read_text(encoding="utf-8")
+        assert "403" in content, (
+            "agents/hathitrust-fetcher.md nennt HTTP 403 nicht. Die Sperrseite "
+            "ist der real gemessene Ausgang des Download-Endpunkts."
+        )
+        block_rule = re.search(r"^.*403.*$", content, re.MULTILINE)
+        assert block_rule and ACCESS_LEVEL_MARKER in content, (
+            "Fuer den 403-Fall fehlt eine Zuordnung zu einer Zugriffsstufe."
+        )
+
+    def test_hathitrust_forbids_reporting_the_block_as_captcha(self):
+        content = (AGENTS_DIR / "hathitrust-fetcher.md").read_text(encoding="utf-8").lower()
+        assert "kein captcha" in content or "nicht als captcha" in content, (
+            "agents/hathitrust-fetcher.md unterscheidet die Sperrseite nicht vom "
+            "CAPTCHA-Fall. Beide sehen im Browser aehnlich aus, verlangen aber "
+            "unterschiedliche Meldungen."
+        )
+
+    def test_internetarchive_maps_http_401_on_restricted_items(self):
+        """HTTP 401 — der reale Fehlerpfad bei Controlled Digital Lending.
+
+        Gemessen: bei einem CDL-Item antwortet dieselbe Download-URL-Form mit
+        HTTP 401 statt mit einem PDF. Die urspruengliche Fassung kannte nur das
+        sichtbare Signal "Borrow-Button" auf der Detailseite.
+        """
+        content = (AGENTS_DIR / "internetarchive-fetcher.md").read_text(encoding="utf-8")
+        assert "401" in content, (
+            "agents/internetarchive-fetcher.md nennt HTTP 401 nicht — der real "
+            "gemessene Ausgang bei einem gesperrten Item."
+        )
+
+    def test_internetarchive_names_the_machine_readable_restriction_signal(self):
+        """``access-restricted-item`` unterscheidet frei von CDL zuverlaessig.
+
+        Der Borrow-Button ist ein Layout-Merkmal; das Metadatenfeld ist die
+        Eigenschaft selbst. Gemessen an zwei Items derselben Suche.
+        """
+        content = (AGENTS_DIR / "internetarchive-fetcher.md").read_text(encoding="utf-8")
+        assert "access-restricted-item" in content, (
+            "agents/internetarchive-fetcher.md nennt das Metadatenfeld nicht, an "
+            "dem sich frei herunterladbare von CDL-Items unterscheiden lassen."
+        )
+
+    def test_mdz_documents_the_mandatory_rights_statement_confirmation(self):
+        """Ohne Bestaetigung des Rechtehinweises liefert MDZ kein PDF.
+
+        Gemessen: das Formular steht auf "Nein" vorbelegt; ohne Umstellung
+        antwortet der Server mit HTTP 200, dem Formular und dem Text "Bitte
+        akzeptieren Sie den Rechtehinweis" — und ohne PDF. Die urspruengliche
+        Fassung beschrieb nur "Download-Icon → PDF-Option waehlen →
+        herunterladen" und haette den Agenten dort stehen lassen.
+        """
+        content = (AGENTS_DIR / "mdz-fetcher.md").read_text(encoding="utf-8")
+        assert "Rechtehinweis" in content, (
+            "agents/mdz-fetcher.md kennt die Pflicht-Bestaetigung des "
+            "Rechtehinweises nicht — ohne sie gibt MDZ kein PDF heraus."
+        )
+
+    def test_mdz_guide_documents_the_mandatory_rights_statement_confirmation(self):
+        guide = (REPO_ROOT / "config" / "browser_guides" / "mdz.md").read_text(encoding="utf-8")
+        assert "Rechtehinweis" in guide, (
+            "config/browser_guides/mdz.md beschreibt den Download-Weg ohne die "
+            "Pflicht-Bestaetigung — die Anleitung fuehrt so ins Leere."
+        )

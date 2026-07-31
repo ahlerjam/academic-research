@@ -54,6 +54,34 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `title`-Feld fehlt in der Kette weiterhin — kein Subagent liefert bislang
   einen Titel aus der Quelle selbst; das bleibt ein offener, größerer
   Koordinationspunkt außerhalb von #450.
+  **Zweite Fixrunde — AC1 real belegt statt zugesagt:** Die vorige Fassung hat
+  den geforderten Live-Nachweis mit „Realer Live-Lauf bleibt Operator-Sache"
+  beantwortet; belegt war damit nichts, denn `evals/free-archive-fetchers/evals.json`
+  ist `structural` und `docs/evals/STRATEGY.md` definiert das ausdrücklich als
+  „kein grün". Der Beleg liegt jetzt als nachfahrbares Artefakt in
+  `evals/free-archive-fetchers/live-verification.json` (URL-Kette, HTTP-Status,
+  Bytes, Prüfsumme, Seitenzahl je Lauf), nach dem Muster von Issue #449:
+  Internet Archive liefert real ein 922-seitiges Digitalisat der Erstausgabe von
+  1813 ohne Login (byteweise über zwei Abrufe reproduzierbar), MDZ das
+  Grimm-Digitalisat als Gesamtwerk-PDF mit 471 Seiten, HathiTrust antwortet am
+  Download-Endpunkt mit HTTP 403 und der Sperrseite „Error - Blocked from
+  HathiTrust" — 2 von 3 Anbietern real als PDF belegt, wie AC1 es verlangt.
+  Nachfahrbar mit `RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py`
+  (opt-in, nicht im CI); hermetisch geprüft in
+  `tests/test_issue_450_fetcher_evidence.py`.
+  Die Live-Läufe haben dabei drei Zugriffshindernisse gefunden, für die die
+  Agenten keine Regel hatten — jedes mit eigenem Test in
+  `tests/test_free_archive_fetchers.py::TestLiveObservedAccessBarriers`:
+  MDZ gibt ein PDF erst nach **Bestätigung des Rechtehinweises** heraus (das
+  Feld steht auf „Nein" vorbelegt, ohne Umstellung antwortet der Server mit
+  HTTP 200 und wieder dem Formular — der Schritt scheitert lautlos);
+  Internet Archive beantwortet den Download eines CDL-Titels mit **HTTP 401**,
+  erkennbar vorab am Metadatenfeld `access-restricted-item`, nicht nur am
+  Borrow-Button; und HathiTrusts Sperrseite ist **kein CAPTCHA** — die
+  Captcha-Erkennung des Repos schlägt an der real aufgezeichneten Seite
+  (`tests/fixtures/free_archive_fetchers/hathitrust_page_blocked.html`)
+  nicht an, weshalb `metadata_only` mit der Zugriffsstufe „Plattform-Sperre"
+  der richtige Ausgang ist und weder `captcha` noch `no_match`.
 
 - **Neuer Skill `latex-layout-auditor` (#392):** Read-only-Prüfung eines
   `latex-export`-Outputs auf LaTeX-spezifische Layout-Fehler, ergänzend zu

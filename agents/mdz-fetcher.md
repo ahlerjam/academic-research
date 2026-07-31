@@ -45,12 +45,27 @@ Seitenansicht).
    Werkansicht/Viewer
    - Kein Viewer-Link, nur Katalogisat: `{"status": "metadata_only", "source_subagent": "mdz-fetcher", "url": "<werkseite-url>", "reason": "Zugriffsstufe: nur Metadaten — kein Digitalisat"}`
 6. Bei mehrbaendigen Werken: passenden Band pruefen, bevor weitergemacht wird
-7. Im Viewer: Download-Icon / Menuepunkt "PDF" suchen
+7. Im Viewer: Download-Icon (Pfeil nach unten) oben rechts → Eintrag
+   "PDF/DaFo". Der Eintrag fuehrt auf ein Formular auf
+   `download.digitale-sammlungen.de`, nicht direkt auf eine PDF-Datei
    - Kein PDF-Export vorgesehen, nur Seitenansicht: `{"status": "metadata_only", "source_subagent": "mdz-fetcher", "url": "<viewer-url>", "reason": "Zugriffsstufe: nur Seitenansicht, kein PDF-Export"}`
-8. Gesamtwerk-PDF-Option waehlen (nicht Einzelseite)
-9. `browser-use download <pdf-link-idx> --to <output_path>`
-10. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
-11. **Ausgabe-/Jahresangabe:** Block "Bibliografische Angaben" auf der
+8. Im Download-Menue die Option **PDF** waehlen (nicht DaFo — das ist eine
+   Bestellung hochaufloesender Bilder mit Mailadresse und Bereitstellung binnen
+   bis zu vier Wochen, kein Weg fuer diesen Agenten)
+9. Seitenbereich auf dem Gesamtwerk belassen (MDZ waehlt es vor)
+10. **Rechtehinweis bestaetigen — Pflichtschritt.** Die Frage "Ich versichere,
+    den Rechtehinweis gelesen zu haben und bin damit einverstanden" steht auf
+    **Nein** vorbelegt. Ohne Umstellung auf **Ja** liefert MDZ kein PDF,
+    sondern erneut das Formular mit dem Hinweis "Bitte akzeptieren Sie den
+    Rechtehinweis" — und zwar mit HTTP 200, der Schritt scheitert also
+    lautlos. Belegt in `evals/free-archive-fetchers/live-verification.json`
+    (Lauf `fa-03`, `rights_gate`). Erst danach den Absende-Button betaetigen.
+11. MDZ stellt das PDF serverseitig zusammen und blendet danach einen Link
+    "PDF-Datei oeffnen oder herunterladen" ein — auf diesen Link warten, statt
+    den Schritt als fehlgeschlagen zu werten
+12. `browser-use download <pdf-link-idx> --to <output_path>`
+13. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+14. **Ausgabe-/Jahresangabe:** Block "Bibliografische Angaben" auf der
     Werkseite lesen und als `edition` uebernehmen — NIE die Eingabe-ISBN/
     -Titel-Angabe kopieren. MDZ-Digitalisate sind oft historische
     Erstausgaben oder spezifische Bibliotheksexemplare, deren Jahr von einer

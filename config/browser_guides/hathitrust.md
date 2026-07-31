@@ -51,6 +51,7 @@ gelegentlich temporäre 429-Sperren bei zu vielen Seitenabrufen kurz hintereinan
 | "Full view" | gemeinfrei, komplett einsehbar | Full-PDF-Download versuchen → `success` |
 | "Limited (search-only)" | urheberrechtlich geschützt, nur Volltextsuche INNERHALB des Buchs möglich, keine Seiten-/Buchansicht | NIEMALS Suchtreffer-Snippets zu einem Text zusammensetzen → `metadata_only` mit `reason: "Zugriffsstufe: search-only"` |
 | "Limited (no full-text search)" | nur bibliografische Metadaten | `metadata_only` mit `reason: "Zugriffsstufe: nur Metadaten"` |
+| Seite "Page Blocked" / "Error - Blocked from HathiTrust" (HTTP 403) | Plattform-Sperre auf Netzwerk-/IP-Ebene, unabhaengig vom Titel | `metadata_only` mit `reason: "Zugriffsstufe: Plattform-Sperre — HTTP 403, kein Volltextzugriff"` — **kein** `captcha`, **kein** `no_match` |
 
 ## Ausgabe-/Jahresangabe
 
@@ -69,6 +70,16 @@ des tatsächlich heruntergeladenen Scans übernehmen.
 - `status: captcha` wenn ein echtes CAPTCHA (nicht der normale
   Bestätigungsdialog) in `browser-use state` sichtbar ist.
 - `status: no_match` wenn Katalogsuche 0 Treffer liefert.
+- **HTTP 403 / Plattform-Sperre:** Zeigt die Seite "Page Blocked" bzw.
+  "Error - Blocked from HathiTrust", ist das weder ein CAPTCHA noch ein
+  Rate-Limit — die Seite bietet keine lösbare Aufgabe an, sondern nennt
+  IP-Reputation als Grund. `metadata_only` mit
+  `reason: "Zugriffsstufe: Plattform-Sperre — HTTP 403, kein Volltextzugriff"`.
+  Belegt in `evals/free-archive-fetchers/live-verification.json` (Lauf `fa-01`):
+  Katalog **und** Download-Endpunkt antworteten anonym mit 403, während die
+  dokumentierte Bib-API (`catalog.hathitrust.org/api/volumes/...`) weiter 200
+  lieferte — deshalb `metadata_only` und nicht `no_match`. Sperre nicht umgehen:
+  kein User-Agent-Wechsel, kein Proxy, kein höheres Tempo.
 - **HTTP 429 / Rate-Limit:** Kein Fehldiagnose als `no_match` oder `captcha`.
   Statuscode und Retry-Hinweis explizit im `reason`-Feld nennen, z. B.
   `"HTTP 429 — Rate-Limit, Retry empfohlen nach Wartezeit"`. Dies gilt gemäß

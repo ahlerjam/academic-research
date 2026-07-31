@@ -25,10 +25,26 @@ Staatsbibliothek für gemeinfreie Werke.
 
 ## Volltext-Lokation
 
-- Im Viewer: Menüpunkt "PDF" oder Download-Icon (meist oben rechts über der
-  Seitenansicht, Symbol für Buch/Download).
-- Optionen dort: gesamtes Werk als PDF oder einzelne Seiten/Kapitel — die
-  Gesamtwerk-Option wählen.
+- Im Viewer: Download-Icon (Pfeil nach unten) oben rechts → Eintrag
+  **"PDF/DaFo"**. Der Eintrag führt auf ein Formular auf
+  `download.digitale-sammlungen.de`, nicht auf eine PDF-Datei.
+- Dort **PDF** wählen, nicht DaFo: DaFo (Daten für die Forschung) ist eine
+  Bestellung hochauflösender Bilder mit Mailadresse und Bereitstellung binnen
+  bis zu vier Wochen. Für diesen Agenten ist nur der Sofort-Download als PDF
+  relevant.
+- Seitenbereich ("Erstes Bild"/"Letztes Bild") steht auf dem Gesamtwerk
+  vorbelegt — so belassen.
+- **Rechtehinweis bestätigen — Pflichtschritt, sonst kein PDF.** Die Frage
+  "Ich versichere, den Rechtehinweis gelesen zu haben und bin damit
+  einverstanden" steht auf **Nein** vorbelegt. Wer sie überspringt, bekommt
+  HTTP 200 und wieder das Formular, diesmal mit "Bitte akzeptieren Sie den
+  Rechtehinweis" — der Schritt scheitert also lautlos, ohne Fehlerseite. Auf
+  **Ja** stellen, dann absenden. Real gemessen, siehe
+  `evals/free-archive-fetchers/live-verification.json`, Lauf `fa-03`
+  (`rights_gate`).
+- MDZ stellt das PDF danach serverseitig zusammen; erst dann erscheint der Link
+  "PDF-Datei öffnen oder herunterladen (\<Größe\>)". Auf ihn warten — bei
+  großen Werken dauert die Zusammenstellung spürbar.
 - Bei mehrbändigen Werken: sicherstellen, dass der passende Band ausgewählt
   ist, bevor der PDF-Download gestartet wird (MDZ listet Bände oft als
   separate Digitalisate mit eigener Werk-ID).
@@ -38,7 +54,7 @@ Staatsbibliothek für gemeinfreie Werke.
 
 | Signal auf Werkseite | Bedeutung | Aktion |
 |---|---|---|
-| Viewer mit PDF-Download-Icon | Digitalisat vollständig verfügbar | PDF-Download versuchen → `success` |
+| Viewer mit Download-Icon und Eintrag "PDF/DaFo" | Digitalisat vollständig verfügbar | Formular ausfüllen, Rechtehinweis auf "Ja" stellen, PDF-Download → `success` |
 | Katalogeintrag ohne Viewer-Link ("kein Digitalisat") | nur bibliografischer Nachweis, (noch) nicht digitalisiert | `metadata_only` mit `reason: "Zugriffsstufe: nur Metadaten — kein Digitalisat"` |
 | Viewer vorhanden, aber PDF-Option fehlt (reiner Bildbetrachter) | Digitalisat nur seitenweise einsehbar, kein Gesamt-PDF-Export vorgesehen | `metadata_only` mit `reason: "Zugriffsstufe: nur Seitenansicht, kein PDF-Export"` |
 
@@ -76,3 +92,11 @@ des Digitalisats übernehmen, nicht das einer moderneren Neuauflage.
   PDF-Download selbst.
 - Der Viewer läuft in einigen Fällen über `mdz-nbn-resolving.de`-Weiterleitung
   — Zielseite nach Redirect erneut mit `browser-use state` prüfen.
+- Der Rechtehinweis ist keine Formalie: MDZ stellt seine Digitalisate unter
+  wechselnde Rights Statements (das geprüfte Beispiel unter NoC-NC, also ohne
+  kommerzielle Nutzung). Das Statement der konkreten Werkseite gehört zur
+  Zugriffsstufe und wird nicht pauschal als "gemeinfrei" gemeldet.
+- Ein abgesendetes Formular ohne bestätigten Rechtehinweis sieht wie ein
+  normal geladenes Formular aus — kein Fehlerstatus, kein sichtbarer Hinweis
+  außer der Zeile "Bitte akzeptieren Sie den Rechtehinweis". Nicht als
+  "PDF-Option fehlt" fehldeuten.

@@ -48,6 +48,12 @@ downloadbar — Zugriffsstufe pro Treffer aktiv pruefen.
 4. `browser-use state` → Zugriffssignal pruefen:
    - "Download Options"-Block mit PDF-Link, KEIN "Borrow"-Button → frei
    - "Borrow"-Button + In-Browser-Reader → Controlled Digital Lending
+   - Der Borrow-Button ist ein Layout-Merkmal und kann fehlen, obwohl das Item
+     gesperrt ist. Das belastbare Signal ist das Metadatenfeld
+     **`access-restricted-item`**: steht es auf `true` (typischerweise
+     zusammen mit der Sammlung `inlibrary`), ist das Item CDL — unabhaengig
+     davon, wie die Seite aussieht und ob eine PDF-Datei gelistet ist.
+     Sichtbar im Block "Show all files"/Metadaten der Item-Seite.
 5. Frei verfuegbar:
    - "Download Options" → ggf. "SHOW ALL" klicken → `*.pdf`-Eintrag waehlen
      (nicht `_djvu.txt`, nicht `_abbyy.gz`)
@@ -68,6 +74,14 @@ downloadbar — Zugriffsstufe pro Treffer aktiv pruefen.
   `reason: "Zugriffsstufe: Borrow/CDL — kein PDF-Export"`
 - Item ohne Datei-Liste (nur Metadaten) → `metadata_only` mit
   `reason: "Zugriffsstufe: nur Metadaten"`
+- **HTTP 401 beim Download** → derselbe `metadata_only`-Ausgang wie CDL, mit
+  `reason: "Zugriffsstufe: Borrow/CDL — HTTP 401, kein PDF-Export"`. Das ist
+  der real gemessene Fehlerpfad (belegt in
+  `evals/free-archive-fetchers/live-verification.json`, Lauf `fa-02`,
+  `access_control_counter_example`): ein CDL-Item listet sein PDF sichtbar auf,
+  gibt es beim Zugriff aber nicht heraus. NICHT als Rate-Limit und nicht als
+  `no_match` melden — und den Download nicht wiederholen, 401 ist eine
+  Rechteentscheidung, keine Stoerung.
 - HTTP 429 / Rate-Limit beim Zugriff: NICHT als `no_match` fehldeuten.
   `reason` muss Statuscode + Retry-Hinweis enthalten, z. B.
   `"HTTP 429 — Rate-Limit, Retry empfohlen nach Wartezeit"`
@@ -138,5 +152,8 @@ CAPTCHA erkannt:
   heruntergeladenen Archive.org-Item-Seite
 - CDL-/Borrow-Items NIEMALS ueber den Reader Seite fuer Seite exportieren
 - Manche Items haben mehrere Dateivarianten — die vollstaendige PDF waehlen,
-  nicht die erste im Listing
+  nicht die erste im Listing. Eine Variante mit dem Format "ACS Encrypted PDF"
+  (Dateiname endet auf `_encrypted.pdf`) ist DRM-geschuetzt und nie das Ziel
+- Ein gesperrtes Item kann sein PDF trotzdem im Listing zeigen — der Beweis
+  faellt erst beim Zugriff (HTTP 401). Vorher `access-restricted-item` pruefen
 - Rate-Limiting bei vielen Downloads kurz hintereinander — 2-3 Sekunden Pause

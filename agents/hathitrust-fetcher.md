@@ -69,6 +69,20 @@ gemeinfreie ("Full view") als auch urheberrechtlich geschuetzte ("Limited
 - HTTP 429 / Rate-Limit beim Zugriff: NICHT als `no_match` fehldeuten.
   `reason` muss Statuscode + Retry-Hinweis enthalten, z. B.
   `"HTTP 429 — Rate-Limit, Retry empfohlen nach Wartezeit"`
+- **HTTP 403 / Plattform-Sperre** (Seite "Page Blocked" bzw. "Error - Blocked
+  from HathiTrust", Begruendung IP-Reputation): `metadata_only` mit
+  `reason: "Zugriffsstufe: Plattform-Sperre — HTTP 403, kein Volltextzugriff"`.
+  Belegt in `evals/free-archive-fetchers/live-verification.json` (Lauf `fa-01`).
+  Drei Abgrenzungen, die alle drei falsch waeren:
+  - **Kein CAPTCHA.** Die Seite bietet keine loesbare Aufgabe an, sondern nennt
+    IP-Reputation und verweist auf den Support. `status: captcha` behauptete
+    eine Huerde, die sich durch Loesen nehmen liesse.
+  - Kein `no_match`. Die HathiTrust-Bib-API loest denselben Titel weiter auf —
+    bibliografisch ist er da, nur der Volltext nicht.
+  - Kein Rate-Limit. Der 403 kam beim ersten Request, ohne vorangehende Last;
+    Warten und Wiederholen hilft nicht.
+- Sperre NIEMALS umgehen — kein Wechsel von User-Agent, Proxy oder IP, kein
+  erhoehtes Anfragetempo. Die Sperre melden ist der richtige Ausgang.
 
 ## Output-Schema
 
@@ -100,6 +114,16 @@ Rate-Limit:
   "source_subagent": "hathitrust-fetcher",
   "url": "<katalog-url>",
   "reason": "HTTP 429 — Rate-Limit, Retry empfohlen nach Wartezeit"
+}
+```
+
+Plattform-Sperre (HTTP 403):
+```json
+{
+  "status": "metadata_only",
+  "source_subagent": "hathitrust-fetcher",
+  "url": "<katalog-oder-reader-url>",
+  "reason": "Zugriffsstufe: Plattform-Sperre — HTTP 403, kein Volltextzugriff"
 }
 ```
 
@@ -138,5 +162,7 @@ CAPTCHA erkannt:
 - Bulk-Download-Schutz kann bei grossen Werken einen serverseitigen
   Vorbereitungsschritt ausloesen (kein Fehler, nur Wartezeit)
 - Rate-Limit (HTTP 429) korrekt diagnostizieren statt als `no_match` zu werten
+- Plattform-Sperre (HTTP 403, "Page Blocked") ist **kein CAPTCHA** und kein
+  Rate-Limit — eigene Meldung, siehe Access-Level-Logik
 - Jahr/Ausgabe immer aus dem Katalogeintrag des konkret gewaehlten
   Digitalisats entnehmen, nicht aus der Eingabe

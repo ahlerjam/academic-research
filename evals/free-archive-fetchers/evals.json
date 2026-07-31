@@ -1,21 +1,25 @@
 [
   {
     "id": "fa-01",
-    "description": "HathiTrust-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition-Feld (Full-View-Digitalisat)",
+    "description": "HathiTrust-Fetcher: bekannter gemeinfreier Klassiker via Titel — HathiTrust sperrt den anonymen Volltextzugriff (HTTP 403), erwartet wird darum metadata_only mit der Zugriffsstufe 'Plattform-Sperre'; gelingt der Volltext ueber einen echten Browser doch, ist success der bessere Ausgang.",
     "agent": "hathitrust-fetcher",
     "input": {
       "title": "Alice's Adventures in Wonderland",
       "output_path": "/tmp/eval-fa-01.pdf"
     },
     "expected": {
-      "status": "success",
+      "status": "metadata_only",
       "source_subagent": "hathitrust-fetcher",
-      "pdf_path_non_empty": true,
-      "edition_non_empty": true
+      "reason_contains": "Zugriffsstufe: Plattform-Sperre"
     },
-    "fallback_acceptable": "metadata_only",
+    "fallback_acceptable": "success",
     "rate_limit_acceptable": true,
-    "note": "Bei HTTP 429 waehrend des Live-Nachweises gilt das Kriterium als erfuellt, sofern der Agent das Limit korrekt diagnostiziert (Statuscode + Retry-Hinweis) — Issue #450 AC1 / Operator-Hinweis 2026-07-30."
+    "note": "Live belegt am 2026-07-31 (evals/free-archive-fetchers/live-verification.json, Lauf fa-01): der Download-Endpunkt antwortet anonym mit HTTP 403 und der Seite 'Error - Blocked from HathiTrust', waehrend die dokumentierte Bib-API denselben Titel weiter aufloest. Erwarteter Ausgang darum metadata_only mit der Zugriffsstufe 'Plattform-Sperre' — nicht captcha (die Seite bietet keine loesbare Aufgabe) und nicht no_match (bibliografisch ist der Titel da).",
+    "live_verification": {
+      "record": "evals/free-archive-fetchers/live-verification.json",
+      "verdict": "blocked_verified",
+      "replay": "RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py"
+    }
   },
   {
     "id": "fa-02",
@@ -33,7 +37,12 @@
     },
     "fallback_acceptable": "metadata_only",
     "rate_limit_acceptable": true,
-    "note": "Bei HTTP 429 waehrend des Live-Nachweises gilt das Kriterium als erfuellt, sofern der Agent das Limit korrekt diagnostiziert (Statuscode + Retry-Hinweis) — Issue #450 AC1 / Operator-Hinweis 2026-07-30."
+    "note": "Live belegt am 2026-07-31 (Lauf fa-02): 52.294.776 Bytes, 922 Seiten, byteweise reproduzierbar ueber zwei vollstaendige Abrufe. Gegenprobe an einem Controlled-Digital-Lending-Item: HTTP 401 statt PDF. Nachfahrbar mit RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py.",
+    "live_verification": {
+      "record": "evals/free-archive-fetchers/live-verification.json",
+      "verdict": "pdf_verified",
+      "replay": "RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py"
+    }
   },
   {
     "id": "fa-03",
@@ -51,6 +60,11 @@
     },
     "fallback_acceptable": "metadata_only",
     "rate_limit_acceptable": true,
-    "note": "Bei HTTP 429 waehrend des Live-Nachweises gilt das Kriterium als erfuellt, sofern der Agent das Limit korrekt diagnostiziert (Statuscode + Retry-Hinweis) — Issue #450 AC1 / Operator-Hinweis 2026-07-30."
+    "note": "Live belegt am 2026-07-31 (Lauf fa-03): Gesamtwerk als ein PDF mit 471 Seiten. Der Bezug haengt an einer Pflicht-Bestaetigung des Rechtehinweises; ohne sie liefert MDZ HTTP 200 und wieder das Formular. Nachfahrbar mit RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py.",
+    "live_verification": {
+      "record": "evals/free-archive-fetchers/live-verification.json",
+      "verdict": "pdf_verified",
+      "replay": "RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py"
+    }
   }
 ]
