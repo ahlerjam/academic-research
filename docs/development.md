@@ -82,7 +82,7 @@ Die Hooks umfassen `ruff` (Lint + Format), `mypy`, `end-of-file-fixer`, `check-y
 
 ## Versionierte `.claude/`-Dateien
 
-`.claude/` ist normalerweise ein lokaler Ordner. In diesem Repository sind fünf Dateien
+`.claude/` ist normalerweise ein lokaler Ordner. In diesem Repository sind sechs Dateien
 davon bewusst **versioniert** (Issue #343) — sie gehören zur Infrastruktur, nicht zur
 Arbeitsumgebung einer einzelnen Person. Die Mechanik dahinter steht in der `.gitignore`:
 `.claude/*` ist ausgeschlossen, und genau diese Einträge sind per `!`-Ausnahme wieder
@@ -92,9 +92,10 @@ zugelassen.
 |--------------------|-------|
 | `.claude/settings.json` | Verdrahtet die Hooks unten an `SessionStart`/`PreToolUse`/`PostToolUse`, aktiviert die Plugins (u. a. flowkit) und trägt die Permission-Allowlist. |
 | `.claude/hooks/pretooluse-blocker.sh` | Einzige Quelle der Wahrheit für das Gefahrenmuster-Regex der roten Linien (Force-Push auf `main`, `--no-verify`, `gh api`-Mutationen, `gh --admin`). |
-| `.claude/hooks/inject-context.sh` | `SessionStart`-Hook: meldet Branch und Arbeitsstand. Rein informativ, fail-open. |
+| `.claude/hooks/inject-context.sh` | `SessionStart`-Hook: meldet Branch und Arbeitsstand, warnt bei veralteten flowkit-Templates. Rein informativ, fail-open. |
 | `.claude/hooks/pushci-guard.sh` | Erinnert an den konfigurierten CI-Push-Alias. Reiner Komfort, fail-open. |
 | `.claude/workflow.config.json` | flowkit-Konfiguration: `areas` und `protectedAreas` (siehe [AGENTS.md](../AGENTS.md)). |
+| `.claude/flowkit-version` | Stempel der zuletzt installierten flowkit-Template-Version; Vergleichsbasis für die Drift-Warnung in `inject-context.sh`. |
 
 **Was bricht, wenn eine dieser Dateien verschwindet:**
 
