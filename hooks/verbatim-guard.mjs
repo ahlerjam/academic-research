@@ -83,14 +83,15 @@ async function readStdin() {
 
 /**
  * Gibt true zurueck wenn der Pfad einer Kapitel-MD- oder LaTeX-Datei entspricht.
- * Patterns: kapitel/*.md | *.tex
+ * Patterns: kapitel/**\/*.md | *.tex
  */
 function isProtectedPath(filePath) {
   if (!filePath) return false;
   const normalized = filePath.replace(/\\/g, '/');
   if (normalized.endsWith('.tex')) return true;
-  // kapitel/<datei>.md — auch bei fuehrendem Slash oder relativen Pfaden
-  if (/(?:^|\/)kapitel\/[^/]+\.md$/.test(normalized)) return true;
+  // kapitel/<datei>.md und beliebig tiefe Unterordner (#516) — auch bei
+  // fuehrendem Slash oder relativen Pfaden
+  if (/(?:^|\/)kapitel\/(?:[^/]+\/)*[^/]+\.md$/.test(normalized)) return true;
   return false;
 }
 

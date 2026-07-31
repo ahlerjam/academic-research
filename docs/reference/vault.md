@@ -13,7 +13,8 @@ sqlite-vec für semantische Suche.
 Das ist der Grund, warum es den Vault gibt: Zitate stammen nicht aus dem Modellgedächtnis,
 sondern aus einer Datenbank, in der jedes Zitat mit Herkunft und Seitenzahl liegt.
 
-Der `verbatim-guard`-Hook prüft jeden `Write`-Aufruf auf `kapitel/*.md`: enthaltene Zitate
+Der `verbatim-guard`-Hook prüft jeden `Write`-Aufruf auf `kapitel/**/*.md` (Unterordner
+eingeschlossen) und `*.tex`: enthaltene Zitate
 werden gegen den Vault geprüft. Unbekannte Zitate werden geblockt mit dem Hinweis
 *„Zitat nicht im Vault — bitte über `quote-extractor` ziehen"*. Ein real durchgespielter
 Beleg für beide Fälle (erfundenes Zitat blockiert, verifiziertes Zitat durchgelassen) steht

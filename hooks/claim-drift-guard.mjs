@@ -94,14 +94,15 @@ async function readStdin() {
 }
 
 // ---------------------------------------------------------------------------
-// Pfad-Match (bewusst identisch zu verbatim-guard.mjs: kapitel/*.md und *.tex)
+// Pfad-Match (bewusst identisch zu verbatim-guard.mjs: kapitel/**\/*.md, *.tex)
 // ---------------------------------------------------------------------------
 
 function isProtectedPath(filePath) {
   if (!filePath) return false;
   const normalized = filePath.replace(/\\/g, '/');
   if (normalized.endsWith('.tex')) return true;
-  if (/(?:^|\/)kapitel\/[^/]+\.md$/.test(normalized)) return true;
+  // Unterordner unter kapitel/ zaehlen mit (#516)
+  if (/(?:^|\/)kapitel\/(?:[^/]+\/)*[^/]+\.md$/.test(normalized)) return true;
   return false;
 }
 
