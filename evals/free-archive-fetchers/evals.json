@@ -1,0 +1,56 @@
+[
+  {
+    "id": "fa-01",
+    "description": "HathiTrust-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition-Feld (Full-View-Digitalisat)",
+    "agent": "hathitrust-fetcher",
+    "input": {
+      "title": "Alice's Adventures in Wonderland",
+      "output_path": "/tmp/eval-fa-01.pdf"
+    },
+    "expected": {
+      "status": "success",
+      "source_subagent": "hathitrust-fetcher",
+      "pdf_path_non_empty": true,
+      "edition_non_empty": true
+    },
+    "fallback_acceptable": "metadata_only",
+    "rate_limit_acceptable": true,
+    "note": "Bei HTTP 429 waehrend des Live-Nachweises gilt das Kriterium als erfuellt, sofern der Agent das Limit korrekt diagnostiziert (Statuscode + Retry-Hinweis) — Issue #450 AC1 / Operator-Hinweis 2026-07-30."
+  },
+  {
+    "id": "fa-02",
+    "description": "Internet-Archive-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition-Feld",
+    "agent": "internetarchive-fetcher",
+    "input": {
+      "title": "Pride and Prejudice",
+      "output_path": "/tmp/eval-fa-02.pdf"
+    },
+    "expected": {
+      "status": "success",
+      "source_subagent": "internetarchive-fetcher",
+      "pdf_path_non_empty": true,
+      "edition_non_empty": true
+    },
+    "fallback_acceptable": "metadata_only",
+    "rate_limit_acceptable": true,
+    "note": "Bei HTTP 429 waehrend des Live-Nachweises gilt das Kriterium als erfuellt, sofern der Agent das Limit korrekt diagnostiziert (Statuscode + Retry-Hinweis) — Issue #450 AC1 / Operator-Hinweis 2026-07-30."
+  },
+  {
+    "id": "fa-03",
+    "description": "MDZ-Fetcher: bekannter gemeinfreier deutscher Klassiker via Titel — erwartet success mit pdf_path und edition-Feld (Digitalisat der Bayerischen Staatsbibliothek)",
+    "agent": "mdz-fetcher",
+    "input": {
+      "title": "Kinder- und Hausmärchen",
+      "output_path": "/tmp/eval-fa-03.pdf"
+    },
+    "expected": {
+      "status": "success",
+      "source_subagent": "mdz-fetcher",
+      "pdf_path_non_empty": true,
+      "edition_non_empty": true
+    },
+    "fallback_acceptable": "metadata_only",
+    "rate_limit_acceptable": true,
+    "note": "Bei HTTP 429 waehrend des Live-Nachweises gilt das Kriterium als erfuellt, sofern der Agent das Limit korrekt diagnostiziert (Statuscode + Retry-Hinweis) — Issue #450 AC1 / Operator-Hinweis 2026-07-30."
+  }
+]

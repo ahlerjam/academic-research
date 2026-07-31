@@ -10,6 +10,45 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Fetcher-Agents für HathiTrust, Internet Archive/Open Library und MDZ (#450):**
+  Drei neue OA-Subagenten (`agents/hathitrust-fetcher.md`,
+  `agents/internetarchive-fetcher.md`, `agents/mdz-fetcher.md`) nach dem
+  `doabooks-fetcher`/`oapen-fetcher`/`tib-fetcher`-Muster: nur `browser-use`,
+  identisches 5-Status-Output-Schema (`success`/`metadata_only`/
+  `pickup_required`/`captcha`/`no_match`). Alle drei Archive digitalisieren
+  überwiegend gemeinfreie Werke, führen aber pro Treffer eine *Zugriffsstufe*
+  (Vollansicht vs. eingeschränkter Zugriff — HathiTrust "search-only",
+  Internet-Archive-Borrow/CDL, MDZ-Katalogisat ohne Digitalisat): das
+  `reason`-Feld bei `metadata_only` trägt dafür ein festes Vokabular
+  (`"Zugriffsstufe: …"`), das gesperrte 5er-Enum bleibt unangetastet. Der
+  `success`-Output bekommt zusätzlich ein `edition`-Feld — Jahr/Ausgabe/Verlag
+  werden ausdrücklich aus dem Katalog-/Metadaten-Eintrag des konkret
+  heruntergeladenen Digitalisats entnommen, nie aus der Eingabe-ISBN/-Titel
+  übernommen (AC4: verschiedene Bibliotheken digitalisieren teils
+  unterschiedliche Auflagen desselben Werks). `agents/book-fetcher.md`
+  (Schritt 3 OA-Kette + Tools-Frontmatter) und
+  `tests/helpers/book_fetcher_router.py` (`OA_SUBAGENTS`) wurden additiv um
+  die drei neuen Hosts erweitert und ans Ende der bestehenden OA-Liste
+  angehängt — lizenzfrei, daher weiterhin nachweislich vor jedem
+  Verlags-Subagenten (AC3, geprüft in
+  `tests/test_book_fetcher.py::test_all_oa_metadata_only_then_springer_success`).
+  Jeder Agent bekommt einen passenden `config/browser_guides/*.md` mit
+  Access-Level-Matrix und dem expliziten Verbot, Suchtreffer-/Snippet-Text zu
+  einem Volltext-Ersatz zusammenzusetzen (AC2). HTTP-429-Rate-Limits werden
+  als `metadata_only` mit Statuscode + Retry-Hinweis diagnostiziert statt als
+  `no_match` fehlgedeutet (Operator-Hinweis 2026-07-30 zu PR #498: ein echtes
+  HathiTrust-Rate-Limit darf den AC-Verify nicht mehr allein zum Scheitern
+  bringen). Neuer Test `tests/test_free_archive_fetchers.py` (Analog zu
+  `tests/test_oa_fetchers.py`), neue `evals/free-archive-fetchers/evals.json`
+  (3 Cases, je 1 bekannter gemeinfreier Testtitel pro Archiv, Status
+  `structural` in `docs/evals/STRATEGY.md` — netzabhängige Live-Downloads,
+  gleiche Begründung wie `oa-fetchers`). Agent-Zähler 24 → 27
+  (`docs/reference/agents.md`, `AGENTS.md`, `README.md`). Vault-Wiring von
+  `edition` bis zu einem tatsächlichen `vault.add_paper()`-Call ist ein
+  offener Koordinationspunkt (weder `book-fetcher` noch `commands/fetch.md`
+  rufen `vault.add_paper()` heute überhaupt auf) und bewusst außerhalb dieses
+  Issues geliefert als Doku-/Feld-Vertrag auf Agent-Output-Ebene.
+
 - **Neuer Skill `latex-layout-auditor` (#392):** Read-only-Prüfung eines
   `latex-export`-Outputs auf LaTeX-spezifische Layout-Fehler, ergänzend zu
   `submission-checker` (der prüft Hochschul-Formalia, nicht LaTeX-Layout).

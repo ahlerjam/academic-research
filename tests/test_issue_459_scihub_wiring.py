@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 import yaml
 
+from tests.helpers.book_fetcher_router import OA_SUBAGENTS as _OA_SUBAGENTS_LIST
 from tests.helpers.book_fetcher_router import BookFetcherRouter
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent
@@ -30,7 +31,10 @@ FETCH_COMMAND = REPO_ROOT / "commands" / "fetch.md"
 CHAPTER_WRITER_SKILL = REPO_ROOT / "skills" / "chapter-writer" / "SKILL.md"
 CITATION_EXTRACTION_SKILL = REPO_ROOT / "skills" / "citation-extraction" / "SKILL.md"
 
-OA_SUBAGENTS = {"doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"}
+# Issue #450: OA_SUBAGENTS wuchs von 4 auf 7 (hathitrust-fetcher,
+# internetarchive-fetcher, mdz-fetcher) -- gemeinsame Quelle statt lokaler
+# Kopie, damit diese Fixtures nicht erneut aus dem Tritt geraten.
+OA_SUBAGENTS = set(_OA_SUBAGENTS_LIST)
 
 
 def _load_json(name):

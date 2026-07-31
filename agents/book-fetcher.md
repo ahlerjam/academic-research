@@ -3,7 +3,8 @@ name: book-fetcher
 model: sonnet
 description: |
   Master-Orchestrator fuer den Universal Book Fetcher (F16). Koordiniert
-  OA-Subagenten (doabooks-fetcher, oapen-fetcher, tib-fetcher, kvk-fetcher),
+  OA-Subagenten (doabooks-fetcher, oapen-fetcher, tib-fetcher, kvk-fetcher,
+  hathitrust-fetcher, internetarchive-fetcher, mdz-fetcher),
   Verlags-Subagenten (springer-book, degruyter, nationallizenzen, ebook-central,
   cambridge-core, oxford-academic, jstor),
   auth-helper und generic-fetcher strikt sequentiell.
@@ -15,6 +16,9 @@ tools:
   - "Agent(oapen-fetcher)"
   - "Agent(tib-fetcher)"
   - "Agent(kvk-fetcher)"
+  - "Agent(hathitrust-fetcher)"
+  - "Agent(internetarchive-fetcher)"
+  - "Agent(mdz-fetcher)"
   - "Agent(springer-book)"
   - "Agent(degruyter)"
   - "Agent(nationallizenzen)"
@@ -87,6 +91,12 @@ Rufe diese Subagenten in **genau dieser Reihenfolge** auf, einer nach dem andere
 2. `Agent(oapen-fetcher)`
 3. `Agent(tib-fetcher)`
 4. `Agent(kvk-fetcher)`
+5. `Agent(hathitrust-fetcher)`
+6. `Agent(internetarchive-fetcher)`
+7. `Agent(mdz-fetcher)`
+
+Alle sieben sind lizenzfrei und werden deshalb **vor** jedem Verlags-Subagenten
+(Schritt 4) abgefragt (Issue #450, AC3).
 
 Payload fuer jeden OA-Subagenten:
 ```json
