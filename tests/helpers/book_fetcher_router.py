@@ -9,7 +9,19 @@ import datetime
 import re
 
 # Subagent-Reihenfolgen (aus L0-Notes und Spec G.md)
-OA_SUBAGENTS = ["doabooks-fetcher", "oapen-fetcher", "tib-fetcher", "kvk-fetcher"]
+# Issue #450: hathitrust-fetcher/internetarchive-fetcher/mdz-fetcher werden ans
+# Ende der OA-Liste angehaengt (lizenzfrei, daher weiterhin vor allen
+# Verlags-Subagenten -- Feinsortierung unter den 7 freien Quellen ist reine
+# Listenreihenfolge und risikolos aenderbar).
+OA_SUBAGENTS = [
+    "doabooks-fetcher",
+    "oapen-fetcher",
+    "tib-fetcher",
+    "kvk-fetcher",
+    "hathitrust-fetcher",
+    "internetarchive-fetcher",
+    "mdz-fetcher",
+]
 
 PUBLISHER_DOMAIN_MAP = {
     "link.springer.com": "springer-book",

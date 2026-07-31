@@ -44,8 +44,8 @@ def test_decisions_table_exists():
         os.unlink(db_path)
 
 
-def test_glossary_table_exists():
-    """Nach init_schema() muss glossary-Tabelle vorhanden sein."""
+def test_glossary_table_removed():
+    """glossary hatte nie einen Lese-/Schreibpfad und ist mit #539 entfernt."""
     db_path, db = make_temp_db()
     try:
         conn = sqlite3.connect(db_path)
@@ -54,13 +54,13 @@ def test_glossary_table_exists():
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
-        assert "glossary" in names
+        assert "glossary" not in names
     finally:
         os.unlink(db_path)
 
 
-def test_style_overrides_table_exists():
-    """Nach init_schema() muss style_overrides-Tabelle vorhanden sein."""
+def test_style_overrides_table_removed():
+    """style_overrides hatte nie einen Lese-/Schreibpfad und ist mit #539 entfernt."""
     db_path, db = make_temp_db()
     try:
         conn = sqlite3.connect(db_path)
@@ -69,7 +69,7 @@ def test_style_overrides_table_exists():
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
-        assert "style_overrides" in names
+        assert "style_overrides" not in names
     finally:
         os.unlink(db_path)
 

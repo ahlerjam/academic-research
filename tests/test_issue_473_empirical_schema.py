@@ -120,6 +120,41 @@ def test_legacy_db_gets_empirical_tables(tmp_path):
     assert _columns(db_path, "codings")
 
 
+def test_db_already_stamped_by_dead_table_drop_still_gets_migrated(tmp_path):
+    """Eine DB auf der #539-Generation muss die #473-Migration noch bekommen.
+
+    Beide Aenderungen entstanden parallel und beanspruchten zunaechst dieselbe
+    Schema-Version 4. Waere es dabei geblieben, kaeme `init_schema()` bei einer
+    von #539 auf 4 gestempelten DB nie ueber sein `current_version >=
+    CURRENT_SCHEMA_VERSION`-Gate hinaus: `source_kind` und die Empirie-Tabellen
+    fehlten dauerhaft, ohne Fehlermeldung. Der Test haelt den Versionssprung
+    fest, nicht nur seinen Zahlenwert.
+    """
+    db_path = str(tmp_path / "stamped-v4.db")
+    _create_legacy_papers_table(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA user_version = 4")
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert _user_version(db_path) == 4
+    assert "source_kind" not in _columns(db_path, "papers")
+
+    VaultDB(db_path).init_schema()
+
+    assert "source_kind" in _columns(db_path, "papers")
+    assert _columns(db_path, "transcript_segments")
+    assert _columns(db_path, "codings")
+    assert _user_version(db_path) == CURRENT_SCHEMA_VERSION
+    assert CURRENT_SCHEMA_VERSION > 4, (
+        "Version 4 gehoert #539 (Drop der toten Tabellen) — #473 braucht eine "
+        "eigene Generation darueber, sonst laeuft seine Migration nie an."
+    )
+
+
 def test_legacy_paper_defaults_to_literature(tmp_path):
     """Bestands-Paper bleiben Literatur — die neue Spalte darf sie nicht umdeuten."""
     db_path = str(tmp_path / "legacy.db")

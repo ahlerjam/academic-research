@@ -24,7 +24,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   optionalem Timecode, idempotenter Re-Import über eine aus `(paper_id, seq)`
   abgeleitete `segment_id`, Kodier-Übersicht und Kodierleitfaden nach
   `empirie/kodierleitfaden.md` inklusive `vault.add_decision(category="kodierung")`.
-  Vault-Schema auf Version 4: neue Spalte `papers.source_kind`
+  Vault-Schema auf Version 5: neue Spalte `papers.source_kind`
   (`literature`|`primary`) plus die Tabellen `transcript_segments` und
   `codings`, vier neue MCP-Tools (`vault.add_transcript_segment`,
   `vault.list_transcript_segments`, `vault.add_coding`, `vault.list_codings`,
@@ -35,6 +35,78 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `source_kind`; `scripts/export-literature-state.mjs` filtert Primärmaterial
   aus dem Literatur-Snapshot. `scripts/project_bootstrap.py` legt zusätzlich
   `empirie/` an. Skill-Zähler 37 → 39.
+- **Fetcher-Agents für HathiTrust, Internet Archive/Open Library und MDZ (#450):**
+  Drei neue OA-Subagenten (`agents/hathitrust-fetcher.md`,
+  `agents/internetarchive-fetcher.md`, `agents/mdz-fetcher.md`) nach dem
+  `doabooks-fetcher`/`oapen-fetcher`/`tib-fetcher`-Muster: nur `browser-use`,
+  identisches 5-Status-Output-Schema (`success`/`metadata_only`/
+  `pickup_required`/`captcha`/`no_match`). Alle drei Archive digitalisieren
+  überwiegend gemeinfreie Werke, führen aber pro Treffer eine *Zugriffsstufe*
+  (Vollansicht vs. eingeschränkter Zugriff — HathiTrust "search-only",
+  Internet-Archive-Borrow/CDL, MDZ-Katalogisat ohne Digitalisat): das
+  `reason`-Feld bei `metadata_only` trägt dafür ein festes Vokabular
+  (`"Zugriffsstufe: …"`), das gesperrte 5er-Enum bleibt unangetastet. Der
+  `success`-Output bekommt zusätzlich ein `edition`-Feld — Jahr/Ausgabe/Verlag
+  werden ausdrücklich aus dem Katalog-/Metadaten-Eintrag des konkret
+  heruntergeladenen Digitalisats entnommen, nie aus der Eingabe-ISBN/-Titel
+  übernommen (AC4: verschiedene Bibliotheken digitalisieren teils
+  unterschiedliche Auflagen desselben Werks). `agents/book-fetcher.md`
+  (Schritt 3 OA-Kette + Tools-Frontmatter) und
+  `tests/helpers/book_fetcher_router.py` (`OA_SUBAGENTS`) wurden additiv um
+  die drei neuen Hosts erweitert und ans Ende der bestehenden OA-Liste
+  angehängt — lizenzfrei, daher weiterhin nachweislich vor jedem
+  Verlags-Subagenten (AC3, geprüft in
+  `tests/test_book_fetcher.py::test_all_oa_metadata_only_then_springer_success`).
+  Jeder Agent bekommt einen passenden `config/browser_guides/*.md` mit
+  Access-Level-Matrix und dem expliziten Verbot, Suchtreffer-/Snippet-Text zu
+  einem Volltext-Ersatz zusammenzusetzen (AC2). HTTP-429-Rate-Limits werden
+  als `metadata_only` mit Statuscode + Retry-Hinweis diagnostiziert statt als
+  `no_match` fehlgedeutet (Operator-Hinweis 2026-07-30 zu PR #498: ein echtes
+  HathiTrust-Rate-Limit darf den AC-Verify nicht mehr allein zum Scheitern
+  bringen). Neuer Test `tests/test_free_archive_fetchers.py` (Analog zu
+  `tests/test_oa_fetchers.py`), neue `evals/free-archive-fetchers/evals.json`
+  (3 Cases, je 1 bekannter gemeinfreier Testtitel pro Archiv, Status
+  `structural` in `docs/evals/STRATEGY.md` — netzabhängige Live-Downloads,
+  gleiche Begründung wie `oa-fetchers`). Agent-Zähler 24 → 27
+  (`docs/reference/agents.md`, `AGENTS.md`, `README.md`). Fixrunde: das
+  `edition`-Feld reicht jetzt bis in den Vault durch — `book-fetcher.md`
+  übernimmt es aus der OA-Subagenten-Antwort unverändert in sein eigenes
+  Output-Schema, und `commands/fetch.md` ruft bei `status: success`
+  tatsächlich `mcp__academic-vault__vault_add_paper` auf (`csl_json` trägt
+  `edition` nur, wenn die Quelle es meldet — nie ein erfundener Platzhalter).
+  Geprüft in `tests/test_issue_450_vault_wiring.py`, inkl. echtem
+  `add_paper()`/`get_paper()`-Roundtrip gegen eine reale `VaultDB` (AC4). Ein
+  `title`-Feld fehlt in der Kette weiterhin — kein Subagent liefert bislang
+  einen Titel aus der Quelle selbst; das bleibt ein offener, größerer
+  Koordinationspunkt außerhalb von #450.
+  **Zweite Fixrunde — AC1 real belegt statt zugesagt:** Die vorige Fassung hat
+  den geforderten Live-Nachweis mit „Realer Live-Lauf bleibt Operator-Sache"
+  beantwortet; belegt war damit nichts, denn `evals/free-archive-fetchers/evals.json`
+  ist `structural` und `docs/evals/STRATEGY.md` definiert das ausdrücklich als
+  „kein grün". Der Beleg liegt jetzt als nachfahrbares Artefakt in
+  `evals/free-archive-fetchers/live-verification.json` (URL-Kette, HTTP-Status,
+  Bytes, Prüfsumme, Seitenzahl je Lauf), nach dem Muster von Issue #449:
+  Internet Archive liefert real ein 922-seitiges Digitalisat der Erstausgabe von
+  1813 ohne Login (byteweise über zwei Abrufe reproduzierbar), MDZ das
+  Grimm-Digitalisat als Gesamtwerk-PDF mit 471 Seiten, HathiTrust antwortet am
+  Download-Endpunkt mit HTTP 403 und der Sperrseite „Error - Blocked from
+  HathiTrust" — 2 von 3 Anbietern real als PDF belegt, wie AC1 es verlangt.
+  Nachfahrbar mit `RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py`
+  (opt-in, nicht im CI); hermetisch geprüft in
+  `tests/test_issue_450_fetcher_evidence.py`.
+  Die Live-Läufe haben dabei drei Zugriffshindernisse gefunden, für die die
+  Agenten keine Regel hatten — jedes mit eigenem Test in
+  `tests/test_free_archive_fetchers.py::TestLiveObservedAccessBarriers`:
+  MDZ gibt ein PDF erst nach **Bestätigung des Rechtehinweises** heraus (das
+  Feld steht auf „Nein" vorbelegt, ohne Umstellung antwortet der Server mit
+  HTTP 200 und wieder dem Formular — der Schritt scheitert lautlos);
+  Internet Archive beantwortet den Download eines CDL-Titels mit **HTTP 401**,
+  erkennbar vorab am Metadatenfeld `access-restricted-item`, nicht nur am
+  Borrow-Button; und HathiTrusts Sperrseite ist **kein CAPTCHA** — die
+  Captcha-Erkennung des Repos schlägt an der real aufgezeichneten Seite
+  (`tests/fixtures/free_archive_fetchers/hathitrust_page_blocked.html`)
+  nicht an, weshalb `metadata_only` mit der Zugriffsstufe „Plattform-Sperre"
+  der richtige Ausgang ist und weder `captcha` noch `no_match`.
 
 - **Neuer Skill `latex-layout-auditor` (#392):** Read-only-Prüfung eines
   `latex-export`-Outputs auf LaTeX-spezifische Layout-Fehler, ergänzend zu
@@ -585,6 +657,10 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **`pre-compact.mjs`: `SLUG`-Default vermischte Snapshots verschiedener Projekte (#382):** `SLUG` fiel ohne `ACADEMIC_PROJECT_SLUG` hartkodiert auf `'default'` zurück, während `DB_SLUG` bereits `basename(CLAUDE_PROJECT_DIR)` nutzte — Snapshots unterschiedlicher Projekte landeten dadurch im selben `~/.academic-research/snapshots/default/`-Ordner. `SLUG` nutzt jetzt denselben Default wie `DB_SLUG`.
 - **Setup prüft jetzt die Node.js-Laufzeit + drei Zugangsdaten-Wege sind erstmals zusammenhängend dokumentiert (#468):** `scripts/setup.sh` warnt beim Fehlen von `node` deutlich (Installationshinweis `brew install node`) statt die 5 node-abhängigen Hooks (u. a. `verbatim-guard`, `claim-drift-guard`) lautlos ausfallen zu lassen — kein harter Abbruch, da venv/Bootstrap/Uni-Profil/SciHub node-unabhängig sind. Neuer Abschnitt „Zugangsdaten" in `docs/guide/installation.md` erklärt gebündelt alle drei tatsächlich existierenden Wege (Such-API-Umgebungsvariablen, Per-Uni-Profil `credentials_keys` via `auth-helper`, HAN-Zugangsdaten-Datei für `ebscohost`/`proquest`/`opac`) statt sie über drei Dateien verstreut zu lassen, inklusive Hinweis auf die bestehende Doku-Drift bei `credentials_keys` (Schema nennt „OS-Keychain", Code liest den Wert direkt aus der YAML). `uni-profiles.md`, `search.md` und `troubleshooting.md` verlinken jetzt dorthin statt Teil-Erklärungen zu duplizieren.
 - **Manifest- und Doku-Ehrlichkeit (#453):** Beide Plugin-Manifeste behaupteten Zahlen ohne Code-Bezug — `.claude-plugin/plugin.json` zählte „Google Scholar und 9 weitere" auf 14 Quellen hoch, obwohl `google_scholar` laut `config/browser_guides/google_scholar.md` ein Browser-Modul ist (`scripts/search.py::MODULES` registriert exakt 7 API-Quellen, bereits korrekt in `docs/reference/search.md`); dieselbe Datei sowie `.claude-plugin/marketplace.json` bewarben eine „Universal Book Fetcher (8-Tier-Pipeline)" — der Begriff „Tier" kommt in `agents/book-fetcher.md` nirgends vor und gehört zu einem anderen Feature (`scripts/pdf.py::resolve_pdf_url()`, generische OA-PDF-Auflösung für einzelne Paper). Beide Manifeste nennen jetzt „7 API-Quellen" bzw. „10 Fetcher-Subagenten mit Fallback-Kette" (Zählbasis: die `Agent(...)`-Tools im `book-fetcher`-Frontmatter ohne `auth-helper`). `docs/reference/agents.md` bekommt eine Dispatch-Spalte (automatisch via Caller / manuell) für alle 20 Agents; dabei fielen zwei weitere „Genutzt von"-Fehlangaben auf: `risk-of-bias` wird tatsächlich von `parallel-screening` dispatcht, nicht von `prisma-flow` (das nur die resultierenden Zähler liest), und `figure-verifier` hat entgegen der bisherigen Tabelle gar keinen automatischen Aufrufer im Code — beide korrigiert. Drei Referenzen auf einen nie im Code existierenden `/academic-research:setup`-Migrationsschalter (`CHANGELOG.md`, `docs/guide/troubleshooting.md`, `docs/guide/installation.md`) sind durch den echten, eigenständigen Aufruf `python academic_vault/migrate.py --state literature_state.md --db <vault.db>` ersetzt; der CHANGELOG-Eintrag verlor zusätzlich einen toten Verweis auf `docs/MIGRATION-v5-to-v6.md` (bereits mit #346 entfernt). Neu: `tests/test_issue_453_manifest_honesty.py` prüft alle Zahlen-Claims gegen den Code, guardet gegen erneutes Zählen von Google Scholar als API-Quelle, erzwingt die Dispatch-Spalte und durchsucht die gesamte Doku-Oberfläche plus `CHANGELOG.md` nach dem alten toten Schalter.
+
+### Removed
+
+- **Tote Schema-Tabellen `glossary` und `style_overrides` (#539):** Beide standen seit v6.4 in `schema.sql` und in `migrate.add_v64_tables()`, hatten aber nie einen Lese- oder Schreibpfad (null Treffer in `db.py`/`server.py`) — sie täuschten ein Glossar-/Stil-Feature vor und liefen bei jeder Migration mit. Frische DBs legen sie nicht mehr an; Bestands-DBs räumt der neue idempotente Helfer `migrate.drop_dead_v64_tables()` am Ende von `apply_pending_migrations()` ab. Damit das Versions-Gate aus #368 die bereits auf `user_version = 3` gestempelten DBs überhaupt noch einmal anfasst, steigt `db.CURRENT_SCHEMA_VERSION` auf 4. Datensicherheit vor Aufräumen: Gedroppt wird nur bei `COUNT(*) = 0`; enthält eine der Tabellen wider Erwarten Zeilen, bleibt sie stehen, `init_schema()` verweigert den `user_version`-Stempel (nächster Aufruf versucht es erneut) und warnt mit dem Tabellennamen — kein `raise`, das würde den MCP-Server lahmlegen. Die Tabellennamen existieren im Paket nur noch als `migrate.DEAD_TABLES`; `db.py` importiert die Konstante, statt sie zu duplizieren, und `tests/test_issue_539_drop_dead_tables.py` hält beides fest. **Nicht enthalten:** die `decisions`-Tabelle (bleibt) und der Aufbau eines echten Glossar-Features (eigenes Feature-Issue). Kein Änderungsbedarf an der Doku: `docs/reference/glossary.md` ist das Begriffs-Glossar der Doku und hat mit der DB-Tabelle nichts zu tun.
 
 ---
 

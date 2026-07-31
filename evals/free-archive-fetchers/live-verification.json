@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-31",
+  "recorded_by": "Fix-Runde zu PR #557 (Issue #450, AC1)",
+  "environment": {
+    "transport": "curl 8.x / urllib, HTTP/2 bzw. HTTP/1.1, keine Zugangsdaten, kein Cookie-Jar, keine Institutions-IP",
+    "platform": "macOS 15 (darwin 25.5.0)",
+    "network": "privates Endnutzer-Netz",
+    "pdf_inspection": "pypdf (Runtime-Dependency, pyproject.toml) — Seitenzahl und Dokument-Metadaten aus dem geoeffneten Dokument, nicht geschaetzt"
+  },
+  "purpose": "AC1 aus Issue #450 verlangt einen Live-Nachweis pro Archiv als PDF und laesst ein korrekt diagnostiziertes Rate-Limit/Zugriffshindernis als Erfuellung gelten, sofern mindestens 2 von 3 Anbietern real belegt sind. Diese Datei ist das Artefakt dazu: pro Agent ein realer Lauf gegen die echte Plattform mit vollstaendiger URL-Kette, HTTP-Status, Byte-Zahl und Pruefsumme der tatsaechlich empfangenen Bytes. Nachfahrbar mit RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py.",
+  "why_this_file_exists": "Die erste Fassung von PR #557 hat AC1 mit dem Satz 'Realer Live-Lauf bleibt Operator-Sache' beantwortet und den Nachweis auf evals/free-archive-fetchers/evals.json verschoben — eine Datei, die docs/evals/STRATEGY.md selbst als 'structural' fuehrt und die dort ausdruecklich als 'kein gruen' definiert ist. Geprueft hat das niemand: tests/test_free_archive_fetchers.py::TestOutputSchema fuehrt vom Testautor selbst geschriebene Beispiel-Dicts gegen ein Schema, also eine Aussage ueber den Testautor und nicht ueber die drei Archive. Das Repo hat fuer genau diese Lage bereits ein Muster — evals/publisher-fetchers/live-verification.json aus Issue #449. Diese Datei wendet es auf #450 an.",
+  "verdict_vocabulary": {
+    "pdf_verified": "Ein PDF wurde real und ohne Login empfangen, beginnt mit %PDF- und liess sich mit pypdf oeffnen. AC1 fuer diesen Agenten belegt (Hauptpfad).",
+    "blocked_verified": "Die Plattform beantwortet den anonymen, automatisierten Zugriff mit einer Sperrseite. AC1 fuer diesen Agenten ueber die im Issue zugelassene Alternative belegt — das Hindernis ist benannt, mit Statuscode belegt und wird nicht umgangen."
+  },
+  "ac1_ledger": {
+    "required": "mindestens 2 von 3 Anbietern real belegen",
+    "pdf_verified": ["fa-02", "fa-03"],
+    "blocked_verified": ["fa-01"],
+    "conclusion": "2 von 3 Anbietern (Internet Archive, MDZ) liefern real ein PDF. HathiTrust ist als gesperrt belegt statt als 'nicht geprueft' offengelassen."
+  },
+  "runs": [
+    {
+      "agent": "hathitrust-fetcher",
+      "eval_case": "fa-01",
+      "platform": "HathiTrust",
+      "verdict": "blocked_verified",
+      "expected_status": "metadata_only",
+      "url_chain": [
+        "https://babel.hathitrust.org/cgi/imgsrv/download?id=mdp.39015078560280;orient=0;size=100"
+      ],
+      "artifact": {
+        "http_status": 403,
+        "content_type": "text/html",
+        "page_title": "Error - Blocked from HathiTrust",
+        "stable_markers": [
+          "Page Blocked",
+          "Sorry, your attempt to access HathiTrust has been blocked",
+          "Because of your IP address' reputation or location",
+          "Cloudflare Ray ID"
+        ],
+        "captured_page": "tests/fixtures/free_archive_fetchers/hathitrust_page_blocked.html"
+      },
+      "also_measured": {
+        "catalog_html_is_challenged": {
+          "url": "https://catalog.hathitrust.org/Search/Home?lookfor=Alice%27s+Adventures+in+Wonderland+Carroll&type=all",
+          "http_status": 403,
+          "response_header": "cf-mitigated: challenge",
+          "note": "Auch der Katalog-Einstieg, den config/browser_guides/hathitrust.md als Discovery-Pfad nennt, antwortet anonym mit einer Cloudflare-Challenge — die Sperre haengt nicht an einem einzelnen Endpunkt."
+        },
+        "bib_api_stays_open": {
+          "url": "https://catalog.hathitrust.org/api/volumes/brief/json/oclc:1006912",
+          "http_status": 200,
+          "content_type": "application/json",
+          "note": "Die dokumentierte Bib-API antwortet unverstellt. Deshalb ist metadata_only fuer diesen Agenten der ehrliche Ausgang und nicht no_match: bibliografisch ist der Titel sehr wohl aufloesbar, nur der Volltext nicht."
+        }
+      },
+      "not_a_captcha": {
+        "claim": "Die Sperrseite ist KEIN CAPTCHA. Sie bietet keine loesbare Aufgabe an, sondern nennt IP-Reputation als Grund und verweist auf Support.",
+        "checked_by": "tests/test_issue_450_fetcher_evidence.py::test_block_page_is_not_a_captcha — die Captcha-Erkennung des Repos (GenericFetcherNavigator.detect_captcha) findet in der aufgezeichneten Seite kein Signal.",
+        "consequence": "status: captcha waere fuer diesen Fall die falsche Meldung. agents/hathitrust-fetcher.md braucht dafuer eine eigene Regel — sonst faellt der Fall in keinen der fuenf Status."
+      },
+      "volatile_fields_excluded": {
+        "fields": ["IP address", "Cloudflare Ray ID"],
+        "reason": "Beide Angaben stehen auf der Sperrseite und wirken wie harte Evidenz, sind aber pro Request neu — und die Client-IP hat in einem oeffentlichen Repo ohnehin nichts verloren. In der eingecheckten Fixture sind sie neutralisiert (REDACTED-*), damit niemand versucht, gegen sie zu vergleichen. Dass die Ray ID rotiert, wird nicht behauptet, sondern gefahren: tests/test_issue_450_live_fetch.py::test_hathitrust_ray_id_rotates holt die Seite zweimal.",
+        "evidence_is_instead": "Status 403, Seitentitel und die vier Stabil-Marker im DOM. Diese Signale sind bei jedem Abruf identisch."
+      },
+      "why_this_still_satisfies_ac1": "AC1 laesst ein korrekt diagnostiziertes Zugriffshindernis als Erfuellung gelten und verlangt reale Belege nur fuer 2 von 3 Anbietern. Die beiden PDF-Belege liefern fa-02 und fa-03; fuer HathiTrust ist das Hindernis benannt, mit Statuscode belegt und ausdruecklich nicht umgangen.",
+      "notes": "Der 403 belegt NICHT, dass HathiTrust-Volltexte generell unerreichbar sind — ueber einen echten Browser im Menschentempo (der Weg, den agents/hathitrust-fetcher.md beschreibt) kann derselbe Inhalt zugaenglich sein. Belegt ist allein: der direkte, anonyme Zugriff auf den Download-Endpunkt wird gesperrt. Genau deshalb bleibt der Agent bei browser-use und erhoeht nicht das Tempo."
+    },
+    {
+      "agent": "internetarchive-fetcher",
+      "eval_case": "fa-02",
+      "platform": "Internet Archive",
+      "verdict": "pdf_verified",
+      "expected_status": "success",
+      "item": {
+        "identifier": "prideprejudiceno00aust_1",
+        "title": "Pride and prejudice : a novel in three volumes",
+        "creator": "Austen, Jane, 1775-1817",
+        "edition": "London : Printed for T. Egerton, 1813",
+        "digitised_by": "University of Alberta Libraries (Bruce Peel Special Collections)",
+        "access": "access-restricted-item fehlt im Metadatensatz — frei herunterladbar, kein Controlled Digital Lending"
+      },
+      "url_chain": [
+        "https://archive.org/metadata/prideprejudiceno00aust_1",
+        "https://archive.org/details/prideprejudiceno00aust_1",
+        "https://archive.org/download/prideprejudiceno00aust_1/prideprejudiceno00aust_1.pdf"
+      ],
+      "artifact": {
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "bytes": 52294776,
+        "magic": "%PDF-1.5",
+        "sha256": "92f2932142632ba4ec434b30dbaddf1ffa4e5994623b2043cd62d7bd38c3dd5b",
+        "pages": 922,
+        "pdf_title": "Pride and prejudice : a novel in three volumes",
+        "pdf_author": "Austen, Jane, 1775-1817",
+        "pdf_keywords": "https://archive.org/details/prideprejudiceno00aust_1",
+        "sha256_stable": true,
+        "sha256_stability_note": "Empirisch geprueft: zwei vollstaendige Abrufe am 2026-07-31 lieferten byteweise dieselbe Datei. Das Digitalisat traegt keinen abruf-abhaengigen Stempel. sha256 ist hier ein hartes Vergleichskriterium."
+      },
+      "no_login_evidence": "Anfrage ohne Cookie-Jar und ohne Zugangsdaten. Die Bindung an genau dieses Item steckt im Dokument selbst: das PDF fuehrt in /Keywords die Detailseiten-URL des Items und in /Title bzw. /Author dieselben Angaben wie der Metadatensatz.",
+      "access_control_counter_example": {
+        "purpose": "Zeigt, dass der freie Bezug oben eine Eigenschaft DIESES Items ist und nicht die Abwesenheit jeder Zugriffskontrolle bei archive.org. Ohne die Gegenprobe waere 'ohne Login geladen' keine Aussage.",
+        "identifier": "prideprejudice00austrich",
+        "signals": {
+          "access-restricted-item": "true",
+          "collection_contains": "inlibrary"
+        },
+        "url": "https://archive.org/download/prideprejudice00austrich/prideprejudice00austrich.pdf",
+        "http_status": 401,
+        "note": "Gleich geformte Download-URL, Controlled-Digital-Lending-Item: HTTP 401 statt PDF. Der Dateiliste dieses Items liegt zusaetzlich eine Variante mit format 'ACS Encrypted PDF' bei. Damit ist 401 der reale Fehlerpfad des Agenten — nicht 429 und nicht ein fehlender Download-Link."
+      },
+      "volatile_fields_excluded": {
+        "fields": ["CDN-Hostname des 302-Ziels"],
+        "reason": "archive.org beantwortet die Download-URL mit einem 302 auf einen zugewiesenen Speicherknoten; im Testlauf am 2026-07-31 kamen dabei Knoten in verschiedenen Regionen zurueck. Der konkrete Hostname des Umleitungsziels ist darum kein Beleg — festgehalten wird die stabile Einstiegs-URL. Dass das Ziel ein zugewiesener Knoten und nicht der Einstiegs-Host ist, wird nicht behauptet, sondern gefahren: tests/test_issue_450_live_fetch.py::test_internet_archive_redirects_to_an_assigned_node. Ob innerhalb weniger Sekunden zwei verschiedene Knoten zurueckkommen, ist dabei ausdruecklich NICHT zugesichert und wird darum auch nicht geprueft.",
+        "evidence_is_instead": "Die stabile /download/-URL, Status, Content-Type, Byte-Zahl, sha256 und die Dokument-Metadaten des PDF."
+      },
+      "notes": "Der Titel wurde bewusst als historische Erstausgabe (1813) gewaehlt: er belegt zugleich AC4, denn 'edition' stammt aus dem Metadatensatz des Digitalisats und nicht aus der Eingabe."
+    },
+    {
+      "agent": "mdz-fetcher",
+      "eval_case": "fa-03",
+      "platform": "Muenchener Digitalisierungszentrum (Bayerische Staatsbibliothek)",
+      "verdict": "pdf_verified",
+      "expected_status": "success",
+      "item": {
+        "identifier": "bsb10125025",
+        "title": "Kinder und Hausmärchen gesammelt durch die Brüder Grimm. 1",
+        "creator": "Grimm, Jacob",
+        "edition": "Göttingen : Verlag der Dieterichschen Buchhandlung, 1864",
+        "shelfmark": "München, Bayerische Staatsbibliothek -- P.o.germ. 1867 f-1",
+        "rights_statement": "https://rightsstatements.org/vocab/NoC-NC/1.0/",
+        "canvases_in_manifest": 470
+      },
+      "url_chain": [
+        "https://api.digitale-sammlungen.de/iiif/presentation/v2/bsb10125025/manifest",
+        "https://download.digitale-sammlungen.de/BOOKS/download.pl?id=10125025&ersteseite=1&letzteseite=470",
+        "https://download.digitale-sammlungen.de/BOOKS/download.pl?ersteseite=1&letzteseite=470&xdfz=2&id=10125025&vers=d&nr=&abschicken=ja&captcha_zeit=10125025&submitbutton=WEITER"
+      ],
+      "artifact": {
+        "scope": "Gesamtwerk (Vorauswahl des Formulars: ersteseite=1, letzteseite=470)",
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "bytes": 155695518,
+        "magic": "%PDF-1.4",
+        "pages": 471,
+        "pages_note": "470 Bilder plus ein von MDZ vorangestelltes Titel-/Rechteblatt.",
+        "sha256_stable": false,
+        "sha256_normalized": "6a6bd5f710f71eb3a19c5166fa20d0991682b89f4713355e16f0958c387d7a5c",
+        "sha256_normalization_rule": "sha256 ueber die empfangenen Bytes, nachdem das /ID-Array im Trailer durch '/ID [<0><0>]' ersetzt wurde.",
+        "sha256_stability_note": "Der rohe sha256 ist bei MDZ kein Kriterium, und zwar aus einem exakt eingegrenzten Grund statt aus Resignation: zwei unabhaengige Zusammenstellungen desselben Bereichs unterschieden sich am 2026-07-31 in genau 58 Bytes, ausschliesslich im /ID-Array des PDF-Trailers, das MDZ pro Lauf neu vergibt. Byte-Zahl, Seitenzahl und jedes andere Byte waren identisch. Nach der Normalisierung ist die Pruefsumme ein hartes Vergleichskriterium — gemessen an fast_reproduction, wo zwei Laeufe denselben normalisierten Wert lieferten."
+      },
+      "fast_reproduction": {
+        "purpose": "Ein 155-MB-Abruf ist kein zumutbarer Nachfahrweg. Derselbe Endpunkt mit einem Seitenbereich laeuft in Sekunden und prueft dieselbe Mechanik inklusive Rechtehinweis-Pflichtfeld. Der Standard-Live-Test nimmt diesen Weg; das Gesamtwerk oben laeuft nur mit RUN_LIVE_FREE_ARCHIVE_FETCH_WHOLE_WORK=1.",
+        "url": "https://download.digitale-sammlungen.de/BOOKS/download.pl?ersteseite=1&letzteseite=8&xdfz=2&id=10125025&vers=d&nr=&abschicken=ja&captcha_zeit=10125025&submitbutton=WEITER",
+        "http_status": 200,
+        "content_type": "application/pdf",
+        "bytes": 1658358,
+        "magic": "%PDF-1.4",
+        "pages": 9,
+        "sha256_normalized": "4673085b7a0956b1cb64298d766b066c60addf27bbf1a5610c104ce77692b4b0",
+        "sha256_normalized_confirmed_by_two_runs": true
+      },
+      "rights_gate": {
+        "claim": "Der PDF-Bezug ist nicht der Klick auf einen Download-Link, sondern das Absenden eines Formulars mit Pflicht-Bestaetigung des Rechtehinweises.",
+        "mechanism": "Das Radio 'xdfz' steht auf 1 ('Nein') vorbelegt. Mit xdfz=1 antwortet der Server mit 200, liefert aber wieder das Formular und den Text 'Bitte akzeptieren Sie den Rechtehinweis' — kein PDF. Erst xdfz=2 ('Ja') stellt das PDF zusammen und legt einen Link darauf.",
+        "measured": "Beide Faelle am 2026-07-31 gefahren; nachfahrbar in tests/test_issue_450_live_fetch.py::test_mdz_refuses_without_accepting_the_rights_statement.",
+        "consequence": "config/browser_guides/mdz.md und agents/mdz-fetcher.md beschrieben bis zu dieser Fix-Runde nur 'Download-Icon → PDF-Option waehlen → herunterladen'. Ein Agent nach dieser Anleitung landet auf dem Formular und bekommt kein PDF, ohne dass einer der fuenf Status zutraefe."
+      },
+      "whole_work_note": "Das Gesamtwerk kam als eine Datei mit 471 Seiten und rund 148 MiB an — MDZ stellt es serverseitig zusammen und liefert es ohne Wartezimmer und ohne Auftragsverfahren aus. Nicht zu verwechseln mit DaFo (hochaufloesende Bilder plus OCR), das MDZ auf der Seite 'Download Options' ausdruecklich als Bestellung mit Mailadresse und Bereitstellung binnen bis zu vier Wochen fuehrt; DaFo ist fuer diesen Agenten kein Weg.",
+      "volatile_fields_excluded": {
+        "fields": ["Job-Praefix im Dateinamen des zusammengestellten PDF", "/ID-Array im PDF-Trailer"],
+        "reason": "MDZ legt das Ergebnis unter /pdf/<job-praefix>bsb10125025.pdf ab; das Praefix wird pro Zusammenstellung neu vergeben. Ein festgehaltener Wert waere darum kein Beleg. Dass es rotiert, wird nicht behauptet, sondern gefahren: tests/test_issue_450_live_fetch.py::test_mdz_job_prefix_rotates. Das /ID-Array ist aus demselben Grund aus der Pruefsumme herausgerechnet.",
+        "evidence_is_instead": "Status, Content-Type, Byte-Zahl, Seitenzahl und der normalisierte sha256."
+      },
+      "notes": "Das Digitalisat traegt 1864 (Dieterichsche Buchhandlung), nicht 1812. Wer 'Kinder- und Hausmärchen' eingibt und daraus 1812 ableitet, traegt eine Jahresangabe in den Vault, die zum gelieferten Digitalisat nicht passt — genau der Fehler, den AC4 verbietet."
+    }
+  ]
+}

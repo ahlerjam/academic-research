@@ -4,7 +4,7 @@
 
 Agents sind LLM-Subagents. Anders als Skills aktivieren sie sich nicht selbst — sie
 werden von einem Command oder einem Skill gestartet und laufen in eigenem Kontext.
-Das Plugin bringt **24 Agents** mit (`agents/*.md`).
+Das Plugin bringt **27 Agents** mit (`agents/*.md`).
 
 Die Dispatch-Spalte zeigt, wie ein Agent tatsächlich gestartet wird: **automatisch**
 heißt, ein Command/Skill/anderer Agent löst ihn ohne weiteres Zutun aus (sobald der
@@ -42,6 +42,9 @@ welcher Reihenfolge probiert werden. Details zur Fallback-Kette in
 | `oxford-academic` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | academic.oup.com per browser-use + Shibboleth/OpenAthens |
 | `jstor` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | jstor.org per browser-use + Shibboleth (hohes Anti-Scraping) |
 | `kvk-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | KVK Meta-Suche (80+ Kataloge) |
+| `hathitrust-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | catalog.hathitrust.org per browser-use, nur Full-View-Digitalisate |
+| `internetarchive-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | archive.org/openlibrary.org per browser-use, kein Export von Borrow/CDL-Titeln |
+| `mdz-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | digitale-sammlungen.de (Münchener Digitalisierungszentrum) per browser-use |
 | `generic-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | Universeller Plattform-Navigator: 5 Seitenzustände, Viewer-/Embed-Erkennung, Profil-Lizenzroute, hartes Schritt-Budget |
 | `auth-helper` | Sonnet | `book-fetcher` (bei Login-Wall) | automatisch via `book-fetcher` | HAN / Shibboleth-WAYF / EZproxy Login-Flow |
 | `scihub-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` (opt-in) | SciHub-Tier — läuft nur bei `scihub_optin: true` |

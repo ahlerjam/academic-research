@@ -194,20 +194,8 @@ CREATE TABLE IF NOT EXISTS figures (
 );
 
 -- v6.4: Decision-Log Ergaenzungs-Tabellen
-
-CREATE TABLE IF NOT EXISTS glossary (
-  term        TEXT PRIMARY KEY,
-  definition  TEXT NOT NULL,
-  created_at  INTEGER NOT NULL,
-  updated_at  INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS style_overrides (
-  key        TEXT PRIMARY KEY,
-  value      TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
+-- (zwei nie angebundene Tabellen sind mit #539 entfernt worden; Bestands-DBs
+--  raeumt migrate.drop_dead_v64_tables() auf)
 
 CREATE TABLE IF NOT EXISTS excluded_sources (
   paper_id   TEXT PRIMARY KEY,
