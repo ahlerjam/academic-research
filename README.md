@@ -220,6 +220,9 @@ MIT — siehe [LICENSE](LICENSE).
 Bug melden oder Feature vorschlagen:
 [GitHub Issues](https://github.com/ahlerjam/academic-research/issues).
 
+Code beitragen: erst [CONTRIBUTING.md](CONTRIBUTING.md) lesen — Pull Requests
+ohne vorherige Absprache im Issue werden nicht angenommen.
+
 **Referenzen:** [Anthropic Skill Spec](https://agentskills.io/specification) ·
 [Claude Code Plugins](https://code.claude.com/docs/en/plugins) ·
 [anthropics/skills Cookbook](https://github.com/anthropics/skills) ·
