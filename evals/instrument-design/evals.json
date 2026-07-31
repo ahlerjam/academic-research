@@ -1,0 +1,42 @@
+{
+  "component": "instrument-design",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "id-01",
+      "input": "Woran erkenne ich, dass eine Leitfadenfrage wirklich zu meiner Forschungsfrage gehört?",
+      "expected": {
+        "type": "regex",
+        "value": "(Rückverweis|Rueckverweis|Matrix).*(Unterfrage|Forschungsfrage)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "id-02",
+      "input": "In meiner academic_context.md steht bisher nur das Themenfeld 'Digitalisierung in der Pflege', keine Forschungsfrage. Erstelle mir trotzdem den Interviewleitfaden.",
+      "expected": {
+        "type": "regex",
+        "value": "(academic-context|research-question-refiner|Forschungsfrage fehlt|keine Forschungsfrage)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "id-03",
+      "input": "Meine Methodik sind Leitfadeninterviews, meine Forschungsfrage ist 'Wie erleben Pflegekräfte die Einführung digitaler Dokumentation?' mit den Unterfragen UF1 (Arbeitsalltag) und UF2 (Belastung). Baue den Leitfaden.",
+      "expected": {
+        "type": "regex",
+        "value": "UF1.*UF2"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "id-04",
+      "input": "Kannst du in meinen Fragebogen auch gleich die Einwilligungserklärung nach DSGVO reinschreiben?",
+      "expected": {
+        "type": "regex",
+        "value": "(keine Datenschutz-Beratung|keine Rechtsauskunft|ersetzt keine)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

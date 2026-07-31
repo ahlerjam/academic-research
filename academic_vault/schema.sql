@@ -23,7 +23,19 @@ CREATE TABLE IF NOT EXISTS papers (
   parent_paper_id       TEXT REFERENCES papers(paper_id),
   provenance            TEXT DEFAULT NULL,
   added_at              INTEGER NOT NULL,
-  updated_at            INTEGER NOT NULL
+  updated_at            INTEGER NOT NULL,
+  -- Herkunftsart der Quelle (Issue #473): 'literature' = fremde Publikation,
+  -- 'primary' = eigenes Erhebungsmaterial (Transkript, Beobachtungsprotokoll).
+  -- Bewusst eine eigene Spalte statt einer Erweiterung von `type` oder
+  -- `provenance`: `type` traegt den CSL-Typ (CHECK-Constraint, in SQLite nicht
+  -- per ALTER erweiterbar), `provenance` beantwortet "woher bezogen" (#195),
+  -- nicht "ist das ueberhaupt Literatur". Werteliste gespiegelt in
+  -- db.VALID_SOURCE_KINDS und migrate.add_source_kind_column().
+  -- Bewusst als LETZTE Spalte: `ALTER TABLE ... ADD COLUMN` (migrate.py) haengt
+  -- sie auf Bestands-DBs ebenfalls hinten an, so bleibt die Spaltenreihenfolge
+  -- zwischen frischer und migrierter DB identisch (Muster quotes.stance).
+  source_kind           TEXT NOT NULL DEFAULT 'literature'
+                          CHECK(source_kind IN ('literature','primary'))
 );
 
 -- FTS5 als eigenstaendige virtuelle Tabelle (kein content=, manuell befuellt).
@@ -225,6 +237,40 @@ CREATE TABLE IF NOT EXISTS score_history (
 CREATE TABLE IF NOT EXISTS vault_locked_status (
   slug      TEXT PRIMARY KEY,
   locked_at INTEGER NOT NULL
+);
+
+-- Empirischer Teil (Issue #473): eigenes Erhebungsmaterial.
+-- Das Transkript selbst ist eine `papers`-Zeile mit source_kind='primary' --
+-- nur so greift die bestehende Belegkette (quotes.paper_id -> papers,
+-- verbatim-guard ueber search_quote_text()). `transcript_segments` haelt die
+-- belegfaehige Stellenangabe: `seq` ist die zitierfaehige Absatznummer,
+-- UNIQUE(paper_id, seq) macht den Re-Import idempotent.
+CREATE TABLE IF NOT EXISTS transcript_segments (
+  segment_id TEXT PRIMARY KEY,
+  paper_id   TEXT NOT NULL REFERENCES papers(paper_id),
+  seq        INTEGER NOT NULL,
+  speaker    TEXT,
+  timecode   TEXT,
+  text       TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(paper_id, seq)
+);
+
+-- Kategorienzuordnung (Issue #473). `category_origin` haelt fest, ob eine
+-- Kategorie am Material entwickelt (induktiv) oder aus der Theorie abgeleitet
+-- (deduktiv) wurde -- die Herkunft ist Teil der Methodendokumentation, nicht
+-- eine Randnotiz. Werteliste gespiegelt in db.VALID_CATEGORY_ORIGINS.
+-- quote_id verweist auf das Ankerbeispiel; es bleibt NULL, solange keines
+-- ausgewaehlt ist (ein Ankerzitat wird nie erfunden).
+CREATE TABLE IF NOT EXISTS codings (
+  coding_id       TEXT PRIMARY KEY,
+  paper_id        TEXT NOT NULL REFERENCES papers(paper_id),
+  segment_id      TEXT REFERENCES transcript_segments(segment_id),
+  quote_id        TEXT REFERENCES quotes(quote_id),
+  category        TEXT NOT NULL,
+  category_origin TEXT NOT NULL CHECK(category_origin IN ('induktiv','deduktiv')),
+  memo            TEXT,
+  created_at      INTEGER NOT NULL
 );
 
 -- v6.5: Contextual Embeddings + Hybrid Retrieval (#109)

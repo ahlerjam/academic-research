@@ -530,6 +530,76 @@ def search_notes(db_path: str, query: str, k: int = 5) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Empirischer Teil: Transkript-Segmente + Kodierungen (Issue #473)
+# ---------------------------------------------------------------------------
+
+
+def add_transcript_segment(
+    db_path: str,
+    paper_id: str,
+    seq: int,
+    text: str,
+    speaker: str | None = None,
+    timecode: str | None = None,
+) -> str:
+    """Upsert eines Transkript-Segments. Gibt die segment_id zurueck.
+
+    ``seq`` ist die zitierfaehige Absatznummer und zugleich der
+    Idempotenz-Schluessel: ein erneuter Import derselben Datei aktualisiert
+    die Zeile, statt eine zweite anzulegen.
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    return db.add_transcript_segment(
+        paper_id=paper_id, seq=seq, text=text, speaker=speaker, timecode=timecode
+    )
+
+
+def list_transcript_segments(db_path: str, paper_id: str) -> list[dict]:
+    """Gibt alle Segmente eines Transkripts in seq-Reihenfolge zurueck."""
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.list_transcript_segments(paper_id)
+
+
+def add_coding(
+    db_path: str,
+    paper_id: str,
+    category: str,
+    category_origin: str,
+    segment_id: str | None = None,
+    quote_id: str | None = None,
+    memo: str | None = None,
+) -> str:
+    """Ordnet einer Stelle eine Kategorie zu. Gibt coding_id zurueck.
+
+    ``category_origin`` ist Pflicht (``induktiv``/``deduktiv``) — ohne die
+    Herkunft ist die Kategorienbildung nicht dokumentiert.
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    return db.add_coding(
+        paper_id=paper_id,
+        category=category,
+        category_origin=category_origin,
+        segment_id=segment_id,
+        quote_id=quote_id,
+        memo=memo,
+    )
+
+
+def list_codings(
+    db_path: str,
+    paper_id: str | None = None,
+    category: str | None = None,
+) -> list[dict]:
+    """Gibt Kodierungen zurueck, optional nach Paper und/oder Kategorie gefiltert."""
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    return db.list_codings(paper_id=paper_id, category=category)
+
+
+# ---------------------------------------------------------------------------
 # Figure-Funktionen (rein, testbar ohne MCP-Framework)
 # ---------------------------------------------------------------------------
 
@@ -602,8 +672,12 @@ def add_paper(
     container_title: str | None | _Unset = _UNSET,
     parent_paper_id: str | None | _Unset = _UNSET,
     provenance: str | None | _Unset = _UNSET,
+    source_kind: str | _Unset = _UNSET,
 ) -> None:
     """Upsert eines Papers in den Vault. Unterstuetzt type=book|chapter.
+
+    source_kind: ``"literature"`` (Default) oder ``"primary"`` fuer eigenes
+    Erhebungsmaterial wie Transkripte (#473).
 
     provenance: Herkunfts-Tag (z.B. "scihub") fuer Provenance-Audit (#195).
 
@@ -640,6 +714,7 @@ def add_paper(
         container_title=container_title,
         parent_paper_id=parent_paper_id,
         provenance=provenance,
+        source_kind=source_kind,
     )
     # _maybe_extract_fulltext() erwartet str | None -- Sentinel ("nicht
     # uebergeben") ist fuer die Volltextextraktion aequivalent zu "kein
@@ -1241,10 +1316,13 @@ def _build_mcp_server():
         container_title: str | None | _Unset = _UNSET,
         parent_paper_id: str | None | _Unset = _UNSET,
         provenance: str | None | _Unset = _UNSET,
+        source_kind: str | _Unset = _UNSET,
     ) -> None:
         """Upsert eines Papers. type aus csl_json; book|chapter|article-journal erlaubt.
 
         provenance: Herkunfts-Tag (z.B. "scihub") fuer Provenance-Audit (#195).
+        source_kind: "literature" (Default) oder "primary" fuer eigenes
+        Erhebungsmaterial (#473).
 
         Nicht uebergebene optionale Felder lassen ihren Bestandswert beim
         Upsert unangetastet statt ihn zu leeren (Issue #455).
@@ -1264,6 +1342,7 @@ def _build_mcp_server():
             container_title=container_title,
             parent_paper_id=parent_paper_id,
             provenance=provenance,
+            source_kind=source_kind,
         )
 
     @mcp.tool(name="vault.add_chapter")
@@ -1358,6 +1437,49 @@ def _build_mcp_server():
     def _vault_search_notes(query: str, k: int = 5) -> list[dict]:
         """FTS5-Volltextsuche ueber alle Notizen (fuer Kapitelschreiben, #462)."""
         return search_notes(db_path, query, k=k)
+
+    @mcp.tool(name="vault.add_transcript_segment")
+    def _vault_add_transcript_segment(
+        paper_id: str,
+        seq: int,
+        text: str,
+        speaker: str | None = None,
+        timecode: str | None = None,
+    ) -> str:
+        """Nimmt einen Transkript-Absatz belegfaehig auf (seq = Stellenangabe, #473)."""
+        return add_transcript_segment(
+            db_path, paper_id=paper_id, seq=seq, text=text, speaker=speaker, timecode=timecode
+        )
+
+    @mcp.tool(name="vault.list_transcript_segments")
+    def _vault_list_transcript_segments(paper_id: str) -> list[dict]:
+        """Gibt alle Segmente eines Transkripts in seq-Reihenfolge zurueck (#473)."""
+        return list_transcript_segments(db_path, paper_id)
+
+    @mcp.tool(name="vault.add_coding")
+    def _vault_add_coding(
+        paper_id: str,
+        category: str,
+        category_origin: str,
+        segment_id: str | None = None,
+        quote_id: str | None = None,
+        memo: str | None = None,
+    ) -> str:
+        """Ordnet einer Stelle eine Kategorie zu (induktiv|deduktiv, #473)."""
+        return add_coding(
+            db_path,
+            paper_id=paper_id,
+            category=category,
+            category_origin=category_origin,
+            segment_id=segment_id,
+            quote_id=quote_id,
+            memo=memo,
+        )
+
+    @mcp.tool(name="vault.list_codings")
+    def _vault_list_codings(paper_id: str | None = None, category: str | None = None) -> list[dict]:
+        """Gibt Kodierungen zurueck, optional nach Paper/Kategorie gefiltert (#473)."""
+        return list_codings(db_path, paper_id=paper_id, category=category)
 
     @mcp.tool(name="vault.stats")
     def _vault_stats() -> dict:

@@ -56,7 +56,14 @@ function runPython(code, args = []) {
 }
 
 /**
- * Gibt alle Paper aus dem Vault zurück (neueste zuerst).
+ * Gibt alle Literatur-Paper aus dem Vault zurück (neueste zuerst).
+ *
+ * Eigenes Erhebungsmaterial (papers.source_kind = 'primary', Issue #473) wird
+ * bewusst ausgelassen: ein Interviewtranskript ist eine Quelle, aber keine
+ * Literatur — es gehört nicht in den Literatur-Snapshot und erst recht nicht
+ * in eine daraus abgeleitete Bibliografie. Vault-DBs ohne die Spalte
+ * (Bestand vor der Migration) liefern weiterhin alle Paper, statt am
+ * fehlenden Feld zu scheitern.
  */
 function getAllPapers() {
   return runPython(`
@@ -65,8 +72,14 @@ sys.path.insert(0, '.')
 try:
     from academic_vault.db import VaultDB
     conn = VaultDB._open(os.environ['VAULT_DB_PATH'])
+    columns = {row[1] for row in conn.execute('PRAGMA table_info(papers)').fetchall()}
+    where = ""
+    if 'source_kind' in columns:
+        where = "WHERE COALESCE(source_kind, 'literature') <> 'primary' "
     rows = conn.execute(
-        'SELECT paper_id, csl_json, pdf_path, file_id, type FROM papers ORDER BY added_at DESC'
+        'SELECT paper_id, csl_json, pdf_path, file_id, type FROM papers '
+        + where
+        + 'ORDER BY added_at DESC'
     ).fetchall()
     conn.close()
     print(json.dumps([dict(r) for r in rows]))

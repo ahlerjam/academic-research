@@ -10,6 +10,32 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Werkzeugsatz für den empirischen Teil (#473):** Zwei neue Skills schließen
+  die Lücke zwischen Methodenwahl und Ergebniskapitel. `instrument-design`
+  leitet aus Forschungsfrage, Unterfragen und Methodik in `academic_context.md`
+  ein Erhebungsinstrument ab und liefert dazu verpflichtend eine
+  Rückverweis-Matrix (jede Frage → genau eine Unterfrage bzw. die
+  Forschungsfrage); ohne Forschungsfrage bricht der Workflow ab und verweist auf
+  `academic-context`/`research-question-refiner`. `qualitative-coding` nimmt
+  Transkripte belegfähig auf und unterstützt die Kategorienbildung induktiv wie
+  deduktiv. Der deterministische Teil liegt in
+  `skills/qualitative-coding/scripts/transcript_import.py` (Subcommands
+  `import`/`overview`/`codebook`): Absatz-Segmentierung mit Sprecherkürzel und
+  optionalem Timecode, idempotenter Re-Import über eine aus `(paper_id, seq)`
+  abgeleitete `segment_id`, Kodier-Übersicht und Kodierleitfaden nach
+  `empirie/kodierleitfaden.md` inklusive `vault.add_decision(category="kodierung")`.
+  Vault-Schema auf Version 4: neue Spalte `papers.source_kind`
+  (`literature`|`primary`) plus die Tabellen `transcript_segments` und
+  `codings`, vier neue MCP-Tools (`vault.add_transcript_segment`,
+  `vault.list_transcript_segments`, `vault.add_coding`, `vault.list_codings`,
+  37 → 41). Eigenes Erhebungsmaterial liegt bewusst in derselben
+  `papers`-Tabelle wie Literatur — nur so greift die bestehende Belegkette, und
+  ein Interviewzitat wird von `hooks/verbatim-guard.mjs` genauso geprüft wie ein
+  Literaturzitat (kein Sonderweg). Unterschieden werden beide über
+  `source_kind`; `scripts/export-literature-state.mjs` filtert Primärmaterial
+  aus dem Literatur-Snapshot. `scripts/project_bootstrap.py` legt zusätzlich
+  `empirie/` an. Skill-Zähler 37 → 39.
+
 - **Neuer Skill `latex-layout-auditor` (#392):** Read-only-Prüfung eines
   `latex-export`-Outputs auf LaTeX-spezifische Layout-Fehler, ergänzend zu
   `submission-checker` (der prüft Hochschul-Formalia, nicht LaTeX-Layout).
