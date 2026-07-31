@@ -391,7 +391,10 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   **Opt-in-Debug-Log**: es entsteht ausschließlich bei gesetztem
   `ACADEMIC_DECISIONS_LOG`. Die Privacy-Eigenschaften aus #191 gelten unverändert für
   beide Senken — gespeichert werden nur relativer Pfad, Tool-Name und SHA-256 des
-  Inhalts, kein Klartext.
+  Inhalts, kein Klartext. Der Material-Passport (#380) bleibt von den Auto-Einträgen
+  unberührt: `vault.export_material_passport` filtert `file-change` aus
+  `decisions_snapshot`, sonst hätte jeder `.md`-Write den `passport_hash` verschoben,
+  obwohl sich am Material nichts geändert hat.
 - **Zwei erfundene Flags in der Doku (#461):** `docs/guide/walkthrough.md` zeigte
   `/academic-research:search --import-list <datei>` und
   `/academic-research:fetch --isbn <nummer>` — beide Flags existieren in keinem

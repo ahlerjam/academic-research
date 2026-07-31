@@ -138,6 +138,78 @@ def test_changed_hash_supersedes_previous(tmp_path):
     assert superseded[0]["superseded_by"] == new_id
 
 
+# ---------------------------------------------------------------------------
+# Abgrenzung zum Material-Passport (#380) — die Auto-Eintraege sind kein
+# Bestandteil des Reproduzierbarkeits-Artefakts.
+# ---------------------------------------------------------------------------
+
+
+class _FrozenTime:
+    """Ersetzt das ``time``-Modul im Passport-Builder, damit ``created_at`` fix ist."""
+
+    @staticmethod
+    def time() -> int:
+        return 1_700_000_000
+
+
+def _export_passport(db_path: str, out_dir: Path) -> dict:
+    from academic_vault import server as vault_server
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = vault_server.export_material_passport(
+        db_path=db_path, slug="projekt", output_dir=str(out_dir)
+    )
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def test_material_passport_excludes_auto_file_changes(tmp_path, monkeypatch):
+    """`decisions_snapshot` enthaelt methodische Decisions, keine Auto-Eintraege.
+
+    Der Passport ist das Reproduzierbarkeits-Artefakt (#380). Datei-Aenderungen
+    sind keine methodischen Entscheidungen — sie gehoeren dort so wenig hinein
+    wie in den Decisions-Block des Reinforcements.
+    """
+    from academic_vault import material_passport
+    from academic_vault.decision_log import AUTO_CATEGORY, record_file_change
+
+    monkeypatch.setattr(material_passport, "time", _FrozenTime)
+
+    db_path = make_vault(tmp_path)
+    from academic_vault import server as vault_server
+
+    manual_id = vault_server.add_decision(db_path, "scope", "Nur Peer-Review", "Qualitaet")
+    record_file_change(db_path, "Write", "kapitel/kap1.md", _sha256("a"))
+
+    snapshot = _export_passport(db_path, tmp_path / "out")["decisions_snapshot"]
+
+    assert [d["decision_id"] for d in snapshot] == [manual_id], (
+        f"Auto-Eintraege im Passport-Snapshot: {snapshot}"
+    )
+    assert all(d.get("category") != AUTO_CATEGORY for d in snapshot)
+
+
+def test_passport_hash_is_stable_across_markdown_writes(tmp_path, monkeypatch):
+    """Ein `.md`-Write darf den `passport_hash` nicht bewegen.
+
+    Sonst signalisiert der Passport bei jeder Kapitel-Aenderung ein neues
+    Material, obwohl sich am Material nichts geaendert hat.
+    """
+    from academic_vault import material_passport
+    from academic_vault.decision_log import record_file_change
+
+    monkeypatch.setattr(material_passport, "time", _FrozenTime)
+
+    db_path = make_vault(tmp_path)
+    before = _export_passport(db_path, tmp_path / "vorher")["passport_hash"]
+
+    for i in range(12):
+        record_file_change(db_path, "Write", f"kapitel/kap{i}.md", _sha256(str(i)))
+
+    after = _export_passport(db_path, tmp_path / "nachher")["passport_hash"]
+
+    assert before == after, "12 Markdown-Writes haben den passport_hash veraendert"
+
+
 def test_distinct_files_get_distinct_decisions(tmp_path):
     """Verschiedene Dateien verdraengen sich nicht gegenseitig."""
     from academic_vault.db import VaultDB

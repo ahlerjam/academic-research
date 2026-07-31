@@ -320,8 +320,13 @@ Eigenschaften der Auto-Einträge:
   manuell über `vault.add_decision` gepflegten Decisions (bis zu 5) — sonst würden die
   letzten Writes jede echte Entscheidung aus dem Fenster drängen.
 - **Höchstens ein aktiver Eintrag pro Datei.** Gleicher Inhalts-Hash ⇒ kein neuer Eintrag;
-  geänderter Hash ⇒ neuer Eintrag, der den bisherigen per `superseded_by` ablöst. Die
-  Tabelle wächst nicht linear mit der Zahl der Writes.
+  geänderter Hash ⇒ neuer Eintrag, der den bisherigen per `superseded_by` ablöst.
+  Begrenzt ist damit die Menge der *aktiven* Einträge — abgelöste bleiben als Historie
+  in der Tabelle stehen und werden nicht gelöscht.
+- **Kein Bestandteil des Material-Passports.** `vault.export_material_passport` nimmt
+  nur die methodischen Decisions in `decisions_snapshot` auf und filtert `file-change`
+  heraus. Sonst würde der `passport_hash` bei jeder Kapitel-Änderung wandern, obwohl
+  sich am Material nichts geändert hat (#380).
 - **Fail-open.** Existiert keine Vault-DB, ist der Vault gesperrt
   (Material-Passport-Lock) oder findet sich kein brauchbarer Python-Interpreter, bleibt
   es bei einer Meldung auf stderr; der Hook beendet sich immer mit Exit 0 und legt nie
