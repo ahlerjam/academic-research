@@ -164,15 +164,22 @@ class TestSkipOptionAndResultPresentation:
         content = _SKILL_MD.read_text(encoding="utf-8")
         return _section(content, "#### PDF-Mismatch-Gate", "### 4. Qualitätsprüfung")
 
-    def test_skip_option_references_add_excluded_source(self):
+    def test_skip_option_no_vault_exclusion_for_transient_errors(self):
+        """Skip-Option darf nicht in excluded_sources schreiben (transiente Fehler != methodischer Ausschluss)."""
         gate = self._gate_section()
         skip_lines = [line for line in gate.splitlines() if "überspringen" in line.strip().lower()]
         assert skip_lines, "Keine Optionszeile mit 'überspringen' gefunden"
         skip_idx = gate.find(skip_lines[0])
-        # Folgesatz/-block direkt nach der Optionszeile durchsuchen (naechste ~300 Zeichen).
+        # Folgesatz/-block direkt nach der Optionszeile durchsuchen.
         follow_up = gate[skip_idx : skip_idx + 300]
-        assert "vault.add_excluded_source" in follow_up, (
-            "'Paper überspringen'-Option muss vault.add_excluded_source referenzieren"
+        # Skip-Option darf NICHT vault.add_excluded_source enthalten.
+        assert "vault.add_excluded_source" not in follow_up, (
+            "'Paper überspringen'-Option darf vault.add_excluded_source NICHT referenzieren "
+            "(transiente Fehler gehören nicht in excluded_sources)"
+        )
+        # Skip-Option muss explizit sessionlokal/nicht-persistent sein.
+        assert "sessionlokal" in follow_up or "kein persist" in follow_up.lower(), (
+            "'Paper überspringen'-Option muss explizit dokumentieren, dass es sessionlokal ist"
         )
 
     def test_step4_separates_successful_and_excluded_groups(self):

@@ -122,13 +122,10 @@ Bei `possible_pdf_mismatch: true` vor jeder weiteren Persistenz
 `AskUserQuestion` stellen — kein reines Flaggen für späteres Review:
 
 - **"Fortfahren — Zitate trotz Mismatch übernehmen"** → Agent-Re-Invoke mit
-  `mismatch_override: true`; der Agent persistiert dann selbst via
-  `vault.add_quote()` (kein zusätzlicher Aufruf durch den Skill)
-- **"Paper überspringen"** → Nicht in `excluded_sources` schreiben (diese
-  Tabelle ist für dauerhaften methodischen Ausschluss reserviert, nicht für
-  transiente Fehler). Stattdessen sessionlokal als "Ausgelassen" markieren
-  (Schritt 4 trennt ohnehin Erfolgreich/Ausgelassen im Report) — kein Persist,
-  Paper taucht in AC3 unter "Ausgelassen" auf
+  `mismatch_override: true` (Agent persistiert selbst, kein Skill-Persist)
+- **"Paper überspringen"** → Sessionlokal als "Ausgelassen" markieren, kein
+  Vault-Persist (nicht in `excluded_sources` schreiben — siehe
+  `references/pdf-mismatch-gate.md`)
 - **"PDF-Zuordnung prüfen"** → pausieren, kein Persist, User klärt die
   Zuordnung (z. B. `vault.update_pdf_path`)
 
