@@ -376,8 +376,8 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   das neue Modul `academic_vault/decision_log.py` in genau die Tabelle, aus der das
   Reinforcement liest. Damit die Divergenz nicht über unterschiedliche DB-Pfade oder
   Interpreter zurückkehrt, lösen beide Hooks beides in der gemeinsamen Brücke
-  `hooks/vault-bridge.mjs` auf (kein Hook, sondern ein importiertes Modul; liegt flach
-  in `hooks/`, damit `node --check hooks/*.mjs` es miterfasst). Auto-Einträge tragen die
+  `hooks/lib/vault-bridge.mjs` auf (kein Hook, sondern ein importiertes Modul; liegt
+  seit #542 bei den übrigen Bibliotheken in `hooks/lib/`). Auto-Einträge tragen die
   feste Kategorie `file-change` und bleiben pro Datei auf genau einen aktiven Eintrag
   begrenzt — gleicher Inhalts-Hash erzeugt keinen neuen Eintrag, geänderter Hash löst
   den Vorgänger per `superseded_by` ab. `printReminder` gibt sie in einem eigenen Block
@@ -449,6 +449,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   künftig gegen die Command-Definitionen.
 
 ### Changed
+
+- **`hooks/` trennt Hooks von Bibliotheken (#542):** Flach in `hooks/` liegen jetzt
+  ausschließlich die fünf in `hooks/hooks.json` registrierten Hooks; die importierten
+  Module (`citation-parse.mjs`, `citation-cascade.mjs`, `vault-bridge.mjs`) und das
+  nicht verdrahtete Setup-Skript `onboard-project-uni-prompt.sh` liegen in `hooks/lib/`
+  — weiterhin innerhalb der protected area „hooks". Voraussetzung dafür war der
+  Syntax-Gate: der CI-Job `hook-syntax` iterierte über den **nicht-rekursiven** Glob
+  `hooks/*.mjs` und hätte jede Datei unterhalb von `hooks/lib/` still ungeprüft
+  gelassen — genau deshalb musste `vault-bridge.mjs` bis dahin flach liegen. Der Gate
+  läuft jetzt als `scripts/dev/check-mjs-syntax.sh` über **alle getrackten `*.mjs`**
+  (Vorbild: `scripts/dev/check-shell-syntax.sh`, #469) und erfasst damit auch
+  `scripts/export-literature-state.mjs`, das bisher ebenfalls außerhalb des Gates lag.
+  Er bricht ab, wenn er keine einzige Datei findet, damit ein künftiger
+  Coverage-Verlust laut statt still ist.
 
 - **`docs/` ist eine navigierbare Referenz statt eines gewachsenen Ordners (#452):**
   Neue Einstiegsseite `docs/README.md` mit drei Lesepfaden (Erstnutzer,

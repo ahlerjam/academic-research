@@ -23,7 +23,7 @@
  *   - Exit 0: immer (fail-open, nie blockierend)
  *
  * Konfiguration via Umgebungsvariablen:
- *   VAULT_DB_PATH           — Vault-DB (Default siehe hooks/vault-bridge.mjs)
+ *   VAULT_DB_PATH           — Vault-DB (Default siehe hooks/lib/vault-bridge.mjs)
  *   ACADEMIC_PYTHON         — Interpreter fuer den Vault-Schreibpfad
  *   ACADEMIC_DECISIONS_LOG  — Pfad zum Opt-in-Debug-Log (ohne: kein Log)
  *   CLAUDE_PROJECT_DIR      — Projekt-Verzeichnis (default: cwd)
@@ -34,7 +34,7 @@ import { dirname, relative, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
-import { resolveVaultDb, VAULT_SRC, runVaultPython } from './vault-bridge.mjs';
+import { resolveVaultDb, VAULT_SRC, runVaultPython } from './lib/vault-bridge.mjs';
 
 // Rotation: maximale Logfile-Groesse in Bytes (10 MB), dann -> decisions.log.1
 const MAX_LOG_BYTES = 10 * 1024 * 1024;

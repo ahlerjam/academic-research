@@ -2,9 +2,9 @@
 # onboard-project-uni-prompt.sh
 # Zeigt verfuegbare Uni-Profile und schreibt das gewaehlte nach active.yaml
 #
-# Aufruf (interaktiv):       ./hooks/onboard-project-uni-prompt.sh
-# Aufruf (nicht-interaktiv): ./hooks/onboard-project-uni-prompt.sh --profile tum
-# Aufruf (Test):             ./hooks/onboard-project-uni-prompt.sh --profile tum --output-dir /tmp/test
+# Aufruf (interaktiv):       ./hooks/lib/onboard-project-uni-prompt.sh
+# Aufruf (nicht-interaktiv): ./hooks/lib/onboard-project-uni-prompt.sh --profile tum
+# Aufruf (Test):             ./hooks/lib/onboard-project-uni-prompt.sh --profile tum --output-dir /tmp/test
 #
 # Schreibt active.yaml nach: ~/.academic-research/library-profiles/active.yaml
 # (oder --output-dir, falls angegeben)
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PROFILES_DIR="${REPO_ROOT}/config/library-profiles"
 
 SELECTED_PROFILE=""

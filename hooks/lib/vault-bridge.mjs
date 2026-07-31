@@ -1,11 +1,12 @@
 /**
- * hooks/vault-bridge.mjs — gemeinsame Vault-Bruecke der Node-Hooks (Issue #527)
+ * hooks/lib/vault-bridge.mjs — gemeinsame Vault-Bruecke der Node-Hooks (#527)
  *
  * KEIN Hook: diese Datei wird von hooks/hooks.json nicht aufgerufen, sondern
- * von den Hooks importiert (analog zu hooks/onboard-project-uni-prompt.sh, das
- * ebenfalls im Verzeichnis liegt, ohne verdrahtet zu sein). Sie liegt bewusst
- * flach in hooks/ und nicht in hooks/lib/, damit das CI-Syntax-Gate
- * (`for f in hooks/*.mjs; node --check "$f"`) sie mit erfasst.
+ * von den Hooks importiert. Sie liegt deshalb in hooks/lib/, wo alle
+ * importierten Module dieses Plugins liegen (#542). Der CI-Syntax-Gate erfasst
+ * sie dort mit: er iteriert seit #542 ueber alle getrackten *.mjs
+ * (`scripts/dev/check-mjs-syntax.sh`) statt ueber den nicht-rekursiven Glob
+ * `hooks/*.mjs`.
  *
  * Hintergrund: `post-tool-use-decisions.mjs` schrieb bis #527 in eine Textdatei,
  * `mid-session-reinforcement.mjs` las die SQLite-Tabelle `decisions` — zwei
@@ -24,10 +25,17 @@ import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
+const LIB_DIR = dirname(fileURLToPath(import.meta.url));
 
-/** Repo-/Plugin-Wurzel — Import-Pfad fuer das Paket `academic_vault`. */
-export const VAULT_SRC = dirname(HOOK_DIR);
+/**
+ * Repo-/Plugin-Wurzel — Import-Pfad fuer das Paket `academic_vault`.
+ *
+ * Zwei Ebenen hoch, nicht eine: diese Datei liegt seit #542 in `hooks/lib/`.
+ * Der Wert landet zur Laufzeit in `sys.path` des Vault-Subprozesses; zeigt er
+ * auf `hooks/`, schlaegt der Import von `academic_vault` lautlos fehl.
+ * Abgesichert durch tests/test_issue_542_hooks_layout.py.
+ */
+export const VAULT_SRC = dirname(dirname(LIB_DIR));
 
 /**
  * Kanonischer Vault-DB-Pfad (Single Source of Truth, Issue #190/#365):
