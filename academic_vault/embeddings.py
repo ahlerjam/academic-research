@@ -4,7 +4,32 @@ Generiert 1-Satz-Kontext pro Chunk via Anthropic API mit Prompt-Caching.
 Baut embedding_text = context_sentence + chunk_text fuer bessere Retrieval-Qualitaet.
 """
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
+
+# Aktuelle Haiku-Modell-ID fuer die Kontext-Satz-Generierung. Das alte
+# 2024er-Haiku-Modell ist seit 2026-04-19 deprecated (#531).
+CONTEXT_MODEL_ID = "claude-haiku-4-5-20251001"
+
+# Env-Override, analog zu embedding_model.py (VAULT_EMBEDDING_MODEL).
+ENV_CONTEXT_MODEL = "VAULT_CONTEXT_MODEL"
+
+# Modul-interner Fehlzaehler: zaehlt fehlgeschlagene Kontext-Generierungen,
+# damit stille Degradation zu "" nicht unbemerkt bleibt (#531 AC3).
+_context_failure_count = 0
+
+
+def get_context_failure_count() -> int:
+    """Anzahl fehlgeschlagener generate_context_sentence-Aufrufe seit letztem Reset."""
+    return _context_failure_count
+
+
+def reset_context_failure_count() -> None:
+    """Setzt den Kontext-Fehlzaehler zurueck (v.a. fuer Tests/Prozessstart)."""
+    global _context_failure_count
+    _context_failure_count = 0
 
 
 def _get_anthropic_client(api_key: str | None = None):
@@ -62,8 +87,10 @@ def generate_context_sentence(
         # Paper-Kontext als user-Message mit cache_control (wird gecacht)
         paper_context = f"Paper-ID: {paper_id}\nTitel: {paper_title}\nAbstract: {paper_abstract}"
 
+        model = os.environ.get(ENV_CONTEXT_MODEL) or CONTEXT_MODEL_ID
+
         response = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model=model,
             max_tokens=100,
             system=[
                 {
@@ -92,8 +119,16 @@ def generate_context_sentence(
 
         return response.content[0].text.strip()
 
-    except Exception:
-        # Graceful degradation: leerer String wenn API nicht verfuegbar
+    except Exception as exc:
+        # Graceful degradation: leerer String wenn API nicht verfuegbar —
+        # aber nicht mehr still: gezaehlt + geloggt (#531 AC3).
+        global _context_failure_count
+        _context_failure_count += 1
+        logger.warning(
+            "Kontext-Generierung fehlgeschlagen fuer paper_id=%s: %s",
+            paper_id,
+            exc,
+        )
         return ""
 
 
