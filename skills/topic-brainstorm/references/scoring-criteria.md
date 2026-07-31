@@ -2,9 +2,17 @@
 
 ## Übersicht
 
-Der Scorer (`scripts/scorer.py`) berechnet für jeden Topic-Kandidaten drei
-Scores im Bereich 0-10. Die Summe aller drei Scores ergibt den Gesamtscore (0-30),
-nach dem das Top-Topic bestimmt wird.
+Der Scorer (`scripts/scorer.py`) normalisiert für jeden vom Modell entworfenen
+Topic-Kandidaten drei Scores im Bereich 0-10. Die Summe aller drei Scores
+ergibt den Gesamtscore (0-30), nach dem das Top-Topic bestimmt wird.
+
+**Wer berechnet was:** Feasibility und Novelty sind Scorer-Arithmetik
+(Basiswert des Kandidaten + Modifikator aus Budget/Datenzugang bzw.
+Interessens-Overlap). Career-Fit ist reine Modell-Einschätzung
+(`base_career_fit` im Topic-Kandidaten aus SKILL.md Schritt 2) — der Scorer
+reicht ihn unverändert durch. Die Tabellen in diesem Dokument sind für
+Career-Fit deshalb **Orientierungshilfe fürs Modell**, kein interner
+Scorer-Lookup.
 
 ---
 
@@ -37,7 +45,8 @@ Datenzugang bearbeitbar?
 
 ### Methoden-Match
 
-Wird aus dem Basiswert des Topics ermittelt (intern im Scorer). Typische Werte:
+Fließt in den `base_feasibility`-Wert ein, den das Modell pro Kandidat
+schätzt (Schritt 2 in `SKILL.md`). Typische Orientierungswerte:
 
 | Methodik | Basiswert |
 |----------|-----------|
@@ -76,9 +85,17 @@ verwenden.
 
 **Fragestellung:** Passt das Thema zur Studienrichtung und zum Berufsbild?
 
-**Berechnung:** Schlagwort-Überschneidung zwischen Studienrichtung und Topic-Keywords.
+**Berechnung:** Wird vom Modell als `base_career_fit` pro Kandidat geschätzt
+(Schlagwort-/Themen-Passung zwischen Studienrichtung und Topic) und vom
+Scorer unverändert übernommen — kein interner Scorer-Lookup.
 
-### Referenzwerte nach Studienrichtung
+### Referenzwerte nach Studienrichtung (Orientierung fürs Modell)
+
+Kein interner Scorer-Lookup — dient dem Modell in Schritt 2 von `SKILL.md`
+als Anhaltspunkt beim Schätzen von `base_career_fit`. Andere
+Studienrichtungen (z. B. Maschinenbau) sind ausdrücklich zulässig; das
+Modell schätzt dafür einen plausiblen Wert nach demselben Muster, statt auf
+eine der drei Zeilen zurückzufallen.
 
 | Studienrichtung | Wirtschafts-IT-Themen | Reine IT-Themen | BWL-Themen |
 |-----------------|----------------------|-----------------|------------|
