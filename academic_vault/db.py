@@ -47,7 +47,8 @@ VALID_STANCES = frozenset({"supports", "contrasts", "mentions"})
 # und der neue migrate.py-Helfer in apply_pending_migrations() ergaenzt wird.
 # 2 = quotes.stance (Issue #400).
 # 3 = notes.page + notes_fts-Backfill fuer Bestandsnotizen (Issue #462).
-CURRENT_SCHEMA_VERSION = 3
+# 4 = Drop der toten Tabellen aus migrate.DEAD_TABLES (Issue #539).
+CURRENT_SCHEMA_VERSION = 4
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -499,7 +500,9 @@ class VaultDB:
         z.B. prae-#195 ohne `parent_paper_id`/`provenance`) und deren
         `user_version` noch unter `CURRENT_SCHEMA_VERSION` liegt, bekommt
         einmalig die additiven `migrate.py`-Helfer nachgezogen -- statt bei
-        `add_paper()` mit `sqlite3.OperationalError` abzustuerzen.
+        `add_paper()` mit `sqlite3.OperationalError` abzustuerzen. Ueber
+        dieselbe Schleuse laeuft seit #539 auch der eine subtraktive Schritt
+        (`migrate.drop_dead_v64_tables()`).
 
         Bei bereits aktueller `user_version` ist der Aufruf ein billiger
         PRAGMA-Read ohne weitere Schreiboperation: `init_schema()` ist ein
@@ -573,19 +576,33 @@ class VaultDB:
                 }
                 missing += [f"{table}.{col}" for col in sorted(required - present)]
 
-            if not missing:
+            # Symmetrisch zur Spalten-Verifikation, nur andersherum (#539):
+            # `migrate.drop_dead_v64_tables()` laesst eine tote Tabelle bewusst
+            # stehen, wenn sie wider Erwarten Zeilen enthaelt -- dann darf auch
+            # nicht gestempelt werden, sonst bliebe sie fuer immer liegen.
+            existing_tables = {
+                row["name"]
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            undropped = sorted(migrate.DEAD_TABLES & existing_tables)
+
+            if not missing and not undropped:
                 conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
             else:
                 # Stempel bewusst auslassen: user_version bleibt unter
                 # CURRENT_SCHEMA_VERSION, damit der naechste init_schema()-Aufruf
                 # die Migration erneut versucht statt sie faelschlich als
-                # erledigt zu betrachten.
+                # erledigt zu betrachten. Kein `raise` -- eine Exception aus
+                # init_schema() wuerde den kompletten MCP-Server lahmlegen.
                 logger.warning(
                     "Migration auf Schema-Version %d nicht verifizierbar -- "
-                    "es fehlen weiterhin Spalten %s. user_version bleibt "
-                    "unveraendert, naechster init_schema()-Aufruf migriert erneut (#368).",
+                    "es fehlen weiterhin Spalten %s, und diese toten Tabellen "
+                    "sind nicht leer und daher nicht gedroppt: %s. user_version "
+                    "bleibt unveraendert, naechster init_schema()-Aufruf "
+                    "migriert erneut (#368, #539).",
                     CURRENT_SCHEMA_VERSION,
                     missing,
+                    undropped,
                 )
 
     # ------------------------------------------------------------------

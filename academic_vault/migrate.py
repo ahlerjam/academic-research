@@ -276,32 +276,24 @@ def add_figures_table(db_path: str) -> None:
         conn.close()
 
 
+# Tabellen, die frueher zum v6.4-Block gehoerten, aber nie einen Lese- oder
+# Schreibpfad bekommen haben (Issue #539). Sie werden weder von `schema.sql`
+# noch von `add_v64_tables()` neu angelegt; auf Bestands-DBs raeumt
+# `drop_dead_v64_tables()` sie ab. Einzige Fundstelle der Namen im Paket --
+# `db.py` importiert die Konstante, statt sie zu duplizieren.
+DEAD_TABLES = frozenset({"glossary", "style_overrides"})
+
+
 def add_v64_tables(db_path: str) -> None:
     """Erstellt v6.4-Tabellen falls nicht vorhanden. Idempotent.
 
-    Tabellen: glossary, style_overrides, excluded_sources,
-              risk_of_bias_assessments, score_history, vault_locked_status.
+    Tabellen: excluded_sources, risk_of_bias_assessments, score_history,
+              vault_locked_status.
     """
     import sqlite3 as _sqlite3
 
     conn = _sqlite3.connect(db_path)
     try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS glossary (
-              term        TEXT PRIMARY KEY,
-              definition  TEXT NOT NULL,
-              created_at  INTEGER NOT NULL,
-              updated_at  INTEGER NOT NULL
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS style_overrides (
-              key        TEXT PRIMARY KEY,
-              value      TEXT NOT NULL,
-              created_at INTEGER NOT NULL,
-              updated_at INTEGER NOT NULL
-            )
-        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS excluded_sources (
               paper_id    TEXT PRIMARY KEY,
@@ -336,6 +328,42 @@ def add_v64_tables(db_path: str) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def drop_dead_v64_tables(db_path: str) -> list[str]:
+    """Entfernt die toten v6.4-Tabellen aus einer Bestands-DB (#539). Idempotent.
+
+    Datensicherheit vor Aufraeumen: Eine Tabelle wird nur gedroppt, wenn sie
+    leer ist. Enthaelt sie wider Erwarten Zeilen (ueber keinen existierenden
+    Schreibpfad erreichbar, aber DROP ist irreversibel), bleibt sie stehen und
+    ihr Name wird zurueckgegeben -- `db.init_schema()` verweigert dann den
+    `user_version`-Stempel und warnt, statt still Daten zu vernichten.
+
+    Returns:
+        Sortierte Namen der Tabellen, die NICHT gedroppt werden konnten.
+        Leere Liste = alles sauber (auch bei DBs, die die Tabellen nie hatten).
+    """
+    import sqlite3 as _sqlite3
+
+    remaining: list[str] = []
+    conn = _sqlite3.connect(db_path)
+    try:
+        for table in sorted(DEAD_TABLES):
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            ).fetchone()
+            if exists is None:
+                continue  # nie angelegt oder bereits gedroppt -- idempotent
+            rows = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            if rows:
+                remaining.append(table)
+                continue
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
+        conn.commit()
+    finally:
+        conn.close()
+    return remaining
 
 
 def add_note_page_column(db_path: str) -> None:
@@ -406,6 +434,11 @@ def apply_pending_migrations(db_path: str) -> None:
     Jeder Helfer oeffnet/schliesst seine eigene kurzlebige `sqlite3`-Connection
     (try/except pro ALTER bzw. `CREATE TABLE IF NOT EXISTS`), daher ist auch
     das wiederholte Ausfuehren dieser Buendel-Funktion sicher.
+
+    Ausnahme von "additiv": `drop_dead_v64_tables()` laeuft als letzter Schritt
+    und raeumt die toten Tabellen aus `DEAD_TABLES` ab (#539) -- nur wenn sie
+    leer sind. Sein Rueckgabewert wird hier bewusst verworfen; die Verifikation
+    vor dem `user_version`-Stempel passiert in `db.init_schema()`.
     """
     add_parent_paper_id_column(db_path)
     add_provenance_column(db_path)
@@ -415,6 +448,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_stance_column(db_path)
     add_note_page_column(db_path)
     add_notes_fts(db_path)
+    drop_dead_v64_tables(db_path)
 
 
 def add_chunk_vectors_table(db_path: str) -> int:
