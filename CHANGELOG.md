@@ -395,6 +395,50 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   unberührt: `vault.export_material_passport` filtert `file-change` aus
   `decisions_snapshot`, sonst hätte jeder `.md`-Write den `passport_hash` verschoben,
   obwohl sich am Material nichts geändert hat.
+
+- **`topic-brainstorm` fachabhängig statt hartkodierter Cyber-Security-Liste (#471):**
+  `scripts/scorer.py` enthielt eine fest kodierte `_TOPIC_DB` mit 5 Themen
+  ausschließlich aus dem Cyber-Security-Bereich; `_normalize_field()` mappte
+  zusätzlich jede unbekannte Studienrichtung (z. B. „Maschinenbau", obwohl
+  `SKILL.md` diese Option selbst anbietet) still auf „Wirtschaftsinformatik" —
+  nur der `career_fit`-Score variierte je Fach, Titel, Forschungsfragen und
+  Pilot-Papers blieben für jede Anfrage identisch, und kein Vorschlag trug
+  eine Begründung. Folgt jetzt dem im Repo etablierten Muster von
+  `methodology-advisor` (Scoring-Rubrik lebt im `SKILL.md`, das Modell wendet
+  sie an — keine feste Kandidatenliste in Python): `_TOPIC_DB` und
+  `_normalize_field`/`_FIELD_NORMALIZE` sind aus `scorer.py` entfernt. Ein
+  neuer `--topics-json <pfad|->`-Input (Datei oder stdin) nimmt die vom
+  Modell entworfenen Kandidaten entgegen; `--field`, `--work-type` (neu,
+  Arbeitstyp) und `--scope` (neu, Umfang) sind zusammen mit `--interests`
+  Pflicht-CLI-Args ohne Normalisierung/Fallback und landen unverändert im
+  neuen `context`-Objekt der `--output-mode full`-Ausgabe. `scorer.py`
+  normalisiert nur noch Feasibility (Budget-/Datenzugang-Modifikatoren) und
+  Novelty (Interessens-Overlap); Career-Fit sowie die drei neuen
+  Pflichtfelder `reason` (warum passt das Thema zum Zuschnitt), `feasibility_note`
+  (Machbarkeitshinweis) und `source_note` (Quellenlagehinweis) reicht der
+  Scorer unverändert durch und lehnt Kandidaten ohne diese Felder ab.
+  `SKILL.md` Schritt 1 erhebt jetzt zusätzlich Arbeitstyp und Umfang als
+  Pflichtangaben (konsistent zum `academic-context`-Skill), Schritt 2
+  beschreibt den Kandidaten-Entwurf inkl. Beispiel-Snippet und
+  Begründungs-/Machbarkeits-/Quellenlage-Pflicht; `references/scoring-criteria.md`
+  stellt die Career-Fit-Referenzwerte als Orientierungshilfe fürs Modell dar
+  statt als internen Scorer-Lookup. **Ehrlich benannte Grenze:** Dass das
+  Modell inhaltlich sinnvolle, fachspezifische Themen erfindet, ist ein
+  Generierungsverhalten ohne API-Budget (Issue #55) — pytest beweist nur den
+  Mechanismus (kein Fixed-DB-Fallback mehr, keine stille Feld-Normalisierung,
+  Fach/Arbeitstyp/Umfang/Interessen erreichen die Ausgabe unverändert, zwei
+  disjunkte Fach-Fixtures bleiben disjunkt), nicht die inhaltliche
+  Themenqualität selbst — Operator-Entscheid vom 2026-07-30 (Issue-Kommentar)
+  hat AC entsprechend nachgeschärft. Da `SKILL.md` dadurch wächst, hebt
+  `tests/baselines/skill_sizes.json`/`tokens.json` die
+  `topic-brainstorm`-Baseline um den Netto-Zuwachs an (7200 → 11213 Zeichen,
+  1412 → 2416 Token-Proxy) — etabliertes, mehrfach genutztes Repo-Muster für
+  legitimes Skill-Wachstum (vgl. 89ca331, d12a976, #395/PR #439). Neu bzw.
+  umgeschrieben: `tests/test_topic_brainstorm.py` (Fixtures statt
+  Live-DB-Erwartung; neue Tests für Fachabhängigkeit ohne Normalisierung,
+  Pflicht-CLI-Args und Skill-Text-Grep auf Begründungs-/Machbarkeits-/
+  Quellenlage-Pflicht).
+
 - **Zwei erfundene Flags in der Doku (#461):** `docs/guide/walkthrough.md` zeigte
   `/academic-research:search --import-list <datei>` und
   `/academic-research:fetch --isbn <nummer>` — beide Flags existieren in keinem

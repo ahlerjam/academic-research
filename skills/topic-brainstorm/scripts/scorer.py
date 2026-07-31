@@ -1,20 +1,45 @@
 #!/usr/bin/env python3
-"""scorer.py — Topic-Brainstorm Feasibility/Novelty/Career-Fit Heuristik.
+"""scorer.py — Topic-Brainstorm Feasibility/Novelty-Heuristik.
 
-Gibt deterministisch 5 Topic-Kandidaten zurueck, basierend auf:
-- Interessensgebieten (--interests, kommagetrennt)
-- Studienrichtung (--field)
-- Zeitbudget (--budget)
-- Datenzugang (--data-access)
+Scored eine vom Aufrufer gelieferte Liste von Topic-Kandidaten (--topics-json).
+Die Kandidaten selbst stammen NICHT aus einer fest kodierten Datenbank — sie
+werden vom Modell in SKILL.md (Schritt 2) fach-, arbeitstyp-, umfangs- und
+interessenspassend entworfen (je Kandidat inkl. `reason`, `feasibility_note`
+und `source_note`) und dem Scorer als JSON uebergeben. `scorer.py` uebernimmt
+ausschliesslich die numerische Normalisierung von Feasibility/Novelty; alle
+qualitativen Felder (reason, feasibility_note, source_note, career_fit)
+reicht er unveraendert durch.
+
+Fach (--field), Arbeitstyp (--work-type), Umfang (--scope) und Interessen
+(--interests) sind Pflicht-Eingaben ohne Normalisierung/Fallback — sie
+erscheinen unveraendert im `context`-Objekt der Ausgabe (Modus "full"), damit
+mechanisch nachweisbar ist, dass kein stiller Mapping-Schritt (wie die
+fruehere `_normalize_field()`-Fallback-Logik) mehr stattfindet.
 
 Ausgabe (Standard-Modus):
-  JSON-Array mit 5 Kandidaten.
+  JSON-Array mit den gescorten Kandidaten (gleiche Anzahl wie Input).
 
 Ausgabe (--output-mode full):
-  JSON-Objekt { "topics": [...], "top_topic": "<Titel>" }
+  JSON-Objekt { "topics": [...], "top_topic": "<Titel>", "context": {...} }
 
 Optionen:
+  --topics-json <pfad|->  JSON-Array der Topic-Kandidaten (siehe unten).
+                           "-" liest von stdin.
   --write-context <pfad>  Top-Topic in academic_context.md schreiben (erstellen falls noetig)
+
+Schema pro Kandidat in --topics-json:
+  {
+    "title": str,                    # Pflicht, nicht-leer
+    "keywords": list[str],           # optional, Default []
+    "reason": str,                   # Pflicht, nicht-leer — warum passt das Thema zum Zuschnitt?
+    "feasibility_note": str,         # Pflicht, nicht-leer — Machbarkeitshinweis
+    "source_note": str,              # Pflicht, nicht-leer — Hinweis zur Quellenlage
+    "base_feasibility": float,       # Pflicht, 0-10
+    "base_novelty": float,           # Pflicht, 0-10
+    "base_career_fit": float,        # Pflicht, 0-10
+    "research_questions": list[str], # Pflicht, mind. 1 Eintrag
+    "pilot_papers": list[str],       # Pflicht, mind. 1 Eintrag
+  }
 """
 
 from __future__ import annotations
@@ -22,106 +47,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
-
-# ---------------------------------------------------------------------------
-# Topic-Datenbank (heuristisch, deterministisch)
-# ---------------------------------------------------------------------------
-
-_TOPIC_DB: list[dict[str, Any]] = [
-    {
-        "title": "Cyber Security Awareness in KMU",
-        "keywords": ["cyber security", "kmu", "awareness", "wirtschaft", "informationssicherheit"],
-        "research_questions": [
-            "Welche Faktoren beeinflussen das Sicherheitsbewusstsein von Mitarbeitenden in kleinen und mittleren Unternehmen?",
-            "Wie wirksam sind Schulungsmaßnahmen zur Cyber Security Awareness in deutschen KMU?",
-            "Welche Zusammenhänge bestehen zwischen Unternehmenskultur und Cyber Security Incidents in KMU?",
-        ],
-        "pilot_papers": [
-            "Bulgurcu et al. (2010): Information Security Policy Compliance, MIS Quarterly",
-            "Parsons et al. (2017): Human Aspects of Cyber Security, Computers & Security",
-        ],
-        "base_feasibility": 8.0,
-        "base_novelty": 6.5,
-        "base_career_fit": {"Wirtschaftsinformatik": 9.0, "BWL": 8.0, "Informatik": 7.0},
-    },
-    {
-        "title": "Ransomware-Resilienz in Kritischen Infrastrukturen",
-        "keywords": [
-            "ransomware",
-            "kritische infrastruktur",
-            "resilience",
-            "kritis",
-            "cyber attack",
-        ],
-        "research_questions": [
-            "Welche technischen und organisatorischen Maßnahmen erhöhen die Ransomware-Resilienz in KRITIS-Betreibern?",
-            "Wie unterscheiden sich Incident-Response-Strategien nach Ransomware-Angriffen in deutschen Energieversorgern?",
-        ],
-        "pilot_papers": [
-            "Richardson & North (2017): Ransomware: Evolution, Mitigation and Prevention, IJCST",
-            "Connolly et al. (2020): The Ransomware Revolution, Computers & Security",
-        ],
-        "base_feasibility": 5.5,
-        "base_novelty": 8.0,
-        "base_career_fit": {"Wirtschaftsinformatik": 8.0, "BWL": 5.0, "Informatik": 9.0},
-    },
-    {
-        "title": "Zero-Trust-Architektur in Cloud-nativen Unternehmensumgebungen",
-        "keywords": ["zero trust", "cloud", "architecture", "identity", "zugriffssteuerung"],
-        "research_questions": [
-            "Welche Herausforderungen entstehen bei der Implementierung von Zero-Trust-Prinzipien in bestehenden Cloud-Infrastrukturen?",
-            "Wie beeinflussen Zero-Trust-Architekturen die Produktivität von Mitarbeitenden im Vergleich zu perimeterbasierter Sicherheit?",
-            "Welche Erfolgsfaktoren kennzeichnen erfolgreiche Zero-Trust-Transformationen in mittelständischen Unternehmen?",
-        ],
-        "pilot_papers": [
-            "Rose et al. (2020): Zero Trust Architecture, NIST SP 800-207",
-            "Kindervag (2010): No More Chewy Centers: The Zero Trust Model of Information Security, Forrester",
-        ],
-        "base_feasibility": 7.0,
-        "base_novelty": 7.5,
-        "base_career_fit": {"Wirtschaftsinformatik": 9.5, "BWL": 6.0, "Informatik": 9.0},
-    },
-    {
-        "title": "Phishing-Erkennung mittels Machine Learning",
-        "keywords": [
-            "phishing",
-            "machine learning",
-            "email security",
-            "social engineering",
-            "detection",
-        ],
-        "research_questions": [
-            "Welche ML-Algorithmen erzielen die höchste Erkennungsrate bei Phishing-E-Mails in deutschen Unternehmensumgebungen?",
-            "Wie entwickelt sich die Umgehung automatisierter Phishing-Filter durch adversarielle Methoden?",
-        ],
-        "pilot_papers": [
-            "Fette et al. (2007): Learning to detect phishing emails, WWW",
-            "Basit et al. (2021): A Comprehensive Survey of AI-enabled Phishing Attacks, Telecommunication Systems",
-        ],
-        "base_feasibility": 7.5,
-        "base_novelty": 5.5,
-        "base_career_fit": {"Wirtschaftsinformatik": 8.5, "BWL": 4.0, "Informatik": 9.5},
-    },
-    {
-        "title": "Datenschutz und DSGVO-Compliance in agilen Softwareentwicklungsprozessen",
-        "keywords": ["dsgvo", "gdpr", "datenschutz", "privacy by design", "agile", "compliance"],
-        "research_questions": [
-            "Wie lässt sich DSGVO-Compliance effektiv in agile Entwicklungsprozesse (Scrum/Kanban) integrieren?",
-            "Welche Privacy-by-Design-Muster eignen sich für Cloud-native Anwendungen nach DSGVO-Anforderungen?",
-            "Wie beurteilen Entwicklerteams den Aufwand für DSGVO-Compliance in agilen Projekten?",
-        ],
-        "pilot_papers": [
-            "Caiza et al. (2017): Privacy by Design in Software Engineering, WWW",
-            "Hadar et al. (2018): Privacy by Designers, IEEE Software",
-        ],
-        "base_feasibility": 8.5,
-        "base_novelty": 6.0,
-        "base_career_fit": {"Wirtschaftsinformatik": 9.0, "BWL": 7.5, "Informatik": 8.0},
-    },
-]
-
 
 # ---------------------------------------------------------------------------
 # Score-Berechnung
@@ -140,18 +68,19 @@ _DATA_FEASIBILITY_MODIFIER = {
     "unternehmensdaten": -1.0,
 }
 
-_FIELD_NORMALIZE = {
-    "wirtschaftsinformatik-bachelor": "Wirtschaftsinformatik",
-    "wirtschaftsinformatik": "Wirtschaftsinformatik",
-    "bwl": "BWL",
-    "betriebswirtschaftslehre": "BWL",
-    "informatik": "Informatik",
-    "informatik-bachelor": "Informatik",
-}
+_REQUIRED_TOPIC_FIELDS = (
+    "title",
+    "reason",
+    "feasibility_note",
+    "source_note",
+    "base_feasibility",
+    "base_novelty",
+    "base_career_fit",
+    "research_questions",
+    "pilot_papers",
+)
 
-
-def _normalize_field(field: str) -> str:
-    return _FIELD_NORMALIZE.get(field.lower(), "Wirtschaftsinformatik")
+_REQUIRED_NONEMPTY_STRING_FIELDS = ("title", "reason", "feasibility_note", "source_note")
 
 
 def _clamp(val: float, lo: float = 0.0, hi: float = 10.0) -> float:
@@ -161,26 +90,43 @@ def _clamp(val: float, lo: float = 0.0, hi: float = 10.0) -> float:
 def _keyword_overlap(interests: list[str], topic_keywords: list[str]) -> float:
     """Berechnet Stichwort-Ueberschneidung als Novelty-Modifikator."""
     interest_words = {w.lower() for phrase in interests for w in phrase.split()}
-    matches = sum(1 for kw in topic_keywords if any(w in kw for w in interest_words))
+    matches = sum(1 for kw in topic_keywords if any(w in kw.lower() for w in interest_words))
     return min(2.0, matches * 0.5)
 
 
+def _validate_topic(topic: dict[str, Any], index: int) -> None:
+    missing = [f for f in _REQUIRED_TOPIC_FIELDS if f not in topic]
+    if missing:
+        raise ValueError(f"Topic-Kandidat #{index} fehlen Pflichtfelder: {missing}")
+    for field in _REQUIRED_NONEMPTY_STRING_FIELDS:
+        if not isinstance(topic[field], str) or not topic[field].strip():
+            raise ValueError(
+                f"Topic-Kandidat #{index}: '{field}' muss ein nicht-leerer String sein"
+            )
+    if not topic["research_questions"]:
+        raise ValueError(f"Topic-Kandidat #{index}: 'research_questions' darf nicht leer sein")
+    if not topic["pilot_papers"]:
+        raise ValueError(f"Topic-Kandidat #{index}: 'pilot_papers' darf nicht leer sein")
+
+
 def score_topics(
+    topics_input: list[dict[str, Any]],
     interests: list[str],
-    field: str,
     budget: str,
     data_access: str,
 ) -> list[dict[str, Any]]:
-    """Berechnet Scores fuer alle 5 Topic-Kandidaten."""
-    normalized_field = _normalize_field(field)
+    """Scored die uebergebenen Topic-Kandidaten (keine feste Themen-DB)."""
     budget_mod = _BUDGET_FEASIBILITY_MODIFIER.get(budget.lower(), 0.0)
     data_mod = _DATA_FEASIBILITY_MODIFIER.get(data_access.lower(), 0.0)
 
     results = []
-    for topic in _TOPIC_DB:
+    for index, topic in enumerate(topics_input):
+        _validate_topic(topic, index)
+        keywords = topic.get("keywords", [])
+
         feasibility = _clamp(topic["base_feasibility"] + budget_mod + data_mod)
-        novelty = _clamp(topic["base_novelty"] + _keyword_overlap(interests, topic["keywords"]))
-        career_fit = _clamp(topic["base_career_fit"].get(normalized_field, 7.0))
+        novelty = _clamp(topic["base_novelty"] + _keyword_overlap(interests, keywords))
+        career_fit = _clamp(topic["base_career_fit"])
 
         results.append(
             {
@@ -188,8 +134,11 @@ def score_topics(
                 "feasibility": feasibility,
                 "novelty": novelty,
                 "career_fit": career_fit,
-                "research_questions": topic["research_questions"][:3],
-                "pilot_papers": topic["pilot_papers"],
+                "reason": topic["reason"],
+                "feasibility_note": topic["feasibility_note"],
+                "source_note": topic["source_note"],
+                "research_questions": list(topic["research_questions"]),
+                "pilot_papers": list(topic["pilot_papers"]),
             }
         )
 
@@ -217,7 +166,7 @@ def write_to_context(ctx_path: Path, top_title: str) -> None:
         if re.search(r"^- Thema:", content, re.MULTILINE):
             content = re.sub(
                 r"^- Thema:.*$",
-                f"- Thema: {top_title}",
+                lambda _m: f"- Thema: {top_title}",
                 content,
                 flags=re.MULTILINE,
             )
@@ -245,25 +194,51 @@ def write_to_context(ctx_path: Path, top_title: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _load_topics_input(source: str) -> list[dict[str, Any]]:
+    raw = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+    data = json.loads(raw)
+    if not isinstance(data, list):
+        raise ValueError("--topics-json muss ein JSON-Array von Topic-Kandidaten enthalten")
+    return data
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Topic-Brainstorm Scorer")
+    parser.add_argument(
+        "--topics-json",
+        required=True,
+        help="Pfad zu einer JSON-Datei mit Topic-Kandidaten, oder '-' fuer stdin",
+    )
     parser.add_argument("--interests", required=True, help="Interessensgebiete, kommagetrennt")
-    parser.add_argument("--field", required=True, help="Studienrichtung")
+    parser.add_argument(
+        "--field", required=True, help="Studienrichtung (unveraendert, kein Mapping)"
+    )
+    parser.add_argument(
+        "--work-type",
+        required=True,
+        help="Arbeitstyp, z.B. Bachelorarbeit/Masterarbeit/Hausarbeit (unveraendert)",
+    )
+    parser.add_argument(
+        "--scope",
+        required=True,
+        help="Umfang, z.B. Seitenzahl/Wortzahl (unveraendert)",
+    )
     parser.add_argument("--budget", required=True, help="Zeitbudget (z.B. '6 Monate')")
     parser.add_argument("--data-access", required=True, help="Datenzugang")
     parser.add_argument(
         "--output-mode",
         default="list",
         choices=["list", "full"],
-        help="'list' = JSON-Array; 'full' = {topics, top_topic}",
+        help="'list' = JSON-Array; 'full' = {topics, top_topic, context}",
     )
     parser.add_argument("--write-context", help="Pfad zur academic_context.md")
     args = parser.parse_args()
 
     interests = [i.strip() for i in args.interests.split(",") if i.strip()]
+    topics_input = _load_topics_input(args.topics_json)
     topics = score_topics(
+        topics_input=topics_input,
         interests=interests,
-        field=args.field,
         budget=args.budget,
         data_access=args.data_access,
     )
@@ -274,7 +249,16 @@ def main() -> None:
         write_to_context(Path(args.write_context), top_title)
 
     if args.output_mode == "full":
-        output = {"topics": topics, "top_topic": top_title}
+        output: Any = {
+            "topics": topics,
+            "top_topic": top_title,
+            "context": {
+                "field": args.field,
+                "work_type": args.work_type,
+                "scope": args.scope,
+                "interests": interests,
+            },
+        }
     else:
         output = topics
 

@@ -323,3 +323,51 @@ def test_hook_allows_clean_edit(tmp_path):
     }
     result = run_hook_raw(payload, env_overrides={"VAULT_DB_PATH": db_path})
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+
+
+UNVERIFIED_QUOTE = 'Laut dem Autor "Dies ist ein sehr wichtiger Satz aus dem Buch" stimmt das.'
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        "kapitel/teil1/intro.md",
+        "kapitel/teil1/abschnitt2/ergebnisse.md",
+        "projekt/kapitel/teil1/intro.md",
+    ],
+)
+def test_hook_blocks_unverified_quote_in_nested_chapter_path(tmp_path, file_path):
+    """Issue #516: Unterordner unter kapitel/ sind ebenfalls geschuetzt."""
+    db_path = _empty_vault(tmp_path, "nested_vault.db")
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": file_path, "content": UNVERIFIED_QUOTE},
+    }
+    result = run_hook_raw(payload, env_overrides={"VAULT_DB_PATH": db_path})
+    assert result.returncode == 2, (
+        f"Verschachtelter Kapitelpfad {file_path} umgeht verbatim-guard: "
+        f"erwartet exit 2 (block), got {result.returncode}. stderr: {result.stderr}"
+    )
+
+
+@pytest.mark.parametrize(
+    "file_path",
+    [
+        "notizen/entwurf.md",
+        "README.md",
+        "meinkapitel/intro.md",
+        "kapitel/teil1/notiz.txt",
+    ],
+)
+def test_hook_ignores_markdown_outside_kapitel(tmp_path, file_path):
+    """Issue #516: Die Unterordner-Erweiterung darf nicht uebergeneralisieren."""
+    db_path = _empty_vault(tmp_path, "outside_vault.db")
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": file_path, "content": UNVERIFIED_QUOTE},
+    }
+    result = run_hook_raw(payload, env_overrides={"VAULT_DB_PATH": db_path})
+    assert result.returncode == 0, (
+        f"{file_path} liegt ausserhalb der Schutzzone, wurde aber geprueft: "
+        f"got exit {result.returncode}. stderr: {result.stderr}"
+    )

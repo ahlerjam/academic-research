@@ -39,40 +39,113 @@ Für Gliederung und Methodik → `advisor` / `methodology-advisor`.
 
 ### Schritt 1: Eingaben sammeln
 
-Stelle dem User vier strukturierte Fragen via `AskUserQuestion`:
+Stelle dem User sechs strukturierte Fragen via `AskUserQuestion`. Fach,
+Arbeitstyp, Umfang und Interessen sind Pflichtangaben — ohne sie darf kein
+Kandidat entworfen werden (Schritt 2):
 
 ```
-Für eine gute Themenempfehlung brauche ich vier Angaben:
+Für eine gute Themenempfehlung brauche ich sechs Angaben:
 
-1. Studienrichtung?
+1. Studienrichtung? (Pflicht)
    - Wirtschaftsinformatik (Bachelor/Master)
    - BWL / Betriebswirtschaft
    - Informatik
    - Maschinenbau
    - Andere → freitext
 
-2. Interessensgebiete (frei, z.B. "Cyber Security, KI, Nachhaltigkeit")
+2. Arbeitstyp? (Pflicht, konsistent zu academic-context "### Arbeit"-Feld "Typ")
+   - Bachelorarbeit
+   - Masterarbeit
+   - Hausarbeit
+   - Seminararbeit
+   - Facharbeit
+   - Andere → freitext
 
-3. Zeitbudget?
+3. Umfang? (Pflicht, z.B. Seiten- oder Wortzahl, freitext — z.B. "60 Seiten", "12000 Wörter")
+
+4. Interessensgebiete (Pflicht, frei, z.B. "Cyber Security, KI, Nachhaltigkeit")
+
+5. Zeitbudget?
    - 3 Monate
    - 6 Monate
    - 12 Monate
 
-4. Datenzugang?
+6. Datenzugang?
    - Public Datasets (Kaggle, STATISTA, Eurostat usw.)
    - Literatur-Only (kein eigener Datensatz)
    - Interview-fähig (Zugang zu Experten/Unternehmen)
    - Unternehmensdaten (NDA-Umgebung)
 ```
 
-### Schritt 2: Scorer aufrufen
+### Schritt 2: Themenkandidaten entwerfen und scoren
 
-Rufe `${CLAUDE_PLUGIN_ROOT}/skills/topic-brainstorm/scripts/scorer.py` auf mit den gesammelten Werten:
+**Es gibt keine feste Themenliste.** Du (das Modell) entwirfst selbst 3-5
+Kandidaten, die zu Studienrichtung, Arbeitstyp, Umfang, Interessensgebieten,
+Zeitbudget und Datenzugang des Users passen — die Urteilsarbeit liegt hier,
+nicht in `scorer.py`. Zwei Anfragen aus unterschiedlichen Fächern (oder mit
+unterschiedlichem Arbeitstyp/Umfang) müssen zu erkennbar unterschiedlichen,
+fachlich passenden Kandidaten führen — niemals dieselben Titel unabhängig
+vom Fach.
+
+Für jeden Kandidaten legst du fest:
+
+- `title`: konkreter, spezifischer Arbeitstitel (kein Gattungsbegriff)
+- `keywords`: 3-6 Schlagworte
+- `reason`: 1-2 Sätze, **warum** das Thema zur genannten Studienrichtung,
+  dem Arbeitstyp, den Interessen und dem Zuschnitt (Budget/Datenzugang)
+  passt — Pflichtfeld, nicht leer lassen
+- `feasibility_note`: 1 Satz Machbarkeitshinweis — passt der Umfang
+  (Seiten-/Wortzahl) und das Zeitbudget realistisch zum Methodenaufwand?
+  Pflichtfeld
+- `source_note`: 1 Satz Hinweis zur Quellenlage — grobe Einschätzung, ob
+  ausreichend Literatur/Daten zu erwarten ist (keine echte Recherche, nur
+  Heuristik). Pflichtfeld
+- `base_feasibility` (0-10): deine Einschätzung nach Datenverfügbarkeit +
+  Methoden-Match, siehe Orientierungswerte in
+  [`references/scoring-criteria.md`](references/scoring-criteria.md)
+- `base_novelty` (0-10): deine Einschätzung der Forschungslücke
+- `base_career_fit` (0-10): deine Einschätzung der Passung zu Studienrichtung
+  und Berufsbild, siehe Orientierungswerte in
+  [`references/scoring-criteria.md`](references/scoring-criteria.md)
+- `research_questions`: 2-3 Forschungsfragen
+- `pilot_papers`: 1-3 plausible Referenzen (Autor, Jahr, Titel/Venue) — als
+  Hinweis, keine Gewissheit für reale Existenz
+
+Beispiel-Snippet (gekürzt, ein Kandidat):
+
+```json
+[
+  {
+    "title": "Preisstrategien im stationären Einzelhandel unter Inflationsdruck",
+    "keywords": ["pricing", "einzelhandel", "inflation"],
+    "reason": "Passt zur BWL, da Preistheorie und Marktbeobachtung Kernkompetenzen sind, und zum Interesse 'Handel'.",
+    "feasibility_note": "Mit 6 Monaten und Public Datasets (Statista, Eurostat) im Umfang einer 60-seitigen Bachelorarbeit realistisch bearbeitbar.",
+    "source_note": "Preistheorie ist breit erforscht — genug Sekundärliteratur, aktuelle Inflationsdaten aber noch dünn.",
+    "base_feasibility": 7.0,
+    "base_novelty": 6.0,
+    "base_career_fit": 8.5,
+    "research_questions": [
+      "Wie reagieren Einzelhändler auf anhaltende Inflation bei der Preissetzung?",
+      "Welche Preisstrategien wirken sich am stärksten auf die Kundenbindung aus?"
+    ],
+    "pilot_papers": ["Simon & Fassnacht (2019): Preismanagement, Springer Gabler"]
+  }
+]
+```
+
+Schreibe das Array in eine temporäre JSON-Datei und rufe den Scorer auf (er
+normalisiert Feasibility über Budget-/Datenzugang-Modifikatoren und Novelty
+über den Interessens-Overlap; Career-Fit, `reason`, `feasibility_note` und
+`source_note` reicht er unverändert durch; Fach/Arbeitstyp/Umfang/Interessen
+landen unverändert im `context`-Objekt der Ausgabe):
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/skills/topic-brainstorm/scripts/scorer.py \
+  --topics-json <pfad-zur-json-datei> \
   --interests "<INTERESSEN>" \
   --field "<STUDIENRICHTUNG>" \
+  --work-type "<ARBEITSTYP>" \
+  --scope "<UMFANG>" \
   --budget "<ZEITBUDGET>" \
   --data-access "<DATENZUGANG>" \
   --output-mode full
@@ -80,7 +153,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/topic-brainstorm/scripts/scorer.py \
 
 ### Schritt 3: Ergebnisse präsentieren
 
-Präsentiere die 5 Kandidaten in dieser Tabellenform:
+Präsentiere die 3-5 Kandidaten in dieser Tabellenform:
 
 ```
 ## Topic-Kandidaten
@@ -94,13 +167,16 @@ Präsentiere die 5 Kandidaten in dieser Tabellenform:
 ```
 
 Zeige pro Topic:
+- Den `reason` — warum das Thema zum Zuschnitt (Fach/Arbeitstyp/Umfang) passt
+- Den `feasibility_note` — Machbarkeitshinweis
+- Den `source_note` — Hinweis zur Quellenlage
 - Die 2-3 Forschungsfragen
 - Das Pilot-Paper-Set (1-3 Referenzen)
 
 Score-Legende (aus `${CLAUDE_PLUGIN_ROOT}/skills/topic-brainstorm/references/scoring-criteria.md`):
 - **Feasibility**: Datenverfügbarkeit + Zeitaufwand + Methoden-Match
 - **Novelty**: Lücken-Indikator (Anzahl recent vs. older papers in area)
-- **Career-Fit**: Schlagwort-Überschneidung mit Studienrichtung + Berufsbild
+- **Career-Fit**: Deine Einschätzung der Passung zu Studienrichtung + Berufsbild (aus Schritt 2)
 
 ### Schritt 4: User-Auswahl und Context-Update
 
@@ -115,8 +191,9 @@ Oder: Eigene Variante (freitext)
 ```
 
 Nach Auswahl:
-1. Rufe Scorer erneut mit `--write-context ./academic_context.md` auf
-   (oder schreibe das Thema direkt in die Datei)
+1. Rufe den Scorer erneut mit derselben `--topics-json`-Datei aus Schritt 2
+   plus `--write-context ./academic_context.md` auf (oder schreibe das Thema
+   direkt in die Datei)
 2. Bestätige die Speicherung: "Das Thema wurde in `academic_context.md` eingetragen."
 
 ### Schritt 5: Handover zu research-question-refiner
@@ -139,14 +216,18 @@ Details: `${CLAUDE_PLUGIN_ROOT}/skills/topic-brainstorm/references/scoring-crite
 
 - **Feasibility**: Datenverfügbarkeit + Zeitaufwand + Methoden-Match
 - **Novelty**: Forschungslücken-Heuristik (Stichwort-Überschneidung mit Interessensgebieten)
-- **Career-Fit**: Schlagwort-Überschneidung mit Studienrichtung
+- **Career-Fit**: Deine (Modell-)Einschätzung der Schlagwort-/Themen-Passung zur
+  Studienrichtung — als `base_career_fit` je Kandidat in Schritt 2 festgelegt
 
-Scoring-Kriterien (alle Modifikator-Tabellen für Datenverfügbarkeit, Zeitbudget
+Scoring-Kriterien (Orientierungswerte für Datenverfügbarkeit, Zeitbudget
 und Studienrichtung) siehe `${CLAUDE_PLUGIN_ROOT}/skills/topic-brainstorm/references/scoring-criteria.md`.
 
 ## Wichtige Regeln
 
-- **Keine Themen aufdrängen** — 5 Optionen zeigen, User entscheidet
+- **Keine feste Themenliste** — Kandidaten fach-, arbeitstyp-, umfangs- und
+  interessenspassend selbst entwerfen (Schritt 2), nie aus einer
+  vordefinierten Liste kopieren
+- **Keine Themen aufdrängen** — 3-5 Optionen zeigen, User entscheidet
 - **Scores transparent erklären** — Immer die Scoring-Kriterien kurz erläutern
 - **Pilot-Papers sind Hinweise, keine Gewissheiten** — Darauf hinweisen, dass reale Literaturrecherche folgen muss
 - **Vor dem Schreiben bestätigen** — Explizit fragen, ob das Thema in `academic_context.md` gespeichert werden soll
