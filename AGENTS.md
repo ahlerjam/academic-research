@@ -11,7 +11,9 @@ Details: README.md (lang!), CHANGELOG.md.
 - Lint: `uv run ruff check .` und `uv run ruff format --check .` (beide
   CI-blockierend seit #340)
 - Types: `uv run mypy` (Konfig in pyproject.toml; blockierend nach #341)
-- Hooks-Syntax: `node --check hooks/*.mjs`
+- Hooks-Syntax: `bash scripts/dev/check-mjs-syntax.sh` (`node --check` ueber
+  alle getrackten `*.mjs`, also auch `hooks/lib/`; CI-blockierend seit #542 —
+  der fruehere Glob `hooks/*.mjs` rekursierte nicht)
 - Hook-Harness: `bash scripts/dev/test-pretooluse-blocker.sh` (testet die
   DEPLOYTE Datei `.claude/hooks/pretooluse-blocker.sh`; CI-blockierend)
 - Shell-Syntax-Gate: `bash scripts/dev/check-shell-syntax.sh` (`bash -n` ueber

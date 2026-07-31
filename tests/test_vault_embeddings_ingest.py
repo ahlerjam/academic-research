@@ -448,6 +448,67 @@ class TestIngest:
 
         assert written == 3
 
+    def test_ingest_result_behaves_like_plain_int(self, temp_vault_db, fake_embedder, monkeypatch):
+        """Der neue Rueckgabetyp darf bestehende int-Vergleiche nicht brechen (#531 AC3)."""
+        from academic_vault.ingest import ingest_paper_embeddings
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        _add_paper(temp_vault_db, "p001", "Titel", "Abstract")
+        _use_embedder(monkeypatch, fake_embedder)
+
+        written = ingest_paper_embeddings(temp_vault_db, "p001")
+
+        assert isinstance(written, int)
+        assert written == written  # noqa: PLR0124 -- Selbstvergleich ist der Punkt
+        assert written + 0 == written
+        assert written.context_failures == 0
+
+    def test_ingest_surfaces_context_failures_in_result(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """AC3 (#531): ein Kontext-Fehlschlag wird im Ingest-Ergebnis ausgewiesen —
+        nicht nur modul-intern in embeddings.py gezaehlt/geloggt."""
+        from academic_vault import embeddings as embeddings_module
+        from academic_vault.ingest import ingest_paper_embeddings
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        monkeypatch.setenv("VAULT_CONTEXTUAL_EMBEDDING", "1")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        _add_paper(temp_vault_db, "p001", "Titel", "Abstract")
+        _use_embedder(monkeypatch, fake_embedder)
+        embeddings_module.reset_context_failure_count()
+
+        def _boom(api_key=None):
+            raise RuntimeError("Anthropic API nicht erreichbar")
+
+        monkeypatch.setattr(embeddings_module, "_get_anthropic_client", _boom)
+
+        try:
+            result = ingest_paper_embeddings(
+                temp_vault_db, "p001", text="Erster Satz. Zweiter Satz."
+            )
+
+            assert result.context_failures >= 1, (
+                "Kontext-Fehlschlaege sind nicht im Ingest-Ergebnis ausgewiesen (AC3)"
+            )
+            assert result.context_failures == embeddings_module.get_context_failure_count()
+        finally:
+            embeddings_module.reset_context_failure_count()
+
+    def test_ingest_without_contextual_embedding_has_zero_context_failures(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """Ohne aktivierte Kontext-Generierung bleibt context_failures 0, kein Rauschen."""
+        from academic_vault.ingest import ingest_paper_embeddings
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        _add_paper(temp_vault_db, "p001", "Titel", "Abstract")
+        _use_embedder(monkeypatch, fake_embedder)
+
+        result = ingest_paper_embeddings(temp_vault_db, "p001")
+
+        assert result.context_failures == 0
+
 
 # ---------------------------------------------------------------------------
 # AC 1: add_paper schreibt chunk_embeddings mit nicht-leerem Vektor

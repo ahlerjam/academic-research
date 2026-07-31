@@ -34,7 +34,7 @@
  *   ACADEMIC_REINFORCEMENT_STATE  — Pfad zur State-Datei (default: ~/.academic-research/reinforcement-state.json)
  *   ACADEMIC_REINFORCEMENT_N      — Trigger-Interval (default: 20)
  *   ACADEMIC_PYTHON               — Interpreter fuer den Vault-Lookup
- *                                   (Kaskade in hooks/vault-bridge.mjs)
+ *                                   (Kaskade in hooks/lib/vault-bridge.mjs)
  *
  * Live-Nachweis der Kontext-Injection: scripts/dev/verify_reinforcement_context.py
  */
@@ -43,10 +43,10 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from 'n
 import { dirname, join } from 'node:path';
 import * as os from 'node:os';
 
-import { resolveVaultDb, VAULT_SRC, runVaultPython } from './vault-bridge.mjs';
+import { resolveVaultDb, VAULT_SRC, runVaultPython } from './lib/vault-bridge.mjs';
 
 // Kanonischer DB-Default (Single Source of Truth, Issue #190/#527): kommt aus
-// hooks/vault-bridge.mjs — derselben Aufloesung, die der PostToolUse-Hook zum
+// hooks/lib/vault-bridge.mjs — derselben Aufloesung, die der PostToolUse-Hook zum
 // SCHREIBEN benutzt. Zwei getrennte Formeln waren die Wurzel von #527.
 const VAULT_DB = resolveVaultDb();
 

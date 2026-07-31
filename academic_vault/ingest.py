@@ -28,6 +28,25 @@ ENV_MAX_CHUNKS = "VAULT_MAX_CHUNKS"
 ENV_CONTEXTUAL = "VAULT_CONTEXTUAL_EMBEDDING"
 
 
+class IngestResult(int):
+    """Rueckgabewert von :func:`ingest_paper_embeddings`.
+
+    Verhaelt sich wie ein normaler ``int`` (Anzahl geschriebener Chunks) --
+    bestehende Vergleiche/Arithmetik auf dem Rueckgabewert bleiben unveraendert
+    gueltig. Zusaetzlich traegt er ``context_failures``: die Anzahl der
+    fehlgeschlagenen Kontext-Satz-Generierungen waehrend dieses Ingest-Laufs,
+    damit ein Fehlschlag im Ingest-Ergebnis sichtbar ist statt nur modul-intern
+    in ``embeddings.py`` gezaehlt/geloggt zu werden (#531 AC3).
+    """
+
+    context_failures: int
+
+    def __new__(cls, chunks_written: int, context_failures: int = 0) -> "IngestResult":
+        obj = super().__new__(cls, chunks_written)
+        obj.context_failures = context_failures
+        return obj
+
+
 def split_text(
     text: str,
     max_chars: int = DEFAULT_CHUNK_CHARS,
@@ -120,7 +139,7 @@ def ingest_paper_embeddings(
     embedder: object | None = None,
     chunker: Callable[[str], list[str]] | None = None,
     max_chunks: int | None = None,
-) -> int:
+) -> IngestResult:
     """Erzeugt Chunk-Embeddings fuer ein Paper und schreibt sie in den Vault.
 
     Ersetzt vorhandene Chunks desselben Papers (``add_paper`` ist ein Upsert und
@@ -135,30 +154,33 @@ def ingest_paper_embeddings(
         max_chunks: Obergrenze. ``None`` = ``VAULT_MAX_CHUNKS`` bzw. Default.
 
     Returns:
-        Anzahl geschriebener Chunks. 0, wenn kein Embedder verfuegbar ist, das
-        Paper nicht existiert oder kein Text gefunden wurde.
+        :class:`IngestResult` (verhaelt sich wie ``int`` = Anzahl geschriebener
+        Chunks). 0, wenn kein Embedder verfuegbar ist, das Paper nicht existiert
+        oder kein Text gefunden wurde. ``.context_failures`` weist aus, wie
+        viele Kontext-Satz-Generierungen in diesem Lauf fehlgeschlagen sind
+        (#531 AC3).
     """
     active_embedder = embedder if embedder is not None else get_embedder()
     if active_embedder is None:
-        return 0
+        return IngestResult(0)
 
     db = VaultDB(db_path)
     if db.get_paper(paper_id) is None:
-        return 0
+        return IngestResult(0)
 
     source = text if text is not None else resolve_paper_text(db_path, paper_id)
     if not source or not source.strip():
-        return 0
+        return IngestResult(0)
 
     split = chunker if chunker is not None else split_text
     chunks = [c for c in split(source) if c.strip()]
     if not chunks:
-        return 0
+        return IngestResult(0)
     limit = max_chunks if max_chunks is not None else _max_chunks_from_env()
     if limit > 0:
         chunks = chunks[:limit]
 
-    contexts = _context_sentences(db, paper_id, chunks)
+    contexts, context_failures = _context_sentences(db, paper_id, chunks)
     embedding_texts = [
         _embedding_text(ctx, chunk) for ctx, chunk in zip(contexts, chunks, strict=True)
     ]
@@ -182,7 +204,7 @@ def ingest_paper_embeddings(
                 embedding_text=embedding_text,
                 embedding_vector=serialize_f32(vector),
             )
-    return len(chunks)
+    return IngestResult(len(chunks), context_failures)
 
 
 def _embedding_text(context_sentence: str, chunk: str) -> str:
@@ -193,10 +215,17 @@ def _embedding_text(context_sentence: str, chunk: str) -> str:
     return build_contextual_embedding_text(context_sentence, chunk)
 
 
-def _context_sentences(db: VaultDB, paper_id: str, chunks: list[str]) -> list[str]:
-    """Erzeugt pro Chunk einen 1-Satz-Kontext — nur wenn explizit aktiviert."""
+def _context_sentences(db: VaultDB, paper_id: str, chunks: list[str]) -> tuple[list[str], int]:
+    """Erzeugt pro Chunk einen 1-Satz-Kontext — nur wenn explizit aktiviert.
+
+    Returns:
+        Tuple aus (Kontext-Saetzen, Anzahl fehlgeschlagener Generierungen in
+        diesem Aufruf). Die Fehlerzahl wird ueber das Delta des modul-globalen
+        Zaehlers in ``embeddings.py`` ermittelt, damit sie ins Ingest-Ergebnis
+        durchgereicht werden kann (#531 AC3).
+    """
     if not _contextual_enabled():
-        return [""] * len(chunks)
+        return [""] * len(chunks), 0
 
     paper = db.get_paper(paper_id) or {}
     try:
@@ -206,9 +235,10 @@ def _context_sentences(db: VaultDB, paper_id: str, chunks: list[str]) -> list[st
     title = str(csl.get("title") or "")
     abstract = str(csl.get("abstract") or "")
 
-    from .embeddings import generate_context_sentence
+    from .embeddings import generate_context_sentence, get_context_failure_count
 
-    return [
+    failures_before = get_context_failure_count()
+    contexts = [
         generate_context_sentence(
             chunk_text=chunk,
             paper_title=title,
@@ -217,3 +247,5 @@ def _context_sentences(db: VaultDB, paper_id: str, chunks: list[str]) -> list[st
         )
         for chunk in chunks
     ]
+    context_failures = get_context_failure_count() - failures_before
+    return contexts, context_failures

@@ -12,6 +12,7 @@ tools:
   - Read
   - mcp__academic-vault__vault_ensure_file
   - mcp__academic-vault__vault_add_figure
+  - mcp__academic-vault__vault_get_figure
   - mcp__academic-vault__vault_list_figures
 maxTurns: 8
 ---
@@ -37,12 +38,19 @@ Fuer jede Figure oder Tabelle im angegebenen Paper:
    - `vlm_description`: aussagekraeftige Beschreibung des Inhalts (≥ 50 Zeichen)
    - `data_extracted_json`: bei Tabellen JSON-Array `[{"spalte": "wert", ...}]`, sonst null
 4. `vault.add_figure(paper_id, page, caption, vlm_description, data_extracted_json)`
+   → figure_id
+5. Read-back: `vault.get_figure(figure_id)` und den zurueckgelesenen Record gegen
+   die eigene Extraktion pruefen (Caption identisch, `vlm_description` ≥ 50 Zeichen,
+   `data_extracted_json` als JSON-Array geparst statt als String abgelegt). Erst
+   der gelesene Record ist der Beleg — nicht die zurueckgegebene figure_id. Weicht
+   er ab, korrigiere den Eintrag und melde die Abweichung im Output.
 
 ## Qualitaetskriterien
 
 - `vlm_description` MUSS ≥ 50 Zeichen haben
 - Tabellen MUESSEN als JSON-Array in `data_extracted_json` vorliegen
 - Keine Halluzinationen: nur was im Dokument steht
+- Jeder Eintrag ist per `vault.get_figure` zurueckgelesen und geprueft
 
 ## Output-Format
 

@@ -449,8 +449,8 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   das neue Modul `academic_vault/decision_log.py` in genau die Tabelle, aus der das
   Reinforcement liest. Damit die Divergenz nicht über unterschiedliche DB-Pfade oder
   Interpreter zurückkehrt, lösen beide Hooks beides in der gemeinsamen Brücke
-  `hooks/vault-bridge.mjs` auf (kein Hook, sondern ein importiertes Modul; liegt flach
-  in `hooks/`, damit `node --check hooks/*.mjs` es miterfasst). Auto-Einträge tragen die
+  `hooks/lib/vault-bridge.mjs` auf (kein Hook, sondern ein importiertes Modul; liegt
+  seit #542 bei den übrigen Bibliotheken in `hooks/lib/`). Auto-Einträge tragen die
   feste Kategorie `file-change` und bleiben pro Datei auf genau einen aktiven Eintrag
   begrenzt — gleicher Inhalts-Hash erzeugt keinen neuen Eintrag, geänderter Hash löst
   den Vorgänger per `superseded_by` ab. `printReminder` gibt sie in einem eigenen Block
@@ -522,6 +522,42 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   künftig gegen die Command-Definitionen.
 
 ### Changed
+
+- **Jedes Vault-MCP-Tool hat einen Aufrufer (#540):** Neun der 37 per
+  `@mcp.tool` registrierten Tools wurden von keinem Skill, Agent, Command oder
+  Hook angesprochen — sie kosteten in jeder Session Tool-Listen-Kontext, ohne
+  dass ein Workflow sie erreichte. Statt sie zu deregistrieren (was `#226` für
+  `supersede_decision`/`list_excluded_sources` explizit zurückgedreht hätte),
+  sind sie jetzt dort verdrahtet, wo die Lücke fachlich saß: `add_chapter` und
+  `extract_fulltext` in `book-handler` (Kapitel am indexierten Sammelband; der
+  Volltext-Index überlebt sonst kein `update_pdf_path` nach OCR), `get_figure`
+  als Read-back in `figure-verifier`, `is_excluded` als Vorab-Check in
+  `reading-list-import` (der Re-Import holte bis dahin aussortierte Quellen
+  zurück), `list_excluded_sources` in `prisma-flow` (PRISMA 2020 verlangt
+  Ausschlussgründe, nicht nur Zahlen), `add_score_snapshot`/`get_score_history`
+  in `source-quality-audit` und die Decision-Tools in `academic-context` —
+  letzteres füllt zugleich den bis dahin immer leeren `decisions_snapshot` des
+  Material-Passports. Registrierung und Doku bleiben unverändert (37 Tools);
+  `tests/test_issue_540_vault_tool_callers.py` hält den Vertrag: jedes
+  `@mcp.tool` braucht eine Referenz in `skills/`, `agents/`, `commands/` oder
+  `hooks/` (`docs/` zählt bewusst nicht mit, sonst wäre der Guard tautologisch
+  grün), und die Tool-Tabellen in `docs/reference/vault.md` müssen sich exakt
+  mit der Registrierung decken. `tests/baselines/*.json` um den Netto-Zuwachs
+  der fünf Skills angehoben (etabliertes Repo-Muster, vgl. #471/PR #547).
+
+- **`hooks/` trennt Hooks von Bibliotheken (#542):** Flach in `hooks/` liegen jetzt
+  ausschließlich die fünf in `hooks/hooks.json` registrierten Hooks; die importierten
+  Module (`citation-parse.mjs`, `citation-cascade.mjs`, `vault-bridge.mjs`) und das
+  nicht verdrahtete Setup-Skript `onboard-project-uni-prompt.sh` liegen in `hooks/lib/`
+  — weiterhin innerhalb der protected area „hooks". Voraussetzung dafür war der
+  Syntax-Gate: der CI-Job `hook-syntax` iterierte über den **nicht-rekursiven** Glob
+  `hooks/*.mjs` und hätte jede Datei unterhalb von `hooks/lib/` still ungeprüft
+  gelassen — genau deshalb musste `vault-bridge.mjs` bis dahin flach liegen. Der Gate
+  läuft jetzt als `scripts/dev/check-mjs-syntax.sh` über **alle getrackten `*.mjs`**
+  (Vorbild: `scripts/dev/check-shell-syntax.sh`, #469) und erfasst damit auch
+  `scripts/export-literature-state.mjs`, das bisher ebenfalls außerhalb des Gates lag.
+  Er bricht ab, wenn er keine einzige Datei findet, damit ein künftiger
+  Coverage-Verlust laut statt still ist.
 
 - **`docs/` ist eine navigierbare Referenz statt eines gewachsenen Ordners (#452):**
   Neue Einstiegsseite `docs/README.md` mit drei Lesepfaden (Erstnutzer,

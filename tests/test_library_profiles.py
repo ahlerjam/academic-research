@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).parent.parent
 PROFILES_DIR = REPO_ROOT / "config" / "library-profiles"
 SCHEMA_PATH = PROFILES_DIR / "_schema.json"
 PROFILE_SLUGS = ["tum", "fu-berlin", "eth-zurich", "uni-wien", "uni-hamburg"]
-HOOK_PATH = REPO_ROOT / "hooks" / "onboard-project-uni-prompt.sh"
+HOOK_PATH = REPO_ROOT / "hooks" / "lib" / "onboard-project-uni-prompt.sh"
 
 
 def load_schema():
