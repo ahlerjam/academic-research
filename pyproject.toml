@@ -23,7 +23,14 @@ authors = [{ name = "Jonas Ahler", email = "jam@ahler.org" }]
 # (scripts/setup.sh -> scripts/requirements.txt) bleibt bewusst pip-basiert (#344);
 # beim Aendern von Runtime-Deps BEIDE Stellen pflegen.
 dependencies = [
-    "anthropic>=0.40",
+    # >=0.120.2: der Stand, mit dem die Suite tatsaechlich laeuft (uv.lock, #332).
+    # Bewusst exakt die verifizierte Version als Untergrenze und nicht die
+    # naechstniedrigere Minor-Serie: der Code haengt an Beta-Namespaces
+    # (anthropic.beta.files.upload in academic_vault/files_api.py,
+    # anthropic.types.beta.messages in scripts/batch_api.py), und die wandern
+    # zwischen Minor-Releases. Eine tiefere Grenze wuerde Kompatibilitaet
+    # behaupten, die hier nie geprueft wurde.
+    "anthropic>=0.120.2",
     "httpx>=0.28.1",
     "pypdf>=4.0.0",
     "pyyaml>=6.0.3",
@@ -67,8 +74,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "pytest-cov>=5.0",
+    # Major-Bumps aus #332, seit uv.lock ohnehin im Einsatz (pytest 9.1.1,
+    # pytest-cov 7.1.0) — die Untergrenzen zogen nur nie nach. Sie stehen auf
+    # der Major-Grenze, weil genau dort das Risiko lag: pytest 9 entfernt
+    # Deprecations, unter pytest 8 laeuft dieselbe Suite gegen anderes
+    # Fixture-Verhalten. Wer ohne Lock installiert, soll nicht stillschweigend
+    # auf dem ungetesteten Stand landen.
+    "pytest>=9.0",
+    "pytest-cov>=7.0",
     # CI-Pins (blockierendes Format-Gate): Bump nur mit Nachformatierung, vgl. ci.yml
     "ruff==0.16.0",
     "mypy==2.3.0",
