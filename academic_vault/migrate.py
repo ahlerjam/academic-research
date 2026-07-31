@@ -251,6 +251,76 @@ def add_stance_column(db_path: str) -> None:
         conn.close()
 
 
+def add_source_kind_column(db_path: str) -> None:
+    """Fuegt die source_kind-Spalte zu papers hinzu. Idempotent (try/except). (#473)
+
+    Unterscheidet eigenes Erhebungsmaterial (``'primary'``) von Literatur
+    (``'literature'``, siehe ``db.VALID_SOURCE_KINDS``). Der CHECK-Constraint
+    und der NOT-NULL-Default werden mit angelegt, damit eine migrierte
+    Bestands-DB dieselbe zweite Verteidigungslinie hat wie eine frisch aus
+    ``schema.sql`` erzeugte. Bestehende Paper werden dabei zu
+    ``'literature'`` -- das ist die einzig richtige Annahme: alles, was vor
+    diesem Feature im Vault lag, war Literatur.
+    Aufruf-Sicher: kann mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "ALTER TABLE papers ADD COLUMN source_kind TEXT NOT NULL "
+                "DEFAULT 'literature' CHECK(source_kind IN ('literature','primary'))"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_empirical_tables(db_path: str) -> None:
+    """Erstellt transcript_segments + codings falls nicht vorhanden. Idempotent. (#473)
+
+    ``schema.sql`` legt beide Tabellen bei jedem ``init_schema()``-Lauf per
+    ``CREATE TABLE IF NOT EXISTS`` an; dieser Helfer haelt den Bestands-Pfad
+    (``apply_pending_migrations``) vollstaendig, damit eine Legacy-DB nicht
+    davon abhaengt, in welcher Reihenfolge DDL und Migration laufen.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transcript_segments (
+              segment_id TEXT PRIMARY KEY,
+              paper_id   TEXT NOT NULL REFERENCES papers(paper_id),
+              seq        INTEGER NOT NULL,
+              speaker    TEXT,
+              timecode   TEXT,
+              text       TEXT NOT NULL,
+              created_at INTEGER NOT NULL,
+              UNIQUE(paper_id, seq)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS codings (
+              coding_id       TEXT PRIMARY KEY,
+              paper_id        TEXT NOT NULL REFERENCES papers(paper_id),
+              segment_id      TEXT REFERENCES transcript_segments(segment_id),
+              quote_id        TEXT REFERENCES quotes(quote_id),
+              category        TEXT NOT NULL,
+              category_origin TEXT NOT NULL
+                                CHECK(category_origin IN ('induktiv','deduktiv')),
+              memo            TEXT,
+              created_at      INTEGER NOT NULL
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def add_figures_table(db_path: str) -> None:
     """Erstellt figures-Tabelle falls nicht vorhanden. Idempotent.
 
@@ -451,6 +521,8 @@ def apply_pending_migrations(db_path: str) -> None:
     add_stance_column(db_path)
     add_note_page_column(db_path)
     add_notes_fts(db_path)
+    add_source_kind_column(db_path)
+    add_empirical_tables(db_path)
     drop_dead_v64_tables(db_path)
 
 

@@ -1,0 +1,25 @@
+{
+  "component": "qualitative-coding",
+  "should_trigger": [
+    "Ich habe mein Interview transkribiert — nimm es bitte in den Vault auf.",
+    "Kodiere das Transkript und bilde Kategorien.",
+    "Wie bilde ich induktive Kategorien aus meinem Material?",
+    "Erstelle mir einen Kodierleitfaden mit Ankerbeispielen.",
+    "Ich brauche eine Kodier-Uebersicht fuer mein Ergebniskapitel.",
+    "Werte meine fuenf Interviews qualitativ aus.",
+    "Ich will deduktive Kategorien aus der Theorie ableiten und am Material pruefen.",
+    "Wie zitiere ich eine Stelle aus meinem eigenen Interview belegfaehig?"
+  ],
+  "should_not_trigger": [
+    "Welche Methodik passt zu meiner Forschungsfrage?",
+    "Erstelle mir einen Interviewleitfaden.",
+    "Leg eine Notiz zu diesem Paper an.",
+    "Erstelle eine Extraktionsmatrix aus meinen Quellen.",
+    "Extrahiere Zitate aus diesem PDF.",
+    "Rechne mir die Effektstaerke fuer die Meta-Analyse aus.",
+    "Schreibe die Einleitung.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Erstelle das PRISMA-Flussdiagramm.",
+    "Exportiere die Thesis als Word-Datei."
+  ]
+}

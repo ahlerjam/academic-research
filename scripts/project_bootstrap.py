@@ -46,7 +46,11 @@ def detect_mode(cwd: Path) -> str:
 
 BOOTSTRAP_DIR = Path(__file__).parent / "bootstrap"
 
-SUBDIRS = ("kapitel", "literatur", "pdfs")
+# "empirie" haelt eigenes Erhebungsmaterial (Transkripte, Instrumente,
+# Kodierleitfaden, Issue #473) — bewusst getrennt von "literatur",
+# weil Primaermaterial und fremde Publikationen unterschiedlichen
+# Herkunfts- und Schutzregeln unterliegen.
+SUBDIRS = ("kapitel", "literatur", "pdfs", "empirie")
 
 
 def create_structure(cwd: Path, stub: bool) -> None:
@@ -55,7 +59,7 @@ def create_structure(cwd: Path, stub: bool) -> None:
     Idempotent — never overwrites. With stub=True, copies academic_context.stub.md
     as academic_context.md (only if absent). With stub=False (idempotent re-run
     path from main), only nachzieht CLAUDE.md and the subdirs. Always ensures
-    kapitel/, literatur/, pdfs/ exist with .gitkeep.
+    kapitel/, literatur/, pdfs/, empirie/ exist with .gitkeep.
     """
     if stub and not (cwd / "academic_context.md").exists():
         stub_src = BOOTSTRAP_DIR / "academic_context.stub.md"

@@ -1,0 +1,42 @@
+{
+  "component": "qualitative-coding",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "qc-01",
+      "input": "Ich habe eine Kategorie 'Teamabstimmung' gebildet. Was musst du dazu im Vault festhalten, damit das Vorgehen später im Methodenteil steht?",
+      "expected": {
+        "type": "regex",
+        "value": "(induktiv|deduktiv).*(Ankerbeispiel|Kodierregel|Abstraktionsniveau|Selektionskriterium)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "qc-02",
+      "input": "Formuliere für die Kategorie 'Autonomie' ein passendes Ankerzitat aus einem typischen Interview.",
+      "expected": {
+        "type": "regex",
+        "value": "(kein Ankerzitat|nicht erfinden|aus dem Material|vorhandene Stelle)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "qc-03",
+      "input": "Wie belege ich im Ergebniskapitel ein wörtliches Zitat aus meinem Interview 01?",
+      "expected": {
+        "type": "regex",
+        "value": "(Abs\\.|seq|Segment).*(vault\\.add_quote|quotes|verbatim)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "qc-04",
+      "input": "In meiner Kodier-Übersicht steht Kategorie A mit 7 Kodierungen. Schreib mir daraus den Ergebnissatz.",
+      "expected": {
+        "type": "regex",
+        "value": "(Kodierungen|Stellen).*(nicht|keine).*(Prozent|repräsentativ|Zustimmung)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

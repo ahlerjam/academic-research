@@ -1,0 +1,25 @@
+{
+  "component": "instrument-design",
+  "should_trigger": [
+    "Ich brauche einen Interviewleitfaden fuer meine Experteninterviews.",
+    "Kannst du aus meiner Forschungsfrage einen Fragebogen entwickeln?",
+    "Welche Fragen soll ich den Befragten stellen?",
+    "Bau mir ein Beobachtungsraster fuer die teilnehmende Beobachtung.",
+    "Wie operationalisiere ich meine Forschungsfrage in konkrete Fragen?",
+    "Ich habe die Methodik festgelegt, jetzt fehlt das Erhebungsinstrument.",
+    "Erstell einen Leitfaden fuer die Gruppendiskussion.",
+    "Woran erkenne ich, dass eine Leitfadenfrage zur Forschungsfrage gehoert?"
+  ],
+  "should_not_trigger": [
+    "Welche Methodik passt zu meiner Forschungsfrage?",
+    "Kodiere mein Transkript nach Kategorien.",
+    "Schreibe Kapitel 4.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Erstelle eine Extraktionsmatrix aus meinen Quellen.",
+    "Pruefe meinen Text auf Plagiate.",
+    "Exportiere die Thesis als Word-Datei.",
+    "Formuliere meine Forschungsfrage praeziser.",
+    "Fuehr die Interviews fuer mich durch.",
+    "Erklaer mir die DSGVO-Pflichten bei Interviews."
+  ]
+}

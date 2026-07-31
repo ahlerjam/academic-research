@@ -67,6 +67,9 @@ def test_create_structure_stub_mode(tmp_path, monkeypatch):
     assert (tmp_path / "kapitel" / ".gitkeep").exists()
     assert (tmp_path / "literatur" / ".gitkeep").exists()
     assert (tmp_path / "pdfs" / ".gitkeep").exists()
+    # Issue #473: eigenes Erhebungsmaterial braucht einen eigenen Ort —
+    # Transkripte gehoeren nicht nach literatur/.
+    assert (tmp_path / "empirie" / ".gitkeep").exists()
 
 
 def test_create_structure_skips_existing(tmp_path, monkeypatch):

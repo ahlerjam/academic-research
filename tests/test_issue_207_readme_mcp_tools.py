@@ -30,14 +30,14 @@ def _readme_text() -> str:
 
 
 def test_registered_tool_count_is_stable() -> None:
-    """Sanity-Check: server.py registriert genau 37 MCP-Tools (Drift-Anker).
+    """Sanity-Check: server.py registriert genau 41 MCP-Tools (Drift-Anker).
 
-    Erhoeht sich, wenn neue @mcp.tool dazukommen (zuletzt +3 via #462:
-    vault.add_note/find_notes/search_notes).
+    Erhoeht sich, wenn neue @mcp.tool dazukommen (zuletzt +4 via #473:
+    vault.add_transcript_segment/list_transcript_segments/add_coding/list_codings).
     Bei Aenderung: README-Tabellen UND diese Zahl gemeinsam aktualisieren.
     """
     tools = _registered_tools()
-    assert len(tools) == 37, f"Erwartet 37 registrierte @mcp.tool, gefunden {len(tools)}: {tools}"
+    assert len(tools) == 41, f"Erwartet 41 registrierte @mcp.tool, gefunden {len(tools)}: {tools}"
 
 
 def test_every_registered_tool_documented_in_readme() -> None:
