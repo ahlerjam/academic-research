@@ -97,22 +97,43 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 ```json
 {
   "paper_id": "<sanitized aus Schritt 2>",
-  "csl_json": "<JSON-String: {\"type\": \"book\"} — bei vorhandenem result.edition zusaetzlich das Feld \"edition\": \"<result.edition>\" ergaenzen>",
+  "csl_json": "<JSON-String: {\"type\": \"book\"} — bei vorhandenem result.edition die drei unten beschriebenen Felder issued/publisher/edition daraus ableiten und ergaenzen>",
   "pdf_path": "<file_path>",
   "isbn": "<identifier_value, falls identifier_type == isbn, sonst weglassen>",
   "doi": "<identifier_value, falls identifier_type == doi, sonst weglassen>"
 }
 ```
 
-   `csl_json` traegt **ausschliesslich** das von book-fetcher gemeldete
-   `edition`-Feld (Jahr/Ausgabe/Verlag DIESES Digitalisats — siehe
-   `agents/book-fetcher.md`/`agents/hathitrust-fetcher.md` etc.). Fehlt
-   `result.edition` (z. B. bei einem Verlags-Treffer ohne dieses Feld), das
-   Schluessel-Wert-Paar `"edition"` ganz weglassen — NIE einen Platzhalter
-   oder eine aus `identifier_value` abgeleitete Angabe erfinden. Ein
-   `title`-Feld fehlt hier bewusst noch: kein Subagent liefert bislang einen
-   Titel aus der Quelle selbst — separater, vorbestehender Koordinationspunkt,
-   nicht Teil von #450.
+   `result.edition` (von book-fetcher gemeldet, Freitext "Jahr/Ausgabe/Verlag
+   DIESES Digitalisats" — siehe `agents/book-fetcher.md`/
+   `agents/hathitrust-fetcher.md` etc.) NICHT unveraendert als Freitext-Blob
+   in ein einzelnes CSL-Feld kopieren — der `latex-export`-Skill
+   (`skills/latex-export/scripts/build_bib.py`) liest das Jahr ausschliesslich
+   aus `csl_json.issued["date-parts"]`, nicht aus `edition`. Stattdessen
+   `result.edition` in `csl_json` zerlegen:
+
+   - **Jahr:** die letzte 4-stellige Zahl (1000–2999) im String → nach
+     `csl_json.issued = {"date-parts": [[<Jahr>]]}`.
+   - **Verlag:** der Text zwischen einem fuehrenden Ort/Doppelpunkt und dem
+     Jahr (z. B. "Printed for T. Egerton" aus
+     "London : Printed for T. Egerton, 1813", oder "Verlag der
+     Dieterichschen Buchhandlung" aus "Göttingen : Verlag der
+     Dieterichschen Buchhandlung, 1864") → nach `csl_json.publisher`.
+   - **Auflage:** nur eine tatsaechliche Ausgabebezeichnung (z. B. "3rd ed.",
+     "2. Aufl.") → nach `csl_json.edition`. Bei HathiTrust/Internet
+     Archive/MDZ fehlt eine solche Angabe im bisher beobachteten Format meist
+     vollstaendig — dann `"edition"` ganz weglassen, NIE Jahr oder Verlag
+     dort hineinschreiben.
+
+   Laesst sich in `result.edition` keine 4-stellige Zahl finden, NICHT raten:
+   den vollen String unveraendert nach `csl_json.edition` uebernehmen
+   (Fallback) und `issued`/`publisher` weglassen. Fehlt `result.edition`
+   komplett (z. B. bei einem Verlags-Treffer ohne dieses Feld), alle drei
+   Schluessel weglassen — NIE einen Platzhalter oder eine aus
+   `identifier_value` abgeleitete Angabe erfinden. Ein `title`-Feld fehlt
+   hier bewusst noch: kein Subagent liefert bislang einen Titel aus der
+   Quelle selbst — separater, vorbestehender Koordinationspunkt, nicht Teil
+   von #450.
 3. Erstelle oder appende folgenden Block an `./literature_state.md`
    (Write-Tool, append-Modus; erstelle Datei falls nicht vorhanden):
 

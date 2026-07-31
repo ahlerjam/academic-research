@@ -157,49 +157,60 @@ class TestOutputSchema:
             f"{context}: source_subagent='{obj['source_subagent']}' nicht in AGENT_NAMES"
         )
 
-    def test_success_output_has_pdf_path_and_edition(self):
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_success_output_has_pdf_path_and_edition(self, agent_name):
         """success-Output muss pdf_path UND edition enthalten (AC4: Ausgabe-/
-        Jahresangabe des Digitalisats, nicht des Originals)."""
-        output = {
-            "status": "success",
-            "source_subagent": "hathitrust-fetcher",
-            "pdf_path": "/tmp/book.pdf",
-            "edition": "1911, Full view, Cambridge University Press",
-        }
-        self._validate_output(output, "success")
-        assert output["pdf_path"], "pdf_path darf nicht leer sein"
-        assert "edition" in output, "success-Output braucht edition-Feld (AC4)"
-        assert output["edition"], "edition darf nicht leer sein"
-
-    def test_metadata_only_output_has_access_level_reason(self):
-        """metadata_only-Output muss url UND einen reason mit dem festen
-        Access-Level-Vokabular ('Zugriffsstufe: ...') tragen (AC2)."""
-        output = {
-            "status": "metadata_only",
-            "source_subagent": "internetarchive-fetcher",
-            "url": "https://archive.org/details/example",
-            "reason": "Zugriffsstufe: Borrow/CDL — kein PDF-Export",
-        }
-        self._validate_output(output, "metadata_only")
-        assert "url" in output, "metadata_only-Output braucht url"
-        assert ACCESS_LEVEL_MARKER in output["reason"], (
-            "metadata_only-reason muss das Access-Level-Vokabular "
-            f"'{ACCESS_LEVEL_MARKER}: ...' enthalten (AC2)"
+        Jahresangabe des Digitalisats, nicht des Originals). Geprueft wird der
+        tatsaechliche Output-Schema-Block der Agent-Datei, nicht ein Literal —
+        loescht man `edition` aus dem Erfolgs-JSON, muss dieser Test rot
+        werden."""
+        content = (AGENTS_DIR / f"{agent_name}.md").read_text(encoding="utf-8")
+        success_block_match = re.search(r'\{\s*"status":\s*"success".*?\n\}', content, re.DOTALL)
+        assert success_block_match, (
+            f"{agent_name}.md: kein success-Output-Block (JSON mit "
+            '\'"status": "success"\') im Output-Schema gefunden'
+        )
+        success_block = success_block_match.group(0)
+        assert '"pdf_path"' in success_block, (
+            f"{agent_name}.md: success-Block enthaelt kein pdf_path-Feld"
+        )
+        assert '"edition"' in success_block, (
+            f"{agent_name}.md: success-Block enthaelt kein edition-Feld (AC4)"
         )
 
-    def test_metadata_only_rate_limit_is_diagnosed_not_no_match(self):
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_metadata_only_output_has_access_level_reason(self, agent_name):
+        """metadata_only-Output muss den festen Access-Level-Marker
+        ('Zugriffsstufe: ...') im reason-Feld tragen (AC2). Geprueft wird der
+        Agent-Body selbst — loescht man den Marker, muss dieser Test rot
+        werden."""
+        _, body = parse_frontmatter(AGENTS_DIR / f"{agent_name}.md")
+        assert "metadata_only" in body, f"{agent_name}.md: kein metadata_only-Status dokumentiert"
+        assert f'"{ACCESS_LEVEL_MARKER}:' in body, (
+            f"{agent_name}.md: kein reason mit dem Access-Level-Vokabular "
+            f"'{ACCESS_LEVEL_MARKER}: ...' im Body gefunden (AC2)"
+        )
+
+    @pytest.mark.parametrize("agent_name", AGENT_NAMES)
+    def test_metadata_only_rate_limit_is_diagnosed_not_no_match(self, agent_name):
         """Rate-Limit (HTTP 429) muss als metadata_only mit Statuscode + Retry-
         Hinweis gemeldet werden, nicht als no_match fehlgedeutet (Issue-Hinweis
-        Operator 2026-07-30, ex-PR #498)."""
-        output = {
-            "status": "metadata_only",
-            "source_subagent": "hathitrust-fetcher",
-            "url": "https://catalog.hathitrust.org/...",
-            "reason": "HTTP 429 — Rate-Limit, Retry empfohlen nach Wartezeit",
-        }
-        self._validate_output(output, "metadata_only (rate-limit)")
-        assert "429" in output["reason"]
-        assert "retry" in output["reason"].lower() or "wartezeit" in output["reason"].lower()
+        Operator 2026-07-30, ex-PR #498). Geprueft wird die Regel im
+        Agent-Body — loescht man die 429-Regel, muss dieser Test rot werden."""
+        _, body = parse_frontmatter(AGENTS_DIR / f"{agent_name}.md")
+        assert "429" in body, f"{agent_name}.md: keine HTTP-429-Regel im Body gefunden"
+        rule_line_match = re.search(r"^.*429.*$", body, re.MULTILINE)
+        assert rule_line_match, f"{agent_name}.md: keine Zeile mit '429' gefunden"
+        # Die 429-Regel selbst muss den no_match-Fehldeutungs-Fall explizit
+        # ausschliessen (nicht nur irgendwo im Dokument 'no_match' erwaehnen).
+        rule_context_match = re.search(r"^.*429.*\n(?:.*\n){0,2}", body, re.MULTILINE)
+        rule_context = rule_context_match.group(0) if rule_context_match else ""
+        assert "no_match" in rule_context, (
+            f"{agent_name}.md: die 429-Regel grenzt sich nicht explizit gegen no_match ab"
+        )
+        assert "retry" in body.lower() or "wartezeit" in body.lower(), (
+            f"{agent_name}.md: kein Retry-/Wartezeit-Hinweis fuer den 429-Fall"
+        )
 
     def test_captcha_output(self):
         output = {
