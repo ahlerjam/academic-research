@@ -240,3 +240,52 @@ def test_procedure_is_recorded_as_decision(vault, tmp_path):
     assert "Handlungsroutinen im Arbeitsalltag" in (
         decisions[0]["text"] + (decisions[0]["rationale"] or "")
     )
+
+
+# ---------------------------------------------------------------------------
+# Bestands-Vault: Lesepfade des Skripts duerfen nicht am fehlenden Schema
+# scheitern (P1-Regression aus dem Review zu PR #561)
+# ---------------------------------------------------------------------------
+
+
+def _legacy_vault_without_empirical_tables(tmp_path) -> str:
+    """Vault, wie er vor #473 angelegt und seither nur gelesen wurde.
+
+    ``papers`` und ``notes_fts`` sind vorhanden -- die beiden Tabellen, an
+    denen ``server._ensure_schema_for_read()`` frueher allein festmachte --,
+    ``transcript_segments``/``codings`` fehlen.
+    """
+    import sqlite3
+
+    db_path = str(tmp_path / "legacy.db")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "CREATE TABLE papers ("
+            "  paper_id TEXT PRIMARY KEY,"
+            "  type TEXT NOT NULL DEFAULT 'article-journal',"
+            "  csl_json TEXT NOT NULL,"
+            "  added_at INTEGER NOT NULL,"
+            "  updated_at INTEGER NOT NULL)"
+        )
+        conn.execute("CREATE VIRTUAL TABLE notes_fts USING fts5(note_id, text)")
+        conn.commit()
+    finally:
+        conn.close()
+    return db_path
+
+
+def test_overview_on_legacy_vault_reports_empty_instead_of_crashing(tmp_path):
+    """``overview`` ist der in SKILL.md dokumentierte Einstieg — auf einem
+    Bestands-Vault endete er in ``sqlite3.OperationalError: no such table:
+    codings``, statt die vorgesehene Leermeldung auszugeben. Der Lesepfad
+    ``collect_categories()`` ging direkt auf ``VaultDB``, also am Guard vorbei,
+    den ``server.list_codings()`` mitbringt.
+    """
+    mod = _load_module()
+    db_path = _legacy_vault_without_empirical_tables(tmp_path)
+
+    assert mod.collect_categories(db_path, paper_id=None) == []
+
+    report = mod.render_overview(db_path=db_path, paper_id=None)
+    assert "Noch keine Kodierungen" in report

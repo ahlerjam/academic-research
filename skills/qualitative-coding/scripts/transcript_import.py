@@ -39,6 +39,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from academic_vault import server as vault_server  # noqa: E402
 from academic_vault.db import VaultDB  # noqa: E402
 
 # Timecode am Absatzanfang: [00:12:35] / (12:35) / [12:35]
@@ -172,10 +173,16 @@ def collect_categories(db_path: str, paper_id: str | None = None) -> list[dict]:
         alphabetisch nach Kategorie. ``anchor`` ist ``None``, solange kein
         Ankerzitat im Vault haengt -- es wird keines erfunden.
     """
-    db = VaultDB(db_path)
+    # Bewusst ueber die server-Schicht statt direkt ueber VaultDB: dort haengt
+    # `_ensure_schema_for_read()`, das die Empirie-Tabellen auf einem vor #473
+    # angelegten Vault einmalig nachzieht. Direkt auf VaultDB gelesen, endete
+    # `overview` dort in `sqlite3.OperationalError: no such table: codings`
+    # statt in der Leermeldung (Review-P1 zu PR #561). Ein `init_schema()` an
+    # dieser Stelle waere die falsche Abhilfe -- es macht aus dem Lesepfad
+    # einen DDL-Schreibvorgang, genau das, was der Guard vermeidet.
     grouped: dict[str, dict] = {}
 
-    for coding in db.list_codings(paper_id=paper_id):
+    for coding in vault_server.list_codings(db_path, paper_id=paper_id):
         entry = grouped.setdefault(
             coding["category"],
             {
@@ -192,7 +199,7 @@ def collect_categories(db_path: str, paper_id: str | None = None) -> list[dict]:
         if entry["rule"] is None and coding["memo"]:
             entry["rule"] = coding["memo"]
         if entry["anchor"] is None and coding["quote_id"]:
-            quote = db.get_quote(coding["quote_id"])
+            quote = vault_server.get_quote(db_path, coding["quote_id"])
             if quote is not None:
                 entry["anchor"] = {
                     "quote_id": quote["quote_id"],
