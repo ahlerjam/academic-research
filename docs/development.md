@@ -42,7 +42,8 @@ Doku nachgezogen ist.
 uv run ruff check .           # Linter
 uv run ruff format --check .  # Formatter (CI-blockierend)
 uv run mypy                   # Typprüfung (Pfade aus pyproject.toml)
-node --check hooks/*.mjs      # Hook-Syntax
+bash scripts/dev/check-mjs-syntax.sh   # ESM-Syntax, alle getrackten *.mjs
+bash scripts/dev/check-shell-syntax.sh # Shell-Syntax, alle getrackten *.sh
 ```
 
 Konfiguration zentral in `pyproject.toml` (`[tool.ruff]`, `[tool.mypy]`).

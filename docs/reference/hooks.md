@@ -23,10 +23,14 @@ Das sind **5 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
 Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
 `PreToolUse` ruft zwei Skripte nacheinander auf.
 
-> **Nicht verdrahtet:** `hooks/vault-bridge.mjs` ist **kein** Hook, sondern ein
+> **Nicht verdrahtet:** `hooks/lib/vault-bridge.mjs` ist **kein** Hook, sondern ein
 > gemeinsames Modul, das die beiden Vault-Hooks importieren (DB-Pfad-Auflösung und
-> Interpreter-Kaskade). Es liegt flach in `hooks/`, damit das CI-Syntax-Gate
-> (`node --check hooks/*.mjs`) es miterfasst.
+> Interpreter-Kaskade). Es liegt bei den übrigen importierten Modulen in
+> `hooks/lib/` (#542); flach in `hooks/` liegen ausschließlich die in
+> `hooks/hooks.json` registrierten Hooks. Der CI-Syntax-Gate erfasst `hooks/lib/`
+> mit: er läuft seit #542 über alle getrackten `*.mjs`
+> (`bash scripts/dev/check-mjs-syntax.sh`) statt über den nicht-rekursiven Glob
+> `hooks/*.mjs`.
 
 ### Klammer-Zitat-Validierung
 
@@ -274,7 +278,7 @@ ohne Gate immer mit.
 
 `mid-session-reinforcement.mjs` liest die Decisions über einen Python-Subprozess,
 `post-tool-use-decisions.mjs` schreibt sie über denselben Weg; die Kaskade steht einmal in
-`hooks/vault-bridge.mjs` (Node hat vor 22.5 kein `node:sqlite`, die CI pinnt Node 20 —
+`hooks/lib/vault-bridge.mjs` (Node hat vor 22.5 kein `node:sqlite`, die CI pinnt Node 20 —
 ein direkter DB-Zugriff aus dem Hook scheidet aus). Hooks
 erben in einer echten Session die `PATH` des Nutzers — dort steht meist das System-Python
 (macOS: `/usr/bin/python3` == 3.9), das `academic_vault` mangels PEP-604-Syntax nicht
@@ -332,7 +336,7 @@ Eigenschaften der Auto-Einträge:
   (Material-Passport-Lock) oder findet sich kein brauchbarer Python-Interpreter, bleibt
   es bei einer Meldung auf stderr; der Hook beendet sich immer mit Exit 0 und legt nie
   selbst eine DB an. Schreib- und Lesepfad lösen den DB-Pfad über dasselbe Modul
-  `hooks/vault-bridge.mjs` auf, damit sie nicht erneut auseinanderlaufen können.
+  `hooks/lib/vault-bridge.mjs` auf, damit sie nicht erneut auseinanderlaufen können.
 
 ## Privacy/Logs
 
