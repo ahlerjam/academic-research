@@ -10,8 +10,6 @@ from pathlib import Path
 from .db import VaultDB
 
 _TTL = 3600  # 1 Stunde in Sekunden
-_AVG_BASE64_TOKENS_PER_PDF = 80_000  # Heuristik (Audit §4.1: 60–100k)
-_FILE_ID_OVERHEAD = 20  # Token fuer file_id-Referenz
 
 
 class FilesAPIClient:
@@ -76,10 +74,11 @@ class FilesAPIClient:
 
     @staticmethod
     def get_stats(db_path: str) -> dict:
-        """Gibt Statistik-Dict zurueck: paper_count, quote_count, cached_files,
-        token_savings_estimate.
+        """Gibt Statistik-Dict zurueck: paper_count, quote_count, cached_files.
 
-        token_savings_estimate = cached_files * (AVG_BASE64_TOKENS_PER_PDF - FILE_ID_OVERHEAD)
+        Keine Token-Ersparnis-Schaetzung (#534): es gibt keinen Messpfad fuer
+        tatsaechliche Token-Zahlen aus der Anthropic-API, jede solche Zahl waere
+        eine unbelegte Phantomgroesse (Honesty-Linie #387/#453).
         """
         now = int(time.time())
         conn = VaultDB._open(db_path)
@@ -91,10 +90,8 @@ class FilesAPIClient:
         ).fetchone()[0]
         conn.close()
 
-        token_savings_estimate = cached_files * (_AVG_BASE64_TOKENS_PER_PDF - _FILE_ID_OVERHEAD)
         return {
             "paper_count": paper_count,
             "quote_count": quote_count,
             "cached_files": cached_files,
-            "token_savings_estimate": token_savings_estimate,
         }

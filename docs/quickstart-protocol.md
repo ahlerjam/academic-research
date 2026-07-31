@@ -131,7 +131,7 @@ $ vault.add_paper('devops-gov-01', csl_json, doi=...)
 -> ok
 
 $ vault.stats()
--> {"paper_count": 2, "quote_count": 1, "cached_files": 0, "token_savings_estimate": 0}
+-> {"paper_count": 2, "quote_count": 1, "cached_files": 0}
 
 $ vault.search('Corporate', k=3)
    - devops-gov-01  (score -0.0000)
