@@ -6,7 +6,7 @@ description: >
   pickup_required (Fernleihe-Eintrag in ~/.academic-research/pickup_queue.json
   angelegt), captcha (Screenshot anzeigen, manuelle Entscheidung abwarten),
   no_match (kein Treffer -> ebenfalls pickup_required-Eintrag).
-allowed-tools: Read, Write, Agent(book-fetcher)
+allowed-tools: Read, Write, Agent(book-fetcher), mcp__academic-vault__vault_add_paper
 argument-hint: <isbn|doi|url|titel>
 ---
 
@@ -89,7 +89,31 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 #### Bei `success`
 
 1. Lese `file_path` aus dem Ergebnis.
-2. Erstelle oder appende folgenden Block an `./literature_state.md`
+2. Trage den Fund im Vault ein — rufe `mcp__academic-vault__vault_add_paper`
+   auf (Issue #450 AC4: die korrekte Ausgabe-/Jahresangabe des Digitalisats
+   muss im Vault landen, nicht nur im Agent-Output des book-fetcher stehen
+   bleiben):
+
+```json
+{
+  "paper_id": "<sanitized aus Schritt 2>",
+  "csl_json": "<JSON-String: {\"type\": \"book\"} — bei vorhandenem result.edition zusaetzlich das Feld \"edition\": \"<result.edition>\" ergaenzen>",
+  "pdf_path": "<file_path>",
+  "isbn": "<identifier_value, falls identifier_type == isbn, sonst weglassen>",
+  "doi": "<identifier_value, falls identifier_type == doi, sonst weglassen>"
+}
+```
+
+   `csl_json` traegt **ausschliesslich** das von book-fetcher gemeldete
+   `edition`-Feld (Jahr/Ausgabe/Verlag DIESES Digitalisats — siehe
+   `agents/book-fetcher.md`/`agents/hathitrust-fetcher.md` etc.). Fehlt
+   `result.edition` (z. B. bei einem Verlags-Treffer ohne dieses Feld), das
+   Schluessel-Wert-Paar `"edition"` ganz weglassen — NIE einen Platzhalter
+   oder eine aus `identifier_value` abgeleitete Angabe erfinden. Ein
+   `title`-Feld fehlt hier bewusst noch: kein Subagent liefert bislang einen
+   Titel aus der Quelle selbst — separater, vorbestehender Koordinationspunkt,
+   nicht Teil von #450.
+3. Erstelle oder appende folgenden Block an `./literature_state.md`
    (Write-Tool, append-Modus; erstelle Datei falls nicht vorhanden):
 
 ```markdown
@@ -106,12 +130,14 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 `literature_state.md` ein, weil `chapter-writer` und `citation-extraction`
 diese Datei als Kontext lesen duerfen — der Kanal darf Zitierweise und
 Textbehandlung nicht beeinflussen. Die Provenienz bleibt vollstaendig im
-Vault erhalten (`vault.get_paper()`, `vault.list_papers_by_provenance()`).
+Vault erhalten (`vault.get_paper()`, `vault.list_papers_by_provenance()`) —
+ueber den `vault_add_paper`-Aufruf aus Schritt 2 tatsaechlich geschrieben.
 
-3. Ausgabe an User:
+4. Ausgabe an User:
 ```
 PDF heruntergeladen: <file_path>
   Quelle: <source>
+  Im Vault erfasst (paper_id: <sanitized>).
   In literature_state.md aufgenommen.
 ```
 

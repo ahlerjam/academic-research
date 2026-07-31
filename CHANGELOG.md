@@ -43,11 +43,17 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   (3 Cases, je 1 bekannter gemeinfreier Testtitel pro Archiv, Status
   `structural` in `docs/evals/STRATEGY.md` — netzabhängige Live-Downloads,
   gleiche Begründung wie `oa-fetchers`). Agent-Zähler 24 → 27
-  (`docs/reference/agents.md`, `AGENTS.md`, `README.md`). Vault-Wiring von
-  `edition` bis zu einem tatsächlichen `vault.add_paper()`-Call ist ein
-  offener Koordinationspunkt (weder `book-fetcher` noch `commands/fetch.md`
-  rufen `vault.add_paper()` heute überhaupt auf) und bewusst außerhalb dieses
-  Issues geliefert als Doku-/Feld-Vertrag auf Agent-Output-Ebene.
+  (`docs/reference/agents.md`, `AGENTS.md`, `README.md`). Fixrunde: das
+  `edition`-Feld reicht jetzt bis in den Vault durch — `book-fetcher.md`
+  übernimmt es aus der OA-Subagenten-Antwort unverändert in sein eigenes
+  Output-Schema, und `commands/fetch.md` ruft bei `status: success`
+  tatsächlich `mcp__academic-vault__vault_add_paper` auf (`csl_json` trägt
+  `edition` nur, wenn die Quelle es meldet — nie ein erfundener Platzhalter).
+  Geprüft in `tests/test_issue_450_vault_wiring.py`, inkl. echtem
+  `add_paper()`/`get_paper()`-Roundtrip gegen eine reale `VaultDB` (AC4). Ein
+  `title`-Feld fehlt in der Kette weiterhin — kein Subagent liefert bislang
+  einen Titel aus der Quelle selbst; das bleibt ein offener, größerer
+  Koordinationspunkt außerhalb von #450.
 
 - **Neuer Skill `latex-layout-auditor` (#392):** Read-only-Prüfung eines
   `latex-export`-Outputs auf LaTeX-spezifische Layout-Fehler, ergänzend zu

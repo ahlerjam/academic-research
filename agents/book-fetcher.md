@@ -117,6 +117,15 @@ Payload fuer jeden OA-Subagenten:
 - `status: metadata_only` -- Merken (`oa_had_metadata_only = true`), naechsten OA-Subagenten versuchen
 - `status: no_match` -- Naechsten OA-Subagenten versuchen
 
+**edition-Feld durchreichen (Issue #450 AC4):** Enthaelt die Subagenten-Antwort
+bei `status: success` ein `edition`-Feld (aktuell melden das
+`hathitrust-fetcher`, `internetarchive-fetcher` und `mdz-fetcher`), uebernimm
+es **unveraendert** in den Master-Output (siehe Output-Schema unten). Fehlt es
+in der Subagenten-Antwort, lass das Feld im Master-Output komplett weg --
+NIE selbst ein `edition`-Feld generieren oder aus der Eingabe-ISBN/-Titel
+ableiten. Dasselbe gilt fuer die Verlags-Subagenten in Schritt 4, sofern
+sie ein `edition`-Feld melden.
+
 ---
 
 ## Schritt 4: Verlags-Subagenten (nur wenn OA metadata_only + lizenziert)
@@ -231,6 +240,7 @@ nicht gesondert weiter, es ist ueber `vault.get_paper()` abfragbar.
   "status": "success | pickup_required | captcha | no_match",
   "source": "<subagent-name der den Endstatus lieferte, inkl. scihub-fetcher>",
   "file_path": "<absoluter PDF-Pfad, nur bei success>",
+  "edition": "<optional, nur bei success: unveraendert aus dem edition-Feld der Subagenten-Antwort uebernommen, sonst weggelassen — NIE selbst generiert (Issue #450 AC4)>",
   "reason": "<optionale Beschreibung>",
   "tries": [
     {"subagent": "<name>", "status": "<status>", "ts": "<ISO-8601>"}
