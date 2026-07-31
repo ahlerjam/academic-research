@@ -5,11 +5,15 @@
   "commands": {
     "setup": "uv sync --extra dev",
     "test": "uv run pytest tests/",
-    "lint": "uv run ruff format --check .",
-    "typecheck": "",
+    "lint": "uv run ruff check . && uv run ruff format --check .",
+    "typecheck": "uv run mypy",
     "smoke": ""
   },
-  "extraGates": [],
+  "extraGates": [
+    "bash scripts/dev/check-mjs-syntax.sh",
+    "bash scripts/dev/test-pretooluse-blocker.sh",
+    "bash scripts/dev/check-shell-syntax.sh"
+  ],
   "protectedAreas": ["vault", "hooks", "security", "ci"],
   "areas": ["vault", "skills", "agents", "commands", "hooks", "scripts", "evals", "ci", "docs", "security"],
   "parallelism": 3,
