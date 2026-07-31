@@ -85,7 +85,8 @@ Recherche-Query zu ermitteln. Für jeden paper_id:
 2. Für detaillierte Zitat-Metadaten: `vault.get_quote(quote_id)`
 
 Sind für ein Paper noch keine Vault-Zitate vorhanden (leere Liste), den
-`quote-extractor`-Agent spawnen, um Zitate aus dem PDF zu ziehen und via
+`quote-extractor`-Agent spawnen, um Zitate aus dem PDF zu ziehen und — sofern kein
+PDF-Mismatch vorliegt (siehe PDF-Mismatch-Gate in Schritt 3) — via
 `vault.add_quote()` zu persistieren. PDFs werden via `vault.ensure_file(paper_id)`
 als `file_id` übergeben — kein direktes `pdf_path` im Context.
 
@@ -121,9 +122,13 @@ Bei `possible_pdf_mismatch: true` vor jeder weiteren Persistenz
 `AskUserQuestion` stellen — kein reines Flaggen für späteres Review:
 
 - **"Fortfahren — Zitate trotz Mismatch übernehmen"** → Agent-Re-Invoke mit
-  `mismatch_override: true`, dann `vault.add_quote()`
-- **"Paper überspringen"** → `vault.add_excluded_source(paper_id,
-  reason="possible_pdf_mismatch")`, kein Persist, Paper gilt als ausgelassen
+  `mismatch_override: true`; der Agent persistiert dann selbst via
+  `vault.add_quote()` (kein zusätzlicher Aufruf durch den Skill)
+- **"Paper überspringen"** → Nicht in `excluded_sources` schreiben (diese
+  Tabelle ist für dauerhaften methodischen Ausschluss reserviert, nicht für
+  transiente Fehler). Stattdessen sessionlokal als "Ausgelassen" markieren
+  (Schritt 4 trennt ohnehin Erfolgreich/Ausgelassen im Report) — kein Persist,
+  Paper taucht in AC3 unter "Ausgelassen" auf
 - **"PDF-Zuordnung prüfen"** → pausieren, kein Persist, User klärt die
   Zuordnung (z. B. `vault.update_pdf_path`)
 
