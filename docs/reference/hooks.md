@@ -10,7 +10,7 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 |-------|-----------|--------------|
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `verbatim-guard.mjs` | Blockt Kapitel-Writes mit nicht-verifizierten Zitaten |
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `claim-drift-guard.mjs` | Warnt, wenn eine Überarbeitung die Aussage um ein belegtes Zitat ändert, ohne den Beleg anzupassen |
-| `PostToolUse` (`Write\|Edit\|MultiEdit`) | `post-tool-use-decisions.mjs` | Decision-Log: jede `.md`-Änderung wird protokolliert |
+| `PostToolUse` (`Write\|Edit\|MultiEdit`) | `post-tool-use-decisions.mjs` | Decision-Log: jede `.md`-Änderung wird im Vault protokolliert |
 | `PreCompact` | `pre-compact.mjs` | Snapshot-Backup vor Claude-Compaction |
 | `UserPromptSubmit` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
 | `SessionStart` (kein Matcher) | *(Inline-Bash)* | Prüft, ob `~/.academic-research/venv` existiert und die Kernpakete importierbar sind |
@@ -22,6 +22,11 @@ Das sind **5 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
 **2 Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
 Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
 `PreToolUse` ruft zwei Skripte nacheinander auf.
+
+> **Nicht verdrahtet:** `hooks/vault-bridge.mjs` ist **kein** Hook, sondern ein
+> gemeinsames Modul, das die beiden Vault-Hooks importieren (DB-Pfad-Auflösung und
+> Interpreter-Kaskade). Es liegt flach in `hooks/`, damit das CI-Syntax-Gate
+> (`node --check hooks/*.mjs`) es miterfasst.
 
 ### Klammer-Zitat-Validierung
 
@@ -267,7 +272,10 @@ ohne Gate immer mit.
 
 ### Python-Interpreter für den Vault-Lookup
 
-`mid-session-reinforcement.mjs` liest die Decisions über einen Python-Subprozess. Hooks
+`mid-session-reinforcement.mjs` liest die Decisions über einen Python-Subprozess,
+`post-tool-use-decisions.mjs` schreibt sie über denselben Weg; die Kaskade steht einmal in
+`hooks/vault-bridge.mjs` (Node hat vor 22.5 kein `node:sqlite`, die CI pinnt Node 20 —
+ein direkter DB-Zugriff aus dem Hook scheidet aus). Hooks
 erben in einer echten Session die `PATH` des Nutzers — dort steht meist das System-Python
 (macOS: `/usr/bin/python3` == 3.9), das `academic_vault` mangels PEP-604-Syntax nicht
 importieren kann. Der Hook probiert daher in dieser Reihenfolge:
@@ -298,20 +306,50 @@ Lookups, entfällt die Erinnerung dieser Runde — die nächste kommt regulär n
 > aufgerufen wird (`./hooks/lib/onboard-project-uni-prompt.sh --profile tum`). Frühere
 > Fassungen dieser Dokumentation führten es fälschlich als `SessionStart`-Hook.
 
+### Decision-Log: eine Senke, zwei Hooks
+
+`post-tool-use-decisions.mjs` protokolliert jede `.md`-Änderung im Projekt in der
+**Vault-Tabelle `decisions`** — genau der Tabelle, die `mid-session-reinforcement.mjs`
+in der nächsten Session vorliest. Bis Issue #527 schrieb der Hook stattdessen in die
+Textdatei `~/.academic-research/decisions.log`, während das Reinforcement SQLite las:
+zwei Speicherorte, die nie zusammenfanden, und ein Feature, das faktisch tot war.
+
+Eigenschaften der Auto-Einträge:
+
+- **Feste Kategorie `file-change`.** Datei-Änderungen sind keine Entscheidungen. Das
+  Reinforcement gibt sie deshalb in einem eigenen Block aus (bis zu 3), getrennt von den
+  manuell über `vault.add_decision` gepflegten Decisions (bis zu 5) — sonst würden die
+  letzten Writes jede echte Entscheidung aus dem Fenster drängen.
+- **Höchstens ein aktiver Eintrag pro Datei.** Gleicher Inhalts-Hash ⇒ kein neuer Eintrag;
+  geänderter Hash ⇒ neuer Eintrag, der den bisherigen per `superseded_by` ablöst.
+  Begrenzt ist damit die Menge der *aktiven* Einträge — abgelöste bleiben als Historie
+  in der Tabelle stehen und werden nicht gelöscht.
+- **Kein Bestandteil des Material-Passports.** `vault.export_material_passport` nimmt
+  nur die methodischen Decisions in `decisions_snapshot` auf und filtert `file-change`
+  heraus. Sonst würde der `passport_hash` bei jeder Kapitel-Änderung wandern, obwohl
+  sich am Material nichts geändert hat (#380).
+- **Fail-open.** Existiert keine Vault-DB, ist der Vault gesperrt
+  (Material-Passport-Lock) oder findet sich kein brauchbarer Python-Interpreter, bleibt
+  es bei einer Meldung auf stderr; der Hook beendet sich immer mit Exit 0 und legt nie
+  selbst eine DB an. Schreib- und Lesepfad lösen den DB-Pfad über dasselbe Modul
+  `hooks/vault-bridge.mjs` auf, damit sie nicht erneut auseinanderlaufen können.
+
 ## Privacy/Logs
 
-Der `post-tool-use-decisions.mjs`-Hook protokolliert jede `.md`-Änderung im Projekt nach
-`~/.academic-research/decisions.log` (Pfad überschreibbar via `ACADEMIC_DECISIONS_LOG`).
-Datenschutz-Eigenschaften:
+In der Vault-Tabelle landen ausschließlich **relativer Pfad, Tool-Name und der
+SHA-256-Hash** des geschriebenen Inhalts — kein Klartext (CWE-532, Issue #191).
+
+`~/.academic-research/decisions.log` ist seit #527 ein reines **Opt-in-Debug-Log**: Es
+entsteht nur noch, wenn `ACADEMIC_DECISIONS_LOG` auf einen Pfad zeigt; ohne die Variable
+schreibt der Hook keine Datei. Bestehende `decisions.log`-Dateien aus früheren Versionen
+sind ein reines Pfad/Hash-Journal ohne semantischen Wert und können gelöscht werden.
+Ist das Debug-Log aktiviert, gelten unverändert:
 
 - **Kein Klartext-Inhalt.** Statt eines Content-Snippets steht in jeder Zeile nur der
-  **SHA-256-Hash** des geschriebenen Inhalts (`… | Write | <pfad> | sha256=<hash>`). Damit
-  bleibt der Idempotenz-/Änderungs-Check möglich, ohne PII (z. B. Zitat-Texte,
-  Kapitelinhalte) zu leaken (CWE-532).
+  **SHA-256-Hash** des geschriebenen Inhalts (`… | Write | <pfad> | sha256=<hash>`).
 - **0600-Permissions.** Das Logfile wird mit `chmod 0600` (nur Owner liest/schreibt)
   erstellt; das Verzeichnis mit `0700`.
 - **Rotation.** Überschreitet `decisions.log` 10 MB, wird es nach `decisions.log.1`
   rotiert und ein frisches Log begonnen.
 
-Wer gar kein Decision-Log möchte, kann den Hook in `hooks/hooks.json` deaktivieren oder
-`ACADEMIC_DECISIONS_LOG` auf einen verworfenen Pfad (z. B. unter `/tmp`) setzen.
+Wer gar kein Decision-Log möchte, kann den Hook in `hooks/hooks.json` deaktivieren.

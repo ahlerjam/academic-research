@@ -63,7 +63,7 @@
     },
     "decisions_snapshot": {
       "type": "array",
-      "description": "Snapshot aller aktiven Decisions zum Zeitpunkt des Exports.",
+      "description": "Snapshot der aktiven methodischen Decisions zum Zeitpunkt des Exports. Auto-Eintraege der Kategorie 'file-change' (PostToolUse-Hook, #527) sind ausgenommen.",
       "items": {
         "type": "object",
         "required": ["decision_id", "text"],
