@@ -586,3 +586,55 @@ def test_hook_is_documented_in_hooks_reference():
     assert "4 Skript-Dateien" not in doc, (
         "Hooks-Referenz behauptet weiterhin 4 Skript-Dateien, es sind jetzt 5."
     )
+
+
+# ---------------------------------------------------------------------------
+# Issue #516: Unterordner unter kapitel/
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    ["kapitel/teil1/intro.md", "kapitel/teil1/abschnitt2/ergebnisse.md"],
+)
+def test_claim_drift_warns_on_nested_chapter_path(vault_with_quote, tmp_path, relative_path):
+    """Issue #516: Verschachtelte Kapitelpfade bleiben im Drift-Guard."""
+    project_dir = tmp_path / "projekt"
+    chapter_file = project_dir / relative_path
+    chapter_file.parent.mkdir(parents=True)
+    chapter_file.write_text(CHAPTER_OLD, encoding="utf-8")
+
+    result = run_hook(
+        edit_payload("moderaten Effekt", "starken Effekt", file_path=relative_path),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert warned(result), (
+        f"Verschachtelter Kapitelpfad {relative_path} blieb im claim-drift-guard stumm. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )
+
+
+@pytest.mark.parametrize("relative_path", ["notizen/entwurf.md", "meinkapitel/intro.md"])
+def test_claim_drift_ignores_markdown_outside_kapitel(vault_with_quote, tmp_path, relative_path):
+    """Issue #516: Die Unterordner-Erweiterung darf nicht uebergeneralisieren."""
+    project_dir = tmp_path / "projekt"
+    chapter_file = project_dir / relative_path
+    chapter_file.parent.mkdir(parents=True)
+    chapter_file.write_text(CHAPTER_OLD, encoding="utf-8")
+
+    result = run_hook(
+        edit_payload("moderaten Effekt", "starken Effekt", file_path=relative_path),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote,
+            "CLAUDE_PROJECT_DIR": str(project_dir),
+        },
+    )
+    assert result.returncode == 0
+    assert not warned(result), (
+        f"{relative_path} liegt ausserhalb der Schutzzone, wurde aber geprueft. "
+        f"stdout: {result.stdout} stderr: {result.stderr}"
+    )

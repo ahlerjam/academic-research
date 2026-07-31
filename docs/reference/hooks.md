@@ -207,7 +207,8 @@ würde auch das echte Tool scheitern — der Teil-Edit wird übersprungen.
 
 Er warnt nur, wenn alle Bedingungen zugleich gelten:
 
-1. Pfad ist eine Kapitel-/LaTeX-Datei (`kapitel/*.md`, `*.tex`) — wie beim `verbatim-guard`.
+1. Pfad ist eine Kapitel-/LaTeX-Datei (`kapitel/**/*.md` inkl. Unterordner, `*.tex`)
+   — wie beim `verbatim-guard`.
 2. Alt und Neu unterscheiden sich nach Normalisierung (Markdown-Emphase raus,
    Whitespace kollabiert) — reine Formatierungsänderungen zählen nicht.
 3. Im Fenster um die Änderung (Default 300 Zeichen, `CLAIM_DRIFT_WINDOW`) liegt ein
