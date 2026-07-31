@@ -47,8 +47,16 @@ def make_unusable_python3_path(tmp_path) -> str:
     PEP-604-Syntax gar nicht importieren kann. Der Stub scheitert wie dieses
     Interpreter-Exemplar: Exit != 0 mit Traceback auf stderr.
 
-    Der PATH enthaelt zusaetzlich das Verzeichnis von `node`, damit der Hook
-    ueberhaupt startbar bleibt.
+    Der PATH enthaelt zusaetzlich alles, was zum Starten von `node` noetig ist —
+    auch dann, wenn `node` selbst ein Shell-Shim ist (asdf/nvm/volta/mise:
+    `#!/usr/bin/env bash`, exec auf den eigentlichen Versionsmanager). Dafuer
+    wird der Stub vor das volle, unveraenderte `os.environ["PATH"]` gesetzt statt
+    eine eigene Minimal-Liste zu bauen: die reale PATH-Struktur bleibt erhalten,
+    also bleiben auch transitive Abhaengigkeiten des Shims (bash, asdf/nvm/volta
+    selbst) aufloesbar. Die Garantie "kein brauchbares python3 erreichbar" bleibt
+    davon unberuehrt, weil Standard-PATH-Auflösung (execvp/`which`) immer den
+    ersten Treffer nimmt — und das ist per Konstruktion der kaputte Stub in
+    `bin_dir`, unabhaengig davon, was weiter hinten im PATH steht.
     """
     bin_dir = tmp_path / "fakebin"
     bin_dir.mkdir()
@@ -61,10 +69,9 @@ def make_unusable_python3_path(tmp_path) -> str:
     )
     stub.chmod(0o755)
 
-    node_bin = shutil.which("node")
-    if node_bin is None:  # pragma: no cover - node ist Testvoraussetzung
+    if shutil.which("node") is None:  # pragma: no cover - node ist Testvoraussetzung
         pytest.skip("node nicht im PATH")
-    return f"{bin_dir}:{Path(node_bin).parent}"
+    return f"{bin_dir}:{os.environ.get('PATH', '')}"
 
 
 def make_vault_with_decision(tmp_path, text: str) -> str:
@@ -418,6 +425,21 @@ def test_hook_no_trigger_on_sessionstart_without_compact_source(tmp_path):
     combined = result.stdout + result.stderr
     assert "Aktive Decisions" not in combined, (
         f"Unerwarteter Hint bei SessionStart/startup: {combined}"
+    )
+
+
+def test_make_unusable_python3_path_never_exposes_working_python3(tmp_path):
+    """Regression fuer AC1: der PATH-Helper darf trotz vererbtem PATH nie ein
+    brauchbares `python3` durchsickern lassen.
+
+    Absicherung gegen eine versehentliche Aufweichung (z. B. Stub ans PATH-Ende
+    statt an den Anfang) — falls jemand den Fix aus #549 rueckgaengig macht oder
+    die Reihenfolge vertauscht, muss genau dieser Test fehlschlagen.
+    """
+    resolved = shutil.which("python3", path=make_unusable_python3_path(tmp_path))
+    assert resolved == str(tmp_path / "fakebin" / "python3"), (
+        "Der kaputte Stub muss der ERSTE python3-Treffer im PATH sein, sonst "
+        f"koennte ein echtes System-python3 gewinnen. Aufgeloest: {resolved!r}"
     )
 
 
