@@ -105,10 +105,32 @@ def test_guard_does_not_count_documentation_as_a_caller() -> None:
     """Meta-Test: ``docs/`` gehoert nicht zur Aufrufer-Oberflaeche.
 
     ``docs/reference/vault.md`` nennt jedes Tool; zaehlte es mit, koennte der
-    Guard nie rot werden.
+    Guard nie rot werden. ``_caller_files()`` liefert absolute Pfade (``REPO_ROOT
+    / rel``), daher hier relativ zu ``REPO_ROOT`` pruefen — ein Vergleich auf dem
+    absoluten String waere immer wahr (beginnt nie mit ``"docs/"``) und der Test
+    koennte nie fehlschlagen.
     """
-    assert all(not str(p).startswith("docs/") for p in _caller_files())
+    assert "docs" not in CALLER_DIRS
+    caller_files = _caller_files()
+    assert all(not str(p.relative_to(REPO_ROOT)).startswith("docs/") for p in caller_files)
     assert _docs.VAULT_DOC.exists()
+    assert _docs.VAULT_DOC not in caller_files
+
+    # Positiver Nachweis, dass der Ausschluss auch etwas bewirkt: waere
+    # docs/reference/vault.md Teil der Aufrufer-Oberflaeche, wuerde JEDES
+    # registrierte Tool automatisch einen "Aufrufer" bekommen, weil die
+    # Referenzseite jede Signatur `vault.<name>(` auflistet — genau der Fall,
+    # den dieser Guard verhindern soll.
+    sample_tool = _registered_tools()[0]
+    doc_text = _docs.VAULT_DOC.read_text(encoding="utf-8")
+    workflow_form = re.compile(
+        rf"(?:vault\.{sample_tool}\(|mcp__academic-vault__vault_{sample_tool}\b)"
+    )
+    assert workflow_form.search(doc_text), (
+        "Testannahme verletzt: docs/reference/vault.md sollte jede "
+        f"Tool-Signatur (hier {sample_tool!r}) im Format `vault.<name>(` "
+        "auflisten — sonst waere die docs-Ausnahme oben ungetestet."
+    )
 
 
 def test_vault_doc_lists_exactly_the_registered_tools() -> None:
