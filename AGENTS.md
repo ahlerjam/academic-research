@@ -58,6 +58,15 @@ ist das Merge-Gate (Required Check, sobald Branch-Protection aktiv). Benötigt
 Repo-Secret `CLAUDE_CODE_OAUTH_TOKEN` (Operator-Pflege); ohne Secret laufen die
 Reviewer-Jobs rot.
 
+Fork-PRs: Die Pipeline triggert auf `pull_request` (nicht `pull_request_target`).
+Das ist Absicht — Forks bekommen so keine Secrets. Folge davon: Bei PRs aus
+einem Fork steht `CLAUDE_CODE_OAUTH_TOKEN` nicht zur Verfügung, die
+Reviewer-Jobs können nicht durchlaufen und `coordinator` ist kein wirksames
+Gate. **Fork-PRs sind manuell zu prüfen; ein grüner Schein-Status ersetzt das
+Review nicht.** Unaufgeforderte Bot-PRs werden nach `CONTRIBUTING.md`
+(Abschnitt „Policy on automated and AI-generated contributions") geschlossen
+— Referenzfall: PR #548, Fork-Farm-Account mit 81 Forks/0 eigenen Repos.
+
 Self-Change-Ablauf (PRs, die `pr-deep-review.yml` selbst anlegen oder ändern):
 claude-code-action verweigert Workflow-Dateien, die vom main-Stand abweichen.
 Daher: PR als Draft erstellen → der OPERATOR setzt das Label
