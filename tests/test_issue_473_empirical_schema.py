@@ -16,6 +16,7 @@ import json
 import sqlite3
 
 import pytest
+from academic_vault import server as vault_server
 from academic_vault.db import (
     _LEGACY_MIGRATION_COLUMNS,
     CURRENT_SCHEMA_VERSION,
@@ -153,6 +154,55 @@ def test_db_already_stamped_by_dead_table_drop_still_gets_migrated(tmp_path):
         "Version 4 gehoert #539 (Drop der toten Tabellen) — #473 braucht eine "
         "eigene Generation darueber, sonst laeuft seine Migration nie an."
     )
+
+
+def _make_legacy_db_with_notes_fts_but_no_empirical_tables(tmp_path) -> str:
+    """Bestands-Vault, an dem der Read-Guard bisher vorbeilaeuft.
+
+    ``papers`` und ``notes_fts`` sind da -- genau die beiden Tabellen, die
+    ``server._ensure_schema_for_read()`` prueft --, die Empirie-Tabellen aus
+    #473 fehlen. So sieht jeder Vault aus, der vor diesem Issue angelegt und
+    seither nur gelesen wurde.
+    """
+    db_path = str(tmp_path / "legacy-with-fts.db")
+    _create_legacy_papers_table(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("CREATE VIRTUAL TABLE notes_fts USING fts5(note_id, text)")
+        conn.commit()
+    finally:
+        conn.close()
+    return db_path
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(lambda p: vault_server.list_codings(p), id="list_codings"),
+        pytest.param(
+            lambda p: vault_server.list_transcript_segments(p, "interview-01"),
+            id="list_transcript_segments",
+        ),
+    ],
+)
+def test_read_tools_on_legacy_db_without_empirical_tables_do_not_crash(tmp_path, call):
+    """P1-Regression (Review zu PR #561), gleiche Klasse wie PR #490.
+
+    ``_ensure_schema_for_read()`` zieht die Migration nur nach, wenn ``papers``
+    ODER ``notes_fts`` fehlt. Auf einem Bestands-Vault, der beide hat, laeuft
+    der Guard durch, ohne ``codings``/``transcript_segments`` anzulegen -- der
+    Read endet dann in einem rohen ``sqlite3.OperationalError: no such table:
+    codings`` statt in der leeren Liste, die ein Lesepfad hier schuldet.
+    """
+    db_path = _make_legacy_db_with_notes_fts_but_no_empirical_tables(tmp_path)
+
+    assert call(db_path) == []
+
+    # Der Guard darf nicht nur den Absturz vermeiden, sondern muss die
+    # Tabellen tatsaechlich nachgezogen haben -- sonst faellt der naechste
+    # Schreibzugriff in dieselbe Luecke.
+    assert _columns(db_path, "codings")
+    assert _columns(db_path, "transcript_segments")
 
 
 def test_legacy_paper_defaults_to_literature(tmp_path):

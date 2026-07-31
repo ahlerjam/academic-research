@@ -80,6 +80,13 @@ def validate_csl_json(csl_json: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
+# Tabellen, ohne die ein reiner Lesepfad in einen rohen
+# sqlite3.OperationalError laeuft statt ein leeres Ergebnis zu liefern.
+# Fehlt eine davon, zieht _ensure_schema_for_read() die Migration einmalig
+# nach. Jede kuenftige Tabelle mit eigenem Lesepfad gehoert hier hinein.
+_READ_REQUIRED_TABLES = frozenset({"papers", "notes_fts", "transcript_segments", "codings"})
+
+
 def _ensure_schema_for_read(db_path: str) -> None:
     """Stellt vor einem reinen Lesezugriff sicher, dass die DB nutzbar ist.
 
@@ -110,24 +117,27 @@ def _ensure_schema_for_read(db_path: str) -> None:
     ``init_schema()``) legt ``notes_fts`` erst beim ersten Schreibzugriff an,
     ein reiner Lesezugriff (``find_notes``/``search_notes``/``get_note``)
     kann diesem aber zeitlich vorausgehen.
+
+    Dieselbe Lage gilt fuer ``transcript_segments``/``codings`` (Issue #473):
+    auch sie fehlen auf jedem Vault, der vorher angelegt wurde, und
+    ``list_codings``/``list_transcript_segments`` sind reine Lesepfade. Die zu
+    pruefenden Tabellen stehen deshalb in ``_READ_REQUIRED_TABLES`` -- wer eine
+    neue Tabelle mit eigenem Lesepfad ergaenzt, traegt sie dort ein, statt eine
+    weitere Einzelabfrage danebenzustellen.
     """
     conn = VaultDB._open(db_path)
     try:
-        papers_exists = (
-            conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='papers'"
-            ).fetchone()
-            is not None
-        )
-        notes_fts_exists = (
-            conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='notes_fts'"
-            ).fetchone()
-            is not None
-        )
+        present = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
+                f"({','.join('?' * len(_READ_REQUIRED_TABLES))})",
+                tuple(sorted(_READ_REQUIRED_TABLES)),
+            ).fetchall()
+        }
     finally:
         conn.close()
-    if not papers_exists or not notes_fts_exists:
+    if present != _READ_REQUIRED_TABLES:
         VaultDB(db_path).init_schema()
 
 
