@@ -131,6 +131,22 @@ Schlüsselkonzepte aus `./academic_context.md` extrahieren, Quellen zuordnen, Ko
 2. Quellen klassifizieren (peer-reviewt / semi-akademisch / nicht-akademisch / Web)
 3. 5 Dimensionen scoren, Gesamt: `0.25*peer_review + 0.20*recency + 0.20*diversity + 0.15*web_ratio + 0.20*coverage`
 4. Empfehlungen für Dimensionen mit Score < 70, strukturiert präsentieren
+5. Bewertung je Quelle im Vault festhalten (siehe „Score-Verlauf")
+
+## Score-Verlauf
+
+Einzelbewertungen bewegen sich: Ein Preprint erscheint peer-reviewt, ein Werk
+verliert an Aktualität. Damit ein Re-Audit die Bewegung zeigt statt sie zu
+überschreiben:
+
+- **Vor dem Audit:** `vault.get_score_history(paper_id, k=3)` — liegen frühere
+  Snapshots vor, die Veränderung ausweisen („peer_review 0.4 → 1.0: Preprint
+  ist erschienen"), nicht nur den aktuellen Wert. Leere History = Erstbewertung.
+- **Nach dem Audit:** je Quelle `vault.add_score_snapshot(paper_id, session_id,
+  scores)` mit `scores` als JSON-String der Dimensionen mit Einzelquellenbezug,
+  z. B. `'{"peer_review": 1.0, "recency": 0.62, "authority": 0.7}'`.
+  Korpus-Dimensionen (Diversität, Abdeckung) gehören nicht hinein; nicht
+  erhobene Werte weglassen statt schätzen.
 
 ## Output-Format
 
@@ -180,6 +196,7 @@ Status-Schwellen: OK >= 70, WARN 50-69, FAIL < 50.
 - Empfehlungen müssen spezifisch sein ("2-3 peer-reviewte Quellen zu [konkretes Thema] ergänzen"), nicht generisch ("mehr Quellen finden")
 - Disziplinnormen beachten: Informatik wertet Konferenzbeiträge hoch; BWL bevorzugt Journal-Artikel; Rechtswissenschaft schätzt Kommentare und Urteile
 - `./literature_state.md` mit Audit-Ergebnissen und identifizierten Lücken aktualisieren
+- Score-Verlauf nie glätten: ein abweichender früherer Snapshot wird erklärt, nicht ersetzt
 
 ## Few-Shot-Beispiele
 
