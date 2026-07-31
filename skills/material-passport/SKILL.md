@@ -146,7 +146,7 @@ Das JSON-Dokument enthält:
 | `plugin_version` | Version des academic-research Plugins |
 | `model_versions` | Eingesetzte KI-Modellversionen |
 | `per_uni_profile_hash` | Hash des Uni-Bewertungsprofils (optional) |
-| `decisions_snapshot` | Snapshot aller aktiven Decisions |
+| `decisions_snapshot` | Snapshot der aktiven **methodischen** Decisions (ohne die Auto-Einträge der Kategorie `file-change`) |
 | `pdf_sha256_hashes` | SHA-256-Hashes aller vorhandenen PDFs |
 | `created_at` | Unix-Timestamp des Exports |
 | `passport_hash` | SHA-256 über alle übrigen Felder |
