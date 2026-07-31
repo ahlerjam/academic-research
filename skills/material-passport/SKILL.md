@@ -14,6 +14,7 @@ description: >
 license: MIT
 allowed-tools:
   - Bash
+  - AskUserQuestion
 ---
 
 # Material-Passport Skill
@@ -64,9 +65,20 @@ Aktiviert bei:
 ### Schritt 1: User-Anfrage verstehen
 
 Kläre bei Bedarf:
-- Soll der Vault nach dem Export **gesperrt** werden? (Repro-Lock — irreversibel)
-  Wenn unklar: **immer nachfragen** bevor `--lock` gesetzt wird.
 - Projekt-Slug (Standard: aus Vault-DB oder aktuelles Verzeichnis)
+
+**Repro-Lock-Gate:** Bevor `build_passport.py` jemals mit `--lock` aufgerufen
+wird, MUSS `AskUserQuestion` gestellt werden — eine Prosa-Rückfrage genügt
+nicht. Optionen:
+
+- **"Mit Repro-Lock exportieren — `--lock`, irreversibel: Vault wird danach
+  dauerhaft read-only"** → weiter mit Schritt 2 "Mit Repro-Lock"
+- **"Ohne Repro-Lock exportieren"** (Default) → weiter mit Schritt 2 "Ohne
+  Repro-Lock"
+
+Bricht der User ab oder wählt "Ohne Repro-Lock": normaler Export ohne
+`--lock` (Schritt 2, "Ohne Repro-Lock") — kein Fehler, kein Abbruch des
+Skills.
 
 ### Schritt 2: build_passport.py ausführen
 
@@ -91,7 +103,8 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/material-passport/scripts/build_passport.py 
 
 > **Achtung:** Der Repro-Lock ist **irreversibel**. Sobald `--lock` gesetzt wurde,
 > können keine weiteren Paper oder Decisions in den Vault geschrieben werden.
-> Den User **explizit bestätigen lassen**, bevor `--lock` ausgeführt wird.
+> `--lock` nur nach positiver Antwort auf das `AskUserQuestion`-Gate aus
+> Schritt 1 aufrufen — keine eigenständige Bestätigung an dieser Stelle.
 
 ### Schritt 3: Ergebnis an User melden
 
