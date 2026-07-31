@@ -16,7 +16,7 @@ import re
 import uuid
 from pathlib import Path
 
-import pytest
+from academic_vault.db import VaultDB
 
 from tests.helpers import docs as _docs
 
@@ -24,13 +24,6 @@ _WORKTREE_ROOT = Path(__file__).parent.parent
 
 _DB_SRC_PATH = _WORKTREE_ROOT / "academic_vault" / "db.py"
 _README_PATH = _WORKTREE_ROOT / "README.md"
-
-try:
-    from academic_vault.db import VaultDB
-
-    _DB_AVAILABLE = True
-except ImportError:
-    _DB_AVAILABLE = False
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +86,6 @@ def _open_db(tmp_path) -> VaultDB:
     return db
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="academic_vault.db nicht importierbar")
 def test_search_quote_text_treats_percent_literally(tmp_path):
     """'%' im Such-Input matcht nur literale '%', nicht beliebige Zeichen."""
     db = _open_db(tmp_path)
@@ -110,7 +102,6 @@ def test_search_quote_text_treats_percent_literally(tmp_path):
         db.__exit__(None, None, None)
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="academic_vault.db nicht importierbar")
 def test_search_quote_text_treats_underscore_literally(tmp_path):
     """'_' im Such-Input matcht nur literalen Unterstrich, nicht ein Wildcard-Zeichen."""
     db = _open_db(tmp_path)
@@ -126,7 +117,6 @@ def test_search_quote_text_treats_underscore_literally(tmp_path):
         db.__exit__(None, None, None)
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="academic_vault.db nicht importierbar")
 def test_find_figures_by_caption_treats_wildcards_literally(tmp_path):
     """find_figures_by_caption behandelt % literal (kein Silent-Wildcard)."""
     db = _open_db(tmp_path)
