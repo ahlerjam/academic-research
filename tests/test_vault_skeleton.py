@@ -282,7 +282,7 @@ def test_get_quote():
 
 
 def test_stats():
-    """vault.stats() gibt korrekte Counts + token_savings_estimate > 0 bei >=1 file_id."""
+    """vault.stats() gibt korrekte Counts zurueck, ohne erfundene Schaetzgroessen (#534)."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
     try:
@@ -305,14 +305,11 @@ def test_stats():
 
         stats = FilesAPIClient.get_stats(db_path)
 
-        assert "paper_count" in stats
-        assert "quote_count" in stats
-        assert "cached_files" in stats
-        assert "token_savings_estimate" in stats
+        assert set(stats.keys()) == {"paper_count", "quote_count", "cached_files"}
+        assert "token_savings_estimate" not in stats
         assert stats["paper_count"] >= 1
         assert stats["quote_count"] >= 1
         assert stats["cached_files"] >= 1
-        assert stats["token_savings_estimate"] > 0
     finally:
         os.unlink(db_path)
 
