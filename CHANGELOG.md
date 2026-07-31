@@ -368,6 +368,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Fixed
 
+- **Decision-Log war faktisch tot (#527):** `hooks/post-tool-use-decisions.mjs`
+  schrieb jede `.md`-Änderung in die Textdatei `~/.academic-research/decisions.log`,
+  während `hooks/mid-session-reinforcement.mjs` die SQLite-Tabelle `decisions` vorlas —
+  die niemand befüllte (`vault.add_decision` hatte null Aufrufer). Das seit v6.4
+  (#90/#91) beworbene Feature erreichte die Session nie. Der Hook schreibt jetzt über
+  das neue Modul `academic_vault/decision_log.py` in genau die Tabelle, aus der das
+  Reinforcement liest. Damit die Divergenz nicht über unterschiedliche DB-Pfade oder
+  Interpreter zurückkehrt, lösen beide Hooks beides in der gemeinsamen Brücke
+  `hooks/vault-bridge.mjs` auf (kein Hook, sondern ein importiertes Modul; liegt flach
+  in `hooks/`, damit `node --check hooks/*.mjs` es miterfasst). Auto-Einträge tragen die
+  feste Kategorie `file-change` und bleiben pro Datei auf genau einen aktiven Eintrag
+  begrenzt — gleicher Inhalts-Hash erzeugt keinen neuen Eintrag, geänderter Hash löst
+  den Vorgänger per `superseded_by` ab. `printReminder` gibt sie in einem eigenen Block
+  aus (max. 3), getrennt von den manuell gepflegten Decisions (max. 5), damit die
+  letzten Writes keine echte Entscheidung aus dem Fenster drängen. Der Schreibpfad
+  importiert bewusst nur `academic_vault.db` statt `academic_vault.server` (~0,06 s
+  statt ~1,2 s CPU pro Write); dasselbe gilt jetzt für den Lesepfad. Fail-open bleibt
+  durchgängig: fehlende DB (die der Hook nie selbst anlegt), gesperrter
+  Material-Passport, belegte DB oder unbrauchbarer Interpreter enden in einer
+  stderr-Zeile und Exit 0. `decisions.log` ist damit abgelöst und nur noch ein
+  **Opt-in-Debug-Log**: es entsteht ausschließlich bei gesetztem
+  `ACADEMIC_DECISIONS_LOG`. Die Privacy-Eigenschaften aus #191 gelten unverändert für
+  beide Senken — gespeichert werden nur relativer Pfad, Tool-Name und SHA-256 des
+  Inhalts, kein Klartext.
 - **Zwei erfundene Flags in der Doku (#461):** `docs/guide/walkthrough.md` zeigte
   `/academic-research:search --import-list <datei>` und
   `/academic-research:fetch --isbn <nummer>` — beide Flags existieren in keinem

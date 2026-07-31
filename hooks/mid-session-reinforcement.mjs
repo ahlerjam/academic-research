@@ -8,7 +8,11 @@
  * zu den Context-Injection-Ausnahmen zaehlt:
  *   - UserPromptSubmit: Trigger nach jeder 20. User-Message.
  *   - SessionStart mit source==="compact": Trigger nach Compaction.
- * Liest Top-5 aktive Decisions aus Vault und erinnert Modell als System-Hint.
+ * Liest die aktiven Decisions aus dem Vault und erinnert das Modell als
+ * System-Hint. Ausgegeben wird in zwei Bloecken (#527): bis zu 5 manuell
+ * gepflegte Decisions und, davon getrennt, bis zu 3 automatisch protokollierte
+ * Datei-Aenderungen (Kategorie `file-change`) — sonst wuerden die Auto-Eintraege
+ * die echten Entscheidungen aus dem Fenster draengen.
  * Loest max. 1× pro 20 Messages aus (State-Datei verhindert Duplikate).
  *
  * Zaehlung der User-Messages (Fix #382 P2-Finding aus PR #420-Review):
@@ -29,34 +33,32 @@
  *   VAULT_DB_PATH                 — Pfad zur Vault-DB
  *   ACADEMIC_REINFORCEMENT_STATE  — Pfad zur State-Datei (default: ~/.academic-research/reinforcement-state.json)
  *   ACADEMIC_REINFORCEMENT_N      — Trigger-Interval (default: 20)
- *   ACADEMIC_PYTHON               — Interpreter fuer den Vault-Lookup (siehe pythonCandidates)
+ *   ACADEMIC_PYTHON               — Interpreter fuer den Vault-Lookup
+ *                                   (Kaskade in hooks/vault-bridge.mjs)
  *
  * Live-Nachweis der Kontext-Injection: scripts/dev/verify_reinforcement_context.py
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
-import { dirname, join, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import * as os from 'node:os';
-import * as path from 'node:path';
 
-const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = dirname(HOOK_DIR);
-const VAULT_SRC = REPO_ROOT;
+import { resolveVaultDb, VAULT_SRC, runVaultPython } from './vault-bridge.mjs';
 
-// Kanonischer DB-Default (Single Source of Truth, Issue #190):
-// VAULT_DB_PATH aus Env, sonst ~/.academic-research/projects/<slug>/vault.db
-// mit slug=basename(CWD). Kein hart kodierter 'default'-Bucket mehr.
-const SLUG = basename(process.env.CLAUDE_PROJECT_DIR || process.cwd()) || 'default';
-const VAULT_DB = process.env.VAULT_DB_PATH
-  || join(os.homedir(), '.academic-research', 'projects', SLUG, 'vault.db');
+// Kanonischer DB-Default (Single Source of Truth, Issue #190/#527): kommt aus
+// hooks/vault-bridge.mjs — derselben Aufloesung, die der PostToolUse-Hook zum
+// SCHREIBEN benutzt. Zwei getrennte Formeln waren die Wurzel von #527.
+const VAULT_DB = resolveVaultDb();
 
 const STATE_FILE = process.env.ACADEMIC_REINFORCEMENT_STATE
   || join(os.homedir(), '.academic-research', 'reinforcement-state.json');
 
 const TRIGGER_N = parseInt(process.env.ACADEMIC_REINFORCEMENT_N || '20', 10);
+// Manuell gepflegte Decisions (Kategorie != file-change).
 const MAX_DECISIONS = 5;
+// Automatisch protokollierte Datei-Aenderungen — bewusst knapper: sie sind
+// Kontext, keine Entscheidungen, und duerfen die echten nicht verdraengen.
+const MAX_FILE_CHANGES = 3;
 
 // ---------------------------------------------------------------------------
 // Stdin lesen
@@ -116,77 +118,55 @@ function saveState(state) {
 // ---------------------------------------------------------------------------
 
 /**
- * Liefert die Interpreter-Kandidaten fuer den Vault-Lookup, in Prioritaets-
- * reihenfolge und dedupliziert.
+ * Laedt die aktiven Decisions aus dem Vault, getrennt in zwei Toepfe:
+ *   manual — manuell gepflegte Entscheidungen (Kategorie != file-change)
+ *   auto   — vom PostToolUse-Hook protokollierte Datei-Aenderungen (#527)
  *
- * Hintergrund (#382, AC1): Hooks erben in einer echten Claude-Code-Session die
- * PATH des Nutzers — dort steht in aller Regel das System-Python (macOS:
- * /usr/bin/python3 == 3.9), das `academic_vault` mangels PEP-604-Syntax nicht
- * einmal importieren kann. Ein blosses `python3` liess den Lookup deshalb
- * scheitern und der Hook injizierte nur die leere Huelle
- * "(keine aktiven Decisions)". In der Testsuite fiel das nie auf, weil
- * `uv run pytest` das venv-Python an den PATH-Anfang stellt.
+ * Die Trennung passiert bereits in Python: `list_decisions()` sortiert nach
+ * `created_at DESC`, und in einer aktiven Schreibsession sind die letzten
+ * Eintraege fast immer Datei-Aenderungen. Ein blosses Top-5 wuerde die echten
+ * Entscheidungen aus dem Fenster draengen — genau der Effekt, den AC2 von
+ * #527 ausschliesst.
  *
- *   1. ACADEMIC_PYTHON        — expliziter Override (conda/pyenv/Systempakete)
- *   2. $VIRTUAL_ENV/bin/python — aktives venv (uv run, aktivierte Shell, CI)
- *   3. ~/.academic-research/venv/bin/python — kanonisches Setup-venv, dasselbe,
- *      das hooks.json im SessionStart-Block prueft (/academic-research:setup)
- *   4. python3                 — PATH-Fallback (bisheriges Verhalten)
- */
-function pythonCandidates() {
-  const candidates = [];
-  if (process.env.ACADEMIC_PYTHON) {
-    candidates.push(process.env.ACADEMIC_PYTHON);
-  }
-  if (process.env.VIRTUAL_ENV) {
-    candidates.push(join(process.env.VIRTUAL_ENV, 'bin', 'python'));
-  }
-  candidates.push(join(os.homedir(), '.academic-research', 'venv', 'bin', 'python'));
-  candidates.push('python3');
-  return [...new Set(candidates)];
-}
-
-/**
- * Laedt Top-N aktive Decisions aus dem Vault.
- * Gibt leeres Array bei Fehler oder fehlendem Vault (fail-open).
+ * Der Lookup importiert bewusst `academic_vault.db` statt `academic_vault.server`:
+ * letzteres zieht die fastmcp/pydantic-Kette nach (~1,2 s CPU statt ~0,06 s).
+ *
+ * Gibt leere Toepfe bei Fehler oder fehlendem Vault zurueck (fail-open).
  */
 function loadTopDecisions() {
+  const empty = { manual: [], auto: [] };
+
   if (!existsSync(VAULT_DB)) {
     process.stderr.write(`[Reinforcement] Vault-DB nicht gefunden (${VAULT_DB}). Übersprungen.\n`);
-    return [];
+    return empty;
   }
 
   const pyCode = [
     'import sys, json',
     `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-    'from academic_vault.server import list_decisions',
-    `decisions = list_decisions(sys.argv[1], active_only=True)`,
-    `print(json.dumps(decisions[:${MAX_DECISIONS}]))`,
+    'from academic_vault.db import VaultDB',
+    'from academic_vault.decision_log import AUTO_CATEGORY',
+    'db = VaultDB(sys.argv[1])',
+    'rows = db.list_decisions(active_only=True)',
+    "manual = [d for d in rows if d.get('category') != AUTO_CATEGORY]",
+    "auto = [d for d in rows if d.get('category') == AUTO_CATEGORY]",
+    `print(json.dumps({'manual': manual[:${MAX_DECISIONS}], 'auto': auto[:${MAX_FILE_CHANGES}]}))`,
   ].join('; ');
 
-  const failures = [];
-  for (const python of pythonCandidates()) {
-    // Absolute Kandidaten vorab pruefen; 'python3' bleibt eine PATH-Aufloesung.
-    if (python.includes(path.sep) && !existsSync(python)) {
-      failures.push(`${python}: nicht vorhanden`);
-      continue;
-    }
-    try {
-      const output = execFileSync(python, ['-c', pyCode, VAULT_DB], {
-        encoding: 'utf-8',
-        timeout: 10000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      return JSON.parse(output.trim()) || [];
-    } catch (err) {
-      failures.push(`${python}: ${err.message.split('\n')[0]}`);
-    }
+  const output = runVaultPython(pyCode, [VAULT_DB], { timeout: 10000, label: 'Reinforcement' });
+  if (output === null) {
+    return empty;
   }
-
-  process.stderr.write(
-    `[Reinforcement] Vault-Lookup mit keinem Interpreter moeglich: ${failures.join(' | ')}\n`
-  );
-  return [];
+  try {
+    const parsed = JSON.parse(output.trim());
+    return {
+      manual: Array.isArray(parsed?.manual) ? parsed.manual : [],
+      auto: Array.isArray(parsed?.auto) ? parsed.auto : [],
+    };
+  } catch (err) {
+    process.stderr.write(`[Reinforcement] Vault-Antwort nicht lesbar: ${err.message}\n`);
+    return empty;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -194,16 +174,24 @@ function loadTopDecisions() {
 // ---------------------------------------------------------------------------
 
 /**
- * Gibt System-Hint auf stdout aus.
+ * Gibt den System-Hint auf stdout aus — zwei Bloecke (#527):
+ * die manuell gepflegten Decisions und, davon getrennt, die zuletzt
+ * geaenderten Dateien.
  */
-function printReminder(decisions) {
+function printReminder({ manual = [], auto = [] } = {}) {
   const lines = ['[Reinforcement] Aktive Decisions:'];
-  for (const d of decisions) {
+  for (const d of manual) {
     const cat = d.category ? `[${d.category}] ` : '';
     lines.push(`  - ${cat}${d.text}`);
   }
-  if (decisions.length === 0) {
+  if (manual.length === 0) {
     lines.push('  (keine aktiven Decisions)');
+  }
+  if (auto.length > 0) {
+    lines.push('[Reinforcement] Zuletzt geänderte Dateien:');
+    for (const d of auto) {
+      lines.push(`  - ${d.text}`);
+    }
   }
   // Auf stdout (wird als System-Hint an Modell weitergegeben)
   process.stdout.write(lines.join('\n') + '\n');
