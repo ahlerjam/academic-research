@@ -176,7 +176,7 @@ def _parse_figure_reference(text: str) -> tuple[str, str] | None:
 # Autorennamen-Normalisierung (Issue #378)
 # ---------------------------------------------------------------------------
 
-# Deutsche Umlaut-/Ligatur-Faltung. Muss identisch in hooks/citation-parse.mjs
+# Deutsche Umlaut-/Ligatur-Faltung. Muss identisch in hooks/lib/citation-parse.mjs
 # gepflegt werden, damit Hook und Vault denselben Vergleich anstellen.
 _UMLAUT_FOLD = {
     "ä": "ae",
@@ -189,7 +189,7 @@ _UMLAUT_FOLD = {
 }
 
 
-# Namenspartikel. Muss mit hooks/citation-parse.mjs::NAME_PARTICLES uebereinstimmen.
+# Namenspartikel. Muss mit hooks/lib/citation-parse.mjs::NAME_PARTICLES uebereinstimmen.
 _NAME_PARTICLES = frozenset(
     {"von", "van", "de", "del", "della", "di", "du", "da", "le", "la", "ten", "ter"}
 )

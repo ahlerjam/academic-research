@@ -31,7 +31,7 @@ from tests.helpers import docs as _docs
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DECISIONS_HOOK = REPO_ROOT / "hooks" / "post-tool-use-decisions.mjs"
 REINFORCEMENT_HOOK = REPO_ROOT / "hooks" / "mid-session-reinforcement.mjs"
-BRIDGE = REPO_ROOT / "hooks" / "vault-bridge.mjs"
+BRIDGE = REPO_ROOT / "hooks" / "lib" / "vault-bridge.mjs"
 
 
 # ---------------------------------------------------------------------------
@@ -567,7 +567,7 @@ def test_hook_is_failopen_with_broken_interpreter(tmp_path):
 
 def test_both_hooks_share_the_vault_bridge():
     """Beide Hooks beziehen DB-Pfad und Interpreter aus derselben Bruecke."""
-    assert BRIDGE.exists(), "hooks/vault-bridge.mjs fehlt"
+    assert BRIDGE.exists(), "hooks/lib/vault-bridge.mjs fehlt"
     for hook in (DECISIONS_HOOK, REINFORCEMENT_HOOK):
         assert "vault-bridge.mjs" in hook.read_text(encoding="utf-8"), (
             f"{hook.name} nutzt die gemeinsame Bruecke nicht — die Pfad-Divergenz "

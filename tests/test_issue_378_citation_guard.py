@@ -1286,7 +1286,7 @@ def run_node(source: str) -> subprocess.CompletedProcess:
 def test_extract_citations_reports_spans():
     """Span-Invariante: content.slice(start, end) === raw für jeden Beleg."""
     source = """
-    import { extractCitations } from './hooks/citation-parse.mjs';
+    import { extractCitations } from './hooks/lib/citation-parse.mjs';
     const content = [
       'Der Befund (Müller 2021, S. 45) gilt.',
       'Auch vgl. Schmidt 2019 wird genannt.',
@@ -1308,7 +1308,7 @@ def test_extract_citations_reports_spans():
 def test_mark_spans_skips_span_mismatch():
     """Wächter: passt der Span nicht zum raw-Text, wird NICHT geraten."""
     source = """
-    import { markSpans } from './hooks/citation-parse.mjs';
+    import { markSpans } from './hooks/lib/citation-parse.mjs';
     const text = 'Ein harmloser Satz ohne Beleg.';
     const out = markSpans(text, [{ raw: '(Müller 2021)', start: 4, end: 17 }], ' [UNVERIFIED]');
     console.log(JSON.stringify({ unchanged: out === text }));
@@ -1426,7 +1426,7 @@ def test_overlapping_citations_never_split_a_word(empty_vault):
 def test_narrative_pass_does_not_swallow_a_paren_citation():
     """Ein Narrativ-Treffer ueber einer maskierten Region ist keine Fundstelle."""
     source = """
-    import { extractCitations } from './hooks/citation-parse.mjs';
+    import { extractCitations } from './hooks/lib/citation-parse.mjs';
     const overlap = 'vgl. (Müller 2021, S. 45) Schmidt 2019, S. 7 ist relevant.';
     const latex = 'vgl. \\\\cite{mueller2021} Schmidt 2019, S. 7 ist relevant.';
     const dump = (content) => extractCitations(content).map((c) => ({
@@ -1450,7 +1450,7 @@ def test_narrative_pass_does_not_swallow_a_paren_citation():
 def test_mark_spans_skips_overlapping_spans():
     """Waechter: ueberlappende Spans werden verworfen statt geraten."""
     source = """
-    import { markSpans } from './hooks/citation-parse.mjs';
+    import { markSpans } from './hooks/lib/citation-parse.mjs';
     const text = 'vgl. (Müller 2021, S. 45) Schmidt 2019, S. 7 ist relevant.';
     const spans = [
       { raw: text.slice(0, 44), start: 0, end: 44 },
@@ -1472,7 +1472,7 @@ def test_mark_spans_skips_overlapping_spans():
 def test_mark_spans_keeps_adjacent_spans():
     """Grenzfall: ein Span endet genau dort, wo der naechste beginnt — kein Overlap."""
     source = """
-    import { markSpans } from './hooks/citation-parse.mjs';
+    import { markSpans } from './hooks/lib/citation-parse.mjs';
     const text = 'AAAAABBBBB';
     const spans = [
       { raw: 'AAAAA', start: 0, end: 5 },
@@ -1488,7 +1488,7 @@ def test_mark_spans_keeps_adjacent_spans():
 def test_narrative_citation_survives_line_break_and_signal_words():
     """Kein Kollateralschaden: legitime Narrativformen bleiben erkannt."""
     source = """
-    import { extractCitations } from './hooks/citation-parse.mjs';
+    import { extractCitations } from './hooks/lib/citation-parse.mjs';
     const cases = {
       plain: 'siehe Schmidt 2019, S. 7 ist relevant.',
       lineBreak: 'Der Befund vgl.\\n  Schmidt 2019, S. 7 ist relevant.',
@@ -1575,7 +1575,7 @@ def test_coauthor_marker_requires_a_second_name():
     Marker ohne folgenden Namen, ein blosses Trennzeichen wird keiner.
     """
     source = """
-    import { extractCitations } from './hooks/citation-parse.mjs';
+    import { extractCitations } from './hooks/lib/citation-parse.mjs';
     const cases = {
       commaOnly: 'Der Vertrag (Paris, 2015) galt.',
       commaAuthor: 'Der Befund (Müller, 2021) gilt.',

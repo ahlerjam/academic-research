@@ -38,13 +38,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "20"
-      - name: node --check fuer alle .mjs-Hooks
-        run: |
-          set -euo pipefail
-          for f in hooks/*.mjs; do
-            echo "→ $f"
-            node --check "$f"
-          done
+      # Rekursiv ueber alle getrackten *.mjs (#542): der frueher hier inline
+      # stehende Glob `hooks/*.mjs` rekursierte nicht und verlor jede Datei,
+      # die nach hooks/lib/ wanderte.
+      - name: node --check fuer alle .mjs-Dateien
+        run: bash scripts/dev/check-mjs-syntax.sh
 
   # 3. Jede Command/Agent-Datei braucht Frontmatter mit nicht-leerer description
   frontmatter-coverage:
