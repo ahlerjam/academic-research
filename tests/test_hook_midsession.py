@@ -9,6 +9,7 @@ Max 1× pro 20 Messages.
 Exit 0 immer.
 """
 
+import functools
 import json
 import os
 import shutil
@@ -22,6 +23,42 @@ HOOK_PATH = Path(__file__).parent.parent / "hooks" / "mid-session-reinforcement.
 WORKTREE_ROOT = Path(__file__).parent.parent
 
 
+@functools.lru_cache(maxsize=1)
+def node_binary() -> str:
+    """Der Node-Interpreter, mit dem der Harness den Hook startet — als echtes Binary.
+
+    `shutil.which("node")` liefert auf Maschinen mit Versionsmanager (asdf, nvm,
+    volta, mise) nur einen Shim, der die Version erst beim Start aufloest. Diese
+    Aufloesung haengt an der Umgebung: asdf sucht `.tool-versions` in der
+    Verzeichnis-Ahnenreihe des CWD und faellt sonst auf `$HOME/.tool-versions`
+    zurueck. Tests dieser Datei biegen `HOME` bewusst um (der Hook liest
+    `os.homedir()`), womit der Fallback wegfaellt; in einem isolierten Worktree
+    ausserhalb der Nutzer-Ahnenreihe findet der Shim dann gar keine Version mehr und
+    bricht mit Exit 126 ab, bevor der Hook laeuft (#549, AC2).
+
+    `process.execPath` liefert den Pfad des tatsaechlich laufenden Interpreters —
+    einmal ueber den Shim in unveraenderter Umgebung erfragt, ist er danach
+    unabhaengig von HOME/PATH/CWD startbar. Laesst sich nichts aufloesen, bleibt es
+    beim Shim (Verhalten wie bisher, statt zu skippen).
+    """
+    shim = shutil.which("node")
+    if shim is None:  # pragma: no cover - node ist Testvoraussetzung
+        pytest.skip("node nicht im PATH")
+    try:
+        proc = subprocess.run(
+            [shim, "-e", "process.stdout.write(process.execPath)"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):  # pragma: no cover - Defensive
+        return shim
+    real = proc.stdout.strip()
+    if proc.returncode == 0 and real and Path(real).is_file():
+        return real
+    return shim  # pragma: no cover - natives node ohne Shim liefert sich selbst
+
+
 def run_hook(payload: dict, env_overrides: dict = None) -> subprocess.CompletedProcess:
     """Startet den Hook als Subprocess mit JSON-Eingabe auf stdin."""
     env = os.environ.copy()
@@ -29,7 +66,7 @@ def run_hook(payload: dict, env_overrides: dict = None) -> subprocess.CompletedP
         env.update(env_overrides)
 
     return subprocess.run(
-        ["node", str(HOOK_PATH)],
+        [node_binary(), str(HOOK_PATH)],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
@@ -47,8 +84,16 @@ def make_unusable_python3_path(tmp_path) -> str:
     PEP-604-Syntax gar nicht importieren kann. Der Stub scheitert wie dieses
     Interpreter-Exemplar: Exit != 0 mit Traceback auf stderr.
 
-    Der PATH enthaelt zusaetzlich das Verzeichnis von `node`, damit der Hook
-    ueberhaupt startbar bleibt.
+    Der PATH enthaelt zusaetzlich alles, was zum Starten von `node` noetig ist —
+    auch dann, wenn `node` selbst ein Shell-Shim ist (asdf/nvm/volta/mise:
+    `#!/usr/bin/env bash`, exec auf den eigentlichen Versionsmanager). Dafuer
+    wird der Stub vor das volle, unveraenderte `os.environ["PATH"]` gesetzt statt
+    eine eigene Minimal-Liste zu bauen: die reale PATH-Struktur bleibt erhalten,
+    also bleiben auch transitive Abhaengigkeiten des Shims (bash, asdf/nvm/volta
+    selbst) aufloesbar. Die Garantie "kein brauchbares python3 erreichbar" bleibt
+    davon unberuehrt, weil Standard-PATH-Auflösung (execvp/`which`) immer den
+    ersten Treffer nimmt — und das ist per Konstruktion der kaputte Stub in
+    `bin_dir`, unabhaengig davon, was weiter hinten im PATH steht.
     """
     bin_dir = tmp_path / "fakebin"
     bin_dir.mkdir()
@@ -61,10 +106,9 @@ def make_unusable_python3_path(tmp_path) -> str:
     )
     stub.chmod(0o755)
 
-    node_bin = shutil.which("node")
-    if node_bin is None:  # pragma: no cover - node ist Testvoraussetzung
+    if shutil.which("node") is None:  # pragma: no cover - node ist Testvoraussetzung
         pytest.skip("node nicht im PATH")
-    return f"{bin_dir}:{Path(node_bin).parent}"
+    return f"{bin_dir}:{os.environ.get('PATH', '')}"
 
 
 def make_vault_with_decision(tmp_path, text: str) -> str:
@@ -352,7 +396,7 @@ def test_hook_persists_counter_before_vault_lookup(tmp_path):
 
     killed_env = dict(base_env, ACADEMIC_PYTHON=str(hanging_python))
     proc = subprocess.Popen(
-        ["node", str(HOOK_PATH)],
+        [node_binary(), str(HOOK_PATH)],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -418,6 +462,63 @@ def test_hook_no_trigger_on_sessionstart_without_compact_source(tmp_path):
     combined = result.stdout + result.stderr
     assert "Aktive Decisions" not in combined, (
         f"Unerwarteter Hint bei SessionStart/startup: {combined}"
+    )
+
+
+def test_node_launcher_survives_home_override(tmp_path):
+    """Regression fuer AC2 (#549): der Harness muss `node` auch dann starten, wenn
+    `HOME` auf ein leeres tmp-Verzeichnis zeigt.
+
+    Vier Tests dieser Datei biegen `HOME` um, damit `os.homedir()` im Hook auf ein
+    hermetisches tmp-Verzeichnis zeigt. Wird `node` ueber einen Versionsmanager-Shim
+    gestartet (asdf/nvm/volta/mise), loest der Shim die Node-Version erst zur Laufzeit
+    auf — bei asdf ueber die Verzeichnis-Ahnenreihe des CWD und, als Fallback,
+    `$HOME/.tool-versions`. Der HOME-Override kappt diesen Fallback; liegt (wie in
+    einem isolierten Worktree unter /tmp) auch in der Ahnenreihe keine
+    `.tool-versions`, bricht der Shim mit Exit 126 "No version is set for command
+    node" ab — noch bevor der Hook ueberhaupt laeuft. Die Tests pruefen dann nicht
+    mehr das Hook-Verhalten, sondern die Node-Installation der Maschine.
+
+    Deshalb startet der Harness `node` ueber `node_binary()` — das aufgeloeste echte
+    Interpreter-Binary, das keine Versionsaufloesung mehr braucht. Dieser Test faellt
+    zurueck auf Exit 126, sobald jemand wieder das literale "node" verwendet oder die
+    Aufloesung entfernt.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+
+    proc = subprocess.run(
+        [node_binary(), "-e", "process.stdout.write('node-started')"],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "PATH": make_unusable_python3_path(tmp_path),
+        },
+        timeout=30,
+    )
+
+    assert proc.returncode == 0, (
+        "node liess sich mit umgebogenem HOME nicht starten — vermutlich ein "
+        "Versionsmanager-Shim ohne aufloesbare Version. "
+        f"rc={proc.returncode}, stderr={proc.stderr!r}"
+    )
+    assert proc.stdout == "node-started", f"Unerwartete Ausgabe: {proc.stdout!r}"
+
+
+def test_make_unusable_python3_path_never_exposes_working_python3(tmp_path):
+    """Regression fuer AC1: der PATH-Helper darf trotz vererbtem PATH nie ein
+    brauchbares `python3` durchsickern lassen.
+
+    Absicherung gegen eine versehentliche Aufweichung (z. B. Stub ans PATH-Ende
+    statt an den Anfang) — falls jemand den Fix aus #549 rueckgaengig macht oder
+    die Reihenfolge vertauscht, muss genau dieser Test fehlschlagen.
+    """
+    resolved = shutil.which("python3", path=make_unusable_python3_path(tmp_path))
+    assert resolved == str(tmp_path / "fakebin" / "python3"), (
+        "Der kaputte Stub muss der ERSTE python3-Treffer im PATH sein, sonst "
+        f"koennte ein echtes System-python3 gewinnen. Aufgeloest: {resolved!r}"
     )
 
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset, default_db_path
+from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .embedding_model import get_embedder
 from .files_api import FilesAPIClient
 
@@ -926,7 +927,16 @@ def export_material_passport(
 
     paper_ids = [r["paper_id"] for r in paper_rows]
     dois = [r["doi"] for r in paper_rows if r["doi"]]
-    decisions = db.list_decisions(active_only=True)
+    # Nur methodische Entscheidungen. Die Auto-Eintraege der Kategorie
+    # `file-change`, die der PostToolUse-Hook seit #527 bei jedem `.md`-Write
+    # schreibt, sind kein Material: sie wuerden den Snapshot fluten und den
+    # `passport_hash` bei jeder Kapitel-Aenderung bewegen, obwohl sich am
+    # Material nichts geaendert hat (#380).
+    decisions = [
+        d
+        for d in db.list_decisions(active_only=True)
+        if d.get("category") != _AUTO_DECISION_CATEGORY
+    ]
 
     scores_5d: dict = {}
     for pid in paper_ids:
