@@ -1,5 +1,5 @@
 /**
- * hooks/citation-cascade.mjs — externe Beleg-Aufloesung (Issue #378)
+ * hooks/lib/citation-cascade.mjs — externe Beleg-Aufloesung (Issue #378)
  *
  * Dreistufige Kaskade als FALLBACK, wenn ein Klammer-Beleg im Vault nicht
  * gefunden wurde:

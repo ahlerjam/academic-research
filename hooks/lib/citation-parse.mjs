@@ -1,5 +1,5 @@
 /**
- * hooks/citation-parse.mjs — Extraktion von Klammer-/Paraphrase-Belegen (Issue #378)
+ * hooks/lib/citation-parse.mjs — Extraktion von Klammer-/Paraphrase-Belegen (Issue #378)
  *
  * Reine Funktionen ohne Seiteneffekte: Kapiteltext rein, normalisierte
  * Beleg-Objekte raus. Wird von hooks/verbatim-guard.mjs importiert.

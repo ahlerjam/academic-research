@@ -293,9 +293,9 @@ denselben hängenden Lookup. Preis dieser Reihenfolge: Stirbt der Hook während 
 Lookups, entfällt die Erinnerung dieser Runde — die nächste kommt regulär nach
 `ACADEMIC_REINFORCEMENT_N` weiteren Nachrichten.
 
-> **Nicht verdrahtet:** `hooks/onboard-project-uni-prompt.sh` liegt zwar im Repo, ist aber
+> **Nicht verdrahtet:** `hooks/lib/onboard-project-uni-prompt.sh` liegt zwar im Repo, ist aber
 > **kein** Hook. Es ist ein eigenständiges Helferskript zur Profilauswahl, das manuell
-> aufgerufen wird (`./hooks/onboard-project-uni-prompt.sh --profile tum`). Frühere
+> aufgerufen wird (`./hooks/lib/onboard-project-uni-prompt.sh --profile tum`). Frühere
 > Fassungen dieser Dokumentation führten es fälschlich als `SessionStart`-Hook.
 
 ## Privacy/Logs

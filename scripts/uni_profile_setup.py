@@ -6,7 +6,7 @@ Flag und ``library-profiles/active.yaml.template`` behauptet einen
 Kopiervorgang nach ``~/.academic-research/library-profiles/active.yaml`` — bis
 hierher fuehrte kein Code-Pfad diesen Kopiervorgang tatsaechlich aus.
 
-``hooks/onboard-project-uni-prompt.sh`` (protected area laut
+``hooks/lib/onboard-project-uni-prompt.sh`` (protected area laut
 ``.claude/workflow.config.json``) implementiert die eigentliche Profil-Auswahl
 und den Kopiervorgang bereits vollstaendig und bleibt hier unveraendert. Dieses
 Modul kapselt nur die ``--uni``/Opt-in-Logik (Bauplan: ``scihub_optin.py``) und
@@ -38,7 +38,7 @@ from pathlib import Path
 PROMPT = "Hochschul-Profil jetzt auswaehlen (Opt-in)? [j/N] "
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-HOOK_PATH = REPO_ROOT / "hooks" / "onboard-project-uni-prompt.sh"
+HOOK_PATH = REPO_ROOT / "hooks" / "lib" / "onboard-project-uni-prompt.sh"
 
 
 def _default_output_dir() -> Path:
@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     result = _run_interactive_hook(output_dir=output_dir)
     if result.returncode != 0:
         # Ein fehlgeschlagener interaktiver Hook (z.B. ungueltige Nummern-
-        # Eingabe, hooks/onboard-project-uni-prompt.sh:68-69) wird wie ein
+        # Eingabe, hooks/lib/onboard-project-uni-prompt.sh:68-69) wird wie ein
         # Opt-out behandelt: NICHT den Hook-Exitcode ungefiltert durchreichen,
         # sonst bricht setup.sh (set -euo pipefail) vor Schritt 8 (SciHub-
         # Opt-in) und der Abschlussmeldung ab (PR #417 critic, Issue #388 AC3).

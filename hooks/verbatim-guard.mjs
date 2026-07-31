@@ -37,8 +37,8 @@ import { existsSync, appendFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
-import { extractCitations, markSpans } from './citation-parse.mjs';
-import { loadConfig, resolveCitations } from './citation-cascade.mjs';
+import { extractCitations, markSpans } from './lib/citation-parse.mjs';
+import { loadConfig, resolveCitations } from './lib/citation-cascade.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration

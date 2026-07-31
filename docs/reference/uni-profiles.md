@@ -39,10 +39,10 @@ cp config/library-profiles/tum.yaml \
 /academic-research:setup --uni meine-uni
 ```
 
-Alternativ hilft das Helferskript `hooks/onboard-project-uni-prompt.sh` bei der Auswahl:
+Alternativ hilft das Helferskript `hooks/lib/onboard-project-uni-prompt.sh` bei der Auswahl:
 
 ```bash
-./hooks/onboard-project-uni-prompt.sh --profile tum
+./hooks/lib/onboard-project-uni-prompt.sh --profile tum
 ```
 
 Das aktive Profil landet in `~/.academic-research/library-profiles/active.yaml`. Dort
