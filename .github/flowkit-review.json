@@ -3,6 +3,8 @@
   "models": { "codeReview": "claude-opus-5", "deadCode": "claude-sonnet-5", "docSync": "claude-sonnet-5", "iacSafety": "claude-opus-5", "verifier": "claude-opus-5" },
   "apiChangePaths": [],
   "iacChangePaths": [],
+  "criticalPaths": [],
+  "deadCode": "auto",
   "deadCodePaths": ["scripts/", "academic_vault/"],
   "docSyncMap": []
 }

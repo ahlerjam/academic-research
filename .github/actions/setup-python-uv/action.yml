@@ -1,3 +1,4 @@
+# flowkit-template-version: 0.7.0
 name: Setup Python + uv (cached)
 description: >
   Single setup step: pins Python via uv (no separate setup-python), installs
