@@ -23,6 +23,7 @@ Thumbs.db
 !.claude/settings.json
 !.claude/hooks/
 !.claude/workflow.config.json
+!.claude/flowkit-version
 
 # flowkit-Laufzeitdaten (Drafts, Runner-State)
 .flowkit/

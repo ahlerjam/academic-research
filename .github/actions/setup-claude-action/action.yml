@@ -1,3 +1,4 @@
+# flowkit-template-version: 0.7.0
 # flowkit install copies both actions side by side into .github/actions/ of the target repo.
 name: setup-claude-action
 description: Setup uv + claude-code-action with OAuth (primary, backup-fallback on auth failure)

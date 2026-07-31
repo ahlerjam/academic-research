@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
+# flowkit-template-version: 0.7.0
 # flowkit pushci guard: if the repo has a local-CI push alias configured, insist on it.
-# Scope: convenience reminder only, no security enforcement; fail-open by design
-# (exits 0 when jq/input is missing or no pushci alias is configured).
 set -u
 PREFIX='[flowkit-hook]'
 cmd=$(jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0

@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-
 from sanitize import sanitize_text
 
 p = Path(sys.argv[1])
