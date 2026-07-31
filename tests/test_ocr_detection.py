@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ocr import run_ocrmypdf
+
 # scripts/ im Suchpfad
 
 
@@ -109,22 +111,12 @@ class TestRunOcrmypdf:
 
     def test_ocrmypdf_not_found_raises_runtime_error(self):
         """subprocess.which gibt None → RuntimeError mit Install-Hinweis."""
-        try:
-            from ocr import run_ocrmypdf
-        except ImportError:
-            pytest.skip("ocr.py noch nicht implementiert")
-
         with patch("shutil.which", return_value=None):
             with pytest.raises(RuntimeError, match="ocrmypdf nicht gefunden"):
                 run_ocrmypdf("input.pdf", "output.pdf")
 
     def test_ocrmypdf_success(self):
         """Erfolgreicher Aufruf — kein Fehler."""
-        try:
-            from ocr import run_ocrmypdf
-        except ImportError:
-            pytest.skip("ocr.py noch nicht implementiert")
-
         mock_result = MagicMock()
         mock_result.returncode = 0
 
@@ -140,11 +132,6 @@ class TestRunOcrmypdf:
 
     def test_ocrmypdf_failure_raises_runtime_error(self):
         """Prozess endet mit Exit-Code != 0 → RuntimeError."""
-        try:
-            from ocr import run_ocrmypdf
-        except ImportError:
-            pytest.skip("ocr.py noch nicht implementiert")
-
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stderr = b"OCR failed"

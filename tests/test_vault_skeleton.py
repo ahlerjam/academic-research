@@ -12,24 +12,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from academic_vault.db import VaultDB
+from academic_vault.files_api import FilesAPIClient
 
 # Worktree-Root zum PYTHONPATH hinzufuegen damit academic_vault importierbar ist
 _WORKTREE_ROOT = Path(__file__).parent.parent
-
-# Modul-Imports mit Guard: fehlen noch bis zur Implementierung
-try:
-    from academic_vault.db import VaultDB
-
-    _DB_AVAILABLE = True
-except ImportError:
-    _DB_AVAILABLE = False
-
-try:
-    from academic_vault.files_api import FilesAPIClient
-
-    _FILES_API_AVAILABLE = True
-except ImportError:
-    _FILES_API_AVAILABLE = False
 
 _SERVER_AVAILABLE = importlib.util.find_spec("academic_vault.server") is not None
 
@@ -53,7 +40,6 @@ def make_temp_db() -> tuple[str, "VaultDB"]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_schema_creates_tables():
     """Alle 5 Tabellen + papers_fts existieren nach init_schema()."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -84,7 +70,6 @@ def test_schema_creates_tables():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_add_paper_and_get():
     """add_paper + get_paper Round-Trip."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -107,7 +92,6 @@ def test_add_paper_and_get():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_search_returns_results():
     """vault.search(query) gibt >= 1 Ergebnis zurueck und liegt unter 500ms (AC #62)."""
     import time
@@ -144,7 +128,6 @@ def test_search_returns_results():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_add_quote_requires_api_response_id():
     """vault.add_quote mit citations-api + kein api_response_id wirft ValueError."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -174,7 +157,6 @@ def test_add_quote_requires_api_response_id():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_add_quote_manual_no_api_id():
     """vault.add_quote mit manual + kein api_response_id ist OK."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -205,8 +187,6 @@ def test_add_quote_manual_no_api_id():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _FILES_API_AVAILABLE, reason="files_api.py noch nicht implementiert")
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_ensure_file_caches():
     """Zweiter Aufruf von ensure_file triggert kein Re-Upload."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -241,7 +221,6 @@ def test_ensure_file_caches():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_find_quotes():
     """find_quotes(paper_id) gibt vorher eingefuegte Quotes zurueck."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -271,7 +250,6 @@ def test_find_quotes():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_get_quote():
     """get_quote(quote_id) gibt vollstaendigen Record zurueck."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -303,8 +281,6 @@ def test_get_quote():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not _FILES_API_AVAILABLE, reason="files_api.py noch nicht implementiert")
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_stats():
     """vault.stats() gibt korrekte Counts + token_savings_estimate > 0 bei >=1 file_id."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -369,7 +345,6 @@ def _vec_extension_loadable() -> bool:
         conn.close()
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 @pytest.mark.skipif(
     not _vec_extension_loadable(),
     reason="Python-Build ohne --enable-loadable-sqlite-extensions (z.B. macOS-CI)",
@@ -394,7 +369,6 @@ def test_vec_extension_loads_by_default():
         os.unlink(tmp.name)
 
 
-@pytest.mark.skipif(not _DB_AVAILABLE, reason="db.py noch nicht implementiert")
 def test_vec_fallback():
     """Wenn sqlite-vec nicht ladbar ist (kaputter Override) -> vec_available=False,
     FTS5 funktioniert trotzdem.
