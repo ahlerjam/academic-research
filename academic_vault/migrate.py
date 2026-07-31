@@ -355,6 +355,9 @@ def drop_dead_v64_tables(db_path: str) -> list[str]:
             ).fetchone()
             if exists is None:
                 continue  # nie angelegt oder bereits gedroppt -- idempotent
+            # Tabellennamen sind in SQLite nicht parametrisierbar; die Werte
+            # stammen ausschliesslich aus der Modul-Konstante DEAD_TABLES,
+            # nie aus Nutzereingaben.
             rows = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             if rows:
                 remaining.append(table)
