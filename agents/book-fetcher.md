@@ -3,7 +3,8 @@ name: book-fetcher
 model: sonnet
 description: |
   Master-Orchestrator fuer den Universal Book Fetcher (F16). Koordiniert
-  OA-Subagenten (doabooks-fetcher, oapen-fetcher, tib-fetcher, kvk-fetcher),
+  OA-Subagenten (doabooks-fetcher, oapen-fetcher, tib-fetcher, kvk-fetcher,
+  hathitrust-fetcher, internetarchive-fetcher, mdz-fetcher),
   Verlags-Subagenten (springer-book, degruyter, nationallizenzen, ebook-central,
   cambridge-core, oxford-academic, jstor),
   auth-helper und generic-fetcher strikt sequentiell.
@@ -15,6 +16,9 @@ tools:
   - "Agent(oapen-fetcher)"
   - "Agent(tib-fetcher)"
   - "Agent(kvk-fetcher)"
+  - "Agent(hathitrust-fetcher)"
+  - "Agent(internetarchive-fetcher)"
+  - "Agent(mdz-fetcher)"
   - "Agent(springer-book)"
   - "Agent(degruyter)"
   - "Agent(nationallizenzen)"
@@ -87,6 +91,12 @@ Rufe diese Subagenten in **genau dieser Reihenfolge** auf, einer nach dem andere
 2. `Agent(oapen-fetcher)`
 3. `Agent(tib-fetcher)`
 4. `Agent(kvk-fetcher)`
+5. `Agent(hathitrust-fetcher)`
+6. `Agent(internetarchive-fetcher)`
+7. `Agent(mdz-fetcher)`
+
+Alle sieben sind lizenzfrei und werden deshalb **vor** jedem Verlags-Subagenten
+(Schritt 4) abgefragt (Issue #450, AC3).
 
 Payload fuer jeden OA-Subagenten:
 ```json
@@ -106,6 +116,15 @@ Payload fuer jeden OA-Subagenten:
 - `status: captcha` -- **SOFORT stoppen**, `{status: captcha}` zurueckgeben
 - `status: metadata_only` -- Merken (`oa_had_metadata_only = true`), naechsten OA-Subagenten versuchen
 - `status: no_match` -- Naechsten OA-Subagenten versuchen
+
+**edition-Feld durchreichen (Issue #450 AC4):** Enthaelt die Subagenten-Antwort
+bei `status: success` ein `edition`-Feld (aktuell melden das
+`hathitrust-fetcher`, `internetarchive-fetcher` und `mdz-fetcher`), uebernimm
+es **unveraendert** in den Master-Output (siehe Output-Schema unten). Fehlt es
+in der Subagenten-Antwort, lass das Feld im Master-Output komplett weg --
+NIE selbst ein `edition`-Feld generieren oder aus der Eingabe-ISBN/-Titel
+ableiten. Dasselbe gilt fuer die Verlags-Subagenten in Schritt 4, sofern
+sie ein `edition`-Feld melden.
 
 ---
 
@@ -221,6 +240,7 @@ nicht gesondert weiter, es ist ueber `vault.get_paper()` abfragbar.
   "status": "success | pickup_required | captcha | no_match",
   "source": "<subagent-name der den Endstatus lieferte, inkl. scihub-fetcher>",
   "file_path": "<absoluter PDF-Pfad, nur bei success>",
+  "edition": "<optional, nur bei success: unveraendert aus dem edition-Feld der Subagenten-Antwort uebernommen, sonst weggelassen — NIE selbst generiert (Issue #450 AC4)>",
   "reason": "<optionale Beschreibung>",
   "tries": [
     {"subagent": "<name>", "status": "<status>", "ts": "<ISO-8601>"}
