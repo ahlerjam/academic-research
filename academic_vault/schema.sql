@@ -56,7 +56,16 @@ CREATE TABLE IF NOT EXISTS quotes (
   section           TEXT,
   context_before    TEXT,
   context_after     TEXT,
-  extraction_method TEXT NOT NULL CHECK(extraction_method IN ('citations-api','manual')),
+  -- Herkunftsnachweis des Wortlauts. Werteliste gespiegelt in
+  -- db.VALID_EXTRACTION_METHODS; Bestands-DBs hebt
+  -- migrate.widen_extraction_method_check() per Tabellen-Rebuild auf diesen
+  -- Stand (SQLite kann CHECK-Constraints nicht per ALTER TABLE aendern).
+  -- 'local-verbatim' (Issue #512) wird in server.add_quote() fail-closed
+  -- gegen den lokalen PDF-Volltext geprueft, bevor irgendetwas geschrieben
+  -- wird -- der CHECK hier ist nur die zweite Verteidigungslinie fuer
+  -- Direkt-Inserts.
+  extraction_method TEXT NOT NULL
+                      CHECK(extraction_method IN ('citations-api','manual','local-verbatim')),
   api_response_id   TEXT,
   created_at        INTEGER NOT NULL,
   -- Haltung des Zitats zur zitierenden Aussage (Issue #400). Vorgemerkt fuer
@@ -67,7 +76,14 @@ CREATE TABLE IF NOT EXISTS quotes (
   -- Bewusst als LETZTE Spalte: `ALTER TABLE ... ADD COLUMN` (migrate.py) haengt
   -- sie auf Bestands-DBs ebenfalls hinten an, so bleibt die Spaltenreihenfolge
   -- zwischen frischer und migrierter DB identisch.
-  stance            TEXT CHECK(stance IN ('supports','contrasts','mentions') OR stance IS NULL)
+  stance            TEXT CHECK(stance IN ('supports','contrasts','mentions') OR stance IS NULL),
+  -- Herkunft von context_before/context_after (Issue #520): 'fulltext' wenn
+  -- server.resolve_quote_context() eine Fundstelle im echten paper_fulltext
+  -- nachgewiesen und den Kontext daraus geschnitten hat, sonst NULL (Feld
+  -- unbefuellt oder modell-generiert -- geraten wird hier nie). Werteliste
+  -- gespiegelt in migrate.add_context_source_column(). Bewusst als LETZTE
+  -- Spalte, siehe Kommentar bei `stance`.
+  context_source    TEXT CHECK(context_source IN ('fulltext') OR context_source IS NULL)
 );
 
 -- vec0 Virtual Tables: optional, nur wenn sqlite-vec Extension geladen ist.

@@ -4,6 +4,7 @@ description: Use this skill when the user needs to extract or format citations. 
 license: MIT
 allowed-tools:
   - Read
+  - AskUserQuestion
 ---
 
 # Zitat-Extraktion
@@ -17,7 +18,9 @@ allowed-tools:
 
 Extrahiert und formatiert Zitate aus PDFs und Volltexten. Liefert
 Literaturverzeichnisse im Zitationsstil aus `./academic_context.md`
-(APA7, IEEE, Harvard etc.). Nutzt die Claude-API `documents[] + citations.enabled`.
+(APA7, IEEE, Harvard etc.). Standard: lokale Extraktion + serverseitige
+`local-verbatim`-Verifikation (kein API-Key nötig); Citations-API nur
+optional (siehe unten).
 
 ## Abgrenzung
 
@@ -53,25 +56,26 @@ deren Regeln haben Vorrang vor den generischen Artikel-Regeln.
 | `type: book` | `references/din1505.md` (Monografie-Sektion) |
 | `type: article-journal` | (keine Zusatz-Referenz) |
 
-## Citations-API
+## Zitat-Extraktion (Standard: lokal, kein API-Key)
 
-Liegen Quellen-PDFs im Session-Kontext, nutze den `documents`-Parameter der Claude-API statt Prompt-basierter Zitation. Vorteil: Zitate sind seitengenau, die API erzwingt die Quellenbindung.
+Standard: `vault.add_quote(..., extraction_method="local-verbatim")` — der
+`quote-extractor`-Agent liest das PDF lokal (`Read`), der Vault-Server prüft
+den Wortlaut fail-closed gegen den PDF-Volltext. Kein `ANTHROPIC_API_KEY` nötig.
 
-**Wann verwenden:** mindestens 1 PDF im Session-Pfad und Zitierstil-Konversion
-aus echtem Quelltext (nicht aus Metadaten).
+**Citations-API (optional):** Liegen PDFs im Session-Kontext, alternativ der
+`documents`-Parameter der Claude-API (seitengenau, erzwingt Quellenbindung).
+Braucht einen eigenen `ANTHROPIC_API_KEY` außerhalb der Subscription-Session
+(Anthropic Beta-API) — nur bei explizitem Bedarf, nicht der Standardweg.
 
-**Wann nicht:** reiner Metadaten-zu-Zitat-Workflow → Prompt-basierte
-Formatierung nach Variant-References.
-
-**Output-Integration:** Seitenangaben aus `citations[].start_page_number` / `end_page_number` → Details in `references/output-formats.md`.
+**Output:** `pdf_page` aus `vault.find_quotes`/`vault.get_quote` (Standard),
+sonst `citations[].start_page_number`/`end_page_number` (optionale
+Citations-API) → `references/output-formats.md`.
 
 ## Kontext-Dateien
 
 - Lesen: `./academic_context.md` (Zitationsstil)
-- Vault-Queries: `vault.find_quotes(paper_id, query)` für Zitate,
-  `vault.get_quote(quote_id)` für Volldetails
-- `./literature_state.md` nur lesen (read-only Snapshot-Export aus dem Vault —
-  für manuellen Überblick; nicht schreiben)
+- Vault-Queries: `vault.find_quotes(paper_id, query)`, `vault.get_quote(quote_id)`
+- `./literature_state.md`: read-only Snapshot, nicht schreiben
 
 ## Core-Workflow
 
@@ -86,17 +90,14 @@ Kläre, was der User braucht:
 
 ### 2. Relevante Paper aus Vault laden
 
-Rufe `vault.search(query, k=5)` auf, um die relevantesten Paper-IDs zur
-Recherche-Query zu ermitteln. Für jeden paper_id:
+Rufe `vault.search(query, k=5)` auf für die relevantesten Paper-IDs. Für jeden paper_id:
 
-1. `vault.find_quotes(paper_id, query=research_query, k=10)` aufrufen →
-   liefert `[{quote_id, verbatim, pdf_page, section, ...}]`
-2. Für detaillierte Zitat-Metadaten: `vault.get_quote(quote_id)`
+1. `vault.find_quotes(paper_id, query=research_query, k=10)` →
+   `[{quote_id, verbatim, pdf_page, section, ...}]`
+2. Details: `vault.get_quote(quote_id)`
 
-Sind für ein Paper noch keine Vault-Zitate vorhanden (leere Liste), den
-`quote-extractor`-Agent spawnen, um Zitate aus dem PDF zu ziehen und via
-`vault.add_quote()` zu persistieren. PDFs werden via `vault.ensure_file(paper_id)`
-als `file_id` übergeben — kein direktes `pdf_path` im Context.
+Fehlen Vault-Zitate (leere Liste): `quote-extractor`-Agent spawnen (Ablauf →
+Schritt 3).
 
 ### 3. Zitat-Extraktion
 
@@ -108,19 +109,16 @@ Fehlen Vault-Zitate, den Agent `quote-extractor` spawnen (definiert in
 
 ```json
 {
-  "paper": {
-    "paper_id": "mueller2023",
-    "title": "Paper Title",
-    "doi": "10.xxxx/xxxxx"
-  },
+  "paper": { "paper_id": "mueller2023", "title": "Paper Title" },
   "research_query": "derived from chapter title or user query",
   "max_quotes": 3,
   "max_words_per_quote": 25
 }
 ```
 
-Der Agent holt das PDF via `vault.ensure_file(paper_id)`, persistiert die
-Zitate automatisch via `vault.add_quote()` und gibt `vault_quote_id` zurück.
+Der Agent liest das PDF lokal via `vault.get_paper(paper_id)` → `pdf_path` →
+`Read`, persistiert via `vault.add_quote(..., extraction_method="local-verbatim")`
+und gibt `vault_quote_id` zurück.
 
 Bei kapitelbezogener Extraktion den `research_query` aus Kapiteltitel und
 Schlüsselkonzepten der Gliederung ableiten. Die Gliederungs-Struktur aus
@@ -131,17 +129,18 @@ Schlüsselkonzepten der Gliederung ableiten. Die Gliederungs-Struktur aus
 Nach der Extraktion die Ergebnisse prüfen:
 
 - Zitate mit `extraction_quality: "failed"` verwerfen
-- Paper mit `possible_pdf_mismatch: true` für manuelles Review flaggen
-- Prüfen, ob Zitate tatsächlich für das Zielkapitel/-thema relevant sind
+- Paper mit `possible_pdf_mismatch: true` für Review flaggen
+- Relevanz für Zielkapitel/-thema prüfen
 - Duplikate über Paper hinweg entfernen (gleiche Idee, andere Formulierung)
 
-Extrahierte Zitate dem User gruppiert nach Quelle präsentieren, je mit
-Zitattext, Seitenzahl (falls verfügbar), Ursprungs-Abschnitt, Relevanz-Score
-sowie Paper-Titel und Autoren.
+Extrahierte Zitate gruppiert nach Quelle präsentieren: Zitattext, Seitenzahl
+(falls verfügbar), Ursprungs-Abschnitt, Relevanz-Score, Paper-Titel, Autoren.
 
 ### 5. Zitat-Formatierung
 
-Formatiere Zitate inline nach dem in `./academic_context.md` konfigurierten Stil. Keine externe Skript-Pipeline — Claude generiert die Formate direkt aus den strukturierten Paper-Daten. Output-Formate → `references/output-formats.md`.
+Formatiere Zitate inline nach dem in `./academic_context.md` konfigurierten
+Stil — keine externe Skript-Pipeline, Claude generiert direkt aus den
+strukturierten Paper-Daten. Output-Formate → `references/output-formats.md`.
 
 ### 6. Kapitelzuordnung
 
@@ -151,6 +150,15 @@ Wenn Zitate für ein bestimmtes Kapitel extrahiert werden:
 2. Platzierung innerhalb der Kapitelstruktur vorschlagen
 3. Unterabschnitte identifizieren, in denen noch stützende Evidenz fehlt
 4. Bei Lücken weitere Literatursuche anbieten
+
+**Gate:** Vorschlag 1.–4. gilt erst nach `AskUserQuestion`-Bestätigung als
+angenommen — vor Export/Weiterverwendung:
+
+- „Übernehmen" — Vorschlag weiterverwenden
+- „Ablehnen" — verworfen, kein Vault-Schreibzugriff, keine Weiterverwendung;
+  zurück zu Schritt 5 oder erneuter Vorschlag
+
+Ablehnung ist Default-Pfad, kein Fehler.
 
 ### 7. Literaturstatus
 
@@ -165,12 +173,12 @@ Zitatanzahlen und Coverage über `vault.stats()` abfragen.
 
 Während der Extraktion auf diese Muster achten:
 
-- **Kapitel ohne Zitate** — Als literaturbedürftig flaggen
-- **Kapitel mit nur einer Quelle** — Als potenziell unzureichend flaggen
-- **Fehlende Gegenargumente** — Wenn alle Zitate dieselbe Position stützen, nach Gegenpositionen suchen
-- **Veraltete Quellen** — Zitate aus Quellen älter als 10 Jahre flaggen, außer es sind Standardwerke
+- **Kapitel ohne Zitate** — literaturbedürftig flaggen
+- **Kapitel mit nur einer Quelle** — potenziell unzureichend flaggen
+- **Fehlende Gegenargumente** — bei Einseitigkeit nach Gegenpositionen suchen
+- **Veraltete Quellen** — >10 Jahre alt flaggen, außer Standardwerke
 
-Bei erkannten Lücken `/search` mit gezielten Queries anbieten oder den Skill `literature-gap-analysis` für ein umfassendes Review triggern.
+Bei Lücken `/search` gezielt anbieten oder `literature-gap-analysis` triggern.
 
 ## Export-Formate
 
@@ -184,9 +192,9 @@ Bibliography-Vollständigkeit) → `references/citation-examples.md`.
 
 ## Wichtige Regeln
 
-- **Nie Zitate fabrizieren** — Nur Text nutzen, der direkt aus PDFs extrahiert wurde
+- **Nie Zitate fabrizieren** — nur Text, der direkt aus PDFs extrahiert wurde
 - **Exakten Wortlaut bewahren** — Zitate müssen wörtlich der Quelle entsprechen
-- **Seitenzahlen angeben** — Wenn verfügbar, immer Seitenzahlen mitführen
-- **Zitationsstil respektieren** — Durchgehend den im akademischen Kontext konfigurierten Stil verwenden
-- **Mismatches flaggen** — Stimmt ein PDF-Inhalt nicht mit dem erwarteten Paper überein, das melden
-- **User bestätigt Zuordnungen** — Kapitel-Zitat-Zuordnungen vor dem Speichern freigeben lassen
+- **Seitenzahlen angeben** — wenn verfügbar, immer mitführen
+- **Zitationsstil respektieren** — durchgehend den konfigurierten Stil nutzen
+- **Mismatches flaggen** — Abweichung PDF-Inhalt vs. erwartetes Paper melden
+- **User bestätigt Zuordnungen** — Gate in Schritt 6 (`AskUserQuestion`)

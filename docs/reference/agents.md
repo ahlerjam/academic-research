@@ -4,7 +4,7 @@
 
 Agents sind LLM-Subagents. Anders als Skills aktivieren sie sich nicht selbst — sie
 werden von einem Command oder einem Skill gestartet und laufen in eigenem Kontext.
-Das Plugin bringt **27 Agents** mit (`agents/*.md`).
+Das Plugin bringt **28 Agents** mit (`agents/*.md`).
 
 Die Dispatch-Spalte zeigt, wie ein Agent tatsächlich gestartet wird: **automatisch**
 heißt, ein Command/Skill/anderer Agent löst ihn ohne weiteres Zutun aus (sobald der
@@ -17,7 +17,7 @@ wird nur gestartet, wenn er direkt per Task-Aufruf adressiert wird.
 |-------|-------|-------------|----------|---------|
 | `query-generator` | Haiku | `/search` | automatisch via `/search` | Expandiert Suchquery auf Modulebene |
 | `relevance-scorer` | Sonnet | `/search`, `/score` | automatisch via `/search`, `/score` | Semantische Relevanz 0–1, 10er-Batches mit Prompt-Caching |
-| `quote-extractor` | Sonnet | `citation-extraction` | automatisch via `citation-extraction` | Verbatim-Zitate via Citations-API + Vault-Write |
+| `quote-extractor` | Sonnet | `citation-extraction` | automatisch via `citation-extraction` | Verbatim-Zitate via lokalem PDF-Pfad (`Read` + `local-verbatim`), Citations-API nur noch Opt-in |
 | `quality-reviewer` | Sonnet | `chapter-writer`, `abstract-generator` | automatisch via `chapter-writer`, `abstract-generator` | Evaluator-Optimizer-Pattern (PASS/REVISE/ESCALATE) |
 | `screening-judge` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Ein Treffer, ein Urteil: include/exclude/unclear als Ein-Fall-JSON |
 | `sparring-partner` | Opus | direkt, `advisor`/`research-question-refiner`/`methodology-advisor` | manuell | Denk- und Impulsgeber: benennt Schwächen, Gegenpositionen und Anschlussfragen, schreibt keine Kapitel-Prosa |
@@ -61,3 +61,4 @@ Login-Wall zurück; den tatsächlichen Aufruf macht ausschließlich der Master
 | `risk-of-bias` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Cochrane RoB 2 / ROBINS-I / CASP |
 | `meta-analysis` | Sonnet | direkt | manuell | DerSimonian-Laird Random-Effects + Forest-Plot |
 | `figure-verifier` | Sonnet | direkt | manuell | VLM-basierte Abbildungsverifikation |
+| `quote-fidelity-auditor` | Sonnet | direkt (Empfehlung aus `claim-drift-guard`-Warnung) | manuell | Urteilt über ein bestehendes Zitat gegen Kapitel-Behauptung, Quote-Kontext und Abstract; persistiert `quotes.stance` |

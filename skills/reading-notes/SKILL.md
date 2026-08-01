@@ -57,8 +57,8 @@ zulässig.
 ### 2. Struktur vorgeben, nicht abfragen
 
 AC5: Die Struktur des Exzerpts kommt vom Skill, nicht vom User. Beim Lesen
-der Quelle (PDF-Volltext via `vault.get_paper()`/Files-API oder vom User
-eingefügter Auszug) leitest du selbstständig ab:
+der Quelle (PDF-Volltext via `vault.get_paper()`-`pdf_path` + `Read`-Tool
+oder vom User eingefügter Auszug) leitest du selbstständig ab:
 
 1. **Kernbefund** — die zentrale Aussage/das Ergebnis in 1-2 Sätzen
 2. **Methode** — wie der Befund zustande kam (Design, Stichprobe, Verfahren)
