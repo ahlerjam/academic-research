@@ -26,7 +26,7 @@ description: |
   assistant: "CASP-Checkliste: 10 Items, Score je yes/no/can't tell. Quotes und
   Assessment im Vault gespeichert."
   </example>
-tools: [Read, mcp__academic-vault__vault_get_paper, mcp__academic-vault__vault_search_quote_text, mcp__academic-vault__vault_add_quote, mcp__academic-vault__vault_add_risk_of_bias]
+tools: [Read, mcp__academic-vault__vault_get_paper, mcp__academic-vault__vault_search_quote_text, mcp__academic-vault__vault_verify_verbatim, mcp__academic-vault__vault_add_quote, mcp__academic-vault__vault_add_risk_of_bias]
 maxTurns: 5
 ---
 
@@ -97,12 +97,25 @@ Für jede Domain des Frameworks:
 1. **Verbatim-Quote finden:** Suche im PDF-Text nach dem relevanten Abschnitt.
    Extrahiere einen Satz (max. 200 Zeichen), der die Bewertung belegt.
 2. **Score bestimmen:** Wende die Signalling Questions aus der Referenz-Datei an.
-3. **vault.add_quote aufrufen:**
+3. **Kandidat gegen den lokalen PDF-Text vorprüfen (`vault.verify_verbatim`):**
+   ```
+   vault.verify_verbatim(paper_id=<paper_id>, candidate=<exakter Text aus PDF>)
+   → {status, verbatim, pdf_page, ratio}
+   ```
+   Read-only, schreibt nichts. `status`:
+   - `"exact"`/`"snapped"` → den zurückgegebenen `verbatim`-Text (bei
+     `"snapped"` die vom Prüfpfad korrigierte Fassung) mit
+     `extraction_method="local-verbatim"` und `pdf_page=<result.pdf_page>`
+     speichern — stärkerer Beleg als `"manual"`.
+   - `"no-match"`/`"no-textlayer"` → Kandidat korrigieren und erneut prüfen,
+     oder als echten Ausnahmefall (z. B. Tabellen-/Grafik-Inhalt ohne
+     Textlayer) mit `extraction_method="manual"` erfassen.
+4. **vault.add_quote aufrufen:**
    ```
    vault.add_quote(
      paper_id=<paper_id>,
-     verbatim=<exakter Text aus PDF>,
-     extraction_method="manual",
+     verbatim=<exakter Text aus PDF, ggf. Snap-Korrektur aus Punkt 3>,
+     extraction_method="local-verbatim" | "manual",  # siehe Punkt 3 oben
      section=<"Methods" | "Results" | ...>
    )
    ```

@@ -95,9 +95,9 @@ Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers`
 python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
 ```
 
-## MCP-Tools (alle 41)
+## MCP-Tools (alle 42)
 
-Der Server registriert **41 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **42 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -121,6 +121,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.search_quote_text(verbatim, k=5)` | LIKE-Volltextsuche in `quotes.verbatim` (prüft, ob ein Zitat existiert) | `vault.search_quote_text("Attention is all", k=3)` |
 | `vault.find_quotes(paper_id, query=None, k=10)` | Gibt Quotes für ein Paper zurück (optional Ähnlichkeitssuche) | `vault.find_quotes("vaswani2017", query="self-attention")` |
 | `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` |
+| `vault.verify_verbatim(paper_id, candidate)` | Read-only-Vorschau des Verbatim-Prüfpfads: liefert **immer** `{status, verbatim, pdf_page, ratio}` zurück (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`, kein `ValueError` bei Nicht-Treffer). Paper unbekannt oder kein/kein lesbarer `pdf_path` wirft weiterhin `ValueError`. Schreibt nichts (s. u.) | `vault.verify_verbatim("vaswani2017", "Attention is all you need")` |
 
 **`extraction_method="local-verbatim"` — fail-closed** (Issue #512)
 
@@ -137,6 +138,16 @@ und nicht in einem Hook — es lässt sich nicht per Marker abschalten.
 Grenzen der Prüfung: seitenübergreifende Zitate und ausgelassene Wörter können
 falsch-negativ als `no-match` gelten. Dann ist `extraction_method="manual"` mit
 eigenem Beleg der richtige Weg — nicht das Aufweichen der Prüfung.
+
+**`vault.verify_verbatim` — read-only Vorschau** (Issue #513)
+
+Nutzt denselben Prüfpfad wie das `local-verbatim`-Gate von `vault.add_quote`
+(gemeinsame Paper-/`pdf_path`-Auflösung), aber ohne Schreibzugriff und ohne
+`ValueError` bei Nicht-Treffer: `status="no-match"`/`"no-textlayer"` kommen
+als reguläres Ergebnis zurück. Damit können Agenten einen Kandidaten
+iterativ prüfen und korrigieren, bevor `vault.add_quote` endgültig ablehnt.
+Paper unbekannt oder kein/kein lesbarer `pdf_path` bleiben `ValueError` —
+das sind Bedienfehler des Aufrufers, keine Zitat-Prüfergebnisse.
 
 **Echter Quellkontext — `resolve_quote_context`** (Issue #520)
 

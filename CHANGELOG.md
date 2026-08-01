@@ -10,6 +10,23 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`vault.verify_verbatim` — read-only Vorschau des Verbatim-Prüfpfads (#513):**
+  Neues MCP-Tool `vault.verify_verbatim(paper_id, candidate)` prüft einen
+  Zitat-Kandidaten gegen den lokalen PDF-Volltext eines Papers und liefert
+  **immer** ein Ergebnis-dict `{status, verbatim, pdf_page, ratio}` zurück
+  (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`) — anders
+  als das Schreib-Gate `vault.add_quote(extraction_method="local-verbatim")`
+  (#512) wirft es bei Nicht-Treffer keine `ValueError`, sondern gibt Agenten
+  so die Möglichkeit, Kandidaten iterativ zu prüfen und zu korrigieren, bevor
+  `add_quote` endgültig ablehnt. Das Tool schreibt nichts in die Datenbank.
+  Paper-/`pdf_path`-Auflösungsfehler (unbekanntes Paper, fehlender/nicht
+  lesbarer `pdf_path`) bleiben `ValueError` mit verständlicher Meldung —
+  Bedienfehler des Aufrufers, keine Zitat-Prüfergebnisse. Intern teilt sich
+  `academic_vault.server.verify_verbatim_preview()` die Paper-/`pdf_path`-
+  Auflösung mit `_verify_local_verbatim()` über einen neuen gemeinsamen
+  privaten Helfer (`_resolve_verbatim_pdf_path`), um Drift zwischen den
+  beiden Prüfpfaden zu vermeiden. 42. MCP-Tool.
+
 - **`resolve_quote_context` — echter Quellkontext statt modell-erinnertem (#520):**
   Neue Funktion `academic_vault.server.resolve_quote_context(db_path, quote_id,
   window=600)` zieht ±600 Zeichen ECHTEN Text aus `paper_fulltext` um die

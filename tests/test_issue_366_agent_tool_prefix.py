@@ -154,6 +154,14 @@ _LIVE_CALL_ARGS = {
     "vault.get_figure": {"figure_id": "issue366-figure"},
     "vault.list_figures": {"paper_id": "issue366-paper"},
     "vault.ensure_file": {"paper_id": "issue366-paper"},
+    # Wie "vault.ensure_file" bewusst OHNE pdf_path-Seed: erreicht real den
+    # ValueError-Zweig der gemeinsamen Paper-/pdf_path-Aufloesung
+    # (_resolve_verbatim_pdf_path, #513/#512), ohne ein PDF-Fixture ueber den
+    # MCP-stdio-Transport bereitstellen zu muessen.
+    "vault.verify_verbatim": {
+        "paper_id": "issue366-paper",
+        "candidate": "Some candidate text.",
+    },
 }
 
 
@@ -255,7 +263,7 @@ async def _run_live_dispatch_check(vault_db_path: Path) -> None:
                         real_name, arguments=_LIVE_CALL_ARGS[real_name]
                     )
 
-                    if real_name == "vault.ensure_file":
+                    if real_name in ("vault.ensure_file", "vault.verify_verbatim"):
                         # Business-Logic-Fehler (kein pdf_path) statt Erfolg --
                         # aber entscheidend: NICHT der MCP-Protokollfehler
                         # "Unknown tool: ...", der bei falschem Praefix kaeme.
