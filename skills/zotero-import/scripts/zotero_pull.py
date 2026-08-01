@@ -60,6 +60,9 @@ class ImportResult:
     # fehlende PDF-Notizen nach dem Import nicht als stiller Datenverlust
     # dastehen.
     comments_skipped: int = 0
+    # Volltexte, die aus Zoteros eigenem `fulltext_item()`-Endpunkt kamen statt
+    # aus lokaler PDF-Extraktion (Issue #525) — spart Download+Re-Extraktion.
+    fulltext_from_zotero: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +290,34 @@ def _download_attachment(
     return None
 
 
+def _fetch_zotero_fulltext(zot_client, attachment_key: str) -> str | None:
+    """Holt den von Zotero bereits extrahierten/indizierten PDF-Volltext (Issue #525).
+
+    Nutzt pyzotero's ``fulltext_item()`` (Endpunkt
+    ``/items/{key}/fulltext``, liefert ``{"content": ..., "indexedPages"/
+    "totalPages"|"indexedChars"/"totalChars"}``). Der Aufruf ist unabhaengig
+    vom PDF-Download: `fulltext_item()` liefert auch dann Text, wenn
+    `_download_attachment()` fehlschlaegt oder gar nicht erst versucht wird.
+
+    Gibt ``None`` zurueck, wenn Zotero den Text (noch) nicht indiziert hat
+    (404 `ResourceNotFoundError`), der Content leer/kein String ist (auch ein
+    unkonfigurierter Mock-Rueckgabewert in Tests faellt darunter — bewusst
+    strikt typgeprueft statt truthy-Check), oder bei jedem anderen Fehler
+    (Netzwerk, Rate-Limit, lokaler Endpunkt ohne Sync). Diese Funktion wird
+    in Tests via patch('zotero_pull._fetch_zotero_fulltext') bzw. am
+    Mock-Client ersetzt und darf run_import() niemals durch eine Exception
+    unterbrechen — genau wie _download_attachment().
+    """
+    try:
+        response = zot_client.fulltext_item(attachment_key)
+        content = response.get("content") if isinstance(response, dict) else None
+        if not isinstance(content, str):
+            return None
+        return content.strip() or None
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Haupt-Import-Funktion
 # ---------------------------------------------------------------------------
@@ -383,6 +414,18 @@ def run_import(
                         and child_data.get("contentType") == "application/pdf"
                     ):
                         att_key = child_data.get("key", "")
+
+                        # Zotero-Volltext bevorzugen (Issue #525): separater,
+                        # vom PDF-Download unabhaengiger API-Call. Wird VOR
+                        # dem `add_paper(..., pdf_path=...)`-Aufruf unten
+                        # geschrieben, damit `_maybe_extract_fulltext()`
+                        # (server.py) `get_fulltext(paper_id) is not None`
+                        # sieht und die lokale PDF-Extraktion ueberspringt.
+                        zotero_text = _fetch_zotero_fulltext(zot, att_key)
+                        if zotero_text:
+                            VaultDB(db_path).set_fulltext(paper_id, zotero_text, extractor="zotero")
+                            result.fulltext_from_zotero += 1
+
                         local_path = _download_attachment(zot, item_key, att_key, tmp_dir)
                         if local_path:
                             # pdf_path im Vault setzen
@@ -491,6 +534,11 @@ def main() -> None:
             print(f"  - {err}", file=sys.stderr)
     if result.file_ids:
         print(f"Files-API file_ids gecacht: {len(result.file_ids)}")
+    if result.fulltext_from_zotero:
+        print(
+            f"Volltext von Zotero uebernommen (ohne lokalen PDF-Parse): "
+            f"{result.fulltext_from_zotero}"
+        )
     if result.quotes_imported:
         print(f"Annotationen als Quotes importiert: {result.quotes_imported}")
     if result.comments_skipped:
