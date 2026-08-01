@@ -77,7 +77,7 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 graph LR
     U[Du in Claude Code] --> C[11 Slash-Commands]
     U --> S[39 Skills<br/>selbstaktivierend]
-    C --> A[28 Agents<br/>Subagents]
+    C --> A[27 Agents<br/>Subagents]
     S --> A
     A --> V[(Vault<br/>SQLite + FTS5 + vec0)]
     C --> V
@@ -201,7 +201,7 @@ Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
 - [Commands](docs/reference/commands.md) — alle 11 Slash-Commands mit Syntax und Beispielen
 - [Skills](docs/reference/skills.md) — alle 39 Skills und ihre Trigger
 - [Agents](docs/reference/agents.md) — alle 27 Subagents
-- [Vault-MCP-Server](docs/reference/vault.md) — alle 42 MCP-Tools, Volltext- und Vektor-Index
+- [Vault-MCP-Server](docs/reference/vault.md) — alle 41 MCP-Tools, Volltext- und Vektor-Index
 - [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt
 - [Hooks-Stack](docs/reference/hooks.md) — was wann eingreift, und was geloggt wird
 - [Per-Uni-Profile](docs/reference/uni-profiles.md) — Hochschulzugänge einrichten

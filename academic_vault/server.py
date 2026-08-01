@@ -402,19 +402,6 @@ def get_quote(db_path: str, quote_id: str) -> dict | None:
     return db.get_quote(quote_id)
 
 
-def set_quote_stance(db_path: str, quote_id: str, stance: str) -> None:
-    """Aktualisiert ``stance`` eines bestehenden Zitats (Issue #523).
-
-    Schreibpfad fuer nachtraegliche Audits (z.B. `quote-fidelity-auditor`):
-    `add_quote(stance=...)` deckt nur die Neuanlage ab. `stance` muss einer der
-    Werte aus ``VALID_STANCES`` sein; ``ValueError`` bei ungueltigem Wert oder
-    unbekannter ``quote_id``.
-    """
-    db = VaultDB(db_path)
-    db.init_schema()
-    db.set_quote_stance(quote_id, stance)
-
-
 def search_papers(
     db_path: str,
     query: str,
@@ -1646,17 +1633,6 @@ def _build_mcp_server():
     def _vault_get_quote(quote_id: str) -> dict | None:
         """Gibt vollstaendigen Quote-Record zurueck."""
         return get_quote(db_path, quote_id)
-
-    @mcp.tool(name="vault.set_quote_stance")
-    def _vault_set_quote_stance(quote_id: str, stance: str) -> None:
-        """Aktualisiert stance eines bestehenden Zitats (Issue #523).
-
-        stance: 'supports' | 'contrasts' | 'mentions' -- Pflichtfeld, kein
-        None. Nachtraeglicher Audit-Schreibpfad fuer den
-        quote-fidelity-auditor-Agenten; wirft ValueError bei ungueltigem
-        stance-Wert oder unbekannter quote_id.
-        """
-        set_quote_stance(db_path=db_path, quote_id=quote_id, stance=stance)
 
     @mcp.tool(name="vault.add_note")
     def _vault_add_note(

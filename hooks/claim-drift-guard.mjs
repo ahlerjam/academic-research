@@ -493,11 +493,6 @@ function emitWarning(filePath, findings) {
     '  Bitte pruefen: Deckt der Beleg die geaenderte Aussage noch? '
     + 'Sonst Quelle anpassen, Zitat austauschen oder die Aussage zuruecknehmen.'
   );
-  lines.push(
-    '  Zur Klaerung: den quote-fidelity-auditor-Agenten mit der betroffenen '
-    + 'quote_id aufrufen (Urteil faithful/overstated/context-stripped/'
-    + 'polarity-flip/unsupported).'
-  );
 
   const message = lines.join('\n');
   process.stderr.write(`${message}\n`);

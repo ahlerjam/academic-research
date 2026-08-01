@@ -141,20 +141,6 @@ def test_claim_drift_warns_on_edit_near_vault_quote(vault_with_quote):
     )
 
 
-def test_warning_recommends_quote_fidelity_auditor(vault_with_quote):
-    """Issue #523: Die Warnung verweist auf den quote-fidelity-auditor-Agenten
-    als Pruefoption fuer die Claim-Drift."""
-    result = run_hook(
-        edit_payload(CHAPTER_OLD, CHAPTER_NEW_DRIFTED),
-        env_overrides={"VAULT_DB_PATH": vault_with_quote},
-    )
-    payload = json.loads(result.stdout)
-    message = payload["systemMessage"]
-    assert "quote-fidelity-auditor" in message, (
-        f"systemMessage empfiehlt den quote-fidelity-auditor-Agenten nicht: {message}"
-    )
-
-
 def test_warning_payload_is_valid_hook_json_with_vault_context(vault_with_quote):
     """AC1: stdout ist gueltiges Hook-JSON und traegt den Vault-Kontext des Zitats."""
     result = run_hook(
