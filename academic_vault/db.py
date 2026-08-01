@@ -29,6 +29,15 @@ _CHUNK_VECTORS_DDL = (
     f"USING vec0(chunk_id TEXT PRIMARY KEY, embedding FLOAT[{EMBEDDING_DIM}])"
 )
 
+# vec0-Tabelle fuer verifizierte Zitat-Embeddings (Issue #521). Anders als
+# chunk_vectors gibt es KEINE BLOB-Basistabelle -- ist die sqlite-vec-
+# Extension in diesem Prozess nicht ladbar, ist Embedding fuer Quotes ein
+# vollstaendiges No-Op (bewusste Scope-Entscheidung, s. Plan-Kommentar #521).
+_QUOTE_EMBEDDINGS_DDL = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings "
+    f"USING vec0(quote_id TEXT PRIMARY KEY, embedding FLOAT[{EMBEDDING_DIM}])"
+)
+
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 
 # Erlaubte Werte fuer `quotes.stance` (Issue #400): Haltung eines Zitats zur
@@ -581,10 +590,7 @@ class VaultDB:
             # quote_embeddings via vec0 versuchen (nur wenn Extension geladen)
             if self.vec_available:
                 try:
-                    conn.execute(
-                        "CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings "
-                        "USING vec0(quote_id TEXT PRIMARY KEY, embedding FLOAT[384])"
-                    )
+                    conn.execute(_QUOTE_EMBEDDINGS_DDL)
                     conn.execute(_CHUNK_VECTORS_DDL)
                 except sqlite3.OperationalError:
                     self.vec_available = False
@@ -1005,6 +1011,82 @@ class VaultDB:
                     "SELECT * FROM quotes WHERE paper_id = ? LIMIT ?",
                     (paper_id, k),
                 ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Quote-Embeddings (Issue #521)
+    # ------------------------------------------------------------------
+
+    def vec_extension_loadable(self) -> bool:
+        """Prueft, ob die sqlite-vec-Extension in diesem Prozess ladbar ist.
+
+        Oeffnet dafuer kurz eine eigene Connection (ueber ``_connection()``,
+        die sie garantiert wieder schliesst) -- fuer Aufrufer, die VOR einer
+        teuren Operation (Embedding-Modell-Load) pruefen wollen, ob am Ende
+        ueberhaupt gespeichert werden koennte (Plan-Risiko #521/4).
+        """
+        with self._connection() as conn:
+            return self.load_vec_extension(conn)
+
+    def add_quote_embedding(self, quote_id: str, embedding_vector: bytes) -> bool:
+        """Schreibt (oder ersetzt) den Embedding-Vektor eines Quotes in vec0.
+
+        Best effort, analog zu ``_mirror_chunk_vector`` (Issue #372): gibt
+        ``False`` zurueck, wenn ``embedding_vector`` nicht die erwartete
+        Dimension hat oder die sqlite-vec-Extension nicht ladbar ist -- wirft
+        in diesen Faellen nie. Anders als bei Chunks gibt es fuer Quotes KEINE
+        BLOB-Basistabelle: ohne ladbare Extension ist dies ein vollstaendiges
+        No-Op (Issue #521, bewusste Scope-Entscheidung).
+
+        Raises:
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+        """
+        if not embedding_vector or len(embedding_vector) != EMBEDDING_DIM * 4:
+            return False
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            if not self.load_vec_extension(conn):
+                return False
+            try:
+                conn.execute(_QUOTE_EMBEDDINGS_DDL)
+                conn.execute(
+                    "INSERT OR REPLACE INTO quote_embeddings (quote_id, embedding) VALUES (?, ?)",
+                    (quote_id, embedding_vector),
+                )
+            except sqlite3.OperationalError:
+                return False
+        return True
+
+    def quotes_missing_embedding(self, limit: int | None = None) -> list[dict]:
+        """Quotes ohne Eintrag in ``quote_embeddings``. Kandidatenliste fuer den Backfill.
+
+        Leere Liste, wenn die sqlite-vec-Extension in diesem Prozess nicht
+        ladbar ist -- sonst wuerde der LEFT JOIN gegen die fehlende Virtual
+        Table mit ``sqlite3.OperationalError: no such table`` abbrechen
+        (Plan-Risiko #521/5), statt sauber zu degradieren.
+        """
+        with self._connection() as conn:
+            if not self.load_vec_extension(conn):
+                return []
+            try:
+                conn.execute(_QUOTE_EMBEDDINGS_DDL)
+            except sqlite3.OperationalError:
+                return []
+            sql = """
+                SELECT q.quote_id, q.paper_id, q.verbatim, q.context_before, q.context_after
+                FROM quotes q
+                LEFT JOIN quote_embeddings e ON e.quote_id = q.quote_id
+                WHERE e.quote_id IS NULL
+                ORDER BY q.created_at, q.quote_id
+            """
+            params: list = []
+            if limit is not None and limit > 0:
+                sql += " LIMIT ?"
+                params.append(limit)
+            try:
+                rows = conn.execute(sql, params).fetchall()
+            except sqlite3.OperationalError:
+                return []
         return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------

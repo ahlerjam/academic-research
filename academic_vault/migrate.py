@@ -769,6 +769,47 @@ def backfill_fulltext(
     return {"filled": filled, "skipped": skipped, "errors": errors}
 
 
+def backfill_quote_embeddings(
+    db_path: str,
+    limit: int | None = None,
+    embedder: object | None = None,
+) -> dict:
+    """Erzeugt Embeddings fuer Bestands-Quotes ohne Eintrag in ``quote_embeddings`` (#521).
+
+    Idempotent: verarbeitet nur Quotes, die noch keine Zeile in
+    ``quote_embeddings`` haben (:meth:`academic_vault.db.VaultDB.quotes_missing_embedding`).
+    Ein zweiter Lauf direkt danach findet keine Kandidaten mehr und schreibt
+    nichts. Ohne ladbare sqlite-vec-Extension oder ohne Embedding-Backend ist
+    der Lauf ein sauberes No-op (``skipped == len(quotes)``, kein Absturz) --
+    fuer Quotes gibt es anders als bei Chunks keinen BLOB-Fallback-Speicher.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        limit: Maximale Anzahl Quotes pro Lauf (``None`` = alle).
+        embedder: Embedder-Instanz. ``None`` = ``get_embedder()`` (Tests
+            injizieren hier den deterministischen ``fake_embedder``).
+
+    Returns:
+        ``{"embedded": int, "skipped": int}``. ``skipped`` zaehlt Quotes, fuer
+        die :func:`academic_vault.server.embed_quote` ``False`` zurueckgab
+        (Degradationspfad).
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.server import embed_quote
+
+    db = VaultDB(db_path)
+    embedded = 0
+    skipped = 0
+
+    for candidate in db.quotes_missing_embedding(limit=limit):
+        if embed_quote(db_path, candidate["quote_id"], embedder=embedder):
+            embedded += 1
+        else:
+            skipped += 1
+
+    return {"embedded": embedded, "skipped": skipped}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed-Migration: literature_state.md -> academic_vault SQLite"
@@ -783,10 +824,16 @@ def main() -> None:
         help="Statt der Seed-Migration: PDF-Volltexte fuer Bestands-Paper nachtragen (#373)",
     )
     parser.add_argument(
+        "--backfill-quote-embeddings",
+        action="store_true",
+        help="Statt der Seed-Migration: Embeddings fuer Bestands-Quotes ohne "
+        "quote_embeddings-Eintrag nachtragen (#521)",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Obergrenze fuer --backfill-fulltext (default: alle)",
+        help="Obergrenze fuer --backfill-fulltext/--backfill-quote-embeddings (default: alle)",
     )
     parser.add_argument(
         "--pdf-dir",
@@ -811,6 +858,21 @@ def main() -> None:
             f"filled={stats['filled']}, "
             f"skipped={stats['skipped']}, "
             f"errors={stats['errors']}"
+        )
+        return
+
+    if args.backfill_quote_embeddings:
+        if not Path(args.db).exists():
+            print(f"[ERROR] Vault-DB nicht gefunden: {args.db}", file=sys.stderr)
+            sys.exit(1)
+        from academic_vault.db import VaultDB
+
+        VaultDB(args.db).init_schema()
+        stats = backfill_quote_embeddings(args.db, limit=args.limit)
+        print(
+            f"Quote-Embedding-Backfill abgeschlossen: "
+            f"embedded={stats['embedded']}, "
+            f"skipped={stats['skipped']}"
         )
         return
 
