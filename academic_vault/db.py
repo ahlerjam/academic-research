@@ -1057,6 +1057,40 @@ class VaultDB:
                 return False
         return True
 
+    def get_quote_embedding(self, quote_id: str) -> list[float] | None:
+        """Liest den gespeicherten Embedding-Vektor eines Quotes (Issue #522).
+
+        Rein lesendes Gegenstueck zu :meth:`add_quote_embedding`. ``None``
+        bedeutet in jedem Fall "keine Zahl verfuegbar" und nie "Aehnlichkeit
+        null": fehlende sqlite-vec-Extension, fehlende ``quote_embeddings``-
+        Tabelle oder kein Eintrag zu dieser ``quote_id``. Aufrufer duerfen
+        daraus nichts ableiten (Muster :meth:`quotes_missing_embedding`).
+        """
+        with self._connection() as conn:
+            if not self.load_vec_extension(conn):
+                return None
+            try:
+                row = conn.execute(
+                    "SELECT embedding FROM quote_embeddings WHERE quote_id = ?",
+                    (quote_id,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                return None
+        if row is None:
+            return None
+        blob = row["embedding"]
+        if not isinstance(blob, bytes | bytearray):
+            return None
+        try:
+            return deserialize_f32(bytes(blob))
+        except ValueError:
+            # Abgeschnittener Altbestand: lieber "keine Zahl" als halbe Floats.
+            logger.warning(
+                "vault.get_quote_embedding: Embedding von Quote '%s' ist beschaedigt (#522).",
+                quote_id,
+            )
+            return None
+
     def quotes_missing_embedding(self, limit: int | None = None) -> list[dict]:
         """Quotes ohne Eintrag in ``quote_embeddings``. Kandidatenliste fuer den Backfill.
 

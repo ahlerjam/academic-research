@@ -10,6 +10,7 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 |-------|-----------|--------------|
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `verbatim-guard.mjs` | Blockt Kapitel-Writes mit nicht-verifizierten Zitaten |
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `claim-drift-guard.mjs` | Warnt, wenn eine Überarbeitung die Aussage um ein belegtes Zitat ändert, ohne den Beleg anzupassen |
+| `PreToolUse` (`Write\|Edit\|MultiEdit`) | `context-fidelity-guard.mjs` | Markiert Zitate, deren echter Quellkontext der Kapitelverwendung widerspricht (Quote-Mining) |
 | `PostToolUse` (`Write\|Edit\|MultiEdit`) | `post-tool-use-decisions.mjs` | Decision-Log: jede `.md`-Änderung wird im Vault protokolliert |
 | `PreCompact` | `pre-compact.mjs` | Snapshot-Backup vor Claude-Compaction |
 | `UserPromptSubmit` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
@@ -18,15 +19,15 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
 
-Das sind **6 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
-`post-tool-use-decisions.mjs`, `pre-compact.mjs`, `mid-session-reinforcement.mjs`,
-`bypass-log-report.mjs`) plus **2 Inline-Bash-Kommandos**;
-`mid-session-reinforcement.mjs` hängt an zwei Event-Konfigurationen
-(`UserPromptSubmit` und `SessionStart`/`compact`), und `PreToolUse` ruft zwei
-Skripte nacheinander auf.
+Das sind **7 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
+`context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`, `pre-compact.mjs`,
+`mid-session-reinforcement.mjs`, `bypass-log-report.mjs`) plus **2
+Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
+Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
+`PreToolUse` ruft drei Skripte nacheinander auf.
 
 > **Nicht verdrahtet:** `hooks/lib/vault-bridge.mjs` ist **kein** Hook, sondern ein
-> gemeinsames Modul, das die beiden Vault-Hooks importieren (DB-Pfad-Auflösung und
+> gemeinsames Modul, das die Vault-Hooks importieren (DB-Pfad-Auflösung und
 > Interpreter-Kaskade). Es liegt bei den übrigen importierten Modulen in
 > `hooks/lib/` (#542); flach in `hooks/` liegen ausschließlich die in
 > `hooks/hooks.json` registrierten Hooks. Der CI-Syntax-Gate erfasst `hooks/lib/`
@@ -245,6 +246,63 @@ auf stderr gibt es nur mit `CLAIM_DRIFT_DEBUG=1`; der Bypass-Marker
 > `academic-research-skills` von Imbad0202 (CC-BY-NC-4.0). Übernommen wurde
 > ausschließlich das **Konzept**; die Implementierung hier ist eigenständig, es wurde
 > kein Code von dort gelesen oder kopiert.
+
+### Kontexttreue-Markierung (`context-fidelity-guard.mjs`, #522)
+
+Der `verbatim-guard` prüft, **ob** ein Zitat im Vault steht, der `claim-drift-guard`
+prüft die **Kapitel**-Umgebung eines Zitats. Beide sehen nicht, ob der **Quellkontext**
+die Verwendung noch trägt: Das Original schränkt unmittelbar nach dem zitierten Satz
+ein („Allerdings gilt das nur für …"), das Kapitel übernimmt nur den ersten Teil. Genau
+dieses Quote-Mining-Muster macht der `context-fidelity-guard` sichtbar.
+
+Er **blockiert nie** (Exit 0, `systemMessage` + `hookSpecificOutput.additionalContext`,
+kein `permissionDecision`) — die Signale sind lexikalisch bzw. probabilistisch und
+werden bewusst nicht zur harten Linie gemacht. Die harte Linie bleibt der
+deterministische `verbatim-guard`.
+
+**Prüfbar** ist ein Zitat nur mit `quotes.context_source = 'fulltext'` (#520). Ein
+nichtleeres `context_before`/`context_after` genügt nicht: der No-Op-Pfad von
+`resolve_quote_context` lässt modellgenerierte Kontextfelder stehen. Der Hook meldet
+deshalb bei jedem Kapitel-Write mit Zitaten eine Abdeckungszeile
+(`[KONTEXT-PRÜFEN] Abdeckung: x von y Zitaten prüfbar`) und begründet jedes nicht
+prüfbare Zitat namentlich — kein Eintrag im Vault, kein aufgelöster Quellkontext oder
+Vault nicht erreichbar. Stilles Überspringen wäre ein lautloses Loch.
+
+Vier Signale, alle bewusst konservativ:
+
+| # | Signal | Quelle | Auslöser |
+|---|--------|--------|----------|
+| 1 | Kontrastmarker am **Anfang** von `context_after` | Vault | `however`, `nevertheless`, `allerdings`, `jedoch`, `dennoch`, … im ersten Satz (max. 80 Zeichen) |
+| 2 | Rahmen-Marker am **Ende** von `context_before` | Vault | `critics argue`, `kritiker behaupten`, `vielfach wird behauptet`, … — das Zitat referiert im Original eine fremde Position |
+| 3 | Hedge-Verlust Quelle → Kapitel | Vault + Kapitel | Relativierung in der Quelle (`deutet darauf hin`, `könnte`, `suggests`, …), **keine** Relativierung im Kapitelfenster **und** ein Absolutheitsmarker dort (`beweist`, `durchweg`, `ausnahmslos`, …) |
+| 4 | Semantische Distanz | `quote_embeddings` (#521) | `cos(embed_query(Kapitelfenster), gespeichertes Quote-Embedding) < CONTEXT_FIDELITY_SIM_MIN` |
+
+**Unterdrückung (kein False Positive bei bewusst kontrastiver Zitation):** Trägt das
+Kapitelfenster um das Zitat selbst ein Kontrast-/Relativierungssignal, ist die
+Kontrastivität offengelegt — Signal 1 und 2 sind dann gegenstandslos. Signal 3 und 4
+bleiben aktiv: ein offengelegter Kontrast heilt weder einen Hedge-Verlust noch eine
+semantische Verschiebung.
+
+> **Schwelle 0.35 ist ungeeicht.** e5-Ähnlichkeiten liegen eng beieinander; der Wert ist
+> eine begründete, defensiv niedrige Vermutung und kein Messergebnis. Er ist per
+> `CONTEXT_FIDELITY_SIM_MIN` justierbar; die Eichung gehört in `evals/`.
+
+Der Lookup läuft — wie beim `claim-drift-guard` — in **einem** Python-Subprozess für
+alle Kandidaten über `hooks/lib/vault-bridge.mjs`. Der Subprozess wird auf
+`HF_HUB_OFFLINE=1` gezwungen: ein Modell-Download im `PreToolUse`-Pfad würde das
+Hook-Timeout sprengen. Ist kein Quote-Embedding gespeichert oder kein Embedding-Backend
+verfügbar, meldet der Hook „Ähnlichkeit nicht geprüft" statt einer geratenen Zahl.
+
+Konfiguration: `CONTEXT_FIDELITY_WINDOW` (Kapitelfenster, Default 300),
+`CONTEXT_FIDELITY_MAX_QUOTES` (Kontingent je Write, Default 20),
+`CONTEXT_FIDELITY_SIM_MIN` (Default 0.35), `CONTEXT_FIDELITY_DEBUG=1`. Der Bypass-Marker
+`<!-- vault-guard: skip -->` schaltet auch diesen Hook stumm; die Nutzung wird wie beim
+`verbatim-guard` protokolliert, mit dem eigenen Label `context-fidelity-guard: skip`.
+
+> **Bypass-Report-Dedupe (#517/#522):** Zwei Guards am selben `PreToolUse`-Event loggen
+> denselben Bypass. `bypass-log-report.mjs` faltet deshalb Zeilen mit gleichem Pfad
+> innerhalb derselben Sekunde zu **einer** Nutzung zusammen — sonst meldete der Report
+> „2 neue Nutzung(en)" für einen einzigen Write.
 
 > **Warum nicht `Notification`/`PostCompact` (Stand vor #382)?** Laut offizieller
 > Claude-Code-Doku ([code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks))
