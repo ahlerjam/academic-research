@@ -117,10 +117,26 @@ Default-Werten, Beschreibung und Beispiel-Call.
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
 |------|-------------|------|
-| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None, stance=None)` | Fügt Verbatim-Zitat mit Provenance ein; `extraction_method="citations-api"` erfordert `api_response_id`; `stance` ist optional (`"supports"`/`"contrasts"`/`"mentions"`, sonst `None`) | `vault.add_quote("vaswani2017", "Attention is all you need", "citations-api", api_response_id="resp_1")` |
+| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None, stance=None)` | Fügt Verbatim-Zitat mit Provenance ein. `extraction_method` ist `"citations-api"` (erfordert `api_response_id`), `"manual"` (ungeprüft) oder `"local-verbatim"` (**fail-closed**, s. u.); `stance` ist optional (`"supports"`/`"contrasts"`/`"mentions"`, sonst `None`) | `vault.add_quote("vaswani2017", "Attention is all you need", "citations-api", api_response_id="resp_1")` |
 | `vault.search_quote_text(verbatim, k=5)` | LIKE-Volltextsuche in `quotes.verbatim` (prüft, ob ein Zitat existiert) | `vault.search_quote_text("Attention is all", k=3)` |
 | `vault.find_quotes(paper_id, query=None, k=10)` | Gibt Quotes für ein Paper zurück (optional Ähnlichkeitssuche) | `vault.find_quotes("vaswani2017", query="self-attention")` |
 | `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` |
+
+**`extraction_method="local-verbatim"` — fail-closed** (Issue #512)
+
+`vault.add_quote` prüft den Wortlaut selbst gegen den lokalen PDF-Volltext des
+Papers, **bevor** irgendetwas geschrieben wird. Das Enforcement sitzt im Vault
+und nicht in einem Hook — es lässt sich nicht per Marker abschalten.
+
+| Situation | Verhalten |
+|---|---|
+| Paper unbekannt, kein `pdf_path`, Datei nicht vorhanden | `ValueError`, nichts gespeichert |
+| Prüfstatus `no-match` oder `no-textlayer` | `ValueError` inkl. Status und bester Ähnlichkeit, nichts gespeichert |
+| Prüfstatus `exact` oder `snapped` | gespeichert wird der **Wortlaut aus der Quelle** (nicht der übergebene Kandidat) und die **verifizierte Seite**; ein abweichendes `pdf_page` wird verworfen und geloggt |
+
+Grenzen der Prüfung: seitenübergreifende Zitate und ausgelassene Wörter können
+falsch-negativ als `no-match` gelten. Dann ist `extraction_method="manual"` mit
+eigenem Beleg der richtige Weg — nicht das Aufweichen der Prüfung.
 
 **Notizen & Exzerpte** (Issue #462)
 

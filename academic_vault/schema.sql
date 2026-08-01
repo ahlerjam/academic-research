@@ -56,7 +56,16 @@ CREATE TABLE IF NOT EXISTS quotes (
   section           TEXT,
   context_before    TEXT,
   context_after     TEXT,
-  extraction_method TEXT NOT NULL CHECK(extraction_method IN ('citations-api','manual')),
+  -- Herkunftsnachweis des Wortlauts. Werteliste gespiegelt in
+  -- db.VALID_EXTRACTION_METHODS; Bestands-DBs hebt
+  -- migrate.widen_extraction_method_check() per Tabellen-Rebuild auf diesen
+  -- Stand (SQLite kann CHECK-Constraints nicht per ALTER TABLE aendern).
+  -- 'local-verbatim' (Issue #512) wird in server.add_quote() fail-closed
+  -- gegen den lokalen PDF-Volltext geprueft, bevor irgendetwas geschrieben
+  -- wird -- der CHECK hier ist nur die zweite Verteidigungslinie fuer
+  -- Direkt-Inserts.
+  extraction_method TEXT NOT NULL
+                      CHECK(extraction_method IN ('citations-api','manual','local-verbatim')),
   api_response_id   TEXT,
   created_at        INTEGER NOT NULL,
   -- Haltung des Zitats zur zitierenden Aussage (Issue #400). Vorgemerkt fuer
