@@ -10,6 +10,18 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`figure-verifier` ohne Citations-API (#533):** Der Agent verlangte in
+  Schritt 2 der Vorgehensweise bislang die Citations-API mit
+  `document`-Parameter (`file_id`) als einzigen Verifikationspfad — identisch
+  zum Muster in `skills/chapter-writer/references/citations-api.md`, das einen
+  separaten `ANTHROPIC_API_KEY` voraussetzt und den Agenten ohne diesen Key
+  funktionslos machte. Analog zu `risk-of-bias` liest `figure-verifier` das
+  PDF jetzt lokal: `vault.get_paper(paper_id)` → `pdf_path` → `Read(pdf_path,
+  pages=...)`, kein externer API-Call mehr nötig. `tools:`-Frontmatter ersetzt
+  `vault_ensure_file` durch `vault_get_paper`. Nicht verifizierbare Seiten
+  (fehlender/ungültiger `pdf_path`, korrupte/leere Seite, OCR fehlgeschlagen)
+  werden explizit im neuen `unverifiable_pages`-Feld des Outputs gemeldet statt
+  still übersprungen.
 - **Werkzeugsatz für den empirischen Teil (#473):** Zwei neue Skills schließen
   die Lücke zwischen Methodenwahl und Ergebniskapitel. `instrument-design`
   leitet aus Forschungsfrage, Unterfragen und Methodik in `academic_context.md`
