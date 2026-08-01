@@ -17,7 +17,7 @@ wird nur gestartet, wenn er direkt per Task-Aufruf adressiert wird.
 |-------|-------|-------------|----------|---------|
 | `query-generator` | Haiku | `/search` | automatisch via `/search` | Expandiert Suchquery auf Modulebene |
 | `relevance-scorer` | Sonnet | `/search`, `/score` | automatisch via `/search`, `/score` | Semantische Relevanz 0–1, 10er-Batches mit Prompt-Caching |
-| `quote-extractor` | Sonnet | `citation-extraction` | automatisch via `citation-extraction` | Verbatim-Zitate via Citations-API + Vault-Write |
+| `quote-extractor` | Sonnet | `citation-extraction` | automatisch via `citation-extraction` | Verbatim-Zitate via lokalem PDF-Pfad (`Read` + `local-verbatim`), Citations-API nur noch Opt-in |
 | `quality-reviewer` | Sonnet | `chapter-writer`, `abstract-generator` | automatisch via `chapter-writer`, `abstract-generator` | Evaluator-Optimizer-Pattern (PASS/REVISE/ESCALATE) |
 | `screening-judge` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Ein Treffer, ein Urteil: include/exclude/unclear als Ein-Fall-JSON |
 | `sparring-partner` | Opus | direkt, `advisor`/`research-question-refiner`/`methodology-advisor` | manuell | Denk- und Impulsgeber: benennt Schwächen, Gegenpositionen und Anschlussfragen, schreibt keine Kapitel-Prosa |

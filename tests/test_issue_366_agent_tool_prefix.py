@@ -53,7 +53,9 @@ WRONG_PREFIX = "mcp__academic_vault__"
 # agent_name -> Liste der erwarteten (korrekten) Vault-MCP-Tool-Namen.
 EXPECTED_VAULT_TOOLS = {
     "quote-extractor": [
-        "mcp__academic-vault__vault_ensure_file",
+        # #514: lokaler Verifikationspfad (vault.get_paper -> pdf_path ->
+        # Read) statt Citations-API/file_id -- vault_ensure_file entfaellt.
+        "mcp__academic-vault__vault_get_paper",
         "mcp__academic-vault__vault_add_quote",
     ],
     "risk-of-bias": [
