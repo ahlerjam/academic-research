@@ -38,7 +38,9 @@
  *   VAULT_GUARD_BYPASS_LOG        — Bypass-Log (identisch zu verbatim-guard.mjs)
  *   CONTEXT_FIDELITY_WINDOW       — Kapitelfenster um das Zitat (default 300)
  *   CONTEXT_FIDELITY_MAX_QUOTES   — geprueftes Kontingent je Write (default 20)
- *   CONTEXT_FIDELITY_SIM_MIN      — Kosinus-Schwelle (default 0.35, UNGEEICHT)
+ *   CONTEXT_FIDELITY_SIM_MIN      — [NICHT AKTIV IM PRETOOLUSE] Kosinus-Schwelle
+ *                                    (default 0.35, UNGEEICHT); die semantische
+ *                                    Distanz wird im PreToolUse-Pfad nicht berechnet.
  *   CONTEXT_FIDELITY_DEBUG        — '1' aktiviert Diagnose-Ausgaben auf stderr
  *   ACADEMIC_PYTHON               — Interpreter-Override fuer den Vault-Lookup
  */
@@ -65,12 +67,16 @@ const MAX_QUOTES = positiveInt(process.env.CONTEXT_FIDELITY_MAX_QUOTES, 20);
 const DEBUG = process.env.CONTEXT_FIDELITY_DEBUG === '1';
 
 /**
- * Kosinus-Schwelle, unterhalb derer Signal 4 anschlaegt.
+ * Kosinus-Schwelle, unterhalb derer Signal 4 (semantische Distanz) anschlaegen WUERDE.
+ *
+ * HINWEIS: Signal 4 ist im PreToolUse-Pfad NICHT AKTIV — die Kosinus-Aehnlichkeit
+ * wird im Lookup nicht berechnet (um torch/sentence-transformers-Importe und
+ * Modellgewichts-Loads im Subprozess zu vermeiden). Die Variable bleibt zum
+ * Konfigurieren bestehen, falls Signal 4 in Zukunft unter optimierten Bedingungen
+ * reaktiviert wird.
  *
  * UNGEEICHT: e5-Aehnlichkeiten liegen eng beieinander, 0.35 ist eine bewusst
- * defensive Vermutung und kein Messergebnis. Die Eichung ist ein evals-Thema;
- * bis dahin ist der Wert per Env justierbar und liegt tief genug, dass Signal 4
- * eher schweigt als falsch anschlaegt.
+ * defensive Vermutung und kein Messergebnis. Die Eichung ist ein evals-Thema.
  */
 const SIM_MIN = finiteFloat(process.env.CONTEXT_FIDELITY_SIM_MIN, 0.35);
 
