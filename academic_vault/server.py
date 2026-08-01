@@ -1160,7 +1160,7 @@ def _anthropic_key(api_key: str = "") -> str:
     Modulimport gelesene Wert. Die Aufrufzeit-Auswertung macht den optionalen
     Pfad testbar und laesst spaeter gesetzte Keys wirken (#535).
     """
-    return api_key or os.environ.get("ANTHROPIC_API_KEY", "") or _ANTHROPIC_KEY
+    return api_key or os.environ.get("ANTHROPIC_API_KEY", "")
 
 
 def ensure_file(db_path: str, paper_id: str, api_key: str = "") -> str | None:

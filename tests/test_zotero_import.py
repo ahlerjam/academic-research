@@ -641,9 +641,11 @@ class TestPDFAttachmentFallback:
         assert result.imported == 1
         mock_ef.assert_called_once()
 
-    def test_annotations_imported_even_when_download_fails(self, tmp_path):
+    def test_annotations_imported_even_when_download_fails(self, tmp_path, monkeypatch):
         """Annotationen haengen nicht am Download-Erfolg des PDFs."""
         from zotero_pull import run_import
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         cfg_path = _minimal_config(tmp_path)
         db_path = str(tmp_path / "vault.db")
