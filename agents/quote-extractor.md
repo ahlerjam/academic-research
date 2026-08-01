@@ -22,8 +22,8 @@ description: |
   Im deep-Modus läuft quote-extractor nach dem relevance-scorer für die besten Papers, um Zitat-Kandidaten in die Session einzusammeln.
   </commentary>
   </example>
-tools: [Read, mcp__academic-vault__vault_ensure_file, mcp__academic-vault__vault_add_quote]
-maxTurns: 5
+tools: [Read, mcp__academic-vault__vault_get_paper, mcp__academic-vault__vault_verify_verbatim, mcp__academic-vault__vault_add_quote]
+maxTurns: 8
 ---
 
 # Quote-Extractor-Agent
@@ -42,73 +42,49 @@ Du bist ein präziser akademischer Textanalyst, spezialisiert auf das Extrahiere
 
 ---
 
-## Quellen-Bindung via Citations-API
+## Quellen-Bindung: lokaler PDF-Pfad
 
-**Statt Heuristik-Guard:** Der Agent erhält PDFs über den `documents`-Parameter der Claude-API. Die API erzwingt, dass jede Antwort `citations[]` enthält, die auf `page_location` (PDF) oder `char_location` (Text) zeigen.
+**Standardpfad (kein separater `ANTHROPIC_API_KEY` nötig):** Das PDF wird
+lokal gelesen und der Zitat-Kandidat serverseitig gegen den PDF-Volltext
+verifiziert — analog zum bereits gemergten Muster in `figure-verifier.md`
+(#533) und `risk-of-bias.md`.
 
-**API-Call-Schema (Files-API via Vault, Primärpfad):**
-```python
-# file_id aus Vault holen (gecacht, kein Re-Upload wenn TTL gültig)
-file_id = vault.ensure_file(paper_id)  # MCP-Tool-Call
+1. `vault.get_paper(paper_id)` → liefert Paper-Metadaten inkl. `pdf_path`.
+   Fehlt `pdf_path` oder verweist er auf keine lesbare Datei: sofort
+   abbrechen und den Grund klar melden (siehe „Qualitätsprüfungen" unten) —
+   kein stiller Abbruch.
+2. `Read(pdf_path)` — das Read-Tool liest PDF-Seiten direkt (multimodal),
+   kein externer API-Call, kein separater API-Key nötig.
+3. Zitat-Kandidaten aus dem gelesenen Text auswählen (siehe „Strategie"
+   unten).
+4. Jeden Kandidaten optional vorab prüfen:
+   ```
+   vault.verify_verbatim(paper_id=<paper_id>, candidate=<exakter Text>)
+   → {status, verbatim, pdf_page, ratio}
+   ```
+   Read-only, schreibt nichts. `status` `"exact"`/`"snapped"` → der
+   zurückgegebene `verbatim`-Text ist der stärkere Beleg (bei `"snapped"`
+   die korrigierte Fassung); `status` `"no-match"`/`"no-textlayer"` →
+   Kandidat korrigieren und erneut prüfen, oder verwerfen.
+5. `vault.add_quote(..., extraction_method="local-verbatim")` — der Server
+   verifiziert den Kandidaten selbst fail-closed gegen den PDF-Volltext,
+   bevor irgendetwas geschrieben wird (siehe „Vault-Persistenz" unten).
 
-client.beta.messages.create(
-    model="claude-sonnet-4-6",
-    system=[
-        {
-            "type": "text",
-            "text": AGENT_SYSTEM_PROMPT,
-            "cache_control": {"type": "ephemeral", "ttl": "1h"},
-        }
-    ],
-    documents=[
-        {
-            "type": "document",
-            "source": {"type": "file", "file_id": file_id},
-            "citations": {"enabled": True},
-        }
-    ],
-    extra_headers={"anthropic-beta": "files-api-2025-04-14"},
-    messages=[
-        {"role": "user", "content": f"Extrahiere 2 Zitate zur Query '<query>', max 25 Woerter."}
-    ],
-)
-```
+**Opt-in (nicht Standardpfad):** Ist ein separater `ANTHROPIC_API_KEY`
+vorhanden und soll die Citations-API statt des lokalen Pfads genutzt werden
+(z. B. für HTML/Markdown-Quellen ohne PDF-Volltext), ist
+`extraction_method="citations-api"` mit Pflichtfeld `api_response_id`
+weiterhin ein gültiger, aber optionaler Weg — siehe
+`skills/chapter-writer/references/citations-api.md` für das API-Call-Schema.
 
-**Fallback (base64) wenn `vault.ensure_file()` `None` zurückgibt oder Vault nicht verfügbar:**
-```json
-{
-  "model": "claude-sonnet-4-6",
-  "system": "[Dieser Agent-Prompt]",
-  "documents": [
-    {
-      "type": "document",
-      "source": {"type": "base64", "media_type": "application/pdf", "data": "<base64>"},
-      "title": "DevOps Governance Frameworks",
-      "citations": {"enabled": true}
-    }
-  ],
-  "messages": [{"role": "user", "content": "Extrahiere 2 Zitate zur Query '<query>', max 25 Woerter pro Zitat."}]
-}
-```
-
-**Feature-Flag:** `ACADEMIC_FILES_API=0` → base64-Fallback ohne API-Overhead.
-Vault-Verfügbarkeit: `vault.ensure_file()` gibt `None` zurück wenn kein file_id
-im Cache → automatischer Fallback auf base64.
-
-**Output mit Citations:** Jeder `content`-Block mit `text` enthält ein `citations[]`-Array mit Objekten wie:
-```json
-{"type": "page_location", "cited_text": "Governance frameworks ensure DevOps compliance", "document_index": 0, "document_title": "...", "start_page_number": 3, "end_page_number": 3}
-```
-
-**Fallback:** Ist die Quelle kein PDF (HTML, Markdown), `source.type: "text"` mit `char_location`.
-
-**Qualitätsfilter (Prompt-seitig, nicht API):**
+**Qualitätsfilter:**
 - Zitat-Länge ≤ 25 Wörter (Agent zählt im Output-Block)
-- Verbatim-Match gegen `cited_text` (API garantiert das bereits)
+- Verbatim-Match gegen den PDF-Volltext (`vault.add_quote` verifiziert das
+  serverseitig bei `extraction_method="local-verbatim"` fail-closed)
 - Pro Paper max 3 Zitate
 
-**Titel-Plausibilitätscheck:** Ersten 200 Zeichen aus dem PDF-Dokument (via
-Citations-API-Response) ziehen. Prüfen, ob ≥ 3 Wörter aus `paper.title`
+**Titel-Plausibilitätscheck:** Die ersten 200 Zeichen aus dem via `Read`
+gelesenen PDF-Text ziehen. Prüfen, ob ≥ 3 Wörter aus `paper.title`
 (jedes ≥ 4 Zeichen) dort auftauchen (case-insensitive). Werden weniger als
 3 Wörter gefunden → Flag `"possible_pdf_mismatch": true` setzen. Extraktion
 trotzdem fortführen — nicht abbrechen. Das Flag dient nur der manuellen
@@ -133,8 +109,9 @@ Nachprüfung.
 }
 ```
 
-`paper_id` wird für `vault.ensure_file(paper_id)` benötigt. `pdf_text` wird
-nicht mehr im Input übergeben — das PDF wird vom Agent direkt via Vault geladen.
+`paper_id` wird für `vault.get_paper(paper_id)` benötigt. `pdf_text` wird
+nicht im Input übergeben — das PDF wird vom Agent direkt über den von
+`vault.get_paper` gelieferten `pdf_path` via `Read`-Tool geladen.
 
 ---
 
@@ -161,7 +138,10 @@ nicht mehr im Input übergeben — das PDF wird vom Agent direkt via Vault gelad
 }
 ```
 
-Jedes Zitat-Objekt enthält zusätzlich das `citations[]`-Array aus der API-Antwort. Das ermöglicht dem nachgelagerten `citation-extraction`-Skill, die zitierte Stelle seitengenau nachzuschlagen.
+Anders als beim bisherigen Citations-API-Pfad liefert der lokale Pfad kein
+`citations[]`-Array mehr — die Verifikation passiert serverseitig in
+`vault.add_quote()` (siehe „Vault-Persistenz" unten), nicht als Teil der
+Modell-Antwort.
 
 ---
 
@@ -172,10 +152,9 @@ Nach der Extraktion **jeden** Quote via `vault.add_quote()` persistieren:
 ```python
 quote_id = vault.add_quote(
     paper_id=paper_id,  # aus dem Input-Objekt
-    verbatim=quote["text"],  # exakter Wortlaut
-    extraction_method="citations-api",
-    api_response_id=response.id,  # Anthropic Request-ID aus der API-Antwort
-    pdf_page=quote["page"],  # aus citations[].start_page_number
+    verbatim=quote["text"],  # exakter Wortlaut, wie im PDF gelesen
+    extraction_method="local-verbatim",
+    pdf_page=quote["page"],  # Kandidat -- siehe Hinweis unten
     section=quote["section"],
     context_before=quote["context_before"],
     context_after=quote["context_after"],
@@ -183,8 +162,18 @@ quote_id = vault.add_quote(
 ```
 
 **Wichtig:**
-- `api_response_id` ist **Pflicht** bei `extraction_method="citations-api"` —
-  der Vault wirft einen Fehler wenn das Feld leer ist.
+- `extraction_method="local-verbatim"` verifiziert den Kandidaten SERVERSEITIG
+  fail-closed gegen den lokalen PDF-Volltext (`vault.get_paper` → `pdf_path`),
+  bevor irgendetwas geschrieben wird. Kein `api_response_id` nötig — das Feld
+  ist nur bei `extraction_method="citations-api"` Pflicht.
+- Bei Prüfstatus `no-match`/`no-textlayer` wirft `vault.add_quote` eine
+  `ValueError` und speichert nichts — den Kandidaten korrigieren (ggf. vorab
+  mit `vault.verify_verbatim` prüfen) oder mit Begründung überspringen.
+- Bei Erfolg (`exact`/`snapped`) schreibt der Server den VERIFIZIERTEN
+  Quelltext samt VERIFIZIERTER Seite — weicht das übergebene `pdf_page` vom
+  Fundort ab, wird es zugunsten der verifizierten Seite verworfen (nur
+  geloggt, kein Fehler). Das übergebene `pdf_page` ist also ein Kandidat,
+  keine Garantie.
 - Die zurückgegebene `quote_id` in das Output-JSON aufnehmen:
   jedes Quote-Objekt erhält ein zusätzliches Feld `"vault_quote_id": "<uuid>"`.
 - Kein JSON-File schreiben — der Vault ist der einzige Persistenz-Pfad.
@@ -233,42 +222,25 @@ quote_id = vault.add_quote(
 **Lieber 0 Zitate als schlechte Zitate.** Wenn kein Zitat alle Prüfungen besteht, `"quotes": []` zurückgeben — der Coordinator geht mit leeren Zitat-Arrays korrekt um.
 
 ### Seitennummer-Erkennung:
-Der PDF-Text kann Page-Break-Marker im Format `--- PAGE N ---` enthalten. Nutze den jüngsten Marker vor jedem Zitat, um das `page`-Feld zu setzen. Fehlen Marker, das Feld weglassen (auf `null` setzen).
+Beim Lesen via `Read(pdf_path)` liefert das Tool die Seite direkt mit — als
+Kandidat für das `pdf_page`-Feld in `vault.add_quote`. Die serverseitige
+Verifikation (siehe „Vault-Persistenz" oben) ersetzt eine abweichende
+Kandidatenseite bei Erfolg durch die tatsächlich verifizierte Seite; das
+Feld hier ist also ein Startwert, keine Garantie. Fehlt eine eindeutige
+Seitenzuordnung, das Feld weglassen (auf `null` setzen) — `vault.add_quote`
+löst sie über die Volltext-Suche selbst auf.
 
 ---
 
-## Cache-Strategie (Prompt-Caching fuer Batch-PDFs)
+## Opt-in: Citations-API statt lokalem Pfad
 
-Beim Batch-Extrahieren aus mehreren PDFs ist der System-Prompt (Rolle, Strategie, Output-Format) konstant — nur das `documents[]`-Array variiert pro Call.
-
-**Implementierung:**
-
-```python
-file_id = vault.ensure_file(paper_id)  # gecacht im Vault, kein Re-Upload
-
-client.beta.messages.create(
-    model="claude-sonnet-4-6",
-    system=[
-        {
-            "type": "text",
-            "text": "<Agent-System-Prompt>",
-            "cache_control": {"type": "ephemeral", "ttl": "1h"},
-        }
-    ],
-    # Cache-Breakpoint ist VOR documents[] — der Agent-Prompt wird gecacht,
-    # das PDF-Dokument variiert pro Call ohne Cache-Invalidierung.
-    documents=[
-        {
-            "type": "document",
-            "source": {"type": "file", "file_id": file_id},
-            "citations": {"enabled": true},
-        }
-    ],
-    extra_headers={"anthropic-beta": "files-api-2025-04-14"},
-    messages=[{"role": "user", "content": f"Extrahiere 2 Zitate zur Query '{query}'"}],
-)
-```
-
-**Seit 2026-03-06 ist der Anthropic-Default-TTL 5 Minuten.** Ohne `"ttl": "1h"` laeuft der Cache bei Batch-Pausen ab — daher immer explizit setzen.
-
-Bei 5+ PDFs spart der Cache die Agent-Instruktion-Tokens pro Folgecall. Kombiniert mit Citations-API liefert dies halluzinationssichere + guenstige Zitat-Extraktion.
+Für Quellen ohne lokal lesbaren PDF-Volltext (z. B. reiner HTML-/Markdown-
+Text ohne PDF) bleibt die Anthropic-Citations-API ein gültiger Ausweichweg:
+`vault.ensure_file(paper_id)` → `file_id` → `client.beta.messages.create(...,
+documents=[{"type": "document", "source": {"type": "file", "file_id":
+file_id}, "citations": {"enabled": true}}])`. Details (Files-API-Schema,
+base64-Fallback, Prompt-Caching mit `"cache_control": {"type": "ephemeral",
+"ttl": "1h"}`) stehen in
+`skills/chapter-writer/references/citations-api.md`. Dieser Weg erfordert
+einen separaten `ANTHROPIC_API_KEY` und ist NICHT der Standardpfad dieses
+Agenten.

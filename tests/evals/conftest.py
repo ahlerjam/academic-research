@@ -1,4 +1,5 @@
 """Shared Fixtures fuer Evals-Suites."""
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -160,7 +161,8 @@ class MockVault:
       - add_quote(...) → quote_id (UUID)
       - find_quotes(paper_id, query, k) → list[dict]
       - get_quote(quote_id) → dict | None
-      - ensure_file(paper_id) → file_id (Fake)
+      - get_paper(paper_id) → dict | None (Metadaten inkl. pdf_path, #514)
+      - ensure_file(paper_id) → file_id (Fake, nur fuer den Citations-API-Opt-in)
     """
 
     def __init__(self) -> None:
@@ -212,9 +214,7 @@ class MockVault:
         k: int = 10,
     ) -> list[dict]:
         """Gibt gespeicherte Quotes fuer ein Paper zurueck, optional gefiltert."""
-        results = [
-            q for q in self._quotes.values() if q["paper_id"] == paper_id
-        ]
+        results = [q for q in self._quotes.values() if q["paper_id"] == paper_id]
         if query:
             q_lower = query.lower()
             results = [
@@ -229,6 +229,18 @@ class MockVault:
     def ensure_file(self, paper_id: str) -> str:
         """Gibt Fake-file_id zurueck (kein echter API-Upload)."""
         return f"file-fake-{paper_id}"
+
+    def get_paper(self, paper_id: str) -> dict | None:
+        """Gibt Fake-Paper-Metadaten inkl. pdf_path zurueck (#514)."""
+        paper = _FAKE_PAPERS.get(paper_id)
+        if paper is None:
+            return None
+        return {
+            "paper_id": paper["paper_id"],
+            "title": paper["title"],
+            "doi": paper["doi"],
+            "pdf_path": paper["pdf_path"],
+        }
 
 
 @pytest.fixture
