@@ -10,6 +10,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`quote_embeddings` nach bestandener Prüfung befüllt, inkl. Backfill (#521):**
+  Neue Funktion `academic_vault.server.embed_quote(db_path, quote_id,
+  embedder=None)` erzeugt ein lokales e5-Embedding aus `context_before +
+  verbatim + context_after` (Fallback: nur `verbatim` ohne Kontext) und
+  schreibt es in die vec0-Tabelle `quote_embeddings`. `vault.add_quote` ruft
+  die Funktion — non-fatal, Muster `_maybe_resolve_quote_context` (#520) —
+  nach dem Insert für alle drei gültigen `extraction_method`-Werte auf
+  (`citations-api`/`manual`/`local-verbatim` gelten laut CHECK-Constraint als
+  "bestandene Prüfung", geraten wird nie). Fehlendes Embedding-Backend oder
+  nicht ladbare sqlite-vec-Extension degradieren sauber (geloggt, kein
+  Absturz) — anders als `chunk_embeddings` hat `quote_embeddings` KEINE
+  BLOB-Basistabelle, ohne Extension ist Embedding hier ein vollständiges
+  No-Op (bewusste Scope-Entscheidung). Neue idempotente Backfill-Funktion
+  `academic_vault.migrate.backfill_quote_embeddings(db_path, limit=None)` +
+  CLI-Flag `--backfill-quote-embeddings` füllen Bestands-Quotes ohne
+  `quote_embeddings`-Eintrag nach. Kein Schema-Versionssprung — die leere
+  vec0-Tabelle `quote_embeddings` existierte bereits seit #217/#219, nur
+  ungenutzt.
+
 - **`resolve_quote_context` — echter Quellkontext statt modell-erinnertem (#520):**
   Neue Funktion `academic_vault.server.resolve_quote_context(db_path, quote_id,
   window=600)` zieht ±600 Zeichen ECHTEN Text aus `paper_fulltext` um die

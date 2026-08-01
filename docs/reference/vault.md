@@ -155,6 +155,36 @@ Die Funktion ist auch direkt aufrufbar:
 |---|---|
 | `resolve_quote_context(db_path, quote_id, window=600)` | Sucht die Fundstelle von `quotes.verbatim` im `paper_fulltext` des zugehörigen Papers und schneidet ±`window` Zeichen als Kontext heraus. Persistiert nur bei nachgewiesener Fundstelle (`context_source="fulltext"`), gibt `True`/`False` zurück (`False` = No-Op). Wirft `ValueError` bei unbekannter `quote_id`. |
 
+**Zitat-Embeddings — `embed_quote`** (Issue #521)
+
+Nach jedem `vault.add_quote(...)` wird — non-fatal, im Hintergrund, für ALLE
+drei gültigen `extraction_method`-Werte (`citations-api`/`manual`/
+`local-verbatim` gelten laut CHECK-Constraint als "bestandene Prüfung") —
+versucht, ein lokales e5-Embedding aus `context_before + verbatim +
+context_after` (Fallback: nur `verbatim` ohne Kontext) zu erzeugen und in die
+vec0-Tabelle `quote_embeddings` zu schreiben. Billiger lokaler Vorfilter für
+einen künftigen Kontexttreue-Hook — Prinzip „erst prüfen, dann vektorn":
+ungeprüfte Zustände gibt es in `quotes` nicht, daher bekommt jedes gespeicherte
+Zitat einen Embedding-Versuch.
+
+Anders als `chunk_embeddings` hat `quote_embeddings` **keine
+BLOB-Basistabelle**: fehlt das lokale Embedding-Backend ODER ist die
+sqlite-vec-Extension in diesem Prozess nicht ladbar (z. B. macOS-System-Python
+ohne `--enable-loadable-sqlite-extensions`), ist Embedding für Zitate ein
+vollständiges No-Op — geloggt, kein Absturz (bewusste Scope-Entscheidung, kein
+Schema-Umbau).
+
+| Funktion (Signatur mit Defaults) | Beschreibung |
+|---|---|
+| `embed_quote(db_path, quote_id, embedder=None)` | Erzeugt und speichert das Embedding eines Zitats. Prüft Backend UND Extension VOR dem teuren Modell-Load. Gibt `True`/`False` zurück (`False` = Degradationspfad, geloggt). Wirft `ValueError` bei unbekannter `quote_id`. |
+
+Bestands-Quotes ohne `quote_embeddings`-Eintrag lassen sich per Backfill
+nachrüsten (idempotent — ein zweiter Lauf findet keine Kandidaten mehr):
+
+```bash
+python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-quote-embeddings
+```
+
 **Notizen & Exzerpte** (Issue #462)
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |

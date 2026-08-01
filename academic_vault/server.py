@@ -311,6 +311,95 @@ def _maybe_resolve_quote_context(db_path: str, quote_id: str) -> bool:
         return False
 
 
+def _quote_embedding_text(quote: dict) -> str:
+    """Baut den Embedding-Text: ``context_before + verbatim + context_after`` (#521).
+
+    Fallback auf nur ``verbatim``, wenn kein Kontext vorliegt (Quote hat
+    ``context_source IS NULL``, z. B. ``extraction_method='manual'`` oder
+    ``resolve_quote_context`` fand keine Fundstelle).
+    """
+    before = quote.get("context_before") or ""
+    after = quote.get("context_after") or ""
+    return before + quote["verbatim"] + after
+
+
+def embed_quote(db_path: str, quote_id: str, embedder: object | None = None) -> bool:
+    """Erzeugt und speichert das Embedding eines verifizierten Zitats (Issue #521).
+
+    Backend- UND Extension-Verfuegbarkeit werden VOR dem teuren
+    ``embed_documents()``-Aufruf geprueft (Plan-Risiko #521/4): ist die
+    vec0-Extension in diesem Prozess nicht ladbar, kann ohnehin nirgends
+    gespeichert werden -- kein unnoetiger Modell-Load. Embedding-Text ist
+    ``context_before + verbatim + context_after`` (:func:`_quote_embedding_text`).
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        quote_id: Referenz auf ``quotes.quote_id``.
+        embedder: Embedder-Instanz. ``None`` = ``get_embedder()``.
+
+    Returns:
+        ``True`` wenn ein Embedding geschrieben wurde, sonst ``False``
+        (Degradationspfad: fehlendes Backend oder fehlende Extension --
+        beide Faelle werden geloggt, nie stillschweigend uebersprungen).
+
+    Raises:
+        ValueError: ``quote_id`` ist unbekannt.
+        VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+
+    if not db.vec_extension_loadable():
+        logger.warning(
+            "vault.embed_quote: sqlite-vec-Extension nicht ladbar -- Quote '%s' "
+            "bleibt ohne Embedding (#521).",
+            quote_id,
+        )
+        return False
+
+    active_embedder = embedder if embedder is not None else get_embedder()
+    if active_embedder is None:
+        logger.warning(
+            "vault.embed_quote: kein Embedding-Backend verfuegbar -- Quote '%s' "
+            "bleibt ohne Embedding (#521).",
+            quote_id,
+        )
+        return False
+
+    quote = db.get_quote(quote_id)
+    if quote is None:
+        raise ValueError(f"vault.embed_quote: Quote '{quote_id}' nicht gefunden.")
+
+    text = _quote_embedding_text(quote)
+    vectors = active_embedder.embed_documents([text])  # type: ignore[attr-defined]
+    if not vectors:
+        return False
+
+    from .embedding_model import serialize_f32
+
+    return db.add_quote_embedding(quote_id, serialize_f32(vectors[0]))
+
+
+def _maybe_embed_quote(db_path: str, quote_id: str) -> bool:
+    """Best-effort-Wrapper um :func:`embed_quote` (#521).
+
+    Faengt unerwartete Fehler ab (Muster ``_maybe_resolve_quote_context``,
+    #520) -- das Zitat wurde bereits erfolgreich committet, ein Fehlschlag
+    hier darf ``vault.add_quote`` nicht als fehlgeschlagen erscheinen lassen.
+    Die erwarteten Degradationspfade (kein Backend/keine Extension) loggen
+    bereits in :func:`embed_quote` selbst und werfen nicht.
+    """
+    try:
+        return embed_quote(db_path, quote_id)
+    except Exception as exc:  # Embedding ist optional -- nie fatal fuer add_quote
+        logger.warning(
+            "vault.add_quote: embed_quote() fuer Quote '%s' fehlgeschlagen: %s (#521)",
+            quote_id,
+            exc,
+        )
+        return False
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -360,6 +449,15 @@ def add_quote(
     manuell gesetzt; die automatische Klassifikation per lokalem NLI-Modell
     (Konzept-Anleihe: scite Smart Citations / SemanticCite, jeweils nur als
     Idee uebernommen -- keine API-Anbindung) ist ein separates Folge-Issue.
+
+    Nach dem Insert wird -- non-fatal, Issue #521 -- fuer JEDE der drei
+    gueltigen ``extraction_method``-Werte (der CHECK-Constraint laesst nur
+    'citations-api'/'manual'/'local-verbatim' zu, alle drei gelten als
+    "bestandene Pruefung") versucht, ein Embedding zu erzeugen und in
+    ``quote_embeddings`` (vec0) zu schreiben (:func:`embed_quote`). Fehlendes
+    Embedding-Backend oder nicht ladbare sqlite-vec-Extension degradieren
+    sauber (geloggt, kein Absturz) -- der bereits gespeicherte, verifizierte
+    Quote-Datensatz bleibt davon unberuehrt.
     """
     if extraction_method == "citations-api" and not api_response_id:
         raise ValueError(
@@ -385,6 +483,7 @@ def add_quote(
     )
     if extraction_method == "local-verbatim":
         _maybe_resolve_quote_context(db_path, quote_id)
+    _maybe_embed_quote(db_path, quote_id)
     return quote_id
 
 
