@@ -403,17 +403,18 @@ class TestAnnotationImport:
 
             with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                 with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    with patch(
-                        "zotero_pull.verify_verbatim",
-                        return_value=VerbatimResult(
-                            status="exact",
-                            verbatim="Ein wichtiges Highlight.",
-                            pdf_page=1,
-                            char_start=0,
-                            ratio=1.0,
-                        ),
-                    ):
-                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+                    with patch("zotero_pull.extract_pages", return_value=[]):
+                        with patch(
+                            "zotero_pull.verify_verbatim_with_pages",
+                            return_value=VerbatimResult(
+                                status="exact",
+                                verbatim="Ein wichtiges Highlight.",
+                                pdf_page=1,
+                                char_start=0,
+                                ratio=1.0,
+                            ),
+                        ):
+                            result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -462,17 +463,18 @@ class TestAnnotationImport:
 
             with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                 with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    with patch(
-                        "zotero_pull.verify_verbatim",
-                        return_value=VerbatimResult(
-                            status="exact",
-                            verbatim="Randbemerkung ohne nummerische Seite.",
-                            pdf_page=1,
-                            char_start=0,
-                            ratio=1.0,
-                        ),
-                    ):
-                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+                    with patch("zotero_pull.extract_pages", return_value=[]):
+                        with patch(
+                            "zotero_pull.verify_verbatim_with_pages",
+                            return_value=VerbatimResult(
+                                status="exact",
+                                verbatim="Randbemerkung ohne nummerische Seite.",
+                                pdf_page=1,
+                                char_start=0,
+                                ratio=1.0,
+                            ),
+                        ):
+                            result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -527,17 +529,18 @@ class TestAnnotationImport:
 
             with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                 with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    with patch(
-                        "zotero_pull.verify_verbatim",
-                        return_value=VerbatimResult(
-                            status="exact",
-                            verbatim="Fussnotenverweis.",
-                            pdf_page=1,
-                            char_start=0,
-                            ratio=1.0,
-                        ),
-                    ):
-                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+                    with patch("zotero_pull.extract_pages", return_value=[]):
+                        with patch(
+                            "zotero_pull.verify_verbatim_with_pages",
+                            return_value=VerbatimResult(
+                                status="exact",
+                                verbatim="Fussnotenverweis.",
+                                pdf_page=1,
+                                char_start=0,
+                                ratio=1.0,
+                            ),
+                        ):
+                            result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -778,17 +781,18 @@ class TestAnnotationReimportDedup:
                 mock_zotero_module.Zotero.return_value = zot_mock
                 with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                     with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                        with patch(
-                            "zotero_pull.verify_verbatim",
-                            return_value=VerbatimResult(
-                                status="exact",
-                                verbatim="Markierung ohne Identifier-Dedup.",
-                                pdf_page=1,
-                                char_start=0,
-                                ratio=1.0,
-                            ),
-                        ):
-                            return run_import(config_path=str(cfg_path), db_path=db_path)
+                        with patch("zotero_pull.extract_pages", return_value=[]):
+                            with patch(
+                                "zotero_pull.verify_verbatim_with_pages",
+                                return_value=VerbatimResult(
+                                    status="exact",
+                                    verbatim="Markierung ohne Identifier-Dedup.",
+                                    pdf_page=1,
+                                    char_start=0,
+                                    ratio=1.0,
+                                ),
+                            ):
+                                return run_import(config_path=str(cfg_path), db_path=db_path)
 
         result_1 = _run()
         assert result_1.quotes_imported == 1
@@ -846,17 +850,18 @@ class TestAnnotationReimportDedup:
                 mock_zotero_module.Zotero.return_value = zot_mock
                 with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                     with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                        with patch(
-                            "zotero_pull.verify_verbatim",
-                            return_value=VerbatimResult(
-                                status="exact",
-                                verbatim="Wiederkehrende Definition.",
-                                pdf_page=1,
-                                char_start=0,
-                                ratio=1.0,
-                            ),
-                        ):
-                            return run_import(config_path=str(cfg_path), db_path=db_path)
+                        with patch("zotero_pull.extract_pages", return_value=[]):
+                            with patch(
+                                "zotero_pull.verify_verbatim_with_pages",
+                                return_value=VerbatimResult(
+                                    status="exact",
+                                    verbatim="Wiederkehrende Definition.",
+                                    pdf_page=1,
+                                    char_start=0,
+                                    ratio=1.0,
+                                ),
+                            ):
+                                return run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert _run().quotes_imported == 2
         assert sorted(r["printed_page"] for r in _quotes_rows(db_path)) == [3, 9]
@@ -959,7 +964,7 @@ def _run_with_annotations(tmp_path, item_key: str, doi: str, annotation_children
             return annotation_children
         return []
 
-    def _verify_side_effect(_pdf_path, candidate):
+    def _verify_side_effect(_pages, candidate):
         # Echot den Kandidaten unveraendert als "Quellwortlaut" zurueck --
         # ausreichend fuer diese Tests, die die Trennung annotationText/
         # annotationComment pruefen, nicht die Verifikationslogik selbst
@@ -975,8 +980,12 @@ def _run_with_annotations(tmp_path, item_key: str, doi: str, annotation_children
 
         with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
             with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                with patch("zotero_pull.verify_verbatim", side_effect=_verify_side_effect):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+                with patch("zotero_pull.extract_pages", return_value=[]):
+                    with patch(
+                        "zotero_pull.verify_verbatim_with_pages",
+                        side_effect=_verify_side_effect,
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
 
     return result, db_path
 
@@ -1166,8 +1175,12 @@ def _run_with_annotations_real_pdf(
         with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
             with patch("zotero_pull._download_attachment", return_value=local_path):
                 if verify_side_effect is not None:
-                    with patch("zotero_pull.verify_verbatim", side_effect=verify_side_effect):
-                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+                    with patch("zotero_pull.extract_pages", return_value=[]):
+                        with patch(
+                            "zotero_pull.verify_verbatim_with_pages",
+                            side_effect=verify_side_effect,
+                        ):
+                            result = run_import(config_path=str(cfg_path), db_path=db_path)
                 else:
                     result = run_import(config_path=str(cfg_path), db_path=db_path)
 

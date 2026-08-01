@@ -39,7 +39,11 @@ except ImportError:  # pragma: no cover
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 from academic_vault.server import add_paper, add_quote, ensure_file  # noqa: E402
-from academic_vault.verbatim import verify_verbatim  # noqa: E402
+from academic_vault.verbatim import (  # noqa: E402
+    verify_verbatim,
+    verify_verbatim_with_pages,
+)
+from academic_vault.chunking import extract_pages  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Datenklassen
@@ -432,6 +436,17 @@ def run_import(
                         # damit auch Dubletten innerhalb eines Laufs greifen.
                         seen_quotes = _existing_quote_keys(db_path, paper_id)
 
+                        # PDF-Seiten einmal vor der Schleife extrahieren,
+                        # um Pro-Annotation PDF-Neu-Parsing zu vermeiden
+                        # (Performance-Fix fuer Issue #529, P1-Finding).
+                        pages_cache = None
+                        cache_error = None
+                        if local_path:
+                            try:
+                                pages_cache = extract_pages(local_path)
+                            except Exception as e:
+                                cache_error = e
+
                         for annotation_child in annotation_children:
                             ann_data = annotation_child.get("data", {})
                             if ann_data.get("itemType") != "annotation":
@@ -459,8 +474,16 @@ def run_import(
                                 )
                                 continue
 
+                            if cache_error is not None:
+                                # PDF-Extraktion ist fehlgeschlagen
+                                result.unverified_quotes += 1
+                                result.unverified_details.append(
+                                    f"{paper_id} ({ann_key}): Verifikationsfehler ({cache_error})"
+                                )
+                                continue
+
                             try:
-                                verification = verify_verbatim(local_path, candidate)
+                                verification = verify_verbatim_with_pages(pages_cache, candidate)
                             except Exception as e:
                                 # Ein kaputtes/unlesbares PDF darf den gesamten
                                 # Item-Import nicht mitreissen (Vorbild:
