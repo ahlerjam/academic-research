@@ -275,29 +275,31 @@ Vier Signale, alle bewusst konservativ:
 | 1 | Kontrastmarker am **Anfang** von `context_after` | Vault | `however`, `nevertheless`, `allerdings`, `jedoch`, `dennoch`, … im ersten Satz (max. 80 Zeichen) |
 | 2 | Rahmen-Marker am **Ende** von `context_before` | Vault | `critics argue`, `kritiker behaupten`, `vielfach wird behauptet`, … — das Zitat referiert im Original eine fremde Position |
 | 3 | Hedge-Verlust Quelle → Kapitel | Vault + Kapitel | Relativierung in der Quelle (`deutet darauf hin`, `könnte`, `suggests`, …), **keine** Relativierung im Kapitelfenster **und** ein Absolutheitsmarker dort (`beweist`, `durchweg`, `ausnahmslos`, …) |
-| 4 | Semantische Distanz | `quote_embeddings` (#521) | `cos(embed_query(Kapitelfenster), gespeichertes Quote-Embedding) < CONTEXT_FIDELITY_SIM_MIN` |
+| 4 | Semantische Distanz | **[Nicht aktiv im PreToolUse-Pfad]** ~~`quote_embeddings` (#521)~~ | ~~`cos(embed_query(Kapitelfenster), gespeichertes Quote-Embedding) < CONTEXT_FIDELITY_SIM_MIN`~~ — Signal 4 deaktiviert um Embedding-Modell-Loads und torch-Importe im Vault-Lookup zu vermeiden (#522) |
 
 **Unterdrückung (kein False Positive bei bewusst kontrastiver Zitation):** Trägt das
 Kapitelfenster um das Zitat selbst ein Kontrast-/Relativierungssignal, ist die
-Kontrastivität offengelegt — Signal 1 und 2 sind dann gegenstandslos. Signal 3 und 4
-bleiben aktiv: ein offengelegter Kontrast heilt weder einen Hedge-Verlust noch eine
-semantische Verschiebung.
+Kontrastivität offengelegt — Signal 1 und 2 sind dann gegenstandslos. Signal 3 bleibt
+aktiv: ein offengelegter Kontrast heilt nicht einen Hedge-Verlust. (Signal 4 ist im
+PreToolUse-Pfad nicht aktiv, siehe Tabelle.)
 
-> **Schwelle 0.35 ist ungeeicht.** e5-Ähnlichkeiten liegen eng beieinander; der Wert ist
-> eine begründete, defensiv niedrige Vermutung und kein Messergebnis. Er ist per
-> `CONTEXT_FIDELITY_SIM_MIN` justierbar; die Eichung gehört in `evals/`.
+> **Schwelle 0.35 ist nicht aktiv.** Signal 4 (semantische Distanz via Kosinus-Ähnlichkeit)
+> läuft nicht im `PreToolUse`-Pfad (#522); `CONTEXT_FIDELITY_SIM_MIN` ist wirkungslos.
+> e5-Ähnlichkeiten liegen eng beieinander; der Wert wäre eine begründete, defensiv niedrige
+> Vermutung gewesen. Die Variable bleibt konfigurierbar für zukünftige Nutzung.
 
 Der Lookup läuft — wie beim `claim-drift-guard` — in **einem** Python-Subprozess für
 alle Kandidaten über `hooks/lib/vault-bridge.mjs`. Der Subprozess wird auf
-`HF_HUB_OFFLINE=1` gezwungen: ein Modell-Download im `PreToolUse`-Pfad würde das
-Hook-Timeout sprengen. Ist kein Quote-Embedding gespeichert oder kein Embedding-Backend
-verfügbar, meldet der Hook „Ähnlichkeit nicht geprüft" statt einer geratenen Zahl.
+`HF_HUB_OFFLINE=1` gezwungen, um Modell-Downloads im `PreToolUse`-Pfad zu vermeiden (#522).
+Die semantische Distanz (Signal 4) wird im Lookup nicht berechnet, um torch/sentence-transformers-
+Importe und Modellgewichts-Loads zu sparen.
 
 Konfiguration: `CONTEXT_FIDELITY_WINDOW` (Kapitelfenster, Default 300),
 `CONTEXT_FIDELITY_MAX_QUOTES` (Kontingent je Write, Default 20),
-`CONTEXT_FIDELITY_SIM_MIN` (Default 0.35), `CONTEXT_FIDELITY_DEBUG=1`. Der Bypass-Marker
-`<!-- vault-guard: skip -->` schaltet auch diesen Hook stumm; die Nutzung wird wie beim
-`verbatim-guard` protokolliert, mit dem eigenen Label `context-fidelity-guard: skip`.
+`CONTEXT_FIDELITY_SIM_MIN` (Default 0.35, **nicht aktiv im PreToolUse-Pfad**),
+`CONTEXT_FIDELITY_DEBUG=1`. Der Bypass-Marker `<!-- vault-guard: skip -->` schaltet auch
+diesen Hook stumm; die Nutzung wird wie beim `verbatim-guard` protokolliert, mit dem
+eigenen Label `context-fidelity-guard: skip`.
 
 > **Bypass-Report-Dedupe (#517/#522):** Zwei Guards am selben `PreToolUse`-Event loggen
 > denselben Bypass. `bypass-log-report.mjs` faltet deshalb Zeilen mit gleichem Pfad

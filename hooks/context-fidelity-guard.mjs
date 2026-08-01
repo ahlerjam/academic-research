@@ -414,7 +414,7 @@ function truncate(text, max = 160) {
   return flat.length > max ? `${flat.slice(0, max - 3)}...` : flat;
 }
 
-function buildMessage(filePath, findings, unverifiable, checkable, total, similarityMissing) {
+function buildMessage(filePath, findings, unverifiable, checkable, total) {
   const lines = [];
 
   if (findings.length > 0) {
@@ -446,12 +446,6 @@ function buildMessage(filePath, findings, unverifiable, checkable, total, simila
   lines.push(`${MARKER} Abdeckung: ${checkable} von ${total} Zitaten prüfbar`);
   for (const item of unverifiable) {
     lines.push(`  Nicht prüfbar: "${truncate(item.span, 80)}" — ${item.reason}`);
-  }
-  if (similarityMissing) {
-    lines.push(
-      '  Ähnlichkeit nicht geprüft: kein gespeichertes Quote-Embedding oder kein '
-      + 'Embedding-Backend — Signal 4 blieb aus (keine geratene Zahl).'
-    );
   }
 
   return lines.join('\n');
@@ -526,7 +520,6 @@ async function main() {
   const findings = [];
   const unverifiable = [];
   let checkable = 0;
-  let similarityMissing = false;
 
   candidates.forEach((candidate, index) => {
     if (lookup.status !== 'ok') {
@@ -550,7 +543,6 @@ async function main() {
     }
 
     checkable += 1;
-    if (typeof record.similarity !== 'number') similarityMissing = true;
     const { signals } = evaluateSignals(record, candidate.window);
     if (signals.length > 0) findings.push({ span: candidate.text, record, signals });
   });
@@ -564,7 +556,7 @@ async function main() {
   }
 
   emit(buildMessage(
-    filePath, findings, unverifiable, checkable, allSpans.length, similarityMissing,
+    filePath, findings, unverifiable, checkable, allSpans.length,
   ));
 
   // Kein process.exit(0) hier: stdout ist bei einer Pipe asynchron, ein
