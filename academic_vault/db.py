@@ -40,6 +40,23 @@ VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 # NULL, sofern es nicht manuell gesetzt wird.
 VALID_STANCES = frozenset({"supports", "contrasts", "mentions"})
 
+# Erlaubte Werte fuer `quotes.extraction_method`: Herkunftsnachweis des
+# Wortlauts. Gespiegelt vom CHECK-Constraint in schema.sql bzw.
+# migrate.widen_extraction_method_check().
+#   citations-api  Wortlaut stammt aus der Anthropic-Citations-API
+#                  (`api_response_id` ist Pflicht, geprueft in server.add_quote).
+#   manual         Wortlaut von Hand belegt -- keine maschinelle Pruefung.
+#                  Bleibt der dokumentierte Ausweichweg, wenn die lokale
+#                  Verifikation an ihre Grenzen stoesst (seitenuebergreifende
+#                  Zitate, Wort-Auslassungen).
+#   local-verbatim Wortlaut gegen den lokalen PDF-Volltext verifiziert
+#                  (Issue #512). server.add_quote() prueft fail-closed VOR dem
+#                  Schreiben; ein nicht belegbarer Kandidat landet nie im Vault.
+# BEWUSST KEINE Python-Validierung dieser Menge in `add_quote()`: fuer
+# unbekannte Werte bleibt der CHECK-Constraint zustaendig (sqlite3.IntegrityError),
+# sonst verschoebe sich das bestehende Fehlerverhalten der Altpfade.
+VALID_EXTRACTION_METHODS = frozenset({"citations-api", "manual", "local-verbatim"})
+
 # Erlaubte Werte fuer `papers.source_kind` (Issue #473): unterscheidet fremde
 # Literatur von eigenem Erhebungsmaterial (Transkript, Beobachtungsprotokoll).
 # Beides liegt in derselben Tabelle, weil nur so die Belegkette greift
@@ -70,7 +87,12 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #     hoeherruecken: eine DB, die #539 bereits auf 4 gestempelt hat, wuerde
 #     `apply_pending_migrations()` sonst nie wieder betreten und bliebe ohne
 #     source_kind und ohne die Empirie-Tabellen zurueck.
-CURRENT_SCHEMA_VERSION = 5
+# 6 = quotes.extraction_method CHECK um 'local-verbatim' erweitert (Issue #512).
+#     Erste Migration, die KEINE Spalte hinzufuegt, sondern einen Constraint
+#     aendert -- verifiziert wird sie deshalb nicht ueber
+#     `_LEGACY_MIGRATION_COLUMNS`, sondern ueber die CHECK-SQL der Tabelle
+#     (siehe `init_schema()`).
+CURRENT_SCHEMA_VERSION = 6
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -611,7 +633,23 @@ class VaultDB:
             }
             undropped = sorted(migrate.DEAD_TABLES & existing_tables)
 
-            if not missing and not undropped:
+            # Dritte Verifikationsart (#512): `widen_extraction_method_check()`
+            # aendert einen CHECK-Constraint statt eine Spalte -- ein
+            # fehlgeschlagener Tabellen-Rebuild waere ueber
+            # `PRAGMA table_info()` unsichtbar und wuerde trotzdem gestempelt
+            # (exakt der Review-Fund aus PR #427, nur eine Ebene tiefer).
+            quotes_sql_row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='quotes'"
+            ).fetchone()
+            unwidened = (
+                []
+                if migrate.quotes_check_accepts_local_verbatim(
+                    quotes_sql_row["sql"] if quotes_sql_row is not None else None
+                )
+                else ["quotes.extraction_method CHECK ohne 'local-verbatim'"]
+            )
+
+            if not missing and not undropped and not unwidened:
                 conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
             else:
                 # Stempel bewusst auslassen: user_version bleibt unter
@@ -621,13 +659,15 @@ class VaultDB:
                 # init_schema() wuerde den kompletten MCP-Server lahmlegen.
                 logger.warning(
                     "Migration auf Schema-Version %d nicht verifizierbar -- "
-                    "es fehlen weiterhin Spalten %s, und diese toten Tabellen "
-                    "sind nicht leer und daher nicht gedroppt: %s. user_version "
+                    "es fehlen weiterhin Spalten %s, diese toten Tabellen "
+                    "sind nicht leer und daher nicht gedroppt: %s, und diese "
+                    "Constraints wurden nicht erweitert: %s. user_version "
                     "bleibt unveraendert, naechster init_schema()-Aufruf "
-                    "migriert erneut (#368, #539).",
+                    "migriert erneut (#368, #539, #512).",
                     CURRENT_SCHEMA_VERSION,
                     missing,
                     undropped,
+                    unwidened,
                 )
 
     # ------------------------------------------------------------------
