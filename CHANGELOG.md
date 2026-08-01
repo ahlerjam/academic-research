@@ -121,6 +121,23 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **`page_offset` wird beim Buch-Import bestätigt statt still gespeichert (#538):**
+  `skills/book-handler/SKILL.md` Schritt 2.5 übernahm das Ergebnis von
+  `scripts/page_offset.py` ohne Rückfrage in `vault.set_page_offset` — ein
+  falscher Offset verschob damit stillschweigend alle Seitenzahlen des Buchs
+  (Audit-Risiko R2). Neu steht vor dem Speichern ein `AskUserQuestion`-Gate;
+  die Optionszeile nennt den Offset und ein Beispiel-Mapping („PDF-Seite
+  {offset+1} = gedruckte Seite 1") zur Plausibilisierung. Die zweite Option
+  führt zur manuellen Offset-Eingabe, nicht zum Abbruch; der berechnete Wert
+  wird nie ungefragt übernommen. `AskUserQuestion` ist jetzt auch in
+  `allowed-tools` deklariert. Die Offset-Berechnung selbst bleibt unverändert
+  (#384/#73). Der Gate-Text lässt `SKILL.md` um 447 Zeichen wachsen; die
+  Guard-Baselines wurden entsprechend angehoben — `skill_sizes.json`
+  5362→5809 (Marge von `test_token_reduction` bleibt exakt 1420 Zeichen),
+  `tokens.json` 862→1098 (neu gemessener Stand, der +20%-Drift-Korridor
+  reichte nicht mehr). Etabliertes Repo-Muster, vgl. 9962c22 (#540);
+  `tests/test_issue_538_page_offset_gate.py` hält beide Anhebungen an den
+  tatsächlichen Zuwachs gebunden.
 - **`bypass-log-report.mjs` zählt eine Bypass-Nutzung nicht mehr doppelt
   (#522):** Seit `context-fidelity-guard.mjs` am selben `PreToolUse`-Event
   hängt, protokollieren zwei Guards denselben Bypass. Der SessionStart-Report
