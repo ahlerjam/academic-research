@@ -33,7 +33,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, appendFileSync, mkdirSync, chmodSync } from 'node:fs';
+import { existsSync, appendFileSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
@@ -57,6 +57,20 @@ const VAULT_DB = process.env.VAULT_DB_PATH
 // analog ACADEMIC_DECISIONS_LOG in post-tool-use-decisions.mjs.
 const VAULT_GUARD_BYPASS_LOG = process.env.VAULT_GUARD_BYPASS_LOG
   || join(os.homedir(), '.academic-research', 'vault-guard-bypass.log');
+// Logdatei fuer Nutzung guard-schwaechender Env-Schalter (Issue #519). Gleiches
+// Muster wie VAULT_GUARD_BYPASS_LOG — eigene Datei, damit der Bypass-Report
+// (#517) beide Quellen unabhaengig voneinander offset-verfolgen kann.
+const VAULT_GUARD_ENV_SWITCH_LOG = process.env.VAULT_GUARD_ENV_SWITCH_LOG
+  || join(os.homedir(), '.academic-research', 'vault-guard-env-switch.log');
+// Namen der guard-schwaechenden Schalter (Issue #519, Audit-Risiko R7). Jeder
+// GESETZTE (nicht-leere) Wert wird protokolliert — unabhaengig davon, ob er im
+// konkreten Content-Check ueberhaupt greift (sichtbar machen der Nutzung, nicht
+// Bewertung der Abschwaechung).
+const ENV_SWITCH_NAMES = [
+  'ACADEMIC_CITATION_AMBIGUOUS',
+  'ACADEMIC_CITATION_CASCADE',
+  'ACADEMIC_CITATION_MAX_PER_WRITE',
+];
 // Mindestlänge eines Zitat-Spans (in Zeichen). Muss mit den Regex-Quantifizierern übereinstimmen.
 const MIN_QUOTE_LEN = 10;
 // Pattern fuer Figure-Referenzen (Abb., Abbildung, Tab., Tabelle, Fig., Figure + Nummer)
@@ -297,6 +311,85 @@ function logBypassUsage(filePath) {
     // Best-effort — das Loggen selbst darf keinen neuen Blocker erzeugen.
     process.stderr.write(`[Vault-Guard] Bypass-Log-Fehler (ignoriert): ${err.message}\n`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Env-Schalter-Nutzung loggen (Issue #519)
+// ---------------------------------------------------------------------------
+
+/**
+ * Protokolliert die Nutzung EINES guard-schwaechenden Env-Schalters.
+ * Best-effort: Schreibfehler duerfen den Guard nie blockierend machen
+ * (analog logBypassUsage, Issue #381).
+ */
+function writeEnvSwitchLines(payloads) {
+  if (payloads.length === 0) return;
+  const ts = new Date().toISOString();
+  const block = payloads.map((p) => `${ts} | ${p}\n`).join('');
+  try {
+    const logDir = dirname(VAULT_GUARD_ENV_SWITCH_LOG);
+    if (!existsSync(logDir)) {
+      mkdirSync(logDir, { recursive: true, mode: 0o700 });
+    }
+    appendFileSync(VAULT_GUARD_ENV_SWITCH_LOG, block, 'utf-8');
+    chmodSync(VAULT_GUARD_ENV_SWITCH_LOG, 0o600);
+  } catch (err) {
+    // Best-effort — das Loggen selbst darf keinen neuen Blocker erzeugen.
+    process.stderr.write(`[Vault-Guard] Env-Switch-Log-Fehler (ignoriert): ${err.message}\n`);
+  }
+}
+
+/**
+ * Nutzlasten (alles ausser dem Zeitstempel) der letzten ``count`` Zeilen des
+ * Env-Switch-Logs. Leeres Array, wenn das Log fehlt/leer/unlesbar ist —
+ * fail-open: im Zweifel wird geschrieben statt verschluckt.
+ */
+function lastEnvSwitchPayloads(count) {
+  try {
+    if (count <= 0 || !existsSync(VAULT_GUARD_ENV_SWITCH_LOG)) return [];
+    const lines = readFileSync(VAULT_GUARD_ENV_SWITCH_LOG, 'utf-8').trimEnd().split('\n');
+    return lines
+      .slice(-count)
+      .map((l) => {
+        const parts = l.split(' | ');
+        return parts.length < 2 ? null : parts.slice(1).join(' | ');
+      })
+      .filter((p) => p !== null);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Prueft alle drei guard-schwaechenden Schalter (ENV_SWITCH_NAMES) und
+ * protokolliert jeden GESETZTEN (nicht-leeren) einzeln. "Gesetzt" heisst
+ * process.env[NAME] vorhanden und nicht-leer — unabhaengig vom konkreten
+ * Wert, auch ein explizit auf Default gesetzter Schalter zaehlt (AC1).
+ */
+function logActiveEnvSwitches(filePath, env = process.env) {
+  const target = filePath || '(unbekannter Pfad)';
+  const payloads = [];
+  for (const name of ENV_SWITCH_NAMES) {
+    const value = env[name];
+    if (value !== undefined && value !== '') {
+      payloads.push(`${name}=${value} | ${target}`);
+    }
+  }
+  // Dedup ueber die GESAMTE Schalter-Kombination, nicht je Zeile: Anders als
+  // der Bypass-Marker (#381) ist ein Env-Schalter eine dauerhaft gesetzte
+  // Konfiguration — ohne Dedup haengt jeder geschuetzte Write denselben Block
+  // erneut an, und der SessionStart-Report meldet dutzende "neue Nutzungen"
+  // fuer eine einzige Einstellung. Der Vergleich muss den ganzen Block
+  // umfassen: bei zwei oder drei gesetzten Schaltern ist die jeweils letzte
+  // Zeile die eines ANDEREN Schalters, ein Zeilenvergleich traefe also nie zu.
+  const previous = lastEnvSwitchPayloads(payloads.length);
+  if (
+    previous.length === payloads.length &&
+    previous.every((p, i) => p === payloads[i])
+  ) {
+    return;
+  }
+  writeEnvSwitchLines(payloads);
 }
 
 // ---------------------------------------------------------------------------
@@ -621,6 +714,11 @@ async function main() {
   if (!isProtectedPath(filePath)) {
     process.exit(0);
   }
+
+  // Guard-schwaechende Env-Schalter sichtbar machen (Issue #519, Audit R7) —
+  // vor dem Bypass-Zweig, damit auch ein Lauf, der wegen des Bypass-Markers
+  // direkt terminiert, die Schalter-Nutzung noch protokolliert.
+  logActiveEnvSwitches(filePath);
 
   // Bypass-Flag — Nutzung wird sichtbar gemacht (Issue #381: kein stiller Bypass mehr).
   if (content.includes('<!-- vault-guard: skip -->')) {

@@ -10,6 +10,21 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Guard-schwächende Env-Schalter sichtbar geloggt (#519, Audit R7):** Die
+  drei guard-schwächenden Schalter `ACADEMIC_CITATION_AMBIGUOUS`,
+  `ACADEMIC_CITATION_CASCADE` und `ACADEMIC_CITATION_MAX_PER_WRITE`
+  hinterließen bei Nutzung keine Audit-Spur. `verbatim-guard.mjs` protokolliert
+  jeden gesetzten Schalter jetzt pro Guard-Lauf einzeln (Name, Wert,
+  Zieldatei) nach `~/.academic-research/vault-guard-env-switch.log`
+  (Env-Override `VAULT_GUARD_ENV_SWITCH_LOG`, 0600/0700, fail-open — analog zum
+  Bypass-Log aus #381). Der bestehende SessionStart-Hook
+  `hooks/bypass-log-report.mjs` (#517) liest zusätzlich dieses Log (eigener
+  Offset-Merkposten `vault-guard-env-switch-report-state.json`, Env-Override
+  `VAULT_GUARD_ENV_SWITCH_REPORT_STATE`) und hängt bei neuen Einträgen einen
+  zweiten Report-Abschnitt an — kein neuer Hooks.json-Eintrag. Geschrieben wird
+  nur bei geänderter Schalter-Kombination (Dedup über den ganzen Block), sonst
+  meldete der Report für eine einzige dauerhafte Einstellung dutzende
+  „neue Nutzungen".
 - **`context-fidelity-guard.mjs` — warnender Kontexttreue-Hook (#522):** Neuer
   `PreToolUse`-Hook (`Write|Edit|MultiEdit`) prüft beim Kapitel-Write jedes im
   Vault verifizierte Zitat gegen seinen **echten** Quellkontext und markiert
