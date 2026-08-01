@@ -130,11 +130,17 @@ class VerbatimResult:
 
     Attributes:
         status: ``exact`` | ``snapped`` | ``no-match`` | ``no-textlayer``.
-        verbatim: Wortlaut AUS DER QUELLE (normalisiert) -- NIE der Kandidat.
-            Leerer String bei ``no-match``/``no-textlayer``.
+        verbatim: Wortlaut AUS DER QUELLE (normalisiert). Bei ``status=exact``
+            schwach normalisiert (Anfuehrungszeichen/Whitespace), bei
+            ``status=snapped`` voll normalisiert (zusaetzlich NFKC/Trennstrich-Join).
+            NIE der Kandidat. Leerer String bei ``no-match``/``no-textlayer``.
         pdf_page: 1-indexierte Seitenzahl des Treffers, ``None`` ohne Treffer.
-        char_start: Zeichenoffset des Treffers im NORMALISIERTEN Seitentext
-            (siehe :func:`normalize_text`), ``None`` ohne Treffer.
+        char_start: Zeichenoffset des Treffers. Semantik haengt vom Status ab:
+            - Bei ``status=exact``: Offset im SCHWACH normalisierten Seitentext
+              (siehe :func:`_normalize_weak`).
+            - Bei ``status=snapped``: Offset im VOLL normalisierten Seitentext
+              (siehe :func:`normalize_text`).
+            - ``None`` bei ``no-match``/``no-textlayer``.
         ratio: rapidfuzz-Aehnlichkeit 0.0-1.0 (``1.0`` bei ``exact``; bei
             ``no-match`` der beste ueber alle Seiten gefundene, unter
             :data:`SNAP_RATIO_THRESHOLD` liegende Wert -- diagnostisch,

@@ -42,14 +42,24 @@ SCAN_PDF = os.path.join(FIXTURES, "scan_no_text.pdf")
 def _assert_char_start_consistent(pdf_path: str, page: int, result) -> None:
     """Bestaetigt, dass ``char_start`` wirklich auf ``verbatim`` zeigt.
 
-    Rekonstruiert den normalisierten Seitentext unabhaengig ueber
-    :func:`normalize_text` und prueft den Slice an ``char_start`` -- robuster
-    als ein hartkodierter Index, der bei jeder Fixture-Aenderung bricht.
+    Rekonstruiert den Seitentext mit der korrekten Normalisierung (schwach
+    fuer ``exact``, voll fuer ``snapped``) unabhaengig und prueft den Slice
+    an ``char_start`` -- robuster als ein hartkodierter Index, der bei jeder
+    Fixture-Aenderung bricht.
     """
     from academic_vault.chunking import extract_pages
+    from academic_vault.verbatim import _normalize_weak
 
     pages = dict(extract_pages(pdf_path))
-    normalized_page = normalize_text(pages[page])
+
+    if result.status == "exact":
+        normalized_page = _normalize_weak(pages[page])
+    elif result.status == "snapped":
+        normalized_page = normalize_text(pages[page])
+    else:
+        # no-match, no-textlayer: char_start ist None, keine Assertion noetig
+        return
+
     end = result.char_start + len(result.verbatim)
     assert normalized_page[result.char_start : end] == result.verbatim
 
@@ -143,3 +153,21 @@ def test_empty_candidate_returns_no_match():
     result = verify_verbatim(SOURCE_PDF, "   ")
 
     assert result.status == "no-match"
+
+
+def test_exact_match_on_page_1_with_weak_normalization():
+    """Exact-Treffer auf Seite 1 mit schwacher Normalisierung (Whitespace-Variante).
+
+    P1-Finding Regression #511: _assert_char_start_consistent muss fuer
+    exact-Treffer auch auf Seite 1 aufgerufen werden (nicht nur auf Seite 2),
+    um sicherzustellen, dass char_start korrekt auf den SCHWACH normalisierten
+    Text bezogen ist. Dieser Test prueft einen exact-Treffer mit extra
+    Whitespace, das durch schwache Normalisierung entfernt wird.
+    """
+    candidate = "Der  Interviewpartner   betonte die Bedeutung von Vertrauen im Team."
+    result = verify_verbatim(SOURCE_PDF, candidate)
+
+    assert result.status == "exact"
+    assert result.pdf_page == 1
+    assert result.ratio == 1.0
+    _assert_char_start_consistent(SOURCE_PDF, 1, result)
