@@ -17,6 +17,7 @@ from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .embedding_model import get_embedder
 from .files_api import FilesAPIClient
+from .files_api import is_configured as _files_api_is_configured
 
 logger = logging.getLogger(__name__)
 
@@ -1152,18 +1153,44 @@ def list_papers_by_provenance(db_path: str, provenance: str) -> list[dict]:
     return db.list_papers_by_provenance(provenance)
 
 
-def ensure_file(db_path: str, paper_id: str, api_key: str = "") -> str:
-    """Delegiert an FilesAPIClient.ensure_file(). Gibt file_id zurueck."""
+def _anthropic_key(api_key: str = "") -> str:
+    """Loest den optionalen ANTHROPIC_API_KEY zur Aufrufzeit auf.
+
+    Reihenfolge: explizites Argument > Umgebung zur Aufrufzeit > der beim
+    Modulimport gelesene Wert. Die Aufrufzeit-Auswertung macht den optionalen
+    Pfad testbar und laesst spaeter gesetzte Keys wirken (#535).
+    """
+    return api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+def ensure_file(db_path: str, paper_id: str, api_key: str = "") -> str | None:
+    """Optionaler Files-API-Upload — gibt file_id zurueck oder None ohne Key.
+
+    Legacy-/Optional-Pfad (#535): ohne ANTHROPIC_API_KEY passiert nichts und
+    es wird ``None`` zurueckgegeben, damit Standard-Flows (Zotero-Import,
+    lokale Verbatim-Zitate) ohne Key fehlerfrei durchlaufen. Fehler in der
+    Aufrufer-Logik bleiben Fehler: unbekanntes Paper oder fehlender pdf_path
+    werfen weiterhin ValueError — und zwar VOR dem Key-Check, damit ein
+    fehlender Key echte Datenfehler nicht verdeckt.
+
+    Raises:
+        ValueError: Paper unbekannt oder ohne pdf_path.
+    """
     paper = get_paper(db_path, paper_id)
     if paper is None:
         raise ValueError(f"Paper '{paper_id}' nicht gefunden.")
     pdf_path = paper.get("pdf_path")
     if not pdf_path:
         raise ValueError(f"Paper '{paper_id}' hat keinen pdf_path.")
-    client = FilesAPIClient(
-        anthropic_api_key=api_key or _ANTHROPIC_KEY,
-        cache_db_path=db_path,
-    )
+    key = _anthropic_key(api_key)
+    if not _files_api_is_configured(key):
+        logger.info(
+            "Files-API uebersprungen fuer '%s': kein ANTHROPIC_API_KEY gesetzt "
+            "(optionaler Pfad, #535).",
+            paper_id,
+        )
+        return None
+    client = FilesAPIClient(anthropic_api_key=key, cache_db_path=db_path)
     return client.ensure_file(pdf_path)
 
 
@@ -1743,9 +1770,14 @@ def _build_mcp_server():
         )
 
     @mcp.tool(name="vault.ensure_file")
-    def _vault_ensure_file(paper_id: str) -> str:
-        """Gibt gecachte file_id zurueck oder laedt PDF hoch."""
-        return ensure_file(db_path, paper_id, api_key=_ANTHROPIC_KEY)
+    def _vault_ensure_file(paper_id: str) -> str | None:
+        """Optional (#535): gibt gecachte file_id zurueck oder laedt PDF hoch.
+
+        Ohne eigenen ANTHROPIC_API_KEY gibt das Tool None zurueck statt zu
+        scheitern — der Standardweg fuer Zitate ist
+        vault.add_quote(extraction_method="local-verbatim").
+        """
+        return ensure_file(db_path, paper_id)
 
     @mcp.tool(name="vault.add_quote")
     def _vault_add_quote(
