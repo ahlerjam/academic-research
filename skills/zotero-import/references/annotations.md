@@ -75,9 +75,14 @@ getrennte Quotes erhalten — das sind zwei echte Markierungen.
 ## Fehlerverhalten
 
 Ein Fehler bei einer einzelnen Annotation bricht den Item-Import nicht ab,
-sondern landet in `result.errors` (analog zum bestehenden
-`ensure_file`-Pattern). Auch das Laden der Annotation-Kinder selbst ist
-fehlertolerant.
+sondern landet in `result.errors`. Auch das Laden der Annotation-Kinder selbst
+ist fehlertolerant.
+
+Abgrenzung: Der optionale Files-API-Upload (`ensure_file`, eigener
+`ANTHROPIC_API_KEY` nötig) folgt seit #535 einer anderen Regel — ohne Key wird
+er übersprungen und in `result.files_api_skipped` gezählt, **nicht** als Fehler
+gemeldet. In `result.errors` landen dort nur echte Upload-Fehler bei gesetztem
+Key.
 
 Annotationen werden unabhängig vom Download-Erfolg des PDFs importiert —
 sie stammen aus der Zotero-API, nicht aus der PDF-Datei.

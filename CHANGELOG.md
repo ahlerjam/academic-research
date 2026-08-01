@@ -87,6 +87,28 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **`files_api.py` ist ein optionaler Legacy-Pfad (#535):** Seit der
+  Umstellung auf lokale Verbatim-Zitate (#507/#512/#532) hängt kein
+  Standard-Workflow mehr an der Anthropic-Files-API — das Modul bleibt nur
+  für den optionalen Citations-API-Pfad mit eigenem `ANTHROPIC_API_KEY`
+  erhalten und darf ohne Key keine Fehler mehr erzeugen.
+  `academic_vault.server.ensure_file()` gibt jetzt `str | None` zurück: ohne
+  Key `None` statt einer Exception, während unbekanntes Paper bzw. fehlender
+  `pdf_path` weiterhin (und **vor** dem Key-Check) `ValueError` werfen —
+  ein fehlender Key verdeckt keine Datenfehler. Das MCP-Tool
+  `vault.ensure_file` folgt der Signatur. Ohne Key wird kein
+  `anthropic.Anthropic`-Client mehr gebaut (Guard in `_get_client()`, neue
+  `FilesAPINotConfiguredError` für direkte Modul-Aufrufe); die
+  Beta-Abhängigkeit steht nur noch in der Konstante
+  `files_api.FILES_API_BETA` (`files-api-2025-04-14`). `zotero_pull.py`
+  prüft die Verfügbarkeit explizit vor dem Aufruf und zählt einen Skip in
+  `ImportResult.files_api_skipped` (CLI-Zeile), statt jede Exception in
+  `result.errors` zu schlucken — dort landen nur noch echte Upload-Fehler
+  **mit** Key. Die zuvor ungetesteten Zweige (TTL-Reupload, gültiger Cache,
+  Cache-Miss ohne `papers`-Zeile) haben jetzt Tests
+  (`tests/test_issue_535_files_api_legacy.py`); der Legacy-Status ist in
+  Modul-Docstring und `docs/reference/vault.md` dokumentiert. Kein Tool
+  entfernt, keine Schema-Änderung.
 - **Kapitel-Zitat-Zuordnung als echtes `AskUserQuestion`-Gate (#518):**
   `skills/citation-extraction/SKILL.md` Schritt 6 „Kapitelzuordnung" hing
   bisher nur an der Prosa-Regel „User bestätigt Zuordnungen" — kein

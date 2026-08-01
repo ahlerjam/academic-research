@@ -110,8 +110,27 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.get_paper(paper_id)` | Paper-Metadaten + `pdf_status` | `vault.get_paper("vaswani2017")` |
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` |
-| `vault.ensure_file(paper_id)` | PDF → Anthropic Files-API; gibt gecachte `file_id` zurück | `vault.ensure_file("vaswani2017")` |
+| `vault.ensure_file(paper_id)` | **Optionaler Legacy-Pfad** (s. u.): PDF → Anthropic Files-API; gibt gecachte `file_id` zurück, ohne `ANTHROPIC_API_KEY` `None` | `vault.ensure_file("vaswani2017")` |
 | `vault.stats()` | DB-Counts (`paper_count`, `quote_count`, `cached_files`) | `vault.stats()` |
+
+**`vault.ensure_file` — optionaler Legacy-Pfad** (Issue #535)
+
+Das Modul `academic_vault/files_api.py` hinter diesem Tool ist seit der
+Umstellung auf lokale Verbatim-Zitate (#507/#512/#532) **Legacy**: kein
+Standard-Workflow hängt mehr daran. Es bedient ausschließlich den optionalen
+Citations-API-Pfad und setzt einen **eigenen `ANTHROPIC_API_KEY`** voraus
+(Anthropic-Beta `files-api-2025-04-14`, im Code auf die Konstante
+`files_api.FILES_API_BETA` isoliert).
+
+| Situation | Verhalten |
+|---|---|
+| Kein `ANTHROPIC_API_KEY` gesetzt | Rückgabe `None`, kein Anthropic-Client wird gebaut, keine Exception — Standard-Flows laufen unverändert durch |
+| Paper unbekannt oder ohne `pdf_path` | `ValueError` (Datenfehler bleiben sichtbar, unabhängig vom Key) |
+| Key gesetzt | Upload + `file_id`-Cache mit 1 h TTL wie bisher |
+
+Der Zotero-Import zählt den Skip in `ImportResult.files_api_skipped` statt ihn
+als Fehler zu melden. Standardweg für Zitate bleibt
+`vault.add_quote(extraction_method="local-verbatim")`.
 
 **Zitate (Quotes)**
 
