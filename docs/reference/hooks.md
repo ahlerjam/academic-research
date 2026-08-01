@@ -268,7 +268,7 @@ deshalb bei jedem Kapitel-Write mit Zitaten eine Abdeckungszeile
 prüfbare Zitat namentlich — kein Eintrag im Vault, kein aufgelöster Quellkontext oder
 Vault nicht erreichbar. Stilles Überspringen wäre ein lautloses Loch.
 
-Vier Signale, alle bewusst konservativ:
+Drei Signale im `PreToolUse`-Pfad (lexikalisch), alle bewusst konservativ:
 
 | # | Signal | Quelle | Auslöser |
 |---|--------|--------|----------|
