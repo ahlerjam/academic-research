@@ -28,6 +28,49 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `quote_embeddings`-Eintrag nach. Kein Schema-Versionssprung — die leere
   vec0-Tabelle `quote_embeddings` existierte bereits seit #217/#219, nur
   ungenutzt.
+- **`vault.verify_verbatim` — read-only Vorschau des Verbatim-Prüfpfads (#513):**
+  Neues MCP-Tool `vault.verify_verbatim(paper_id, candidate)` prüft einen
+  Zitat-Kandidaten gegen den lokalen PDF-Volltext eines Papers und liefert
+  **immer** ein Ergebnis-dict `{status, verbatim, pdf_page, ratio}` zurück
+  (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`) — anders
+  als das Schreib-Gate `vault.add_quote(extraction_method="local-verbatim")`
+  (#512) wirft es bei Nicht-Treffer keine `ValueError`, sondern gibt Agenten
+  so die Möglichkeit, Kandidaten iterativ zu prüfen und zu korrigieren, bevor
+  `add_quote` endgültig ablehnt. Das Tool schreibt nichts in die Datenbank.
+  Paper-/`pdf_path`-Auflösungsfehler (unbekanntes Paper, fehlender/nicht
+  lesbarer `pdf_path`) bleiben `ValueError` mit verständlicher Meldung —
+  Bedienfehler des Aufrufers, keine Zitat-Prüfergebnisse. Intern teilt sich
+  `academic_vault.server.verify_verbatim_preview()` die Paper-/`pdf_path`-
+  Auflösung mit `_verify_local_verbatim()` über einen neuen gemeinsamen
+  privaten Helfer (`_resolve_verbatim_pdf_path`), um Drift zwischen den
+  beiden Prüfpfaden zu vermeiden.
+
+- **`quote-fidelity-auditor` — Richter-Subagent mit Abstract-Abgleich (#523):**
+  Neuer Subagent `agents/quote-fidelity-auditor.md` (Judge-Pattern analog
+  `screening-judge.md`/`risk-of-bias.md`) urteilt über ein bestehendes Zitat
+  gegen Kapitel-Behauptung, Quote-Kontext (`context_before`/`context_after`)
+  und Paper-Abstract (`csl_json.abstract`) und liefert ein Urteil
+  `faithful`/`overstated`/`context-stripped`/`polarity-flip`/`unsupported`.
+  Der Abstract-Abgleich ist explizit die dritte, nachgeordnete Prüfebene und
+  erzeugt allein nie ein Negativ-Urteil — Detail-Zitate jenseits des
+  Abstracts bleiben legitim; fehlt `abstract`, wird das explizit als
+  übersprungen markiert statt geraten. Neues Vault-Tool
+  `vault.set_quote_stance(quote_id, stance)`
+  (`academic_vault/db.py`/`server.py`) ergänzt den bisher fehlenden
+  Schreibpfad für nachträgliche Audits — `add_quote()` befüllt `stance` nur
+  bei Neuanlage. Das Mapping Verdict→`stance` ist im Agenten dokumentiert
+  (`unsupported` persistiert bewusst nichts, um keine Scheingenauigkeit zu
+  erzeugen). Der Agent hat kein `Write`/`Edit`/`MultiEdit` im
+  Tool-Frontmatter — Urteil + Begründung gehen als Prosa an den aufrufenden
+  Kontext, kein Auto-Rewrite von Kapiteltext. `hooks/claim-drift-guard.mjs`
+  verweist in seiner Warnung additiv auf den neuen Agenten als Prüfoption.
+  `set_quote_stance` respektiert wie jeder andere Schreibpfad den
+  Material-Passport-Lock (`VaultLockedError`, Issue #380). Die Doku-Zähler
+  sind mitgezogen: 41 → 43 MCP-Tools in derselben Merge-Runde wie
+  `vault.verify_verbatim` (#513) (`README.md`, `docs/reference/vault.md`,
+  `tests/helpers/smoke_core.py`, `tests/test_issue_207_readme_mcp_tools.py`)
+  und 27 → 28 Agents (`README.md`, `AGENTS.md`, `docs/reference/agents.md`
+  inklusive Dispatch-Zeile `manuell`).
 
 - **`resolve_quote_context` — echter Quellkontext statt modell-erinnertem (#520):**
   Neue Funktion `academic_vault.server.resolve_quote_context(db_path, quote_id,

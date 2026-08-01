@@ -1,7 +1,8 @@
 """academic_vault MCP-Server.
 
 Stellt MCP-Tools vault.search/get_paper/add_paper/ensure_file/
-add_quote/find_quotes/get_quote/add_note/find_notes/search_notes/stats bereit.
+add_quote/verify_verbatim/find_quotes/get_quote/add_note/find_notes/
+search_notes/stats bereit.
 
 Start via: python -m academic_vault.server
 """
@@ -141,6 +142,81 @@ def _ensure_schema_for_read(db_path: str) -> None:
         VaultDB(db_path).init_schema()
 
 
+def _resolve_verbatim_pdf_path(caller: str, db_path: str, paper_id: str) -> str:
+    """Loest Paper -> lesbaren ``pdf_path`` auf, sonst fail-closed ``ValueError``.
+
+    Gemeinsamer Helfer fuer :func:`_verify_local_verbatim` (#512, Schreib-Gate
+    in ``add_quote``) und :func:`verify_verbatim_preview` (#513, reine
+    Read-only-Vorschau) -- beide brauchen dieselbe Paper-/pdf_path-Aufloesung.
+    ``caller`` (z. B. ``"vault.add_quote"``/``"vault.verify_verbatim"``)
+    landet in der Fehlermeldung, damit die Ursache im jeweiligen Tool-Kontext
+    erkennbar bleibt.
+
+    Raises:
+        ValueError: Paper unbekannt oder ``pdf_path`` fehlt/nicht lesbar. Das
+            sind Bedienfehler des Aufrufers, keine Zitat-Pruefergebnisse.
+    """
+    paper = get_paper(db_path, paper_id)
+    if paper is None:
+        raise ValueError(
+            f"{caller}: Paper '{paper_id}' nicht gefunden -- "
+            "eine lokale Verbatim-Pruefung braucht ein Paper mit hinterlegtem PDF."
+        )
+
+    pdf_path = (paper.get("pdf_path") or "").strip()
+    if not pdf_path:
+        raise ValueError(
+            f"{caller}: Paper '{paper_id}' hat keinen pdf_path -- "
+            "eine lokale Verbatim-Pruefung ist ohne lokales PDF nicht moeglich. "
+            "Entweder pdf_path nachtragen (vault.update_pdf_path) oder das "
+            "Zitat mit extraction_method='manual' und eigenem Beleg erfassen."
+        )
+    if not Path(pdf_path).is_file():
+        raise ValueError(
+            f"{caller}: hinterlegter pdf_path '{pdf_path}' von Paper "
+            f"'{paper_id}' existiert nicht -- eine lokale Verbatim-Pruefung "
+            "ist damit nicht moeglich. Pfad korrigieren (vault.update_pdf_path) "
+            "oder das Zitat mit extraction_method='manual' erfassen."
+        )
+    return pdf_path
+
+
+def verify_verbatim_preview(db_path: str, paper_id: str, candidate: str) -> dict:
+    """Prueft ``candidate`` read-only gegen den lokalen PDF-Volltext (#513).
+
+    Anders als :func:`_verify_local_verbatim` (das Schreib-Gate von
+    ``add_quote``) wirft diese Funktion bei den Pruefstatus ``no-match``/
+    ``no-textlayer`` KEINE Exception -- sie liefert IMMER ein Ergebnis-dict
+    zurueck, damit Agenten Kandidaten iterativ pruefen und korrigieren
+    koennen, bevor ``add_quote()`` endgueltig ablehnt. Die Paper-/
+    pdf_path-Aufloesung (unbekanntes Paper, fehlender/nicht lesbarer
+    ``pdf_path``) bleibt ``ValueError`` -- das sind Bedienfehler des
+    Aufrufers, keine Zitat-Pruefergebnisse.
+
+    Schreibt nichts in die Datenbank (reiner Lesepfad ueber ``get_paper``).
+
+    Returns:
+        dict mit ``status`` (``"exact"``/``"snapped"``/``"no-match"``/
+        ``"no-textlayer"``), ``verbatim`` (Quelltext bei Treffer, sonst
+        ``""``), ``pdf_page`` (``int`` oder ``None``) und ``ratio``
+        (``float`` 0.0-1.0).
+
+    Raises:
+        ValueError: Paper unbekannt oder ``pdf_path`` fehlt/nicht lesbar.
+    """
+    # Lazy import: `verbatim.verify_verbatim` zieht pypdf + rapidfuzz nach.
+    from .verbatim import verify_verbatim
+
+    pdf_path = _resolve_verbatim_pdf_path("vault.verify_verbatim", db_path, paper_id)
+    result = verify_verbatim(pdf_path, candidate)
+    return {
+        "status": result.status,
+        "verbatim": result.verbatim,
+        "pdf_page": result.pdf_page,
+        "ratio": result.ratio,
+    }
+
+
 def _verify_local_verbatim(
     db_path: str,
     paper_id: str,
@@ -166,28 +242,7 @@ def _verify_local_verbatim(
     # Die Pfade 'manual' und 'citations-api' duerfen davon nichts merken.
     from .verbatim import verify_verbatim
 
-    paper = get_paper(db_path, paper_id)
-    if paper is None:
-        raise ValueError(
-            f"vault.add_quote: Paper '{paper_id}' nicht gefunden -- "
-            "extraction_method='local-verbatim' braucht ein Paper mit hinterlegtem PDF."
-        )
-
-    pdf_path = (paper.get("pdf_path") or "").strip()
-    if not pdf_path:
-        raise ValueError(
-            f"vault.add_quote: Paper '{paper_id}' hat keinen pdf_path -- "
-            "extraction_method='local-verbatim' ist ohne lokales PDF nicht belegbar. "
-            "Entweder pdf_path nachtragen oder das Zitat mit "
-            "extraction_method='manual' und eigenem Beleg erfassen."
-        )
-    if not Path(pdf_path).is_file():
-        raise ValueError(
-            f"vault.add_quote: hinterlegter pdf_path '{pdf_path}' von Paper "
-            f"'{paper_id}' existiert nicht -- extraction_method='local-verbatim' "
-            "ist damit nicht belegbar. Pfad korrigieren (vault.update_pdf_path) "
-            "oder das Zitat mit extraction_method='manual' erfassen."
-        )
+    pdf_path = _resolve_verbatim_pdf_path("vault.add_quote", db_path, paper_id)
 
     result = verify_verbatim(pdf_path, verbatim)
     if result.status not in ("exact", "snapped") or result.pdf_page is None:
@@ -499,6 +554,19 @@ def get_quote(db_path: str, quote_id: str) -> dict | None:
     db = VaultDB(db_path)
     _ensure_schema_for_read(db_path)
     return db.get_quote(quote_id)
+
+
+def set_quote_stance(db_path: str, quote_id: str, stance: str) -> None:
+    """Aktualisiert ``stance`` eines bestehenden Zitats (Issue #523).
+
+    Schreibpfad fuer nachtraegliche Audits (z.B. `quote-fidelity-auditor`):
+    `add_quote(stance=...)` deckt nur die Neuanlage ab. `stance` muss einer der
+    Werte aus ``VALID_STANCES`` sein; ``ValueError`` bei ungueltigem Wert oder
+    unbekannter ``quote_id``.
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    db.set_quote_stance(quote_id, stance)
 
 
 def search_papers(
@@ -1718,6 +1786,21 @@ def _build_mcp_server():
             stance=stance,
         )
 
+    @mcp.tool(name="vault.verify_verbatim")
+    def _vault_verify_verbatim(paper_id: str, candidate: str) -> dict:
+        """Prueft einen Zitat-Kandidaten read-only gegen das lokale PDF (#513).
+
+        Liefert IMMER ein Ergebnis-dict zurueck --
+        {status, verbatim, pdf_page, ratio} mit status aus 'exact'/'snapped'/
+        'no-match'/'no-textlayer' -- auch bei no-match/no-textlayer, ohne
+        ValueError. Schreibt nichts in die DB. Fuer den Schreibpfad siehe
+        vault.add_quote(extraction_method='local-verbatim'), das denselben
+        Pruefpfad fail-closed durchsetzt. Paper unbekannt oder kein/kein
+        lesbarer pdf_path wirft weiterhin ValueError (Bedienfehler, kein
+        Pruefergebnis).
+        """
+        return verify_verbatim_preview(db_path, paper_id, candidate)
+
     @mcp.tool(name="vault.search_quote_text")
     def _vault_search_quote_text(verbatim: str, k: int = 5) -> list[dict]:
         """LIKE-Suche in quotes.verbatim. Prueft ob ein Zitat im Vault existiert."""
@@ -1732,6 +1815,17 @@ def _build_mcp_server():
     def _vault_get_quote(quote_id: str) -> dict | None:
         """Gibt vollstaendigen Quote-Record zurueck."""
         return get_quote(db_path, quote_id)
+
+    @mcp.tool(name="vault.set_quote_stance")
+    def _vault_set_quote_stance(quote_id: str, stance: str) -> None:
+        """Aktualisiert stance eines bestehenden Zitats (Issue #523).
+
+        stance: 'supports' | 'contrasts' | 'mentions' -- Pflichtfeld, kein
+        None. Nachtraeglicher Audit-Schreibpfad fuer den
+        quote-fidelity-auditor-Agenten; wirft ValueError bei ungueltigem
+        stance-Wert oder unbekannter quote_id.
+        """
+        set_quote_stance(db_path=db_path, quote_id=quote_id, stance=stance)
 
     @mcp.tool(name="vault.add_note")
     def _vault_add_note(
