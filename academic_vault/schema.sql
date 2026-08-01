@@ -76,7 +76,14 @@ CREATE TABLE IF NOT EXISTS quotes (
   -- Bewusst als LETZTE Spalte: `ALTER TABLE ... ADD COLUMN` (migrate.py) haengt
   -- sie auf Bestands-DBs ebenfalls hinten an, so bleibt die Spaltenreihenfolge
   -- zwischen frischer und migrierter DB identisch.
-  stance            TEXT CHECK(stance IN ('supports','contrasts','mentions') OR stance IS NULL)
+  stance            TEXT CHECK(stance IN ('supports','contrasts','mentions') OR stance IS NULL),
+  -- Herkunft von context_before/context_after (Issue #520): 'fulltext' wenn
+  -- server.resolve_quote_context() eine Fundstelle im echten paper_fulltext
+  -- nachgewiesen und den Kontext daraus geschnitten hat, sonst NULL (Feld
+  -- unbefuellt oder modell-generiert -- geraten wird hier nie). Werteliste
+  -- gespiegelt in migrate.add_context_source_column(). Bewusst als LETZTE
+  -- Spalte, siehe Kommentar bei `stance`.
+  context_source    TEXT CHECK(context_source IN ('fulltext') OR context_source IS NULL)
 );
 
 -- vec0 Virtual Tables: optional, nur wenn sqlite-vec Extension geladen ist.

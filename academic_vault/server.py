@@ -212,6 +212,105 @@ def _verify_local_verbatim(
     return result.verbatim, result.pdf_page
 
 
+def resolve_quote_context(db_path: str, quote_id: str, window: int = 600) -> bool:
+    """Ermittelt ECHTEN Quellkontext (+-``window`` Zeichen) aus ``paper_fulltext`` (#520).
+
+    Sucht die Fundstelle von ``quotes.verbatim`` im (mit
+    :func:`academic_vault.verbatim.normalize_text` normalisierten) Volltext
+    des zugehoerigen Papers -- erst exakter Substring-Treffer, sonst
+    Fuzzy-Fallback via ``rapidfuzz.fuzz.partial_ratio_alignment``. Der
+    Fuzzy-Fallback ist noetig, weil der Volltext-Extraktor
+    (:func:`academic_vault.fulltext.extract_fulltext`, Issue #373) vom
+    Seiten-Extraktor abweichen kann, den ``verify_verbatim`` fuer die
+    Verifikation selbst nutzt (:func:`academic_vault.chunking.extract_pages`,
+    Issue #511/#512) -- Ligaturen, Trennstriche, Whitespace. Bei
+    nachgewiesener Fundstelle werden ``context_before``/``context_after``
+    (je bis zu ``window`` Zeichen, an Textanfang/-ende entsprechend kuerzer)
+    persistiert und ``context_source='fulltext'`` gesetzt.
+
+    Geraten wird NIE: ohne ``paper_fulltext``-Eintrag oder ohne Fundstelle
+    (Fuzzy-Score unter :data:`academic_vault.verbatim.SNAP_RATIO_THRESHOLD`)
+    bleibt der Quote-Datensatz unveraendert -- No-Op, Rueckgabe ``False``.
+    Kommt der Wortlaut mehrfach im Volltext vor, gewinnt bei exaktem
+    Substring-Treffer deterministisch die ERSTE Fundstelle (``str.find``);
+    fuer den Fuzzy-Fallback bestimmt ``rapidfuzz`` den besten Treffer.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        quote_id: Referenz auf ``quotes.quote_id``.
+        window: Anzahl Zeichen vor/nach der Fundstelle (Default 600).
+
+    Returns:
+        ``True`` wenn Kontext persistiert wurde, sonst ``False`` (No-Op).
+
+    Raises:
+        ValueError: ``quote_id`` ist unbekannt.
+        VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+    """
+    # Lazy import: rapidfuzz wird nur gebraucht, wenn tatsaechlich Kontext
+    # aufgeloest wird (Muster wie _verify_local_verbatim/#512).
+    from rapidfuzz import fuzz
+
+    from .verbatim import SNAP_RATIO_THRESHOLD, normalize_text
+
+    db = VaultDB(db_path)
+    db.init_schema()
+    quote = db.get_quote(quote_id)
+    if quote is None:
+        raise ValueError(f"vault.resolve_quote_context: Quote '{quote_id}' nicht gefunden.")
+
+    fulltext = db.get_fulltext(quote["paper_id"])
+    if not fulltext:
+        return False
+
+    normalized_candidate = normalize_text(quote["verbatim"])
+    if not normalized_candidate:
+        return False
+    normalized_fulltext = normalize_text(fulltext)
+
+    match_start = normalized_fulltext.find(normalized_candidate)
+    if match_start != -1:
+        match_end = match_start + len(normalized_candidate)
+    else:
+        alignment = fuzz.partial_ratio_alignment(normalized_candidate, normalized_fulltext)
+        # alignment ist nur None, wenn ein score_cutoff uebergeben wird (hier
+        # nicht der Fall) -- der Guard ist reine mypy-Absicherung.
+        if alignment is None or alignment.score / 100.0 < SNAP_RATIO_THRESHOLD:
+            return False
+        match_start, match_end = alignment.dest_start, alignment.dest_end
+
+    context_before = normalized_fulltext[max(0, match_start - window) : match_start]
+    context_after = normalized_fulltext[match_end : match_end + window]
+
+    db.update_quote_context(
+        quote_id=quote_id,
+        context_before=context_before,
+        context_after=context_after,
+        context_source="fulltext",
+    )
+    return True
+
+
+def _maybe_resolve_quote_context(db_path: str, quote_id: str) -> bool:
+    """Best-effort-Wrapper um :func:`resolve_quote_context` (#520).
+
+    Fehler werden geloggt, nie geworfen -- das Zitat wurde bereits erfolgreich
+    committet (``VaultDB.add_quote`` hat seine eigene Transaktion laengst
+    abgeschlossen); ein Fehlschlag hier darf ``vault.add_quote`` nicht als
+    fehlgeschlagen erscheinen lassen und den bereits gespeicherten,
+    verifizierten Datensatz nicht unsichtbar machen.
+    """
+    try:
+        return resolve_quote_context(db_path, quote_id)
+    except Exception as exc:  # Kontext-Backfill ist optional -- nie fatal fuer add_quote
+        logger.warning(
+            "vault.add_quote: resolve_quote_context() fuer Quote '%s' fehlgeschlagen: %s (#520)",
+            quote_id,
+            exc,
+        )
+        return False
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -239,6 +338,11 @@ def add_quote(
       Kandidat) samt der VERIFIZIERTEN Seite gespeichert; ein abweichend
       uebergebenes ``pdf_page`` wird verworfen und per ``logger.warning``
       sichtbar gemacht, weil die verifizierte Seite der Beweis ist.
+      Danach wird -- non-fatal, Issue #520 -- versucht, echten Quellkontext
+      aus ``paper_fulltext`` aufzuloesen (:func:`resolve_quote_context`) und
+      ``context_before``/``context_after``/``context_source`` zu befuellen.
+      Ohne Volltext oder ohne Fundstelle bleibt das No-Op; ein Fehler dabei
+      wird nur geloggt, das bereits gespeicherte Zitat bleibt unberuehrt.
     * ``'manual'`` bleibt ungeprueft -- und damit der dokumentierte
       Ausweichweg, wenn die lokale Verifikation an ihre Grenzen stoesst.
 
@@ -279,6 +383,8 @@ def add_quote(
         context_after=context_after,
         stance=stance,
     )
+    if extraction_method == "local-verbatim":
+        _maybe_resolve_quote_context(db_path, quote_id)
     return quote_id
 
 
