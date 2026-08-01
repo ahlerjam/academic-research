@@ -67,7 +67,9 @@ EXPECTED_VAULT_TOOLS = {
         "mcp__academic-vault__vault_get_paper",
     ],
     "figure-verifier": [
-        "mcp__academic-vault__vault_ensure_file",
+        # #533: lokaler Seiten-Verifikationspfad (vault.get_paper -> pdf_path
+        # -> Read) statt Citations-API/file_id -- vault_ensure_file entfaellt.
+        "mcp__academic-vault__vault_get_paper",
         "mcp__academic-vault__vault_add_figure",
         # Read-back nach dem Schreiben (#540): der zurueckgelesene Record ist
         # der Beleg, nicht die zurueckgegebene figure_id.

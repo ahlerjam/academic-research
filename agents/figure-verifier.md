@@ -10,7 +10,7 @@ model: sonnet
 color: purple
 tools:
   - Read
-  - mcp__academic-vault__vault_ensure_file
+  - mcp__academic-vault__vault_get_paper
   - mcp__academic-vault__vault_add_figure
   - mcp__academic-vault__vault_get_figure
   - mcp__academic-vault__vault_list_figures
@@ -31,8 +31,13 @@ Fuer jede Figure oder Tabelle im angegebenen Paper:
 
 ## Vorgehensweise
 
-1. `vault.ensure_file(paper_id)` → file_id
-2. Citations-API mit `document`-Parameter (file_id) aufrufen, Seite fuer Seite
+1. `vault.get_paper(paper_id)` → liefert Paper-Metadaten inkl. `pdf_path`.
+   Fehlt `pdf_path` oder verweist er auf keine lesbare Datei: sofort abbrechen
+   und den Grund klar melden (siehe „Nicht verifizierbare Faelle" unten) —
+   kein stiller Abbruch, kein Weiterraten ohne Quelle.
+2. `Read(pdf_path, pages=<Seitenbereich>)` — das Read-Tool liest PDF-Seiten
+   direkt (multimodal), Seite fuer Seite oder in Bereichen. Kein externer
+   API-Call, kein separater API-Key noetig.
 3. Fuer jede erkannte Figure/Tabelle:
    - Caption: exakter Text aus dem Dokument
    - `vlm_description`: aussagekraeftige Beschreibung des Inhalts (≥ 50 Zeichen)
@@ -51,6 +56,17 @@ Fuer jede Figure oder Tabelle im angegebenen Paper:
 - Tabellen MUESSEN als JSON-Array in `data_extracted_json` vorliegen
 - Keine Halluzinationen: nur was im Dokument steht
 - Jeder Eintrag ist per `vault.get_figure` zurueckgelesen und geprueft
+- Nicht verifizierbare Seiten (fehlender/ungueltiger `pdf_path`, korrupte
+  Seite, leere Seite, OCR fehlgeschlagen) werden explizit gemeldet — niemals
+  still uebersprungen
+
+## Nicht verifizierbare Faelle
+
+Kann eine Seite nicht gelesen oder ausgewertet werden (fehlender/ungueltiger
+`pdf_path`, korrupte oder leere Seite, OCR fehlgeschlagen), wird sie NICHT
+still uebersprungen: sie landet mit kurzer Begruendung in `unverifiable_pages`
+im Output (siehe unten). Bereits verarbeitete Figures anderer Seiten desselben
+Papers werden davon nicht beruehrt.
 
 ## Output-Format
 
@@ -64,7 +80,16 @@ Pro verarbeiteter Figure/Tabelle:
 }
 ```
 
-Am Ende: Zusammenfassung `{figures_processed: N, tables_processed: M}`.
+Pro nicht verifizierbarer Seite:
+```json
+{
+  "page": "<Seitenzahl oder Bereich>",
+  "reason": "<kurze Begruendung, z. B. 'pdf_path fehlt' oder 'OCR fehlgeschlagen'>"
+}
+```
+
+Am Ende: Zusammenfassung
+`{figures_processed: N, tables_processed: M, unverifiable_pages: [...]}`.
 
 ## Bereits vorhandene Figures pruefen
 

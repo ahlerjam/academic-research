@@ -473,6 +473,61 @@ def test_figure_verifier_has_nonempty_description():
     assert len(desc_value) >= 10, f"description-Feld ist zu kurz oder leer: '{desc_value}'"
 
 
+# ---------------------------------------------------------------------------
+# Issue #533: figure-verifier ohne Citations-API — lokaler Seiten-Verifikationspfad
+# ---------------------------------------------------------------------------
+
+
+def test_figure_verifier_uses_local_pdf_read_path():
+    """AC1: figure-verifier kommt ohne ANTHROPIC_API_KEY (Citations-API) zu einem
+    Ergebnis — tools:-Frontmatter enthaelt vault_get_paper, Vorgehensweise nutzt
+    vault.get_paper() -> pdf_path -> Read(pages=...) statt eines externen API-Calls.
+    """
+    import re
+
+    agent_path = Path(__file__).parent.parent / "agents" / "figure-verifier.md"
+    content = agent_path.read_text(encoding="utf-8")
+
+    fm_match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    assert fm_match is not None, "Kein YAML-Frontmatter gefunden"
+    fm = fm_match.group(1)
+
+    assert "mcp__academic-vault__vault_get_paper" in fm, (
+        "tools:-Frontmatter muss vault_get_paper enthalten (Issue #533)"
+    )
+    assert "vault.get_paper" in content, "Vorgehensweise muss vault.get_paper referenzieren"
+    assert "pdf_path" in content, "Vorgehensweise muss pdf_path referenzieren"
+    assert re.search(r"Read\([^)]*pages", content), (
+        "Vorgehensweise muss Read(pdf_path, pages=...) referenzieren"
+    )
+
+
+def test_figure_verifier_has_no_citations_api_mandatory_path():
+    """AC2: kein file_id-/document-Parameter-Pfad mehr als Pflichtweg."""
+    agent_path = Path(__file__).parent.parent / "agents" / "figure-verifier.md"
+    content = agent_path.read_text(encoding="utf-8")
+
+    assert "Citations-API" not in content, "Citations-API darf nicht mehr referenziert werden"
+    assert "file_id" not in content, "file_id-Pfad darf nicht mehr referenziert werden"
+    assert "document`-Parameter" not in content, (
+        "document-Parameter-Pfad darf nicht mehr referenziert werden"
+    )
+
+
+def test_figure_verifier_reports_unverifiable_pages():
+    """AC3: nicht verifizierbare Figuren/Seiten werden gemeldet, nicht still
+    uebersprungen — sowohl in Qualitaetskriterien als auch im Output-Format."""
+    agent_path = Path(__file__).parent.parent / "agents" / "figure-verifier.md"
+    content = agent_path.read_text(encoding="utf-8")
+
+    assert "nicht verifizierbar" in content.lower(), (
+        "Qualitaetskriterien muessen einen Fehlerfall 'nicht verifizierbar' benennen"
+    )
+    assert "unverifiable_pages" in content, (
+        "Output-Format muss ein Feld fuer nicht verifizierbare Seiten enthalten"
+    )
+
+
 def test_all_agents_have_nonempty_description():
     """Regression #168: Alle agents/*.md muessen ein nicht-leeres description-Feld haben.
 
