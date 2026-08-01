@@ -1,11 +1,12 @@
 """zotero_pull.py — Zotero-Import-Logik fuer academic-research Plugin.
 
 Liest Items und PDF-Attachments aus einer Zotero-Library, dedupliziert via
-DOI/ISBN gegen den Vault und cached optional (eigener ANTHROPIC_API_KEY
-noetig) PDFs in der Anthropic Files-API fuer den optionalen
-Citations-API-Zitatweg, siehe
-skills/chapter-writer/references/citations-api.md. Standard-Zitatweg bleibt
-lokal: vault.add_quote(extraction_method="local-verbatim").
+DOI/ISBN gegen den Vault. PDFs werden in temporaere Verzeichnisse heruntergeladen
+und pdf_path im Vault gespeichert; Files-API-Upload ist optional (erfordert
+ANTHROPIC_API_KEY) fuer den optionalen Citations-API-Zitatweg, siehe
+skills/chapter-writer/references/citations-api.md. Lokale Zitierung via
+vault.add_quote(extraction_method="local-verbatim") ist nur moeglich, wenn
+pdf_path noch verfuegbar ist.
 
 Aufruf:
     python skills/zotero-import/scripts/zotero_pull.py \\
