@@ -570,6 +570,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Interactive-Gates laufen per Default (#537):** Die beiden Human-Gates aus
+  #105 waren vorhanden, standen aber auf Opt-in — im Normalbetrieb sah der User
+  weder die Query-Expansion noch die Outline vor dem Draften (Audit-Befund R3).
+  In `commands/search.md` ist `--interactive` jetzt `on`; das Phase-1-Gate
+  (expandierte Queries aus `queries.json` + Top-5-10-Preview) ist zugleich von
+  Schritt 10 an die Position direkt hinter dem Ranking gewandert und greift
+  damit **vor** dem teuren LLM-Relevanz-Scoring statt danach, wo es wirkungslos
+  war. In `skills/chapter-writer/SKILL.md` verliert das Outline-Gate seine
+  Vorbedingung („wenn `/search --interactive` aktiv war") und wird Default. Die
+  gate-freien Pfade bleiben erhalten und sind benannt: `--interactive=off` als
+  dokumentiertes Opt-out (Verhalten wie vor #537), `--batch` sowie
+  nicht-interaktive/headless Läufe ohne `AskUserQuestion`-Kanal; für das
+  Outline-Gate ein ausdrücklicher User-Wunsch bzw. `outline_gate: off` in
+  `./academic_context.md`. Dieser Schlüssel steht mit Default `on` in
+  `scripts/bootstrap/academic_context.stub.md` — analog zu `humanizer_de`, damit
+  das Opt-out auffindbar ist und nicht nur im Skill-Text existiert.
 - **Jedes Vault-MCP-Tool hat einen Aufrufer (#540):** Neun der 37 per
   `@mcp.tool` registrierten Tools wurden von keinem Skill, Agent, Command oder
   Hook angesprochen — sie kosteten in jeder Session Tool-Listen-Kontext, ohne

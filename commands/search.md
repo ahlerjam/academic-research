@@ -2,7 +2,7 @@
 description: Search academic papers across multiple APIs (Semantic Scholar, CrossRef, OpenAlex, BASE, EconBiz, EconStor, arXiv)
 disable-model-invocation: true
 allowed-tools: Read, Write, Bash(~/.academic-research/venv/bin/python *), Bash(browser-use:*), Bash(browser-use *), Bash(SESSION_DIR=~/.academic-research/sessions/*), Bash(mkdir -p "$SESSION_DIR/pdfs"), Agent(query-generator, relevance-scorer), AskUserQuestion
-argument-hint: "<query>" [--mode quick|standard|deep|metadata] [--modules crossref,openalex,...] [--limit N] [--batch] [--interactive]
+argument-hint: "<query>" [--mode quick|standard|deep|metadata] [--modules crossref,openalex,...] [--limit N] [--batch] [--interactive=off]
 ---
 
 # Akademische Paper-Suche
@@ -27,7 +27,7 @@ Parallele Suche über bis zu 8 API-Quellen (7 laufen automatisch je Modus, `dblp
 | `--no-expand` | false | `query-generator`-Agent überspringen, rohe Query nutzen |
 | `--no-browser` | false | Browser-Module überspringen (nur APIs) |
 | `--batch` | false | Bei ≥50 Paper: relevance-scorer-Calls als Anthropic Message-Batches-API ausführen (50 % Discount, ~1 h Latenz). Job-ID in `$SESSION_DIR/batch.json` speichern. |
-| `--interactive` | `off` | Two-Phase Research Mode: Phase 1 zeigt Query-Expansion + Top-5-10-Treffer-Preview, dann Approval-Gate. `--interactive=off` (default) verhält sich wie bisher. |
+| `--interactive` | `on` | Two-Phase Research Mode: Phase 1 zeigt Query-Expansion + Top-5-10-Treffer-Preview, dann Approval-Gate vor dem teuren Relevanz-Scoring. Opt-out: `--interactive=off` überspringt das Gate und liefert wie vor #537 direkt das Endergebnis. |
 
 ## Modul-Auswahl nach Modus
 
@@ -154,7 +154,51 @@ Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
 
 Die Heuristik-Dimensionen (Aktualität, Qualität, Autorität, Zugang) werden direkt in diesem Command berechnet — siehe Formeln in `commands/score.md` → „4 weitere Dimensionen berechnen". Gesamtscore wie dort, Clusterzuweisung ebenfalls. Das Resultat in `$SESSION_DIR/ranked.json` schreiben.
 
-### Schritt 7: PRISMA-Zähler speichern
+### Schritt 7: Interactive Mode — Phase 1 (Approval-Gate, Default)
+
+Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 9, damit der
+User Query-Expansion und Trefferlage sieht, bevor das teure LLM-Relevanz-Scoring
+startet.
+
+Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 8):
+
+- `--interactive=off` — das dokumentierte Opt-out, stellt das Verhalten vor #537 her.
+- `--batch` — der Batch-Modus reicht die Scoring-Calls an die Message-Batches-API
+  weiter und bleibt gate-frei.
+- Nicht-interaktive bzw. headless Läufe (kein `AskUserQuestion`-Kanal verfügbar,
+  z. B. CI oder Automatisierung): kein Gate, sonst würde der Lauf blockieren.
+
+Sonst Preview aufbauen:
+
+```bash
+~/.academic-research/venv/bin/python -c "
+import json, sys
+sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts')
+from search import run_interactive_phase1
+papers = json.load(open('$SESSION_DIR/ranked.json'))
+preview = run_interactive_phase1(papers, query='$QUERY', n_preview=5)
+print(json.dumps(preview, ensure_ascii=False, indent=2))
+"
+```
+
+Anzeigen:
+
+1. Die in Schritt 2 expandierten Queries aus `$SESSION_DIR/queries.json`
+   (bei `--no-expand`: die rohe User-Query) — damit sichtbar ist, wonach
+   tatsächlich gesucht wurde.
+2. Die Top-5-10-Treffer aus dem Preview als formatierte Tabelle.
+
+Dann **Approval-Gate via `AskUserQuestion`**:
+
+Optionen:
+1. **Weiter** — Phase 2 starten (Deep-Investigation)
+2. **Anders formulieren** — neue Query eingeben und ab Schritt 2 wiederholen
+3. **Mehr Quellen** — zusätzliche Module hinzufügen und ab Schritt 3 wiederholen
+4. **Modul-Wahl ändern** — andere API-Module wählen und ab Schritt 3 wiederholen
+
+Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
+
+### Schritt 8: PRISMA-Zähler speichern
 
 ```bash
 ~/.academic-research/venv/bin/python -c "
@@ -184,7 +228,7 @@ im Ledger protokolliert — dann statt der Handzählung:
   > "$SESSION_DIR/prisma_counters.json"
 ```
 
-### Schritt 8: Relevanz-Scoring (Standard vs. Batch)
+### Schritt 9: Relevanz-Scoring (Standard vs. Batch)
 
 **Standard (< 50 Paper oder kein `--batch`):**  
 Den `relevance-scorer`-Agent in Batches von 10 Papers starten.
@@ -209,7 +253,7 @@ print('Abholung via: /history --batch', job['batch_id'])
 Job-ID wird in `$SESSION_DIR/batch.json` gespeichert. Abholung über
 `/history --batch <id>` (sobald Batch-Status `ended` ist, ca. 1 h).
 
-### Schritt 9: Session-Index aktualisieren
+### Schritt 10: Session-Index aktualisieren
 
 Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
 im Index unter `~/.academic-research/session_index.json` fortgeschrieben
@@ -238,34 +282,6 @@ update_session_index(DEFAULT_INDEX_PATH, entry)
 laufendem Batch-Job in `$SESSION_DIR/ranked.json`) enthaltenen Paper. Die
 Anzahl beschaffter Volltexte wird automatisch aus `$SESSION_DIR/pdfs/*.pdf`
 gezählt.
-
-### Schritt 10: Interactive Mode — Phase 1 (nur bei `--interactive`)
-
-Falls `--interactive=off` (Standard): diesen Schritt überspringen.
-
-Bei `--interactive`:
-
-```bash
-~/.academic-research/venv/bin/python -c "
-import json, sys
-sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts')
-from search import run_interactive_phase1
-papers = json.load(open('$SESSION_DIR/ranked.json'))
-preview = run_interactive_phase1(papers, query='$QUERY', n_preview=5)
-print(json.dumps(preview, ensure_ascii=False, indent=2))
-"
-```
-
-Die Top-5-10-Treffer als formatierte Tabelle anzeigen, dann
-**Approval-Gate via `AskUserQuestion`**:
-
-Optionen:
-1. **Weiter** — Phase 2 starten (Deep-Investigation)
-2. **Anders formulieren** — neue Query eingeben und ab Schritt 2 wiederholen
-3. **Mehr Quellen** — zusätzliche Module hinzufügen und ab Schritt 3 wiederholen
-4. **Modul-Wahl ändern** — andere API-Module wählen und ab Schritt 3 wiederholen
-
-Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
 
 ### Schritt 11: Ergebnisse anzeigen
 

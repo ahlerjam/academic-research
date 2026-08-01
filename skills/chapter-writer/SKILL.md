@@ -57,10 +57,10 @@ Falls unklar, den User fragen, welches Kapitel/welcher Abschnitt zu schreiben
 ist. Kläre: Kapitelnummer und -titel, Scope (was das Kapitel leisten soll),
 zugeordnete Quellen, erwarteter Umfang (Seitenschätzung aus der Gliederung).
 
-### 3. Approval-Gate nach Outline (Interactive Mode)
+### 3. Approval-Gate nach Outline
 
-Wenn `/search --interactive` aktiv war oder der User explizit eine
-Freigabe-Runde wünscht, **Approval-Gate vor dem Draften einbauen**:
+Die Outline wird **standardmäßig** zur Freigabe vorgelegt, auch ohne
+Interactive-Kontext aus `/search` (#537):
 
 1. Outline (Abschnitts-Aufbau aus Schritt 4 unten) dem User vorlegen.
 2. Via `AskUserQuestion` Optionen anbieten:
@@ -70,8 +70,9 @@ Freigabe-Runde wünscht, **Approval-Gate vor dem Draften einbauen**:
    - **Scope ändern** — Kapitelziel neu definieren
 3. Erst nach expliziter Freigabe ("Freigeben") mit dem Draften beginnen.
 
-Bei `--interactive=off` (default) ohne `/search --interactive`-Kontext:
-Kapitelplanung direkt starten (kein Gate).
+**Opt-out** (Gate entfällt, Planung startet direkt): `outline_gate: off` in
+`./academic_context.md` (Default `on`), expliziter User-Wunsch, oder headless
+ohne `AskUserQuestion`-Kanal.
 
 ### 4. Kapitelplanung
 
@@ -87,7 +88,7 @@ Bevor geschrieben wird, erstelle einen kurzen internen Plan:
 3. **Argumentationsfluss** — wie das Kapitel zur Forschungsfrage beiträgt
 4. **Schlüsseldefinitionen** — einzuführende oder referenzierte Begriffe
 
-Plan dem User zur Freigabe vorlegen, bevor gedraftet wird.
+Der Plan geht in das Approval-Gate aus Schritt 3.
 
 ### 5. Draften
 
