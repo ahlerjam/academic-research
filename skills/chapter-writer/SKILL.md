@@ -2,7 +2,7 @@
 name: chapter-writer
 description: Use this skill when the user wants a chapter SCHREIBEN (Text-Output, kein Review). Triggers on "Kapitel SCHREIBEN", "Einleitung schreiben", "Theorieteil ausformulieren / Theoretischer Rahmen", "Methodik-Kapitel / Methodenteil", "Empirie / Ergebnisse darstellen", "Diskussion schreiben / Diskussionsteil drafted", "Fazit / Schlussteil", "Übergänge formulieren / Uebergaenge formulieren". Für reines Struktur-/Gliederungs-Feedback ohne Neuschrieb → `advisor`. Für Abstract/Keywords → `abstract-generator`. Für Zitations-Formatierung → `citation-extraction`.
 license: MIT
-allowed-tools: [Read]
+allowed-tools: [Read, AskUserQuestion]
 ---
 
 # Kapitel-Autor
@@ -169,8 +169,8 @@ Trigger, Ausführung und Ergebnis-Handling:
 ## Qualitaets-Review vor finalem Output
 
 Nach der Generierung des Kapitel-Entwurfs (ggf. nach Humanizer-Audit-Pass)
-triggere den `quality-reviewer`-Agent. Vollständige Kriterien-Konfiguration und
-PASS-/REVISE-Handling: `${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/quality-review-config.md`.
+triggere den `quality-reviewer`-Agent. Kriterien und PASS-/REVISE-/ESCALATE-Handling:
+`${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/quality-review-config.md`.
 
 ## Wichtige Regeln
 

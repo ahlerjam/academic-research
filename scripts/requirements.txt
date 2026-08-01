@@ -47,3 +47,7 @@ sentence-transformers>=3.0
 # lokalen Reranker) unnoetig auf die aeltere transformers-Version zwingen.
 # Wer FlagEmbedding manuell nachinstalliert, deckelt transformers im selben
 # Schritt: `pip install 'FlagEmbedding>=1.3,<2.0' 'transformers<5.0'`.
+# Fuzzy-Snap in academic_vault/verbatim.py (Issue #511): findet die
+# naechstliegende Textstelle fuer leicht abweichende Zitat-Kandidaten.
+# Zweitstelle: pyproject.toml [project.dependencies].
+rapidfuzz>=3.14.5

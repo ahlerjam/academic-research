@@ -16,8 +16,14 @@
     },
     {
       "id": "qr-03",
-      "input": "Iteration: 2. Text: 'Kurzer Test.' Kriterien: Satzlaenge >= 10. Erwartet: PASS-with-warnings wegen Iteration-Limit.",
-      "expected": {"type": "regex", "value": "PASS|BLOCKIERT_VON:\\s*iteration-limit"},
+      "input": "Iteration: 2. Text: 'Kurzer Test.' Kriterien: Satzlaenge >= 10. Das Kriterium ist verletzt.",
+      "expected": {"type": "regex", "value": "VERDICT:\\s*ESCALATE[\\s\\S]*BLOCKIERT_VON:\\s*iteration-limit"},
+      "mode": "with_skill"
+    },
+    {
+      "id": "qr-04",
+      "input": "Iteration: 2. Text: 'Die Untersuchung folgt einem qualitativen Design und stuetzt sich auf zehn leitfadengestuetzte Interviews (Mueller, 2022). Die Auswertung erfolgt inhaltsanalytisch entlang festgelegter Kategorien (Schmidt, 2023).' Kriterien: Satzlaenge 15-25, Quellen/1000W >= 5. Kein Kriterium ist verletzt.",
+      "expected": {"type": "regex", "value": "VERDICT:\\s*PASS"},
       "mode": "with_skill"
     }
   ]
