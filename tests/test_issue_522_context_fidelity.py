@@ -500,7 +500,12 @@ def test_hooks_doc_lists_new_hook():
 def test_setup_sh_hook_count_is_current():
     setup = (REPO_ROOT / "scripts" / "setup.sh").read_text(encoding="utf-8")
     assert "5 der 7 Hooks" not in setup, "scripts/setup.sh behauptet weiter '5 der 7 Hooks'."
-    assert "6 der 8 Hooks" in setup, "scripts/setup.sh nennt die aktuelle Hook-Anzahl nicht."
+    assert "6 der 8 Hooks" not in setup, (
+        "scripts/setup.sh nennt veraltete Hook-Anzahl '6 der 8 Hooks'."
+    )
+    assert "7 der 9 Hooks" in setup, (
+        "scripts/setup.sh nennt die aktuelle Hook-Anzahl nicht ('7 der 9 Hooks')."
+    )
 
 
 # ---------------------------------------------------------------------------

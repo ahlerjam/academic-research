@@ -269,7 +269,7 @@ function logBypassUsage(filePath) {
 const PY_LOOKUP = [
   'import sys, json',
   `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-  'from academic_vault.server import search_quote_text, get_quote, quote_context_similarity',
+  'from academic_vault.server import search_quote_text, get_quote',
   'db_path = sys.argv[1]',
   'out = []',
   'for item in json.loads(sys.argv[2]):',
@@ -279,10 +279,6 @@ const PY_LOOKUP = [
   '        continue',
   '    quote_id = hits[0]["quote_id"]',
   '    record = get_quote(db_path, quote_id) or {}',
-  '    try:',
-  '        similarity = quote_context_similarity(db_path, quote_id, item["window"])',
-  '    except Exception:',
-  '        similarity = None',
   '    out.append({',
   '        "found": True,',
   '        "quote_id": quote_id,',
@@ -292,7 +288,7 @@ const PY_LOOKUP = [
   '        "context_source": record.get("context_source"),',
   '        "printed_page": record.get("printed_page"),',
   '        "verbatim": record.get("verbatim"),',
-  '        "similarity": similarity,',
+  '        "similarity": None,',
   '    })',
   'print(json.dumps(out))',
 ].join('\n');
@@ -309,11 +305,10 @@ function lookupQuotes(candidates) {
     return { status: 'unavailable' };
   }
 
-  // Kein Modell-Download im PreToolUse-Pfad: HF_HUB_OFFLINE zwingt
-  // huggingface_hub auf den lokalen Cache (dokumentierte Offline-Variable).
-  // Ohne Cache scheitert der Modell-Load sauber, quote_context_similarity gibt
-  // dann None zurueck und der Hook weist "Aehnlichkeit nicht geprueft" aus,
-  // statt in das Hook-Timeout zu laufen.
+  // Keine Embedding-Modelle im PreToolUse-Pfad: quote_context_similarity laeuft
+  // nicht im Lookup (Signal 4 bleibt aus). Das verhindert torch-/sentence-transformers-
+  // Importe und Gewichts-Loads auch wenn der Embedder cached ist. Signale 1-3 arbeiten
+  // rein lexikalisch und sind schnell genug.
   process.env.HF_HUB_OFFLINE = process.env.HF_HUB_OFFLINE ?? '1';
   process.env.HF_HUB_DISABLE_TELEMETRY = process.env.HF_HUB_DISABLE_TELEMETRY ?? '1';
 
@@ -496,14 +491,28 @@ async function main() {
   }
 
   // Kandidaten: deduplizierte Zitat-Spans mit ihrem Kapitelfenster.
-  const candidates = [];
+  // Zuerst ALLE Spans durchzaehlen, dann in Kandidaten (bis MAX_QUOTES) und
+  // uebersprungene trennen. So ist die Abdeckungszeile echt: "x von y Zitaten"
+  // bezieht sich auf y = Gesamtzahl, nicht Gepufferte.
+  const allSpans = [];
   const seen = new Set();
   for (const span of extractQuoteSpans(content)) {
     if (seen.has(span.text)) continue;
     seen.add(span.text);
-    candidates.push({ text: span.text, window: chapterWindow(content, span) });
-    if (candidates.length >= MAX_QUOTES) break;
+    allSpans.push(span);
   }
+
+  const candidates = [];
+  const skipped = [];
+  for (let i = 0; i < allSpans.length; i++) {
+    const span = allSpans[i];
+    if (candidates.length < MAX_QUOTES) {
+      candidates.push({ text: span.text, window: chapterWindow(content, span) });
+    } else {
+      skipped.push(span.text);
+    }
+  }
+
   if (candidates.length === 0) process.exit(0); // Kein Zitat — nichts zu melden.
 
   const lookup = lookupQuotes(candidates);
@@ -540,8 +549,16 @@ async function main() {
     if (signals.length > 0) findings.push({ span: candidate.text, record, signals });
   });
 
+  // Uebersprungene Zitate wegen Kontingent-Limit ausgeben
+  if (skipped.length > 0) {
+    unverifiable.push({
+      span: `[${skipped.length} weitere ${skipped.length === 1 ? 'Zitat' : 'Zitate'} uebersprungen]`,
+      reason: `Kontingent CONTEXT_FIDELITY_MAX_QUOTES=${MAX_QUOTES} erschöpft`,
+    });
+  }
+
   emit(buildMessage(
-    filePath, findings, unverifiable, checkable, candidates.length, similarityMissing,
+    filePath, findings, unverifiable, checkable, allSpans.length, similarityMissing,
   ));
 
   // Kein process.exit(0) hier: stdout ist bei einer Pipe asynchron, ein
