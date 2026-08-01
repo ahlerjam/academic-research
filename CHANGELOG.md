@@ -33,6 +33,16 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Bypass-Report beim SessionStart (#517):** Der Bypass-Marker
+  `<!-- vault-guard: skip -->` ist für Ausnahmefälle legitim, blieb aber
+  bisher unbemerkt — nichts las das seit #381 geschriebene Log
+  (`~/.academic-research/vault-guard-bypass.log`). Der neue, rein lesende
+  SessionStart-Hook `hooks/bypass-log-report.mjs` meldet Anzahl und
+  betroffene Dateien NEUER Bypass-Nutzungen seit dem letzten SessionStart auf
+  stdout, ohne neue Einträge bleibt er stumm. Der Merkposten „zuletzt
+  gemeldet" liegt in `~/.academic-research/vault-guard-bypass-report-state.json`
+  (0600/0700). Fail-open bei jedem Lese-/Rotationsfehler — der SessionStart
+  wird nie blockiert. Die Schreibseite (`verbatim-guard.mjs`) ist unverändert.
 - **`figure-verifier` ohne Citations-API (#533):** Der Agent verlangte in
   Schritt 2 der Vorgehensweise bislang die Citations-API mit
   `document`-Parameter (`file_id`) als einzigen Verifikationspfad — identisch
