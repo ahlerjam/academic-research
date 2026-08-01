@@ -367,6 +367,29 @@ dauerhaft unsichtbar. `bypass-log-report.mjs` schließt die Lücke als rein
 - Ändert nichts an der Schreibseite: Blockieren des Bypass bleibt weiterhin
   möglich und unverändert Aufgabe von `verbatim-guard.mjs`.
 
+### Env-Switch-Report: guard-schwächende Schalter sichtbar (#519, Audit R7)
+
+Drei Env-Schalter schwächen `verbatim-guard.mjs` gezielt ab, ohne ihn
+abzuschalten: `ACADEMIC_CITATION_AMBIGUOUS=mark` (mehrdeutige Klammerform wird
+markiert statt blockiert), `ACADEMIC_CITATION_CASCADE=off` (externe Kaskade
+deaktiviert) und `ACADEMIC_CITATION_MAX_PER_WRITE` (Prüfkontingent pro Write).
+Legitime Konfiguration — aber ihre Nutzung blieb bislang unbemerkt. Bei jedem
+Guard-Lauf auf einer geschützten Datei protokolliert `verbatim-guard.mjs` jetzt
+für **jeden gesetzten** (nicht-leeren) der drei Schalter genau eine Zeile nach
+`~/.academic-research/vault-guard-env-switch.log` (Env-Override
+`VAULT_GUARD_ENV_SWITCH_LOG`, 0600/0700, fail-open — identisches Muster wie das
+Bypass-Log aus #381). „Gesetzt" bedeutet: der Schalter steht in der Umgebung,
+unabhängig davon, ob er im konkreten Content-Check überhaupt greift — sichtbar
+gemacht wird die Nutzung, nicht ihre Wirkung.
+
+`bypass-log-report.mjs` liest zusätzlich dieses Log (eigener
+Offset-Merkposten `~/.academic-research/vault-guard-env-switch-report-state.json`,
+Env-Override `VAULT_GUARD_ENV_SWITCH_REPORT_STATE`) und hängt bei neuen
+Einträgen einen zweiten Report-Abschnitt mit Schalter-Name, Wert und
+betroffener Datei an — kein neuer Hooks.json-Eintrag, weiterhin **6
+Skript-Dateien**. Gleiches Fail-open- und Kein-Rauschen-Verhalten wie beim
+Bypass-Abschnitt.
+
 ## Privacy/Logs
 
 In der Vault-Tabelle landen ausschließlich **relativer Pfad, Tool-Name und der
