@@ -10,6 +10,28 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Bypass-Report beim SessionStart (#517):** Der Bypass-Marker
+  `<!-- vault-guard: skip -->` ist für Ausnahmefälle legitim, blieb aber
+  bisher unbemerkt — nichts las das seit #381 geschriebene Log
+  (`~/.academic-research/vault-guard-bypass.log`). Der neue, rein lesende
+  SessionStart-Hook `hooks/bypass-log-report.mjs` meldet Anzahl und
+  betroffene Dateien NEUER Bypass-Nutzungen seit dem letzten SessionStart auf
+  stdout, ohne neue Einträge bleibt er stumm. Der Merkposten „zuletzt
+  gemeldet" liegt in `~/.academic-research/vault-guard-bypass-report-state.json`
+  (0600/0700). Fail-open bei jedem Lese-/Rotationsfehler — der SessionStart
+  wird nie blockiert. Die Schreibseite (`verbatim-guard.mjs`) ist unverändert.
+- **`figure-verifier` ohne Citations-API (#533):** Der Agent verlangte in
+  Schritt 2 der Vorgehensweise bislang die Citations-API mit
+  `document`-Parameter (`file_id`) als einzigen Verifikationspfad — identisch
+  zum Muster in `skills/chapter-writer/references/citations-api.md`, das einen
+  separaten `ANTHROPIC_API_KEY` voraussetzt und den Agenten ohne diesen Key
+  funktionslos machte. Analog zu `risk-of-bias` liest `figure-verifier` das
+  PDF jetzt lokal: `vault.get_paper(paper_id)` → `pdf_path` → `Read(pdf_path,
+  pages=...)`, kein externer API-Call mehr nötig. `tools:`-Frontmatter ersetzt
+  `vault_ensure_file` durch `vault_get_paper`. Nicht verifizierbare Seiten
+  (fehlender/ungültiger `pdf_path`, korrupte/leere Seite, OCR fehlgeschlagen)
+  werden explizit im neuen `unverifiable_pages`-Feld des Outputs gemeldet statt
+  still übersprungen.
 - **Werkzeugsatz für den empirischen Teil (#473):** Zwei neue Skills schließen
   die Lücke zwischen Methodenwahl und Ergebniskapitel. `instrument-design`
   leitet aus Forschungsfrage, Unterfragen und Methodik in `academic_context.md`
@@ -548,6 +570,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Interactive-Gates laufen per Default (#537):** Die beiden Human-Gates aus
+  #105 waren vorhanden, standen aber auf Opt-in — im Normalbetrieb sah der User
+  weder die Query-Expansion noch die Outline vor dem Draften (Audit-Befund R3).
+  In `commands/search.md` ist `--interactive` jetzt `on`; das Phase-1-Gate
+  (expandierte Queries aus `queries.json` + Top-5-10-Preview) ist zugleich von
+  Schritt 10 an die Position direkt hinter dem Ranking gewandert und greift
+  damit **vor** dem teuren LLM-Relevanz-Scoring statt danach, wo es wirkungslos
+  war. In `skills/chapter-writer/SKILL.md` verliert das Outline-Gate seine
+  Vorbedingung („wenn `/search --interactive` aktiv war") und wird Default. Die
+  gate-freien Pfade bleiben erhalten und sind benannt: `--interactive=off` als
+  dokumentiertes Opt-out (Verhalten wie vor #537), `--batch` sowie
+  nicht-interaktive/headless Läufe ohne `AskUserQuestion`-Kanal; für das
+  Outline-Gate ein ausdrücklicher User-Wunsch bzw. `outline_gate: off` in
+  `./academic_context.md`. Dieser Schlüssel steht mit Default `on` in
+  `scripts/bootstrap/academic_context.stub.md` — analog zu `humanizer_de`, damit
+  das Opt-out auffindbar ist und nicht nur im Skill-Text existiert.
 - **Jedes Vault-MCP-Tool hat einen Aufrufer (#540):** Neun der 37 per
   `@mcp.tool` registrierten Tools wurden von keinem Skill, Agent, Command oder
   Hook angesprochen — sie kosteten in jeder Session Tool-Listen-Kontext, ohne
