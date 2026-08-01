@@ -6,22 +6,24 @@ Kontrolle des von pypdf extrahierten Unicode-Texts ueber eine /ToUnicode-CMap).
 AC -> Testfall (siehe Issue #511):
   - Exakter Treffer nach Normalisierung -> status=exact, korrekte Seite,
     char_start: test_exact_match_after_normalization (Anfuehrungszeichen-
-    Variante), plus Regressionsfaelle fuer die einzelnen Normalisierungsschritte
-    (Ligatur, Zeilenend-Trennstrich).
-  - Leicht abweichender Kandidat -> status=snapped, Wortlaut AUS DER QUELLE:
-    test_snapped_returns_source_wording_not_candidate.
+    Variante) -- exact bleibt reserviert fuer reine Darstellungsvarianten
+    (krumme Anfuehrungszeichen/Apostrophe, Whitespace), die den Wortlaut
+    NICHT veraendern.
+  - Leicht abweichender Kandidat (Ligatur "fi" statt "ﬁ", fehlender
+    Trennstrich-Zeilenumbruch) -> status=snapped, Wortlaut AUS DER QUELLE:
+    test_ligature_normalization_returns_snapped,
+    test_hyphenated_linebreak_normalization_returns_snapped, sowie ein
+    echter Tippfehler in test_snapped_returns_source_wording_not_candidate.
   - Kandidat ohne Entsprechung -> no-match; PDF ohne Textlayer -> no-textlayer,
     nie durchgewunken: test_unrelated_candidate_returns_no_match,
     test_scan_pdf_without_text_layer_returns_no_textlayer.
 
-DESIGN-ENTSCHEIDUNG (Abweichung von der Wortwahl des Issue-Body-ACs): die
-"Ligatur"/"Trennstrich"-Beispiele im AC-Text sind illustrativ gemeint. Die
-"What"-Sektion des Issues listet Ligatur-Aufloesung UND Trennstrich-Join
-explizit als Teil der DETERMINISTISCHEN Normalisierung -- ein Kandidat, der
-sich nur darin vom Quelltext unterscheidet, landet also konsequent bei
-`exact`, nicht bei `snapped` (sonst waere die deterministische Normalisierung
-wirkungslos). `snapped` ist reserviert fuer Abweichungen, die NICHT durch die
-Normalisierung aufgeloest werden (z. B. echte Tippfehler).
+Wortlaut-Treue zum AC-Beispiel (Issue #511): der `exact`-Vergleich normalisiert
+nur Anfuehrungszeichen-/Apostroph-Varianten und Whitespace ("schwache"
+Normalisierung) -- NICHT Ligaturen (NFKC) und NICHT den Trennstrich-Join.
+Diese beiden zaehlen laut AC-Wortlaut explizit als "leicht abweichend" und
+muessen ueber den Fuzzy-Pfad als `snapped` erkannt werden, nicht als `exact`
+durchgewunken werden.
 """
 
 import os
@@ -64,30 +66,33 @@ def test_exact_match_after_normalization():
     _assert_char_start_consistent(SOURCE_PDF, 2, result)
 
 
-def test_ligature_normalization_returns_exact():
-    """Kandidat mit 'fi' statt Ligatur ﬁ -> nach Normalisierung exact."""
+def test_ligature_normalization_returns_snapped():
+    """Kandidat mit 'fi' statt Ligatur ﬁ -> AC-Beispiel fuer 'leicht
+    abweichend': status=snapped, nicht exact (Ligatur-Aufloesung ist keine
+    reine Darstellungsvariante im Sinne des exact-Vergleichs)."""
     candidate = "Die Wirksamkeit der Konfiguration wurde nachgewiesen."
     result = verify_verbatim(SOURCE_PDF, candidate)
 
-    assert result.status == "exact"
+    assert result.status == "snapped"
     assert result.pdf_page == 1
-    assert result.ratio == 1.0
+    assert result.ratio >= SNAP_RATIO_THRESHOLD
     assert "fi" in result.verbatim
     assert "ﬁ" not in result.verbatim
     _assert_char_start_consistent(SOURCE_PDF, 1, result)
 
 
-def test_hyphenated_linebreak_normalization_returns_exact():
-    """Kandidat ohne Trennstrich-Zeilenumbruch -> nach Join exact."""
+def test_hyphenated_linebreak_normalization_returns_snapped():
+    """Kandidat ohne Trennstrich-Zeilenumbruch -> AC-Beispiel fuer 'leicht
+    abweichend': status=snapped, nicht exact."""
     candidate = (
         "Diese Studie belegt eine gesteigerte innovationsfaehigkeit "
         "in den befragten Organisationen."
     )
     result = verify_verbatim(SOURCE_PDF, candidate)
 
-    assert result.status == "exact"
+    assert result.status == "snapped"
     assert result.pdf_page == 1
-    assert result.ratio == 1.0
+    assert result.ratio >= SNAP_RATIO_THRESHOLD
     assert "innovationsfaehigkeit" in result.verbatim
     _assert_char_start_consistent(SOURCE_PDF, 1, result)
 

@@ -11,26 +11,32 @@ Ablauf von :func:`verify_verbatim`:
 
 1. Kein Text-Layer auf keiner Seite -> ``status="no-textlayer"``, Kurzschluss
    VOR jeder Normalisierung/jedem Vergleich.
-2. Kandidat und Seitentexte werden identisch normalisiert (NFKC -- loest u.a.
-   Ligaturen wie ﬁ/ﬂ gemaess Unicode-Kompatibilitaetszerlegung auf --,
-   Anfuehrungszeichen-/Apostroph-Varianten auf ASCII, Zeilenend-Trennstriche
-   zusammengefuehrt, Whitespace kollabiert). Exakter Substring-Treffer auf
-   irgendeiner Seite (erste Seite mit Treffer gewinnt, deterministisch bei
-   Mehrfachvorkommen) -> ``status="exact"``.
-3. Kein exakter Treffer -> Fuzzy-Suche mit rapidfuzz ueber ein
-   kandidatlanges Sliding-Window je Seite. Bester Treffer >=
-   :data:`SNAP_RATIO_THRESHOLD` -> ``status="snapped"``, ``verbatim`` ist der
-   NORMALISIERTE QUELLTEXT an der Fundstelle -- NIE der Kandidat.
+2. Kandidat und Seitentexte werden SCHWACH normalisiert (nur
+   Anfuehrungszeichen-/Apostroph-Varianten auf ASCII, Whitespace kollabiert --
+   siehe :func:`_normalize_weak`). ``exact`` bleibt damit reserviert fuer
+   reine Darstellungsvarianten, die den Wortlaut nicht veraendern. Exakter
+   Substring-Treffer auf irgendeiner Seite (erste Seite mit Treffer gewinnt,
+   deterministisch bei Mehrfachvorkommen) -> ``status="exact"``.
+3. Kein exakter Treffer -> Kandidat und Seitentexte werden VOLL normalisiert
+   (zusaetzlich NFKC -- loest u.a. Ligaturen wie ﬁ/ﬂ gemaess
+   Unicode-Kompatibilitaetszerlegung auf --, sowie Zeilenend-Trennstriche
+   zusammengefuehrt; siehe :func:`normalize_text`). Fuzzy-Suche mit rapidfuzz
+   ueber ein kandidatlanges Sliding-Window je Seite auf diesem voll
+   normalisierten Text. Bester Treffer >= :data:`SNAP_RATIO_THRESHOLD` ->
+   ``status="snapped"``, ``verbatim`` ist der NORMALISIERTE QUELLTEXT an der
+   Fundstelle -- NIE der Kandidat. Ligatur-/Trennstrich-Abweichungen vom
+   Kandidaten landen damit AC-konform bei ``snapped``, nicht bei ``exact``.
 4. Sonst -> ``status="no-match"``.
 
 DESIGN-ENTSCHEIDUNG (``verbatim``-Feld): der zurueckgegebene Wortlaut ist der
-normalisierte Quelltext (glatte Anfuehrungszeichen, aufgeloeste Ligaturen,
-zusammengefuehrte Trennstriche) -- nicht der rohe PDF-Bytestream. Das ist
-exakt die Textform, gegen die verglichen wird, bleibt fuer Weiterverarbeitung
-(Zitat-Einfuegen) typografisch sauber und ist ohne verlustbehaftete
-Rueck-Projektion auf den Rohtext eindeutig herleitbar (Normalisierung veraendert die
-Zeichenlaenge, z. B. durch Trennstrich-Join -- eine 1:1-Rueckabbildung auf
-Roh-Byte-Positionen waere nicht robust herleitbar).
+normalisierte Quelltext (glatte Anfuehrungszeichen, bei ``snapped``
+zusaetzlich aufgeloeste Ligaturen/zusammengefuehrte Trennstriche) -- nicht
+der rohe PDF-Bytestream. Das ist exakt die Textform, gegen die verglichen
+wird, bleibt fuer Weiterverarbeitung (Zitat-Einfuegen) typografisch sauber
+und ist ohne verlustbehaftete Rueck-Projektion auf den Rohtext eindeutig
+herleitbar (Normalisierung veraendert die Zeichenlaenge, z. B. durch
+Trennstrich-Join -- eine 1:1-Rueckabbildung auf Roh-Byte-Positionen waere
+nicht robust herleitbar).
 
 Scope-Grenze (aus dem Issue-Body): ``add_quote``-Integration und MCP-Tool
 sind explizit spaetere Issues -- dieses Modul ist reine Pruefung, keine
@@ -85,15 +91,36 @@ def _join_hyphenated_linebreaks(text: str) -> str:
 
 
 def normalize_text(text: str) -> str:
-    """Normalisiert Text fuer den Verbatim-Vergleich (siehe Modul-Docstring).
+    """Normalisiert Text fuer den ``snapped``-Vergleich (siehe Modul-Docstring).
 
-    Reihenfolge: NFKC (u. a. Ligatur-Aufloesung) -> Anfuehrungszeichen-/
-    Apostroph-Mapping -> Trennstrich-Zeilenumbruch-Join -> Whitespace-Kollaps.
-    Idempotent: ``normalize_text(normalize_text(x)) == normalize_text(x)``.
+    "Volle" Normalisierung, Reihenfolge: NFKC (u. a. Ligatur-Aufloesung) ->
+    Anfuehrungszeichen-/Apostroph-Mapping -> Trennstrich-Zeilenumbruch-Join ->
+    Whitespace-Kollaps. Idempotent:
+    ``normalize_text(normalize_text(x)) == normalize_text(x)``.
+
+    Fuer den ``exact``-Vergleich wird bewusst NICHT diese Funktion verwendet,
+    sondern die schwaechere :func:`_normalize_weak` (siehe dort) -- damit
+    Ligatur-/Trennstrich-Abweichungen laut AC #511 als ``snapped`` erkannt
+    werden statt als ``exact`` durchzugehen.
     """
     normalized = unicodedata.normalize("NFKC", text)
     normalized = normalized.translate(_QUOTE_TRANSLATION)
     normalized = _join_hyphenated_linebreaks(normalized)
+    return " ".join(normalized.split())
+
+
+def _normalize_weak(text: str) -> str:
+    """Normalisiert Text fuer den ``exact``-Vergleich (siehe Modul-Docstring).
+
+    Nur Anfuehrungszeichen-/Apostroph-Mapping und Whitespace-Kollaps -- OHNE
+    NFKC (Ligatur-Aufloesung) und OHNE Trennstrich-Zeilenumbruch-Join. Diese
+    beiden Normalisierungsschritte zaehlen laut AC-Wortlaut in Issue #511
+    explizit als "leicht abweichender Kandidat" und muessen ueber den
+    Fuzzy-Pfad (:func:`normalize_text` + rapidfuzz) als ``snapped`` erkannt
+    werden, nicht bereits hier als ``exact`` durchgewunken werden.
+    Idempotent, analog zu :func:`normalize_text`.
+    """
+    normalized = text.translate(_QUOTE_TRANSLATION)
     return " ".join(normalized.split())
 
 
@@ -194,17 +221,22 @@ def verify_verbatim(pdf_path: str, candidate: str) -> VerbatimResult:
             status="no-textlayer", verbatim="", pdf_page=None, char_start=None, ratio=0.0
         )
 
-    normalized_candidate = normalize_text(candidate)
-    if not normalized_candidate:
+    weak_candidate = _normalize_weak(candidate)
+    if not weak_candidate:
         return VerbatimResult(
             status="no-match", verbatim="", pdf_page=None, char_start=None, ratio=0.0
         )
 
-    normalized_pages = [(page_number, normalize_text(text)) for page_number, text in pages]
+    weak_pages = [(page_number, _normalize_weak(text)) for page_number, text in pages]
 
-    exact = _find_exact(normalized_candidate, normalized_pages)
+    exact = _find_exact(weak_candidate, weak_pages)
     if exact is not None:
         return exact
+
+    # Kein exakter Treffer unter schwacher Normalisierung -> jetzt voll
+    # normalisieren (NFKC/Ligaturen, Trennstrich-Join) und fuzzy vergleichen.
+    normalized_candidate = normalize_text(candidate)
+    normalized_pages = [(page_number, normalize_text(text)) for page_number, text in pages]
 
     best_ratio = 0.0
     best_start = 0
