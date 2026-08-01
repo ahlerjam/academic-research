@@ -95,9 +95,9 @@ Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers`
 python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
 ```
 
-## MCP-Tools (alle 41)
+## MCP-Tools (alle 42)
 
-Der Server registriert **41 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **42 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -121,6 +121,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.search_quote_text(verbatim, k=5)` | LIKE-Volltextsuche in `quotes.verbatim` (prüft, ob ein Zitat existiert) | `vault.search_quote_text("Attention is all", k=3)` |
 | `vault.find_quotes(paper_id, query=None, k=10)` | Gibt Quotes für ein Paper zurück (optional Ähnlichkeitssuche) | `vault.find_quotes("vaswani2017", query="self-attention")` |
 | `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` |
+| `vault.set_quote_stance(quote_id, stance)` | Setzt `stance` eines **bestehenden** Zitats nachträglich (Audit-Schreibpfad, u. a. für `quote-fidelity-auditor`). `stance` ist Pflicht (`"supports"`/`"contrasts"`/`"mentions"`, kein `None`); `ValueError` bei ungültigem Wert oder unbekannter `quote_id` | `vault.set_quote_stance("q_42", "contrasts")` |
 
 **`extraction_method="local-verbatim"` — fail-closed** (Issue #512)
 

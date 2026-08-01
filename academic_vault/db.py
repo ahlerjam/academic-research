@@ -948,6 +948,34 @@ class VaultDB:
             row = conn.execute("SELECT * FROM quotes WHERE quote_id = ?", (quote_id,)).fetchone()
         return dict(row) if row is not None else None
 
+    def set_quote_stance(self, quote_id: str, stance: str) -> None:
+        """Aktualisiert ``stance`` eines BESTEHENDEN Quotes (Issue #523).
+
+        Ergaenzt ``add_quote(stance=...)`` um einen nachtraeglichen
+        Audit-Schreibpfad: der `quote-fidelity-auditor`-Agent legt keine neuen
+        Zitate an, sondern urteilt ueber bereits im Vault vorhandene.
+
+        Args:
+            quote_id: Referenz auf ``quotes.quote_id``.
+            stance: Einer der Werte aus ``VALID_STANCES`` (``None`` ist hier
+                bewusst NICHT erlaubt -- ein Audit-Urteil loescht keine
+                bestehende Einstufung, das waere ein stiller Datenverlust).
+
+        Raises:
+            ValueError: Wenn ``stance`` nicht in ``VALID_STANCES`` liegt, oder
+                wenn ``quote_id`` auf kein bestehendes Zitat verweist.
+        """
+        if stance not in VALID_STANCES:
+            raise ValueError(f"Ungueltiger stance '{stance}' -- erlaubt: {sorted(VALID_STANCES)}")
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            cursor = conn.execute(
+                "UPDATE quotes SET stance = ? WHERE quote_id = ?",
+                (stance, quote_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError(f"vault.set_quote_stance: Quote '{quote_id}' nicht gefunden")
+
     def search_quote_text(self, verbatim: str, k: int = 5) -> list[dict]:
         """LIKE-Suche in quotes.verbatim. Gibt [{quote_id, verbatim, paper_id}] zurueck."""
         with self._connection() as conn:

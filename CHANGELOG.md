@@ -10,6 +10,32 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`quote-fidelity-auditor` — Richter-Subagent mit Abstract-Abgleich (#523):**
+  Neuer Subagent `agents/quote-fidelity-auditor.md` (Judge-Pattern analog
+  `screening-judge.md`/`risk-of-bias.md`) urteilt über ein bestehendes Zitat
+  gegen Kapitel-Behauptung, Quote-Kontext (`context_before`/`context_after`)
+  und Paper-Abstract (`csl_json.abstract`) und liefert ein Urteil
+  `faithful`/`overstated`/`context-stripped`/`polarity-flip`/`unsupported`.
+  Der Abstract-Abgleich ist explizit die dritte, nachgeordnete Prüfebene und
+  erzeugt allein nie ein Negativ-Urteil — Detail-Zitate jenseits des
+  Abstracts bleiben legitim; fehlt `abstract`, wird das explizit als
+  übersprungen markiert statt geraten. Neues Vault-Tool
+  `vault.set_quote_stance(quote_id, stance)`
+  (`academic_vault/db.py`/`server.py`) ergänzt den bisher fehlenden
+  Schreibpfad für nachträgliche Audits — `add_quote()` befüllt `stance` nur
+  bei Neuanlage. Das Mapping Verdict→`stance` ist im Agenten dokumentiert
+  (`unsupported` persistiert bewusst nichts, um keine Scheingenauigkeit zu
+  erzeugen). Der Agent hat kein `Write`/`Edit`/`MultiEdit` im
+  Tool-Frontmatter — Urteil + Begründung gehen als Prosa an den aufrufenden
+  Kontext, kein Auto-Rewrite von Kapiteltext. `hooks/claim-drift-guard.mjs`
+  verweist in seiner Warnung additiv auf den neuen Agenten als Prüfoption.
+  `set_quote_stance` respektiert wie jeder andere Schreibpfad den
+  Material-Passport-Lock (`VaultLockedError`, Issue #380). Die Doku-Zähler
+  sind mitgezogen: 41 → 42 MCP-Tools (`README.md`, `docs/reference/vault.md`,
+  `tests/helpers/smoke_core.py`, `tests/test_issue_207_readme_mcp_tools.py`)
+  und 27 → 28 Agents (`README.md`, `AGENTS.md`, `docs/reference/agents.md`
+  inklusive Dispatch-Zeile `manuell`).
+
 - **`resolve_quote_context` — echter Quellkontext statt modell-erinnertem (#520):**
   Neue Funktion `academic_vault.server.resolve_quote_context(db_path, quote_id,
   window=600)` zieht ±600 Zeichen ECHTEN Text aus `paper_fulltext` um die
