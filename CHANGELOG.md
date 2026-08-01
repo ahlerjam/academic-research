@@ -10,6 +10,23 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`vault.verify_verbatim` — read-only Vorschau des Verbatim-Prüfpfads (#513):**
+  Neues MCP-Tool `vault.verify_verbatim(paper_id, candidate)` prüft einen
+  Zitat-Kandidaten gegen den lokalen PDF-Volltext eines Papers und liefert
+  **immer** ein Ergebnis-dict `{status, verbatim, pdf_page, ratio}` zurück
+  (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`) — anders
+  als das Schreib-Gate `vault.add_quote(extraction_method="local-verbatim")`
+  (#512) wirft es bei Nicht-Treffer keine `ValueError`, sondern gibt Agenten
+  so die Möglichkeit, Kandidaten iterativ zu prüfen und zu korrigieren, bevor
+  `add_quote` endgültig ablehnt. Das Tool schreibt nichts in die Datenbank.
+  Paper-/`pdf_path`-Auflösungsfehler (unbekanntes Paper, fehlender/nicht
+  lesbarer `pdf_path`) bleiben `ValueError` mit verständlicher Meldung —
+  Bedienfehler des Aufrufers, keine Zitat-Prüfergebnisse. Intern teilt sich
+  `academic_vault.server.verify_verbatim_preview()` die Paper-/`pdf_path`-
+  Auflösung mit `_verify_local_verbatim()` über einen neuen gemeinsamen
+  privaten Helfer (`_resolve_verbatim_pdf_path`), um Drift zwischen den
+  beiden Prüfpfaden zu vermeiden.
+
 - **`quote-fidelity-auditor` — Richter-Subagent mit Abstract-Abgleich (#523):**
   Neuer Subagent `agents/quote-fidelity-auditor.md` (Judge-Pattern analog
   `screening-judge.md`/`risk-of-bias.md`) urteilt über ein bestehendes Zitat
@@ -31,7 +48,8 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   verweist in seiner Warnung additiv auf den neuen Agenten als Prüfoption.
   `set_quote_stance` respektiert wie jeder andere Schreibpfad den
   Material-Passport-Lock (`VaultLockedError`, Issue #380). Die Doku-Zähler
-  sind mitgezogen: 41 → 42 MCP-Tools (`README.md`, `docs/reference/vault.md`,
+  sind mitgezogen: 41 → 43 MCP-Tools in derselben Merge-Runde wie
+  `vault.verify_verbatim` (#513) (`README.md`, `docs/reference/vault.md`,
   `tests/helpers/smoke_core.py`, `tests/test_issue_207_readme_mcp_tools.py`)
   und 27 → 28 Agents (`README.md`, `AGENTS.md`, `docs/reference/agents.md`
   inklusive Dispatch-Zeile `manuell`).
