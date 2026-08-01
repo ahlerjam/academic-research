@@ -127,15 +127,62 @@ function saveOffset(offset) {
 
 /**
  * Parst eine Log-Zeile im Format
- * "<ISO-Timestamp> | vault-guard: skip | <Dateipfad>" und gibt den Dateipfad
+ * "<ISO-Timestamp> | <label>: skip | <Dateipfad>" und gibt den Dateipfad
  * zurueck (oder null bei unerwartetem Format — wird dann nicht in der
  * Dateiliste gefuehrt, zaehlt aber weiter zum Gesamtzaehler).
+ *
+ * Das Label ist seit #522 nicht mehr konstant: neben `vault-guard: skip`
+ * (verbatim-guard.mjs) schreibt auch `context-fidelity-guard: skip` in dieses
+ * Log. Der Dateipfad bleibt das dritte Feld.
  */
 function parseFilePath(line) {
   const parts = line.split(' | ');
   if (parts.length < 3) return null;
   const path = parts.slice(2).join(' | ').trim();
   return path || null;
+}
+
+/**
+ * Sekundengenauer Zeitstempel einer Log-Zeile, oder null bei unerwartetem
+ * Format. Millisekunden fallen bewusst weg — sie sind die einzige Differenz
+ * zwischen zwei Guards, die denselben Write protokollieren.
+ */
+function parseTimestampSecond(line) {
+  const stamp = line.split(' | ')[0]?.trim();
+  if (!stamp) return null;
+  const match = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.exec(stamp);
+  return match ? match[0] : null;
+}
+
+/**
+ * Faltet Zeilen zusammen, die DIESELBE Bypass-Nutzung beschreiben (#522).
+ *
+ * Seit #522 haengen zwei Guards am selben PreToolUse-Event und loggen beide,
+ * wenn der Bypass-Marker gesetzt ist. Ohne diese Faltung meldete der Report
+ * "2 neue Nutzung(en)" fuer einen einzigen Write. Kriterium ist Pfad +
+ * Zeitstempel auf die Sekunde genau: zwei Guards laufen im selben Write
+ * unmittelbar nacheinander, zwei echte Nutzungen derselben Datei liegen
+ * praktisch nie in derselben Sekunde.
+ *
+ * Zeilen ohne parsebaren Zeitstempel oder Pfad werden NICHT gefaltet — im
+ * Zweifel lieber eine Nutzung zu viel melden als eine zu verschweigen.
+ */
+function dedupeUsages(lines) {
+  const seen = new Set();
+  const kept = [];
+  for (const line of lines) {
+    const path = parseFilePath(line);
+    const second = parseTimestampSecond(line);
+    if (path === null || second === null) {
+      kept.push(line);
+      continue;
+    }
+    const key = `${second} | ${path}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(line);
+  }
+  return kept;
 }
 
 /**
@@ -224,9 +271,10 @@ async function main() {
 
   const offset = loadOffset();
   const { newLines, currentSize } = readNewLines(offset);
+  const usages = dedupeUsages(newLines);
 
-  if (newLines.length > 0) {
-    printReport(newLines);
+  if (usages.length > 0) {
+    printReport(usages);
   }
 
   saveOffset(currentSize);

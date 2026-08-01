@@ -456,6 +456,59 @@ def _maybe_embed_quote(db_path: str, quote_id: str) -> bool:
         return False
 
 
+def quote_context_similarity(
+    db_path: str,
+    quote_id: str,
+    text: str,
+    embedder: object | None = None,
+) -> float | None:
+    """Kosinus zwischen einem Kapitelfenster und dem gespeicherten Quote-Embedding (#522).
+
+    Kein MCP-Tool: die Funktion wird aus ``hooks/context-fidelity-guard.mjs``
+    per ``python -c``-Subprozess aufgerufen (Muster :func:`search_quote_text`)
+    und ist so mit injiziertem Embedder unit-testbar, ohne den Node-Hook zu
+    starten.
+
+    Das gespeicherte Embedding stammt aus ``embed_documents`` (Passage-Seite),
+    das Kapitelfenster wird mit ``embed_query`` vektorisiert -- e5 ist
+    asymmetrisch, beide Seiten brauchen ihr eigenes Praefix. Beide Vektoren
+    werden L2-normiert, der Kosinus ist dann das Skalarprodukt.
+
+    Das gespeicherte Embedding wird VOR dem Embedder geholt: fehlt es, gibt es
+    nichts zu vergleichen und kein Modell muss geladen werden (relevant im
+    PreToolUse-Pfad, wo ein Modell-Load das Hook-Timeout sprengen wuerde).
+
+    Returns:
+        Kosinus in ``[-1, 1]`` oder ``None``. ``None`` heisst ausschliesslich
+        "nicht bestimmbar" (kein gespeichertes Embedding, kein
+        Embedding-Backend, Dimensionen passen nicht) -- nie "unaehnlich".
+    """
+    from .embedding_model import l2_normalize
+
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    stored = db.get_quote_embedding(quote_id)
+    if not stored:
+        return None
+
+    active_embedder = embedder if embedder is not None else get_embedder()
+    if active_embedder is None:
+        logger.warning(
+            "vault.quote_context_similarity: kein Embedding-Backend verfuegbar -- "
+            "Quote '%s' bleibt ungeprueft (#522).",
+            quote_id,
+        )
+        return None
+
+    query_vector = active_embedder.embed_query(text)  # type: ignore[attr-defined]
+    if not query_vector or len(query_vector) != len(stored):
+        return None
+
+    left = l2_normalize(query_vector)
+    right = l2_normalize(stored)
+    return float(sum(a * b for a, b in zip(left, right, strict=True)))
+
+
 def add_quote(
     db_path: str,
     paper_id: str,

@@ -50,15 +50,16 @@ SCRIPT_DIR="$(cd "$(dirname "${0:-.}")" && pwd)"
 # ---------------------------------------------------------------------------
 # 0. Node.js pruefen (vgl. #468)
 # ---------------------------------------------------------------------------
-# 5 der 7 Hooks sind '.mjs'-Dateien und werden in hooks/hooks.json per
+# 7 der 9 Hooks sind '.mjs'-Dateien und werden in hooks/hooks.json per
 # 'node ...' gestartet — darunter der beworbene Halluzinationsschutz
-# (verbatim-guard, claim-drift-guard). Fehlt Node, fallen diese Hooks sonst
+# (verbatim-guard, claim-drift-guard, context-fidelity-guard). Fehlt Node,
+# fallen diese Hooks sonst
 # lautlos aus, ohne dass der Nutzer je einen Hinweis bekommt. Analog zum
 # browser-use-Muster (Abschnitt 3) bricht das Setup deswegen NICHT hart ab —
 # venv, Permissions, Bootstrap, Uni-Profil und SciHub-Opt-in sind
 # node-unabhaengig — sondern warnt nur deutlich mit Installationsweg.
 if ! command -v node &>/dev/null; then
-  echo "⚠️  Node.js nicht gefunden — 5 der 7 Hooks (u. a. verbatim-guard, claim-drift-guard) laufen NICHT."
+  echo "⚠️  Node.js nicht gefunden — 7 der 9 Hooks (u. a. verbatim-guard, claim-drift-guard, context-fidelity-guard) laufen NICHT."
   echo "   Installieren: brew install node (macOS) oder https://nodejs.org/"
 else
   echo "✅ Node.js: gefunden ($(node --version))"

@@ -10,6 +10,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`context-fidelity-guard.mjs` — warnender Kontexttreue-Hook (#522):** Neuer
+  `PreToolUse`-Hook (`Write|Edit|MultiEdit`) prüft beim Kapitel-Write jedes im
+  Vault verifizierte Zitat gegen seinen **echten** Quellkontext und markiert
+  Quote-Mining-Muster mit `[KONTEXT-PRÜFEN]`. Drei bewusst konservative
+  lexikalische Signale im `PreToolUse`-Pfad: Kontrastmarker am Anfang von
+  `context_after`, Rahmen-Marker am Ende von `context_before`, Hedge-Verlust
+  Quelle → Kapitel. (Signal 4 — semantische Distanz über `quote_embeddings`
+  (#521) — ist im `PreToolUse`-Pfad deaktiviert, um torch/sentence-transformers-
+  Importe zu vermeiden; Funktionen `get_quote_embedding` und
+  `quote_context_similarity` bleiben für zukünftige Nutzung erhalten.) Trägt das
+  Kapitelfenster selbst ein Kontrastsignal, ist die Kontrastivität offengelegt
+  und Signal 1+2 entfallen. Der Hook **blockiert nie** (Exit 0, kein
+  `permissionDecision`); die harte Linie bleibt der deterministische
+  `verbatim-guard`. Prüfbar ist nur ein Zitat mit `context_source = 'fulltext'`
+  (#520) — gefüllte Kontextfelder allein sind kein Beleg für echten Quellkontext.
+  Bei jedem Write mit Zitaten wird die Abdeckung ausgewiesen
+  (`Abdeckung: x von y Zitaten prüfbar`), jedes nicht prüfbare Zitat mit Grund
+  benannt statt still übersprungen. Der Vault-Lookup läuft in **einem**
+  Python-Subprozess mit erzwungenem `HF_HUB_OFFLINE=1`.
 - **`quote_embeddings` nach bestandener Prüfung befüllt, inkl. Backfill (#521):**
   Neue Funktion `academic_vault.server.embed_quote(db_path, quote_id,
   embedder=None)` erzeugt ein lokales e5-Embedding aus `context_before +
@@ -87,6 +106,13 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **`bypass-log-report.mjs` zählt eine Bypass-Nutzung nicht mehr doppelt
+  (#522):** Seit `context-fidelity-guard.mjs` am selben `PreToolUse`-Event
+  hängt, protokollieren zwei Guards denselben Bypass. Der SessionStart-Report
+  faltet Log-Zeilen mit gleichem Pfad innerhalb derselben Sekunde zu einer
+  Nutzung zusammen; Zeilen ohne parsebaren Zeitstempel/Pfad bleiben
+  ungefaltet (im Zweifel eine Nutzung zu viel melden statt eine zu
+  verschweigen).
 - **`files_api.py` ist ein optionaler Legacy-Pfad (#535):** Seit der
   Umstellung auf lokale Verbatim-Zitate (#507/#512/#532) hängt kein
   Standard-Workflow mehr an der Anthropic-Files-API — das Modul bleibt nur
