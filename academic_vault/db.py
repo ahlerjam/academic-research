@@ -92,7 +92,10 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #     aendert -- verifiziert wird sie deshalb nicht ueber
 #     `_LEGACY_MIGRATION_COLUMNS`, sondern ueber die CHECK-SQL der Tabelle
 #     (siehe `init_schema()`).
-CURRENT_SCHEMA_VERSION = 6
+# 7 = quotes.context_source (Issue #520): Herkunftsnachweis fuer
+#     context_before/context_after ('fulltext' oder NULL), gesetzt von
+#     server.resolve_quote_context().
+CURRENT_SCHEMA_VERSION = 7
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -116,7 +119,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
             "container_title",
         }
     ),
-    "quotes": frozenset({"stance"}),
+    "quotes": frozenset({"stance", "context_source"}),
     "notes": frozenset({"page"}),
 }
 
@@ -906,6 +909,37 @@ class VaultDB:
                     now,
                     stance,
                 ),
+            )
+
+    def update_quote_context(
+        self,
+        quote_id: str,
+        context_before: str,
+        context_after: str,
+        context_source: str,
+    ) -> None:
+        """Schreibt echten Quellkontext auf einen bestehenden Quote (Issue #520).
+
+        Wird ausschliesslich von :func:`academic_vault.server.resolve_quote_context`
+        aufgerufen, NACHDEM eine Fundstelle im ``paper_fulltext`` nachgewiesen
+        wurde -- kein Aufrufweg hier rate irgendetwas, das ist Aufgabe des
+        Aufrufers. ``context_source`` wird bewusst nicht gegen
+        ``VALID_...``-Konstante validiert (analog zu ``extraction_method``):
+        der CHECK-Constraint auf ``quotes.context_source`` ist die zweite
+        Verteidigungslinie fuer unbekannte Werte.
+
+        Raises:
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+        """
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute(
+                """
+                UPDATE quotes
+                SET context_before = ?, context_after = ?, context_source = ?
+                WHERE quote_id = ?
+                """,
+                (context_before, context_after, context_source, quote_id),
             )
 
     def get_quote(self, quote_id: str) -> dict | None:

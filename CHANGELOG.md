@@ -8,6 +8,21 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Added
+
+- **`resolve_quote_context` — echter Quellkontext statt modell-erinnertem (#520):**
+  Neue Funktion `academic_vault.server.resolve_quote_context(db_path, quote_id,
+  window=600)` zieht ±600 Zeichen ECHTEN Text aus `paper_fulltext` um die
+  Fundstelle eines Zitats (erst exakter Substring-Treffer, sonst Fuzzy-Fallback
+  via `rapidfuzz.fuzz.partial_ratio_alignment`, weil der Volltext-Extraktor
+  vom Seiten-Extraktor der Verbatim-Prüfung abweichen kann — Ligaturen,
+  Trennstriche) und persistiert `context_before`/`context_after` samt neuer
+  Spalte `quotes.context_source` (`'fulltext'` oder `NULL`). `vault.add_quote`
+  ruft die Funktion für `extraction_method='local-verbatim'` nach dem Insert
+  non-fatal auf — ein Kontext-Fehlschlag rollt das bereits verifizierte Zitat
+  nicht zurück. Ohne `paper_fulltext`-Eintrag oder ohne Fundstelle bleibt alles
+  unverändert (No-Op) — geraten wird nie. `CURRENT_SCHEMA_VERSION` 6→7.
+
 ### Changed
 
 - **`quality-reviewer` eskaliert ab Iteration 2 statt durchzuwinken (#528):**
