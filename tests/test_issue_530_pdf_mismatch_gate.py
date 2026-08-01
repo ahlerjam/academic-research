@@ -94,19 +94,42 @@ class TestAgentConditionalPersistence:
 class TestSkillNoLongerDescribesUngatedPersistence:
     """SKILL.md darf Persistenz bei Mismatch nicht mehr als automatisch/ungegated beschreiben."""
 
-    def test_old_manual_review_only_bullet_is_gone(self):
+    def test_step4_delegates_mismatch_to_the_gate(self):
+        """Schritt 4 muss auf das Gate verweisen, nicht nur alte Prosa vermeiden.
+
+        Eine reine Negativ-Assertion ('alte Formulierung kommt nicht vor') waere
+        auch ohne die Implementierung gruen — den Satz gab es auf main nie in
+        genau dieser Form. Geprueft wird deshalb positiv, dass der
+        Mismatch-Punkt an das Gate delegiert.
+        """
         content = _SKILL_MD.read_text(encoding="utf-8")
         step4 = _section(content, "### 4. Qualitätsprüfung", "## Export-Formate")
-        assert "für manuelles Review flaggen" not in step4, (
-            "Die alte Nur-Flag-Formulierung ('für manuelles Review flaggen') muss "
-            "durch einen Verweis auf das PDF-Mismatch-Gate ersetzt sein"
+        mismatch_lines = [ln for ln in step4.splitlines() if "possible_pdf_mismatch" in ln]
+        assert mismatch_lines, "Schritt 4 muss possible_pdf_mismatch behandeln"
+        joined = " ".join(mismatch_lines)
+        assert "Gate" in joined, (
+            "Der Mismatch-Punkt in Schritt 4 muss auf das PDF-Mismatch-Gate "
+            f"verweisen statt eigenstaendig zu flaggen — gefunden: {joined!r}"
+        )
+        assert "flaggen" not in joined or "kein" in joined.lower(), (
+            "Schritt 4 darf Mismatches nicht mehr eigenstaendig flaggen"
         )
 
-    def test_step3_no_longer_claims_unconditional_automatic_persist(self):
+    def test_step3_binds_persistence_to_the_mismatch_flag(self):
+        """Schritt 3 muss die Persistenz an die Bedingung knuepfen.
+
+        Auch hier positiv geprueft: dass 'automatisch' fehlt, sagt fuer sich
+        genommen nichts — es muss die Kopplung an possible_pdf_mismatch bzw.
+        mismatch_override dastehen.
+        """
         content = _SKILL_MD.read_text(encoding="utf-8")
         step3 = _section(content, "### 3. Zitat-Extraktion", "### 4. Qualitätsprüfung")
         assert "persistiert die Zitate automatisch via" not in step3, (
             "Schritt 3 darf Persistenz nicht mehr pauschal als automatisch beschreiben"
+        )
+        assert "possible_pdf_mismatch" in step3 and "mismatch_override" in step3, (
+            "Schritt 3 muss die Persistenz explizit an possible_pdf_mismatch und "
+            "den Override-Pfad binden"
         )
 
 
@@ -219,9 +242,17 @@ class TestWichtigeRegelnReferencesGate:
         regeln_idx = content.find("## Wichtige Regeln")
         assert regeln_idx != -1, "'## Wichtige Regeln' Abschnitt fehlt"
         regeln_section = content[regeln_idx:]
-        lower = regeln_section.lower()
-        assert "mismatch" in lower, "Wichtige-Regeln-Abschnitt muss Mismatch erwaehnen"
-        assert "gate" in lower, (
+        # Gezielt DEN Mismatch-Bullet pruefen: 'gate' irgendwo im Abschnitt
+        # stammt sonst aus dem unveraenderten Schritt-6-Bullet und waere auch
+        # ohne diese Aenderung gruen.
+        mismatch_bullets = [
+            ln
+            for ln in regeln_section.splitlines()
+            if ln.lstrip().startswith("-") and "ismatch" in ln
+        ]
+        assert mismatch_bullets, "Wichtige-Regeln-Abschnitt braucht einen Mismatch-Bullet"
+        joined = " ".join(mismatch_bullets)
+        assert "Gate" in joined, (
             "Der Mismatch-Bullet in 'Wichtige Regeln' muss auf das Gate verweisen, "
-            "statt eigenstaendiger Flag-Prosa"
+            f"statt eigenstaendiger Flag-Prosa — gefunden: {joined!r}"
         )

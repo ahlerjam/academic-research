@@ -111,6 +111,10 @@ Persistenz via `vault.add_quote(..., extraction_method="local-verbatim")` nur
 bei `possible_pdf_mismatch: false` — sonst erst nach dem Gate, per Re-Invoke
 mit `mismatch_override: true`.
 
+Bei kapitelbezogener Extraktion den `research_query` aus Kapiteltitel und
+Schlüsselkonzepten der Gliederung ableiten. Die Gliederungs-Struktur aus
+`./academic_context.md` nutzen, um Paper zu Kapiteln zu matchen.
+
 #### PDF-Mismatch-Gate
 
 Bei `possible_pdf_mismatch: true` vor jeder weiteren Persistenz
@@ -126,9 +130,6 @@ Bei `possible_pdf_mismatch: true` vor jeder weiteren Persistenz
 
 Ohne Freigabe aus diesem Gate wird kein Zitat des Papers persistiert.
 
-Bei kapitelbezogener Extraktion den `research_query` aus Kapiteltitel und
-Schlüsselkonzepten der Gliederung ableiten. Die Gliederungs-Struktur aus
-`./academic_context.md` nutzen, um Paper zu Kapiteln zu matchen.
 
 ### 4. Qualitätsprüfung
 
