@@ -1,4 +1,5 @@
 """Evals fuer quote-extractor-Agent (Block B + A)."""
+
 import json
 import re
 from pathlib import Path
@@ -35,6 +36,7 @@ def test_quote_extractor_eval(prompt, mode):
 # ---------------------------------------------------------------------------
 # Vault-Mock-Tests (kein API-Key benoetigt)
 # ---------------------------------------------------------------------------
+
 
 def test_quote_extractor_evals_use_paper_id_input():
     """Alle qe-Prompts muessen paper_id im Input haben (Vault-Interface, kein pdf_text)."""
@@ -86,8 +88,33 @@ def test_mock_vault_get_quote_returns_dict(mock_vault):
     assert result["paper_id"] == "devops2022"
 
 
-def test_mock_vault_ensure_file_returns_fake_file_id(mock_vault):
-    """mock_vault.ensure_file() gibt eine nicht-leere Fake-file_id zurueck."""
-    file_id = mock_vault.ensure_file("devops2022")
-    assert file_id, "file_id darf nicht leer sein"
-    assert file_id.startswith("file-fake-")
+def test_mock_vault_get_paper_returns_pdf_path(mock_vault):
+    """mock_vault.get_paper() liefert pdf_path -- Basis des lokalen Pfads (#514).
+
+    Ersetzt den frueheren ensure_file()-Mock-Test: der Agent nutzt den
+    Files-API/file_id-Weg nicht mehr im Standardpfad, sondern
+    get_paper(paper_id)["pdf_path"] fuers native Read-Tool.
+    """
+    paper = mock_vault.get_paper("devops2022")
+    assert paper is not None
+    assert paper["pdf_path"], "pdf_path darf nicht leer sein"
+    assert paper["title"] == "DevOps Governance Frameworks"
+
+
+def test_mock_vault_get_paper_returns_none_for_unknown_paper(mock_vault):
+    """Unbekannte paper_id liefert None (Business-Logic-Fehlerpfad, nicht Exception)."""
+    assert mock_vault.get_paper("does-not-exist") is None
+
+
+def test_mock_vault_add_quote_local_verbatim_stores_extraction_method(mock_vault):
+    """mock_vault.add_quote(extraction_method='local-verbatim') persistiert den Wert (#514)."""
+    quote_id = mock_vault.add_quote(
+        paper_id="devops2022",
+        verbatim="Governance frameworks ensure DevOps compliance.",
+        extraction_method="local-verbatim",
+        pdf_page=3,
+        section="Introduction",
+    )
+    result = mock_vault.get_quote(quote_id)
+    assert result is not None
+    assert result["extraction_method"] == "local-verbatim"

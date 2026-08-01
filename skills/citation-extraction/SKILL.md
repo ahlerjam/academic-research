@@ -18,7 +18,8 @@ allowed-tools:
 
 Extrahiert und formatiert Zitate aus PDFs und Volltexten. Liefert
 Literaturverzeichnisse im Zitationsstil aus `./academic_context.md`
-(APA7, IEEE, Harvard etc.). Nutzt die Claude-API `documents[] + citations.enabled`.
+(APA7, IEEE, Harvard etc.). Standard: lokale Extraktion + serverseitige
+`local-verbatim`-Verifikation, kein API-Key nötig.
 
 ## Abgrenzung
 
@@ -45,24 +46,24 @@ Rueckfrage. Datei: `${CLAUDE_PLUGIN_ROOT}/skills/citation-extraction/references/
 `book-chapter-de.md`; `type: book` → `din1505.md` (Monografie-Sektion);
 `type: article-journal` → keine Zusatz-Referenz.
 
-## Citations-API
+## Zitat-Extraktion (Standard: lokal, kein API-Key)
 
-Liegt ein Quellen-PDF im Session-Kontext, den `documents`-Parameter der
-Claude-API statt Prompt-Zitation nutzen — seitengenau, API erzwingt
-Quellenbindung.
+Standard: `vault.add_quote(..., extraction_method="local-verbatim")` — der
+`quote-extractor`-Agent liest das PDF lokal (`Read`), der Vault-Server prüft
+den Wortlaut fail-closed gegen den PDF-Volltext. Kein `ANTHROPIC_API_KEY` nötig.
 
-**Wann:** ≥1 PDF + Zitierstil-Konversion aus echtem Quelltext. **Wann
-nicht:** reiner Metadaten-Workflow → Prompt-Formatierung nach
-Variant-References.
+**Citations-API (optional):** `documents`-Parameter der Claude-API, nur bei
+explizitem Bedarf — braucht einen eigenen `ANTHROPIC_API_KEY` außerhalb der
+Subscription-Session.
 
-**Output:** Seitenangaben aus `citations[].start_page_number` /
-`end_page_number` → `references/output-formats.md`.
+**Output:** `pdf_page` aus `vault.find_quotes`/`vault.get_quote`, sonst
+`citations[].start_page_number` → `references/output-formats.md`.
 
 ## Kontext-Dateien
 
-- `./academic_context.md` lesen (Zitationsstil)
-- `vault.find_quotes(paper_id, query)` / `vault.get_quote(quote_id)` für Zitate
-- `./literature_state.md` nur lesen (read-only Snapshot; nicht schreiben)
+- Lesen: `./academic_context.md` (Zitationsstil)
+- Vault-Queries: `vault.find_quotes(paper_id, query)`, `vault.get_quote(quote_id)`
+- `./literature_state.md`: read-only Snapshot, nicht schreiben
 
 ## Core-Workflow
 
@@ -77,18 +78,15 @@ Kläre, was der User braucht:
 
 ### 2. Relevante Paper aus Vault laden
 
-Rufe `vault.search(query, k=5)` auf, um die relevantesten Paper-IDs zur
-Recherche-Query zu ermitteln. Für jeden paper_id:
+Rufe `vault.search(query, k=5)` auf für die relevantesten Paper-IDs. Für jeden paper_id:
 
-1. `vault.find_quotes(paper_id, query=research_query, k=10)` aufrufen →
-   liefert `[{quote_id, verbatim, pdf_page, section, ...}]`
-2. Für detaillierte Zitat-Metadaten: `vault.get_quote(quote_id)`
+1. `vault.find_quotes(paper_id, query=research_query, k=10)` →
+   `[{quote_id, verbatim, pdf_page, section, ...}]`
+2. Details: `vault.get_quote(quote_id)`
 
-Sind für ein Paper noch keine Vault-Zitate vorhanden (leere Liste), den
-`quote-extractor`-Agent spawnen, um Zitate aus dem PDF zu ziehen und — sofern kein
-PDF-Mismatch vorliegt (siehe PDF-Mismatch-Gate in Schritt 3) — via
-`vault.add_quote()` zu persistieren. PDFs werden via `vault.ensure_file(paper_id)`
-als `file_id` übergeben — kein direktes `pdf_path` im Context.
+Fehlen Vault-Zitate (leere Liste): `quote-extractor`-Agent spawnen (Ablauf →
+Schritt 3). Persistiert wird nur, sofern kein PDF-Mismatch vorliegt — siehe
+PDF-Mismatch-Gate in Schritt 3.
 
 ### 3. Zitat-Extraktion
 
@@ -100,21 +98,18 @@ Fehlen Vault-Zitate, den Agent `quote-extractor` spawnen (definiert in
 
 ```json
 {
-  "paper": {
-    "paper_id": "mueller2023",
-    "title": "Paper Title",
-    "doi": "10.xxxx/xxxxx"
-  },
+  "paper": { "paper_id": "mueller2023", "title": "Paper Title" },
   "research_query": "derived from chapter title or user query",
   "max_quotes": 3,
   "max_words_per_quote": 25
 }
 ```
 
-Der Agent liefert `possible_pdf_mismatch` + `extraction_quality` im
-Output-JSON. Persistenz via `vault.add_quote()`: automatisch bei
-`possible_pdf_mismatch: false`; bei `true` NICHT, außer im Re-Invoke steht
-`mismatch_override: true` — siehe PDF-Mismatch-Gate.
+Der Agent liest das PDF lokal (`vault.get_paper` → `pdf_path` → `Read`) und
+liefert `vault_quote_id`, `possible_pdf_mismatch`, `extraction_quality`.
+Persistenz via `vault.add_quote(..., extraction_method="local-verbatim")` nur
+bei `possible_pdf_mismatch: false` — sonst erst nach dem Gate, per Re-Invoke
+mit `mismatch_override: true`.
 
 #### PDF-Mismatch-Gate
 
@@ -137,43 +132,48 @@ Schlüsselkonzepten der Gliederung ableiten. Die Gliederungs-Struktur aus
 
 ### 4. Qualitätsprüfung
 
-Nach der Extraktion die Ergebnisse prüfen:
+Nach der Extraktion:
 
-- Zitate mit `extraction_quality: "failed"` verwerfen
+- `extraction_quality: "failed"` → verwerfen
 - `possible_pdf_mismatch: true` → PDF-Mismatch-Gate aus Schritt 3, kein
   eigenständiges Flaggen mehr an dieser Stelle
-- Prüfen, ob Zitate tatsächlich für das Zielkapitel/-thema relevant sind
-- Duplikate über Paper hinweg entfernen (gleiche Idee, andere Formulierung)
+- Relevanz fürs Zielkapitel prüfen, Duplikate über Paper hinweg entfernen
 
 Ergebnispräsentation getrennt nach Ausgang:
 
-- **Erfolgreich** — Paper mit persistierten Zitaten, gruppiert nach Quelle:
-  Zitattext, Seitenzahl (falls verfügbar), Abschnitt, Relevanz-Score,
-  Paper-Titel und Autoren.
-- **Ausgelassen** — im Gate übersprungene oder zur PDF-Zuordnungsprüfung
-  pausierte Paper; zählen nicht als erfolgreich, eigene Gruppe im Report.
+- **Erfolgreich** — persistierte Zitate nach Quelle gruppiert: Zitattext,
+  Seitenzahl, Abschnitt, Relevanz-Score, Paper-Titel, Autoren.
+- **Ausgelassen** — im Gate übersprungene oder pausierte Paper; zählen nicht
+  als erfolgreich, eigene Gruppe im Report.
 
 ### 5. Zitat-Formatierung
 
-Formatiere Zitate inline nach dem in `./academic_context.md` konfigurierten Stil. Keine externe Skript-Pipeline — Claude generiert die Formate direkt aus den strukturierten Paper-Daten. Output-Formate → `references/output-formats.md`.
+Formatiere Zitate inline nach dem in `./academic_context.md` konfigurierten
+Stil — keine externe Skript-Pipeline, Claude generiert direkt aus den
+strukturierten Paper-Daten. Output-Formate → `references/output-formats.md`.
 
 ### 6. Kapitelzuordnung
 
-Wenn Zitate für ein bestimmtes Kapitel extrahiert werden:
+Bei kapitelbezogener Extraktion: Zitate nach Relevanz für die Unterabschnitte
+gruppieren, Platzierung vorschlagen, Lücken in der stützenden Evidenz benennen
+und dort weitere Suche anbieten.
 
-1. Zitate nach Relevanz für die Unterabschnitte gruppieren
-2. Platzierung innerhalb der Kapitelstruktur vorschlagen
-3. Unterabschnitte identifizieren, in denen noch stützende Evidenz fehlt
-4. Bei Lücken weitere Literatursuche anbieten
+**Gate:** Der Vorschlag gilt erst nach `AskUserQuestion`-Bestätigung als
+angenommen — vor Export/Weiterverwendung:
+
+- „Übernehmen" — Vorschlag weiterverwenden
+- „Ablehnen" — verworfen, kein Vault-Schreibzugriff; zurück zu Schritt 5
+
+Ablehnung ist Default-Pfad, kein Fehler.
 
 ### 7. Literaturstatus
 
 Der Vault ist die Quelle der Wahrheit; `./literature_state.md` ist ein
-read-only Snapshot — nicht beschreiben. Snapshot regenerieren:
+read-only Snapshot — nicht beschreiben. Regenerieren:
 ```bash
 node scripts/export-literature-state.mjs
 ```
-Zitatanzahlen und Coverage über `vault.stats()` abfragen.
+Zitatanzahlen und Coverage über `vault.stats()`.
 
 ## Lückenerkennung
 
@@ -197,4 +197,4 @@ Bibliography-Vollständigkeit) → `references/citation-examples.md`.
 - **Seitenzahlen** — wenn verfügbar immer mitführen
 - **Zitationsstil respektieren** — durchgehend den konfigurierten Stil
 - **Mismatches gaten** — `possible_pdf_mismatch: true` löst vor jeder Persistenz das Gate aus Schritt 3 aus (kein reines Flaggen)
-- **User bestätigt Zuordnungen** — Kapitel-Zitat-Zuordnung vor dem Speichern freigeben
+- **User bestätigt Zuordnungen** — Gate in Schritt 6 (`AskUserQuestion`)

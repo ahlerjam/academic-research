@@ -95,9 +95,9 @@ Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers`
 python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
 ```
 
-## MCP-Tools (alle 41)
+## MCP-Tools (alle 43)
 
-Der Server registriert **41 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **43 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -110,17 +110,111 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.get_paper(paper_id)` | Paper-Metadaten + `pdf_status` | `vault.get_paper("vaswani2017")` |
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` |
-| `vault.ensure_file(paper_id)` | PDF → Anthropic Files-API; gibt gecachte `file_id` zurück | `vault.ensure_file("vaswani2017")` |
+| `vault.ensure_file(paper_id)` | **Optionaler Legacy-Pfad** (s. u.): PDF → Anthropic Files-API; gibt gecachte `file_id` zurück, ohne `ANTHROPIC_API_KEY` `None` | `vault.ensure_file("vaswani2017")` |
 | `vault.stats()` | DB-Counts (`paper_count`, `quote_count`, `cached_files`) | `vault.stats()` |
+
+**`vault.ensure_file` — optionaler Legacy-Pfad** (Issue #535)
+
+Das Modul `academic_vault/files_api.py` hinter diesem Tool ist seit der
+Umstellung auf lokale Verbatim-Zitate (#507/#512/#532) **Legacy**: kein
+Standard-Workflow hängt mehr daran. Es bedient ausschließlich den optionalen
+Citations-API-Pfad und setzt einen **eigenen `ANTHROPIC_API_KEY`** voraus
+(Anthropic-Beta `files-api-2025-04-14`, im Code auf die Konstante
+`files_api.FILES_API_BETA` isoliert).
+
+| Situation | Verhalten |
+|---|---|
+| Kein `ANTHROPIC_API_KEY` gesetzt | Rückgabe `None`, kein Anthropic-Client wird gebaut, keine Exception — Standard-Flows laufen unverändert durch |
+| Paper unbekannt oder ohne `pdf_path` | `ValueError` (Datenfehler bleiben sichtbar, unabhängig vom Key) |
+| Key gesetzt | Upload + `file_id`-Cache mit 1 h TTL wie bisher |
+
+Der Zotero-Import zählt den Skip in `ImportResult.files_api_skipped` statt ihn
+als Fehler zu melden. Standardweg für Zitate bleibt
+`vault.add_quote(extraction_method="local-verbatim")`.
 
 **Zitate (Quotes)**
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
 |------|-------------|------|
-| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None, stance=None)` | Fügt Verbatim-Zitat mit Provenance ein; `extraction_method="citations-api"` erfordert `api_response_id`; `stance` ist optional (`"supports"`/`"contrasts"`/`"mentions"`, sonst `None`) | `vault.add_quote("vaswani2017", "Attention is all you need", "citations-api", api_response_id="resp_1")` |
+| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None, stance=None)` | Fügt Verbatim-Zitat mit Provenance ein. `extraction_method` ist `"citations-api"` (erfordert `api_response_id`), `"manual"` (ungeprüft) oder `"local-verbatim"` (**fail-closed**, s. u.); `stance` ist optional (`"supports"`/`"contrasts"`/`"mentions"`, sonst `None`) | `vault.add_quote("vaswani2017", "Attention is all you need", "citations-api", api_response_id="resp_1")` |
 | `vault.search_quote_text(verbatim, k=5)` | LIKE-Volltextsuche in `quotes.verbatim` (prüft, ob ein Zitat existiert) | `vault.search_quote_text("Attention is all", k=3)` |
 | `vault.find_quotes(paper_id, query=None, k=10)` | Gibt Quotes für ein Paper zurück (optional Ähnlichkeitssuche) | `vault.find_quotes("vaswani2017", query="self-attention")` |
 | `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` |
+| `vault.verify_verbatim(paper_id, candidate)` | Read-only-Vorschau des Verbatim-Prüfpfads: liefert **immer** `{status, verbatim, pdf_page, ratio}` zurück (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`, kein `ValueError` bei Nicht-Treffer). Paper unbekannt oder kein/kein lesbarer `pdf_path` wirft weiterhin `ValueError`. Schreibt nichts (s. u.) | `vault.verify_verbatim("vaswani2017", "Attention is all you need")` |
+| `vault.set_quote_stance(quote_id, stance)` | Setzt `stance` eines **bestehenden** Zitats nachträglich (Audit-Schreibpfad, u. a. für `quote-fidelity-auditor`). `stance` ist Pflicht (`"supports"`/`"contrasts"`/`"mentions"`, kein `None`); `ValueError` bei ungültigem Wert oder unbekannter `quote_id` | `vault.set_quote_stance("q_42", "contrasts")` |
+
+**`extraction_method="local-verbatim"` — fail-closed** (Issue #512)
+
+`vault.add_quote` prüft den Wortlaut selbst gegen den lokalen PDF-Volltext des
+Papers, **bevor** irgendetwas geschrieben wird. Das Enforcement sitzt im Vault
+und nicht in einem Hook — es lässt sich nicht per Marker abschalten.
+
+| Situation | Verhalten |
+|---|---|
+| Paper unbekannt, kein `pdf_path`, Datei nicht vorhanden | `ValueError`, nichts gespeichert |
+| Prüfstatus `no-match` oder `no-textlayer` | `ValueError` inkl. Status und bester Ähnlichkeit, nichts gespeichert |
+| Prüfstatus `exact` oder `snapped` | gespeichert wird der **Wortlaut aus der Quelle** (nicht der übergebene Kandidat) und die **verifizierte Seite**; ein abweichendes `pdf_page` wird verworfen und geloggt |
+
+Grenzen der Prüfung: seitenübergreifende Zitate und ausgelassene Wörter können
+falsch-negativ als `no-match` gelten. Dann ist `extraction_method="manual"` mit
+eigenem Beleg der richtige Weg — nicht das Aufweichen der Prüfung.
+
+**`vault.verify_verbatim` — read-only Vorschau** (Issue #513)
+
+Nutzt denselben Prüfpfad wie das `local-verbatim`-Gate von `vault.add_quote`
+(gemeinsame Paper-/`pdf_path`-Auflösung), aber ohne Schreibzugriff und ohne
+`ValueError` bei Nicht-Treffer: `status="no-match"`/`"no-textlayer"` kommen
+als reguläres Ergebnis zurück. Damit können Agenten einen Kandidaten
+iterativ prüfen und korrigieren, bevor `vault.add_quote` endgültig ablehnt.
+Paper unbekannt oder kein/kein lesbarer `pdf_path` bleiben `ValueError` —
+das sind Bedienfehler des Aufrufers, keine Zitat-Prüfergebnisse.
+
+**Echter Quellkontext — `resolve_quote_context`** (Issue #520)
+
+Nach `vault.add_quote(..., extraction_method="local-verbatim")` wird —
+non-fatal, im Hintergrund — versucht, `context_before`/`context_after` aus
+dem echten `paper_fulltext` des Papers zu befüllen (nicht mehr vom Modell
+„erinnert"). Erst exakter Substring-Treffer, sonst Fuzzy-Fallback via
+`rapidfuzz` (der Volltext-Extraktor kann vom Seiten-Extraktor der
+Verbatim-Prüfung abweichen — Ligaturen, Trennstriche). Bei Erfolg steht
+`quotes.context_source == "fulltext"`; ohne `paper_fulltext`-Eintrag oder
+ohne Fundstelle bleibt alles unverändert (`None`) — geraten wird nie.
+
+Die Funktion ist auch direkt aufrufbar:
+
+| Funktion (Signatur mit Defaults) | Beschreibung |
+|---|---|
+| `resolve_quote_context(db_path, quote_id, window=600)` | Sucht die Fundstelle von `quotes.verbatim` im `paper_fulltext` des zugehörigen Papers und schneidet ±`window` Zeichen als Kontext heraus. Persistiert nur bei nachgewiesener Fundstelle (`context_source="fulltext"`), gibt `True`/`False` zurück (`False` = No-Op). Wirft `ValueError` bei unbekannter `quote_id`. |
+
+**Zitat-Embeddings — `embed_quote`** (Issue #521)
+
+Nach jedem `vault.add_quote(...)` wird — non-fatal, im Hintergrund, für ALLE
+drei gültigen `extraction_method`-Werte (`citations-api`/`manual`/
+`local-verbatim` gelten laut CHECK-Constraint als "bestandene Prüfung") —
+versucht, ein lokales e5-Embedding aus `context_before + verbatim +
+context_after` (Fallback: nur `verbatim` ohne Kontext) zu erzeugen und in die
+vec0-Tabelle `quote_embeddings` zu schreiben. Billiger lokaler Vorfilter für
+einen künftigen Kontexttreue-Hook — Prinzip „erst prüfen, dann vektorn":
+ungeprüfte Zustände gibt es in `quotes` nicht, daher bekommt jedes gespeicherte
+Zitat einen Embedding-Versuch.
+
+Anders als `chunk_embeddings` hat `quote_embeddings` **keine
+BLOB-Basistabelle**: fehlt das lokale Embedding-Backend ODER ist die
+sqlite-vec-Extension in diesem Prozess nicht ladbar (z. B. macOS-System-Python
+ohne `--enable-loadable-sqlite-extensions`), ist Embedding für Zitate ein
+vollständiges No-Op — geloggt, kein Absturz (bewusste Scope-Entscheidung, kein
+Schema-Umbau).
+
+| Funktion (Signatur mit Defaults) | Beschreibung |
+|---|---|
+| `embed_quote(db_path, quote_id, embedder=None)` | Erzeugt und speichert das Embedding eines Zitats. Prüft Backend UND Extension VOR dem teuren Modell-Load. Gibt `True`/`False` zurück (`False` = Degradationspfad, geloggt). Wirft `ValueError` bei unbekannter `quote_id`. |
+
+Bestands-Quotes ohne `quote_embeddings`-Eintrag lassen sich per Backfill
+nachrüsten (idempotent — ein zweiter Lauf findet keine Kandidaten mehr):
+
+```bash
+python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-quote-embeddings
+```
 
 **Notizen & Exzerpte** (Issue #462)
 

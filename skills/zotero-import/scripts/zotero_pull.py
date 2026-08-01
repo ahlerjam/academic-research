@@ -1,7 +1,14 @@
 """zotero_pull.py — Zotero-Import-Logik fuer academic-research Plugin.
 
-Liest Items und PDF-Attachments aus einer Zotero-Library,
-dedupliziert via DOI/ISBN gegen den Vault und laedt PDFs in die Files-API hoch.
+Liest Items und PDF-Attachments aus einer Zotero-Library, dedupliziert via
+DOI/ISBN gegen den Vault. PDFs werden in temporaere Verzeichnisse heruntergeladen
+und pdf_path im Vault gespeichert; Files-API-Upload ist optional (erfordert
+ANTHROPIC_API_KEY) fuer den optionalen Citations-API-Zitatweg, siehe
+skills/chapter-writer/references/citations-api.md. Ohne Key wird dieser
+Upload uebersprungen und in ``ImportResult.files_api_skipped`` gezaehlt (#535)
+— ein fehlender Key ist kein Importfehler. Lokale Zitierung via
+vault.add_quote(extraction_method="local-verbatim") ist nur moeglich, wenn
+pdf_path noch verfuegbar ist.
 
 Aufruf:
     python skills/zotero-import/scripts/zotero_pull.py \\
@@ -18,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sqlite3
 import stat
@@ -29,6 +37,8 @@ from uuid import uuid4
 
 import yaml
 
+logger = logging.getLogger(__name__)
+
 # pyzotero: optionale Dep — fruehzeitiger Import fuer testbaren Mock-Punkt
 try:
     from pyzotero import zotero  # noqa: F401
@@ -38,6 +48,7 @@ except ImportError:  # pragma: no cover
 # Vault-Funktionen direkt importieren (kein MCP-Roundtrip noetig)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
+from academic_vault.files_api import is_configured as files_api_configured  # noqa: E402
 from academic_vault.server import add_paper, add_quote, ensure_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -60,6 +71,18 @@ class ImportResult:
     # fehlende PDF-Notizen nach dem Import nicht als stiller Datenverlust
     # dastehen.
     comments_skipped: int = 0
+    # Volltexte, die aus Zoteros eigenem `fulltext_item()`-Endpunkt kamen statt
+    # aus lokaler PDF-Extraktion (Issue #525) — spart Download+Re-Extraktion.
+    fulltext_from_zotero: int = 0
+    # Faelle, in denen Zotero-Volltext nicht verfuegbar war (nicht indiziert,
+    # leer, oder sonstiger Fehler bei `fulltext_item()`) und sauber auf den
+    # lokalen PDF-Parse-Pfad zurueckgefallen wurde (Issue #525 AC2 — dieser
+    # Fallback muss geloggt und gezaehlt werden, nicht still bleiben).
+    fulltext_fallback_local: int = 0
+    # PDFs, fuer die der optionale Files-API-Upload uebersprungen wurde, weil
+    # kein eigener ANTHROPIC_API_KEY gesetzt ist (#535). Der Zaehler haelt den
+    # Skip sichtbar, ohne ihn als Importfehler zu zaehlen.
+    files_api_skipped: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +310,34 @@ def _download_attachment(
     return None
 
 
+def _fetch_zotero_fulltext(zot_client, attachment_key: str) -> str | None:
+    """Holt den von Zotero bereits extrahierten/indizierten PDF-Volltext (Issue #525).
+
+    Nutzt pyzotero's ``fulltext_item()`` (Endpunkt
+    ``/items/{key}/fulltext``, liefert ``{"content": ..., "indexedPages"/
+    "totalPages"|"indexedChars"/"totalChars"}``). Der Aufruf ist unabhaengig
+    vom PDF-Download: `fulltext_item()` liefert auch dann Text, wenn
+    `_download_attachment()` fehlschlaegt oder gar nicht erst versucht wird.
+
+    Gibt ``None`` zurueck, wenn Zotero den Text (noch) nicht indiziert hat
+    (404 `ResourceNotFoundError`), der Content leer/kein String ist (auch ein
+    unkonfigurierter Mock-Rueckgabewert in Tests faellt darunter — bewusst
+    strikt typgeprueft statt truthy-Check), oder bei jedem anderen Fehler
+    (Netzwerk, Rate-Limit, lokaler Endpunkt ohne Sync). Diese Funktion wird
+    in Tests via patch('zotero_pull._fetch_zotero_fulltext') bzw. am
+    Mock-Client ersetzt und darf run_import() niemals durch eine Exception
+    unterbrechen — genau wie _download_attachment().
+    """
+    try:
+        response = zot_client.fulltext_item(attachment_key)
+        content = response.get("content") if isinstance(response, dict) else None
+        if not isinstance(content, str):
+            return None
+        return content.strip() or None
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Haupt-Import-Funktion
 # ---------------------------------------------------------------------------
@@ -383,6 +434,30 @@ def run_import(
                         and child_data.get("contentType") == "application/pdf"
                     ):
                         att_key = child_data.get("key", "")
+
+                        # Zotero-Volltext bevorzugen (Issue #525): separater,
+                        # vom PDF-Download unabhaengiger API-Call. Wird VOR
+                        # dem `add_paper(..., pdf_path=...)`-Aufruf unten
+                        # geschrieben, damit `_maybe_extract_fulltext()`
+                        # (server.py) `get_fulltext(paper_id) is not None`
+                        # sieht und die lokale PDF-Extraktion ueberspringt.
+                        zotero_text = _fetch_zotero_fulltext(zot, att_key)
+                        if zotero_text:
+                            VaultDB(db_path).set_fulltext(paper_id, zotero_text, extractor="zotero")
+                            result.fulltext_from_zotero += 1
+                        else:
+                            # Kein Fehler (Issue #525 AC2): nicht indiziert, leer
+                            # oder anderer Fehler bei fulltext_item() -- sauberer
+                            # Fallback auf den lokalen PDF-Parse-Pfad weiter unten.
+                            # Muss sichtbar bleiben statt still zu verschwinden.
+                            result.fulltext_fallback_local += 1
+                            logger.info(
+                                "Zotero-Volltext fuer Attachment %s nicht verfuegbar "
+                                "(nicht indiziert/leer/Fehler) -- Fallback auf lokalen "
+                                "PDF-Parse.",
+                                att_key,
+                            )
+
                         local_path = _download_attachment(zot, item_key, att_key, tmp_dir)
                         if local_path:
                             # pdf_path im Vault setzen
@@ -394,19 +469,32 @@ def run_import(
                                 isbn=isbn,
                                 pdf_path=local_path,
                             )
-                            # Files-API Upload + Cache
-                            try:
-                                file_id = ensure_file(
-                                    db_path=db_path,
-                                    paper_id=paper_id,
-                                    api_key="",  # ANTHROPIC_API_KEY aus Env
+                            # Optionaler Files-API-Upload + Cache (eigener
+                            # ANTHROPIC_API_KEY noetig, siehe citations-api.md).
+                            # Ohne Key wird der Pfad explizit uebersprungen und
+                            # gezaehlt (#535) — kein Eintrag in result.errors,
+                            # denn ein fehlender Key ist kein Importfehler. Das
+                            # except faengt nur noch echte Upload-Fehler MIT Key.
+                            if not files_api_configured():
+                                result.files_api_skipped += 1
+                                logger.info(
+                                    "Optionaler Files-API-Upload fuer %s uebersprungen: "
+                                    "kein ANTHROPIC_API_KEY gesetzt.",
+                                    paper_id,
                                 )
-                                if file_id:
-                                    result.file_ids.append(file_id)
-                            except Exception as e:
-                                result.errors.append(
-                                    f"ensure_file fuer {paper_id} fehlgeschlagen: {e}"
-                                )
+                            else:
+                                try:
+                                    file_id = ensure_file(
+                                        db_path=db_path,
+                                        paper_id=paper_id,
+                                        api_key="",  # ANTHROPIC_API_KEY aus Env
+                                    )
+                                    if file_id:
+                                        result.file_ids.append(file_id)
+                                except Exception as e:
+                                    result.errors.append(
+                                        f"ensure_file fuer {paper_id} fehlgeschlagen: {e}"
+                                    )
 
                         # Annotationen (Highlights/Notizen) dieses Attachments
                         # importieren — unabhaengig vom Download-Erfolg des PDFs.
@@ -490,7 +578,22 @@ def main() -> None:
         for err in result.errors:
             print(f"  - {err}", file=sys.stderr)
     if result.file_ids:
-        print(f"Files-API file_ids gecacht: {len(result.file_ids)}")
+        print(f"Optionale Files-API file_ids gecacht: {len(result.file_ids)}")
+    if result.files_api_skipped:
+        print(
+            f"Optionaler Files-API-Upload uebersprungen (kein eigener "
+            f"ANTHROPIC_API_KEY): {result.files_api_skipped}"
+        )
+    if result.fulltext_from_zotero:
+        print(
+            f"Volltext von Zotero uebernommen (ohne lokalen PDF-Parse): "
+            f"{result.fulltext_from_zotero}"
+        )
+    if result.fulltext_fallback_local:
+        print(
+            f"Zotero-Volltext nicht verfuegbar, Fallback auf lokalen PDF-Parse: "
+            f"{result.fulltext_fallback_local}"
+        )
     if result.quotes_imported:
         print(f"Annotationen als Quotes importiert: {result.quotes_imported}")
     if result.comments_skipped:

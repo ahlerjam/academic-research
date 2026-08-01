@@ -10,6 +10,230 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **`context-fidelity-guard.mjs` — warnender Kontexttreue-Hook (#522):** Neuer
+  `PreToolUse`-Hook (`Write|Edit|MultiEdit`) prüft beim Kapitel-Write jedes im
+  Vault verifizierte Zitat gegen seinen **echten** Quellkontext und markiert
+  Quote-Mining-Muster mit `[KONTEXT-PRÜFEN]`. Drei bewusst konservative
+  lexikalische Signale im `PreToolUse`-Pfad: Kontrastmarker am Anfang von
+  `context_after`, Rahmen-Marker am Ende von `context_before`, Hedge-Verlust
+  Quelle → Kapitel. (Signal 4 — semantische Distanz über `quote_embeddings`
+  (#521) — ist im `PreToolUse`-Pfad deaktiviert, um torch/sentence-transformers-
+  Importe zu vermeiden; Funktionen `get_quote_embedding` und
+  `quote_context_similarity` bleiben für zukünftige Nutzung erhalten.) Trägt das
+  Kapitelfenster selbst ein Kontrastsignal, ist die Kontrastivität offengelegt
+  und Signal 1+2 entfallen. Der Hook **blockiert nie** (Exit 0, kein
+  `permissionDecision`); die harte Linie bleibt der deterministische
+  `verbatim-guard`. Prüfbar ist nur ein Zitat mit `context_source = 'fulltext'`
+  (#520) — gefüllte Kontextfelder allein sind kein Beleg für echten Quellkontext.
+  Bei jedem Write mit Zitaten wird die Abdeckung ausgewiesen
+  (`Abdeckung: x von y Zitaten prüfbar`), jedes nicht prüfbare Zitat mit Grund
+  benannt statt still übersprungen. Der Vault-Lookup läuft in **einem**
+  Python-Subprozess mit erzwungenem `HF_HUB_OFFLINE=1`.
+- **`quote_embeddings` nach bestandener Prüfung befüllt, inkl. Backfill (#521):**
+  Neue Funktion `academic_vault.server.embed_quote(db_path, quote_id,
+  embedder=None)` erzeugt ein lokales e5-Embedding aus `context_before +
+  verbatim + context_after` (Fallback: nur `verbatim` ohne Kontext) und
+  schreibt es in die vec0-Tabelle `quote_embeddings`. `vault.add_quote` ruft
+  die Funktion — non-fatal, Muster `_maybe_resolve_quote_context` (#520) —
+  nach dem Insert für alle drei gültigen `extraction_method`-Werte auf
+  (`citations-api`/`manual`/`local-verbatim` gelten laut CHECK-Constraint als
+  "bestandene Prüfung", geraten wird nie). Fehlendes Embedding-Backend oder
+  nicht ladbare sqlite-vec-Extension degradieren sauber (geloggt, kein
+  Absturz) — anders als `chunk_embeddings` hat `quote_embeddings` KEINE
+  BLOB-Basistabelle, ohne Extension ist Embedding hier ein vollständiges
+  No-Op (bewusste Scope-Entscheidung). Neue idempotente Backfill-Funktion
+  `academic_vault.migrate.backfill_quote_embeddings(db_path, limit=None)` +
+  CLI-Flag `--backfill-quote-embeddings` füllen Bestands-Quotes ohne
+  `quote_embeddings`-Eintrag nach. Kein Schema-Versionssprung — die leere
+  vec0-Tabelle `quote_embeddings` existierte bereits seit #217/#219, nur
+  ungenutzt.
+- **`vault.verify_verbatim` — read-only Vorschau des Verbatim-Prüfpfads (#513):**
+  Neues MCP-Tool `vault.verify_verbatim(paper_id, candidate)` prüft einen
+  Zitat-Kandidaten gegen den lokalen PDF-Volltext eines Papers und liefert
+  **immer** ein Ergebnis-dict `{status, verbatim, pdf_page, ratio}` zurück
+  (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`) — anders
+  als das Schreib-Gate `vault.add_quote(extraction_method="local-verbatim")`
+  (#512) wirft es bei Nicht-Treffer keine `ValueError`, sondern gibt Agenten
+  so die Möglichkeit, Kandidaten iterativ zu prüfen und zu korrigieren, bevor
+  `add_quote` endgültig ablehnt. Das Tool schreibt nichts in die Datenbank.
+  Paper-/`pdf_path`-Auflösungsfehler (unbekanntes Paper, fehlender/nicht
+  lesbarer `pdf_path`) bleiben `ValueError` mit verständlicher Meldung —
+  Bedienfehler des Aufrufers, keine Zitat-Prüfergebnisse. Intern teilt sich
+  `academic_vault.server.verify_verbatim_preview()` die Paper-/`pdf_path`-
+  Auflösung mit `_verify_local_verbatim()` über einen neuen gemeinsamen
+  privaten Helfer (`_resolve_verbatim_pdf_path`), um Drift zwischen den
+  beiden Prüfpfaden zu vermeiden.
+
+- **`quote-fidelity-auditor` — Richter-Subagent mit Abstract-Abgleich (#523):**
+  Neuer Subagent `agents/quote-fidelity-auditor.md` (Judge-Pattern analog
+  `screening-judge.md`/`risk-of-bias.md`) urteilt über ein bestehendes Zitat
+  gegen Kapitel-Behauptung, Quote-Kontext (`context_before`/`context_after`)
+  und Paper-Abstract (`csl_json.abstract`) und liefert ein Urteil
+  `faithful`/`overstated`/`context-stripped`/`polarity-flip`/`unsupported`.
+  Der Abstract-Abgleich ist explizit die dritte, nachgeordnete Prüfebene und
+  erzeugt allein nie ein Negativ-Urteil — Detail-Zitate jenseits des
+  Abstracts bleiben legitim; fehlt `abstract`, wird das explizit als
+  übersprungen markiert statt geraten. Neues Vault-Tool
+  `vault.set_quote_stance(quote_id, stance)`
+  (`academic_vault/db.py`/`server.py`) ergänzt den bisher fehlenden
+  Schreibpfad für nachträgliche Audits — `add_quote()` befüllt `stance` nur
+  bei Neuanlage. Das Mapping Verdict→`stance` ist im Agenten dokumentiert
+  (`unsupported` persistiert bewusst nichts, um keine Scheingenauigkeit zu
+  erzeugen). Der Agent hat kein `Write`/`Edit`/`MultiEdit` im
+  Tool-Frontmatter — Urteil + Begründung gehen als Prosa an den aufrufenden
+  Kontext, kein Auto-Rewrite von Kapiteltext. `hooks/claim-drift-guard.mjs`
+  verweist in seiner Warnung additiv auf den neuen Agenten als Prüfoption.
+  `set_quote_stance` respektiert wie jeder andere Schreibpfad den
+  Material-Passport-Lock (`VaultLockedError`, Issue #380). Die Doku-Zähler
+  sind mitgezogen: 41 → 43 MCP-Tools in derselben Merge-Runde wie
+  `vault.verify_verbatim` (#513) (`README.md`, `docs/reference/vault.md`,
+  `tests/helpers/smoke_core.py`, `tests/test_issue_207_readme_mcp_tools.py`)
+  und 27 → 28 Agents (`README.md`, `AGENTS.md`, `docs/reference/agents.md`
+  inklusive Dispatch-Zeile `manuell`).
+
+- **`resolve_quote_context` — echter Quellkontext statt modell-erinnertem (#520):**
+  Neue Funktion `academic_vault.server.resolve_quote_context(db_path, quote_id,
+  window=600)` zieht ±600 Zeichen ECHTEN Text aus `paper_fulltext` um die
+  Fundstelle eines Zitats (erst exakter Substring-Treffer, sonst Fuzzy-Fallback
+  via `rapidfuzz.fuzz.partial_ratio_alignment`, weil der Volltext-Extraktor
+  vom Seiten-Extraktor der Verbatim-Prüfung abweichen kann — Ligaturen,
+  Trennstriche) und persistiert `context_before`/`context_after` samt neuer
+  Spalte `quotes.context_source` (`'fulltext'` oder `NULL`). `vault.add_quote`
+  ruft die Funktion für `extraction_method='local-verbatim'` nach dem Insert
+  non-fatal auf — ein Kontext-Fehlschlag rollt das bereits verifizierte Zitat
+  nicht zurück. Ohne `paper_fulltext`-Eintrag oder ohne Fundstelle bleibt alles
+  unverändert (No-Op) — geraten wird nie. `CURRENT_SCHEMA_VERSION` 6→7.
+
+### Changed
+
+- **`bypass-log-report.mjs` zählt eine Bypass-Nutzung nicht mehr doppelt
+  (#522):** Seit `context-fidelity-guard.mjs` am selben `PreToolUse`-Event
+  hängt, protokollieren zwei Guards denselben Bypass. Der SessionStart-Report
+  faltet Log-Zeilen mit gleichem Pfad innerhalb derselben Sekunde zu einer
+  Nutzung zusammen; Zeilen ohne parsebaren Zeitstempel/Pfad bleiben
+  ungefaltet (im Zweifel eine Nutzung zu viel melden statt eine zu
+  verschweigen).
+- **`files_api.py` ist ein optionaler Legacy-Pfad (#535):** Seit der
+  Umstellung auf lokale Verbatim-Zitate (#507/#512/#532) hängt kein
+  Standard-Workflow mehr an der Anthropic-Files-API — das Modul bleibt nur
+  für den optionalen Citations-API-Pfad mit eigenem `ANTHROPIC_API_KEY`
+  erhalten und darf ohne Key keine Fehler mehr erzeugen.
+  `academic_vault.server.ensure_file()` gibt jetzt `str | None` zurück: ohne
+  Key `None` statt einer Exception, während unbekanntes Paper bzw. fehlender
+  `pdf_path` weiterhin (und **vor** dem Key-Check) `ValueError` werfen —
+  ein fehlender Key verdeckt keine Datenfehler. Das MCP-Tool
+  `vault.ensure_file` folgt der Signatur. Ohne Key wird kein
+  `anthropic.Anthropic`-Client mehr gebaut (Guard in `_get_client()`, neue
+  `FilesAPINotConfiguredError` für direkte Modul-Aufrufe); die
+  Beta-Abhängigkeit steht nur noch in der Konstante
+  `files_api.FILES_API_BETA` (`files-api-2025-04-14`). `zotero_pull.py`
+  prüft die Verfügbarkeit explizit vor dem Aufruf und zählt einen Skip in
+  `ImportResult.files_api_skipped` (CLI-Zeile), statt jede Exception in
+  `result.errors` zu schlucken — dort landen nur noch echte Upload-Fehler
+  **mit** Key. Die zuvor ungetesteten Zweige (TTL-Reupload, gültiger Cache,
+  Cache-Miss ohne `papers`-Zeile) haben jetzt Tests
+  (`tests/test_issue_535_files_api_legacy.py`); der Legacy-Status ist in
+  Modul-Docstring und `docs/reference/vault.md` dokumentiert. Kein Tool
+  entfernt, keine Schema-Änderung.
+- **Kapitel-Zitat-Zuordnung als echtes `AskUserQuestion`-Gate (#518):**
+  `skills/citation-extraction/SKILL.md` Schritt 6 „Kapitelzuordnung" hing
+  bisher nur an der Prosa-Regel „User bestätigt Zuordnungen" — kein
+  Mechanismus erzwang die Freigabe, bevor die Zuordnung weiterverwendet wurde
+  (Audit-Risiko R5). Neu gilt der Vorschlag erst nach einer strukturierten
+  `AskUserQuestion`-Bestätigung („Übernehmen" / „Ablehnen") als angenommen;
+  Ablehnung verwirft die Zuordnung ohne Vault-Schreibzugriff und ohne
+  Fehler-Framing (Default-Pfad, kein Abbruch). `AskUserQuestion` ist jetzt in
+  `allowed-tools` deklariert; der Prosa-Bullet unter „Wichtige Regeln"
+  verweist auf das Gate statt eigenständig zu stehen (analog zum
+  Präzedenzfall `material-passport`/#536/PR #567). Reine Doku-Änderung, kein
+  Vault-Schema-Change — die Kapitel-Zuordnung ist nirgends als eigenes
+  Vault-Feld persistiert.
+
+- **`quality-reviewer` eskaliert ab Iteration 2 statt durchzuwinken (#528):**
+  Der Agent gab bei `iteration >= 2` unabhängig von offenen Findings ein
+  PASS-with-warnings zurück (`agents/quality-reviewer.md` „Loop-Begrenzung" und
+  Strategie-Punkt 5, gespiegelt in
+  `skills/chapter-writer/references/quality-review-config.md`) — das
+  Qualitäts-Gate war damit genau dann wirkungslos, wenn es zählt (Audit-Risiko
+  R6). Neu gibt es ein drittes Verdict `ESCALATE`, gekoppelt an `iteration >= 2`
+  **und** mindestens ein Kriterium mit FAIL; ohne offenes Finding bleibt PASS
+  unverändert. Das Entscheidungs-Gate liegt beim Aufrufer, nicht im Subagenten
+  (der läuft mit `tools: [Read]` und hat keinen User-Kanal): `chapter-writer`
+  legt die Restprobleme vor und fragt via `AskUserQuestion` — akzeptieren /
+  weitere Revision / abbrechen; das Tool ist jetzt auch in `allowed-tools`
+  deklariert (es war für das Outline-Gate bereits undeklariert im Einsatz). Die
+  Loop-Begrenzung bleibt erhalten: „weitere Revision" gewährt genau eine
+  zusätzliche Runde, danach wird erneut eskaliert statt still akzeptiert.
+  `evals/quality-reviewer/evals.json` prüft beide Pfade (`qr-03` ESCALATE mit
+  offenem Finding, `qr-04` PASS am Iterations-Limit ohne Finding). `advisor`
+  und `abstract-generator` rufen denselben Agenten auf, bleiben hier aber
+  unverändert — ihr SKILL.md-Größenbudget ist ausgereizt (advisor: 2 Zeichen
+  Luft), das Nachziehen erfordert eine eigene Textkompression.
+
+### Added
+
+- **Fail-closed `extraction_method="local-verbatim"` (#512):** `vault.add_quote`
+  akzeptiert einen dritten Herkunftsnachweis und verifiziert ihn SELBST gegen
+  den lokalen PDF-Volltext des Papers (`academic_vault/verbatim.py` aus #511) —
+  vor jedem Schreibzugriff. Unbekanntes Paper, fehlender oder nicht lesbarer
+  `pdf_path` sowie die Prüfstatus `no-match`/`no-textlayer` werfen `ValueError`,
+  und es wird nichts gespeichert; bei `exact`/`snapped` landen der Wortlaut AUS
+  DER QUELLE (nicht der übergebene Kandidat) und die VERIFIZIERTE Seite im
+  Vault, ein abweichend übergebenes `pdf_page` wird verworfen und geloggt. Das
+  Enforcement sitzt damit im Vault statt in einem Hook und ist bypass-immun; es
+  schließt zugleich die Lücke, dass eine beliebige nicht-leere
+  `api_response_id` als „Beweis" durchging. Die Pfade `citations-api` und
+  `manual` sind unverändert — `manual` bleibt der dokumentierte Ausweichweg für
+  die bekannten Grenzen der Prüfung (seitenübergreifende Zitate,
+  Wort-Auslassungen). `import`-Kosten von pypdf/rapidfuzz fallen dank Lazy
+  Import nur auf dem neuen Pfad an.
+
+- **Bypass-Report beim SessionStart (#517):** Der Bypass-Marker
+  `<!-- vault-guard: skip -->` ist für Ausnahmefälle legitim, blieb aber
+  bisher unbemerkt — nichts las das seit #381 geschriebene Log
+  (`~/.academic-research/vault-guard-bypass.log`). Der neue, rein lesende
+  SessionStart-Hook `hooks/bypass-log-report.mjs` meldet Anzahl und
+  betroffene Dateien NEUER Bypass-Nutzungen seit dem letzten SessionStart auf
+  stdout, ohne neue Einträge bleibt er stumm. Der Merkposten „zuletzt
+  gemeldet" liegt in `~/.academic-research/vault-guard-bypass-report-state.json`
+  (0600/0700). Fail-open bei jedem Lese-/Rotationsfehler — der SessionStart
+  wird nie blockiert. Die Schreibseite (`verbatim-guard.mjs`) ist unverändert.
+- **`quote-extractor` ohne Citations-API (#514):** Der Agent verlangte im
+  Abschnitt „Quellen-Bindung" bislang die Citations-API mit
+  Files-API/`file_id` (`vault.ensure_file`) als einzigen Verifikationspfad —
+  identisch zum bei `figure-verifier` (#533) bereits abgelösten Muster, das
+  einen separaten `ANTHROPIC_API_KEY` voraussetzte und den Agenten ohne
+  diesen Key funktionslos machte. Analog zu `figure-verifier`/`risk-of-bias`
+  liest `quote-extractor` das PDF jetzt lokal: `vault.get_paper(paper_id)` →
+  `pdf_path` → `Read`, optional vorab per `vault.verify_verbatim` geprüft.
+  Persistiert wird über `vault.add_quote(extraction_method="local-verbatim")`
+  (#512), das serverseitig fail-closed gegen den PDF-Volltext verifiziert und
+  bei Erfolg Wortlaut+Seite AUS DER QUELLE zurückschreibt — kein
+  Anthropic-API-Call mehr im Standardpfad, kein separater, abgerechneter
+  Console-Key nötig. `tools:`-Frontmatter ersetzt `vault_ensure_file` durch
+  `vault_get_paper` (Pflicht) und `vault_verify_verbatim` (optional);
+  `maxTurns` von 5 auf 8 angehoben (PDF-Read + optionale Vorabchecks +
+  mehrere `add_quote`-Aufrufe, analog `figure-verifier`). Der bisherige
+  Citations-API-Block bleibt als kurzer Opt-in-Hinweis erhalten (z. B. für
+  HTML-/Markdown-Quellen ohne PDF-Volltext) — das `citations[]`-Array pro
+  Zitat entfällt damit ersatzlos aus dem Standard-Output; das seitengenaue
+  Nachschlagen dafür ist Scope von `skills/citation-extraction` (eigenes
+  Issue). Qualitätsregeln unverändert: ≤ 25 Wörter/Zitat, max. 3/Paper,
+  Titel-Plausibilitätscheck (`possible_pdf_mismatch`, jetzt gegen den
+  `Read`-Output statt die Citations-API-Response geprüft), „lieber 0 Zitate
+  als schlechte Zitate".
+- **`figure-verifier` ohne Citations-API (#533):** Der Agent verlangte in
+  Schritt 2 der Vorgehensweise bislang die Citations-API mit
+  `document`-Parameter (`file_id`) als einzigen Verifikationspfad — identisch
+  zum Muster in `skills/chapter-writer/references/citations-api.md`, das einen
+  separaten `ANTHROPIC_API_KEY` voraussetzt und den Agenten ohne diesen Key
+  funktionslos machte. Analog zu `risk-of-bias` liest `figure-verifier` das
+  PDF jetzt lokal: `vault.get_paper(paper_id)` → `pdf_path` → `Read(pdf_path,
+  pages=...)`, kein externer API-Call mehr nötig. `tools:`-Frontmatter ersetzt
+  `vault_ensure_file` durch `vault_get_paper`. Nicht verifizierbare Seiten
+  (fehlender/ungültiger `pdf_path`, korrupte/leere Seite, OCR fehlgeschlagen)
+  werden explizit im neuen `unverifiable_pages`-Feld des Outputs gemeldet statt
+  still übersprungen.
 - **Werkzeugsatz für den empirischen Teil (#473):** Zwei neue Skills schließen
   die Lücke zwischen Methodenwahl und Ergebniskapitel. `instrument-design`
   leitet aus Forschungsfrage, Unterfragen und Methodik in `academic_context.md`
@@ -464,6 +688,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **Eval-Strategie statt stillschweigender Schema-Checks (#390):** Neues Dokument `docs/evals/STRATEGY.md` benennt für jede der 37 Komponenten unter `evals/` genau einen Zustand — `metric` (Offline-Runner bewertet Inhalt), `structural` (nur Struktur geprüft, inhaltliche Bewertung skippt ohne `ANTHROPIC_API_KEY`, Begründung Pflicht) oder `removed`. Der neue Guard `tests/evals/test_eval_strategy.py` prüft die Tabelle gegen das Dateisystem (Set-Gleichheit in beide Richtungen, geschlossenes Status-Vokabular, Existenz genannter Runner) und erzwingt, dass kein Eval-Runner API-Budget verbraucht. Das Dokument beziffert den Budgetbedarf für reale Läufe (ca. 400 Aufrufe pro Vollauf) ausdrücklich als Operator-Entscheid und hält fest, dass Alt-Issue #55 von #390 absorbiert und geschlossen ist.
 - **Die zwei toten Eval-Definitionen haben einen echten Ausführungspfad (#390):** `evals/humanizer-de-pipeline/runner.py` misst die Tell-Dichte (Marker aus `skills/humanizer-de/references/patterns.md` pro 100 Wörter) je Vorher/Nachher-Draft-Paar; `evals/auto-download/runner.py` prüft das Tier-Routing der 20 kuratierten Quellen gegen `resolve_pdf_url()` mit gestubbten Tier-Funktionen. Beide laufen ohne Netz und ohne API-Key, beide sind über `tests/evals/test_humanizer_pipeline_evals.py` bzw. `tests/evals/test_auto_download_routing.py` in jeden `pytest`-Lauf eingebunden. Gegen Placebo-Metriken sichern Negativkontrollen: Detection-Floor und Substanz-Quotient (Humanizer, verhindert „Reduktion durch Kürzen") sowie ein Leerlauf ohne Treffer, der `(None, None)` liefern muss (auto-download).
 
+### Changed
+
+- **Schema-Version 6 — CHECK auf `quotes.extraction_method` erweitert (#512):**
+  SQLite kann CHECK-Constraints nicht per `ALTER TABLE` ändern, deshalb hebt
+  `migrate.widen_extraction_method_check()` Bestands-DBs mit dem
+  dokumentierten Tabellen-Rebuild (`CREATE` → `INSERT … SELECT` → `DROP` →
+  `RENAME`, `PRAGMA foreign_key_check` vor dem Commit). Der Helfer liest die
+  neue Tabellendefinition aus der bestehenden `sqlite_master.sql` und kopiert
+  die Spalten über `PRAGMA table_info` — dadurch reihenfolgeunabhängig zu
+  `add_stance_column()` und ohne Datenverlust. Erste Migration ohne neue
+  Spalte: `db.init_schema()` verifiziert sie deshalb an der CHECK-SQL statt an
+  `PRAGMA table_info` und lässt den `user_version`-Stempel aus, wenn der
+  Rebuild nicht gegriffen hat.
+
 ### Fixed
 
 - **Decision-Log war faktisch tot (#527):** `hooks/post-tool-use-decisions.mjs`
@@ -548,6 +786,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Interactive-Gates laufen per Default (#537):** Die beiden Human-Gates aus
+  #105 waren vorhanden, standen aber auf Opt-in — im Normalbetrieb sah der User
+  weder die Query-Expansion noch die Outline vor dem Draften (Audit-Befund R3).
+  In `commands/search.md` ist `--interactive` jetzt `on`; das Phase-1-Gate
+  (expandierte Queries aus `queries.json` + Top-5-10-Preview) ist zugleich von
+  Schritt 10 an die Position direkt hinter dem Ranking gewandert und greift
+  damit **vor** dem teuren LLM-Relevanz-Scoring statt danach, wo es wirkungslos
+  war. In `skills/chapter-writer/SKILL.md` verliert das Outline-Gate seine
+  Vorbedingung („wenn `/search --interactive` aktiv war") und wird Default. Die
+  gate-freien Pfade bleiben erhalten und sind benannt: `--interactive=off` als
+  dokumentiertes Opt-out (Verhalten wie vor #537), `--batch` sowie
+  nicht-interaktive/headless Läufe ohne `AskUserQuestion`-Kanal; für das
+  Outline-Gate ein ausdrücklicher User-Wunsch bzw. `outline_gate: off` in
+  `./academic_context.md`. Dieser Schlüssel steht mit Default `on` in
+  `scripts/bootstrap/academic_context.stub.md` — analog zu `humanizer_de`, damit
+  das Opt-out auffindbar ist und nicht nur im Skill-Text existiert.
 - **Jedes Vault-MCP-Tool hat einen Aufrufer (#540):** Neun der 37 per
   `@mcp.tool` registrierten Tools wurden von keinem Skill, Agent, Command oder
   Hook angesprochen — sie kosteten in jeder Session Tool-Listen-Kontext, ohne

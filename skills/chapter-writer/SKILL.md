@@ -2,7 +2,7 @@
 name: chapter-writer
 description: Use this skill when the user wants a chapter SCHREIBEN (Text-Output, kein Review). Triggers on "Kapitel SCHREIBEN", "Einleitung schreiben", "Theorieteil ausformulieren / Theoretischer Rahmen", "Methodik-Kapitel / Methodenteil", "Empirie / Ergebnisse darstellen", "Diskussion schreiben / Diskussionsteil drafted", "Fazit / Schlussteil", "Übergänge formulieren / Uebergaenge formulieren". Für reines Struktur-/Gliederungs-Feedback ohne Neuschrieb → `advisor`. Für Abstract/Keywords → `abstract-generator`. Für Zitations-Formatierung → `citation-extraction`.
 license: MIT
-allowed-tools: [Read]
+allowed-tools: [Read, AskUserQuestion]
 ---
 
 # Kapitel-Autor
@@ -57,10 +57,10 @@ Falls unklar, den User fragen, welches Kapitel/welcher Abschnitt zu schreiben
 ist. Kläre: Kapitelnummer und -titel, Scope (was das Kapitel leisten soll),
 zugeordnete Quellen, erwarteter Umfang (Seitenschätzung aus der Gliederung).
 
-### 3. Approval-Gate nach Outline (Interactive Mode)
+### 3. Approval-Gate nach Outline
 
-Wenn `/search --interactive` aktiv war oder der User explizit eine
-Freigabe-Runde wünscht, **Approval-Gate vor dem Draften einbauen**:
+Die Outline wird **standardmäßig** zur Freigabe vorgelegt, auch ohne
+Interactive-Kontext aus `/search` (#537):
 
 1. Outline (Abschnitts-Aufbau aus Schritt 4 unten) dem User vorlegen.
 2. Via `AskUserQuestion` Optionen anbieten:
@@ -70,8 +70,9 @@ Freigabe-Runde wünscht, **Approval-Gate vor dem Draften einbauen**:
    - **Scope ändern** — Kapitelziel neu definieren
 3. Erst nach expliziter Freigabe ("Freigeben") mit dem Draften beginnen.
 
-Bei `--interactive=off` (default) ohne `/search --interactive`-Kontext:
-Kapitelplanung direkt starten (kein Gate).
+**Opt-out** (Gate entfällt, Planung startet direkt): `outline_gate: off` in
+`./academic_context.md` (Default `on`), expliziter User-Wunsch, oder headless
+ohne `AskUserQuestion`-Kanal.
 
 ### 4. Kapitelplanung
 
@@ -87,7 +88,7 @@ Bevor geschrieben wird, erstelle einen kurzen internen Plan:
 3. **Argumentationsfluss** — wie das Kapitel zur Forschungsfrage beiträgt
 4. **Schlüsseldefinitionen** — einzuführende oder referenzierte Begriffe
 
-Plan dem User zur Freigabe vorlegen, bevor gedraftet wird.
+Der Plan geht in das Approval-Gate aus Schritt 3.
 
 ### 5. Draften
 
@@ -151,11 +152,11 @@ Rahmen, Methodik, Analyse/Ergebnisse, Fazit):
 `${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/chapter-types.md`. Beim Kapitelplanung-Schritt
 das passende Profil anwenden.
 
-## Zitat-Einbindung via Citations-API
+## Zitat-Einbindung
 
-Quellen-PDFs im `documents`-Parameter übergeben, damit die API die
-Quellenbindung erzwingt; jedes Paraphrase-Segment via `citations[]`
-nachweisbar. Vollständiger Workflow und Fallback (kein PDF im Vault):
+Standard: `vault.add_quote(..., extraction_method="local-verbatim")` —
+Wortlaut wird lokal gegen die PDF geprüft. Optional (eigener
+`ANTHROPIC_API_KEY`, Beta-Fallback): Citations-API, siehe
 `${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/citations-api.md`.
 
 ## Humanizer-Audit-Pass (nur Hochschul-Kontext)
@@ -168,8 +169,8 @@ Trigger, Ausführung und Ergebnis-Handling:
 ## Qualitaets-Review vor finalem Output
 
 Nach der Generierung des Kapitel-Entwurfs (ggf. nach Humanizer-Audit-Pass)
-triggere den `quality-reviewer`-Agent. Vollständige Kriterien-Konfiguration und
-PASS-/REVISE-Handling: `${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/quality-review-config.md`.
+triggere den `quality-reviewer`-Agent. Kriterien und PASS-/REVISE-/ESCALATE-Handling:
+`${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/quality-review-config.md`.
 
 ## Wichtige Regeln
 

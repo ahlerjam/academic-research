@@ -9,9 +9,12 @@ Idempotent (INSERT OR REPLACE via add_paper-Upsert).
 
 import argparse
 import json
+import logging
 import re
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_literature_state(state_path: str) -> list[dict]:
@@ -243,6 +246,164 @@ def add_stance_column(db_path: str) -> None:
             conn.execute(
                 "ALTER TABLE quotes ADD COLUMN stance TEXT "
                 "CHECK(stance IN ('supports','contrasts','mentions') OR stance IS NULL)"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# CHECK-Constraint auf `quotes.extraction_method` in der von sqlite_master
+# gelieferten CREATE-TABLE-SQL. Gruppe 1 ist die reine Werteliste -- der Rebuild
+# haengt dort an, statt den ganzen Constraint neu zu schreiben, damit
+# abweichende Formatierungen und etwaige Zusatzwerte erhalten bleiben.
+_EXTRACTION_METHOD_CHECK_RE = re.compile(
+    r"CHECK\s*\(\s*extraction_method\s+IN\s*\(([^)]*)\)\s*\)",
+    re.IGNORECASE,
+)
+
+# Kopf der CREATE-TABLE-Anweisung fuer `quotes` (optional mit IF NOT EXISTS und
+# Quoting), damit der Rebuild die Tabelle unter einem Zwischennamen anlegen kann.
+_CREATE_QUOTES_HEAD_RE = re.compile(
+    r"^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[\"'`\[]?quotes[\"'`\]]?",
+    re.IGNORECASE,
+)
+
+# Zwischenname waehrend des Tabellen-Rebuilds (Schritt 4-7 der SQLite-Prozedur
+# "Making Other Kinds Of Table Schema Changes", lang_altertable.html).
+_QUOTES_REBUILD_NAME = "quotes_rebuild_512"
+
+
+def quotes_check_accepts_local_verbatim(table_sql: str | None) -> bool:
+    """Prueft an der CREATE-TABLE-SQL, ob ``'local-verbatim'` erlaubt ist (#512).
+
+    Reine Textfunktion ohne DB-Zugriff, damit der Aufrufer
+    (``db.init_schema()``) sie auf seiner bereits offenen Connection nutzen
+    kann, statt eine zweite aufzumachen.
+
+    Args:
+        table_sql: ``sqlite_master.sql`` der Tabelle ``quotes`` oder ``None``.
+
+    Returns:
+        ``True``, wenn der Wert eingefuegt werden darf -- also wenn die Tabelle
+        gar nicht existiert, wenn sie keinen CHECK auf ``extraction_method``
+        traegt (dann ist jeder Wert erlaubt) oder wenn ``'local-verbatim'``
+        bereits in der Werteliste steht.
+    """
+    if not table_sql:
+        return True
+    match = _EXTRACTION_METHOD_CHECK_RE.search(table_sql)
+    if match is None:
+        return True
+    return "local-verbatim" in match.group(1)
+
+
+def widen_extraction_method_check(db_path: str) -> None:
+    """Erweitert den CHECK auf ``quotes.extraction_method`` um ``'local-verbatim'``.
+
+    SQLite kann CHECK-Constraints nicht per ``ALTER TABLE`` aendern; noetig ist
+    der dokumentierte Tabellen-Rebuild (SQLite-Doku ``lang_altertable.html``,
+    "Making Other Kinds Of Table Schema Changes"): ``foreign_keys=OFF``
+    ausserhalb der Transaktion -> ``CREATE`` der neuen Tabelle -> ``INSERT ...
+    SELECT`` -> ``DROP`` -> ``RENAME`` -> ``PRAGMA foreign_key_check`` ->
+    ``COMMIT``. Auf ``quotes`` liegen keine Indizes, Trigger oder Views, die
+    nachgebaut werden muessten -- ``codings.quote_id`` referenziert die Tabelle
+    aber per Fremdschluessel, deshalb die FK-Pruefung vor dem Commit.
+
+    Die neue Tabellendefinition entsteht aus der BESTEHENDEN
+    ``sqlite_master.sql`` (nur die Werteliste des CHECK wird ergaenzt), und die
+    Spalten werden ueber ``PRAGMA table_info(quotes)`` dynamisch kopiert. Damit
+    ist der Helfer reihenfolgeunabhaengig: laeuft er vor oder nach
+    :func:`add_stance_column`, bleibt in beiden Faellen genau der vorgefundene
+    Spaltensatz erhalten (Issue #512).
+
+    Idempotent: No-op, wenn ``quotes`` fehlt, keinen CHECK auf
+    ``extraction_method`` traegt oder ``'local-verbatim'`` bereits zulaesst.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    # Explizite Transaktionssteuerung: PRAGMA foreign_keys wirkt nur ausserhalb
+    # einer offenen Transaktion, und der DROP/RENAME muss atomar mit dem
+    # Datentransfer laufen.
+    conn.isolation_level = None
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='quotes'"
+        ).fetchone()
+        table_sql = row[0] if row is not None else None
+        if not table_sql or quotes_check_accepts_local_verbatim(table_sql):
+            return
+
+        match = _EXTRACTION_METHOD_CHECK_RE.search(table_sql)
+        if match is None:  # pragma: no cover -- von der Vorpruefung abgedeckt
+            return
+        widened_sql = table_sql[: match.end(1)] + ",'local-verbatim'" + table_sql[match.end(1) :]
+        head = _CREATE_QUOTES_HEAD_RE.match(widened_sql)
+        if head is None:
+            logger.warning(
+                "quotes-Tabellendefinition nicht als CREATE TABLE erkennbar -- "
+                "CHECK-Erweiterung auf 'local-verbatim' uebersprungen (#512)."
+            )
+            return
+        rebuild_sql = f'CREATE TABLE "{_QUOTES_REBUILD_NAME}"' + widened_sql[head.end() :]
+
+        columns = [str(info[1]) for info in conn.execute("PRAGMA table_info(quotes)").fetchall()]
+        column_list = ", ".join(f'"{name}"' for name in columns)
+
+        foreign_keys_on = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+        conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            conn.execute("BEGIN")
+            conn.execute(f'DROP TABLE IF EXISTS "{_QUOTES_REBUILD_NAME}"')
+            conn.execute(rebuild_sql)
+            conn.execute(
+                f'INSERT INTO "{_QUOTES_REBUILD_NAME}" ({column_list}) '
+                f"SELECT {column_list} FROM quotes"
+            )
+            conn.execute("DROP TABLE quotes")
+            conn.execute(f'ALTER TABLE "{_QUOTES_REBUILD_NAME}" RENAME TO quotes')
+            violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                conn.execute("ROLLBACK")
+                logger.warning(
+                    "CHECK-Erweiterung auf 'local-verbatim' zurueckgerollt: "
+                    "PRAGMA foreign_key_check meldet %d Verletzung(en) (#512).",
+                    len(violations),
+                )
+                return
+            conn.execute("COMMIT")
+        except _sqlite3.Error:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        finally:
+            if foreign_keys_on:
+                conn.execute("PRAGMA foreign_keys=ON")
+    finally:
+        conn.close()
+
+
+def add_context_source_column(db_path: str) -> None:
+    """Fuegt die context_source-Spalte zu quotes hinzu. Idempotent (try/except). (#520)
+
+    Haelt fest, ob ``context_before``/``context_after`` aus dem echten
+    ``paper_fulltext`` stammen (``'fulltext'``, gesetzt von
+    ``server.resolve_quote_context()``) oder unbefuellt/modell-generiert sind
+    (``NULL``, der Default). Der CHECK-Constraint wird mit angelegt, damit
+    eine migrierte Bestands-DB dieselbe zweite Verteidigungslinie hat wie eine
+    frisch aus ``schema.sql`` erzeugte.
+    Aufruf-Sicher: kann mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "ALTER TABLE quotes ADD COLUMN context_source TEXT "
+                "CHECK(context_source IN ('fulltext') OR context_source IS NULL)"
             )
         except _sqlite3.OperationalError:
             pass  # Spalte existiert bereits -- idempotent
@@ -503,6 +664,9 @@ def apply_pending_migrations(db_path: str) -> None:
     `PRAGMA user_version`-Gate genau einmal pro Schema-Generation auf einer
     Legacy-DB auf; jeder neue Helfer gehoert hier hinein UND braucht seine
     Spalten in `db._LEGACY_MIGRATION_COLUMNS` (Verifikation vor dem Stempeln).
+    Helfer, die keine Spalte hinzufuegen, brauchen eine eigene Verifikation in
+    `db.init_schema()` -- fuer `widen_extraction_method_check()` ist das
+    `quotes_check_accepts_local_verbatim()` auf der CHECK-SQL (#512).
 
     Jeder Helfer oeffnet/schliesst seine eigene kurzlebige `sqlite3`-Connection
     (try/except pro ALTER bzw. `CREATE TABLE IF NOT EXISTS`), daher ist auch
@@ -519,6 +683,12 @@ def apply_pending_migrations(db_path: str) -> None:
     add_figures_table(db_path)
     add_v64_tables(db_path)
     add_stance_column(db_path)
+    # Nach add_stance_column(): der Rebuild kopiert den vorgefundenen
+    # Spaltensatz, also muss `stance` zu diesem Zeitpunkt bereits stehen. Der
+    # Helfer ist zwar reihenfolgeunabhaengig (dynamische Spaltenliste), diese
+    # Reihenfolge spart aber einen zweiten Tabellendurchlauf (#512).
+    widen_extraction_method_check(db_path)
+    add_context_source_column(db_path)
     add_note_page_column(db_path)
     add_notes_fts(db_path)
     add_source_kind_column(db_path)
@@ -599,6 +769,47 @@ def backfill_fulltext(
     return {"filled": filled, "skipped": skipped, "errors": errors}
 
 
+def backfill_quote_embeddings(
+    db_path: str,
+    limit: int | None = None,
+    embedder: object | None = None,
+) -> dict:
+    """Erzeugt Embeddings fuer Bestands-Quotes ohne Eintrag in ``quote_embeddings`` (#521).
+
+    Idempotent: verarbeitet nur Quotes, die noch keine Zeile in
+    ``quote_embeddings`` haben (:meth:`academic_vault.db.VaultDB.quotes_missing_embedding`).
+    Ein zweiter Lauf direkt danach findet keine Kandidaten mehr und schreibt
+    nichts. Ohne ladbare sqlite-vec-Extension oder ohne Embedding-Backend ist
+    der Lauf ein sauberes No-op (``skipped == len(quotes)``, kein Absturz) --
+    fuer Quotes gibt es anders als bei Chunks keinen BLOB-Fallback-Speicher.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        limit: Maximale Anzahl Quotes pro Lauf (``None`` = alle).
+        embedder: Embedder-Instanz. ``None`` = ``get_embedder()`` (Tests
+            injizieren hier den deterministischen ``fake_embedder``).
+
+    Returns:
+        ``{"embedded": int, "skipped": int}``. ``skipped`` zaehlt Quotes, fuer
+        die :func:`academic_vault.server.embed_quote` ``False`` zurueckgab
+        (Degradationspfad).
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.server import embed_quote
+
+    db = VaultDB(db_path)
+    embedded = 0
+    skipped = 0
+
+    for candidate in db.quotes_missing_embedding(limit=limit):
+        if embed_quote(db_path, candidate["quote_id"], embedder=embedder):
+            embedded += 1
+        else:
+            skipped += 1
+
+    return {"embedded": embedded, "skipped": skipped}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed-Migration: literature_state.md -> academic_vault SQLite"
@@ -613,10 +824,16 @@ def main() -> None:
         help="Statt der Seed-Migration: PDF-Volltexte fuer Bestands-Paper nachtragen (#373)",
     )
     parser.add_argument(
+        "--backfill-quote-embeddings",
+        action="store_true",
+        help="Statt der Seed-Migration: Embeddings fuer Bestands-Quotes ohne "
+        "quote_embeddings-Eintrag nachtragen (#521)",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Obergrenze fuer --backfill-fulltext (default: alle)",
+        help="Obergrenze fuer --backfill-fulltext/--backfill-quote-embeddings (default: alle)",
     )
     parser.add_argument(
         "--pdf-dir",
@@ -641,6 +858,21 @@ def main() -> None:
             f"filled={stats['filled']}, "
             f"skipped={stats['skipped']}, "
             f"errors={stats['errors']}"
+        )
+        return
+
+    if args.backfill_quote_embeddings:
+        if not Path(args.db).exists():
+            print(f"[ERROR] Vault-DB nicht gefunden: {args.db}", file=sys.stderr)
+            sys.exit(1)
+        from academic_vault.db import VaultDB
+
+        VaultDB(args.db).init_schema()
+        stats = backfill_quote_embeddings(args.db, limit=args.limit)
+        print(
+            f"Quote-Embedding-Backfill abgeschlossen: "
+            f"embedded={stats['embedded']}, "
+            f"skipped={stats['skipped']}"
         )
         return
 
