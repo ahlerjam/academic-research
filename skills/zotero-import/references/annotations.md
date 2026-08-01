@@ -33,16 +33,17 @@ verschluckt also nichts stillschweigend.
 aber Zotero garantiert nicht, dass dieser Text noch wortgleich im
 Volltext steht (z. B. nach nachträglicher Bearbeitung der Annotation in
 Zotero). Vor dem Speichern als `quotes.verbatim` wird der Kandidat deshalb
-über `academic_vault.verbatim.verify_verbatim()` (Issue #511) gegen den
+über `academic_vault.verbatim.verify_verbatim_with_pages()` (Issue #511;
+Seiten-Cache statt Neu-Parsen je Annotation) gegen den
 lokal heruntergeladenen PDF-Volltext geprüft:
 
-| `verify_verbatim`-Status | Verhalten |
+| `verify_verbatim_with_pages`-Status | Verhalten |
 | --- | --- |
-| `exact` / `snapped` | Der von `verify_verbatim` gelieferte, normalisierte QUELLTEXT wird gespeichert — **nicht** der rohe `annotationText`-Kandidat. |
+| `exact` / `snapped` | Der von `verify_verbatim_with_pages` gelieferte, normalisierte QUELLTEXT wird gespeichert — **nicht** der rohe `annotationText`-Kandidat. |
 | `no-match` | Kein Treffer im Volltext: **keine** Quote, `ImportResult.unverified_quotes` zählt mit, `unverified_details` listet den Fall. |
 | `no-textlayer` | PDF ohne Textlayer (z. B. reiner Scan): gleiches Verhalten wie `no-match`. |
 | Kein PDF geladen (`local_path is None`) | Ohne PDF ist keine Verifikation möglich — gleiches Verhalten wie `no-match`. |
-| `verify_verbatim` wirft eine Exception (z. B. defektes PDF) | Wird try/except-isoliert abgefangen — der Fall zählt als unverifiziert, der restliche Item-Import bricht nicht ab. |
+| `verify_verbatim_with_pages` wirft eine Exception (z. B. defektes PDF) | Wird try/except-isoliert abgefangen — der Fall zählt als unverifiziert, der restliche Item-Import bricht nicht ab. |
 
 Das schließt den in diesem Dokument selbst benannten Audit-Gap: Ohne diese
 Prüfung landete jeder Zotero-Highlight ungeprüft als `verbatim` im Vault und

@@ -174,7 +174,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 - **Zotero-Highlights werden beim Import gegen den PDF-Volltext verifiziert
   (#529, Audit-Risiko R1):** `skills/zotero-import/scripts/zotero_pull.py`
-  ruft beim Annotations-Import künftig `academic_vault.verbatim.verify_verbatim()`
+  ruft beim Annotations-Import künftig `academic_vault.verbatim.verify_verbatim_with_pages()`
   (#511) gegen das lokal heruntergeladene PDF auf, statt `annotationText`
   ungeprüft als `quotes.verbatim` zu speichern. Belegbare Highlights
   (`exact`/`snapped`) werden mit dem gesnappten Quelltext gespeichert; nicht

@@ -1379,6 +1379,42 @@ class TestAnnotationVerification:
         assert _quotes_rows(db_path) == []
         assert result.unverified_quotes == 1
 
+    def test_verify_call_itself_raising_is_isolated(self, tmp_path):
+        """Deckt den try/except um ``verify_verbatim_with_pages`` SELBST ab.
+
+        Der Test darueber trifft den Fehlerpfad des Seiten-Caches
+        (``extract_pages`` scheitert am defekten PDF) — der Aufruf von
+        ``verify_verbatim_with_pages`` kommt dort nie zustande. Hier liefert
+        ``extract_pages`` sauber (im Helper auf ``[]`` gepatcht) und erst die
+        Verifikation wirft, sodass der zweite try/except-Zweig greift: Die
+        Annotation zaehlt als unverifiziert, der Item-Import laeuft weiter.
+        """
+        annotation_children = [
+            _annotation_child(
+                "ANNOVER7",
+                annotationType="highlight",
+                annotationText="Highlight, dessen Verifikation abstuerzt.",
+                annotationPageLabel="1",
+            )
+        ]
+
+        def _raise_on_verify(_pages, _candidate):
+            raise RuntimeError("verify_verbatim_with_pages abgestuerzt")
+
+        result, db_path = _run_with_annotations_real_pdf(
+            tmp_path,
+            "ANNOVERI7",
+            "10.9999/verify.007",
+            annotation_children,
+            local_path=str(VERBATIM_SOURCE_PDF),
+            verify_side_effect=_raise_on_verify,
+        )
+
+        assert result.imported == 1
+        assert result.errors == []
+        assert _quotes_rows(db_path) == []
+        assert result.unverified_quotes == 1
+
 
 # Test 10: Zotero-Volltext-Uebernahme statt lokaler PDF-Extraktion (Issue #525)
 # ---------------------------------------------------------------------------

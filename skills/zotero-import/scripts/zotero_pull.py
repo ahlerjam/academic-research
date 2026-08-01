@@ -528,7 +528,17 @@ def run_import(
                         # (Performance-Fix fuer Issue #529, P1-Finding).
                         pages_cache = None
                         cache_error = None
-                        if local_path:
+                        # Nur parsen, wenn ueberhaupt eine Annotation mit
+                        # Verbatim-Text vorliegt: Attachments mit
+                        # ausschliesslich Kommentar-Annotationen (oder ganz
+                        # ohne) brauchen den Seiten-Cache nie, das Parsen waere
+                        # reine Rechenzeit.
+                        needs_pages = any(
+                            child.get("data", {}).get("itemType") == "annotation"
+                            and _annotation_verbatim(child.get("data", {}))
+                            for child in annotation_children
+                        )
+                        if local_path and needs_pages:
                             try:
                                 pages_cache = extract_pages(local_path)
                             except Exception as e:
