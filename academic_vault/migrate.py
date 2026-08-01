@@ -385,6 +385,33 @@ def widen_extraction_method_check(db_path: str) -> None:
         conn.close()
 
 
+def add_context_source_column(db_path: str) -> None:
+    """Fuegt die context_source-Spalte zu quotes hinzu. Idempotent (try/except). (#520)
+
+    Haelt fest, ob ``context_before``/``context_after`` aus dem echten
+    ``paper_fulltext`` stammen (``'fulltext'``, gesetzt von
+    ``server.resolve_quote_context()``) oder unbefuellt/modell-generiert sind
+    (``NULL``, der Default). Der CHECK-Constraint wird mit angelegt, damit
+    eine migrierte Bestands-DB dieselbe zweite Verteidigungslinie hat wie eine
+    frisch aus ``schema.sql`` erzeugte.
+    Aufruf-Sicher: kann mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "ALTER TABLE quotes ADD COLUMN context_source TEXT "
+                "CHECK(context_source IN ('fulltext') OR context_source IS NULL)"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def add_source_kind_column(db_path: str) -> None:
     """Fuegt die source_kind-Spalte zu papers hinzu. Idempotent (try/except). (#473)
 
@@ -661,6 +688,7 @@ def apply_pending_migrations(db_path: str) -> None:
     # Helfer ist zwar reihenfolgeunabhaengig (dynamische Spaltenliste), diese
     # Reihenfolge spart aber einen zweiten Tabellendurchlauf (#512).
     widen_extraction_method_check(db_path)
+    add_context_source_column(db_path)
     add_note_page_column(db_path)
     add_notes_fts(db_path)
     add_source_kind_column(db_path)

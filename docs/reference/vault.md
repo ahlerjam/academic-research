@@ -138,6 +138,23 @@ Grenzen der Prüfung: seitenübergreifende Zitate und ausgelassene Wörter könn
 falsch-negativ als `no-match` gelten. Dann ist `extraction_method="manual"` mit
 eigenem Beleg der richtige Weg — nicht das Aufweichen der Prüfung.
 
+**Echter Quellkontext — `resolve_quote_context`** (Issue #520)
+
+Nach `vault.add_quote(..., extraction_method="local-verbatim")` wird —
+non-fatal, im Hintergrund — versucht, `context_before`/`context_after` aus
+dem echten `paper_fulltext` des Papers zu befüllen (nicht mehr vom Modell
+„erinnert"). Erst exakter Substring-Treffer, sonst Fuzzy-Fallback via
+`rapidfuzz` (der Volltext-Extraktor kann vom Seiten-Extraktor der
+Verbatim-Prüfung abweichen — Ligaturen, Trennstriche). Bei Erfolg steht
+`quotes.context_source == "fulltext"`; ohne `paper_fulltext`-Eintrag oder
+ohne Fundstelle bleibt alles unverändert (`None`) — geraten wird nie.
+
+Die Funktion ist auch direkt aufrufbar:
+
+| Funktion (Signatur mit Defaults) | Beschreibung |
+|---|---|
+| `resolve_quote_context(db_path, quote_id, window=600)` | Sucht die Fundstelle von `quotes.verbatim` im `paper_fulltext` des zugehörigen Papers und schneidet ±`window` Zeichen als Kontext heraus. Persistiert nur bei nachgewiesener Fundstelle (`context_source="fulltext"`), gibt `True`/`False` zurück (`False` = No-Op). Wirft `ValueError` bei unbekannter `quote_id`. |
+
 **Notizen & Exzerpte** (Issue #462)
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
