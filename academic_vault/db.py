@@ -29,6 +29,15 @@ _CHUNK_VECTORS_DDL = (
     f"USING vec0(chunk_id TEXT PRIMARY KEY, embedding FLOAT[{EMBEDDING_DIM}])"
 )
 
+# vec0-Tabelle fuer verifizierte Zitat-Embeddings (Issue #521). Anders als
+# chunk_vectors gibt es KEINE BLOB-Basistabelle -- ist die sqlite-vec-
+# Extension in diesem Prozess nicht ladbar, ist Embedding fuer Quotes ein
+# vollstaendiges No-Op (bewusste Scope-Entscheidung, s. Plan-Kommentar #521).
+_QUOTE_EMBEDDINGS_DDL = (
+    "CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings "
+    f"USING vec0(quote_id TEXT PRIMARY KEY, embedding FLOAT[{EMBEDDING_DIM}])"
+)
+
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 
 # Erlaubte Werte fuer `quotes.stance` (Issue #400): Haltung eines Zitats zur
@@ -581,10 +590,7 @@ class VaultDB:
             # quote_embeddings via vec0 versuchen (nur wenn Extension geladen)
             if self.vec_available:
                 try:
-                    conn.execute(
-                        "CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings "
-                        "USING vec0(quote_id TEXT PRIMARY KEY, embedding FLOAT[384])"
-                    )
+                    conn.execute(_QUOTE_EMBEDDINGS_DDL)
                     conn.execute(_CHUNK_VECTORS_DDL)
                 except sqlite3.OperationalError:
                     self.vec_available = False
@@ -948,6 +954,34 @@ class VaultDB:
             row = conn.execute("SELECT * FROM quotes WHERE quote_id = ?", (quote_id,)).fetchone()
         return dict(row) if row is not None else None
 
+    def set_quote_stance(self, quote_id: str, stance: str) -> None:
+        """Aktualisiert ``stance`` eines BESTEHENDEN Quotes (Issue #523).
+
+        Ergaenzt ``add_quote(stance=...)`` um einen nachtraeglichen
+        Audit-Schreibpfad: der `quote-fidelity-auditor`-Agent legt keine neuen
+        Zitate an, sondern urteilt ueber bereits im Vault vorhandene.
+
+        Args:
+            quote_id: Referenz auf ``quotes.quote_id``.
+            stance: Einer der Werte aus ``VALID_STANCES`` (``None`` ist hier
+                bewusst NICHT erlaubt -- ein Audit-Urteil loescht keine
+                bestehende Einstufung, das waere ein stiller Datenverlust).
+
+        Raises:
+            ValueError: Wenn ``stance`` nicht in ``VALID_STANCES`` liegt, oder
+                wenn ``quote_id`` auf kein bestehendes Zitat verweist.
+        """
+        if stance not in VALID_STANCES:
+            raise ValueError(f"Ungueltiger stance '{stance}' -- erlaubt: {sorted(VALID_STANCES)}")
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            cursor = conn.execute(
+                "UPDATE quotes SET stance = ? WHERE quote_id = ?",
+                (stance, quote_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError(f"vault.set_quote_stance: Quote '{quote_id}' nicht gefunden")
+
     def search_quote_text(self, verbatim: str, k: int = 5) -> list[dict]:
         """LIKE-Suche in quotes.verbatim. Gibt [{quote_id, verbatim, paper_id}] zurueck."""
         with self._connection() as conn:
@@ -977,6 +1011,116 @@ class VaultDB:
                     "SELECT * FROM quotes WHERE paper_id = ? LIMIT ?",
                     (paper_id, k),
                 ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Quote-Embeddings (Issue #521)
+    # ------------------------------------------------------------------
+
+    def vec_extension_loadable(self) -> bool:
+        """Prueft, ob die sqlite-vec-Extension in diesem Prozess ladbar ist.
+
+        Oeffnet dafuer kurz eine eigene Connection (ueber ``_connection()``,
+        die sie garantiert wieder schliesst) -- fuer Aufrufer, die VOR einer
+        teuren Operation (Embedding-Modell-Load) pruefen wollen, ob am Ende
+        ueberhaupt gespeichert werden koennte (Plan-Risiko #521/4).
+        """
+        with self._connection() as conn:
+            return self.load_vec_extension(conn)
+
+    def add_quote_embedding(self, quote_id: str, embedding_vector: bytes) -> bool:
+        """Schreibt (oder ersetzt) den Embedding-Vektor eines Quotes in vec0.
+
+        Best effort, analog zu ``_mirror_chunk_vector`` (Issue #372): gibt
+        ``False`` zurueck, wenn ``embedding_vector`` nicht die erwartete
+        Dimension hat oder die sqlite-vec-Extension nicht ladbar ist -- wirft
+        in diesen Faellen nie. Anders als bei Chunks gibt es fuer Quotes KEINE
+        BLOB-Basistabelle: ohne ladbare Extension ist dies ein vollstaendiges
+        No-Op (Issue #521, bewusste Scope-Entscheidung).
+
+        Raises:
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+        """
+        if not embedding_vector or len(embedding_vector) != EMBEDDING_DIM * 4:
+            return False
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            if not self.load_vec_extension(conn):
+                return False
+            try:
+                conn.execute(_QUOTE_EMBEDDINGS_DDL)
+                conn.execute(
+                    "INSERT OR REPLACE INTO quote_embeddings (quote_id, embedding) VALUES (?, ?)",
+                    (quote_id, embedding_vector),
+                )
+            except sqlite3.OperationalError:
+                return False
+        return True
+
+    def get_quote_embedding(self, quote_id: str) -> list[float] | None:
+        """Liest den gespeicherten Embedding-Vektor eines Quotes (Issue #522).
+
+        Rein lesendes Gegenstueck zu :meth:`add_quote_embedding`. ``None``
+        bedeutet in jedem Fall "keine Zahl verfuegbar" und nie "Aehnlichkeit
+        null": fehlende sqlite-vec-Extension, fehlende ``quote_embeddings``-
+        Tabelle oder kein Eintrag zu dieser ``quote_id``. Aufrufer duerfen
+        daraus nichts ableiten (Muster :meth:`quotes_missing_embedding`).
+        """
+        with self._connection() as conn:
+            if not self.load_vec_extension(conn):
+                return None
+            try:
+                row = conn.execute(
+                    "SELECT embedding FROM quote_embeddings WHERE quote_id = ?",
+                    (quote_id,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                return None
+        if row is None:
+            return None
+        blob = row["embedding"]
+        if not isinstance(blob, bytes | bytearray):
+            return None
+        try:
+            return deserialize_f32(bytes(blob))
+        except ValueError:
+            # Abgeschnittener Altbestand: lieber "keine Zahl" als halbe Floats.
+            logger.warning(
+                "vault.get_quote_embedding: Embedding von Quote '%s' ist beschaedigt (#522).",
+                quote_id,
+            )
+            return None
+
+    def quotes_missing_embedding(self, limit: int | None = None) -> list[dict]:
+        """Quotes ohne Eintrag in ``quote_embeddings``. Kandidatenliste fuer den Backfill.
+
+        Leere Liste, wenn die sqlite-vec-Extension in diesem Prozess nicht
+        ladbar ist -- sonst wuerde der LEFT JOIN gegen die fehlende Virtual
+        Table mit ``sqlite3.OperationalError: no such table`` abbrechen
+        (Plan-Risiko #521/5), statt sauber zu degradieren.
+        """
+        with self._connection() as conn:
+            if not self.load_vec_extension(conn):
+                return []
+            try:
+                conn.execute(_QUOTE_EMBEDDINGS_DDL)
+            except sqlite3.OperationalError:
+                return []
+            sql = """
+                SELECT q.quote_id, q.paper_id, q.verbatim, q.context_before, q.context_after
+                FROM quotes q
+                LEFT JOIN quote_embeddings e ON e.quote_id = q.quote_id
+                WHERE e.quote_id IS NULL
+                ORDER BY q.created_at, q.quote_id
+            """
+            params: list = []
+            if limit is not None and limit > 0:
+                sql += " LIMIT ?"
+                params.append(limit)
+            try:
+                rows = conn.execute(sql, params).fetchall()
+            except sqlite3.OperationalError:
+                return []
         return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------

@@ -219,8 +219,15 @@ class TestMissingIdentifier:
 
 
 class TestPDFAttachment:
-    def test_pdf_attachment_uploaded_file_id_cached(self, tmp_path):
-        """Item mit PDF-Attachment → ensure_file wird aufgerufen."""
+    def test_pdf_attachment_uploaded_file_id_cached(self, tmp_path, monkeypatch):
+        """Item mit PDF-Attachment + gesetztem Key → ensure_file wird aufgerufen.
+
+        Seit #535 ist der Files-API-Upload ein optionaler Pfad hinter einem
+        Key-Gate: ohne ANTHROPIC_API_KEY wird er uebersprungen statt versucht.
+        Der gesetzte Key macht diesen Test zum Regressionsbeleg dafuer, dass
+        der Upload-Pfad MIT Key unveraendert laeuft.
+        """
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         from zotero_pull import run_import
 
         cfg_path = _minimal_config(tmp_path)
@@ -556,8 +563,11 @@ def _paper_pdf_path(db_path: str, paper_id: str) -> str | None:
 
 
 class TestPDFAttachmentFallback:
-    def test_failed_first_download_falls_back_to_second_pdf(self, tmp_path):
+    def test_failed_first_download_falls_back_to_second_pdf(self, tmp_path, monkeypatch):
         """Schlaegt der Download des ersten PDFs fehl, wird das zweite versucht."""
+        # Key gesetzt: der optionale Files-API-Pfad (#535) laeuft mit, damit
+        # `mock_ef` unten ueberhaupt erreicht wird.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         from zotero_pull import run_import
 
         cfg_path = _minimal_config(tmp_path)
@@ -593,8 +603,11 @@ class TestPDFAttachmentFallback:
         assert "file_mock_id_abc" in result.file_ids
         assert _paper_pdf_path(db_path, "zotero-FALLBACK") == str(ATTACHMENT_A)
 
-    def test_successful_first_download_stops_after_first_pdf(self, tmp_path):
+    def test_successful_first_download_stops_after_first_pdf(self, tmp_path, monkeypatch):
         """Erfolgreicher Download → zweites PDF-Attachment wird nicht angefasst."""
+        # Key gesetzt: der optionale Files-API-Pfad (#535) laeuft mit, damit
+        # `mock_ef` unten ueberhaupt erreicht wird.
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         from zotero_pull import run_import
 
         cfg_path = _minimal_config(tmp_path)
@@ -628,9 +641,11 @@ class TestPDFAttachmentFallback:
         assert result.imported == 1
         mock_ef.assert_called_once()
 
-    def test_annotations_imported_even_when_download_fails(self, tmp_path):
+    def test_annotations_imported_even_when_download_fails(self, tmp_path, monkeypatch):
         """Annotationen haengen nicht am Download-Erfolg des PDFs."""
         from zotero_pull import run_import
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         cfg_path = _minimal_config(tmp_path)
         db_path = str(tmp_path / "vault.db")

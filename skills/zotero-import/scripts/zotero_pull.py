@@ -1,7 +1,14 @@
 """zotero_pull.py — Zotero-Import-Logik fuer academic-research Plugin.
 
-Liest Items und PDF-Attachments aus einer Zotero-Library,
-dedupliziert via DOI/ISBN gegen den Vault und laedt PDFs in die Files-API hoch.
+Liest Items und PDF-Attachments aus einer Zotero-Library, dedupliziert via
+DOI/ISBN gegen den Vault. PDFs werden in temporaere Verzeichnisse heruntergeladen
+und pdf_path im Vault gespeichert; Files-API-Upload ist optional (erfordert
+ANTHROPIC_API_KEY) fuer den optionalen Citations-API-Zitatweg, siehe
+skills/chapter-writer/references/citations-api.md. Ohne Key wird dieser
+Upload uebersprungen und in ``ImportResult.files_api_skipped`` gezaehlt (#535)
+— ein fehlender Key ist kein Importfehler. Lokale Zitierung via
+vault.add_quote(extraction_method="local-verbatim") ist nur moeglich, wenn
+pdf_path noch verfuegbar ist.
 
 Aufruf:
     python skills/zotero-import/scripts/zotero_pull.py \\
@@ -41,6 +48,7 @@ except ImportError:  # pragma: no cover
 # Vault-Funktionen direkt importieren (kein MCP-Roundtrip noetig)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
+from academic_vault.files_api import is_configured as files_api_configured  # noqa: E402
 from academic_vault.server import add_paper, add_quote, ensure_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -71,6 +79,10 @@ class ImportResult:
     # lokalen PDF-Parse-Pfad zurueckgefallen wurde (Issue #525 AC2 — dieser
     # Fallback muss geloggt und gezaehlt werden, nicht still bleiben).
     fulltext_fallback_local: int = 0
+    # PDFs, fuer die der optionale Files-API-Upload uebersprungen wurde, weil
+    # kein eigener ANTHROPIC_API_KEY gesetzt ist (#535). Der Zaehler haelt den
+    # Skip sichtbar, ohne ihn als Importfehler zu zaehlen.
+    files_api_skipped: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -457,19 +469,32 @@ def run_import(
                                 isbn=isbn,
                                 pdf_path=local_path,
                             )
-                            # Files-API Upload + Cache
-                            try:
-                                file_id = ensure_file(
-                                    db_path=db_path,
-                                    paper_id=paper_id,
-                                    api_key="",  # ANTHROPIC_API_KEY aus Env
+                            # Optionaler Files-API-Upload + Cache (eigener
+                            # ANTHROPIC_API_KEY noetig, siehe citations-api.md).
+                            # Ohne Key wird der Pfad explizit uebersprungen und
+                            # gezaehlt (#535) — kein Eintrag in result.errors,
+                            # denn ein fehlender Key ist kein Importfehler. Das
+                            # except faengt nur noch echte Upload-Fehler MIT Key.
+                            if not files_api_configured():
+                                result.files_api_skipped += 1
+                                logger.info(
+                                    "Optionaler Files-API-Upload fuer %s uebersprungen: "
+                                    "kein ANTHROPIC_API_KEY gesetzt.",
+                                    paper_id,
                                 )
-                                if file_id:
-                                    result.file_ids.append(file_id)
-                            except Exception as e:
-                                result.errors.append(
-                                    f"ensure_file fuer {paper_id} fehlgeschlagen: {e}"
-                                )
+                            else:
+                                try:
+                                    file_id = ensure_file(
+                                        db_path=db_path,
+                                        paper_id=paper_id,
+                                        api_key="",  # ANTHROPIC_API_KEY aus Env
+                                    )
+                                    if file_id:
+                                        result.file_ids.append(file_id)
+                                except Exception as e:
+                                    result.errors.append(
+                                        f"ensure_file fuer {paper_id} fehlgeschlagen: {e}"
+                                    )
 
                         # Annotationen (Highlights/Notizen) dieses Attachments
                         # importieren — unabhaengig vom Download-Erfolg des PDFs.
@@ -553,7 +578,12 @@ def main() -> None:
         for err in result.errors:
             print(f"  - {err}", file=sys.stderr)
     if result.file_ids:
-        print(f"Files-API file_ids gecacht: {len(result.file_ids)}")
+        print(f"Optionale Files-API file_ids gecacht: {len(result.file_ids)}")
+    if result.files_api_skipped:
+        print(
+            f"Optionaler Files-API-Upload uebersprungen (kein eigener "
+            f"ANTHROPIC_API_KEY): {result.files_api_skipped}"
+        )
     if result.fulltext_from_zotero:
         print(
             f"Volltext von Zotero uebernommen (ohne lokalen PDF-Parse): "

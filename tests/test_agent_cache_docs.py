@@ -48,16 +48,21 @@ def test_quote_extractor_file_source_documented():
 
 
 # ---------------------------------------------------------------------------
-# Test 10: quote-extractor.md dokumentiert base64-Fallback
+# Test 10 (bis #514): quote-extractor.md dokumentierte einen base64-Fallback
+# fuer die Citations-API. Seit #514 ist die Citations-API selbst nur noch
+# ein kurzer Opt-in-Hinweis (Standardpfad: vault.get_paper -> pdf_path ->
+# Read, Persistenz via extraction_method="local-verbatim") -- der
+# base64-Unterfallback der Files-API ist damit kein Doku-Pflichtinhalt des
+# Agent-Files mehr, sondern Detail des referenzierten
+# skills/chapter-writer/references/citations-api.md (dessen eigener
+# Fallback ist Vault-Zitat-Text statt Citations-API, nicht base64).
 # ---------------------------------------------------------------------------
 
 
-def test_quote_extractor_base64_fallback_documented():
+def test_quote_extractor_opt_in_citations_api_references_details_doc():
     agent_file = Path(__file__).parent.parent / "agents" / "quote-extractor.md"
     content = agent_file.read_text()
-    # base64 als Fallback muss noch vorhanden sein
-    assert '"type": "base64"' in content, "quote-extractor.md muss base64-Fallback dokumentieren"
-    # Und als Fallback bezeichnet
-    assert "Fallback" in content or "fallback" in content, (
-        "quote-extractor.md muss Fallback-Begriff enthalten"
+    assert "Opt-in" in content, "quote-extractor.md muss die Citations-API als Opt-in kennzeichnen"
+    assert "skills/chapter-writer/references/citations-api.md" in content, (
+        "quote-extractor.md muss fuer Citations-API-Details auf die Referenzdatei verweisen"
     )

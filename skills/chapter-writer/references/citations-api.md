@@ -1,8 +1,11 @@
-# Zitat-Einbindung via Citations-API
+# Zitat-Einbindung via Citations-API (optional)
 
-Beim Einweben von Zitaten in Kapitel-Prosa: Quellen-PDFs im
-`documents`-Parameter an Claude uebergeben, damit die API die Quellenbindung
-erzwingt. Jedes Paraphrase-Segment mit einem `citations[]`-Eintrag nachweisbar.
+**Optional Fallback**, nicht der Standardweg — Standard ist
+`vault.add_quote(..., extraction_method="local-verbatim")`. Dieser Pfad
+setzt einen eigenen `ANTHROPIC_API_KEY` ausserhalb der Subscription-Session
+voraus (Anthropic Beta-API). Beim Einweben von Zitaten in Kapitel-Prosa:
+Quellen-PDFs im `documents`-Parameter an Claude uebergeben, damit die API die
+Quellenbindung erzwingt. Jedes Paraphrase-Segment mit einem `citations[]`-Eintrag nachweisbar.
 
 ## Workflow
 
