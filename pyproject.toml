@@ -70,6 +70,10 @@ dependencies = [
     # (cuda-toolkit + nvidia-* + triton, mehrere GB) in uv.lock und in jeden
     # CI-Job. Mit dem Eintrag kommt das CPU-Wheel.
     "torch>=2.0",
+    # Fuzzy-Snap in academic_vault/verbatim.py (#511): findet die naechstliegende
+    # Textstelle fuer leicht abweichende Zitat-Kandidaten. >=3.14.5: der Stand,
+    # mit dem die Suite tatsaechlich laeuft (uv.lock).
+    "rapidfuzz>=3.14.5",
 ]
 
 [project.optional-dependencies]
