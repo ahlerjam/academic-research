@@ -8,6 +8,29 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Changed
+
+- **`quality-reviewer` eskaliert ab Iteration 2 statt durchzuwinken (#528):**
+  Der Agent gab bei `iteration >= 2` unabhängig von offenen Findings ein
+  PASS-with-warnings zurück (`agents/quality-reviewer.md` „Loop-Begrenzung" und
+  Strategie-Punkt 5, gespiegelt in
+  `skills/chapter-writer/references/quality-review-config.md`) — das
+  Qualitäts-Gate war damit genau dann wirkungslos, wenn es zählt (Audit-Risiko
+  R6). Neu gibt es ein drittes Verdict `ESCALATE`, gekoppelt an `iteration >= 2`
+  **und** mindestens ein Kriterium mit FAIL; ohne offenes Finding bleibt PASS
+  unverändert. Das Entscheidungs-Gate liegt beim Aufrufer, nicht im Subagenten
+  (der läuft mit `tools: [Read]` und hat keinen User-Kanal): `chapter-writer`
+  legt die Restprobleme vor und fragt via `AskUserQuestion` — akzeptieren /
+  weitere Revision / abbrechen; das Tool ist jetzt auch in `allowed-tools`
+  deklariert (es war für das Outline-Gate bereits undeklariert im Einsatz). Die
+  Loop-Begrenzung bleibt erhalten: „weitere Revision" gewährt genau eine
+  zusätzliche Runde, danach wird erneut eskaliert statt still akzeptiert.
+  `evals/quality-reviewer/evals.json` prüft beide Pfade (`qr-03` ESCALATE mit
+  offenem Finding, `qr-04` PASS am Iterations-Limit ohne Finding). `advisor`
+  und `abstract-generator` rufen denselben Agenten auf, bleiben hier aber
+  unverändert — ihr SKILL.md-Größenbudget ist ausgereizt (advisor: 2 Zeichen
+  Luft), das Nachziehen erfordert eine eigene Textkompression.
+
 ### Added
 
 - **Fail-closed `extraction_method="local-verbatim"` (#512):** `vault.add_quote`
