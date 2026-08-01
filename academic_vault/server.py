@@ -141,6 +141,77 @@ def _ensure_schema_for_read(db_path: str) -> None:
         VaultDB(db_path).init_schema()
 
 
+def _verify_local_verbatim(
+    db_path: str,
+    paper_id: str,
+    verbatim: str,
+    pdf_page: int | None,
+) -> tuple[str, int]:
+    """Verifiziert einen Kandidaten fail-closed gegen das lokale PDF (#512).
+
+    Wird ausschliesslich aus :func:`add_quote` fuer
+    ``extraction_method='local-verbatim'`` aufgerufen -- VOR jedem
+    Schreibzugriff auf ``quotes``.
+
+    Returns:
+        ``(verbatim, pdf_page)`` aus der QUELLE: der an der Fundstelle
+        stehende Wortlaut und die verifizierte Seite.
+
+    Raises:
+        ValueError: Paper unbekannt, kein/kein lesbarer ``pdf_path``, oder
+            Pruefstatus ``no-match``/``no-textlayer``. In allen Faellen wurde
+            nichts gespeichert.
+    """
+    # Lazy import: `verbatim.verify_verbatim` zieht pypdf + rapidfuzz nach.
+    # Die Pfade 'manual' und 'citations-api' duerfen davon nichts merken.
+    from .verbatim import verify_verbatim
+
+    paper = get_paper(db_path, paper_id)
+    if paper is None:
+        raise ValueError(
+            f"vault.add_quote: Paper '{paper_id}' nicht gefunden -- "
+            "extraction_method='local-verbatim' braucht ein Paper mit hinterlegtem PDF."
+        )
+
+    pdf_path = (paper.get("pdf_path") or "").strip()
+    if not pdf_path:
+        raise ValueError(
+            f"vault.add_quote: Paper '{paper_id}' hat keinen pdf_path -- "
+            "extraction_method='local-verbatim' ist ohne lokales PDF nicht belegbar. "
+            "Entweder pdf_path nachtragen oder das Zitat mit "
+            "extraction_method='manual' und eigenem Beleg erfassen."
+        )
+    if not Path(pdf_path).is_file():
+        raise ValueError(
+            f"vault.add_quote: hinterlegter pdf_path '{pdf_path}' von Paper "
+            f"'{paper_id}' existiert nicht -- extraction_method='local-verbatim' "
+            "ist damit nicht belegbar. Pfad korrigieren (vault.update_pdf_path) "
+            "oder das Zitat mit extraction_method='manual' erfassen."
+        )
+
+    result = verify_verbatim(pdf_path, verbatim)
+    if result.status not in ("exact", "snapped") or result.pdf_page is None:
+        raise ValueError(
+            f"vault.add_quote: Verbatim-Pruefung fehlgeschlagen (status="
+            f"'{result.status}', beste Aehnlichkeit {result.ratio:.2f}) fuer Paper "
+            f"'{paper_id}' -- das Zitat wurde NICHT gespeichert. Der Wortlaut ist "
+            "im lokalen PDF nicht auffindbar (z. B. Halluzination, Seitenumbruch "
+            "mitten im Zitat oder fehlender Text-Layer). Wortlaut korrigieren oder "
+            "das Zitat mit extraction_method='manual' und eigenem Beleg erfassen."
+        )
+
+    if pdf_page is not None and pdf_page != result.pdf_page:
+        logger.warning(
+            "vault.add_quote: uebergebenes pdf_page=%s weicht von der verifizierten "
+            "Seite %s ab (Paper '%s') -- gespeichert wird die verifizierte Seite (#512).",
+            pdf_page,
+            result.pdf_page,
+            paper_id,
+        )
+
+    return result.verbatim, result.pdf_page
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -156,8 +227,27 @@ def add_quote(
 ) -> str:
     """Fuegt Quote in Vault ein. Gibt quote_id zurueck.
 
-    Halluzinationsschutz: extraction_method='citations-api' erfordert
-    api_response_id. Bei Fehlen wird ValueError geworfen.
+    Halluzinationsschutz, je nach ``extraction_method`` (``VALID_EXTRACTION_METHODS``):
+
+    * ``'citations-api'`` erfordert ``api_response_id``; bei Fehlen ``ValueError``.
+    * ``'local-verbatim'`` (Issue #512) wird HIER fail-closed gegen den lokalen
+      PDF-Volltext des Papers verifiziert (:func:`academic_vault.verbatim.verify_verbatim`),
+      bevor irgendetwas geschrieben wird. Unbekanntes Paper, fehlender oder
+      nicht lesbarer ``pdf_path`` sowie die Pruefstatus ``no-match`` und
+      ``no-textlayer`` werfen ``ValueError`` -- der Vault bleibt unveraendert.
+      Bei ``exact``/``snapped`` wird der QUELLTEXT (nicht der uebergebene
+      Kandidat) samt der VERIFIZIERTEN Seite gespeichert; ein abweichend
+      uebergebenes ``pdf_page`` wird verworfen und per ``logger.warning``
+      sichtbar gemacht, weil die verifizierte Seite der Beweis ist.
+    * ``'manual'`` bleibt ungeprueft -- und damit der dokumentierte
+      Ausweichweg, wenn die lokale Verifikation an ihre Grenzen stoesst.
+
+    Grenzen der lokalen Verifikation (Issue #511, hier zur harten Blockade
+    verschaerft): seitenuebergreifende Zitate liefern ``no-match``, und die
+    Fuzzy-Suche fixiert die Fensterlaenge auf die Kandidatenlaenge -- bei
+    Wort-Auslassungen sind damit falsch-negative Ergebnisse moeglich. In
+    solchen Faellen ist ``extraction_method='manual'`` mit eigenem Beleg der
+    richtige Weg, nicht das Aufweichen dieser Pruefung.
 
     ``stance`` (optional, Issue #400) haelt die Haltung des Zitats zur
     zitierenden Aussage fest -- einer der Werte aus ``VALID_STANCES``
@@ -171,6 +261,8 @@ def add_quote(
         raise ValueError(
             "vault.add_quote: api_response_id required for extraction_method='citations-api'"
         )
+    if extraction_method == "local-verbatim":
+        verbatim, pdf_page = _verify_local_verbatim(db_path, paper_id, verbatim, pdf_page)
     quote_id = str(uuid4())
     db = VaultDB(db_path)
     db.init_schema()
@@ -1395,7 +1487,15 @@ def _build_mcp_server():
         context_after: str | None = None,
         stance: str | None = None,
     ) -> str:
-        """Fuegt Quote ein. extraction_method='citations-api' erfordert api_response_id.
+        """Fuegt Quote ein. extraction_method: 'citations-api' | 'manual' | 'local-verbatim'.
+
+        'citations-api' erfordert api_response_id. 'local-verbatim' (#512) wird
+        fail-closed gegen den lokalen PDF-Volltext des Papers geprueft: ist der
+        Wortlaut dort nicht auffindbar (oder fehlt ein lesbarer pdf_path), wirft
+        der Aufruf ValueError und es wird NICHTS gespeichert; bei Erfolg landen
+        der Wortlaut AUS DER QUELLE und die VERIFIZIERTE Seite im Vault (ein
+        abweichend uebergebenes pdf_page wird verworfen). 'manual' bleibt
+        ungeprueft und ist der Ausweichweg fuer seitenuebergreifende Zitate.
 
         stance (optional): 'supports' | 'contrasts' | 'mentions' | None (#400).
         """

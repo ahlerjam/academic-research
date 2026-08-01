@@ -10,6 +10,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Fail-closed `extraction_method="local-verbatim"` (#512):** `vault.add_quote`
+  akzeptiert einen dritten Herkunftsnachweis und verifiziert ihn SELBST gegen
+  den lokalen PDF-Volltext des Papers (`academic_vault/verbatim.py` aus #511) —
+  vor jedem Schreibzugriff. Unbekanntes Paper, fehlender oder nicht lesbarer
+  `pdf_path` sowie die Prüfstatus `no-match`/`no-textlayer` werfen `ValueError`,
+  und es wird nichts gespeichert; bei `exact`/`snapped` landen der Wortlaut AUS
+  DER QUELLE (nicht der übergebene Kandidat) und die VERIFIZIERTE Seite im
+  Vault, ein abweichend übergebenes `pdf_page` wird verworfen und geloggt. Das
+  Enforcement sitzt damit im Vault statt in einem Hook und ist bypass-immun; es
+  schließt zugleich die Lücke, dass eine beliebige nicht-leere
+  `api_response_id` als „Beweis" durchging. Die Pfade `citations-api` und
+  `manual` sind unverändert — `manual` bleibt der dokumentierte Ausweichweg für
+  die bekannten Grenzen der Prüfung (seitenübergreifende Zitate,
+  Wort-Auslassungen). `import`-Kosten von pypdf/rapidfuzz fallen dank Lazy
+  Import nur auf dem neuen Pfad an.
+
 - **Bypass-Report beim SessionStart (#517):** Der Bypass-Marker
   `<!-- vault-guard: skip -->` ist für Ausnahmefälle legitim, blieb aber
   bisher unbemerkt — nichts las das seit #381 geschriebene Log
@@ -485,6 +501,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 - **Crossref-Retraction-Check im Reading-List-Import (#383):** `import_reading_list()` prüft nach jedem erfolgreichen `vault.add_paper()`-Aufruf mit DOI zusätzlich `check_retraction(doi)` gegen `api.crossref.org/works/{doi}` (Feld `message.updated-by`, `type == "retraction"`; seit 09/2023 mit Retraction-Watch-Daten integriert, kostenlos, kein API-Key). Maßgeblich ist `updated-by` — Crossref hängt dieses Feld an den zurückgezogenen Artikel, während das Gegenstück `update-to` zur Retraction-Notiz gehört und von dieser auf den Artikel zeigt. Bei Treffer wird das Paper automatisch über den neuen Wrapper `vault_add_excluded_source()` als `excluded_source` markiert. Fail-safe: Netzwerk-/Parse-Fehler bei `check_retraction()` liefern `False` und blockieren den regulären Paper-Ingest nicht. Aufgezeichnete Crossref-Payloads unter `tests/fixtures/crossref/` halten beide Richtungen fest.
 - **Eval-Strategie statt stillschweigender Schema-Checks (#390):** Neues Dokument `docs/evals/STRATEGY.md` benennt für jede der 37 Komponenten unter `evals/` genau einen Zustand — `metric` (Offline-Runner bewertet Inhalt), `structural` (nur Struktur geprüft, inhaltliche Bewertung skippt ohne `ANTHROPIC_API_KEY`, Begründung Pflicht) oder `removed`. Der neue Guard `tests/evals/test_eval_strategy.py` prüft die Tabelle gegen das Dateisystem (Set-Gleichheit in beide Richtungen, geschlossenes Status-Vokabular, Existenz genannter Runner) und erzwingt, dass kein Eval-Runner API-Budget verbraucht. Das Dokument beziffert den Budgetbedarf für reale Läufe (ca. 400 Aufrufe pro Vollauf) ausdrücklich als Operator-Entscheid und hält fest, dass Alt-Issue #55 von #390 absorbiert und geschlossen ist.
 - **Die zwei toten Eval-Definitionen haben einen echten Ausführungspfad (#390):** `evals/humanizer-de-pipeline/runner.py` misst die Tell-Dichte (Marker aus `skills/humanizer-de/references/patterns.md` pro 100 Wörter) je Vorher/Nachher-Draft-Paar; `evals/auto-download/runner.py` prüft das Tier-Routing der 20 kuratierten Quellen gegen `resolve_pdf_url()` mit gestubbten Tier-Funktionen. Beide laufen ohne Netz und ohne API-Key, beide sind über `tests/evals/test_humanizer_pipeline_evals.py` bzw. `tests/evals/test_auto_download_routing.py` in jeden `pytest`-Lauf eingebunden. Gegen Placebo-Metriken sichern Negativkontrollen: Detection-Floor und Substanz-Quotient (Humanizer, verhindert „Reduktion durch Kürzen") sowie ein Leerlauf ohne Treffer, der `(None, None)` liefern muss (auto-download).
+
+### Changed
+
+- **Schema-Version 6 — CHECK auf `quotes.extraction_method` erweitert (#512):**
+  SQLite kann CHECK-Constraints nicht per `ALTER TABLE` ändern, deshalb hebt
+  `migrate.widen_extraction_method_check()` Bestands-DBs mit dem
+  dokumentierten Tabellen-Rebuild (`CREATE` → `INSERT … SELECT` → `DROP` →
+  `RENAME`, `PRAGMA foreign_key_check` vor dem Commit). Der Helfer liest die
+  neue Tabellendefinition aus der bestehenden `sqlite_master.sql` und kopiert
+  die Spalten über `PRAGMA table_info` — dadurch reihenfolgeunabhängig zu
+  `add_stance_column()` und ohne Datenverlust. Erste Migration ohne neue
+  Spalte: `db.init_schema()` verifiziert sie deshalb an der CHECK-SQL statt an
+  `PRAGMA table_info` und lässt den `user_version`-Stempel aus, wenn der
+  Rebuild nicht gegriffen hat.
 
 ### Fixed
 
