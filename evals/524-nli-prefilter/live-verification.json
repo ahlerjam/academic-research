@@ -1,0 +1,613 @@
+{
+  "run_at_utc": "2026-08-01T13:15:28Z",
+  "environment": {
+    "transformers_version": "4.46.3",
+    "torch_version": "2.13.0",
+    "note": "Transiente uv-Umgebung (transformers==4.46.3) statt Repo-Pin (transformers==5.14.1) -- HHEM-2.1-Open bricht unter 5.14.1 (AttributeError: HHEMv2ForSequenceClassification hat kein all_tied_weights_keys), siehe README Risiken.",
+    "device": "cpu"
+  },
+  "models": [
+    {
+      "model": "hhem-2.1-open",
+      "tp": 2,
+      "fp": 0,
+      "fn": 14,
+      "tn": 16,
+      "precision": 1.0,
+      "recall": 0.125,
+      "accuracy": 0.5625,
+      "avg_latency_s": 0.20208975246805494,
+      "details": [
+        {
+          "id": "np-01",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.09207025915384293,
+          "latency_s": 5.663393208000343,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-02",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.15318721532821655,
+          "latency_s": 0.02571420799358748,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-03",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.15277792513370514,
+          "latency_s": 0.027336792001733556,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-04",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.853939950466156,
+          "latency_s": 0.024519832979422063,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-05",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.04943030700087547,
+          "latency_s": 0.027125082997372374,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-06",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.4028194844722748,
+          "latency_s": 0.02706462499918416,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-07",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.22120937705039978,
+          "latency_s": 0.026930583000648767,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-08",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.4508301317691803,
+          "latency_s": 0.0243619579996448,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-09",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.5380954742431641,
+          "latency_s": 0.026925167010631412,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-10",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.08726680278778076,
+          "latency_s": 0.02686970800277777,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-11",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.40408679842948914,
+          "latency_s": 0.027032084006350487,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-12",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.40633031725883484,
+          "latency_s": 0.026787041017087176,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-13",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.06466938555240631,
+          "latency_s": 0.02687945798970759,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-14",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.4840277135372162,
+          "latency_s": 0.026922000019112602,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-15",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.2618342638015747,
+          "latency_s": 0.027392916003009304,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-16",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.2036880999803543,
+          "latency_s": 0.024534416996175423,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-17",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.13432981073856354,
+          "latency_s": 0.024345457990420982,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-18",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.09027755260467529,
+          "latency_s": 0.024432749982224777,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-19",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.020865516737103462,
+          "latency_s": 0.02427958298358135,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-20",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.10930869728326797,
+          "latency_s": 0.024292707996210083,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-21",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.029581241309642792,
+          "latency_s": 0.02751516699208878,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-22",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.08319275826215744,
+          "latency_s": 0.02687274999334477,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-23",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.026365283876657486,
+          "latency_s": 0.02681929199025035,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-24",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.0063555738888680935,
+          "latency_s": 0.027244791999692097,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-25",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.14903824031352997,
+          "latency_s": 0.024076875008177012,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-26",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.0900939553976059,
+          "latency_s": 0.026849040994420648,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-27",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.029169607907533646,
+          "latency_s": 0.026515583012951538,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-28",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.18814456462860107,
+          "latency_s": 0.023818916000891477,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-29",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.006461362354457378,
+          "latency_s": 0.026776750019052997,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-30",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.014662863686680794,
+          "latency_s": 0.024276957992697135,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-31",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.007335569243878126,
+          "latency_s": 0.02447316699544899,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-32",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.00882203970104456,
+          "latency_s": 0.02449320800951682,
+          "claim_lang": "de",
+          "context_lang": "en"
+        }
+      ]
+    },
+    {
+      "model": "mdeberta-xnli",
+      "tp": 13,
+      "fp": 0,
+      "fn": 3,
+      "tn": 16,
+      "precision": 1.0,
+      "recall": 0.8125,
+      "accuracy": 0.90625,
+      "avg_latency_s": 0.06302374862661964,
+      "details": [
+        {
+          "id": "np-01",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.7297409772872925,
+          "latency_s": 0.813215540983947,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-02",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9960644841194153,
+          "latency_s": 0.038310584001010284,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-03",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.006627698894590139,
+          "latency_s": 0.04123887501191348,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-04",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9965227842330933,
+          "latency_s": 0.041074708016822115,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-05",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9991508722305298,
+          "latency_s": 0.03831791601260193,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-06",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.03714196756482124,
+          "latency_s": 0.03873050000402145,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-07",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9984840750694275,
+          "latency_s": 0.03762770802131854,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-08",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9847315549850464,
+          "latency_s": 0.03806012499262579,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-09",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.99913090467453,
+          "latency_s": 0.0384384999924805,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-10",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9769944548606873,
+          "latency_s": 0.038124541024444625,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-11",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9836885929107666,
+          "latency_s": 0.04115545898093842,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-12",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.995449960231781,
+          "latency_s": 0.03862470798776485,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-13",
+          "expected": "faithful",
+          "actual": "verzerrend",
+          "raw_score": 0.004836521111428738,
+          "latency_s": 0.03818550001597032,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-14",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9927080273628235,
+          "latency_s": 0.03830108299735002,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-15",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9263501167297363,
+          "latency_s": 0.04138841599342413,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-16",
+          "expected": "faithful",
+          "actual": "faithful",
+          "raw_score": 0.9936095476150513,
+          "latency_s": 0.03833904198836535,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-17",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.00025198468938469887,
+          "latency_s": 0.03704958298476413,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-18",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.000805491756182164,
+          "latency_s": 0.03766425000503659,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-19",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.016482248902320862,
+          "latency_s": 0.037810125009855255,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-20",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.0005169424694031477,
+          "latency_s": 0.04085120800300501,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-21",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.002563327783718705,
+          "latency_s": 0.041038416005903855,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-22",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.006514556705951691,
+          "latency_s": 0.040819874993758276,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-23",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.00014875353372190148,
+          "latency_s": 0.04085779198794626,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-24",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.00029467494459822774,
+          "latency_s": 0.040775791014311835,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-25",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.00042920137639157474,
+          "latency_s": 0.037206417007837445,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-26",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.00010781576565932482,
+          "latency_s": 0.03739362501073629,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-27",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.008583588525652885,
+          "latency_s": 0.03752470901235938,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-28",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.00046066526556387544,
+          "latency_s": 0.037965083989547566,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-29",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.0027236081659793854,
+          "latency_s": 0.03815524998935871,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-30",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.0009308149456046522,
+          "latency_s": 0.037206333014182746,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-31",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.0024251285940408707,
+          "latency_s": 0.0380333749926649,
+          "claim_lang": "de",
+          "context_lang": "en"
+        },
+        {
+          "id": "np-32",
+          "expected": "verzerrend",
+          "actual": "verzerrend",
+          "raw_score": 0.0012008138000965118,
+          "latency_s": 0.03727491700556129,
+          "claim_lang": "de",
+          "context_lang": "en"
+        }
+      ]
+    }
+  ]
+}
