@@ -41,7 +41,11 @@ Claude-Code-Permissions.
 
 ### `/academic-research:search`
 
-**Syntax:** `/academic-research:search "<query>" [--mode quick|standard|deep|metadata] [--modules LIST] [--limit N] [--no-expand] [--no-browser]`
+**Syntax:** `/academic-research:search "<query>" [--mode quick|standard|deep|metadata] [--modules LIST] [--limit N] [--no-expand] [--no-browser] [--batch] [--interactive=off]`
+
+Das Approval-Gate nach Phase 1 (Query-Expansion + Treffer-Preview) läuft seit
+#537 standardmäßig; `--interactive=off` ist das Opt-out, `--batch` und
+nicht-interaktive Läufe bleiben gate-frei.
 
 | Mode | Module | Top-N | Beschreibung |
 |------|--------|-------|-------------|
