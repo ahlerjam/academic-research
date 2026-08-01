@@ -4,6 +4,7 @@ description: Use this skill when the user needs to extract or format citations. 
 license: MIT
 allowed-tools:
   - Read
+  - AskUserQuestion
 ---
 
 # Zitat-Extraktion
@@ -55,23 +56,20 @@ deren Regeln haben Vorrang vor den generischen Artikel-Regeln.
 
 ## Citations-API
 
-Liegen Quellen-PDFs im Session-Kontext, nutze den `documents`-Parameter der Claude-API statt Prompt-basierter Zitation. Vorteil: Zitate sind seitengenau, die API erzwingt die Quellenbindung.
+Liegen PDFs im Session-Kontext, nutze den `documents`-Parameter der Claude-API
+(seitengenau, erzwingt Quellenbindung) statt Prompt-basierter Zitation.
 
-**Wann verwenden:** mindestens 1 PDF im Session-Pfad und Zitierstil-Konversion
-aus echtem Quelltext (nicht aus Metadaten).
+**Wann:** ≥1 PDF + Zitat aus echtem Quelltext. **Wann nicht:** reiner
+Metadaten-Workflow → Prompt-basiert nach Variant-References.
 
-**Wann nicht:** reiner Metadaten-zu-Zitat-Workflow → Prompt-basierte
-Formatierung nach Variant-References.
-
-**Output-Integration:** Seitenangaben aus `citations[].start_page_number` / `end_page_number` → Details in `references/output-formats.md`.
+**Output:** `citations[].start_page_number`/`end_page_number` →
+`references/output-formats.md`.
 
 ## Kontext-Dateien
 
 - Lesen: `./academic_context.md` (Zitationsstil)
-- Vault-Queries: `vault.find_quotes(paper_id, query)` für Zitate,
-  `vault.get_quote(quote_id)` für Volldetails
-- `./literature_state.md` nur lesen (read-only Snapshot-Export aus dem Vault —
-  für manuellen Überblick; nicht schreiben)
+- Vault-Queries: `vault.find_quotes(paper_id, query)`, `vault.get_quote(quote_id)`
+- `./literature_state.md`: read-only Snapshot, nicht schreiben
 
 ## Core-Workflow
 
@@ -86,17 +84,15 @@ Kläre, was der User braucht:
 
 ### 2. Relevante Paper aus Vault laden
 
-Rufe `vault.search(query, k=5)` auf, um die relevantesten Paper-IDs zur
-Recherche-Query zu ermitteln. Für jeden paper_id:
+Rufe `vault.search(query, k=5)` auf für die relevantesten Paper-IDs. Für jeden paper_id:
 
-1. `vault.find_quotes(paper_id, query=research_query, k=10)` aufrufen →
-   liefert `[{quote_id, verbatim, pdf_page, section, ...}]`
-2. Für detaillierte Zitat-Metadaten: `vault.get_quote(quote_id)`
+1. `vault.find_quotes(paper_id, query=research_query, k=10)` →
+   `[{quote_id, verbatim, pdf_page, section, ...}]`
+2. Details: `vault.get_quote(quote_id)`
 
-Sind für ein Paper noch keine Vault-Zitate vorhanden (leere Liste), den
-`quote-extractor`-Agent spawnen, um Zitate aus dem PDF zu ziehen und via
-`vault.add_quote()` zu persistieren. PDFs werden via `vault.ensure_file(paper_id)`
-als `file_id` übergeben — kein direktes `pdf_path` im Context.
+Fehlen Vault-Zitate (leere Liste): `quote-extractor`-Agent spawnen, Zitate aus
+PDF ziehen und via `vault.add_quote()` persistieren. PDF via
+`vault.ensure_file(paper_id)` als `file_id` (kein direktes `pdf_path`).
 
 ### 3. Zitat-Extraktion
 
@@ -152,6 +148,15 @@ Wenn Zitate für ein bestimmtes Kapitel extrahiert werden:
 3. Unterabschnitte identifizieren, in denen noch stützende Evidenz fehlt
 4. Bei Lücken weitere Literatursuche anbieten
 
+**Gate:** Vorschlag 1.–4. gilt erst nach `AskUserQuestion`-Bestätigung als
+angenommen — vor Export/Weiterverwendung:
+
+- „Übernehmen" — Vorschlag weiterverwenden
+- „Ablehnen" — verworfen, kein Vault-Schreibzugriff, keine Weiterverwendung;
+  zurück zu Schritt 5 oder erneuter Vorschlag
+
+Ablehnung ist Default-Pfad, kein Fehler.
+
 ### 7. Literaturstatus
 
 Der Vault ist die Quelle der Wahrheit; `./literature_state.md` ist ein
@@ -189,4 +194,4 @@ Bibliography-Vollständigkeit) → `references/citation-examples.md`.
 - **Seitenzahlen angeben** — Wenn verfügbar, immer Seitenzahlen mitführen
 - **Zitationsstil respektieren** — Durchgehend den im akademischen Kontext konfigurierten Stil verwenden
 - **Mismatches flaggen** — Stimmt ein PDF-Inhalt nicht mit dem erwarteten Paper überein, das melden
-- **User bestätigt Zuordnungen** — Kapitel-Zitat-Zuordnungen vor dem Speichern freigeben lassen
+- **User bestätigt Zuordnungen** — Gate in Schritt 6 (`AskUserQuestion`)

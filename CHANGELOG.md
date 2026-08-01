@@ -25,6 +25,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Kapitel-Zitat-Zuordnung als echtes `AskUserQuestion`-Gate (#518):**
+  `skills/citation-extraction/SKILL.md` Schritt 6 „Kapitelzuordnung" hing
+  bisher nur an der Prosa-Regel „User bestätigt Zuordnungen" — kein
+  Mechanismus erzwang die Freigabe, bevor die Zuordnung weiterverwendet wurde
+  (Audit-Risiko R5). Neu gilt der Vorschlag erst nach einer strukturierten
+  `AskUserQuestion`-Bestätigung („Übernehmen" / „Ablehnen") als angenommen;
+  Ablehnung verwirft die Zuordnung ohne Vault-Schreibzugriff und ohne
+  Fehler-Framing (Default-Pfad, kein Abbruch). `AskUserQuestion` ist jetzt in
+  `allowed-tools` deklariert; der Prosa-Bullet unter „Wichtige Regeln"
+  verweist auf das Gate statt eigenständig zu stehen (analog zum
+  Präzedenzfall `material-passport`/#536/PR #567). Reine Doku-Änderung, kein
+  Vault-Schema-Change — die Kapitel-Zuordnung ist nirgends als eigenes
+  Vault-Feld persistiert.
+
 - **`quality-reviewer` eskaliert ab Iteration 2 statt durchzuwinken (#528):**
   Der Agent gab bei `iteration >= 2` unabhängig von offenen Findings ein
   PASS-with-warnings zurück (`agents/quality-reviewer.md` „Loop-Begrenzung" und
