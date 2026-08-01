@@ -8,7 +8,7 @@ description: >
   Holt Items und PDF-Attachments aus einer Zotero-Library via pyzotero.
   Dedupliziert via DOI/ISBN ("Prüfung / Deduplication" via normalisierten Identifikatoren).
   Lädt PDF-Attachments in temporäres Verzeichnis und setzt pdf_path im Vault;
-  Files-API-Cache optional. Read-only — kein Push zurück.
+  optionaler Upload-Cache nur mit eigenem ANTHROPIC_API_KEY. Read-only — kein Push zurück.
 license: MIT
 allowed-tools:
   - Bash
