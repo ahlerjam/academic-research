@@ -2,7 +2,7 @@
 name: book-handler
 description: 'Verwende diesen Skill wenn der User ein Buch / eine Monografie / einen Sammelband verarbeiten möchte. Trigger: "Buch", "Monografie", "Sammelband", "Bücher verarbeiten", "Sammelband prüfen / pruefen", "Kapitel von ...", ISBN-Pattern (\d{3}-\d{1,5}-\d{1,7}-\d{1,7}-\d), Springer-DOI (10.1007/978-). Löst ISBN/Titel/DOI via DNB + OpenLibrary + DOAB auf und legt CSL-JSON im Vault an. Unterstützt "Monografie / Sammelband" als gleichwertige Buchtypen.'
 license: MIT
-allowed-tools: [Read, Bash]
+allowed-tools: [Read, Bash, AskUserQuestion]
 ---
 
 # Buch-Handler
@@ -63,7 +63,7 @@ Ist der Sammelband selbst schon indexiert, hängen weitere Kapitel per
 page_last)` daran — erbt Herausgeber und `container_title` vom Eltern-Eintrag und
 gibt die Kapitel-`paper_id` für alle Folgeschritte zurück.
 
-### 2.5. page_offset berechnen
+### 2.5. page_offset berechnen und bestätigen
 
 Falls `pdf_path` gesetzt:
 
@@ -71,7 +71,15 @@ Falls `pdf_path` gesetzt:
 python scripts/page_offset.py {pdf_path}
 ```
 
-Ergebnis via `vault.set_page_offset({citekey}, {offset})` speichern.
+**Gate (Pflicht):** Ein falscher Offset verschiebt alle Seitenzahlen des Buchs.
+Lass den Wert daher per `AskUserQuestion` bestätigen, Optionen:
+
+- „Offset {offset} übernehmen — PDF-Seite {offset+1} = gedruckte Seite 1"
+- „Offset manuell setzen — Mapping stimmt nicht"
+
+Erst nach der ersten Option `vault.set_page_offset({citekey}, {offset})`
+aufrufen. Bei der zweiten Option den Offset vom User erfragen und diesen Wert
+speichern; der berechnete Offset wird nie ungefragt übernommen.
 
 ### 3. OA-Check
 
