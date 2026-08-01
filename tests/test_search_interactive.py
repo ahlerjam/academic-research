@@ -166,11 +166,17 @@ def test_search_md_has_interactive_flag():
 
 
 def test_search_md_interactive_off_documented():
-    """commands/search.md must mention --interactive=off default."""
+    """commands/search.md must document --interactive=off.
+
+    Bis #537 war `off` der Default und dieser Test hat genau das abgesichert.
+    Seit #537 laeuft das Gate per Default; `--interactive=off` ist das
+    dokumentierte Opt-out. Geprueft wird weiterhin, dass der gate-freie Weg
+    ueberhaupt auffindbar bleibt — nur nicht mehr als Default.
+    """
     search_md = REPO_ROOT / "commands" / "search.md"
     content = search_md.read_text(encoding="utf-8")
     assert "--interactive=off" in content or "interactive=off" in content.lower(), (
-        "commands/search.md must document --interactive=off as default"
+        "commands/search.md must document --interactive=off as the opt-out"
     )
 
 
