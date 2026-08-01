@@ -87,8 +87,8 @@ weiterhin ein gültiger, aber optionaler Weg — siehe
 gelesenen PDF-Text ziehen. Prüfen, ob ≥ 3 Wörter aus `paper.title`
 (jedes ≥ 4 Zeichen) dort auftauchen (case-insensitive). Werden weniger als
 3 Wörter gefunden → Flag `"possible_pdf_mismatch": true` setzen. Extraktion
-trotzdem fortführen — nicht abbrechen. Das Flag dient nur der manuellen
-Nachprüfung.
+trotzdem fortführen — nicht abbrechen; das Flag blockiert jedoch die Vault-Persistenz
+(siehe Abschnitt Vault-Persistenz / PDF-Mismatch-Gate).
 
 **Werte für `extraction_quality`:** `"high"` (sauberer Text, 2–3 gute Zitate gefunden) | `"medium"` (degradierter Text oder nur 1 Zitat) | `"low"` (nutzbar, aber schwache OCR/Formatierung) | `"failed"` (unbrauchbar — keine verwertbaren Inhalte, z. B. Scan ohne OCR oder leere Seiten)
 
@@ -105,13 +105,19 @@ Nachprüfung.
   },
   "research_query": "DevOps Governance",
   "max_quotes": 3,
-  "max_words_per_quote": 25
+  "max_words_per_quote": 25,
+  "mismatch_override": false
 }
 ```
 
 `paper_id` wird für `vault.get_paper(paper_id)` benötigt. `pdf_text` wird
 nicht im Input übergeben — das PDF wird vom Agent direkt über den von
 `vault.get_paper` gelieferten `pdf_path` via `Read`-Tool geladen.
+
+`mismatch_override` (optional, Default `false`): erlaubt Persistenz trotz
+`possible_pdf_mismatch: true`. Wird nur `true` gesetzt, wenn das
+PDF-Mismatch-Gate im aufrufenden `citation-extraction`-Skill bereits eine
+dokumentierte User-Freigabe eingeholt hat (Re-Invoke des Agents).
 
 ---
 
@@ -147,18 +153,31 @@ Modell-Antwort.
 
 ## Vault-Persistenz
 
-Nach der Extraktion **jeden** Quote via `vault.add_quote()` persistieren:
+**Persistenz-Bedingung (Issue #530, Audit R4):** `vault.add_quote()` NUR
+aufrufen, wenn `possible_pdf_mismatch == false` **oder**
+`mismatch_override == true` (aus dem Input-Objekt). Bei
+`possible_pdf_mismatch == true` und `mismatch_override == false` (Default)
+NICHT persistieren — das PDF-Mismatch-Gate im aufrufenden
+`citation-extraction`-Skill entscheidet über Fortfahren, Überspringen oder
+Prüfen, bevor ggf. mit `mismatch_override: true` erneut aufgerufen wird.
+
+Ist die Bedingung erfüllt, jeden Quote via `vault.add_quote()` persistieren:
 
 ```python
-quote_id = vault.add_quote(
-    paper_id=paper_id,  # aus dem Input-Objekt
-    verbatim=quote["text"],  # exakter Wortlaut, wie im PDF gelesen
-    extraction_method="local-verbatim",
-    pdf_page=quote["page"],  # Kandidat -- siehe Hinweis unten
-    section=quote["section"],
-    context_before=quote["context_before"],
-    context_after=quote["context_after"],
-)
+# result: Agent-Antwort mit possible_pdf_mismatch auf oberster Ebene
+# input: User-Input mit mismatch_override aus dem aufrufenden citation-extraction-Skill
+if not result.get("possible_pdf_mismatch") or input.get("mismatch_override", False):
+    quote_id = vault.add_quote(
+        paper_id=paper_id,  # aus dem Input-Objekt
+        verbatim=quote["text"],  # exakter Wortlaut, wie im PDF gelesen
+        extraction_method="local-verbatim",
+        pdf_page=quote["page"],  # Kandidat -- siehe Hinweis unten
+        section=quote["section"],
+        context_before=quote["context_before"],
+        context_after=quote["context_after"],
+    )
+else:
+    quote_id = None
 ```
 
 **Wichtig:**
@@ -174,8 +193,13 @@ quote_id = vault.add_quote(
   Fundort ab, wird es zugunsten der verifizierten Seite verworfen (nur
   geloggt, kein Fehler). Das übergebene `pdf_page` ist also ein Kandidat,
   keine Garantie.
-- Die zurückgegebene `quote_id` in das Output-JSON aufnehmen:
-  jedes Quote-Objekt erhält ein zusätzliches Feld `"vault_quote_id": "<uuid>"`.
+- Wird persistiert: die zurückgegebene `quote_id` in das Output-JSON
+  aufnehmen — jedes Quote-Objekt erhält ein zusätzliches Feld
+  `"vault_quote_id": "<uuid>"`.
+- Wird NICHT persistiert (Mismatch ohne Override): jedes Quote-Objekt erhält
+  `"vault_quote_id": null`, zusätzlich eine Warnung im `warnings[]`-Array
+  des Output-JSON (z. B. `"possible_pdf_mismatch: Persistenz ausgesetzt,
+  Gate im citation-extraction-Skill ausstehend"`).
 - Kein JSON-File schreiben — der Vault ist der einzige Persistenz-Pfad.
 
 **Output-Ergänzung (quote-Objekt):**
