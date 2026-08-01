@@ -178,7 +178,11 @@ class TestSkipOptionAndResultPresentation:
             "(transiente Fehler gehören nicht in excluded_sources)"
         )
         # Skip-Option muss explizit sessionlokal/nicht-persistent sein.
-        assert "sessionlokal" in follow_up or "kein persist" in follow_up.lower(), (
+        # Beide Haelften case-insensitiv pruefen: die Optionszeile beginnt mit
+        # "Sessionlokal", ein Vergleich gegen das kleingeschriebene Literal
+        # traf deshalb nie zu und liess die Bedingung an der zweiten Haelfte
+        # haengen.
+        assert "sessionlokal" in follow_up.lower() or "kein persist" in follow_up.lower(), (
             "'Paper überspringen'-Option muss explizit dokumentieren, dass es sessionlokal ist"
         )
 
