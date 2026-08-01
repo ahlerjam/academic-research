@@ -16,6 +16,7 @@ import os
 import re
 import socket
 import subprocess
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -24,6 +25,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 HOOK_PATH = REPO_ROOT / "hooks" / "verbatim-guard.mjs"
+
+# Wegwerf-Ziel fuer die Guard-Logs dieses Testmoduls (siehe run_hook).
+_GUARD_LOG_DIR = Path(tempfile.mkdtemp(prefix="vault-guard-test-logs-"))
 # Seit #402 ist die README nur noch Landing-Page; der Hook-Stack samt
 # Env-Variablen steht in docs/reference/hooks.md — dort prüfen die
 # Doku-Regressionstests (tests/test_readme_hook_stack_doc.py) mit.
@@ -165,6 +169,14 @@ def run_hook(payload: dict, env_overrides: dict | None = None) -> subprocess.Com
     for key in [k for k in env if k.startswith("ACADEMIC_CITATION_")]:
         del env[key]
     env["VAULT_DB_PATH"] = str(REPO_ROOT / "nonexistent_vault_for_tests.db")
+    # Guard-Logs in ein Wegwerf-Verzeichnis umleiten. Ohne das schreibt jeder
+    # der ~50 run_hook-Aufrufe in das ECHTE ~/.academic-research/ des
+    # Entwicklers bzw. des CI-Runners: ACADEMIC_CITATION_CASCADE unten ist ein
+    # gesetzter Env-Schalter, den verbatim-guard.mjs seit #519 protokolliert,
+    # und der SessionStart-Report meldete danach Schalter-Nutzungen, die nur
+    # aus dem Testlauf stammen.
+    env["VAULT_GUARD_ENV_SWITCH_LOG"] = str(_GUARD_LOG_DIR / "env-switch.log")
+    env["VAULT_GUARD_BYPASS_LOG"] = str(_GUARD_LOG_DIR / "bypass.log")
     # Default in Tests: keine echte Netz-Kaskade.
     env["ACADEMIC_CITATION_CASCADE"] = "off"
     if env_overrides:

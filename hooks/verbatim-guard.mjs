@@ -33,7 +33,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, appendFileSync, mkdirSync, chmodSync } from 'node:fs';
+import { existsSync, appendFileSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
@@ -324,17 +324,42 @@ function logBypassUsage(filePath) {
  */
 function logEnvSwitchUsage(name, value, filePath) {
   const ts = new Date().toISOString();
-  const line = `${ts} | ${name}=${value} | ${filePath || '(unbekannter Pfad)'}\n`;
+  const payload = `${name}=${value} | ${filePath || '(unbekannter Pfad)'}`;
+  const line = `${ts} | ${payload}\n`;
   try {
     const logDir = dirname(VAULT_GUARD_ENV_SWITCH_LOG);
     if (!existsSync(logDir)) {
       mkdirSync(logDir, { recursive: true, mode: 0o700 });
     }
+    // Dedup gegen die zuletzt geschriebene Zeile: Anders als der Bypass-Marker
+    // (#381) ist ein Env-Schalter eine DAUERHAFT gesetzte Konfiguration — ohne
+    // Dedup haengt jeder geschuetzte Write eine weitere identische Zeile an,
+    // und der SessionStart-Report meldet dutzende "neue Nutzungen", die nur
+    // eine einzige Einstellung beschreiben. Verglichen wird ohne Zeitstempel.
+    if (lastEnvSwitchPayload() === payload) return;
     appendFileSync(VAULT_GUARD_ENV_SWITCH_LOG, line, 'utf-8');
     chmodSync(VAULT_GUARD_ENV_SWITCH_LOG, 0o600);
   } catch (err) {
     // Best-effort — das Loggen selbst darf keinen neuen Blocker erzeugen.
     process.stderr.write(`[Vault-Guard] Env-Switch-Log-Fehler (ignoriert): ${err.message}\n`);
+  }
+}
+
+/**
+ * Nutzlast (alles ausser dem Zeitstempel) der letzten Zeile des
+ * Env-Switch-Logs, oder null wenn das Log fehlt/leer/unlesbar ist.
+ * Fail-open: Im Zweifel wird geschrieben statt verschluckt.
+ */
+function lastEnvSwitchPayload() {
+  try {
+    if (!existsSync(VAULT_GUARD_ENV_SWITCH_LOG)) return null;
+    const lines = readFileSync(VAULT_GUARD_ENV_SWITCH_LOG, 'utf-8').trimEnd().split('\n');
+    const last = lines[lines.length - 1];
+    if (!last) return null;
+    const parts = last.split(' | ');
+    return parts.length < 2 ? null : parts.slice(1).join(' | ');
+  } catch {
+    return null;
   }
 }
 
