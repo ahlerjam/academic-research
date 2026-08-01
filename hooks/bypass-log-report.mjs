@@ -152,10 +152,14 @@ function saveOffset(stateFile, offset) {
  * Parst eine Log-Zeile im Format
  * "<ISO-Timestamp> | <Mittelfeld> | <Dateipfad>" und gibt { middle, path }
  * zurueck (oder null bei unerwartetem Format — wird dann nicht im Report
- * gefuehrt, zaehlt aber weiter zum Gesamtzaehler). Das Mittelfeld ist beim
- * Bypass-Log der feste Text "vault-guard: skip", beim Env-Switch-Log
- * "<SCHALTER-NAME>=<Wert>" (defensiv slice-basiert statt striktem
- * Split-Count, siehe Plan-Risiko zu Trennzeichen-Kollisionen).
+ * gefuehrt, zaehlt aber weiter zum Gesamtzaehler).
+ *
+ * Das Mittelfeld ist nicht konstant: Im Bypass-Log schreibt neben
+ * `vault-guard: skip` (verbatim-guard.mjs) seit #522 auch
+ * `context-fidelity-guard: skip`; im Env-Switch-Log steht dort
+ * "<SCHALTER-NAME>=<Wert>" (#519). Der Dateipfad bleibt in allen Faellen das
+ * dritte Feld — deshalb defensiv slice-basiert statt striktem Split-Count
+ * (siehe Plan-Risiko zu Trennzeichen-Kollisionen).
  */
 function parseLine(line) {
   const parts = line.split(' | ');
@@ -163,6 +167,50 @@ function parseLine(line) {
   const middle = parts[1];
   const path = parts.slice(2).join(' | ').trim();
   return path ? { middle, path } : null;
+}
+
+/**
+ * Sekundengenauer Zeitstempel einer Log-Zeile, oder null bei unerwartetem
+ * Format. Millisekunden fallen bewusst weg — sie sind die einzige Differenz
+ * zwischen zwei Guards, die denselben Write protokollieren.
+ */
+function parseTimestampSecond(line) {
+  const stamp = line.split(' | ')[0]?.trim();
+  if (!stamp) return null;
+  const match = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.exec(stamp);
+  return match ? match[0] : null;
+}
+
+/**
+ * Faltet Zeilen zusammen, die DIESELBE Bypass-Nutzung beschreiben (#522).
+ *
+ * Seit #522 haengen zwei Guards am selben PreToolUse-Event und loggen beide,
+ * wenn der Bypass-Marker gesetzt ist. Ohne diese Faltung meldete der Report
+ * "2 neue Nutzung(en)" fuer einen einzigen Write. Kriterium ist Pfad +
+ * Zeitstempel auf die Sekunde genau: zwei Guards laufen im selben Write
+ * unmittelbar nacheinander, zwei echte Nutzungen derselben Datei liegen
+ * praktisch nie in derselben Sekunde.
+ *
+ * Zeilen ohne parsebaren Zeitstempel oder Pfad werden NICHT gefaltet — im
+ * Zweifel lieber eine Nutzung zu viel melden als eine zu verschweigen.
+ */
+function dedupeUsages(lines) {
+  const seen = new Set();
+  const kept = [];
+  for (const line of lines) {
+    const parsed = parseLine(line);
+    const path = parsed ? parsed.path : null;
+    const second = parseTimestampSecond(line);
+    if (path === null || second === null) {
+      kept.push(line);
+      continue;
+    }
+    const key = `${second} | ${path}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(line);
+  }
+  return kept;
 }
 
 /**
@@ -285,8 +333,13 @@ async function main() {
 
   const bypassOffset = loadOffset(BYPASS_STATE_FILE);
   const bypassResult = readNewLines(VAULT_GUARD_BYPASS_LOG, bypassOffset);
-  if (bypassResult.newLines.length > 0) {
-    printBypassReport(bypassResult.newLines);
+  // Faltung nur auf dem Bypass-Log (#522): dort haengen zwei Guards am selben
+  // PreToolUse-Event und protokollieren denselben Write doppelt. Das
+  // Env-Switch-Log (#519) kennt diesen Fall nicht — jede Zeile ist dort eine
+  // eigene Schalter-Nutzung und darf nicht zusammengefasst werden.
+  const bypassUsages = dedupeUsages(bypassResult.newLines);
+  if (bypassUsages.length > 0) {
+    printBypassReport(bypassUsages);
   }
   saveOffset(BYPASS_STATE_FILE, bypassResult.currentSize);
 

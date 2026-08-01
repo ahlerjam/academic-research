@@ -212,3 +212,63 @@ def test_corrupt_state_file_warns_on_stderr_and_stays_fail_open(tmp_path):
     assert result.stderr.strip() != "", "Erwartet eine stderr-Warnung bei korrupter State-Datei"
     # Verhaelt sich wie ohne State: die vorhandene Zeile gilt als neu.
     assert "kapitel/kap1.md" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Dedupe: mehrere Guards loggen denselben Write (Issue #522, Plan-Risiko 3)
+# ---------------------------------------------------------------------------
+
+
+def test_same_write_logged_by_two_guards_counts_once(tmp_path):
+    """verbatim-guard UND context-fidelity-guard loggen denselben Bypass.
+
+    Ohne Dedupe meldete der Report "2 neue Nutzung(en)" fuer einen einzigen
+    Write. Gleicher Pfad in derselben Sekunde = eine Nutzung.
+    """
+    log_path = tmp_path / "vault-guard-bypass.log"
+    state_path = tmp_path / "report-state.json"
+    write_bypass_log(
+        log_path,
+        [
+            "2026-08-01T09:00:00.100Z | vault-guard: skip | kapitel/kap1.md",
+            "2026-08-01T09:00:00.450Z | context-fidelity-guard: skip | kapitel/kap1.md",
+        ],
+    )
+
+    result = run_hook(
+        {
+            "VAULT_GUARD_BYPASS_LOG": str(log_path),
+            "VAULT_GUARD_BYPASS_REPORT_STATE": str(state_path),
+        }
+    )
+
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "1 neue Nutzung(en)" in result.stdout, (
+        f"Doppelzaehlung desselben Writes: {result.stdout!r}"
+    )
+    assert "kapitel/kap1.md" in result.stdout
+
+
+def test_same_file_in_different_seconds_counts_twice(tmp_path):
+    """Zwei echte Bypass-Nutzungen an derselben Datei bleiben zwei Nutzungen."""
+    log_path = tmp_path / "vault-guard-bypass.log"
+    state_path = tmp_path / "report-state.json"
+    write_bypass_log(
+        log_path,
+        [
+            "2026-08-01T09:00:00.100Z | vault-guard: skip | kapitel/kap1.md",
+            "2026-08-01T09:00:07.100Z | vault-guard: skip | kapitel/kap1.md",
+        ],
+    )
+
+    result = run_hook(
+        {
+            "VAULT_GUARD_BYPASS_LOG": str(log_path),
+            "VAULT_GUARD_BYPASS_REPORT_STATE": str(state_path),
+        }
+    )
+
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "2 neue Nutzung(en)" in result.stdout, (
+        f"Getrennte Nutzungen duerfen nicht zusammenfallen: {result.stdout!r}"
+    )

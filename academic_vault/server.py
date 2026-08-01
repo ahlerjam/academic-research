@@ -1,7 +1,8 @@
 """academic_vault MCP-Server.
 
 Stellt MCP-Tools vault.search/get_paper/add_paper/ensure_file/
-add_quote/find_quotes/get_quote/add_note/find_notes/search_notes/stats bereit.
+add_quote/verify_verbatim/find_quotes/get_quote/add_note/find_notes/
+search_notes/stats bereit.
 
 Start via: python -m academic_vault.server
 """
@@ -16,6 +17,7 @@ from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .embedding_model import get_embedder
 from .files_api import FilesAPIClient
+from .files_api import is_configured as _files_api_is_configured
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,372 @@ def _ensure_schema_for_read(db_path: str) -> None:
         VaultDB(db_path).init_schema()
 
 
+def _resolve_verbatim_pdf_path(caller: str, db_path: str, paper_id: str) -> str:
+    """Loest Paper -> lesbaren ``pdf_path`` auf, sonst fail-closed ``ValueError``.
+
+    Gemeinsamer Helfer fuer :func:`_verify_local_verbatim` (#512, Schreib-Gate
+    in ``add_quote``) und :func:`verify_verbatim_preview` (#513, reine
+    Read-only-Vorschau) -- beide brauchen dieselbe Paper-/pdf_path-Aufloesung.
+    ``caller`` (z. B. ``"vault.add_quote"``/``"vault.verify_verbatim"``)
+    landet in der Fehlermeldung, damit die Ursache im jeweiligen Tool-Kontext
+    erkennbar bleibt.
+
+    Raises:
+        ValueError: Paper unbekannt oder ``pdf_path`` fehlt/nicht lesbar. Das
+            sind Bedienfehler des Aufrufers, keine Zitat-Pruefergebnisse.
+    """
+    paper = get_paper(db_path, paper_id)
+    if paper is None:
+        raise ValueError(
+            f"{caller}: Paper '{paper_id}' nicht gefunden -- "
+            "eine lokale Verbatim-Pruefung braucht ein Paper mit hinterlegtem PDF."
+        )
+
+    pdf_path = (paper.get("pdf_path") or "").strip()
+    if not pdf_path:
+        raise ValueError(
+            f"{caller}: Paper '{paper_id}' hat keinen pdf_path -- "
+            "eine lokale Verbatim-Pruefung ist ohne lokales PDF nicht moeglich. "
+            "Entweder pdf_path nachtragen (vault.update_pdf_path) oder das "
+            "Zitat mit extraction_method='manual' und eigenem Beleg erfassen."
+        )
+    if not Path(pdf_path).is_file():
+        raise ValueError(
+            f"{caller}: hinterlegter pdf_path '{pdf_path}' von Paper "
+            f"'{paper_id}' existiert nicht -- eine lokale Verbatim-Pruefung "
+            "ist damit nicht moeglich. Pfad korrigieren (vault.update_pdf_path) "
+            "oder das Zitat mit extraction_method='manual' erfassen."
+        )
+    return pdf_path
+
+
+def verify_verbatim_preview(db_path: str, paper_id: str, candidate: str) -> dict:
+    """Prueft ``candidate`` read-only gegen den lokalen PDF-Volltext (#513).
+
+    Anders als :func:`_verify_local_verbatim` (das Schreib-Gate von
+    ``add_quote``) wirft diese Funktion bei den Pruefstatus ``no-match``/
+    ``no-textlayer`` KEINE Exception -- sie liefert IMMER ein Ergebnis-dict
+    zurueck, damit Agenten Kandidaten iterativ pruefen und korrigieren
+    koennen, bevor ``add_quote()`` endgueltig ablehnt. Die Paper-/
+    pdf_path-Aufloesung (unbekanntes Paper, fehlender/nicht lesbarer
+    ``pdf_path``) bleibt ``ValueError`` -- das sind Bedienfehler des
+    Aufrufers, keine Zitat-Pruefergebnisse.
+
+    Schreibt nichts in die Datenbank (reiner Lesepfad ueber ``get_paper``).
+
+    Returns:
+        dict mit ``status`` (``"exact"``/``"snapped"``/``"no-match"``/
+        ``"no-textlayer"``), ``verbatim`` (Quelltext bei Treffer, sonst
+        ``""``), ``pdf_page`` (``int`` oder ``None``) und ``ratio``
+        (``float`` 0.0-1.0).
+
+    Raises:
+        ValueError: Paper unbekannt oder ``pdf_path`` fehlt/nicht lesbar.
+    """
+    # Lazy import: `verbatim.verify_verbatim` zieht pypdf + rapidfuzz nach.
+    from .verbatim import verify_verbatim
+
+    pdf_path = _resolve_verbatim_pdf_path("vault.verify_verbatim", db_path, paper_id)
+    result = verify_verbatim(pdf_path, candidate)
+    return {
+        "status": result.status,
+        "verbatim": result.verbatim,
+        "pdf_page": result.pdf_page,
+        "ratio": result.ratio,
+    }
+
+
+def _verify_local_verbatim(
+    db_path: str,
+    paper_id: str,
+    verbatim: str,
+    pdf_page: int | None,
+) -> tuple[str, int]:
+    """Verifiziert einen Kandidaten fail-closed gegen das lokale PDF (#512).
+
+    Wird ausschliesslich aus :func:`add_quote` fuer
+    ``extraction_method='local-verbatim'`` aufgerufen -- VOR jedem
+    Schreibzugriff auf ``quotes``.
+
+    Returns:
+        ``(verbatim, pdf_page)`` aus der QUELLE: der an der Fundstelle
+        stehende Wortlaut und die verifizierte Seite.
+
+    Raises:
+        ValueError: Paper unbekannt, kein/kein lesbarer ``pdf_path``, oder
+            Pruefstatus ``no-match``/``no-textlayer``. In allen Faellen wurde
+            nichts gespeichert.
+    """
+    # Lazy import: `verbatim.verify_verbatim` zieht pypdf + rapidfuzz nach.
+    # Die Pfade 'manual' und 'citations-api' duerfen davon nichts merken.
+    from .verbatim import verify_verbatim
+
+    pdf_path = _resolve_verbatim_pdf_path("vault.add_quote", db_path, paper_id)
+
+    result = verify_verbatim(pdf_path, verbatim)
+    if result.status not in ("exact", "snapped") or result.pdf_page is None:
+        raise ValueError(
+            f"vault.add_quote: Verbatim-Pruefung fehlgeschlagen (status="
+            f"'{result.status}', beste Aehnlichkeit {result.ratio:.2f}) fuer Paper "
+            f"'{paper_id}' -- das Zitat wurde NICHT gespeichert. Der Wortlaut ist "
+            "im lokalen PDF nicht auffindbar (z. B. Halluzination, Seitenumbruch "
+            "mitten im Zitat oder fehlender Text-Layer). Wortlaut korrigieren oder "
+            "das Zitat mit extraction_method='manual' und eigenem Beleg erfassen."
+        )
+
+    if pdf_page is not None and pdf_page != result.pdf_page:
+        logger.warning(
+            "vault.add_quote: uebergebenes pdf_page=%s weicht von der verifizierten "
+            "Seite %s ab (Paper '%s') -- gespeichert wird die verifizierte Seite (#512).",
+            pdf_page,
+            result.pdf_page,
+            paper_id,
+        )
+
+    return result.verbatim, result.pdf_page
+
+
+def resolve_quote_context(db_path: str, quote_id: str, window: int = 600) -> bool:
+    """Ermittelt ECHTEN Quellkontext (+-``window`` Zeichen) aus ``paper_fulltext`` (#520).
+
+    Sucht die Fundstelle von ``quotes.verbatim`` im (mit
+    :func:`academic_vault.verbatim.normalize_text` normalisierten) Volltext
+    des zugehoerigen Papers -- erst exakter Substring-Treffer, sonst
+    Fuzzy-Fallback via ``rapidfuzz.fuzz.partial_ratio_alignment``. Der
+    Fuzzy-Fallback ist noetig, weil der Volltext-Extraktor
+    (:func:`academic_vault.fulltext.extract_fulltext`, Issue #373) vom
+    Seiten-Extraktor abweichen kann, den ``verify_verbatim`` fuer die
+    Verifikation selbst nutzt (:func:`academic_vault.chunking.extract_pages`,
+    Issue #511/#512) -- Ligaturen, Trennstriche, Whitespace. Bei
+    nachgewiesener Fundstelle werden ``context_before``/``context_after``
+    (je bis zu ``window`` Zeichen, an Textanfang/-ende entsprechend kuerzer)
+    persistiert und ``context_source='fulltext'`` gesetzt.
+
+    Geraten wird NIE: ohne ``paper_fulltext``-Eintrag oder ohne Fundstelle
+    (Fuzzy-Score unter :data:`academic_vault.verbatim.SNAP_RATIO_THRESHOLD`)
+    bleibt der Quote-Datensatz unveraendert -- No-Op, Rueckgabe ``False``.
+    Kommt der Wortlaut mehrfach im Volltext vor, gewinnt bei exaktem
+    Substring-Treffer deterministisch die ERSTE Fundstelle (``str.find``);
+    fuer den Fuzzy-Fallback bestimmt ``rapidfuzz`` den besten Treffer.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        quote_id: Referenz auf ``quotes.quote_id``.
+        window: Anzahl Zeichen vor/nach der Fundstelle (Default 600).
+
+    Returns:
+        ``True`` wenn Kontext persistiert wurde, sonst ``False`` (No-Op).
+
+    Raises:
+        ValueError: ``quote_id`` ist unbekannt.
+        VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+    """
+    # Lazy import: rapidfuzz wird nur gebraucht, wenn tatsaechlich Kontext
+    # aufgeloest wird (Muster wie _verify_local_verbatim/#512).
+    from rapidfuzz import fuzz
+
+    from .verbatim import SNAP_RATIO_THRESHOLD, normalize_text
+
+    db = VaultDB(db_path)
+    db.init_schema()
+    quote = db.get_quote(quote_id)
+    if quote is None:
+        raise ValueError(f"vault.resolve_quote_context: Quote '{quote_id}' nicht gefunden.")
+
+    fulltext = db.get_fulltext(quote["paper_id"])
+    if not fulltext:
+        return False
+
+    normalized_candidate = normalize_text(quote["verbatim"])
+    if not normalized_candidate:
+        return False
+    normalized_fulltext = normalize_text(fulltext)
+
+    match_start = normalized_fulltext.find(normalized_candidate)
+    if match_start != -1:
+        match_end = match_start + len(normalized_candidate)
+    else:
+        alignment = fuzz.partial_ratio_alignment(normalized_candidate, normalized_fulltext)
+        # alignment ist nur None, wenn ein score_cutoff uebergeben wird (hier
+        # nicht der Fall) -- der Guard ist reine mypy-Absicherung.
+        if alignment is None or alignment.score / 100.0 < SNAP_RATIO_THRESHOLD:
+            return False
+        match_start, match_end = alignment.dest_start, alignment.dest_end
+
+    context_before = normalized_fulltext[max(0, match_start - window) : match_start]
+    context_after = normalized_fulltext[match_end : match_end + window]
+
+    db.update_quote_context(
+        quote_id=quote_id,
+        context_before=context_before,
+        context_after=context_after,
+        context_source="fulltext",
+    )
+    return True
+
+
+def _maybe_resolve_quote_context(db_path: str, quote_id: str) -> bool:
+    """Best-effort-Wrapper um :func:`resolve_quote_context` (#520).
+
+    Fehler werden geloggt, nie geworfen -- das Zitat wurde bereits erfolgreich
+    committet (``VaultDB.add_quote`` hat seine eigene Transaktion laengst
+    abgeschlossen); ein Fehlschlag hier darf ``vault.add_quote`` nicht als
+    fehlgeschlagen erscheinen lassen und den bereits gespeicherten,
+    verifizierten Datensatz nicht unsichtbar machen.
+    """
+    try:
+        return resolve_quote_context(db_path, quote_id)
+    except Exception as exc:  # Kontext-Backfill ist optional -- nie fatal fuer add_quote
+        logger.warning(
+            "vault.add_quote: resolve_quote_context() fuer Quote '%s' fehlgeschlagen: %s (#520)",
+            quote_id,
+            exc,
+        )
+        return False
+
+
+def _quote_embedding_text(quote: dict) -> str:
+    """Baut den Embedding-Text: ``context_before + verbatim + context_after`` (#521).
+
+    Fallback auf nur ``verbatim``, wenn kein Kontext vorliegt (Quote hat
+    ``context_source IS NULL``, z. B. ``extraction_method='manual'`` oder
+    ``resolve_quote_context`` fand keine Fundstelle).
+    """
+    before = quote.get("context_before") or ""
+    after = quote.get("context_after") or ""
+    return before + quote["verbatim"] + after
+
+
+def embed_quote(db_path: str, quote_id: str, embedder: object | None = None) -> bool:
+    """Erzeugt und speichert das Embedding eines verifizierten Zitats (Issue #521).
+
+    Backend- UND Extension-Verfuegbarkeit werden VOR dem teuren
+    ``embed_documents()``-Aufruf geprueft (Plan-Risiko #521/4): ist die
+    vec0-Extension in diesem Prozess nicht ladbar, kann ohnehin nirgends
+    gespeichert werden -- kein unnoetiger Modell-Load. Embedding-Text ist
+    ``context_before + verbatim + context_after`` (:func:`_quote_embedding_text`).
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        quote_id: Referenz auf ``quotes.quote_id``.
+        embedder: Embedder-Instanz. ``None`` = ``get_embedder()``.
+
+    Returns:
+        ``True`` wenn ein Embedding geschrieben wurde, sonst ``False``
+        (Degradationspfad: fehlendes Backend oder fehlende Extension --
+        beide Faelle werden geloggt, nie stillschweigend uebersprungen).
+
+    Raises:
+        ValueError: ``quote_id`` ist unbekannt.
+        VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+
+    if not db.vec_extension_loadable():
+        logger.warning(
+            "vault.embed_quote: sqlite-vec-Extension nicht ladbar -- Quote '%s' "
+            "bleibt ohne Embedding (#521).",
+            quote_id,
+        )
+        return False
+
+    active_embedder = embedder if embedder is not None else get_embedder()
+    if active_embedder is None:
+        logger.warning(
+            "vault.embed_quote: kein Embedding-Backend verfuegbar -- Quote '%s' "
+            "bleibt ohne Embedding (#521).",
+            quote_id,
+        )
+        return False
+
+    quote = db.get_quote(quote_id)
+    if quote is None:
+        raise ValueError(f"vault.embed_quote: Quote '{quote_id}' nicht gefunden.")
+
+    text = _quote_embedding_text(quote)
+    vectors = active_embedder.embed_documents([text])  # type: ignore[attr-defined]
+    if not vectors:
+        return False
+
+    from .embedding_model import serialize_f32
+
+    return db.add_quote_embedding(quote_id, serialize_f32(vectors[0]))
+
+
+def _maybe_embed_quote(db_path: str, quote_id: str) -> bool:
+    """Best-effort-Wrapper um :func:`embed_quote` (#521).
+
+    Faengt unerwartete Fehler ab (Muster ``_maybe_resolve_quote_context``,
+    #520) -- das Zitat wurde bereits erfolgreich committet, ein Fehlschlag
+    hier darf ``vault.add_quote`` nicht als fehlgeschlagen erscheinen lassen.
+    Die erwarteten Degradationspfade (kein Backend/keine Extension) loggen
+    bereits in :func:`embed_quote` selbst und werfen nicht.
+    """
+    try:
+        return embed_quote(db_path, quote_id)
+    except Exception as exc:  # Embedding ist optional -- nie fatal fuer add_quote
+        logger.warning(
+            "vault.add_quote: embed_quote() fuer Quote '%s' fehlgeschlagen: %s (#521)",
+            quote_id,
+            exc,
+        )
+        return False
+
+
+def quote_context_similarity(
+    db_path: str,
+    quote_id: str,
+    text: str,
+    embedder: object | None = None,
+) -> float | None:
+    """Kosinus zwischen einem Kapitelfenster und dem gespeicherten Quote-Embedding (#522).
+
+    Kein MCP-Tool: die Funktion wird aus ``hooks/context-fidelity-guard.mjs``
+    per ``python -c``-Subprozess aufgerufen (Muster :func:`search_quote_text`)
+    und ist so mit injiziertem Embedder unit-testbar, ohne den Node-Hook zu
+    starten.
+
+    Das gespeicherte Embedding stammt aus ``embed_documents`` (Passage-Seite),
+    das Kapitelfenster wird mit ``embed_query`` vektorisiert -- e5 ist
+    asymmetrisch, beide Seiten brauchen ihr eigenes Praefix. Beide Vektoren
+    werden L2-normiert, der Kosinus ist dann das Skalarprodukt.
+
+    Das gespeicherte Embedding wird VOR dem Embedder geholt: fehlt es, gibt es
+    nichts zu vergleichen und kein Modell muss geladen werden (relevant im
+    PreToolUse-Pfad, wo ein Modell-Load das Hook-Timeout sprengen wuerde).
+
+    Returns:
+        Kosinus in ``[-1, 1]`` oder ``None``. ``None`` heisst ausschliesslich
+        "nicht bestimmbar" (kein gespeichertes Embedding, kein
+        Embedding-Backend, Dimensionen passen nicht) -- nie "unaehnlich".
+    """
+    from .embedding_model import l2_normalize
+
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    stored = db.get_quote_embedding(quote_id)
+    if not stored:
+        return None
+
+    active_embedder = embedder if embedder is not None else get_embedder()
+    if active_embedder is None:
+        logger.warning(
+            "vault.quote_context_similarity: kein Embedding-Backend verfuegbar -- "
+            "Quote '%s' bleibt ungeprueft (#522).",
+            quote_id,
+        )
+        return None
+
+    query_vector = active_embedder.embed_query(text)  # type: ignore[attr-defined]
+    if not query_vector or len(query_vector) != len(stored):
+        return None
+
+    left = l2_normalize(query_vector)
+    right = l2_normalize(stored)
+    return float(sum(a * b for a, b in zip(left, right, strict=True)))
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -156,8 +524,32 @@ def add_quote(
 ) -> str:
     """Fuegt Quote in Vault ein. Gibt quote_id zurueck.
 
-    Halluzinationsschutz: extraction_method='citations-api' erfordert
-    api_response_id. Bei Fehlen wird ValueError geworfen.
+    Halluzinationsschutz, je nach ``extraction_method`` (``VALID_EXTRACTION_METHODS``):
+
+    * ``'citations-api'`` erfordert ``api_response_id``; bei Fehlen ``ValueError``.
+    * ``'local-verbatim'`` (Issue #512) wird HIER fail-closed gegen den lokalen
+      PDF-Volltext des Papers verifiziert (:func:`academic_vault.verbatim.verify_verbatim`),
+      bevor irgendetwas geschrieben wird. Unbekanntes Paper, fehlender oder
+      nicht lesbarer ``pdf_path`` sowie die Pruefstatus ``no-match`` und
+      ``no-textlayer`` werfen ``ValueError`` -- der Vault bleibt unveraendert.
+      Bei ``exact``/``snapped`` wird der QUELLTEXT (nicht der uebergebene
+      Kandidat) samt der VERIFIZIERTEN Seite gespeichert; ein abweichend
+      uebergebenes ``pdf_page`` wird verworfen und per ``logger.warning``
+      sichtbar gemacht, weil die verifizierte Seite der Beweis ist.
+      Danach wird -- non-fatal, Issue #520 -- versucht, echten Quellkontext
+      aus ``paper_fulltext`` aufzuloesen (:func:`resolve_quote_context`) und
+      ``context_before``/``context_after``/``context_source`` zu befuellen.
+      Ohne Volltext oder ohne Fundstelle bleibt das No-Op; ein Fehler dabei
+      wird nur geloggt, das bereits gespeicherte Zitat bleibt unberuehrt.
+    * ``'manual'`` bleibt ungeprueft -- und damit der dokumentierte
+      Ausweichweg, wenn die lokale Verifikation an ihre Grenzen stoesst.
+
+    Grenzen der lokalen Verifikation (Issue #511, hier zur harten Blockade
+    verschaerft): seitenuebergreifende Zitate liefern ``no-match``, und die
+    Fuzzy-Suche fixiert die Fensterlaenge auf die Kandidatenlaenge -- bei
+    Wort-Auslassungen sind damit falsch-negative Ergebnisse moeglich. In
+    solchen Faellen ist ``extraction_method='manual'`` mit eigenem Beleg der
+    richtige Weg, nicht das Aufweichen dieser Pruefung.
 
     ``stance`` (optional, Issue #400) haelt die Haltung des Zitats zur
     zitierenden Aussage fest -- einer der Werte aus ``VALID_STANCES``
@@ -166,11 +558,22 @@ def add_quote(
     manuell gesetzt; die automatische Klassifikation per lokalem NLI-Modell
     (Konzept-Anleihe: scite Smart Citations / SemanticCite, jeweils nur als
     Idee uebernommen -- keine API-Anbindung) ist ein separates Folge-Issue.
+
+    Nach dem Insert wird -- non-fatal, Issue #521 -- fuer JEDE der drei
+    gueltigen ``extraction_method``-Werte (der CHECK-Constraint laesst nur
+    'citations-api'/'manual'/'local-verbatim' zu, alle drei gelten als
+    "bestandene Pruefung") versucht, ein Embedding zu erzeugen und in
+    ``quote_embeddings`` (vec0) zu schreiben (:func:`embed_quote`). Fehlendes
+    Embedding-Backend oder nicht ladbare sqlite-vec-Extension degradieren
+    sauber (geloggt, kein Absturz) -- der bereits gespeicherte, verifizierte
+    Quote-Datensatz bleibt davon unberuehrt.
     """
     if extraction_method == "citations-api" and not api_response_id:
         raise ValueError(
             "vault.add_quote: api_response_id required for extraction_method='citations-api'"
         )
+    if extraction_method == "local-verbatim":
+        verbatim, pdf_page = _verify_local_verbatim(db_path, paper_id, verbatim, pdf_page)
     quote_id = str(uuid4())
     db = VaultDB(db_path)
     db.init_schema()
@@ -187,6 +590,9 @@ def add_quote(
         context_after=context_after,
         stance=stance,
     )
+    if extraction_method == "local-verbatim":
+        _maybe_resolve_quote_context(db_path, quote_id)
+    _maybe_embed_quote(db_path, quote_id)
     return quote_id
 
 
@@ -202,6 +608,19 @@ def get_quote(db_path: str, quote_id: str) -> dict | None:
     db = VaultDB(db_path)
     _ensure_schema_for_read(db_path)
     return db.get_quote(quote_id)
+
+
+def set_quote_stance(db_path: str, quote_id: str, stance: str) -> None:
+    """Aktualisiert ``stance`` eines bestehenden Zitats (Issue #523).
+
+    Schreibpfad fuer nachtraegliche Audits (z.B. `quote-fidelity-auditor`):
+    `add_quote(stance=...)` deckt nur die Neuanlage ab. `stance` muss einer der
+    Werte aus ``VALID_STANCES`` sein; ``ValueError`` bei ungueltigem Wert oder
+    unbekannter ``quote_id``.
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    db.set_quote_stance(quote_id, stance)
 
 
 def search_papers(
@@ -787,18 +1206,44 @@ def list_papers_by_provenance(db_path: str, provenance: str) -> list[dict]:
     return db.list_papers_by_provenance(provenance)
 
 
-def ensure_file(db_path: str, paper_id: str, api_key: str = "") -> str:
-    """Delegiert an FilesAPIClient.ensure_file(). Gibt file_id zurueck."""
+def _anthropic_key(api_key: str = "") -> str:
+    """Loest den optionalen ANTHROPIC_API_KEY zur Aufrufzeit auf.
+
+    Reihenfolge: explizites Argument > Umgebung zur Aufrufzeit > der beim
+    Modulimport gelesene Wert. Die Aufrufzeit-Auswertung macht den optionalen
+    Pfad testbar und laesst spaeter gesetzte Keys wirken (#535).
+    """
+    return api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+def ensure_file(db_path: str, paper_id: str, api_key: str = "") -> str | None:
+    """Optionaler Files-API-Upload — gibt file_id zurueck oder None ohne Key.
+
+    Legacy-/Optional-Pfad (#535): ohne ANTHROPIC_API_KEY passiert nichts und
+    es wird ``None`` zurueckgegeben, damit Standard-Flows (Zotero-Import,
+    lokale Verbatim-Zitate) ohne Key fehlerfrei durchlaufen. Fehler in der
+    Aufrufer-Logik bleiben Fehler: unbekanntes Paper oder fehlender pdf_path
+    werfen weiterhin ValueError — und zwar VOR dem Key-Check, damit ein
+    fehlender Key echte Datenfehler nicht verdeckt.
+
+    Raises:
+        ValueError: Paper unbekannt oder ohne pdf_path.
+    """
     paper = get_paper(db_path, paper_id)
     if paper is None:
         raise ValueError(f"Paper '{paper_id}' nicht gefunden.")
     pdf_path = paper.get("pdf_path")
     if not pdf_path:
         raise ValueError(f"Paper '{paper_id}' hat keinen pdf_path.")
-    client = FilesAPIClient(
-        anthropic_api_key=api_key or _ANTHROPIC_KEY,
-        cache_db_path=db_path,
-    )
+    key = _anthropic_key(api_key)
+    if not _files_api_is_configured(key):
+        logger.info(
+            "Files-API uebersprungen fuer '%s': kein ANTHROPIC_API_KEY gesetzt "
+            "(optionaler Pfad, #535).",
+            paper_id,
+        )
+        return None
+    client = FilesAPIClient(anthropic_api_key=key, cache_db_path=db_path)
     return client.ensure_file(pdf_path)
 
 
@@ -1378,9 +1823,14 @@ def _build_mcp_server():
         )
 
     @mcp.tool(name="vault.ensure_file")
-    def _vault_ensure_file(paper_id: str) -> str:
-        """Gibt gecachte file_id zurueck oder laedt PDF hoch."""
-        return ensure_file(db_path, paper_id, api_key=_ANTHROPIC_KEY)
+    def _vault_ensure_file(paper_id: str) -> str | None:
+        """Optional (#535): gibt gecachte file_id zurueck oder laedt PDF hoch.
+
+        Ohne eigenen ANTHROPIC_API_KEY gibt das Tool None zurueck statt zu
+        scheitern — der Standardweg fuer Zitate ist
+        vault.add_quote(extraction_method="local-verbatim").
+        """
+        return ensure_file(db_path, paper_id)
 
     @mcp.tool(name="vault.add_quote")
     def _vault_add_quote(
@@ -1395,7 +1845,15 @@ def _build_mcp_server():
         context_after: str | None = None,
         stance: str | None = None,
     ) -> str:
-        """Fuegt Quote ein. extraction_method='citations-api' erfordert api_response_id.
+        """Fuegt Quote ein. extraction_method: 'citations-api' | 'manual' | 'local-verbatim'.
+
+        'citations-api' erfordert api_response_id. 'local-verbatim' (#512) wird
+        fail-closed gegen den lokalen PDF-Volltext des Papers geprueft: ist der
+        Wortlaut dort nicht auffindbar (oder fehlt ein lesbarer pdf_path), wirft
+        der Aufruf ValueError und es wird NICHTS gespeichert; bei Erfolg landen
+        der Wortlaut AUS DER QUELLE und die VERIFIZIERTE Seite im Vault (ein
+        abweichend uebergebenes pdf_page wird verworfen). 'manual' bleibt
+        ungeprueft und ist der Ausweichweg fuer seitenuebergreifende Zitate.
 
         stance (optional): 'supports' | 'contrasts' | 'mentions' | None (#400).
         """
@@ -1413,6 +1871,21 @@ def _build_mcp_server():
             stance=stance,
         )
 
+    @mcp.tool(name="vault.verify_verbatim")
+    def _vault_verify_verbatim(paper_id: str, candidate: str) -> dict:
+        """Prueft einen Zitat-Kandidaten read-only gegen das lokale PDF (#513).
+
+        Liefert IMMER ein Ergebnis-dict zurueck --
+        {status, verbatim, pdf_page, ratio} mit status aus 'exact'/'snapped'/
+        'no-match'/'no-textlayer' -- auch bei no-match/no-textlayer, ohne
+        ValueError. Schreibt nichts in die DB. Fuer den Schreibpfad siehe
+        vault.add_quote(extraction_method='local-verbatim'), das denselben
+        Pruefpfad fail-closed durchsetzt. Paper unbekannt oder kein/kein
+        lesbarer pdf_path wirft weiterhin ValueError (Bedienfehler, kein
+        Pruefergebnis).
+        """
+        return verify_verbatim_preview(db_path, paper_id, candidate)
+
     @mcp.tool(name="vault.search_quote_text")
     def _vault_search_quote_text(verbatim: str, k: int = 5) -> list[dict]:
         """LIKE-Suche in quotes.verbatim. Prueft ob ein Zitat im Vault existiert."""
@@ -1427,6 +1900,17 @@ def _build_mcp_server():
     def _vault_get_quote(quote_id: str) -> dict | None:
         """Gibt vollstaendigen Quote-Record zurueck."""
         return get_quote(db_path, quote_id)
+
+    @mcp.tool(name="vault.set_quote_stance")
+    def _vault_set_quote_stance(quote_id: str, stance: str) -> None:
+        """Aktualisiert stance eines bestehenden Zitats (Issue #523).
+
+        stance: 'supports' | 'contrasts' | 'mentions' -- Pflichtfeld, kein
+        None. Nachtraeglicher Audit-Schreibpfad fuer den
+        quote-fidelity-auditor-Agenten; wirft ValueError bei ungueltigem
+        stance-Wert oder unbekannter quote_id.
+        """
+        set_quote_stance(db_path=db_path, quote_id=quote_id, stance=stance)
 
     @mcp.tool(name="vault.add_note")
     def _vault_add_note(

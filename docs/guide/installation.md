@@ -11,7 +11,7 @@ Detail, was das Setup genau tut, und wie eine Migration von v5 abläuft.
 |-----------|-------|--------------|
 | **Claude Code** | CLI zum Ausführen | [Installations-Anleitung](https://code.claude.com/docs/en/quickstart) |
 | **Python 3.11+** | Vault-MCP-Server, Suchskripte | `brew install python@3.11` (macOS) |
-| **Node.js** | Alle Hooks sind `.mjs` und werden in `hooks/hooks.json` als `node …` gestartet — ohne Node greifen `verbatim-guard` und `claim-drift-guard` nicht | `brew install node` (macOS); CI testet gegen Node 20 |
+| **Node.js** | Alle Hooks sind `.mjs` und werden in `hooks/hooks.json` als `node …` gestartet — ohne Node greifen `verbatim-guard`, `claim-drift-guard` und `context-fidelity-guard` nicht | `brew install node` (macOS); CI testet gegen Node 20 |
 | **Git** | Plugin-Marketplace-Install | auf macOS/Linux meist vorinstalliert |
 | **`uv` oder `pipx`** *(optional)* | Automatische `browser-use`-Installation | `brew install pipx` oder `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 

@@ -29,5 +29,19 @@ Agent(
 
 - **Bei PASS:** Output an User liefern.
 - **Bei REVISE:** Empfehlungen anwenden, erneut generieren, iteration += 1.
-- **Bei iteration >= 2:** PASS-with-warnings akzeptieren und die verbleibenden
-  Warnungen dem User transparent machen.
+- **Bei ESCALATE** (der Agent liefert es bei `iteration >= 2` **und**
+  mindestens einem Kriterium mit FAIL, `BLOCKIERT_VON: iteration-limit`):
+  nicht automatisch akzeptieren. Die verbleibenden Probleme aus `BEGRÜNDUNG`
+  und `EMPFEHLUNGEN` auflisten und via `AskUserQuestion` genau drei Optionen
+  anbieten:
+  1. **Entwurf akzeptieren** — Output mit dokumentierten Restproblemen liefern.
+  2. **Weitere Revision** — Empfehlungen anwenden und erneut generieren;
+     das gewährt **genau eine zusätzliche Runde**. Bleiben danach Findings
+     offen, liefert der Agent erneut ESCALATE und dieses Gate läuft erneut —
+     nie ein stiller Auto-PASS und nie eine Endlos-Schleife.
+  3. **Abbrechen** — Entwurf verwerfen, kein Output; offener Punkt in
+     `./writing_state.md` vermerken.
+
+  Steht kein `AskUserQuestion`-Kanal zur Verfügung (headless), gilt ESCALATE
+  als Abbruch: kein Output als fertig ausweisen, sondern die Restprobleme
+  melden.
