@@ -152,11 +152,11 @@ Rahmen, Methodik, Analyse/Ergebnisse, Fazit):
 `${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/chapter-types.md`. Beim Kapitelplanung-Schritt
 das passende Profil anwenden.
 
-## Zitat-Einbindung via Citations-API
+## Zitat-Einbindung
 
-Quellen-PDFs im `documents`-Parameter übergeben, damit die API die
-Quellenbindung erzwingt; jedes Paraphrase-Segment via `citations[]`
-nachweisbar. Vollständiger Workflow und Fallback (kein PDF im Vault):
+Standard: `vault.add_quote(..., extraction_method="local-verbatim")` —
+Wortlaut wird lokal gegen die PDF geprüft. Optional (eigener
+`ANTHROPIC_API_KEY`, Beta-Fallback): Citations-API, siehe
 `${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/citations-api.md`.
 
 ## Humanizer-Audit-Pass (nur Hochschul-Kontext)

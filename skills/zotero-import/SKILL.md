@@ -7,7 +7,7 @@ description: >
   "Bibliothek synchronisieren", "Zotero sync".
   Holt Items und PDF-Attachments aus einer Zotero-Library via pyzotero.
   Dedupliziert via DOI/ISBN ("Prüfung / Deduplication" via normalisierten Identifikatoren).
-  Lädt PDFs in die Files-API hoch und cached file_ids. Read-only — kein Push zurück.
+  Speichert PDFs lokal via `add_paper(pdf_path=...)`. Read-only — kein Push zurück.
 license: MIT
 allowed-tools:
   - Bash
