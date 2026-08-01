@@ -14,14 +14,16 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `PreCompact` | `pre-compact.mjs` | Snapshot-Backup vor Claude-Compaction |
 | `UserPromptSubmit` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
 | `SessionStart` (kein Matcher) | *(Inline-Bash)* | Prüft, ob `~/.academic-research/venv` existiert und die Kernpakete importierbar sind |
+| `SessionStart` (kein Matcher) | `bypass-log-report.mjs` | Meldet neue Nutzungen des `vault-guard`-Bypass-Markers seit der letzten Session |
 | `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
 
-Das sind **5 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
-`post-tool-use-decisions.mjs`, `pre-compact.mjs`, `mid-session-reinforcement.mjs`) plus
-**2 Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
-Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
-`PreToolUse` ruft zwei Skripte nacheinander auf.
+Das sind **6 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
+`post-tool-use-decisions.mjs`, `pre-compact.mjs`, `mid-session-reinforcement.mjs`,
+`bypass-log-report.mjs`) plus **2 Inline-Bash-Kommandos**;
+`mid-session-reinforcement.mjs` hängt an zwei Event-Konfigurationen
+(`UserPromptSubmit` und `SessionStart`/`compact`), und `PreToolUse` ruft zwei
+Skripte nacheinander auf.
 
 > **Nicht verdrahtet:** `hooks/lib/vault-bridge.mjs` ist **kein** Hook, sondern ein
 > gemeinsames Modul, das die beiden Vault-Hooks importieren (DB-Pfad-Auflösung und
@@ -337,6 +339,33 @@ Eigenschaften der Auto-Einträge:
   es bei einer Meldung auf stderr; der Hook beendet sich immer mit Exit 0 und legt nie
   selbst eine DB an. Schreib- und Lesepfad lösen den DB-Pfad über dasselbe Modul
   `hooks/lib/vault-bridge.mjs` auf, damit sie nicht erneut auseinanderlaufen können.
+
+### Bypass-Report: sichtbare Bypass-Nutzung (`bypass-log-report.mjs`, #517)
+
+Der Bypass-Marker `<!-- vault-guard: skip -->` schaltet `verbatim-guard.mjs` für
+eine Datei ab — legitim für Ausnahmefälle, aber jede Nutzung landet seit #381 in
+`~/.academic-research/vault-guard-bypass.log` (Env-Override
+`VAULT_GUARD_BYPASS_LOG`). Bis #517 las nichts dieses Log; Umgehungen blieben
+dauerhaft unsichtbar. `bypass-log-report.mjs` schließt die Lücke als rein
+**lesender** SessionStart-Hook (kein Matcher, läuft also bei jedem Start):
+
+- Liest das Bypass-Log ab einem persistierten Byte-Offset und meldet neue
+  Zeilen seit dem letzten SessionStart mit Zähler und den betroffenen Dateien
+  (dedupliziert, gedeckelt auf 5) auf stdout.
+- Der Offset liegt in `~/.academic-research/vault-guard-bypass-report-state.json`
+  (Env-Override `VAULT_GUARD_BYPASS_REPORT_STATE`, 0600/0700 wie
+  `reinforcement-state.json`) — Merkposten „zuletzt gemeldet“, keine Kopie des
+  Logs.
+- **Kein Rauschen ohne neue Einträge:** Wurde der Bypass seit dem letzten
+  Report nicht erneut genutzt, gibt der Hook nichts aus.
+- **Fail-open in jede Richtung** (blockiert den SessionStart nie): fehlt das
+  Log (Normalfall ohne je genutzten Bypass), gibt es keinen Report und kein
+  stderr-Rauschen; ist die Logdatei kürzer als der gespeicherte Offset
+  (externe Rotation/Löschung), wird der Offset auf 0 zurückgesetzt statt eine
+  Exception zu werfen; eine korrupte State-Datei führt zu einer
+  stderr-Warnung und behandelt den Lauf wie ohne State.
+- Ändert nichts an der Schreibseite: Blockieren des Bypass bleibt weiterhin
+  möglich und unverändert Aufgabe von `verbatim-guard.mjs`.
 
 ## Privacy/Logs
 
