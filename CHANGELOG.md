@@ -132,6 +132,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   gemeldet" liegt in `~/.academic-research/vault-guard-bypass-report-state.json`
   (0600/0700). Fail-open bei jedem Lese-/Rotationsfehler — der SessionStart
   wird nie blockiert. Die Schreibseite (`verbatim-guard.mjs`) ist unverändert.
+- **`quote-extractor` ohne Citations-API (#514):** Der Agent verlangte im
+  Abschnitt „Quellen-Bindung" bislang die Citations-API mit
+  Files-API/`file_id` (`vault.ensure_file`) als einzigen Verifikationspfad —
+  identisch zum bei `figure-verifier` (#533) bereits abgelösten Muster, das
+  einen separaten `ANTHROPIC_API_KEY` voraussetzte und den Agenten ohne
+  diesen Key funktionslos machte. Analog zu `figure-verifier`/`risk-of-bias`
+  liest `quote-extractor` das PDF jetzt lokal: `vault.get_paper(paper_id)` →
+  `pdf_path` → `Read`, optional vorab per `vault.verify_verbatim` geprüft.
+  Persistiert wird über `vault.add_quote(extraction_method="local-verbatim")`
+  (#512), das serverseitig fail-closed gegen den PDF-Volltext verifiziert und
+  bei Erfolg Wortlaut+Seite AUS DER QUELLE zurückschreibt — kein
+  Anthropic-API-Call mehr im Standardpfad, kein separater, abgerechneter
+  Console-Key nötig. `tools:`-Frontmatter ersetzt `vault_ensure_file` durch
+  `vault_get_paper` (Pflicht) und `vault_verify_verbatim` (optional);
+  `maxTurns` von 5 auf 8 angehoben (PDF-Read + optionale Vorabchecks +
+  mehrere `add_quote`-Aufrufe, analog `figure-verifier`). Der bisherige
+  Citations-API-Block bleibt als kurzer Opt-in-Hinweis erhalten (z. B. für
+  HTML-/Markdown-Quellen ohne PDF-Volltext) — das `citations[]`-Array pro
+  Zitat entfällt damit ersatzlos aus dem Standard-Output; das seitengenaue
+  Nachschlagen dafür ist Scope von `skills/citation-extraction` (eigenes
+  Issue). Qualitätsregeln unverändert: ≤ 25 Wörter/Zitat, max. 3/Paper,
+  Titel-Plausibilitätscheck (`possible_pdf_mismatch`, jetzt gegen den
+  `Read`-Output statt die Citations-API-Response geprüft), „lieber 0 Zitate
+  als schlechte Zitate".
 - **`figure-verifier` ohne Citations-API (#533):** Der Agent verlangte in
   Schritt 2 der Vorgehensweise bislang die Citations-API mit
   `document`-Parameter (`file_id`) als einzigen Verifikationspfad — identisch
