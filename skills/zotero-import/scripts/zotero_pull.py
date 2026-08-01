@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sqlite3
 import stat
@@ -28,6 +29,8 @@ from pathlib import Path
 from uuid import uuid4
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 # pyzotero: optionale Dep — fruehzeitiger Import fuer testbaren Mock-Punkt
 try:
@@ -63,6 +66,11 @@ class ImportResult:
     # Volltexte, die aus Zoteros eigenem `fulltext_item()`-Endpunkt kamen statt
     # aus lokaler PDF-Extraktion (Issue #525) — spart Download+Re-Extraktion.
     fulltext_from_zotero: int = 0
+    # Faelle, in denen Zotero-Volltext nicht verfuegbar war (nicht indiziert,
+    # leer, oder sonstiger Fehler bei `fulltext_item()`) und sauber auf den
+    # lokalen PDF-Parse-Pfad zurueckgefallen wurde (Issue #525 AC2 — dieser
+    # Fallback muss geloggt und gezaehlt werden, nicht still bleiben).
+    fulltext_fallback_local: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -425,6 +433,18 @@ def run_import(
                         if zotero_text:
                             VaultDB(db_path).set_fulltext(paper_id, zotero_text, extractor="zotero")
                             result.fulltext_from_zotero += 1
+                        else:
+                            # Kein Fehler (Issue #525 AC2): nicht indiziert, leer
+                            # oder anderer Fehler bei fulltext_item() -- sauberer
+                            # Fallback auf den lokalen PDF-Parse-Pfad weiter unten.
+                            # Muss sichtbar bleiben statt still zu verschwinden.
+                            result.fulltext_fallback_local += 1
+                            logger.info(
+                                "Zotero-Volltext fuer Attachment %s nicht verfuegbar "
+                                "(nicht indiziert/leer/Fehler) -- Fallback auf lokalen "
+                                "PDF-Parse.",
+                                att_key,
+                            )
 
                         local_path = _download_attachment(zot, item_key, att_key, tmp_dir)
                         if local_path:
@@ -538,6 +558,11 @@ def main() -> None:
         print(
             f"Volltext von Zotero uebernommen (ohne lokalen PDF-Parse): "
             f"{result.fulltext_from_zotero}"
+        )
+    if result.fulltext_fallback_local:
+        print(
+            f"Zotero-Volltext nicht verfuegbar, Fallback auf lokalen PDF-Parse: "
+            f"{result.fulltext_fallback_local}"
         )
     if result.quotes_imported:
         print(f"Annotationen als Quotes importiert: {result.quotes_imported}")

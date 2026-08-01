@@ -5,6 +5,7 @@ Alle pyzotero-Calls werden vollstaendig gemockt — keine echten API-Calls.
 """
 
 import json
+import logging
 import os
 import sqlite3
 import sys
@@ -1134,6 +1135,7 @@ class TestZoteroFulltext:
 
         assert result.errors == []
         assert result.fulltext_from_zotero == 0
+        assert result.fulltext_fallback_local == 1
         row = _paper_fulltext_row(db_path, "zotero-ZFTEXT2")
         assert row is not None
         text, extractor = row
@@ -1165,9 +1167,47 @@ class TestZoteroFulltext:
 
         assert result.errors == []
         assert result.fulltext_from_zotero == 0
+        assert result.fulltext_fallback_local == 1
         row = _paper_fulltext_row(db_path, "zotero-ZFTEXT3")
         assert row is not None
         assert row[1] == "pypdf"
+
+    def test_fallback_is_logged_when_zotero_fulltext_unavailable(self, tmp_path, caplog):
+        """Nicht verfuegbarer Zotero-Volltext faellt sauber zurueck UND wird geloggt (Issue #525 AC2).
+
+        'Sauber' (kein result.errors-Eintrag) war bereits erfuellt; dieser Test
+        verlangt zusaetzlich einen tatsaechlichen Log-Eintrag (nicht nur den
+        Zaehler) fuer den Fallback-Fall -- vorher gab es weder logging-Import
+        noch print/Log-Ausgabe dafuer.
+        """
+        from pyzotero.errors import ResourceNotFoundError
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment("ZFTEXT5", "10.9999/zft.005")
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.return_value = attachment_children
+            zot_mock.fulltext_item.side_effect = ResourceNotFoundError("nicht indiziert")
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                    with caplog.at_level(logging.INFO, logger="zotero_pull"):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.errors == []
+        assert result.fulltext_fallback_local == 1
+        fallback_records = [
+            rec for rec in caplog.records if rec.name == "zotero_pull" and att_key in rec.message
+        ]
+        assert fallback_records, (
+            "Fallback auf lokalen PDF-Parse muss geloggt werden (Issue #525 AC2) -- "
+            f"gefundene Log-Records: {[(r.name, r.message) for r in caplog.records]}"
+        )
 
     def test_read_only_guarantee_no_mutating_zotero_calls(self, tmp_path):
         """Nur lesende pyzotero-Methoden werden aufgerufen -- kein Push nach Zotero."""
