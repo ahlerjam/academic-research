@@ -5,6 +5,7 @@ Alle pyzotero-Calls werden vollstaendig gemockt — keine echten API-Calls.
 """
 
 import json
+import logging
 import os
 import sqlite3
 import sys
@@ -1055,3 +1056,194 @@ class TestAnnotationCommentIsNotVerbatim:
         assert result.comments_skipped == 1, (
             "Nur-Kommentar-Annotationen werden still verworfen — ImportResult muss sie zaehlen"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Zotero-Volltext-Uebernahme statt lokaler PDF-Extraktion (Issue #525)
+# ---------------------------------------------------------------------------
+
+NONCE_PDF = FIXTURES / "fulltext" / "nonce_paper.pdf"
+
+
+def _paper_fulltext_row(db_path: str, paper_id: str) -> tuple[str, str] | None:
+    """Liest ``(text, extractor)`` aus ``paper_fulltext`` oder ``None``."""
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT text, extractor FROM paper_fulltext WHERE paper_id = ?", (paper_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return (row[0], row[1]) if row else None
+
+
+class TestZoteroFulltext:
+    def test_available_zotero_fulltext_skips_local_pdf_parse(self, tmp_path):
+        """`fulltext_item()` liefert Content -> ohne lokalen PDF-Parse uebernommen.
+
+        Der Download-Mock schlaegt bewusst fehl: der Sparerfekt gilt
+        unabhaengig vom Download-Erfolg des PDFs (separater API-Call).
+        """
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment("ZFTEXT1", "10.9999/zft.001")
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.return_value = attachment_children
+            zot_mock.fulltext_item.return_value = {
+                "content": "Von Zotero indizierter Volltext.",
+                "indexedPages": 3,
+                "totalPages": 3,
+            }
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=None):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        zot_mock.fulltext_item.assert_called_once_with(att_key)
+        assert result.fulltext_from_zotero == 1
+        row = _paper_fulltext_row(db_path, "zotero-ZFTEXT1")
+        assert row is not None
+        text, extractor = row
+        assert extractor == "zotero"
+        assert text == "Von Zotero indizierter Volltext."
+
+    def test_zotero_fulltext_not_indexed_falls_back_to_local_pdf(self, tmp_path):
+        """404 (`ResourceNotFoundError`) -> sauberer Fallback auf lokalen pypdf-Pfad."""
+        from pyzotero.errors import ResourceNotFoundError
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment("ZFTEXT2", "10.9999/zft.002")
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.return_value = attachment_children
+            zot_mock.fulltext_item.side_effect = ResourceNotFoundError("nicht indiziert")
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.errors == []
+        assert result.fulltext_from_zotero == 0
+        assert result.fulltext_fallback_local == 1
+        row = _paper_fulltext_row(db_path, "zotero-ZFTEXT2")
+        assert row is not None
+        text, extractor = row
+        assert extractor == "pypdf"
+        assert "zqxwvfulltextnonce373" in text
+
+    def test_zotero_fulltext_empty_content_falls_back_to_local_pdf(self, tmp_path):
+        """Leerer Content zaehlt wie 'nicht verfuegbar' -- kein falsches 'true'."""
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment("ZFTEXT3", "10.9999/zft.003")
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.return_value = attachment_children
+            zot_mock.fulltext_item.return_value = {
+                "content": "",
+                "indexedPages": 0,
+                "totalPages": 0,
+            }
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.errors == []
+        assert result.fulltext_from_zotero == 0
+        assert result.fulltext_fallback_local == 1
+        row = _paper_fulltext_row(db_path, "zotero-ZFTEXT3")
+        assert row is not None
+        assert row[1] == "pypdf"
+
+    def test_fallback_is_logged_when_zotero_fulltext_unavailable(self, tmp_path, caplog):
+        """Nicht verfuegbarer Zotero-Volltext faellt sauber zurueck UND wird geloggt (Issue #525 AC2).
+
+        'Sauber' (kein result.errors-Eintrag) war bereits erfuellt; dieser Test
+        verlangt zusaetzlich einen tatsaechlichen Log-Eintrag (nicht nur den
+        Zaehler) fuer den Fallback-Fall -- vorher gab es weder logging-Import
+        noch print/Log-Ausgabe dafuer.
+        """
+        from pyzotero.errors import ResourceNotFoundError
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, att_key = _item_with_pdf_attachment("ZFTEXT5", "10.9999/zft.005")
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.return_value = attachment_children
+            zot_mock.fulltext_item.side_effect = ResourceNotFoundError("nicht indiziert")
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                    with caplog.at_level(logging.INFO, logger="zotero_pull"):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+        assert result.errors == []
+        assert result.fulltext_fallback_local == 1
+        fallback_records = [
+            rec for rec in caplog.records if rec.name == "zotero_pull" and att_key in rec.message
+        ]
+        assert fallback_records, (
+            "Fallback auf lokalen PDF-Parse muss geloggt werden (Issue #525 AC2) -- "
+            f"gefundene Log-Records: {[(r.name, r.message) for r in caplog.records]}"
+        )
+
+    def test_read_only_guarantee_no_mutating_zotero_calls(self, tmp_path):
+        """Nur lesende pyzotero-Methoden werden aufgerufen -- kein Push nach Zotero."""
+        from zotero_pull import run_import
+
+        cfg_path = _minimal_config(tmp_path)
+        db_path = str(tmp_path / "vault.db")
+
+        item, attachment_children, _att_key = _item_with_pdf_attachment(
+            "ZFTEXT4", "10.9999/zft.004"
+        )
+
+        with patch("zotero_pull.zotero") as mock_zotero_module:
+            zot_mock = _make_zotero_mock(item)
+            zot_mock.children.return_value = attachment_children
+            zot_mock.fulltext_item.return_value = {
+                "content": "Text.",
+                "indexedPages": 1,
+                "totalPages": 1,
+            }
+            mock_zotero_module.Zotero.return_value = zot_mock
+
+            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                    run_import(config_path=str(cfg_path), db_path=db_path)
+
+        called_method_names = {call[0] for call in zot_mock.method_calls}
+        mutating_methods = {
+            "update_item",
+            "update_items",
+            "create_items",
+            "upload_attachments",
+            "attachment_simple",
+            "delete_item",
+            "delete_items",
+            "set_fulltext",
+        }
+        assert called_method_names.isdisjoint(mutating_methods)
+        assert "fulltext_item" in called_method_names
