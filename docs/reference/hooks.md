@@ -433,12 +433,21 @@ Drei Env-Schalter schwächen `verbatim-guard.mjs` gezielt ab, ohne ihn
 abzuschalten: `ACADEMIC_CITATION_AMBIGUOUS=mark` (mehrdeutige Klammerform wird
 markiert statt blockiert), `ACADEMIC_CITATION_CASCADE=off` (externe Kaskade
 deaktiviert) und `ACADEMIC_CITATION_MAX_PER_WRITE` (Prüfkontingent pro Write).
-Legitime Konfiguration — aber ihre Nutzung blieb bislang unbemerkt. Bei jedem
+Legitime Konfiguration — aber ihre Nutzung blieb bislang unbemerkt. Bei einem
 Guard-Lauf auf einer geschützten Datei protokolliert `verbatim-guard.mjs` jetzt
-für **jeden gesetzten** (nicht-leeren) der drei Schalter genau eine Zeile nach
+für **jeden gesetzten** (nicht-leeren) der drei Schalter je eine Zeile nach
 `~/.academic-research/vault-guard-env-switch.log` (Env-Override
 `VAULT_GUARD_ENV_SWITCH_LOG`, 0600/0700, fail-open — identisches Muster wie das
-Bypass-Log aus #381). „Gesetzt" bedeutet: der Schalter steht in der Umgebung,
+Bypass-Log aus #381).
+
+**Dedupliziert über die Schalter-Kombination:** Anders als der Bypass-Marker
+ist ein Env-Schalter eine dauerhaft gesetzte Konfiguration. Geschrieben wird
+deshalb nur, wenn sich die Kombination aus gesetzten Schaltern, Werten und
+Zieldatei vom zuletzt protokollierten Block unterscheidet — sonst hinge an
+jedem geschützten Write derselbe Block erneut, und der SessionStart-Report
+meldete dutzende „neue Nutzungen" für eine einzige Einstellung. Verglichen
+wird der ganze Block, nicht die einzelne Zeile: Bei mehreren gesetzten
+Schaltern stammt die jeweils letzte Zeile von einem anderen Schalter. „Gesetzt" bedeutet: der Schalter steht in der Umgebung,
 unabhängig davon, ob er im konkreten Content-Check überhaupt greift — sichtbar
 gemacht wird die Nutzung, nicht ihre Wirkung.
 

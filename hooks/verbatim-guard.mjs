@@ -322,22 +322,16 @@ function logBypassUsage(filePath) {
  * Best-effort: Schreibfehler duerfen den Guard nie blockierend machen
  * (analog logBypassUsage, Issue #381).
  */
-function logEnvSwitchUsage(name, value, filePath) {
+function writeEnvSwitchLines(payloads) {
+  if (payloads.length === 0) return;
   const ts = new Date().toISOString();
-  const payload = `${name}=${value} | ${filePath || '(unbekannter Pfad)'}`;
-  const line = `${ts} | ${payload}\n`;
+  const block = payloads.map((p) => `${ts} | ${p}\n`).join('');
   try {
     const logDir = dirname(VAULT_GUARD_ENV_SWITCH_LOG);
     if (!existsSync(logDir)) {
       mkdirSync(logDir, { recursive: true, mode: 0o700 });
     }
-    // Dedup gegen die zuletzt geschriebene Zeile: Anders als der Bypass-Marker
-    // (#381) ist ein Env-Schalter eine DAUERHAFT gesetzte Konfiguration — ohne
-    // Dedup haengt jeder geschuetzte Write eine weitere identische Zeile an,
-    // und der SessionStart-Report meldet dutzende "neue Nutzungen", die nur
-    // eine einzige Einstellung beschreiben. Verglichen wird ohne Zeitstempel.
-    if (lastEnvSwitchPayload() === payload) return;
-    appendFileSync(VAULT_GUARD_ENV_SWITCH_LOG, line, 'utf-8');
+    appendFileSync(VAULT_GUARD_ENV_SWITCH_LOG, block, 'utf-8');
     chmodSync(VAULT_GUARD_ENV_SWITCH_LOG, 0o600);
   } catch (err) {
     // Best-effort — das Loggen selbst darf keinen neuen Blocker erzeugen.
@@ -346,20 +340,23 @@ function logEnvSwitchUsage(name, value, filePath) {
 }
 
 /**
- * Nutzlast (alles ausser dem Zeitstempel) der letzten Zeile des
- * Env-Switch-Logs, oder null wenn das Log fehlt/leer/unlesbar ist.
- * Fail-open: Im Zweifel wird geschrieben statt verschluckt.
+ * Nutzlasten (alles ausser dem Zeitstempel) der letzten ``count`` Zeilen des
+ * Env-Switch-Logs. Leeres Array, wenn das Log fehlt/leer/unlesbar ist —
+ * fail-open: im Zweifel wird geschrieben statt verschluckt.
  */
-function lastEnvSwitchPayload() {
+function lastEnvSwitchPayloads(count) {
   try {
-    if (!existsSync(VAULT_GUARD_ENV_SWITCH_LOG)) return null;
+    if (count <= 0 || !existsSync(VAULT_GUARD_ENV_SWITCH_LOG)) return [];
     const lines = readFileSync(VAULT_GUARD_ENV_SWITCH_LOG, 'utf-8').trimEnd().split('\n');
-    const last = lines[lines.length - 1];
-    if (!last) return null;
-    const parts = last.split(' | ');
-    return parts.length < 2 ? null : parts.slice(1).join(' | ');
+    return lines
+      .slice(-count)
+      .map((l) => {
+        const parts = l.split(' | ');
+        return parts.length < 2 ? null : parts.slice(1).join(' | ');
+      })
+      .filter((p) => p !== null);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -370,12 +367,29 @@ function lastEnvSwitchPayload() {
  * Wert, auch ein explizit auf Default gesetzter Schalter zaehlt (AC1).
  */
 function logActiveEnvSwitches(filePath, env = process.env) {
+  const target = filePath || '(unbekannter Pfad)';
+  const payloads = [];
   for (const name of ENV_SWITCH_NAMES) {
     const value = env[name];
     if (value !== undefined && value !== '') {
-      logEnvSwitchUsage(name, value, filePath);
+      payloads.push(`${name}=${value} | ${target}`);
     }
   }
+  // Dedup ueber die GESAMTE Schalter-Kombination, nicht je Zeile: Anders als
+  // der Bypass-Marker (#381) ist ein Env-Schalter eine dauerhaft gesetzte
+  // Konfiguration — ohne Dedup haengt jeder geschuetzte Write denselben Block
+  // erneut an, und der SessionStart-Report meldet dutzende "neue Nutzungen"
+  // fuer eine einzige Einstellung. Der Vergleich muss den ganzen Block
+  // umfassen: bei zwei oder drei gesetzten Schaltern ist die jeweils letzte
+  // Zeile die eines ANDEREN Schalters, ein Zeilenvergleich traefe also nie zu.
+  const previous = lastEnvSwitchPayloads(payloads.length);
+  if (
+    previous.length === payloads.length &&
+    previous.every((p, i) => p === payloads[i])
+  ) {
+    return;
+  }
+  writeEnvSwitchLines(payloads);
 }
 
 // ---------------------------------------------------------------------------
