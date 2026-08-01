@@ -23,6 +23,7 @@ from academic_vault.db import VaultDB
 _WORKTREE_ROOT = Path(__file__).parent.parent
 
 _SCRIPT = _WORKTREE_ROOT / "skills" / "material-passport" / "scripts" / "build_passport.py"
+_SKILL_MD = _WORKTREE_ROOT / "skills" / "material-passport" / "SKILL.md"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -445,6 +446,96 @@ class TestLockedVaultRefusesWrites:
             )
         finally:
             os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# Issue #536: Repro-Lock nur nach echtem AskUserQuestion-Gate (Audit R9)
+# ---------------------------------------------------------------------------
+
+
+class TestReproLockAskUserQuestionGate:
+    """SKILL.md bindet `--lock` an ein echtes AskUserQuestion-Gate (kein Prosa-Hinweis)."""
+
+    def _step1_text(self, content: str) -> str:
+        step1_idx = content.find("### Schritt 1")
+        step2_idx = content.find("### Schritt 2")
+        assert step1_idx != -1, "Schritt 1 nicht gefunden"
+        assert step2_idx != -1, "Schritt 2 nicht gefunden"
+        return content[step1_idx:step2_idx]
+
+    def test_allowed_tools_declares_ask_user_question(self):
+        """AC1-Voraussetzung: Skill darf AskUserQuestion ueberhaupt aufrufen."""
+        content = _SKILL_MD.read_text(encoding="utf-8")
+        frontmatter = content.split("---")[1]
+        for line in frontmatter.splitlines():
+            if line.strip().startswith("allowed-tools:"):
+                # Liste kann auf derselben Zeile oder als Folgezeilen stehen.
+                break
+        assert "AskUserQuestion" in frontmatter, (
+            "SKILL.md nutzt AskUserQuestion fuer das Repro-Lock-Gate, "
+            "muss es aber auch in allowed-tools deklarieren"
+        )
+
+    def test_ask_user_question_gate_precedes_lock_flag_call(self):
+        """AC1: --lock wird nie ohne vorheriges, textuell vorangestelltes Gate erreicht."""
+        content = _SKILL_MD.read_text(encoding="utf-8")
+        step1_text = self._step1_text(content)
+        assert "AskUserQuestion" in step1_text, (
+            "Schritt 1 muss ein AskUserQuestion-Gate beschreiben, nicht nur Prosa "
+            "('immer nachfragen')"
+        )
+
+        step2_idx = content.find("### Schritt 2")
+        lock_call_idx = content.find("--lock", step2_idx)
+        ask_idx = content.find("AskUserQuestion")
+        assert lock_call_idx != -1, "Schritt 2 muss den --lock-Aufruf enthalten"
+        assert ask_idx < lock_call_idx, (
+            "Das AskUserQuestion-Gate muss textuell VOR dem --lock-Aufruf stehen"
+        )
+
+    def test_gate_option_names_irreversibility_in_option_label(self):
+        """AC2: 'irreversibel' steht in der Optionszeile selbst, nicht nur im Fliesstext."""
+        content = _SKILL_MD.read_text(encoding="utf-8")
+        step1_text = self._step1_text(content)
+        option_lines = [
+            line
+            for line in step1_text.splitlines()
+            if line.strip().startswith("-") and "irreversibel" in line.lower() and "--lock" in line
+        ]
+        assert option_lines, (
+            "Schritt 1 muss eine AskUserQuestion-Optionszeile enthalten, die "
+            "sowohl 'irreversibel' als auch '--lock' im Optionstext selbst nennt "
+            "(nicht nur im umgebenden Fliesstext)"
+        )
+
+    def test_abort_path_maps_to_export_without_lock_not_to_error(self):
+        """AC3: Abbruch/'Nein' fuehrt zu Schritt 2 'Ohne Repro-Lock', nicht zum Fehler."""
+        content = _SKILL_MD.read_text(encoding="utf-8")
+        step1_text = self._step1_text(content)
+        assert "ohne Repro-Lock" in step1_text or "Ohne Repro-Lock" in step1_text, (
+            "Schritt 1 muss den Abbruch-/Ablehnungs-Pfad explizit auf "
+            "'Ohne Repro-Lock' (Schritt 2) verweisen"
+        )
+        assert "FEHLER" not in step1_text, (
+            "Der Abbruch-/Ablehnungs-Pfad des Gates darf keine Fehler-Formulierung "
+            "verwenden — Abbruch ist der normale, fehlerfreie Default-Pfad"
+        )
+        assert "wird abgebrochen" not in step1_text.lower(), (
+            "Der Abbruch-/Ablehnungs-Pfad des Gates darf den Skill nicht als "
+            "abgebrochen darstellen — er fuehrt zum normalen Export ohne Lock"
+        )
+
+    def test_achtung_hinweis_references_gate_instead_of_standalone_prose(self):
+        """Konsolidierung: Zeile 92-94 verweist auf das Gate statt eigener Prosa."""
+        content = _SKILL_MD.read_text(encoding="utf-8")
+        achtung_idx = content.find("**Achtung:**")
+        assert achtung_idx != -1, "Achtung-Hinweis vor dem --lock-Codeblock fehlt"
+        achtung_block = content[achtung_idx : achtung_idx + 500]
+        assert "Schritt 1" in achtung_block or "Gate" in achtung_block, (
+            "Der Achtung-Hinweis muss auf das AskUserQuestion-Gate aus Schritt 1 "
+            "verweisen statt eine unabhaengige 'explizit bestaetigen lassen'-"
+            "Formulierung zu wiederholen"
+        )
 
 
 # ---------------------------------------------------------------------------
