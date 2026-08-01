@@ -84,8 +84,8 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/zotero-import/scripts/zotero_pull.py \
 2. Alle Items aus Zotero holen (paginiert via `zot.everything()`)
 3. Für jedes Item: DOI/ISBN-Dedup gegen Vault
 4. Neue Items: `vault.add_paper()` + ggf. PDF-Attachment herunterladen
-5. PDFs: Zotero-Text bevorzugt, sonst lokal; Upload optional mit eigenem API-Key
-6. Annotationen → Quotes (`references/annotations.md`)
+5. PDFs: Zotero-Text bevorzugt, sonst lokal; Upload optional
+6. Annotationen → verifiziert → Quotes (`references/annotations.md`)
 7. Ergebnis: N importiert, M übersprungen, Quotes, Fehler
 
 ## Sicherheitshinweise

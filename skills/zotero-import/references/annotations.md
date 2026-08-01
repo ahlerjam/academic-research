@@ -27,6 +27,39 @@ Annotation übersprungen. Trägt sie einen Kommentar, zählt
 `ImportResult.comments_skipped` sie mit und die CLI weist sie aus — der Import
 verschluckt also nichts stillschweigend.
 
+## Verifikation gegen den PDF-Volltext (Issue #529)
+
+`annotationText` ist der von Zotero aus dem PDF übernommene Ausschnitt —
+aber Zotero garantiert nicht, dass dieser Text noch wortgleich im
+Volltext steht (z. B. nach nachträglicher Bearbeitung der Annotation in
+Zotero). Vor dem Speichern als `quotes.verbatim` wird der Kandidat deshalb
+über `academic_vault.verbatim.verify_verbatim_with_pages()` (Issue #511;
+Seiten-Cache statt Neu-Parsen je Annotation) gegen den
+lokal heruntergeladenen PDF-Volltext geprüft:
+
+| `verify_verbatim_with_pages`-Status | Verhalten |
+| --- | --- |
+| `exact` / `snapped` | Der von `verify_verbatim_with_pages` gelieferte, normalisierte QUELLTEXT wird gespeichert — **nicht** der rohe `annotationText`-Kandidat. |
+| `no-match` | Kein Treffer im Volltext: **keine** Quote, `ImportResult.unverified_quotes` zählt mit, `unverified_details` listet den Fall. |
+| `no-textlayer` | PDF ohne Textlayer (z. B. reiner Scan): gleiches Verhalten wie `no-match`. |
+| Kein PDF geladen (`local_path is None`) | Ohne PDF ist keine Verifikation möglich — gleiches Verhalten wie `no-match`. |
+| `verify_verbatim_with_pages` wirft eine Exception (z. B. defektes PDF) | Wird try/except-isoliert abgefangen — der Fall zählt als unverifiziert, der restliche Item-Import bricht nicht ab. |
+
+Das schließt den in diesem Dokument selbst benannten Audit-Gap: Ohne diese
+Prüfung landete jeder Zotero-Highlight ungeprüft als `verbatim` im Vault und
+legitimierte damit jedes Zitat über die LIKE-Suche des `verbatim-guard`
+(`search_quote_text()` liest `quotes.verbatim`, nicht `extraction_method`).
+Der `verify_verbatim`-Aufruf selbst prüft nur den WORTLAUT, nicht den
+Kontext der Fundstelle (Kontexttreue-Prüfung ist Issue #509, explizit
+out-of-scope hier).
+
+**Bekannte Grenze:** Der Dedup-Schlüssel `(verbatim, printed_page)` basiert
+für `exact`/`snapped` jetzt auf dem verifizierten (normalisierten)
+Quelltext statt auf dem rohen `annotationText`. Ein Re-Import gegen eine
+VOR dieser Änderung befüllte Vault-DB dedupliziert eine bereits vorhandene
+Markierung ggf. nicht mehr (unterschiedlicher String) — keine Migration in
+diesem Issue.
+
 ### Warum kein Fallback auf `annotationComment`
 
 `quotes.verbatim` trägt im Vault genau eine Zusage: *dieser Wortlaut steht so

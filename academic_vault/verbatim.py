@@ -206,22 +206,21 @@ def _best_fuzzy_window(candidate: str, page_text: str) -> tuple[int, float]:
     return best_start, best_ratio
 
 
-def verify_verbatim(pdf_path: str, candidate: str) -> VerbatimResult:
-    """Prueft ``candidate`` deterministisch gegen den Volltext von ``pdf_path``.
+def verify_verbatim_with_pages(pages: list[tuple[int, str]], candidate: str) -> VerbatimResult:
+    """Prueft ``candidate`` gegen vorab extrahierte Seitentexte.
 
-    Siehe Modul-Docstring fuer den vollstaendigen Ablauf. Wirft KEINE
-    Exception fuer "Kandidat nicht gefunden" -- das ist der Normalfall
-    ``no-match``/``no-textlayer``, kein Fehlerzustand.
+    Siehe Modul-Docstring fuer den vollstaendigen Ablauf. Diese Variante
+    erlaubt es, die PDF-Extraktion einmal pro PDF durchzufuehren und dann
+    mehrere Kandidaten zu verifiziieren, ohne die Seiten erneut zu parsen.
 
     Args:
-        pdf_path: Pfad zur PDF-Datei (an :func:`academic_vault.chunking.extract_pages`
-            weitergereicht).
+        pages: Liste aus ``(page_number: int, text: str)`` Tuples, z. B. von
+            :func:`academic_vault.chunking.extract_pages`.
         candidate: Der zu verifizierende Zitat-Kandidat.
 
     Returns:
         :class:`VerbatimResult`.
     """
-    pages = extract_pages(pdf_path)
     if not _has_text_layer(pages):
         return VerbatimResult(
             status="no-textlayer", verbatim="", pdf_page=None, char_start=None, ratio=0.0
@@ -269,3 +268,22 @@ def verify_verbatim(pdf_path: str, candidate: str) -> VerbatimResult:
     return VerbatimResult(
         status="no-match", verbatim="", pdf_page=None, char_start=None, ratio=best_ratio
     )
+
+
+def verify_verbatim(pdf_path: str, candidate: str) -> VerbatimResult:
+    """Prueft ``candidate`` deterministisch gegen den Volltext von ``pdf_path``.
+
+    Siehe Modul-Docstring fuer den vollstaendigen Ablauf. Wirft KEINE
+    Exception fuer "Kandidat nicht gefunden" -- das ist der Normalfall
+    ``no-match``/``no-textlayer``, kein Fehlerzustand.
+
+    Args:
+        pdf_path: Pfad zur PDF-Datei (an :func:`academic_vault.chunking.extract_pages`
+            weitergereicht).
+        candidate: Der zu verifizierende Zitat-Kandidat.
+
+    Returns:
+        :class:`VerbatimResult`.
+    """
+    pages = extract_pages(pdf_path)
+    return verify_verbatim_with_pages(pages, candidate)

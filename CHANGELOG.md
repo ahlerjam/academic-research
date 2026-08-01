@@ -204,6 +204,21 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Zotero-Highlights werden beim Import gegen den PDF-Volltext verifiziert
+  (#529, Audit-Risiko R1):** `skills/zotero-import/scripts/zotero_pull.py`
+  ruft beim Annotations-Import künftig `academic_vault.verbatim.verify_verbatim_with_pages()`
+  (#511) gegen das lokal heruntergeladene PDF auf, statt `annotationText`
+  ungeprüft als `quotes.verbatim` zu speichern. Belegbare Highlights
+  (`exact`/`snapped`) werden mit dem gesnappten Quelltext gespeichert; nicht
+  belegbare (`no-match`, `no-textlayer`, fehlendes PDF, Verifikationsfehler)
+  landen **nicht** in `quotes`, sondern werden über die neuen
+  `ImportResult`-Felder `unverified_quotes`/`unverified_details` gezählt und
+  von der CLI ausgewiesen — kein stilles Verwerfen. **Bewusste
+  Verhaltensänderung:** Annotationen ohne heruntergeladenes PDF wurden bisher
+  trotzdem als Quote gespeichert; ohne PDF ist keine Verifikation möglich,
+  sie zählen jetzt als unverifiziert statt gespeichert zu werden. Details:
+  `skills/zotero-import/references/annotations.md` (Abschnitt „Verifikation
+  gegen den PDF-Volltext").
 - **Fail-closed `extraction_method="local-verbatim"` (#512):** `vault.add_quote`
   akzeptiert einen dritten Herkunftsnachweis und verifiziert ihn SELBST gegen
   den lokalen PDF-Volltext des Papers (`academic_vault/verbatim.py` aus #511) —
