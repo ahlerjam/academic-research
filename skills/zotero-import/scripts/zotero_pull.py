@@ -39,6 +39,7 @@ except ImportError:  # pragma: no cover
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 from academic_vault.server import add_paper, add_quote, ensure_file  # noqa: E402
+from academic_vault.verbatim import verify_verbatim  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Datenklassen
@@ -60,6 +61,14 @@ class ImportResult:
     # fehlende PDF-Notizen nach dem Import nicht als stiller Datenverlust
     # dastehen.
     comments_skipped: int = 0
+    # Highlights, die NICHT gegen den PDF-Volltext belegt werden konnten
+    # (Issue #529, Audit-Risiko R1): kein PDF geladen, kein Textlayer, kein
+    # Treffer, oder verify_verbatim() wirft eine Exception. Sie werden bewusst
+    # NICHT als quotes.verbatim gespeichert (das wuerde hooks/verbatim-guard.mjs
+    # spaeter als belegtes Zitat durchwinken), sondern nur gezaehlt und mit
+    # Kontext gelistet — Vorbild ist comments_skipped/unverified_details.
+    unverified_quotes: int = 0
+    unverified_details: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -427,8 +436,8 @@ def run_import(
                             ann_data = annotation_child.get("data", {})
                             if ann_data.get("itemType") != "annotation":
                                 continue
-                            verbatim = _annotation_verbatim(ann_data)
-                            if not verbatim:
+                            candidate = _annotation_verbatim(ann_data)
+                            if not candidate:
                                 # Nur-Kommentar-Annotation: nicht als Quote
                                 # importieren (Nutzertext, kein Beleg), aber
                                 # mitzaehlen statt still zu verwerfen.
@@ -436,17 +445,57 @@ def run_import(
                                     result.comments_skipped += 1
                                 continue
                             printed_page = _parse_page_label(ann_data.get("annotationPageLabel"))
-                            if (verbatim, printed_page) in seen_quotes:
+                            ann_key = ann_data.get("key", "?")
+
+                            # Highlight gegen den PDF-Volltext verifizieren
+                            # (Issue #529, Audit-Risiko R1) — ungeprueft landet
+                            # annotationText sonst als quotes.verbatim und
+                            # legitimiert spaeter jedes Zitat ueber die
+                            # LIKE-Suche des verbatim-guard.
+                            if not local_path:
+                                result.unverified_quotes += 1
+                                result.unverified_details.append(
+                                    f"{paper_id} ({ann_key}): kein PDF verfuegbar fuer Verifikation"
+                                )
+                                continue
+
+                            try:
+                                verification = verify_verbatim(local_path, candidate)
+                            except Exception as e:
+                                # Ein kaputtes/unlesbares PDF darf den gesamten
+                                # Item-Import nicht mitreissen (Vorbild:
+                                # ensure_file-try/except oben).
+                                result.unverified_quotes += 1
+                                result.unverified_details.append(
+                                    f"{paper_id} ({ann_key}): Verifikationsfehler ({e})"
+                                )
+                                continue
+
+                            if verification.status not in ("exact", "snapped"):
+                                reason = (
+                                    "kein Treffer im PDF-Volltext"
+                                    if verification.status == "no-match"
+                                    else "PDF ohne Textlayer"
+                                )
+                                result.unverified_quotes += 1
+                                result.unverified_details.append(
+                                    f"{paper_id} ({ann_key}): {reason}"
+                                )
+                                continue
+
+                            verified_text = verification.verbatim
+                            if (verified_text, printed_page) in seen_quotes:
                                 continue
                             try:
                                 add_quote(
                                     db_path=db_path,
                                     paper_id=paper_id,
-                                    verbatim=verbatim,
+                                    verbatim=verified_text,
                                     extraction_method="manual",
+                                    pdf_page=verification.pdf_page,
                                     printed_page=printed_page,
                                 )
-                                seen_quotes.add((verbatim, printed_page))
+                                seen_quotes.add((verified_text, printed_page))
                                 result.quotes_imported += 1
                             except Exception as e:
                                 result.errors.append(
@@ -498,6 +547,13 @@ def main() -> None:
             f"Nur-Kommentar-Annotationen uebersprungen: {result.comments_skipped} "
             f"(eigener Text, kein Beleg aus der Quelle — nicht als Zitat importiert)"
         )
+    if result.unverified_quotes:
+        print(
+            f"Nicht verifizierte Highlights (nicht als Zitat gespeichert): "
+            f"{result.unverified_quotes}"
+        )
+        for detail in result.unverified_details:
+            print(f"  - {detail}", file=sys.stderr)
 
 
 if __name__ == "__main__":

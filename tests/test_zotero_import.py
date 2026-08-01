@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from academic_vault.verbatim import VerbatimResult, normalize_text
 
 # Pfad fuer Import setzen
 sys.path.insert(
@@ -21,6 +22,8 @@ sys.path.insert(
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 LIBRARY_JSON = FIXTURES / "zotero_library.json"
 ATTACHMENT_A = FIXTURES / "zotero_attachments" / "paper_a.pdf"
+VERBATIM_SOURCE_PDF = FIXTURES / "verbatim" / "verbatim_source.pdf"
+SCAN_NO_TEXT_PDF = FIXTURES / "verbatim" / "scan_no_text.pdf"
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +358,7 @@ def _quotes_rows(db_path: str) -> list[sqlite3.Row]:
     conn.row_factory = sqlite3.Row
     try:
         return conn.execute(
-            "SELECT verbatim, printed_page, extraction_method FROM quotes"
+            "SELECT verbatim, printed_page, pdf_page, extraction_method FROM quotes"
         ).fetchall()
     finally:
         conn.close()
@@ -400,7 +403,17 @@ class TestAnnotationImport:
 
             with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                 with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+                    with patch(
+                        "zotero_pull.verify_verbatim",
+                        return_value=VerbatimResult(
+                            status="exact",
+                            verbatim="Ein wichtiges Highlight.",
+                            pdf_page=1,
+                            char_start=0,
+                            ratio=1.0,
+                        ),
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -449,7 +462,17 @@ class TestAnnotationImport:
 
             with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                 with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+                    with patch(
+                        "zotero_pull.verify_verbatim",
+                        return_value=VerbatimResult(
+                            status="exact",
+                            verbatim="Randbemerkung ohne nummerische Seite.",
+                            pdf_page=1,
+                            char_start=0,
+                            ratio=1.0,
+                        ),
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -504,7 +527,17 @@ class TestAnnotationImport:
 
             with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                 with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+                    with patch(
+                        "zotero_pull.verify_verbatim",
+                        return_value=VerbatimResult(
+                            status="exact",
+                            verbatim="Fussnotenverweis.",
+                            pdf_page=1,
+                            char_start=0,
+                            ratio=1.0,
+                        ),
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -627,8 +660,15 @@ class TestPDFAttachmentFallback:
         assert result.imported == 1
         mock_ef.assert_called_once()
 
-    def test_annotations_imported_even_when_download_fails(self, tmp_path):
-        """Annotationen haengen nicht am Download-Erfolg des PDFs."""
+    def test_annotations_unverified_when_download_fails(self, tmp_path):
+        """Ohne heruntergeladenes PDF kann nicht verifiziert werden (Issue #529).
+
+        Bewusste Verhaltensaenderung ggue. der fruehreren Erwartung ("Annotationen
+        haengen nicht am Download-Erfolg"): Ohne lokales PDF ist keine
+        Verifikation gegen den Volltext moeglich (AC #529) -- die Annotation wird
+        NICHT mehr ungeprueft als Quote gespeichert, sondern als unverifiziert
+        gezaehlt. Der Item-Import selbst (``imported``) bleibt unveraendert.
+        """
         from zotero_pull import run_import
 
         cfg_path = _minimal_config(tmp_path)
@@ -672,9 +712,10 @@ class TestPDFAttachmentFallback:
         mock_ef.assert_not_called()
 
         rows = _quotes_rows(db_path)
-        assert len(rows) == 1
-        assert rows[0]["verbatim"] == "Highlight ohne heruntergeladenes PDF."
-        assert rows[0]["printed_page"] == 7
+        assert rows == []
+        assert result.quotes_imported == 0
+        assert result.unverified_quotes == 1
+        assert any("ANNOKEY3" in d or "kein PDF" in d for d in result.unverified_details)
 
 
 # ---------------------------------------------------------------------------
@@ -737,7 +778,17 @@ class TestAnnotationReimportDedup:
                 mock_zotero_module.Zotero.return_value = zot_mock
                 with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                     with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                        return run_import(config_path=str(cfg_path), db_path=db_path)
+                        with patch(
+                            "zotero_pull.verify_verbatim",
+                            return_value=VerbatimResult(
+                                status="exact",
+                                verbatim="Markierung ohne Identifier-Dedup.",
+                                pdf_page=1,
+                                char_start=0,
+                                ratio=1.0,
+                            ),
+                        ):
+                            return run_import(config_path=str(cfg_path), db_path=db_path)
 
         result_1 = _run()
         assert result_1.quotes_imported == 1
@@ -795,7 +846,17 @@ class TestAnnotationReimportDedup:
                 mock_zotero_module.Zotero.return_value = zot_mock
                 with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
                     with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                        return run_import(config_path=str(cfg_path), db_path=db_path)
+                        with patch(
+                            "zotero_pull.verify_verbatim",
+                            return_value=VerbatimResult(
+                                status="exact",
+                                verbatim="Wiederkehrende Definition.",
+                                pdf_page=1,
+                                char_start=0,
+                                ratio=1.0,
+                            ),
+                        ):
+                            return run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert _run().quotes_imported == 2
         assert sorted(r["printed_page"] for r in _quotes_rows(db_path)) == [3, 9]
@@ -898,6 +959,15 @@ def _run_with_annotations(tmp_path, item_key: str, doi: str, annotation_children
             return annotation_children
         return []
 
+    def _verify_side_effect(_pdf_path, candidate):
+        # Echot den Kandidaten unveraendert als "Quellwortlaut" zurueck --
+        # ausreichend fuer diese Tests, die die Trennung annotationText/
+        # annotationComment pruefen, nicht die Verifikationslogik selbst
+        # (siehe tests/test_verbatim.py dafuer).
+        return VerbatimResult(
+            status="exact", verbatim=candidate, pdf_page=1, char_start=0, ratio=1.0
+        )
+
     with patch("zotero_pull.zotero") as mock_zotero_module:
         zot_mock = _make_zotero_mock(item)
         zot_mock.children.side_effect = children_side_effect
@@ -905,7 +975,8 @@ def _run_with_annotations(tmp_path, item_key: str, doi: str, annotation_children
 
         with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
             with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                result = run_import(config_path=str(cfg_path), db_path=db_path)
+                with patch("zotero_pull.verify_verbatim", side_effect=_verify_side_effect):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
 
     return result, db_path
 
@@ -1055,3 +1126,226 @@ class TestAnnotationCommentIsNotVerbatim:
         assert result.comments_skipped == 1, (
             "Nur-Kommentar-Annotationen werden still verworfen — ImportResult muss sie zaehlen"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 12: Highlights werden gegen den PDF-Volltext verifiziert (Issue #529)
+# ---------------------------------------------------------------------------
+
+
+def _run_with_annotations_real_pdf(
+    tmp_path, item_key, doi, annotation_children, local_path, verify_side_effect=None
+):
+    """Wie ``_run_with_annotations``, aber mit waehlbarem ``local_path`` (auch
+    ``None``) und optionalem ``verify_verbatim``-Mock.
+
+    ``verify_side_effect=None`` laesst den ECHTEN
+    ``academic_vault.verbatim.verify_verbatim`` laufen -- fuer Tests, die
+    nicht test-gamed werden sollen (Lehre aus Issue #511: mindestens ein Test
+    je Statusklasse gegen die echten Fixtures statt nur gemockt).
+    """
+    from zotero_pull import run_import
+
+    cfg_path = _minimal_config(tmp_path)
+    db_path = str(tmp_path / "vault.db")
+
+    item, attachment_children, att_key = _item_with_pdf_attachment(item_key, doi)
+
+    def children_side_effect(key):
+        if key == item_key:
+            return attachment_children
+        if key == att_key:
+            return annotation_children
+        return []
+
+    with patch("zotero_pull.zotero") as mock_zotero_module:
+        zot_mock = _make_zotero_mock(item)
+        zot_mock.children.side_effect = children_side_effect
+        mock_zotero_module.Zotero.return_value = zot_mock
+
+        with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
+            with patch("zotero_pull._download_attachment", return_value=local_path):
+                if verify_side_effect is not None:
+                    with patch("zotero_pull.verify_verbatim", side_effect=verify_side_effect):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+                else:
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+
+    return result, db_path
+
+
+class TestAnnotationVerification:
+    """Highlights werden vor der Speicherung als Quote gegen den PDF-Volltext
+    verifiziert (AC #529, Audit-Risiko R1). Belegbare Highlights (``exact``/
+    ``snapped``) werden mit dem gesnappten Quelltext gespeichert; nicht
+    belegbare landen NICHT in ``quotes``, sondern werden gezaehlt und im
+    Report gelistet (``ImportResult.unverified_quotes``/``unverified_details``).
+    """
+
+    def test_exact_match_stores_normalized_source_text(self, tmp_path):
+        """Belegbares Highlight, ECHTES verify_verbatim (kein Mock) -> der
+        gesnappte Quelltext wird gespeichert (AC1)."""
+        candidate = 'Die Teilnehmenden beschrieben "implizites Wissen" als zentralen Faktor.'
+        annotation_children = [
+            _annotation_child(
+                "ANNOVER1",
+                annotationType="highlight",
+                annotationText=candidate,
+                annotationPageLabel="20",
+            )
+        ]
+
+        result, db_path = _run_with_annotations_real_pdf(
+            tmp_path,
+            "ANNOVERI1",
+            "10.9999/verify.001",
+            annotation_children,
+            local_path=str(VERBATIM_SOURCE_PDF),
+        )
+
+        rows = _quotes_rows(db_path)
+        assert result.errors == []
+        assert len(rows) == 1
+        assert rows[0]["verbatim"] == normalize_text(candidate)
+        assert rows[0]["printed_page"] == 20
+        assert rows[0]["pdf_page"] == 2
+        assert result.unverified_quotes == 0
+
+    def test_snapped_stores_source_wording_not_candidate(self, tmp_path):
+        """Gemockt: status=snapped -> gespeicherter Wortlaut kommt aus der
+        Quelle, nicht vom rohen Kandidaten."""
+        annotation_children = [
+            _annotation_child(
+                "ANNOVER2",
+                annotationType="highlight",
+                annotationText="Der Interviewpartner betonto die Bedeutung.",
+                annotationPageLabel="5",
+            )
+        ]
+
+        def _verify(_pdf_path, _candidate):
+            return VerbatimResult(
+                status="snapped",
+                verbatim="Der Interviewpartner betonte die Bedeutung.",
+                pdf_page=1,
+                char_start=0,
+                ratio=0.95,
+            )
+
+        result, db_path = _run_with_annotations_real_pdf(
+            tmp_path,
+            "ANNOVERI2",
+            "10.9999/verify.002",
+            annotation_children,
+            local_path=str(ATTACHMENT_A),
+            verify_side_effect=_verify,
+        )
+
+        rows = _quotes_rows(db_path)
+        assert len(rows) == 1
+        assert rows[0]["verbatim"] == "Der Interviewpartner betonte die Bedeutung."
+        assert result.unverified_quotes == 0
+
+    def test_no_match_not_stored_and_listed(self, tmp_path):
+        """Gemockt: status=no-match -> keine Quote, aber Zaehler + Report-Eintrag (AC2)."""
+        annotation_children = [
+            _annotation_child(
+                "ANNOVER3",
+                annotationType="highlight",
+                annotationText="Nicht belegbarer Text.",
+                annotationPageLabel="1",
+            )
+        ]
+
+        def _verify(_pdf_path, _candidate):
+            return VerbatimResult(
+                status="no-match", verbatim="", pdf_page=None, char_start=None, ratio=0.2
+            )
+
+        result, db_path = _run_with_annotations_real_pdf(
+            tmp_path,
+            "ANNOVERI3",
+            "10.9999/verify.003",
+            annotation_children,
+            local_path=str(ATTACHMENT_A),
+            verify_side_effect=_verify,
+        )
+
+        assert _quotes_rows(db_path) == []
+        assert result.quotes_imported == 0
+        assert result.unverified_quotes == 1
+        assert any("ANNOVER3" in d for d in result.unverified_details), result.unverified_details
+
+    def test_no_textlayer_counts_as_unverified(self, tmp_path):
+        """ECHTES verify_verbatim gegen ein PDF ohne Textlayer -> unverified (AC3)."""
+        annotation_children = [
+            _annotation_child(
+                "ANNOVER4",
+                annotationType="highlight",
+                annotationText="Beliebiger Kandidat.",
+                annotationPageLabel="1",
+            )
+        ]
+
+        result, db_path = _run_with_annotations_real_pdf(
+            tmp_path,
+            "ANNOVERI4",
+            "10.9999/verify.004",
+            annotation_children,
+            local_path=str(SCAN_NO_TEXT_PDF),
+        )
+
+        assert _quotes_rows(db_path) == []
+        assert result.quotes_imported == 0
+        assert result.unverified_quotes == 1
+
+    def test_missing_pdf_counts_as_unverified(self, tmp_path):
+        """Kein PDF geladen (``local_path=None``) -> unverified statt stiller
+        0-Zeile im Report (AC3)."""
+        annotation_children = [
+            _annotation_child(
+                "ANNOVER5",
+                annotationType="highlight",
+                annotationText="Highlight ohne PDF.",
+                annotationPageLabel="1",
+            )
+        ]
+
+        result, db_path = _run_with_annotations_real_pdf(
+            tmp_path,
+            "ANNOVERI5",
+            "10.9999/verify.005",
+            annotation_children,
+            local_path=None,
+        )
+
+        assert _quotes_rows(db_path) == []
+        assert result.quotes_imported == 0
+        assert result.unverified_quotes == 1
+
+    def test_verify_verbatim_exception_does_not_abort_import(self, tmp_path):
+        """Wirft ``verify_verbatim`` eine Exception (z. B. ``ATTACHMENT_A``, eine
+        51-Byte-Dummy-Datei ohne gueltige xref-Tabelle), bricht der Item-Import
+        NICHT ab -- die Annotation landet als unverified statt den ganzen
+        Import mitzureissen."""
+        annotation_children = [
+            _annotation_child(
+                "ANNOVER6",
+                annotationType="highlight",
+                annotationText="Highlight gegen kaputtes PDF.",
+                annotationPageLabel="1",
+            )
+        ]
+
+        result, db_path = _run_with_annotations_real_pdf(
+            tmp_path,
+            "ANNOVERI6",
+            "10.9999/verify.006",
+            annotation_children,
+            local_path=str(ATTACHMENT_A),
+        )
+
+        assert result.imported == 1
+        assert result.errors == []
+        assert _quotes_rows(db_path) == []
+        assert result.unverified_quotes == 1
