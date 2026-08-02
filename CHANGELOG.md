@@ -133,6 +133,50 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   nicht zurück. Ohne `paper_fulltext`-Eintrag oder ohne Fundstelle bleibt alles
   unverändert (No-Op) — geraten wird nie. `CURRENT_SCHEMA_VERSION` 6→7.
 
+### Removed
+
+- **Keine Plugin-Funktion braucht mehr einen `ANTHROPIC_API_KEY` (#632):** Wer das
+  Plugin installiert, hat bereits Claude Code — also eine Sitzung mit Modellzugang.
+  Ein zweiter, selbst bezahlter Schlüssel war eine Hürde bei der Installation und
+  ein zweites Abrechnungsverhältnis für dieselbe Sache. Alle vier verbliebenen
+  SDK-Pfade sind entfallen:
+  - `scripts/batch_api.py` samt der Optionen **`/search --batch` und
+    `/history --batch`**. Das Relevanz-Scoring großer Treffermengen lief darüber
+    asynchron über die Anthropic-Message-Batches-API (50 % Rabatt, ~1 h Latenz,
+    Abholung per Job-ID) und setzte dafür einen eigenen `ANTHROPIC_API_KEY`
+    voraus. **Bewusster Verzicht:** Batch-Rabatt und asynchrone Abholung fallen
+    weg; auch ≥ 50 Paper laufen jetzt über `agents/relevance-scorer` in Gruppen
+    von 10 — mehr Agent-Läufe statt eines Batch-Jobs, bezahlt aus dem
+    Sitzungskontingent. Der Hebel gegen Kosten liegt damit vor dem Scoring
+    (`--limit`, `--mode`), nicht daneben.
+  - `academic_vault/files_api.py` und mit ihm das MCP-Tool **`vault.ensure_file`**
+    (43 → 42 Tools). Der Pfad war seit #535 Legacy und seit #511/#532 durch die
+    lokale Verbatim-Verifikation ersetzt. `vault.stats()` verliert dadurch das
+    Feld `cached_files`: ohne Upload-Cache hätte es keinen Schreiber mehr und
+    stünde dauerhaft auf 0 — genau die Phantomgröße, die #387/#453/#534
+    verbieten. Die Spalten `file_id`/`file_id_expires_at` bleiben (keine
+    Schema-Migration), der schreiberlose Setter `VaultDB.set_file_id()` nicht.
+  - `generate_context_sentence()`/`_get_anthropic_client()` in
+    `academic_vault/embeddings.py` samt `chunking.anthropic_context_provider()`
+    und dem Env-Schalter `VAULT_CONTEXTUAL_EMBEDDING`. Kontextsätze kommen
+    ausschließlich aus dem deterministischen Offline-Default
+    `default_context_sentence()`; `ingest_paper_embeddings()` gibt entsprechend
+    wieder einen blanken `int` zurück statt eines Ergebnisobjekts mit
+    `context_failures`.
+  - `llm_parse()` in `skills/reading-list-import/scripts/parse_list.py`. Das
+    Skript ist jetzt zweistufig: `--extract` gibt den Rohtext einer
+    Literaturliste aus, der Skill parst ihn in der Sitzung, `--entries` nimmt das
+    fertige JSON entgegen und übernimmt DOI-/ISBN-Auflösung, Retraction-Check und
+    Vault-Import. Das war der einzige der vier Pfade, der im Normalbetrieb lief.
+
+  `anthropic` steht damit in keiner Datei mehr, die ein Endnutzer installiert
+  (`scripts/requirements.txt`, `academic_vault/requirements.txt`,
+  `[project.dependencies]`); als Dev-Extra bleibt es nur für
+  `tests/evals/eval_runner.py` erhalten und entfällt dort mit #631. Neuer Guard
+  `tests/test_issue_632_no_anthropic_sdk.py` lässt einen Test rot werden, sobald
+  ein Produktivpfad das SDK wieder importiert, eine Endnutzer-Doku den Schlüssel
+  wieder als Voraussetzung nennt oder `vault.ensure_file` zurückkehrt.
+
 ### Changed
 
 - **`page_offset` wird beim Buch-Import bestätigt statt still gespeichert (#538):**

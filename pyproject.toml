@@ -23,14 +23,6 @@ authors = [{ name = "Jonas Ahler", email = "jam@ahler.org" }]
 # (scripts/setup.sh -> scripts/requirements.txt) bleibt bewusst pip-basiert (#344);
 # beim Aendern von Runtime-Deps BEIDE Stellen pflegen.
 dependencies = [
-    # >=0.120.2: der Stand, mit dem die Suite tatsaechlich laeuft (uv.lock, #332).
-    # Bewusst exakt die verifizierte Version als Untergrenze und nicht die
-    # naechstniedrigere Minor-Serie: der Code haengt an Beta-Namespaces
-    # (anthropic.beta.files.upload in academic_vault/files_api.py,
-    # anthropic.types.beta.messages in scripts/batch_api.py), und die wandern
-    # zwischen Minor-Releases. Eine tiefere Grenze wuerde Kompatibilitaet
-    # behaupten, die hier nie geprueft wurde.
-    "anthropic>=0.120.2",
     "httpx>=0.28.1",
     "pypdf>=4.0.0",
     "pyyaml>=6.0.3",
@@ -90,6 +82,13 @@ dev = [
     "ruff==0.16.0",
     "mypy==2.3.0",
     "vulture>=2.16",
+    # Nur tests/evals/eval_runner.py (Repo-Infrastruktur, kein Endnutzer-Pfad).
+    # Bewusst NICHT in [project.dependencies]: seit #632 setzt keine
+    # Plugin-Funktion mehr einen eigenen ANTHROPIC_API_KEY voraus. Ohne diesen
+    # Eintrag wuerde .github/workflows/eval-behavior.yml still durchskippen
+    # statt real zu laufen. Entfaellt mit #631 (Umstellung auf OAuth-Session).
+    # >=0.120.2: der Stand, mit dem die Suite tatsaechlich laeuft (uv.lock, #332).
+    "anthropic>=0.120.2",
 ]
 # Cloud-Reranker-SDKs (#376): optionale Extras, KEINE Hard-Dependency. Ohne
 # gesetzten API-Key UND ohne installiertes FlagEmbedding (siehe Kommentar

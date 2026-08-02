@@ -19,8 +19,6 @@ Variant-Selector in `SKILL.md`).
 - **Markdown** — für Review und manuelles Editieren.
 - **JSON** — für die programmatische Nutzung durch andere Skills.
 
-Seitenangaben stammen im Standardpfad aus `pdf_page` via
+Seitenangaben stammen aus `pdf_page` via
 `vault.find_quotes`/`vault.get_quote` (lokal verifiziert, kein API-Key). Bei
-optionaler Citations-API-Nutzung (eigener `ANTHROPIC_API_KEY`, siehe
-`SKILL.md`): `citations[].start_page_number`/`end_page_number`. Bei Büchern
-mit Vorseiten: `printed_page = vault.get_printed_page(paper_id, pdf_page)`.
+Büchern mit Vorseiten: `printed_page = vault.get_printed_page(paper_id, pdf_page)`.

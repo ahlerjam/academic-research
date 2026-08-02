@@ -46,18 +46,16 @@ Rueckfrage. Datei: `${CLAUDE_PLUGIN_ROOT}/skills/citation-extraction/references/
 `book-chapter-de.md`; `type: book` → `din1505.md` (Monografie-Sektion);
 `type: article-journal` → keine Zusatz-Referenz.
 
-## Zitat-Extraktion (Standard: lokal, kein API-Key)
+## Zitat-Extraktion (lokal, kein API-Key)
 
-Standard: `vault.add_quote(..., extraction_method="local-verbatim")` — der
+`vault.add_quote(..., extraction_method="local-verbatim")` — der
 `quote-extractor`-Agent liest das PDF lokal (`Read`), der Vault-Server prüft
-den Wortlaut fail-closed gegen den PDF-Volltext. Kein `ANTHROPIC_API_KEY` nötig.
+den Wortlaut fail-closed gegen den PDF-Volltext. Seit #632 der einzige Weg;
+`extraction_method="citations-api"` bleibt optionaler Alt-Wert für
+Bestandszitate, wird aber nicht mehr neu erzeugt.
 
-**Citations-API (optional):** `documents`-Parameter der Claude-API, nur bei
-explizitem Bedarf — braucht einen eigenen `ANTHROPIC_API_KEY` außerhalb der
-Subscription-Session.
-
-**Output:** `pdf_page` aus `vault.find_quotes`/`vault.get_quote`, sonst
-`citations[].start_page_number` → `references/output-formats.md`.
+**Output:** `pdf_page` aus `vault.find_quotes`/`vault.get_quote` →
+`references/output-formats.md`.
 
 ## Kontext-Dateien
 

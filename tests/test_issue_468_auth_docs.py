@@ -8,7 +8,8 @@ AC4  Der erste Lauf weist auf Umfang und Ablageort des Modell-Downloads hin.
 
 Bestandsaufnahme der drei Zugangsdaten-Wege (siehe Plan-Kommentar zu #468):
 1. Umgebungsvariablen pro Suchquelle — ``SS_API_KEY`` (scripts/search.py),
-   ``ANTHROPIC_API_KEY`` (scripts/batch_api.py).
+   (seit #632 nur noch ``SS_API_KEY``; der fruehere ``ANTHROPIC_API_KEY``
+   entfiel mit dem Batch-API-Skript).
 2. Per-Uni-Profil ``active.yaml``, Feld ``credentials_keys`` — genutzt vom
    ``auth-helper``-Subagenten fuer den book-fetcher-Workflow.
 3. Das HAN-spezifische Zugangsdaten-File unter ``~/.academic-research/``
@@ -40,7 +41,7 @@ REQUIRED_TOOL_MARKERS = (
 )
 
 #: Die drei Zugangsdaten-Wege, konkret benannt (Code-Ist-Zustand, kein Aliasing).
-AUTH_ENV_VAR_MARKERS = ("SS_API_KEY", "ANTHROPIC_API_KEY")
+AUTH_ENV_VAR_MARKERS = ("SS_API_KEY",)
 AUTH_PROFILE_MARKER = "credentials_keys"
 AUTH_HAN_MARKERS = ("han_user", "han_password")
 

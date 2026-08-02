@@ -97,5 +97,8 @@ def test_requirements_still_parseable():
     """Alle Zeilen muessen valide PEP-508-Requirements bleiben (kein Bruch)."""
     reqs = _parse_requirements()
     # Sanity: Kernpakete bleiben vorhanden, nichts versehentlich entfernt.
-    for pkg in ("anthropic", "httpx", "requests", "lxml"):
+    # anthropic ist mit #632 aus scripts/requirements.txt raus
+    # (Endnutzer-Installationspfad); der Guard dagegen sitzt in
+    # tests/test_issue_632_no_anthropic_sdk.py.
+    for pkg in ("httpx", "requests", "lxml"):
         assert pkg in reqs, f"{pkg} unerwartet aus requirements.txt entfernt"

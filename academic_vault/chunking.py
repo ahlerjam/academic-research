@@ -248,45 +248,15 @@ def default_context_sentence(
 ) -> str:
     """Deterministischer Offline-Default fuer den Kontextsatz.
 
-    Macht KEINEN API-Call -- notwendig, damit Tests/CI ohne ANTHROPIC_API_KEY
-    gruen bleiben (siehe :func:`anthropic_context_provider` fuer die optionale
-    Anbindung an die echte Kontextsatz-Generierung aus #109).
+    Macht KEINEN API-Call und ist seit #632 der einzige Kontextsatz-Weg:
+    keine Plugin-Funktion darf einen eigenen Modellzugang voraussetzen. Ein
+    abweichender ``context_provider`` bleibt ueber :func:`chunk_pages`
+    injizierbar.
     """
     return (
         f'Dieser Abschnitt stammt aus "{section_title}" '
         f"(Seite {page_start}-{page_end}, Chunk {chunk_index})."
     )
-
-
-def anthropic_context_provider(
-    paper_title: str,
-    paper_abstract: str,
-    paper_id: str,
-    api_key: str | None = None,
-) -> ContextProvider:
-    """Baut einen ``context_provider``, der die echte Anthropic-API nutzt (#109).
-
-    Macht bei jedem Chunk einen echten API-Call -- nur fuer den produktiven
-    Einsatz gedacht, niemals als Default in Tests/CI (kein ANTHROPIC_API_KEY
-    dort verfuegbar bzw. gewuenscht).
-    """
-    from .embeddings import generate_context_sentence
-
-    def _provider(
-        chunk_text: str, section_title: str, chunk_index: int, page_start: int, page_end: int
-    ) -> str:
-        sentence = generate_context_sentence(
-            chunk_text=chunk_text,
-            paper_title=paper_title,
-            paper_abstract=paper_abstract,
-            paper_id=paper_id,
-            api_key=api_key,
-        )
-        return sentence or default_context_sentence(
-            section_title, chunk_index, page_start, page_end
-        )
-
-    return _provider
 
 
 def _split_words_with_metadata(

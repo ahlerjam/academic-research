@@ -1,7 +1,7 @@
 ---
 description: View past research sessions and their results; restore snapshots
 allowed-tools: Read, Bash(cat ~/.academic-research/*), Bash(ls ~/.academic-research/*), Bash(~/.academic-research/venv/bin/python *), Bash(ls ~/.academic-research/snapshots/*), Bash(tar *)
-argument-hint: [optional: search query, date, --restore <ts>, --restore-session <id>, --snapshots, --batch <id>]
+argument-hint: [optional: search query, date, --restore <ts>, --restore-session <id>, --snapshots]
 disable-model-invocation: true
 ---
 
@@ -18,7 +18,6 @@ Vergangene Recherche-Sessions ansehen und Snapshots verwalten.
 - `/academic-research:history --snapshots` — Alle verfügbaren Snapshots auflisten
 - `/academic-research:history --restore <ts>` — Snapshot wiederherstellen (z.B. `--restore 20260507-1430`)
 - `/academic-research:history --restore-session <id>` — Frühere Recherche-Session als Arbeitsstand wiederherstellen (`<id>` ist der Session-Verzeichnisname bzw. -pfad aus der Auflistung, z.B. `2026-03-17T09-12-00Z`)
-- `/academic-research:history --batch <id>` — Eingereichten Batch-Job abholen (Relevanz-Scoring, siehe `search --batch`)
 
 ## Umsetzung
 
@@ -26,7 +25,6 @@ Vergangene Recherche-Sessions ansehen und Snapshots verwalten.
    - `--restore <ts>` → **Snapshot-Wiederherstellung** (siehe unten)
    - `--restore-session <id>` → **Session-Wiederherstellung** (siehe unten)
    - `--snapshots` → Snapshot-Liste anzeigen (siehe unten)
-   - `--batch <id>` → **Batch-Job-Abholung** (siehe unten)
    - Datum → Session von diesem Tag finden, Details anzeigen
    - `"stats"` → Aggregatstatistik anzeigen
    - Sonst → Sessions per Query-Text durchsuchen oder alle auflisten
@@ -155,35 +153,3 @@ else:
      JSON-Ergebnis 1:1 ausgeben (Klartext, kein Traceback), z.B.
      `❌ Sitzungsordner nicht gefunden: ~/.academic-research/sessions/2026-03-17T09-12-00Z`.
 
-## Batch-Job-Abholung (`--batch <id>`)
-
-`/academic-research:search --batch` reicht das Relevanz-Scoring grosser Treffermengen (≥ 50 Paper) asynchron über die Anthropic Message Batches API ein und gibt am Ende `Abholung via: /history --batch <id>` aus. Mit diesem Workflow holst du das Ergebnis ab, sobald der Batch fertig ist (Status `ended`, typischerweise ca. 1 h nach Einreichung).
-
-Ablauf:
-1. Batch-ID aus dem Argument (`<id>`, Format `msgbatch_…`) übernehmen.
-2. Batch-Status prüfen und — wenn `ended` — die Relevanz-Scores einlesen:
-
-```bash
-~/.academic-research/venv/bin/python -c "
-import sys
-sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts')
-from batch_api import get_batch_status, fetch_batch_results
-
-batch_id = '<id>'
-status = get_batch_status(batch_id)
-print('Batch-Status:', status)
-if status == 'ended':
-    scores = fetch_batch_results(batch_id)
-    print('Scores abgeholt:', len(scores))
-    for custom_id, score in sorted(scores.items()):
-        print(f'  {custom_id}: {score:.2f}')
-else:
-    print('Noch nicht fertig — bitte später erneut /history --batch', batch_id)
-"
-```
-
-3. Ergebnis ausgeben:
-   - Fertig (`ended`): `✅ Batch <id> abgeholt — <n> Relevanz-Scores gelesen` und die Scores in die Session-`ranked.json` zurückschreiben (Reihenfolge über die `paper_<i>`-`custom_id` mappen).
-   - Noch laufend (`in_progress`): `⏳ Batch <id> läuft noch (Status: <status>) — in ~1 h erneut /history --batch <id> aufrufen`.
-
-**Hinweis:** Die Batch-Job-Metadaten liegen in `<SESSION_DIR>/batch.json` (von `search --batch` via `save_batch_job` geschrieben); `load_batch_job(<SESSION_DIR>)` liest sie zurück, falls du die `<id>` nicht zur Hand hast.

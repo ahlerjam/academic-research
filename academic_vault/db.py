@@ -813,15 +813,6 @@ class VaultDB:
             return None
         return dict(row)
 
-    def set_file_id(self, paper_id: str, file_id: str, expires_at: int) -> None:
-        """Setzt file_id und file_id_expires_at fuer ein Paper."""
-        with self._connection(commit=True) as conn:
-            conn.execute(
-                "UPDATE papers SET file_id = ?, file_id_expires_at = ?, updated_at = ? "
-                "WHERE paper_id = ?",
-                (file_id, expires_at, int(time.time()), paper_id),
-            )
-
     def set_page_offset(self, paper_id: str, offset: int) -> None:
         """Setzt page_offset fuer ein Paper."""
         with self._connection(commit=True) as conn:

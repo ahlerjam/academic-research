@@ -20,8 +20,10 @@ import pytest
 @pytest.mark.parametrize(
     "agent_name",
     [
-        "relevance-scorer",
-        "quote-extractor",
+        # relevance-scorer und quote-extractor sind seit #632 raus: beide
+        # beschrieben einen rohen SDK-Aufrufweg (client.messages.create bzw.
+        # den Citations-API-Opt-in) mit eigenem ANTHROPIC_API_KEY. Diesen Weg
+        # gibt es nicht mehr, also gibt es dafuer auch keine Doku-Pflicht.
         "quality-reviewer",
     ],
 )
@@ -35,34 +37,10 @@ def test_agent_cache_ttl_1h(agent_name):
 
 
 # ---------------------------------------------------------------------------
-# Test 9: quote-extractor.md dokumentiert source.type: "file"
+# Bis #632: quote-extractor.md musste den Citations-API-Opt-in dokumentieren
+# (source.type: "file", Verweis auf skills/chapter-writer/references/
+# citations-api.md). Dieser Weg setzte einen eigenen ANTHROPIC_API_KEY voraus
+# und ist entfallen -- der Agent liest das PDF ausschliesslich lokal. Der
+# Guard dagegen, dass er zurueckkommt, sitzt in
+# tests/test_issue_632_no_anthropic_sdk.py.
 # ---------------------------------------------------------------------------
-
-
-def test_quote_extractor_file_source_documented():
-    agent_file = Path(__file__).parent.parent / "agents" / "quote-extractor.md"
-    content = agent_file.read_text()
-    assert '"type": "file"' in content, (
-        'quote-extractor.md muss source.type: "file" als primären Pfad dokumentieren'
-    )
-
-
-# ---------------------------------------------------------------------------
-# Test 10 (bis #514): quote-extractor.md dokumentierte einen base64-Fallback
-# fuer die Citations-API. Seit #514 ist die Citations-API selbst nur noch
-# ein kurzer Opt-in-Hinweis (Standardpfad: vault.get_paper -> pdf_path ->
-# Read, Persistenz via extraction_method="local-verbatim") -- der
-# base64-Unterfallback der Files-API ist damit kein Doku-Pflichtinhalt des
-# Agent-Files mehr, sondern Detail des referenzierten
-# skills/chapter-writer/references/citations-api.md (dessen eigener
-# Fallback ist Vault-Zitat-Text statt Citations-API, nicht base64).
-# ---------------------------------------------------------------------------
-
-
-def test_quote_extractor_opt_in_citations_api_references_details_doc():
-    agent_file = Path(__file__).parent.parent / "agents" / "quote-extractor.md"
-    content = agent_file.read_text()
-    assert "Opt-in" in content, "quote-extractor.md muss die Citations-API als Opt-in kennzeichnen"
-    assert "skills/chapter-writer/references/citations-api.md" in content, (
-        "quote-extractor.md muss fuer Citations-API-Details auf die Referenzdatei verweisen"
-    )
