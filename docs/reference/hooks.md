@@ -35,6 +35,45 @@ Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
 > (`bash scripts/dev/check-mjs-syntax.sh`) statt über den nicht-rekursiven Glob
 > `hooks/*.mjs`.
 
+### Geschützter Pfad: welche Dateien geprüft werden (`hooks/lib/protected-path.mjs`, #615)
+
+Alle drei Kapitel-Guards (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
+`context-fidelity-guard.mjs`) teilen sich **eine** Pfadprüfung in
+`hooks/lib/protected-path.mjs`: geschützt ist jede `*.tex`-Datei
+(ordnerunabhängig, überall im Projekt) und jede `*.md`-Datei unterhalb des
+Kapitelverzeichnisses (beliebig tief verschachtelt). Die Prüfung ist
+**case-insensitiv** — sowohl für den Ordnernamen als auch für die
+Dateiendung. `Kapitel/03.md`, `KAPITEL/03.md` und `kapitel/03.MD` sind alle
+geschützt, nicht nur die kleingeschriebene Form. Das schließt die Lücke, die
+auf macOS' case-insensitivem Standard-Dateisystem sonst lautlos blieb: die
+Datei landete am richtigen Ort, aber ohne Zitatprüfung, wenn der
+Kapitelordner `Kapitel/` statt `kapitel/` hieß.
+
+Das Kapitelverzeichnis selbst ist über `ACADEMIC_CHAPTER_DIR` konfigurierbar
+(Default weiterhin `"kapitel"`, unverändertes Verhalten ohne die Variable) —
+für Projekte, die ihren Ordner `chapters/`, `manuskript/` oder `text/`
+nennen.
+
+**Sichtbare Meldung statt stillem Durchlass:** Schreibt `Write`/`Edit`/
+`MultiEdit` eine `.md`- oder `.tex`-Datei außerhalb der geschützten Menge, gibt
+`verbatim-guard.mjs` eine Hinweiszeile auf stderr aus (`[Vault-Guard] Hinweis:
+… liegt außerhalb des geschützten Kapitelverzeichnisses …`). Der Write bleibt
+erlaubt — es ist kein Block, nur ein Signal, damit ein falsch benannter oder
+vergessener Kapitelordner nicht unbemerkt bleibt. Andere Dateitypen (`.py`,
+`.json`, …) lösen keine Meldung aus.
+
+**Bash-Schreibvorgänge sind nicht erfasst.** `hooks/hooks.json` registriert
+`PreToolUse` für die drei Guards ausschließlich auf `Write|Edit|MultiEdit`
+(siehe Tabelle oben) — ein `cat > kapitel/03.md`, `tee`, `sed -i` oder
+`python -c "...write..."` über das `Bash`-Tool erreicht keinen der drei
+Guards. Das ist eine bewusste Auslassung, keine übersehene Lücke: ein
+zuverlässiger Parser für Schreibabsicht in beliebigen Shell-Kommandos
+(Quoting, Heredocs, Pipes, `dd`, interpretierte Sprachen) ist praktisch nicht
+erreichbar und würde eher falsche Sicherheit vortäuschen als echten Schutz
+bieten. Wer Kapiteltexte über Bash statt über `Write`/`Edit`/`MultiEdit`
+verändert, bekommt aktuell **keine** Zitat-, Claim-Drift- oder
+Kontexttreue-Prüfung.
+
 ### Klammer-Zitat-Validierung
 
 Klammer- und Paraphrase-Belege wie `(Müller 2021, S. 45)`,
