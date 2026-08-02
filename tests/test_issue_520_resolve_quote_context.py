@@ -292,8 +292,10 @@ def _create_v6_quotes_db(db_path: str) -> None:
 class TestAc3SchemaMigration:
     """AC3-Randbedingung: Bestands-DBs (Schema v6) werden ohne Datenverlust migriert."""
 
-    def test_current_schema_version_is_7(self):
-        assert db_module.CURRENT_SCHEMA_VERSION == 7
+    def test_current_schema_version_covers_context_source(self):
+        # context_source kam mit Schema 7; spaetere Generationen (#629: 8)
+        # duerfen weiterzaehlen, unterschreiten darf die Version sie nie.
+        assert db_module.CURRENT_SCHEMA_VERSION >= 7
 
     def test_fresh_db_has_context_source_column(self, tmp_path):
         db_path = str(tmp_path / "fresh.db")

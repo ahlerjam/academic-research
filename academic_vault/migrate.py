@@ -693,7 +693,40 @@ def apply_pending_migrations(db_path: str) -> None:
     add_notes_fts(db_path)
     add_source_kind_column(db_path)
     add_empirical_tables(db_path)
+    add_embedding_meta_table(db_path)
     drop_dead_v64_tables(db_path)
+
+
+def add_embedding_meta_table(db_path: str) -> None:
+    """Legt ``embedding_meta`` an (Issue #629). Idempotent.
+
+    Haelt fest, mit welchem Modell und in welcher Breite die Vektoren eines
+    Vaults entstanden sind. Bewusst OHNE Vorbefuellung: eine Zeile "384, Modell
+    unbekannt" waere eine Behauptung ueber einen Bestand, den niemand geprueft
+    hat. Fehlt die Zeile, gilt ``DEFAULT_EMBEDDING_DIM`` als Breite und der
+    erste Schreibvorgang traegt die tatsaechliche Modell-ID nach
+    (``VaultDB.register_embedding_inventory``).
+
+    Verifiziert wird der Helfer ueber ``db._REQUIRED_MIGRATION_TABLES``, bevor
+    ``init_schema()`` die neue ``user_version`` stempelt.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS embedding_meta (
+              id         INTEGER PRIMARY KEY CHECK(id = 1),
+              model_id   TEXT,
+              dim        INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL
+            )
+        """)
+        conn.commit()
+    except _sqlite3.OperationalError:
+        pass
+    finally:
+        conn.close()
 
 
 def add_chunk_vectors_table(db_path: str) -> int:
@@ -810,6 +843,104 @@ def backfill_quote_embeddings(
     return {"embedded": embedded, "skipped": skipped}
 
 
+def reindex_embeddings(
+    db_path: str,
+    embedder: object | None = None,
+    batch_size: int = 128,
+) -> dict:
+    """Rechnet alle Vektoren eines Vaults mit dem aktuellen Modell neu (Issue #629).
+
+    Der Weg, den ein Modellwechsel braucht: ``chunk_embeddings.embedding_vector``
+    und ``quote_embeddings`` werden aus den gespeicherten Texten
+    (``embedding_text`` bzw. ``verbatim`` + Kontext) neu berechnet, die
+    vec0-Tabellen in der neuen Breite angelegt und ``embedding_meta``
+    fortgeschrieben.
+
+    Unterschied zu :func:`backfill_quote_embeddings`: dort werden nur Luecken
+    gefuellt, hier wird der GESAMTE Bestand ersetzt. Ein Vault, der vor #629
+    mit zwei Modellen befuellt wurde, traegt sonst weiter Vektoren aus dem
+    alten Raum -- und die faenden sich in keiner Suche wieder, ohne dass es
+    auffiele.
+
+    Reihenfolge (Plan-Risiko 3+5): zuerst der Lock-Check, dann die Berechnung,
+    erst danach DROP + CREATE der vec0-Tabellen. ``quote_embeddings`` hat keine
+    BLOB-Basistabelle -- ein Abbruch nach dem Drop haette die Vektoren
+    nirgends mehr, die Quelle (``quotes``) bleibt aber vollstaendig erhalten,
+    ein erneuter Lauf stellt sie also wieder her.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        embedder: Embedder-Instanz. ``None`` = ``get_embedder()``.
+        batch_size: Chunks pro Embedding-Aufruf (haelt den Speicher beschraenkt).
+
+    Returns:
+        ``{"chunks": int, "quotes": int, "dim": int, "model_id": str | None,
+        "skipped_quotes": int}``.
+
+    Raises:
+        RuntimeError: kein Embedding-Backend verfuegbar.
+        VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.embedding_model import get_embedder, serialize_f32
+    from academic_vault.server import _quote_embedding_text
+
+    db = VaultDB(db_path)
+    db.init_schema()
+
+    active = embedder if embedder is not None else get_embedder()
+    if active is None:
+        raise RuntimeError(
+            "Re-Index nicht moeglich: kein Embedding-Backend verfuegbar. "
+            "sentence-transformers installieren bzw. VAULT_EMBEDDING_MODEL pruefen (#629)."
+        )
+    dim = int(active.dim)  # type: ignore[attr-defined]
+    model_id = getattr(active, "model_id", None)
+
+    # Lock-Check VOR jeder Aenderung: ein gesperrter Vault darf nicht halb
+    # abgeraeumt zurueckbleiben.
+    db.raise_if_locked()
+
+    chunks = [
+        (row["chunk_id"], row["embedding_text"])
+        for row in db.all_chunk_embedding_texts()
+        if (row["embedding_text"] or "").strip()
+    ]
+    vectors: list[tuple[str, bytes]] = []
+    for start in range(0, len(chunks), max(batch_size, 1)):
+        batch = chunks[start : start + max(batch_size, 1)]
+        embedded = active.embed_documents([text for _, text in batch])  # type: ignore[attr-defined]
+        vectors.extend(
+            (chunk_id, serialize_f32(vector))
+            for (chunk_id, _), vector in zip(batch, embedded, strict=True)
+        )
+
+    db.replace_chunk_vectors(vectors, model_id=model_id, dim=dim)
+
+    quotes = 0
+    skipped_quotes = 0
+    for quote in db.all_quotes_for_embedding():
+        vector = active.embed_documents([_quote_embedding_text(quote)])  # type: ignore[attr-defined]
+        if not vector:
+            skipped_quotes += 1
+            continue
+        if db.add_quote_embedding(quote["quote_id"], serialize_f32(vector[0])):
+            quotes += 1
+        else:
+            # Ohne ladbare sqlite-vec-Extension gibt es fuer Quotes keinen
+            # Speicher -- das ist ein bekannter Degradationspfad (#521), kein
+            # Fehler des Re-Index.
+            skipped_quotes += 1
+
+    return {
+        "chunks": len(vectors),
+        "quotes": quotes,
+        "skipped_quotes": skipped_quotes,
+        "dim": dim,
+        "model_id": model_id,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed-Migration: literature_state.md -> academic_vault SQLite"
@@ -828,6 +959,13 @@ def main() -> None:
         action="store_true",
         help="Statt der Seed-Migration: Embeddings fuer Bestands-Quotes ohne "
         "quote_embeddings-Eintrag nachtragen (#521)",
+    )
+    parser.add_argument(
+        "--reindex-embeddings",
+        action="store_true",
+        help="Statt der Seed-Migration: alle Vektoren mit dem aktuell konfigurierten "
+        "Modell (VAULT_EMBEDDING_MODEL) neu berechnen und die Spaltenbreite anpassen "
+        "-- noetig nach einem Modellwechsel (#629)",
     )
     parser.add_argument(
         "--limit",
@@ -873,6 +1011,21 @@ def main() -> None:
             f"Quote-Embedding-Backfill abgeschlossen: "
             f"embedded={stats['embedded']}, "
             f"skipped={stats['skipped']}"
+        )
+        return
+
+    if args.reindex_embeddings:
+        if not Path(args.db).exists():
+            print(f"[ERROR] Vault-DB nicht gefunden: {args.db}", file=sys.stderr)
+            sys.exit(1)
+        stats = reindex_embeddings(args.db)
+        print(
+            f"Re-Index abgeschlossen: "
+            f"model={stats['model_id']}, "
+            f"dim={stats['dim']}, "
+            f"chunks={stats['chunks']}, "
+            f"quotes={stats['quotes']}, "
+            f"skipped_quotes={stats['skipped_quotes']}"
         )
         return
 
