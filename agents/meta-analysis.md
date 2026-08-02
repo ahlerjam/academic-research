@@ -22,7 +22,7 @@ description: |
   Agent liefert sofort Interpretation der I²-Werte nach Higgins-Konvention (0–25%: niedrig, 25–50%: moderat, >50%: hoch).
   </commentary>
   </example>
-tools: [Read, Write, mcp__academic-vault__vault_search, mcp__academic-vault__vault_get_paper, Bash]
+tools: [Read, Write, mcp__academic-vault__vault_search, mcp__academic-vault__vault_get_paper, mcp__academic-vault__vault_extract_tables, mcp__academic-vault__vault_list_tables, mcp__academic-vault__vault_get_table_cell, Bash]
 maxTurns: 5
 ---
 
@@ -59,7 +59,29 @@ SE = (CI_hi - CI_lo) / (2 × 1.96)
 vi  = SE²
 ```
 
-Erstelle eine temporäre JSON-Datei `/tmp/meta_studies.json`:
+#### Kandidatenzahlen aus Ergebnistabellen (#630)
+
+Effektstärken und Konfidenzintervalle stehen fast immer in einer Tabelle, nicht
+im Fließtext — und der Volltextindex kollabiert dort jede Struktur. Hol sie
+deshalb aus der Tabellenquelle statt sie aus dem Fließtext zu rekonstruieren:
+
+1. `vault.extract_tables(paper_id)` — einmal pro Paper, falls noch nicht
+   geschehen.
+2. `vault.list_tables(paper_id)` — `rows` ist die Zeilen-/Spaltenmatrix; suche
+   in der Kopfzeile nach `d`, `g`, `OR`, `SE`, `95%-CI`.
+3. `vault.get_table_cell(paper_id, page, table_index, row, col)` — liefert
+   `value` und ein fertiges `evidence`-Feld
+   (`smith2020, S. 1, Tabelle 1, Zeile 2, Spalte 4`).
+
+**Jede so gewonnene Zahl ist ein Vorschlag mit Beleg, keine übernommene
+Tatsache.** Lege `yi`/`vi` niemals selbsttätig fest: Leg dem User die
+Kandidatenliste als Tabelle (Studie | yi | vi | Beleg) vor und warte auf seine
+ausdrückliche Bestätigung, bevor du `/tmp/meta_studies.json` schreibst. Meldet
+`vault.extract_tables()` `no-tables`, `no-textlayer` oder `backend-missing`,
+nenne den Status im Klartext und frag nach den Zahlen — nicht schätzen, nicht
+aus dem Abstract ableiten.
+
+Erstelle nach der Bestätigung eine temporäre JSON-Datei `/tmp/meta_studies.json`:
 ```json
 [
   {"name": "Smith 2020", "yi": 0.50, "vi": 0.0625},

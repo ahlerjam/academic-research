@@ -83,7 +83,9 @@ def validate_csl_json(csl_json: str) -> dict:
 # sqlite3.OperationalError laeuft statt ein leeres Ergebnis zu liefern.
 # Fehlt eine davon, zieht _ensure_schema_for_read() die Migration einmalig
 # nach. Jede kuenftige Tabelle mit eigenem Lesepfad gehoert hier hinein.
-_READ_REQUIRED_TABLES = frozenset({"papers", "notes_fts", "transcript_segments", "codings"})
+_READ_REQUIRED_TABLES = frozenset(
+    {"papers", "notes_fts", "transcript_segments", "codings", "paper_tables"}
+)
 
 
 def _ensure_schema_for_read(db_path: str) -> None:
@@ -1696,6 +1698,82 @@ def extract_fulltext_for_paper(
     }
 
 
+def extract_tables_for_paper(
+    db_path: str,
+    paper_id: str,
+    backend: str = "auto",
+) -> dict:
+    """Extrahiert die Tabellen eines Papers strukturerhaltend (Issue #630).
+
+    Laeuft **neben** dem Volltextpfad: ``paper_fulltext`` und ``papers_fts``
+    werden nicht angefasst, der FTS5-Volltext bleibt byteweise identisch.
+    Fehlt das optionale Backend, ist das Ergebnis ein sichtbarer Status mit
+    Installationsanweisung statt einer Exception — der Volltextpfad laeuft
+    unveraendert weiter.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        paper_id: Paper mit hinterlegtem ``pdf_path``.
+        backend: ``"auto"`` oder ``"pdfplumber"``.
+
+    Returns:
+        ``{"paper_id", "status", "message", "backend", "tables", "cells"}``.
+        ``status`` ist ``"ok"``, ``"no-tables"``, ``"no-textlayer"`` oder
+        ``"backend-missing"``; ``tables``/``cells`` sind Anzahlen.
+
+    Raises:
+        ValueError: Paper unbekannt oder ohne ``pdf_path``.
+        FileNotFoundError: Hinterlegter ``pdf_path`` existiert nicht.
+        VaultLockedError: Der Materialpass ist eingefroren.
+    """
+    from .tables import STATUS_OK, extract_tables
+
+    db = VaultDB(db_path)
+    db.init_schema()
+    paper = db.get_paper(paper_id)
+    if paper is None:
+        raise ValueError(f"Paper unbekannt: {paper_id}")
+    pdf_path = (paper.get("pdf_path") or "").strip()
+    if not pdf_path:
+        raise ValueError(f"Paper '{paper_id}' hat keinen pdf_path -- nichts zu extrahieren.")
+
+    result = extract_tables(pdf_path, backend=backend)
+    found = result["tables"]
+    if result["status"] == STATUS_OK:
+        db.set_paper_tables(paper_id, found, result["backend"])
+    return {
+        "paper_id": paper_id,
+        "status": result["status"],
+        "message": result["message"],
+        "backend": result["backend"],
+        "tables": len(found),
+        "cells": sum(len(table["cells"]) for table in found),
+    }
+
+
+def list_paper_tables(db_path: str, paper_id: str, page: int | None = None) -> list[dict]:
+    """Gibt die gespeicherten Tabellenstrukturen eines Papers zurueck (Issue #630)."""
+    _ensure_schema_for_read(db_path)
+    return VaultDB(db_path).list_paper_tables(paper_id, page=page)
+
+
+def get_table_cell(
+    db_path: str,
+    paper_id: str,
+    page: int,
+    table_index: int,
+    row: int,
+    col: int,
+) -> dict | None:
+    """Loest eine Tabellenzelle zu Wert und Beleg auf (Issue #630 AC2).
+
+    ``None`` bei unbekannter Zelle — ein geratener Beleg waere schlimmer als
+    gar keiner.
+    """
+    _ensure_schema_for_read(db_path)
+    return VaultDB(db_path).get_table_cell(paper_id, page, table_index, row, col)
+
+
 # ---------------------------------------------------------------------------
 # MCP-Server (optional: nur wenn mcp-SDK verfuegbar)
 # ---------------------------------------------------------------------------
@@ -1971,6 +2049,36 @@ def _build_mcp_server():
         backend: "auto" (GROBID falls GROBID_URL gesetzt, sonst pypdf), "grobid", "pypdf".
         """
         return extract_fulltext_for_paper(db_path, paper_id, backend=backend)
+
+    @mcp.tool(name="vault.extract_tables")
+    def _vault_extract_tables(paper_id: str, backend: str = "auto") -> dict:
+        """Extrahiert Tabellen strukturerhaltend (Zeilen/Spalten/Zellen, #630).
+
+        Laeuft neben dem Volltextpfad -- papers_fts bleibt unveraendert. status:
+        "ok" | "no-tables" | "no-textlayer" | "backend-missing" (dann nennt
+        message die Installation `uv sync --extra tables`).
+        """
+        return extract_tables_for_paper(db_path, paper_id, backend=backend)
+
+    @mcp.tool(name="vault.list_tables")
+    def _vault_list_tables(paper_id: str, page: int | None = None) -> list[dict]:
+        """Gespeicherte Tabellenstrukturen eines Papers (rows = Textmatrix, #630)."""
+        return list_paper_tables(db_path, paper_id, page=page)
+
+    @mcp.tool(name="vault.get_table_cell")
+    def _vault_get_table_cell(
+        paper_id: str,
+        page: int,
+        table_index: int,
+        row: int,
+        col: int,
+    ) -> dict | None:
+        """Eine Tabellenzelle mit Wert, Bounding-Box und fertigem Beleg (#630).
+
+        table_index/row/col sind 0-basiert, page ist die PDF-Seite (1-basiert).
+        None bei unbekannter Zelle -- kein Naeherungstreffer.
+        """
+        return get_table_cell(db_path, paper_id, page, table_index, row, col)
 
     @mcp.tool(name="vault.add_figure")
     def _vault_add_figure(

@@ -167,6 +167,31 @@ CREATE TABLE IF NOT EXISTS paper_fulltext (
   extracted_at INTEGER NOT NULL
 );
 
+-- Strukturerhaltend extrahierte Tabellen (Issue #630). Bewusst NEBEN
+-- paper_fulltext und ohne jede Beruehrung der FTS5-Trigger: der Volltextpfad
+-- kollabiert Whitespace (richtig fuer den Index, toedlich fuer eine Tabelle),
+-- dieser Speicher haelt Zeilen, Spalten und Zell-Bounding-Boxen als JSON.
+-- rows_json  = Textmatrix (Zeile -> Spalte -> Wert, null fuer geschluckte
+--              Positionen unter verbundenen Zellen)
+-- cells_json = je Zelle {row, col, value, bbox} fuer den Beleg auf Zellebene
+-- UNIQUE(paper_id, page, table_index) macht die Re-Extraktion idempotent.
+CREATE TABLE IF NOT EXISTS paper_tables (
+  table_id     TEXT PRIMARY KEY,
+  paper_id     TEXT NOT NULL REFERENCES papers(paper_id) ON DELETE CASCADE,
+  page         INTEGER NOT NULL,
+  table_index  INTEGER NOT NULL,
+  backend      TEXT NOT NULL,
+  n_rows       INTEGER NOT NULL,
+  n_cols       INTEGER NOT NULL,
+  bbox_json    TEXT NOT NULL,
+  rows_json    TEXT NOT NULL,
+  cells_json   TEXT NOT NULL,
+  extracted_at INTEGER NOT NULL,
+  UNIQUE(paper_id, page, table_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_tables_paper ON paper_tables(paper_id);
+
 -- FTS5-Trigger: befuellen papers_fts manuell via json_extract.
 -- Bewusst DROP + CREATE statt CREATE TRIGGER IF NOT EXISTS: init_schema() fuehrt
 -- dieses Skript auch auf Bestands-DBs aus; mit IF NOT EXISTS behielten die

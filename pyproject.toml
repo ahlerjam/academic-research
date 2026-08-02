@@ -99,6 +99,26 @@ rerank-cloud = [
     "cohere>=5.0,<8.0",
 ]
 
+# Strukturerhaltende Tabellenextraktion (#630): academic_vault/tables.py liest
+# Zeilen/Spalten/Zellen inkl. Bounding-Box aus einem PDF, damit Effektstaerken
+# und Stichprobengroessen mit Seiten- und Zellbeleg in die Extraktionsmatrix und
+# die Meta-Analyse gehen statt als kollabierter Fliesstext zu verschwinden.
+#
+# ABSICHTLICH ein Extra und KEINE Hard-Dependency: ohne pdfplumber laeuft der
+# bestehende Volltextpfad unveraendert weiter, `extract_tables()` meldet dann
+# `status="backend-missing"` mit der Installationsanweisung (AC5 von #630).
+#
+# Backend-Wahl (Vergleich dokumentiert in docs/reference/vault.md, Abschnitt
+# "Tabellenextraktion"): pdfplumber ist reines Python (pdfminer.six + Pillow +
+# pypdfium2), liefert ueber `Page.find_tables()` Zellen als Bounding-Boxen und
+# braucht keine Systembinaries. camelot setzt Ghostscript/OpenCV voraus,
+# Docling und Marker ziehen Layout-Modelle im GB-Bereich in uv.lock — dieselbe
+# Falle, die oben schon fuer FlagEmbedding dokumentiert ist.
+# Zweitstelle beim Aendern: scripts/requirements.txt (Endnutzer-Installation).
+tables = [
+    "pdfplumber>=0.11",
+]
+
 # Lokaler Reranker-Fallback (BAAI/bge-reranker-v2-m3, #376): FlagEmbedding ist
 # ABSICHTLICH KEIN uv-verwaltetes Extra (P1-Fix, Fixrunde PR #422) -- kein
 # `rerank-local`-Eintrag hier, kein Eintrag in uv.lock. Grund: uv loest

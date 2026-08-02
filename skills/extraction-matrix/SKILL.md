@@ -55,7 +55,9 @@ Vergleichstabelle:
 - Vault-Queries: `vault.find_notes(paper_id, query=None, k=10)` für
   strukturierte Exzerpte (Kernbefund/Methode/Verwendbarkeit aus
   `reading-notes`), `vault.find_quotes(paper_id, query, k=3)` für wörtliche
-  Belege je Spaltenthema
+  Belege je Spaltenthema, `vault.list_tables(paper_id)` und
+  `vault.get_table_cell(paper_id, page, table_index, row, col)` für
+  Zahlen-Spalten aus Ergebnistabellen (Schritt 4a)
 - Extern: `document-skills:xlsx` für den Arbeitsblatt-Export (Schritt 7)
 
 ## Core-Workflow
@@ -97,6 +99,24 @@ eigenes Feld — nur übernehmen, wenn sie explizit im Methode-Text auftauchen
 (z. B. „N=42", „Erhebung 2021–2022"); sonst als fehlend markieren, auch wenn
 der Methode-Text sonst vorhanden ist. Nie aus dem Kernbefund oder aus
 Weltwissen ergänzen.
+
+### 4a. Zahlen-Spalten aus Tabellen (Stichprobe, Effektstärke, CI)
+
+Zahlen stehen in Tabellen, der Volltextindex kollabiert dort jede Struktur.
+Für **Stichprobe**, Effektstärke und CI zuerst die Tabellenquelle prüfen:
+
+1. `vault.list_tables(paper_id)` — je Tabelle `page`, `table_index` und `rows`
+   (Zeile → Spalte → Wert); Zeile 0 ist meist die Kopfzeile.
+2. Spalte in der Kopfzeile suchen (`N`, `d`, `95%-CI`), dann die Studienzeile.
+3. `vault.get_table_cell(paper_id, page, table_index, row, col)` → `value`,
+   `bbox` und ein fertiges `evidence`-Feld.
+4. Matrixzelle: `<value> (<evidence>)`, z. B.
+   `120 (smith2020, S. 1, Tabelle 1, Zeile 2, Spalte 2)`.
+
+Kein Ergebnis heißt nicht „still leer": `status` nennt den Grund (`no-tables`,
+`no-textlayer` → erst OCR, `backend-missing` → `uv sync --extra tables`). In
+allen Fällen bleibt die Zelle `— fehlend —`; ein `None` von
+`vault.get_table_cell()` wird nie durch einen Nachbarwert ersetzt.
 
 **Fehlend-Markierung:** Jede Zelle ohne Beleg erhält den Text `— fehlend —`
 (nicht leer lassen, nicht raten). Der Preamble-Block „Keine Fabrikation" gilt
