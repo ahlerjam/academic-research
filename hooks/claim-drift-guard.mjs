@@ -45,6 +45,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname, basename, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
+import { isProtectedPath } from './lib/protected-path.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -94,17 +95,9 @@ async function readStdin() {
 }
 
 // ---------------------------------------------------------------------------
-// Pfad-Match (bewusst identisch zu verbatim-guard.mjs: kapitel/**\/*.md, *.tex)
+// Pfad-Match: isProtectedPath() kommt aus ./lib/protected-path.mjs (#615) —
+// gemeinsame Quelle fuer alle drei Kapitel-Guards.
 // ---------------------------------------------------------------------------
-
-function isProtectedPath(filePath) {
-  if (!filePath) return false;
-  const normalized = filePath.replace(/\\/g, '/');
-  if (normalized.endsWith('.tex')) return true;
-  // Unterordner unter kapitel/ zaehlen mit (#516)
-  if (/(?:^|\/)kapitel\/(?:[^/]+\/)*[^/]+\.md$/.test(normalized)) return true;
-  return false;
-}
 
 /** Loest einen relativen Tool-Pfad gegen CLAUDE_PROJECT_DIR bzw. das CWD auf. */
 function resolveFilePath(filePath) {

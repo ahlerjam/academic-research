@@ -39,6 +39,7 @@ import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
 import { extractCitations, markSpans } from './lib/citation-parse.mjs';
 import { loadConfig, resolveCitations } from './lib/citation-cascade.mjs';
+import { isProtectedPath, isMarkdownOrTexFile, chapterDirLabel } from './lib/protected-path.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -92,22 +93,9 @@ async function readStdin() {
 }
 
 // ---------------------------------------------------------------------------
-// Pfad-Match
+// Pfad-Match: isProtectedPath() kommt aus ./lib/protected-path.mjs (#615) —
+// gemeinsame Quelle fuer alle drei Kapitel-Guards.
 // ---------------------------------------------------------------------------
-
-/**
- * Gibt true zurueck wenn der Pfad einer Kapitel-MD- oder LaTeX-Datei entspricht.
- * Patterns: kapitel/**\/*.md | *.tex
- */
-function isProtectedPath(filePath) {
-  if (!filePath) return false;
-  const normalized = filePath.replace(/\\/g, '/');
-  if (normalized.endsWith('.tex')) return true;
-  // kapitel/<datei>.md und beliebig tiefe Unterordner (#516) — auch bei
-  // fuehrendem Slash oder relativen Pfaden
-  if (/(?:^|\/)kapitel\/(?:[^/]+\/)*[^/]+\.md$/.test(normalized)) return true;
-  return false;
-}
 
 // ---------------------------------------------------------------------------
 // Tool-Erkennung + Content-Extraktion
@@ -712,6 +700,15 @@ async function main() {
 
   // Pfad-Match
   if (!isProtectedPath(filePath)) {
+    // Sichtbare Meldung statt stillem Durchlass (#615): eine Regex deckt nie
+    // jeden Ordnernamen ab, aber ein Nutzer, der die Zeile sieht, merkt es.
+    // Beschraenkt auf .md/.tex, damit irrelevante Dateitypen (.py, .json, …)
+    // kein Rauschen erzeugen.
+    if (isMarkdownOrTexFile(filePath)) {
+      process.stderr.write(
+        `[Vault-Guard] Hinweis: ${filePath} liegt außerhalb des geschützten Kapitelverzeichnisses (${chapterDirLabel()}/) — Zitate/Figures werden NICHT geprüft.\n`
+      );
+    }
     process.exit(0);
   }
 

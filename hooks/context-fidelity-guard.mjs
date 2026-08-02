@@ -51,6 +51,7 @@ import * as os from 'node:os';
 import { join } from 'node:path';
 
 import { VAULT_SRC, resolveVaultDb, runVaultPython } from './lib/vault-bridge.mjs';
+import { isProtectedPath } from './lib/protected-path.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -183,16 +184,9 @@ async function readStdin() {
 }
 
 // ---------------------------------------------------------------------------
-// Pfad-Match (identisch zu verbatim-guard.mjs / claim-drift-guard.mjs)
+// Pfad-Match: isProtectedPath() kommt aus ./lib/protected-path.mjs (#615) —
+// gemeinsame Quelle fuer alle drei Kapitel-Guards.
 // ---------------------------------------------------------------------------
-
-function isProtectedPath(filePath) {
-  if (!filePath) return false;
-  const normalized = filePath.replace(/\\/g, '/');
-  if (normalized.endsWith('.tex')) return true;
-  // Unterordner unter kapitel/ zaehlen mit (#516)
-  return /(?:^|\/)kapitel\/(?:[^/]+\/)*[^/]+\.md$/.test(normalized);
-}
 
 // ---------------------------------------------------------------------------
 // Geschriebener Text
