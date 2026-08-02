@@ -14,35 +14,82 @@
     "bash scripts/dev/test-pretooluse-blocker.sh",
     "bash scripts/dev/check-shell-syntax.sh"
   ],
-  "protectedAreas": ["vault", "hooks", "security", "ci"],
-  "areas": ["vault", "skills", "agents", "commands", "hooks", "scripts", "evals", "ci", "docs", "security"],
+  "protectedAreas": [
+    "vault",
+    "hooks",
+    "security",
+    "ci"
+  ],
+  "areas": [
+    "vault",
+    "skills",
+    "agents",
+    "commands",
+    "hooks",
+    "scripts",
+    "evals",
+    "ci",
+    "docs",
+    "security"
+  ],
   "parallelism": 3,
-  "caps": { "maxParallel": 4, "issuesPerRun": 25, "groomingIssuesPerWeek": 15 },
+  "caps": {
+    "maxParallel": 4,
+    "issuesPerRun": 25,
+    "groomingIssuesPerWeek": 15
+  },
   "budgets": {
-    "S": { "turns": 20, "tokens": 200000 },
-    "M": { "turns": 60, "tokens": 500000 },
-    "L": { "turns": 120, "tokens": 1100000 }
+    "S": {
+      "turns": 20,
+      "tokens": 200000
+    },
+    "M": {
+      "turns": 60,
+      "tokens": 500000
+    },
+    "L": {
+      "turns": 120,
+      "tokens": 1100000
+    }
   },
   "opusTurnWeight": 3,
   "runBudgetFactor": 1.2,
   "models": {
     "grooming": "haiku",
-    "planner": { "SM": "sonnet", "L": "opus" },
-    "builder": { "SM": "sonnet", "L": "opus" },
+    "planner": {
+      "SM": "sonnet",
+      "L": "opus"
+    },
+    "builder": {
+      "SM": "sonnet",
+      "L": "opus"
+    },
     "verifier": "sonnet",
     "escalation": "opus"
   },
-  "autoReady": { "impulse": "P2", "gapScan": "off" },
+  "autoReady": {
+    "impulse": "P2",
+    "gapScan": "off"
+  },
   "maxFixRounds": 3,
   "mergeCheck": "coordinator",
   "overrideLabel": "override-claude-review",
-  "markers": { "plan": "<!-- plan:v1 -->", "acVerify": "<!-- ac-verify:v1 -->" },
+  "markers": {
+    "plan": "<!-- plan:v1 -->",
+    "acVerify": "<!-- ac-verify:v1 -->"
+  },
   "milestoneExcludeRegex": "",
-  "excludeLabels": ["type/operator", "type/epic", "epic"],
+  "excludeLabels": [
+    "type/operator",
+    "type/epic",
+    "epic"
+  ],
   "respectDependencies": true,
   "learnings": true,
   "issueLimit": 300,
   "browserProof": false,
   "notify": false,
-  "onSmokeFailure": "revert"
+  "onSmokeFailure": "revert",
+  "progressStopAfter": 3,
+  "ciInfraSignatures": []
 }
