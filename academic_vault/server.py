@@ -1939,7 +1939,7 @@ def _build_mcp_server():
 
     @mcp.tool(name="vault.stats")
     def _vault_stats() -> dict:
-        """Counts: paper_count, quote_count, cached_files."""
+        """Counts: paper_count, quote_count."""
         return get_stats(db_path)
 
     @mcp.tool(name="vault.set_ocr_done")
