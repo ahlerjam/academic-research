@@ -11,9 +11,18 @@ zitiert englische Quellen).
 > Abschlussarbeit. Alle 32 Paare in `cases.json` sind konstruiert, keine
 > echten Zitate.
 >
-> **Zielsystem aktuell weg.** `quote-fidelity-auditor` (#523) wurde nach
-> PR #582 wegen eines CI-Hangs revertet (PR #584, offene Investigation). Die
-> Empfehlung unten ist Vorarbeit ohne aktuellen Produktiv-Anschlusspunkt.
+> **Zielsystem ist vorhanden.** `quote-fidelity-auditor` (#523) liegt auf
+> `main` (PR #582). Der Revert-PR #584 beruhte auf einer Fehlmessung — der
+> Post-Merge-CI-Lauf war `cancelled` (abgebrochen durch den naechsten Merge,
+> `concurrency: cancel-in-progress` auf main), nicht `failure`; der
+> nachfolgende Lauf auf main war gruen. #584 wurde am 2026-08-01 mit Belegen
+> geschlossen. Ein Produktiv-Anschlusspunkt fuer einen Vorfilter existiert
+> also. Die Empfehlung unten bleibt davon unberuehrt: Sie stuetzt sich auf die
+> Datenlage (32 konstruierte Faelle), nicht auf das Fehlen eines Zielsystems.
+>
+> **Folge-Issue:** #592 nimmt mDeBERTa-v3-XNLI als Vorfilter auf — mit
+> konservativer Schwelle, Default AUS und einer Validierung an echtem
+> Zitatmaterial als Vorbedingung fuers Scharfschalten.
 
 ## Ergebnis auf einen Blick
 
