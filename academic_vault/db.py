@@ -331,6 +331,22 @@ def csl_year(csl: dict) -> int | None:
     return None
 
 
+def format_table_evidence(
+    paper_id: str,
+    page: int,
+    table_index: int,
+    row: int,
+    col: int,
+) -> str:
+    """Formatiert den Beleg zu einer Tabellenzelle (Issue #630 AC2).
+
+    Intern sind ``table_index``, ``row`` und ``col`` 0-basiert; im Beleg stehen
+    sie 1-basiert, weil ihn ein Mensch gegen das PDF haelt. ``page`` ist die
+    PDF-Seite und bereits 1-basiert.
+    """
+    return f"{paper_id}, S. {page}, Tabelle {table_index + 1}, Zeile {row + 1}, Spalte {col + 1}"
+
+
 # Escape-Zeichen fuer LIKE-Patterns (siehe escape_like / ESCAPE-Klauseln unten).
 _LIKE_ESCAPE_CHAR = "\\"
 
@@ -1385,6 +1401,130 @@ class VaultDB:
         with self._connection() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Strukturerhaltend extrahierte Tabellen (Issue #630)
+    # ------------------------------------------------------------------
+
+    def set_paper_tables(self, paper_id: str, tables: list[dict], backend: str) -> int:
+        """Ersetzt die gespeicherten Tabellen eines Papers. Gibt deren Anzahl zurueck.
+
+        Ersetzen statt Anhaengen: eine zweite Extraktion desselben PDFs soll
+        denselben Stand ergeben und nicht die alte Fassung daneben stehen
+        lassen. ``papers``, ``paper_fulltext`` und ``papers_fts`` werden dabei
+        nicht angefasst -- der FTS5-Volltext bleibt byteweise unveraendert.
+
+        Args:
+            paper_id: Referenz auf ``papers.paper_id``.
+            tables: Tabellen aus :func:`academic_vault.tables.extract_tables`.
+            backend: Herkunft der Struktur (z. B. ``"pdfplumber"``).
+
+        Returns:
+            Anzahl geschriebener Tabellen.
+        """
+        now = int(time.time())
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute("DELETE FROM paper_tables WHERE paper_id = ?", (paper_id,))
+            for table in tables:
+                conn.execute(
+                    """
+                    INSERT INTO paper_tables
+                      (table_id, paper_id, page, table_index, backend,
+                       n_rows, n_cols, bbox_json, rows_json, cells_json, extracted_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(uuid4()),
+                        paper_id,
+                        int(table["page"]),
+                        int(table["table_index"]),
+                        backend,
+                        int(table["n_rows"]),
+                        int(table["n_cols"]),
+                        json.dumps(table["bbox"]),
+                        json.dumps(table["rows"], ensure_ascii=False),
+                        json.dumps(table["cells"], ensure_ascii=False),
+                        now,
+                    ),
+                )
+        return len(tables)
+
+    def list_paper_tables(self, paper_id: str, page: int | None = None) -> list[dict]:
+        """Gibt die gespeicherten Tabellen eines Papers zurueck (Struktur inklusive).
+
+        Auf einer Bestands-DB ohne ``paper_tables`` ist das Ergebnis eine leere
+        Liste statt eines ``sqlite3.OperationalError``: ein Vault, in dem nie
+        eine Tabelle extrahiert wurde, hat schlicht keine.
+        """
+        sql = "SELECT * FROM paper_tables WHERE paper_id = ?"
+        params: list = [paper_id]
+        if page is not None:
+            sql += " AND page = ?"
+            params.append(int(page))
+        sql += " ORDER BY page, table_index"
+        with self._connection() as conn:
+            try:
+                rows = conn.execute(sql, params).fetchall()
+            except sqlite3.OperationalError:
+                return []
+        return [self._table_row_to_dict(row) for row in rows]
+
+    @staticmethod
+    def _table_row_to_dict(row: sqlite3.Row) -> dict:
+        record = dict(row)
+        record["rows"] = json.loads(record.pop("rows_json"))
+        record["cells"] = json.loads(record.pop("cells_json"))
+        record["bbox"] = json.loads(record.pop("bbox_json"))
+        return record
+
+    def get_table_cell(
+        self,
+        paper_id: str,
+        page: int,
+        table_index: int,
+        row: int,
+        col: int,
+    ) -> dict | None:
+        """Loest eine einzelne Zelle zu Wert **und** Beleg auf (Issue #630 AC2).
+
+        Returns:
+            ``{"paper_id", "page", "table_index", "row", "col", "value", "bbox",
+            "backend", "evidence"}`` oder ``None``, wenn es die Zelle nicht
+            gibt. ``None`` statt eines Naeherungstreffers: ein geratener Beleg
+            waere schlimmer als gar keiner.
+        """
+        with self._connection() as conn:
+            try:
+                found = conn.execute(
+                    """
+                    SELECT * FROM paper_tables
+                    WHERE paper_id = ? AND page = ? AND table_index = ?
+                    """,
+                    (paper_id, int(page), int(table_index)),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                return None
+        if found is None:
+            return None
+
+        for cell in json.loads(found["cells_json"]):
+            if cell["row"] != row or cell["col"] != col:
+                continue
+            return {
+                "paper_id": paper_id,
+                "page": int(found["page"]),
+                "table_index": int(found["table_index"]),
+                "row": row,
+                "col": col,
+                "value": cell["value"],
+                "bbox": cell["bbox"],
+                "backend": str(found["backend"]),
+                "evidence": format_table_evidence(
+                    paper_id, int(found["page"]), int(found["table_index"]), row, col
+                ),
+            }
+        return None
 
     # ------------------------------------------------------------------
     # Figures CRUD

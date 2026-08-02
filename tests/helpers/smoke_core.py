@@ -50,7 +50,7 @@ VAULT_DOC = REPO_ROOT / "docs" / "reference" / "vault.md"
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 
-EXPECTED_TOOL_COUNT = 42
+EXPECTED_TOOL_COUNT = 45
 
 # venv-Python, das den MCP-Server beherbergt.
 VENV_PYTHON = Path.home() / ".academic-research" / "venv" / "bin" / "python"

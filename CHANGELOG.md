@@ -10,6 +10,33 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Tabellen strukturerhaltend extrahieren (#630):** Meta-Analyse,
+  Extraktionsmatrix und Verzerrungsbewertung stehen und fallen mit Zahlen aus
+  den Primärstudien — die stehen in Tabellen, und der einzige Volltextpfad
+  (`normalize_whitespace()`) kollabierte dort jede Struktur zu einem
+  Leerzeichen. Neu ist ein **zweiter, danebenliegender Pfad**:
+  `academic_vault/tables.py` liest Zeilen, Spalten und Zellen inklusive
+  Bounding-Box aus, `paper_tables` speichert sie, und die drei neuen MCP-Tools
+  `vault.extract_tables()`, `vault.list_tables()` und `vault.get_table_cell()`
+  machen sie abrufbar (42 → 45 Tools). Zu jeder Zahl liefert
+  `vault.get_table_cell()` ein fertiges `evidence`-Feld
+  (`smith2020, S. 1, Tabelle 1, Zeile 2, Spalte 2`); eine unbekannte Zelle
+  ergibt `None` statt eines Näherungstreffers. Der FTS5-Volltext bleibt
+  byteweise unverändert — `normalize_whitespace()` wird nicht aufgeweicht und
+  vom neuen Modul nicht einmal importiert (Regressionstests:
+  `test_fts5_fulltext_is_byte_identical_after_table_extraction`,
+  `test_tables_module_does_not_use_normalize_whitespace`). Backend ist
+  **pdfplumber** als optionales Extra (`uv sync --extra tables`), keine
+  Pflichtabhängigkeit: fehlt es, läuft der Volltextpfad unverändert weiter und
+  der Status `backend-missing` nennt die Nachinstallation. „Keine Tabelle
+  erkannt" ist ebenfalls ein sichtbarer Status (`no-tables` /
+  `no-textlayer`), kein leeres Ergebnis. `skills/extraction-matrix` füllt
+  Zahlen-Spalten aus dieser Quelle statt sie als `— fehlend —` zu markieren,
+  `agents/meta-analysis` zieht Kandidatenzahlen mit Beleg — `yi`/`vi` werden
+  weiterhin nur nach ausdrücklicher Bestätigung übernommen. Der
+  Backend-Vergleich (pdfplumber / camelot / Docling / Marker) und die bekannten
+  Grenzen (verbundene Kopfzellen, zweispaltiges Layout, Tabellen ohne
+  Gitterlinien) stehen in `docs/reference/vault.md`.
 - **OCR mit Sprachangabe und Zeitlimit (#594):** `run_ocrmypdf()` in
   `scripts/ocr.py` ruft ocrmypdf jetzt mit `-l deu+eng` als Default auf
   (übersteuerbar per Parameter `lang` oder Env `ACADEMIC_RESEARCH_OCR_LANG`) —
