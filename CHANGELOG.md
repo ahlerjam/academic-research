@@ -10,6 +10,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **OCR mit Sprachangabe und Zeitlimit (#594):** `run_ocrmypdf()` in
+  `scripts/ocr.py` ruft ocrmypdf jetzt mit `-l deu+eng` als Default auf
+  (übersteuerbar per Parameter `lang` oder Env `ACADEMIC_RESEARCH_OCR_LANG`) —
+  ohne `-l` nahm Tesseract Englisch an, was bei deutschen Scans mit Umlauten
+  und ß messbar schlechteren Text lieferte, die Grundlage der
+  `local-verbatim`-Verifikation. Der Subprozess bekommt zusätzlich ein
+  Zeitlimit (Parameter `timeout` oder Env `ACADEMIC_RESEARCH_OCR_TIMEOUT`,
+  sonst aus der Seitenzahl hochgerechnet mit Fallback-Festwert bei nicht
+  lesbarer Seitenzahl); Überschreitung wirft die neue `OcrTimeoutError`
+  (Unterklasse von `RuntimeError`), erkennbar unterschieden vom inhaltlichen
+  OCR-Fehlschlag. Fehlt ein angefordertes Tesseract-Sprachpaket (ocrmypdf-Exit
+  3), nennt die Fehlermeldung Paketname und Installationsweg
+  (`brew install tesseract-lang` / `apt-get install tesseract-ocr-<lang>`)
+  statt still auf Englisch zurückzufallen.
 - **Guard-schwächende Env-Schalter sichtbar geloggt (#519, Audit R7):** Die
   drei guard-schwächenden Schalter `ACADEMIC_CITATION_AMBIGUOUS`,
   `ACADEMIC_CITATION_CASCADE` und `ACADEMIC_CITATION_MAX_PER_WRITE`
