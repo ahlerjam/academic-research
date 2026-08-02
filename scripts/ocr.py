@@ -99,8 +99,32 @@ def _resolve_timeout(input_pdf: str, timeout: float | None) -> float:
             value = 0.0
         if value > 0:
             return value
+        log.warning(
+            "run_ocrmypdf: %s=%r ist kein gueltiges positives Zeitlimit, "
+            "verwende stattdessen die Seitenzahl-Schaetzung",
+            TIMEOUT_ENV,
+            env_timeout,
+        )
 
     return _estimate_timeout_from_pages(input_pdf)
+
+
+# Exit-Code 3 (missing_dependency) deckt laut ocrmypdf-Doku nicht nur fehlende
+# Tesseract-Sprachpakete ab, sondern auch Ghostscript, das tesseract-Binary
+# selbst, unpaper, jbig2enc und pngquant. Nur wenn der stderr-Text auf ein
+# Sprachdatei-Problem hindeutet, ist die sprachspezifische Meldung zutreffend
+# -- sonst wuerde z. B. fehlendes Ghostscript faelschlich als Sprachproblem
+# gemeldet (Review-Finding, PR #613).
+_LANGUAGE_HINT_KEYWORDS = ("traineddata", "tessdata", "language")
+
+
+def _is_language_related_stderr(lang: str, stderr: str) -> bool:
+    """Prueft, ob ein missing_dependency-stderr tatsaechlich sprachbezogen ist."""
+    stderr_lower = stderr.lower()
+    if any(keyword in stderr_lower for keyword in _LANGUAGE_HINT_KEYWORDS):
+        return True
+    requested_codes = lang.split("+")
+    return any(code and code.lower() in stderr_lower for code in requested_codes)
 
 
 def _missing_language_message(lang: str, stderr: str) -> str:
@@ -109,7 +133,9 @@ def _missing_language_message(lang: str, stderr: str) -> str:
     Die Sprachcode-Erkennung im stderr ist reine Zusatzinfo (das exakte
     stderr-Format kann je ocrmypdf-Version variieren) -- geworfen wird die
     Meldung bereits ueber den stabilen Exit-Code (``missing_dependency``),
-    hier wird nur versucht, den betroffenen Sprachcode zu benennen.
+    hier wird nur versucht, den betroffenen Sprachcode zu benennen. Aufrufer
+    muss vorher mit ``_is_language_related_stderr`` pruefen, ob dieser Fall
+    ueberhaupt zutrifft.
     """
     requested_codes = lang.split("+")
     matched = [code for code in requested_codes if code and code.lower() in stderr.lower()]
@@ -175,6 +201,8 @@ def run_ocrmypdf(
 
     if result.returncode != 0:
         stderr = result.stderr.decode(errors="replace").strip()
-        if result.returncode == MISSING_DEPENDENCY_EXIT_CODE:
+        if result.returncode == MISSING_DEPENDENCY_EXIT_CODE and _is_language_related_stderr(
+            resolved_lang, stderr
+        ):
             raise RuntimeError(_missing_language_message(resolved_lang, stderr))
         raise RuntimeError(f"ocrmypdf fehlgeschlagen (Exit {result.returncode}): {stderr}")
