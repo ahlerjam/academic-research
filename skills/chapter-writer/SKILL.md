@@ -154,10 +154,10 @@ das passende Profil anwenden.
 
 ## Zitat-Einbindung
 
-Standard: `vault.add_quote(..., extraction_method="local-verbatim")` —
-Wortlaut wird lokal gegen die PDF geprüft. Optional (eigener
-`ANTHROPIC_API_KEY`, Beta-Fallback): Citations-API, siehe
-`${CLAUDE_PLUGIN_ROOT}/skills/chapter-writer/references/citations-api.md`.
+Ausschließlich: `vault.add_quote(..., extraction_method="local-verbatim")` —
+der Wortlaut wird lokal und fail-closed gegen die PDF geprüft. Einen
+API-gestützten Zweitweg gibt es seit #632 nicht mehr — er hätte einen eigenen
+Modellzugang außerhalb der Sitzung gebraucht.
 
 ## Humanizer-Audit-Pass (nur Hochschul-Kontext)
 

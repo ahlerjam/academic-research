@@ -78,7 +78,8 @@ REQUIRED_TOKEN_LEVERS = (
     "--mode metadata",
     "--mode quick",
     "--limit",
-    "--batch",
+    # "--batch" entfiel mit #632 zusammen mit der Batch-API -- der Hebel liegt
+    # seither vor dem Scoring (Treffermenge klein halten), nicht daneben.
     "--no-expand",
     "--no-browser",
 )

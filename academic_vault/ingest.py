@@ -2,7 +2,7 @@
 
 Buendelt den Weg vom Paper-Text zum durchsuchbaren Vektor an einer Stelle:
 
-    Textquelle -> Chunking -> (optionaler Kontextsatz) -> Embedding -> DB
+    Textquelle -> Chunking -> Embedding -> DB
 
 Chunker und Textquelle sind injizierbar. Die hier enthaltene Chunk-Zerlegung
 ist bewusst ein einfacher Platzhalter: sobald die dedizierte Chunking-Logik
@@ -25,26 +25,6 @@ DEFAULT_CHUNK_OVERLAP = 200
 DEFAULT_MAX_CHUNKS = 64
 
 ENV_MAX_CHUNKS = "VAULT_MAX_CHUNKS"
-ENV_CONTEXTUAL = "VAULT_CONTEXTUAL_EMBEDDING"
-
-
-class IngestResult(int):
-    """Rueckgabewert von :func:`ingest_paper_embeddings`.
-
-    Verhaelt sich wie ein normaler ``int`` (Anzahl geschriebener Chunks) --
-    bestehende Vergleiche/Arithmetik auf dem Rueckgabewert bleiben unveraendert
-    gueltig. Zusaetzlich traegt er ``context_failures``: die Anzahl der
-    fehlgeschlagenen Kontext-Satz-Generierungen waehrend dieses Ingest-Laufs,
-    damit ein Fehlschlag im Ingest-Ergebnis sichtbar ist statt nur modul-intern
-    in ``embeddings.py`` gezaehlt/geloggt zu werden (#531 AC3).
-    """
-
-    context_failures: int
-
-    def __new__(cls, chunks_written: int, context_failures: int = 0) -> "IngestResult":
-        obj = super().__new__(cls, chunks_written)
-        obj.context_failures = context_failures
-        return obj
 
 
 def split_text(
@@ -124,14 +104,6 @@ def _max_chunks_from_env() -> int:
     return value if value > 0 else DEFAULT_MAX_CHUNKS
 
 
-def _contextual_enabled() -> bool:
-    """Kontextsaetze sind Opt-in: sie kosten einen Anthropic-API-Call pro Chunk."""
-    flag = os.environ.get(ENV_CONTEXTUAL, "").strip().lower()
-    if flag not in {"1", "true", "yes", "on"}:
-        return False
-    return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
-
-
 def ingest_paper_embeddings(
     db_path: str,
     paper_id: str,
@@ -139,7 +111,7 @@ def ingest_paper_embeddings(
     embedder: object | None = None,
     chunker: Callable[[str], list[str]] | None = None,
     max_chunks: int | None = None,
-) -> IngestResult:
+) -> int:
     """Erzeugt Chunk-Embeddings fuer ein Paper und schreibt sie in den Vault.
 
     Ersetzt vorhandene Chunks desselben Papers (``add_paper`` ist ein Upsert und
@@ -154,36 +126,35 @@ def ingest_paper_embeddings(
         max_chunks: Obergrenze. ``None`` = ``VAULT_MAX_CHUNKS`` bzw. Default.
 
     Returns:
-        :class:`IngestResult` (verhaelt sich wie ``int`` = Anzahl geschriebener
-        Chunks). 0, wenn kein Embedder verfuegbar ist, das Paper nicht existiert
-        oder kein Text gefunden wurde. ``.context_failures`` weist aus, wie
-        viele Kontext-Satz-Generierungen in diesem Lauf fehlgeschlagen sind
-        (#531 AC3).
+        Anzahl geschriebener Chunks. 0, wenn kein Embedder verfuegbar ist, das
+        Paper nicht existiert oder kein Text gefunden wurde.
     """
     active_embedder = embedder if embedder is not None else get_embedder()
     if active_embedder is None:
-        return IngestResult(0)
+        return 0
 
     db = VaultDB(db_path)
     if db.get_paper(paper_id) is None:
-        return IngestResult(0)
+        return 0
 
     source = text if text is not None else resolve_paper_text(db_path, paper_id)
     if not source or not source.strip():
-        return IngestResult(0)
+        return 0
 
     split = chunker if chunker is not None else split_text
     chunks = [c for c in split(source) if c.strip()]
     if not chunks:
-        return IngestResult(0)
+        return 0
     limit = max_chunks if max_chunks is not None else _max_chunks_from_env()
     if limit > 0:
         chunks = chunks[:limit]
 
-    contexts, context_failures = _context_sentences(db, paper_id, chunks)
-    embedding_texts = [
-        _embedding_text(ctx, chunk) for ctx, chunk in zip(contexts, chunks, strict=True)
-    ]
+    # Kein Kontextsatz auf diesem Weg: der ``split_text``-Platzhalter kennt
+    # weder Abschnitt noch Seitenzahlen. Kontextualisierte Embedding-Texte
+    # entstehen im seitenbewussten Pfad (``chunking.chunk_pages``, #374) ueber
+    # ``default_context_sentence`` -- seit #632 der einzige Kontextsatz-Weg,
+    # weil keine Plugin-Funktion einen ANTHROPIC_API_KEY voraussetzen darf.
+    embedding_texts = list(chunks)
     # Embeddings VOR der Schreib-Transaktion berechnen: Modell-Inferenz kann
     # Sekunden dauern und darf keinen SQLite-Write-Lock halten.
     vectors = active_embedder.embed_documents(embedding_texts)  # type: ignore[attr-defined]
@@ -194,58 +165,12 @@ def ingest_paper_embeddings(
     # darf kein Paper mit halb geloeschten Chunks hinterlassen.
     with VaultDB(db_path) as writer:
         writer.delete_chunk_embeddings(paper_id)
-        for chunk, ctx, embedding_text, vector in zip(
-            chunks, contexts, embedding_texts, vectors, strict=True
-        ):
+        for chunk, embedding_text, vector in zip(chunks, embedding_texts, vectors, strict=True):
             writer.add_chunk_embedding(
                 paper_id=paper_id,
                 chunk_text=chunk,
-                context_sentence=ctx,
+                context_sentence="",
                 embedding_text=embedding_text,
                 embedding_vector=serialize_f32(vector),
             )
-    return IngestResult(len(chunks), context_failures)
-
-
-def _embedding_text(context_sentence: str, chunk: str) -> str:
-    if not context_sentence:
-        return chunk
-    from .embeddings import build_contextual_embedding_text
-
-    return build_contextual_embedding_text(context_sentence, chunk)
-
-
-def _context_sentences(db: VaultDB, paper_id: str, chunks: list[str]) -> tuple[list[str], int]:
-    """Erzeugt pro Chunk einen 1-Satz-Kontext — nur wenn explizit aktiviert.
-
-    Returns:
-        Tuple aus (Kontext-Saetzen, Anzahl fehlgeschlagener Generierungen in
-        diesem Aufruf). Die Fehlerzahl wird ueber das Delta des modul-globalen
-        Zaehlers in ``embeddings.py`` ermittelt, damit sie ins Ingest-Ergebnis
-        durchgereicht werden kann (#531 AC3).
-    """
-    if not _contextual_enabled():
-        return [""] * len(chunks), 0
-
-    paper = db.get_paper(paper_id) or {}
-    try:
-        csl = json.loads(paper.get("csl_json") or "{}")
-    except (json.JSONDecodeError, TypeError):
-        csl = {}
-    title = str(csl.get("title") or "")
-    abstract = str(csl.get("abstract") or "")
-
-    from .embeddings import generate_context_sentence, get_context_failure_count
-
-    failures_before = get_context_failure_count()
-    contexts = [
-        generate_context_sentence(
-            chunk_text=chunk,
-            paper_title=title,
-            paper_abstract=abstract,
-            paper_id=paper_id,
-        )
-        for chunk in chunks
-    ]
-    context_failures = get_context_failure_count() - failures_before
-    return contexts, context_failures
+    return len(chunks)

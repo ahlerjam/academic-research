@@ -31,11 +31,12 @@ Degradations-Pfade des Setups zeigt (siehe Schritt 1).
 - Die Slash-Commands rufen ihrerseits Skripte und MCP-Tools auf. Protokolliert ist die
   darunterliegende Ebene (`scripts/setup.sh`, `scripts/search.py`, die `vault.*`-Tools,
   `hooks/verbatim-guard.mjs`) — also der Code, der die Arbeit tatsächlich macht.
-- Der Verbatim-Extraktor (`quote-extractor`, Claude-Citations-API) wurde **nicht** live
-  aufgerufen: dafür braucht es einen `ANTHROPIC_API_KEY`, der hier nicht vorlag. Schritt 4
-  legt das Zitat deshalb direkt über `vault.add_quote(..., extraction_method=
-  "citations-api")` an und weist anschließend nach, dass der Halluzinationsschutz genau
-  dieses Zitat akzeptiert und ein erfundenes ablehnt.
+- Der Verbatim-Extraktor (`quote-extractor`) wurde **nicht** live als Agent aufgerufen.
+  Schritt 4 legt das Zitat deshalb direkt über `vault.add_quote(...)` an und weist
+  anschließend nach, dass der Halluzinationsschutz genau dieses Zitat akzeptiert und
+  ein erfundenes ablehnt. Der damals protokollierte `extraction_method` war
+  `"citations-api"`; neue Zitate entstehen seit #632 ausschließlich über
+  `"local-verbatim"`.
 
 ## 1. Setup
 
@@ -131,7 +132,7 @@ $ vault.add_paper('devops-gov-01', csl_json, doi=...)
 -> ok
 
 $ vault.stats()
--> {"paper_count": 2, "quote_count": 1, "cached_files": 0}
+-> {"paper_count": 2, "quote_count": 1}
 
 $ vault.search('Corporate', k=3)
    - devops-gov-01  (score -0.0000)

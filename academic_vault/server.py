@@ -1,6 +1,6 @@
 """academic_vault MCP-Server.
 
-Stellt MCP-Tools vault.search/get_paper/add_paper/ensure_file/
+Stellt MCP-Tools vault.search/get_paper/add_paper/
 add_quote/verify_verbatim/find_quotes/get_quote/add_note/find_notes/
 search_notes/stats bereit.
 
@@ -16,15 +16,12 @@ from uuid import uuid4
 from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset, default_db_path
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .embedding_model import get_embedder
-from .files_api import FilesAPIClient
-from .files_api import is_configured as _files_api_is_configured
 
 logger = logging.getLogger(__name__)
 
 # Kanonischer DB-Default (Single Source of Truth, Issue #190):
 # VAULT_DB_PATH aus Env, sonst ~/.academic-research/projects/<slug>/vault.db.
 _DEFAULT_DB = default_db_path()
-_ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 # Maximale Snippet-Laenge eines Vektor-Treffers in der Suchausgabe.
 _VEC_SNIPPET_CHARS = 240
@@ -1206,50 +1203,25 @@ def list_papers_by_provenance(db_path: str, provenance: str) -> list[dict]:
     return db.list_papers_by_provenance(provenance)
 
 
-def _anthropic_key(api_key: str = "") -> str:
-    """Loest den optionalen ANTHROPIC_API_KEY zur Aufrufzeit auf.
-
-    Reihenfolge: explizites Argument > Umgebung zur Aufrufzeit > der beim
-    Modulimport gelesene Wert. Die Aufrufzeit-Auswertung macht den optionalen
-    Pfad testbar und laesst spaeter gesetzte Keys wirken (#535).
-    """
-    return api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-
-
-def ensure_file(db_path: str, paper_id: str, api_key: str = "") -> str | None:
-    """Optionaler Files-API-Upload — gibt file_id zurueck oder None ohne Key.
-
-    Legacy-/Optional-Pfad (#535): ohne ANTHROPIC_API_KEY passiert nichts und
-    es wird ``None`` zurueckgegeben, damit Standard-Flows (Zotero-Import,
-    lokale Verbatim-Zitate) ohne Key fehlerfrei durchlaufen. Fehler in der
-    Aufrufer-Logik bleiben Fehler: unbekanntes Paper oder fehlender pdf_path
-    werfen weiterhin ValueError — und zwar VOR dem Key-Check, damit ein
-    fehlender Key echte Datenfehler nicht verdeckt.
-
-    Raises:
-        ValueError: Paper unbekannt oder ohne pdf_path.
-    """
-    paper = get_paper(db_path, paper_id)
-    if paper is None:
-        raise ValueError(f"Paper '{paper_id}' nicht gefunden.")
-    pdf_path = paper.get("pdf_path")
-    if not pdf_path:
-        raise ValueError(f"Paper '{paper_id}' hat keinen pdf_path.")
-    key = _anthropic_key(api_key)
-    if not _files_api_is_configured(key):
-        logger.info(
-            "Files-API uebersprungen fuer '%s': kein ANTHROPIC_API_KEY gesetzt "
-            "(optionaler Pfad, #535).",
-            paper_id,
-        )
-        return None
-    client = FilesAPIClient(anthropic_api_key=key, cache_db_path=db_path)
-    return client.ensure_file(pdf_path)
-
-
 def get_stats(db_path: str) -> dict:
-    """Delegiert an FilesAPIClient.get_stats()."""
-    return FilesAPIClient.get_stats(db_path)
+    """Gibt Statistik-Dict zurueck: paper_count, quote_count.
+
+    Keine Token-Ersparnis-Schaetzung (#534) und seit #632 auch kein
+    ``cached_files`` mehr: der Files-API-Upload-Cache ist mit dem
+    Anthropic-SDK entfallen, ein dauerhaft auf 0 stehendes Feld waere genau
+    die Phantomgroesse, die die Honesty-Linie #387/#453 verbietet.
+    """
+    conn = VaultDB._open(db_path)
+    try:
+        paper_count = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+        quote_count = conn.execute("SELECT COUNT(*) FROM quotes").fetchone()[0]
+    finally:
+        conn.close()
+
+    return {
+        "paper_count": paper_count,
+        "quote_count": quote_count,
+    }
 
 
 def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
@@ -1821,16 +1793,6 @@ def _build_mcp_server():
             page_first=page_first,
             page_last=page_last,
         )
-
-    @mcp.tool(name="vault.ensure_file")
-    def _vault_ensure_file(paper_id: str) -> str | None:
-        """Optional (#535): gibt gecachte file_id zurueck oder laedt PDF hoch.
-
-        Ohne eigenen ANTHROPIC_API_KEY gibt das Tool None zurueck statt zu
-        scheitern — der Standardweg fuer Zitate ist
-        vault.add_quote(extraction_method="local-verbatim").
-        """
-        return ensure_file(db_path, paper_id)
 
     @mcp.tool(name="vault.add_quote")
     def _vault_add_quote(

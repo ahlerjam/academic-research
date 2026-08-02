@@ -8,7 +8,7 @@ description: >
   "Literaturliste importieren", "Reading List importieren",
   "Quellenliste / Quellenliste importieren",
   "Leseliste einlesen / Leseliste prüfen / pruefen".
-  Parst Referenzen via LLM (Sonnet), resolvet DOI/ISBN ("Auflösung / Resolution"
+  Parst Referenzen in der Sitzung, resolvet DOI/ISBN ("Auflösung / Resolution"
   via Crossref + DNB), und schreibt alles in den Vault (vault.add_paper).
   Optional: anystyle (Ruby) als Backend, falls installiert.
 license: MIT
@@ -16,7 +16,6 @@ allowed-tools:
   - Bash
   - Read
 security:
-  - api_key_source: "~/.academic-research/config.yaml (0600)"
   - network_allowlist:
       - "api.crossref.org"
       - "services.dnb.de"
@@ -42,21 +41,16 @@ Unterstützt PDF, Markdown und Plaintext. Dedupliziert via DOI/ISBN.
 ### 1. Abhängigkeiten
 
 ```bash
-pip install anthropic requests lxml
+pip install requests lxml
 # Optional für PDF:
 pip install pypdf
 # Optional: anystyle (Ruby-Gem) für strukturiertes Parsen
 gem install anystyle-cli
 ```
 
-### 2. Anthropic API-Key
+Kein API-Key nötig: das Parsen macht der Skill in der Sitzung.
 
-```yaml
-# ~/.academic-research/config.yaml (chmod 0600)
-anthropic_api_key: "sk-ant-..."
-```
-
-### 3. Vault-Datenbank vorhanden
+### 2. Vault-Datenbank vorhanden
 
 Der Vault muss initialisiert sein (z.B. via `vault.init_schema()`).
 
@@ -72,11 +66,17 @@ Claude erkennt folgende Phrasen:
 
 ### Manuell
 
+Zweistufig: Stufe 1 gibt den Rohtext aus, du parst ihn, Stufe 2 importiert.
+
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/skills/reading-list-import/scripts/parse_list.py \
-  --file /Pfad/zur/Literaturliste.pdf \
-  --db ~/.academic-research/projects/meine-arbeit/vault.db
+P=${CLAUDE_PLUGIN_ROOT}/skills/reading-list-import/scripts/parse_list.py
+python $P --extract --file /Pfad/zur/Literaturliste.pdf
+python $P --entries entries.json --db ~/.academic-research/.../vault.db
 ```
+
+`entries.json` ist ein JSON-Array mit `author`, `title`, `year`, `doi`, `isbn`
+und optional `_ambiguous`/`_candidates`. Feldtabelle, Beispiel und die Regel
+„nichts erfinden": `references/entry-schema.md`
 
 ### Unterstützte Formate
 
@@ -85,17 +85,19 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/reading-list-import/scripts/parse_list.py \
 - `.txt` — direkt eingelesen
 
 Erwartete Inhalts-Formate: APA, BibTeX-Snippets, Plain-Stil.
-Detaillierte Format-Hinweise: `${CLAUDE_PLUGIN_ROOT}/skills/reading-list-import/references/format-hints.md`
+Detaillierte Format-Hinweise: `references/format-hints.md`
 
 ## Pipeline
 
 ```
 Datei-Eingabe
     ↓
-Text-Extraktion (pypdf für PDF, direkt für md/txt)
+Text-Extraktion (`--extract`: pypdf für PDF, direkt für md/txt)
     ↓
-LLM-Parser (Sonnet): Text → [{author, title, year, doi, isbn, ...}]
+Parsen in der Sitzung: Text → [{author, title, year, doi, isbn, ...}]
     ↓  (optional: anystyle-Fallback)
+`--entries`: JSON entgegennehmen und validieren
+    ↓
 DOI-Resolution: Crossref-API → CSL-JSON
     ↓
 ISBN-Resolution: DNB SRU + OpenLibrary + GoogleBooks → CSL-JSON
@@ -123,14 +125,14 @@ Claude prüft die Verfügbarkeit automatisch:
 anystyle --version 2>/dev/null && echo "verfügbar" || echo "nicht installiert"
 ```
 
-Bei Verfügbarkeit parst anystyle initial; der LLM-Parser prüft
-und vervollständigt das Ergebnis.
+Bei Verfügbarkeit parst anystyle initial; der Skill prüft und ergänzt.
 
 ## Verhalten
 
 1. Datei-Pfad entgegennehmen (Argument oder via User-Frage)
-2. Format erkennen und Text extrahieren
-3. LLM-Parser aufrufen (Sonnet) — extrahiert strukturierte Liste
+2. Rohtext holen: `parse_list.py --extract --file <liste>`
+3. Rohtext selbst ins Eintrags-Schema überführen, als `entries.json` ablegen,
+   dann `parse_list.py --entries entries.json --db <vault>`
 4. Für jeden Eintrag: DOI/ISBN resolven → CSL-JSON
 5. `vault.is_excluded(citekey)` vorab prüfen: Treffer → überspringen und als
    „ausgeschlossen" zählen, sonst holt der Re-Import aussortierte Quellen zurück
@@ -143,23 +145,17 @@ und vervollständigt das Ergebnis.
 
 ## Mehrdeutigkeiten
 
-Wenn der LLM-Parser mehrere mögliche Quellen für einen Eintrag findet
-(z.B. gleichnamige Arbeiten verschiedener Autoren), wird der User via
-`AskUserQuestion` gefragt:
-
-```
-Mehrdeutiger Eintrag: "Language Models" von Radford, A.
-Welche Quelle ist gemeint?
-  [0] Language Models are Few-Shot Learners (DOI: 10.48550/arXiv.2005.14165)
-  [1] Language Models are Unsupervised Multitask Learners (DOI: kein DOI)
-Auswahl (Nummer):
-```
+Kommen beim Parsen mehrere Quellen für einen Eintrag in Frage (z.B.
+gleichnamige Arbeiten verschiedener Autoren), gehört er mit `_ambiguous: true`
+und `_candidates` ins JSON — der Import fragt den User dann via
+`AskUserQuestion` nach der gemeinten Quelle. Beispiel:
+`references/entry-schema.md`.
 
 ## Sicherheitshinweise
 
 - **Read-only Netz**: Nur lesende API-Zugriffe (Crossref, DNB, OpenLibrary)
 - **Kein Schreiben in externe Systeme**: Nur Vault lokal
-- **Credentials**: Anthropic-Key nur aus `~/.academic-research/config.yaml` (0600)
+- **Kein API-Key**: das Skript braucht keinen eigenen Modellzugang (#632)
 - **Keine PDFs heruntergeladen**: Nur Metadaten werden im Vault gespeichert
 - **Retraction-Check**: kostenloser Crossref-Call bei DOI (`network_allowlist`
   bereits vorhanden); Treffer → automatisch `excluded_source`, kein Hard-Fail
@@ -172,4 +168,4 @@ Auswahl (Nummer):
 - Scan-PDFs (keine Textschicht) können nicht verarbeitet werden;
   OCR muss vorgelagert werden
 - anystyle erfordert Ruby-Umgebung (optional, kein Pflicht-Dep)
-- Netz-Ausfälle führen zu Fallback auf LLM-generiertes CSL-JSON
+- Netz-Ausfälle führen zu minimalem CSL-JSON aus den geparsten Daten

@@ -84,19 +84,18 @@ class TestAc2ChapterWriterDocumentsLocalVerbatimAsDefault:
             'extraction_method="local-verbatim"-Weg als Standard nennen'
         )
 
-    def test_citations_api_reference_marks_optional_api_key(self):
-        assert CHAPTER_WRITER_CITATIONS_API_REF.exists(), (
-            "references/citations-api.md fehlt -- laut AC2 muss die Datei "
-            "entweder ersetzt oder als optionaler Pfad markiert sein"
-        )
-        text = CHAPTER_WRITER_CITATIONS_API_REF.read_text(encoding="utf-8").lower()
-        assert any(marker in text for marker in OPTIONAL_MARKERS), (
-            "references/citations-api.md muss einen Optional-/API-Key-Marker "
-            f"enthalten ({OPTIONAL_MARKERS})"
-        )
-        cleaned = text.replace("$", "").replace("{", "").replace("}", "")
-        assert "anthropic_api_key" in cleaned, (
-            "references/citations-api.md muss auf den eigenen ANTHROPIC_API_KEY hinweisen"
+    def test_citations_api_reference_is_gone(self):
+        """Umkehrung der frueheren Erwartung (#632).
+
+        Bis #632 musste references/citations-api.md existieren und den eigenen
+        ANTHROPIC_API_KEY nennen -- der Pfad war ein markierter Opt-in. Da
+        keine Plugin-Funktion mehr einen eigenen Modellzugang voraussetzen
+        darf, ist die Datei entfallen; sie wieder anzulegen hiesse, den
+        Opt-in-Pfad zurueckzubringen.
+        """
+        assert not CHAPTER_WRITER_CITATIONS_API_REF.exists(), (
+            "references/citations-api.md ist mit #632 entfallen und darf nicht "
+            "zurueckkommen -- der Zitatweg ist ausschliesslich local-verbatim"
         )
 
 

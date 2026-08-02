@@ -33,9 +33,10 @@ Vault, Schreib-Workflow und Open-Access-Quellen unverändert, nur die jeweils da
 hängenden Quellen fehlen bzw. Rate-Limits greifen strenger.
 
 1. **Umgebungsvariablen pro Suchquelle** — `SS_API_KEY` (Semantic Scholar, verhindert
-   429-Fehler bei viel Suchvolumen) und `ANTHROPIC_API_KEY` (Batch-API in
-   `scripts/batch_api.py`). Selbst in der Shell setzen (z. B. `export SS_API_KEY=…` in
-   `~/.zshrc`). Zuständig: die 7 API-Suchmodule.
+   429-Fehler bei viel Suchvolumen). Selbst in der Shell setzen (z. B.
+   `export SS_API_KEY=…` in `~/.zshrc`). Zuständig: die 7 API-Suchmodule.
+   Einen eigenen Modellzugang braucht keine Plugin-Funktion: alles, was ein
+   Modell aufruft, läuft in deiner Claude-Code-Sitzung (#632).
 2. **Per-Uni-Profil** — `~/.academic-research/library-profiles/active.yaml`, Feld
    `credentials_keys`. Der `auth-helper`-Subagent liest die dort genannten Feldnamen zur
    Laufzeit direkt aus derselben YAML-Datei aus. **Doku-Drift, noch nicht bereinigt:**

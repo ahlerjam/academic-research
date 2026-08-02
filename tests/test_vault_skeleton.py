@@ -9,11 +9,9 @@ import tempfile
 import time
 import tomllib
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 from academic_vault.db import VaultDB
-from academic_vault.files_api import FilesAPIClient
 
 # Worktree-Root zum PYTHONPATH hinzufuegen damit academic_vault importierbar ist
 _WORKTREE_ROOT = Path(__file__).parent.parent
@@ -94,7 +92,6 @@ def test_add_paper_and_get():
 
 def test_search_returns_results():
     """vault.search(query) gibt >= 1 Ergebnis zurueck und liegt unter 500ms (AC #62)."""
-    import time
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
@@ -183,40 +180,6 @@ def test_add_quote_manual_no_api_id():
 
 
 # ---------------------------------------------------------------------------
-# Task 5 aktiviert: test_ensure_file_caches
-# ---------------------------------------------------------------------------
-
-
-def test_ensure_file_caches():
-    """Zweiter Aufruf von ensure_file triggert kein Re-Upload."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = f.name
-    # Minimales temporaeres PDF-Dummy
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as pdf_f:
-        pdf_path = pdf_f.name
-        pdf_f.write(b"%PDF-1.4 fake content")
-    try:
-        db = VaultDB(db_path)
-        db.init_schema()
-        db.add_paper("p-file", '{"title": "File Paper"}', pdf_path=pdf_path)
-
-        mock_upload = MagicMock()
-        mock_upload.return_value = "file-abc123"
-
-        client = FilesAPIClient(anthropic_api_key="test-key", cache_db_path=db_path)
-
-        with patch.object(client, "_upload_file", mock_upload):
-            fid1 = client.ensure_file(pdf_path)
-            fid2 = client.ensure_file(pdf_path)
-
-        assert fid1 == fid2 == "file-abc123"
-        mock_upload.assert_called_once()
-    finally:
-        os.unlink(db_path)
-        os.unlink(pdf_path)
-
-
-# ---------------------------------------------------------------------------
 # Task 8 aktiviert: test_find_quotes
 # ---------------------------------------------------------------------------
 
@@ -289,8 +252,6 @@ def test_stats():
         db = VaultDB(db_path)
         db.init_schema()
         db.add_paper("p-stats", '{"title": "Stats Paper"}')
-        # file_id manuell setzen (wie nach ensure_file)
-        db.set_file_id("p-stats", "file-xyz", expires_at=int(time.time()) + 3600)
 
         from academic_vault.server import add_quote
 
@@ -301,15 +262,17 @@ def test_stats():
             extraction_method="manual",
         )
 
-        from academic_vault.files_api import FilesAPIClient
+        from academic_vault.server import get_stats
 
-        stats = FilesAPIClient.get_stats(db_path)
+        stats = get_stats(db_path)
 
-        assert set(stats.keys()) == {"paper_count", "quote_count", "cached_files"}
+        # cached_files ist mit dem Files-API-Pfad entfallen (#632): ohne
+        # Schreiber waere das Feld dauerhaft 0 -- genau die Phantomgroesse,
+        # die #387/#453/#534 verbieten.
+        assert set(stats.keys()) == {"paper_count", "quote_count"}
         assert "token_savings_estimate" not in stats
         assert stats["paper_count"] >= 1
         assert stats["quote_count"] >= 1
-        assert stats["cached_files"] >= 1
     finally:
         os.unlink(db_path)
 

@@ -156,62 +156,15 @@ class TestChunkEmbeddingsCRUD:
 # ---------------------------------------------------------------------------
 
 
-class TestContextualEmbeddingGeneration:
-    """Tests fuer embeddings.py — Kontext-Satz-Generierung."""
+class TestContextualEmbeddingText:
+    """Tests fuer embeddings.py — Zusammenbau des Embedding-Inputs.
 
-    def test_generate_context_sentence_returns_string(self, tmp_path):
-        """generate_context_sentence gibt einen nicht-leeren String zurueck."""
-        from academic_vault.embeddings import generate_context_sentence
-
-        # Mock-Anthropic-Client — keine echte API noetig
-        mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(
-                text="Dieser Chunk diskutiert Transformer im Kontext von Attention aus Paper p001."
-            )
-        ]
-
-        with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.messages.create.return_value = mock_response
-            mock_client.return_value = mock_instance
-
-            result = generate_context_sentence(
-                chunk_text="Multi-head attention allows the model to attend to different positions.",
-                paper_title="Attention Is All You Need",
-                paper_abstract="Transformer architecture based on self-attention.",
-                paper_id="p001",
-            )
-
-        assert isinstance(result, str)
-        assert len(result) > 10
-
-    def test_generate_context_sentence_uses_prompt_caching(self, tmp_path):
-        """generate_context_sentence nutzt Anthropic Prompt-Caching."""
-        from academic_vault.embeddings import generate_context_sentence
-
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Context sentence.")]
-        mock_response.usage = MagicMock(cache_creation_input_tokens=100, cache_read_input_tokens=0)
-
-        with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.messages.create.return_value = mock_response
-            mock_client.return_value = mock_instance
-
-            generate_context_sentence(
-                chunk_text="Some chunk text.",
-                paper_title="Test Paper",
-                paper_abstract="Test abstract.",
-                paper_id="p001",
-            )
-
-            # Prompt-Caching: system-Prompt muss cache_control enthalten
-            call_kwargs = mock_instance.messages.create.call_args
-            assert call_kwargs is not None
-            # Entweder system oder messages enthaelt cache_control
-            args_str = str(call_kwargs)
-            assert "cache_control" in args_str or "ephemeral" in args_str
+    Die frueher hier geprueften Kontextsatz-Generierung ueber das Anthropic-SDK
+    ist mit #632 entfallen: keine Plugin-Funktion darf einen eigenen
+    ANTHROPIC_API_KEY voraussetzen. Der Kontextsatz kommt seither
+    ausschliesslich aus ``chunking.default_context_sentence`` (offline,
+    deterministisch, eigener Test in tests/test_chunking.py).
+    """
 
     def test_build_contextual_embedding_text(self):
         """build_contextual_embedding_text kombiniert Kontext + Chunk korrekt."""
@@ -225,152 +178,6 @@ class TestContextualEmbeddingGeneration:
         assert chunk in result
         # Kontext soll vor Chunk stehen
         assert result.index(context) < result.index(chunk)
-
-    def test_generate_context_sentence_fallback_on_error(self):
-        """Bei API-Fehler gibt generate_context_sentence Fallback-String zurueck."""
-        from academic_vault.embeddings import generate_context_sentence
-
-        with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.messages.create.side_effect = Exception("API error")
-            mock_client.return_value = mock_instance
-
-            result = generate_context_sentence(
-                chunk_text="Some text.",
-                paper_title="Paper Title",
-                paper_abstract="Abstract.",
-                paper_id="p001",
-            )
-
-        # Fallback: kein Crash, gibt leeren String oder Fallback zurueck
-        assert isinstance(result, str)
-
-    def test_no_legacy_haiku_model_in_repo(self):
-        """Das deprecated Modell claude-3-haiku-20240307 darf nirgends mehr vorkommen (#531 AC1).
-
-        Dieser Testfile selbst enthaelt den String zwangslaeufig als Literal
-        (fuer die Pruefung) — daher explizit von der git-grep-Suche ausgenommen.
-        """
-        import subprocess
-
-        repo_root = Path(__file__).parent.parent
-        legacy_model = "claude-3-haiku" + "-20240307"
-        self_path = f"tests/{Path(__file__).name}"
-        result = subprocess.run(
-            ["git", "grep", "-l", legacy_model, "--", ".", f":!{self_path}"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-        )
-        hits = [line for line in result.stdout.splitlines() if line]
-        assert hits == [], f"{legacy_model} noch gefunden in: {hits}"
-
-    def test_generate_context_sentence_uses_default_model_constant(self):
-        """Ohne Env-Override wird CONTEXT_MODEL_ID an messages.create uebergeben (#531 AC2)."""
-        from academic_vault.embeddings import CONTEXT_MODEL_ID, generate_context_sentence
-
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Context sentence.")]
-
-        with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.messages.create.return_value = mock_response
-            mock_client.return_value = mock_instance
-
-            generate_context_sentence(
-                chunk_text="Some chunk text.",
-                paper_title="Test Paper",
-                paper_abstract="Test abstract.",
-                paper_id="p001",
-            )
-
-            call_kwargs = mock_instance.messages.create.call_args.kwargs
-            assert call_kwargs["model"] == CONTEXT_MODEL_ID
-
-    def test_generate_context_sentence_respects_env_override(self, monkeypatch):
-        """VAULT_CONTEXT_MODEL uebersteuert das Default-Modell (#531 AC2)."""
-        from academic_vault.embeddings import ENV_CONTEXT_MODEL, generate_context_sentence
-
-        monkeypatch.setenv(ENV_CONTEXT_MODEL, "claude-x-test-override")
-
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Context sentence.")]
-
-        with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.messages.create.return_value = mock_response
-            mock_client.return_value = mock_instance
-
-            generate_context_sentence(
-                chunk_text="Some chunk text.",
-                paper_title="Test Paper",
-                paper_abstract="Test abstract.",
-                paper_id="p001",
-            )
-
-            call_kwargs = mock_instance.messages.create.call_args.kwargs
-            assert call_kwargs["model"] == "claude-x-test-override"
-
-    def test_generate_context_sentence_failure_is_counted_and_logged(self, caplog):
-        """Fehlschlag wird gezaehlt und geloggt, nicht nur still zu '' degradiert (#531 AC3)."""
-        import logging
-
-        from academic_vault.embeddings import (
-            generate_context_sentence,
-            get_context_failure_count,
-            reset_context_failure_count,
-        )
-
-        reset_context_failure_count()
-
-        with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.messages.create.side_effect = Exception("API error")
-            mock_client.return_value = mock_instance
-
-            with caplog.at_level(logging.WARNING, logger="academic_vault.embeddings"):
-                result = generate_context_sentence(
-                    chunk_text="Some text.",
-                    paper_title="Paper Title",
-                    paper_abstract="Abstract.",
-                    paper_id="p001-fail",
-                )
-
-        assert result == ""
-        assert get_context_failure_count() == 1
-        assert any(
-            "p001-fail" in record.getMessage()
-            for record in caplog.records
-            if record.levelno == logging.WARNING
-        ), "Erwarte WARNING-Log mit paper_id bei Kontext-Fehlschlag"
-
-        reset_context_failure_count()
-
-    def test_reset_context_failure_count(self):
-        """reset_context_failure_count setzt den Zaehler auf 0 zurueck (#531 AC3)."""
-        from academic_vault.embeddings import (
-            generate_context_sentence,
-            get_context_failure_count,
-            reset_context_failure_count,
-        )
-
-        reset_context_failure_count()
-
-        with patch("academic_vault.embeddings._get_anthropic_client") as mock_client:
-            mock_instance = MagicMock()
-            mock_instance.messages.create.side_effect = Exception("API error")
-            mock_client.return_value = mock_instance
-
-            generate_context_sentence(
-                chunk_text="Some text.",
-                paper_title="Paper Title",
-                paper_abstract="Abstract.",
-                paper_id="p001",
-            )
-
-        assert get_context_failure_count() == 1
-        reset_context_failure_count()
-        assert get_context_failure_count() == 0
 
 
 # ---------------------------------------------------------------------------

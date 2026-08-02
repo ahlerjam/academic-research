@@ -44,8 +44,7 @@ Du bist ein präziser akademischer Textanalyst, spezialisiert auf das Extrahiere
 
 ## Quellen-Bindung: lokaler PDF-Pfad
 
-**Standardpfad (kein separater `ANTHROPIC_API_KEY` nötig):** Das PDF wird
-lokal gelesen und der Zitat-Kandidat serverseitig gegen den PDF-Volltext
+**Einziger Pfad:** Das PDF wird lokal gelesen und der Zitat-Kandidat serverseitig gegen den PDF-Volltext
 verifiziert — analog zum bereits gemergten Muster in `figure-verifier.md`
 (#533) und `risk-of-bias.md`.
 
@@ -70,12 +69,11 @@ verifiziert — analog zum bereits gemergten Muster in `figure-verifier.md`
    verifiziert den Kandidaten selbst fail-closed gegen den PDF-Volltext,
    bevor irgendetwas geschrieben wird (siehe „Vault-Persistenz" unten).
 
-**Opt-in (nicht Standardpfad):** Ist ein separater `ANTHROPIC_API_KEY`
-vorhanden und soll die Citations-API statt des lokalen Pfads genutzt werden
-(z. B. für HTML/Markdown-Quellen ohne PDF-Volltext), ist
-`extraction_method="citations-api"` mit Pflichtfeld `api_response_id`
-weiterhin ein gültiger, aber optionaler Weg — siehe
-`skills/chapter-writer/references/citations-api.md` für das API-Call-Schema.
+Quellen ohne lokal lesbaren PDF-Volltext (reiner HTML-/Markdown-Text) lassen
+sich mit diesem Agenten nicht belegen — dann keinen Beleg erfinden, sondern
+den fehlenden Volltext melden. Der frühere Ausweichweg über die
+Anthropic-Citations-API ist mit #632 entfallen: er setzte einen eigenen
+Modellzugang außerhalb der Sitzung voraus, und keine Plugin-Funktion darf das.
 
 **Qualitätsfilter:**
 - Zitat-Länge ≤ 25 Wörter (Agent zählt im Output-Block)
@@ -253,18 +251,3 @@ Kandidatenseite bei Erfolg durch die tatsächlich verifizierte Seite; das
 Feld hier ist also ein Startwert, keine Garantie. Fehlt eine eindeutige
 Seitenzuordnung, das Feld weglassen (auf `null` setzen) — `vault.add_quote`
 löst sie über die Volltext-Suche selbst auf.
-
----
-
-## Opt-in: Citations-API statt lokalem Pfad
-
-Für Quellen ohne lokal lesbaren PDF-Volltext (z. B. reiner HTML-/Markdown-
-Text ohne PDF) bleibt die Anthropic-Citations-API ein gültiger Ausweichweg:
-`vault.ensure_file(paper_id)` → `file_id` → `client.beta.messages.create(...,
-documents=[{"type": "document", "source": {"type": "file", "file_id":
-file_id}, "citations": {"enabled": true}}])`. Details (Files-API-Schema,
-base64-Fallback, Prompt-Caching mit `"cache_control": {"type": "ephemeral",
-"ttl": "1h"}`) stehen in
-`skills/chapter-writer/references/citations-api.md`. Dieser Weg erfordert
-einen separaten `ANTHROPIC_API_KEY` und ist NICHT der Standardpfad dieses
-Agenten.

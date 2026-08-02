@@ -56,7 +56,6 @@ rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
 | `VAULT_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Alternatives Modell (muss 384 Dimensionen liefern). |
 | `VAULT_EMBEDDING_CACHE` | `~/.academic-research/models` | Ablageort der Modellgewichte. |
 | `VAULT_MAX_CHUNKS` | `64` | Obergrenze der Chunks pro Ingest (Latenzschutz). |
-| `VAULT_CONTEXTUAL_EMBEDDING` | *(aus)* | `1` + `ANTHROPIC_API_KEY` erzeugt pro Chunk einen 1-Satz-Kontext. |
 
 Bestands-Datenbanken bekommen den vec0-Spiegel per
 `python -c "from academic_vault.migrate import add_chunk_vectors_table; add_chunk_vectors_table('<pfad>/vault.db')"`.
@@ -95,9 +94,9 @@ Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers`
 python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
 ```
 
-## MCP-Tools (alle 43)
+## MCP-Tools (alle 42)
 
-Der Server registriert **43 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **42 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -110,33 +109,13 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.get_paper(paper_id)` | Paper-Metadaten + `pdf_status` | `vault.get_paper("vaswani2017")` |
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` |
-| `vault.ensure_file(paper_id)` | **Optionaler Legacy-Pfad** (s. u.): PDF → Anthropic Files-API; gibt gecachte `file_id` zurück, ohne `ANTHROPIC_API_KEY` `None` | `vault.ensure_file("vaswani2017")` |
-| `vault.stats()` | DB-Counts (`paper_count`, `quote_count`, `cached_files`) | `vault.stats()` |
-
-**`vault.ensure_file` — optionaler Legacy-Pfad** (Issue #535)
-
-Das Modul `academic_vault/files_api.py` hinter diesem Tool ist seit der
-Umstellung auf lokale Verbatim-Zitate (#507/#512/#532) **Legacy**: kein
-Standard-Workflow hängt mehr daran. Es bedient ausschließlich den optionalen
-Citations-API-Pfad und setzt einen **eigenen `ANTHROPIC_API_KEY`** voraus
-(Anthropic-Beta `files-api-2025-04-14`, im Code auf die Konstante
-`files_api.FILES_API_BETA` isoliert).
-
-| Situation | Verhalten |
-|---|---|
-| Kein `ANTHROPIC_API_KEY` gesetzt | Rückgabe `None`, kein Anthropic-Client wird gebaut, keine Exception — Standard-Flows laufen unverändert durch |
-| Paper unbekannt oder ohne `pdf_path` | `ValueError` (Datenfehler bleiben sichtbar, unabhängig vom Key) |
-| Key gesetzt | Upload + `file_id`-Cache mit 1 h TTL wie bisher |
-
-Der Zotero-Import zählt den Skip in `ImportResult.files_api_skipped` statt ihn
-als Fehler zu melden. Standardweg für Zitate bleibt
-`vault.add_quote(extraction_method="local-verbatim")`.
+| `vault.stats()` | DB-Counts (`paper_count`, `quote_count`) | `vault.stats()` |
 
 **Zitate (Quotes)**
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call |
 |------|-------------|------|
-| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None, stance=None)` | Fügt Verbatim-Zitat mit Provenance ein. `extraction_method` ist `"citations-api"` (erfordert `api_response_id`), `"manual"` (ungeprüft) oder `"local-verbatim"` (**fail-closed**, s. u.); `stance` ist optional (`"supports"`/`"contrasts"`/`"mentions"`, sonst `None`) | `vault.add_quote("vaswani2017", "Attention is all you need", "citations-api", api_response_id="resp_1")` |
+| `vault.add_quote(paper_id, verbatim, extraction_method, api_response_id=None, pdf_page=None, printed_page=None, section=None, context_before=None, context_after=None, stance=None)` | Fügt Verbatim-Zitat mit Provenance ein. `extraction_method` ist `"local-verbatim"` (**fail-closed**, s. u., der einzige Weg für neue Zitate seit #632), `"manual"` (ungeprüft) oder `"citations-api"` (erfordert `api_response_id`; nur noch für Bestandszitate aus älteren Läufen gültig); `stance` ist optional (`"supports"`/`"contrasts"`/`"mentions"`, sonst `None`) | `vault.add_quote("vaswani2017", "Attention is all you need", "local-verbatim")` |
 | `vault.search_quote_text(verbatim, k=5)` | LIKE-Volltextsuche in `quotes.verbatim` (prüft, ob ein Zitat existiert) | `vault.search_quote_text("Attention is all", k=3)` |
 | `vault.find_quotes(paper_id, query=None, k=10)` | Gibt Quotes für ein Paper zurück (optional Ähnlichkeitssuche) | `vault.find_quotes("vaswani2017", query="self-attention")` |
 | `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` |

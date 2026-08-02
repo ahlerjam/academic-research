@@ -2,13 +2,11 @@
 
 Liest Items und PDF-Attachments aus einer Zotero-Library, dedupliziert via
 DOI/ISBN gegen den Vault. PDFs werden in temporaere Verzeichnisse heruntergeladen
-und pdf_path im Vault gespeichert; Files-API-Upload ist optional (erfordert
-ANTHROPIC_API_KEY) fuer den optionalen Citations-API-Zitatweg, siehe
-skills/chapter-writer/references/citations-api.md. Ohne Key wird dieser
-Upload uebersprungen und in ``ImportResult.files_api_skipped`` gezaehlt (#535)
-— ein fehlender Key ist kein Importfehler. Lokale Zitierung via
-vault.add_quote(extraction_method="local-verbatim") ist nur moeglich, wenn
-pdf_path noch verfuegbar ist.
+und pdf_path im Vault gespeichert. Zitiert wird ausschliesslich lokal via
+vault.add_quote(extraction_method="local-verbatim") — das ist nur moeglich,
+wenn pdf_path noch verfuegbar ist. Einen PDF-Upload-Cache bei Anthropic gibt
+es seit #632 nicht mehr: keine Plugin-Funktion setzt einen eigenen Modellzugang
+ausserhalb der Sitzung voraus.
 
 Aufruf:
     python skills/zotero-import/scripts/zotero_pull.py \\
@@ -49,8 +47,7 @@ except ImportError:  # pragma: no cover
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_REPO_ROOT))
 from academic_vault.chunking import extract_pages  # noqa: E402
-from academic_vault.files_api import is_configured as files_api_configured  # noqa: E402
-from academic_vault.server import add_paper, add_quote, ensure_file  # noqa: E402
+from academic_vault.server import add_paper, add_quote  # noqa: E402
 from academic_vault.verbatim import (  # noqa: E402
     verify_verbatim_with_pages,
 )
@@ -67,7 +64,6 @@ class ImportResult:
     imported: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
-    file_ids: list[str] = field(default_factory=list)
     quotes_imported: int = 0
     # Annotationen mit Kommentar, aber ohne markierten Quellentext (Notiz-,
     # Bild-, Ink-Annotationen). Sie werden bewusst nicht als Quote importiert
@@ -91,10 +87,6 @@ class ImportResult:
     # lokalen PDF-Parse-Pfad zurueckgefallen wurde (Issue #525 AC2 — dieser
     # Fallback muss geloggt und gezaehlt werden, nicht still bleiben).
     fulltext_fallback_local: int = 0
-    # PDFs, fuer die der optionale Files-API-Upload uebersprungen wurde, weil
-    # kein eigener ANTHROPIC_API_KEY gesetzt ist (#535). Der Zaehler haelt den
-    # Skip sichtbar, ohne ihn als Importfehler zu zaehlen.
-    files_api_skipped: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -481,32 +473,6 @@ def run_import(
                                 isbn=isbn,
                                 pdf_path=local_path,
                             )
-                            # Optionaler Files-API-Upload + Cache (eigener
-                            # ANTHROPIC_API_KEY noetig, siehe citations-api.md).
-                            # Ohne Key wird der Pfad explizit uebersprungen und
-                            # gezaehlt (#535) — kein Eintrag in result.errors,
-                            # denn ein fehlender Key ist kein Importfehler. Das
-                            # except faengt nur noch echte Upload-Fehler MIT Key.
-                            if not files_api_configured():
-                                result.files_api_skipped += 1
-                                logger.info(
-                                    "Optionaler Files-API-Upload fuer %s uebersprungen: "
-                                    "kein ANTHROPIC_API_KEY gesetzt.",
-                                    paper_id,
-                                )
-                            else:
-                                try:
-                                    file_id = ensure_file(
-                                        db_path=db_path,
-                                        paper_id=paper_id,
-                                        api_key="",  # ANTHROPIC_API_KEY aus Env
-                                    )
-                                    if file_id:
-                                        result.file_ids.append(file_id)
-                                except Exception as e:
-                                    result.errors.append(
-                                        f"ensure_file fuer {paper_id} fehlgeschlagen: {e}"
-                                    )
 
                         # Annotationen (Highlights/Notizen) dieses Attachments
                         # importieren — unabhaengig vom Download-Erfolg des PDFs.
@@ -583,8 +549,7 @@ def run_import(
                                 verification = verify_verbatim_with_pages(pages_cache, candidate)
                             except Exception as e:
                                 # Ein kaputtes/unlesbares PDF darf den gesamten
-                                # Item-Import nicht mitreissen (Vorbild:
-                                # ensure_file-try/except oben).
+                                # Item-Import nicht mitreissen.
                                 result.unverified_quotes += 1
                                 result.unverified_details.append(
                                     f"{paper_id} ({ann_key}): Verifikationsfehler ({e})"
@@ -658,13 +623,6 @@ def main() -> None:
     if result.errors:
         for err in result.errors:
             print(f"  - {err}", file=sys.stderr)
-    if result.file_ids:
-        print(f"Optionale Files-API file_ids gecacht: {len(result.file_ids)}")
-    if result.files_api_skipped:
-        print(
-            f"Optionaler Files-API-Upload uebersprungen (kein eigener "
-            f"ANTHROPIC_API_KEY): {result.files_api_skipped}"
-        )
     if result.fulltext_from_zotero:
         print(
             f"Volltext von Zotero uebernommen (ohne lokalen PDF-Parse): "

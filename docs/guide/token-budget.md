@@ -16,7 +16,7 @@ sich je Schritt lohnt, in [Modellwahl](model-choice.md).
 | Schritt | Warum teuer | Gegenmittel |
 |---|---|---|
 | Tiefensuche über Browser-Module | Jede Seite wird geladen, gerendert und gelesen; dazu Wartezeit pro Modul | Modus senken, Module gezielt wählen |
-| Relevanz-Scoring großer Treffermengen | Ein Modellaufruf pro Paper | `--batch` oder kleinere Treffermenge |
+| Relevanz-Scoring großer Treffermengen | Ein Modellaufruf pro Paper | kleinere Treffermenge (`--limit`), Modus senken |
 | Volltext plus Embedding-Erstlauf | Erstes PDF zieht die Modellgewichte (~470 MB) und indexiert den ganzen Text | einmalig hinnehmen, danach offline |
 | Kapitelentwürfe | Langer Output auf einem starken Modell, oft mehrfach überarbeitet | eigene Session pro Kapitel |
 
@@ -49,23 +49,17 @@ Browser-Module:
 auf die API-Quellen. Die vollständige Optionstabelle steht in der
 [Commands-Referenz](../reference/commands.md).
 
-## Große Treffermengen asynchron scoren
+## Große Treffermengen kosten linear
 
-Ab etwa 50 Treffern lohnt sich der Batch-Weg: Das Relevanz-Scoring läuft dann über die
-Anthropic-Message-Batches-API mit 50 % Rabatt, dafür mit rund einer Stunde Latenz.
+Das Relevanz-Scoring läuft vollständig in der Sitzung: der `relevance-scorer`
+bekommt die Treffer in Gruppen von 10, bei 100 Papern sind das eben zehn
+Läufe. Es gibt keinen billigeren Zweitweg mehr — der frühere `--batch`-Modus
+über die Anthropic-Message-Batches-API (50 % Rabatt, ~1 h Latenz) ist mit
+#632 entfallen, weil er einen zweiten, selbst bezahlten Modellzugang neben
+der Claude-Code-Sitzung vorausgesetzt hat.
 
-```
-/academic-research:search "IT Compliance KMU" --mode deep --batch
-```
-
-Das Ergebnis holst du dir später ab:
-
-```
-/academic-research:history --batch <id>
-```
-
-Das ist der einzige Hebel auf dieser Seite, der Geld spart, ohne Ergebnisqualität zu
-kosten — er kostet nur Zeit.
+Der Hebel liegt damit vor dem Scoring: Treffermenge über `--limit` und
+`--mode` klein halten, statt hinterher billiger zu bewerten.
 
 ## Wann sich ein eigener Kontext lohnt
 

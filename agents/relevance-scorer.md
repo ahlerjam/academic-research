@@ -106,26 +106,11 @@ Pro Batch bis zu 10 Papers verarbeiten.
 
 ---
 
-## Cache-Strategie (Prompt-Caching)
+## Grosse Treffermengen
 
-Beim Batch-Scoring werden oft 10+ Papers in Folge verarbeitet. Der System-Prompt (Rolle, Bewertungsskala, Leitlinien) ist dabei konstant — der User-Input variiert nur im `papers[]`-Array.
-
-**Implementierung im API-Call:**
-
-```python
-client.messages.create(
-    model="claude-sonnet-4-6",
-    system=[
-        {
-            "type": "text",
-            "text": "<Agent-System-Prompt aus dieser Datei>",
-            "cache_control": {"type": "ephemeral", "ttl": "1h"},
-        }
-    ],
-    messages=[{"role": "user", "content": json.dumps(batch_input)}],
-)
-```
-
-**Wichtig:** Seit 2026-03-06 ist der Anthropic-Default-TTL 5 Minuten. Ohne explizites `"ttl": "1h"` verfaellt der Cache bei Batch-Pausen — daher immer `"ttl": "1h"` setzen.
-
-**Messbarer Nutzen:** Nach dem 2. Batch-Call liefert die API `cache_read_input_tokens > 0`. Token-Ersparnis skaliert linear mit Batch-Anzahl.
+Bei 50, 100 oder mehr Papern aendert sich nichts am Ablauf: der Agent wird
+mehrfach mit je 10 Papern gestartet. Es gibt keinen Schwellenwert, ab dem ein
+anderer Weg griffe — der frueher hier beschriebene Batch-API-Pfad ist mit #632
+entfallen, weil er einen eigenen Modellzugang ausserhalb der Sitzung
+vorausgesetzt haette. Der Systemprompt ist ueber alle Laeufe identisch; das
+Prompt-Caching der Sitzung greift dadurch von selbst.

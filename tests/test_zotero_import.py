@@ -100,8 +100,7 @@ class TestSmokeImport:
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(single_item)
-            with patch("zotero_pull.ensure_file"):
-                result = run_import(config_path=str(cfg_path), db_path=db_path)
+            result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.skipped == 0
@@ -125,8 +124,7 @@ class TestBulkImport:
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(items)
-            with patch("zotero_pull.ensure_file"):
-                result = run_import(config_path=str(cfg_path), db_path=db_path)
+            result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 50
         assert result.skipped == 0
@@ -158,16 +156,14 @@ class TestDedup:
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(items)
-            with patch("zotero_pull.ensure_file"):
-                result_1 = run_import(config_path=str(cfg_path), db_path=db_path)
+            result_1 = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result_1.imported == 50
 
         # Zweiter Run — Items mit DOI/ISBN werden dedupliziert
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(items)
-            with patch("zotero_pull.ensure_file"):
-                result_2 = run_import(config_path=str(cfg_path), db_path=db_path)
+            result_2 = run_import(config_path=str(cfg_path), db_path=db_path)
 
         # Items mit Identifier werden uebersprungen
         assert result_2.skipped == items_with_id
@@ -209,81 +205,10 @@ class TestMissingIdentifier:
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock(no_id_item)
-            with patch("zotero_pull.ensure_file"):
-                result = run_import(config_path=str(cfg_path), db_path=db_path)
+            result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.skipped == 0
-
-
-# ---------------------------------------------------------------------------
-# Test 5: PDF-Attachment → ensure_file aufgerufen, file_id gecacht
-# ---------------------------------------------------------------------------
-
-
-class TestPDFAttachment:
-    def test_pdf_attachment_uploaded_file_id_cached(self, tmp_path, monkeypatch):
-        """Item mit PDF-Attachment + gesetztem Key → ensure_file wird aufgerufen.
-
-        Seit #535 ist der Files-API-Upload ein optionaler Pfad hinter einem
-        Key-Gate: ohne ANTHROPIC_API_KEY wird er uebersprungen statt versucht.
-        Der gesetzte Key macht diesen Test zum Regressionsbeleg dafuer, dass
-        der Upload-Pfad MIT Key unveraendert laeuft.
-        """
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        from zotero_pull import run_import
-
-        cfg_path = _minimal_config(tmp_path)
-        db_path = str(tmp_path / "vault.db")
-
-        item = [
-            {
-                "key": "ATTACH001",
-                "version": 1,
-                "data": {
-                    "key": "ATTACH001",
-                    "itemType": "journalArticle",
-                    "title": "Paper mit Attachment",
-                    "creators": [
-                        {"creatorType": "author", "firstName": "Franz", "lastName": "Weber"}
-                    ],
-                    "date": "2023",
-                    "DOI": "10.9999/attach.001",
-                    "ISBN": "",
-                    "abstractNote": "Hat PDF",
-                },
-            }
-        ]
-
-        attachment_record = [
-            {
-                "key": "ATT0001A",
-                "version": 1,
-                "data": {
-                    "key": "ATT0001A",
-                    "itemType": "attachment",
-                    "linkMode": "linked_file",
-                    "contentType": "application/pdf",
-                    "filename": "paper_a.pdf",
-                    "title": "paper_a.pdf",
-                },
-            }
-        ]
-
-        with patch("zotero_pull.zotero") as mock_zotero_module:
-            zot_mock = _make_zotero_mock(item)
-            zot_mock.children.return_value = attachment_record
-            mock_zotero_module.Zotero.return_value = zot_mock
-
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id_abc") as mock_ef:
-                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
-
-        assert result.imported == 1
-        mock_ef.assert_called_once()
-        # ensure_file gibt file_id zurueck — result.file_ids nicht leer
-        assert len(result.file_ids) >= 1
-        assert "file_mock_id_abc" in result.file_ids
 
 
 # ---------------------------------------------------------------------------
@@ -311,8 +236,7 @@ class TestConfigPermissions:
 
         with patch("zotero_pull.zotero") as mock_zotero_module:
             mock_zotero_module.Zotero.return_value = _make_zotero_mock([])
-            with patch("zotero_pull.ensure_file"):
-                result = run_import(config_path=str(cfg_path), db_path=db_path)
+            result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 0
 
@@ -409,20 +333,19 @@ class TestAnnotationImport:
             zot_mock.children.side_effect = children_side_effect
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    with patch("zotero_pull.extract_pages", return_value=[]):
-                        with patch(
-                            "zotero_pull.verify_verbatim_with_pages",
-                            return_value=VerbatimResult(
-                                status="exact",
-                                verbatim="Ein wichtiges Highlight.",
-                                pdf_page=1,
-                                char_start=0,
-                                ratio=1.0,
-                            ),
-                        ):
-                            result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                with patch("zotero_pull.extract_pages", return_value=[]):
+                    with patch(
+                        "zotero_pull.verify_verbatim_with_pages",
+                        return_value=VerbatimResult(
+                            status="exact",
+                            verbatim="Ein wichtiges Highlight.",
+                            pdf_page=1,
+                            char_start=0,
+                            ratio=1.0,
+                        ),
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -469,20 +392,19 @@ class TestAnnotationImport:
             zot_mock.children.side_effect = children_side_effect
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    with patch("zotero_pull.extract_pages", return_value=[]):
-                        with patch(
-                            "zotero_pull.verify_verbatim_with_pages",
-                            return_value=VerbatimResult(
-                                status="exact",
-                                verbatim="Randbemerkung ohne nummerische Seite.",
-                                pdf_page=1,
-                                char_start=0,
-                                ratio=1.0,
-                            ),
-                        ):
-                            result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                with patch("zotero_pull.extract_pages", return_value=[]):
+                    with patch(
+                        "zotero_pull.verify_verbatim_with_pages",
+                        return_value=VerbatimResult(
+                            status="exact",
+                            verbatim="Randbemerkung ohne nummerische Seite.",
+                            pdf_page=1,
+                            char_start=0,
+                            ratio=1.0,
+                        ),
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -535,20 +457,19 @@ class TestAnnotationImport:
             zot_mock.children.side_effect = children_side_effect
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                    with patch("zotero_pull.extract_pages", return_value=[]):
-                        with patch(
-                            "zotero_pull.verify_verbatim_with_pages",
-                            return_value=VerbatimResult(
-                                status="exact",
-                                verbatim="Fussnotenverweis.",
-                                pdf_page=1,
-                                char_start=0,
-                                ratio=1.0,
-                            ),
-                        ):
-                            result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                with patch("zotero_pull.extract_pages", return_value=[]):
+                    with patch(
+                        "zotero_pull.verify_verbatim_with_pages",
+                        return_value=VerbatimResult(
+                            status="exact",
+                            verbatim="Fussnotenverweis.",
+                            pdf_page=1,
+                            char_start=0,
+                            ratio=1.0,
+                        ),
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
@@ -601,9 +522,6 @@ def _paper_pdf_path(db_path: str, paper_id: str) -> str | None:
 class TestPDFAttachmentFallback:
     def test_failed_first_download_falls_back_to_second_pdf(self, tmp_path, monkeypatch):
         """Schlaegt der Download des ersten PDFs fehl, wird das zweite versucht."""
-        # Key gesetzt: der optionale Files-API-Pfad (#535) laeuft mit, damit
-        # `mock_ef` unten ueberhaupt erreicht wird.
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         from zotero_pull import run_import
 
         cfg_path = _minimal_config(tmp_path)
@@ -629,21 +547,15 @@ class TestPDFAttachmentFallback:
             zot_mock.children.side_effect = children_side_effect
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id_abc") as mock_ef:
-                with patch("zotero_pull._download_attachment", side_effect=download_side_effect):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", side_effect=download_side_effect):
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert attempted == [first_key, second_key]
         assert result.imported == 1
-        mock_ef.assert_called_once()
-        assert "file_mock_id_abc" in result.file_ids
         assert _paper_pdf_path(db_path, "zotero-FALLBACK") == str(ATTACHMENT_A)
 
     def test_successful_first_download_stops_after_first_pdf(self, tmp_path, monkeypatch):
         """Erfolgreicher Download → zweites PDF-Attachment wird nicht angefasst."""
-        # Key gesetzt: der optionale Files-API-Pfad (#535) laeuft mit, damit
-        # `mock_ef` unten ueberhaupt erreicht wird.
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         from zotero_pull import run_import
 
         cfg_path = _minimal_config(tmp_path)
@@ -669,26 +581,22 @@ class TestPDFAttachmentFallback:
             zot_mock.children.side_effect = children_side_effect
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id_abc") as mock_ef:
-                with patch("zotero_pull._download_attachment", side_effect=download_side_effect):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", side_effect=download_side_effect):
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert attempted == [first_key]
         assert result.imported == 1
-        mock_ef.assert_called_once()
 
     def test_annotations_unverified_when_download_fails(self, tmp_path, monkeypatch):
         """Ohne heruntergeladenes PDF kann nicht verifiziert werden (Issue #529).
 
-        Bewusste Verhaltensaenderung ggue. der fruehreren Erwartung ("Annotationen
+        Bewusste Verhaltensaenderung ggue. der frueheren Erwartung ("Annotationen
         haengen nicht am Download-Erfolg"): Ohne lokales PDF ist keine
         Verifikation gegen den Volltext moeglich (AC #529) -- die Annotation wird
         NICHT mehr ungeprueft als Quote gespeichert, sondern als unverifiziert
         gezaehlt. Der Item-Import selbst (``imported``) bleibt unveraendert.
         """
         from zotero_pull import run_import
-
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         cfg_path = _minimal_config(tmp_path)
         db_path = str(tmp_path / "vault.db")
@@ -722,13 +630,11 @@ class TestPDFAttachmentFallback:
             zot_mock.children.side_effect = children_side_effect
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id") as mock_ef:
-                with patch("zotero_pull._download_attachment", return_value=None):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=None):
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.imported == 1
         assert result.errors == []
-        mock_ef.assert_not_called()
 
         rows = _quotes_rows(db_path)
         assert rows == []
@@ -795,20 +701,19 @@ class TestAnnotationReimportDedup:
                 zot_mock = _make_zotero_mock(item)
                 zot_mock.children.side_effect = children_side_effect
                 mock_zotero_module.Zotero.return_value = zot_mock
-                with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                    with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                        with patch("zotero_pull.extract_pages", return_value=[]):
-                            with patch(
-                                "zotero_pull.verify_verbatim_with_pages",
-                                return_value=VerbatimResult(
-                                    status="exact",
-                                    verbatim="Markierung ohne Identifier-Dedup.",
-                                    pdf_page=1,
-                                    char_start=0,
-                                    ratio=1.0,
-                                ),
-                            ):
-                                return run_import(config_path=str(cfg_path), db_path=db_path)
+                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                    with patch("zotero_pull.extract_pages", return_value=[]):
+                        with patch(
+                            "zotero_pull.verify_verbatim_with_pages",
+                            return_value=VerbatimResult(
+                                status="exact",
+                                verbatim="Markierung ohne Identifier-Dedup.",
+                                pdf_page=1,
+                                char_start=0,
+                                ratio=1.0,
+                            ),
+                        ):
+                            return run_import(config_path=str(cfg_path), db_path=db_path)
 
         result_1 = _run()
         assert result_1.quotes_imported == 1
@@ -864,20 +769,19 @@ class TestAnnotationReimportDedup:
                 zot_mock = _make_zotero_mock(item)
                 zot_mock.children.side_effect = children_side_effect
                 mock_zotero_module.Zotero.return_value = zot_mock
-                with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                    with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                        with patch("zotero_pull.extract_pages", return_value=[]):
-                            with patch(
-                                "zotero_pull.verify_verbatim_with_pages",
-                                return_value=VerbatimResult(
-                                    status="exact",
-                                    verbatim="Wiederkehrende Definition.",
-                                    pdf_page=1,
-                                    char_start=0,
-                                    ratio=1.0,
-                                ),
-                            ):
-                                return run_import(config_path=str(cfg_path), db_path=db_path)
+                with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+                    with patch("zotero_pull.extract_pages", return_value=[]):
+                        with patch(
+                            "zotero_pull.verify_verbatim_with_pages",
+                            return_value=VerbatimResult(
+                                status="exact",
+                                verbatim="Wiederkehrende Definition.",
+                                pdf_page=1,
+                                char_start=0,
+                                ratio=1.0,
+                            ),
+                        ):
+                            return run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert _run().quotes_imported == 2
         assert sorted(r["printed_page"] for r in _quotes_rows(db_path)) == [3, 9]
@@ -994,14 +898,13 @@ def _run_with_annotations(tmp_path, item_key: str, doi: str, annotation_children
         zot_mock.children.side_effect = children_side_effect
         mock_zotero_module.Zotero.return_value = zot_mock
 
-        with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-            with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
-                with patch("zotero_pull.extract_pages", return_value=[]):
-                    with patch(
-                        "zotero_pull.verify_verbatim_with_pages",
-                        side_effect=_verify_side_effect,
-                    ):
-                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+        with patch("zotero_pull._download_attachment", return_value=str(ATTACHMENT_A)):
+            with patch("zotero_pull.extract_pages", return_value=[]):
+                with patch(
+                    "zotero_pull.verify_verbatim_with_pages",
+                    side_effect=_verify_side_effect,
+                ):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
 
     return result, db_path
 
@@ -1188,17 +1091,16 @@ def _run_with_annotations_real_pdf(
         zot_mock.children.side_effect = children_side_effect
         mock_zotero_module.Zotero.return_value = zot_mock
 
-        with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-            with patch("zotero_pull._download_attachment", return_value=local_path):
-                if verify_side_effect is not None:
-                    with patch("zotero_pull.extract_pages", return_value=[]):
-                        with patch(
-                            "zotero_pull.verify_verbatim_with_pages",
-                            side_effect=verify_side_effect,
-                        ):
-                            result = run_import(config_path=str(cfg_path), db_path=db_path)
-                else:
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+        with patch("zotero_pull._download_attachment", return_value=local_path):
+            if verify_side_effect is not None:
+                with patch("zotero_pull.extract_pages", return_value=[]):
+                    with patch(
+                        "zotero_pull.verify_verbatim_with_pages",
+                        side_effect=verify_side_effect,
+                    ):
+                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+            else:
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
 
     return result, db_path
 
@@ -1458,9 +1360,8 @@ class TestZoteroFulltext:
             }
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=None):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=None):
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         zot_mock.fulltext_item.assert_called_once_with(att_key)
         assert result.fulltext_from_zotero == 1
@@ -1486,9 +1387,8 @@ class TestZoteroFulltext:
             zot_mock.fulltext_item.side_effect = ResourceNotFoundError("nicht indiziert")
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.errors == []
         assert result.fulltext_from_zotero == 0
@@ -1518,9 +1418,8 @@ class TestZoteroFulltext:
             }
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
-                    result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.errors == []
         assert result.fulltext_from_zotero == 0
@@ -1551,10 +1450,9 @@ class TestZoteroFulltext:
             zot_mock.fulltext_item.side_effect = ResourceNotFoundError("nicht indiziert")
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
-                    with caplog.at_level(logging.INFO, logger="zotero_pull"):
-                        result = run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                with caplog.at_level(logging.INFO, logger="zotero_pull"):
+                    result = run_import(config_path=str(cfg_path), db_path=db_path)
 
         assert result.errors == []
         assert result.fulltext_fallback_local == 1
@@ -1587,9 +1485,8 @@ class TestZoteroFulltext:
             }
             mock_zotero_module.Zotero.return_value = zot_mock
 
-            with patch("zotero_pull.ensure_file", return_value="file_mock_id"):
-                with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
-                    run_import(config_path=str(cfg_path), db_path=db_path)
+            with patch("zotero_pull._download_attachment", return_value=str(NONCE_PDF)):
+                run_import(config_path=str(cfg_path), db_path=db_path)
 
         called_method_names = {call[0] for call in zot_mock.method_calls}
         mutating_methods = {

@@ -290,7 +290,7 @@ def _make_csl(entry: dict) -> str:
 
 
 class TestParseText:
-    """Unit-Tests fuer extract_text() und llm_parse()."""
+    """Unit-Tests fuer extract_text() und load_entries()."""
 
     def test_extract_text_from_txt(self, tmp_path):
         """extract_text liest .txt-Datei korrekt."""
@@ -311,39 +311,76 @@ class TestParseText:
         result = extract_text(str(sample))
         assert "Author" in result
 
-    def test_llm_parse_returns_list(self):
-        """llm_parse() gibt Liste von Dicts zurueck."""
-        from parse_list import llm_parse
+    def test_load_entries_returns_list(self):
+        """load_entries() gibt Liste von Dicts zurueck."""
+        from parse_list import load_entries
 
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text=json.dumps(PARSED_ENTRIES[:3]))]
-        )
-        result = llm_parse("some text", client=mock_client)
+        result = load_entries(json.dumps(PARSED_ENTRIES[:3]))
         assert isinstance(result, list)
         assert len(result) == 3
         assert result[0]["title"] == PARSED_ENTRIES[0]["title"]
 
-    def test_llm_parse_handles_json_in_markdown(self):
-        """llm_parse() kann JSON aus Markdown-Code-Block extrahieren."""
-        from parse_list import llm_parse
+    def test_load_entries_handles_json_in_markdown(self):
+        """load_entries() kann JSON aus Markdown-Code-Block extrahieren."""
+        from parse_list import load_entries
 
         wrapped = f"```json\n{json.dumps(PARSED_ENTRIES[:2])}\n```"
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text=wrapped)])
-        result = llm_parse("some text", client=mock_client)
-        assert len(result) == 2
+        assert len(load_entries(wrapped)) == 2
 
-    def test_llm_parse_invalid_json_raises(self):
-        """llm_parse() wirft ValueError bei nicht-parse-barem JSON."""
-        from parse_list import llm_parse
+    def test_load_entries_invalid_json_raises(self):
+        """load_entries() wirft ValueError bei nicht-parse-barem JSON."""
+        from parse_list import load_entries
 
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text="Das ist kein JSON")]
+        with pytest.raises(ValueError, match="Eintrags-JSON"):
+            load_entries("Das ist kein JSON")
+
+    def test_load_entries_rejects_non_array(self):
+        """load_entries() akzeptiert nur ein Array von Objekten."""
+        from parse_list import load_entries
+
+        with pytest.raises(ValueError, match="Erwartet JSON-Array"):
+            load_entries('{"title": "kein Array"}')
+
+    def test_import_reading_list_without_anthropic_sdk(self, tmp_path, monkeypatch):
+        """AC5 (#632): der Listen-Import laeuft ohne SDK und ohne Key durch.
+
+        ``sys.modules["anthropic"] = None`` laesst jeden ``import anthropic``
+        im Produktivpfad mit ImportError scheitern — der Import darf davon
+        nichts merken.
+        """
+        import sys
+
+        from parse_list import import_reading_list, load_entries
+
+        monkeypatch.setitem(sys.modules, "anthropic", None)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        listing = tmp_path / "refs.md"
+        listing.write_text(
+            "- Vaswani, A. (2017). Attention Is All You Need.\n",
+            encoding="utf-8",
         )
-        with pytest.raises(ValueError, match="LLM-Parser"):
-            llm_parse("some text", client=mock_client)
+        entries = load_entries(
+            json.dumps(
+                [
+                    {
+                        "author": "Vaswani, A.",
+                        "title": "Attention Is All You Need",
+                        "year": "2017",
+                        "doi": None,
+                        "isbn": None,
+                    }
+                ]
+            )
+        )
+
+        mock_vault_add = MagicMock()
+        with patch("parse_list.vault_add_paper", mock_vault_add):
+            result = import_reading_list(entries, db_path=":memory:")
+
+        assert result["imported"] == 1
+        assert result["errors"] == []
+        mock_vault_add.assert_called_once()
 
 
 class TestResolveEntry:
@@ -570,11 +607,6 @@ class TestImportPipeline:
         """
         from parse_list import import_reading_list
 
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text=json.dumps(entries))]
-        )
-
         # Alle DOIs/ISBNs erfolgreich resolven
         def fake_resolve_doi(doi):
             if doi:
@@ -600,17 +632,9 @@ class TestImportPipeline:
             self._last_mock_excluded = mock_excluded
             if mock_ask:
                 with patch("parse_list.ask_user_question", mock_ask):
-                    return import_reading_list(
-                        str(SAMPLE_TXT),
-                        db_path=":memory:",
-                        llm_client=mock_client,
-                    )
+                    return import_reading_list(entries, db_path=":memory:")
             else:
-                return import_reading_list(
-                    str(SAMPLE_TXT),
-                    db_path=":memory:",
-                    llm_client=mock_client,
-                )
+                return import_reading_list(entries, db_path=":memory:")
 
     def test_90_percent_imported(self):
         """>=28 von 30 Eintraegen werden erfolgreich via vault.add_paper importiert."""
@@ -698,10 +722,6 @@ class TestImportPipeline:
         """Eintraege die nicht resolvet werden koennen, werden als 'skipped' gezaehlt."""
         from parse_list import import_reading_list
 
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text=json.dumps(PARSED_ENTRIES[:3]))]
-        )
         mock_vault_add = MagicMock()
 
         # Resolve schlaegt immer fehl
@@ -716,11 +736,7 @@ class TestImportPipeline:
             patch("parse_list.resolve_isbn", side_effect=always_fail_isbn),
             patch("parse_list.vault_add_paper", mock_vault_add),
         ):
-            result = import_reading_list(
-                str(SAMPLE_TXT),
-                db_path=":memory:",
-                llm_client=mock_client,
-            )
+            result = import_reading_list(PARSED_ENTRIES[:3], db_path=":memory:")
 
         # Eintraege ohne DOI/ISBN-Resolution: Fallback-Pfad oder skipped
         assert result["total"] == 3
@@ -778,11 +794,7 @@ class TestImportPipeline:
         """
         from parse_list import import_reading_list
 
-        mock_client = MagicMock()
         entry = dict(PARSED_ENTRIES[1])  # hat DOI
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text=json.dumps([entry]))]
-        )
         mock_vault_add = MagicMock()
 
         def fake_resolve_doi(doi):
@@ -794,11 +806,7 @@ class TestImportPipeline:
             patch("requests.get", side_effect=ConnectionError("Crossref down")),
             patch("parse_list.vault_add_excluded_source") as mock_excluded,
         ):
-            result = import_reading_list(
-                str(SAMPLE_TXT),
-                db_path=":memory:",
-                llm_client=mock_client,
-            )
+            result = import_reading_list([entry], db_path=":memory:")
 
         assert result["imported"] == 1
         assert result["errors"] == []
@@ -810,11 +818,7 @@ class TestImportPipeline:
         doch eine Exception, faengt der try/except am Call-Standort sie ab."""
         from parse_list import import_reading_list
 
-        mock_client = MagicMock()
         entry = dict(PARSED_ENTRIES[1])  # hat DOI
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text=json.dumps([entry]))]
-        )
         mock_vault_add = MagicMock()
 
         def fake_resolve_doi(doi):
@@ -826,11 +830,7 @@ class TestImportPipeline:
             patch("parse_list.check_retraction", side_effect=Exception("Crossref down")),
             patch("parse_list.vault_add_excluded_source") as mock_excluded,
         ):
-            result = import_reading_list(
-                str(SAMPLE_TXT),
-                db_path=":memory:",
-                llm_client=mock_client,
-            )
+            result = import_reading_list([entry], db_path=":memory:")
 
         assert result["imported"] == 1
         mock_vault_add.assert_called_once()
@@ -845,11 +845,7 @@ class TestImportPipeline:
         """
         from parse_list import import_reading_list
 
-        mock_client = MagicMock()
         entry = dict(PARSED_ENTRIES[1])  # hat DOI
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text=json.dumps([entry]))]
-        )
         mock_vault_add = MagicMock()
 
         def fake_resolve_doi(doi):
@@ -866,11 +862,7 @@ class TestImportPipeline:
                 side_effect=RuntimeError("vault locked"),
             ) as mock_excluded,
         ):
-            result = import_reading_list(
-                str(SAMPLE_TXT),
-                db_path=":memory:",
-                llm_client=mock_client,
-            )
+            result = import_reading_list([entry], db_path=":memory:")
 
         # Der Ingest selbst bleibt unberuehrt (fail-safe fuer den regulaeren Import) ...
         mock_vault_add.assert_called_once()

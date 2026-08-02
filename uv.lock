@@ -22,7 +22,6 @@ name = "academic-research"
 version = "6.5.1"
 source = { virtual = "." }
 dependencies = [
-    { name = "anthropic" },
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "lxml" },
@@ -44,6 +43,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "anthropic" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -57,7 +57,7 @@ rerank-cloud = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.120.2" },
+    { name = "anthropic", marker = "extra == 'dev'", specifier = ">=0.120.2" },
     { name = "cohere", marker = "extra == 'rerank-cloud'", specifier = ">=5.0,<8.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "jsonschema", specifier = ">=4.0" },

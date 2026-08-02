@@ -158,10 +158,19 @@ def test_chapter_writer_outline_gate_is_default() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_search_md_batch_is_gate_free() -> None:
-    """`--batch` und nicht-interaktive Laeufe muessen explizit als gate-frei benannt sein."""
+def test_search_md_non_interactive_is_gate_free() -> None:
+    """Die gate-freien Pfade muessen explizit benannt sein.
+
+    Bis #632 war `--batch` einer davon; die Option ist mit der Batch-API
+    entfallen, uebrig bleiben `--interactive=off` und headless-Laeufe.
+    """
     section = _step_section(_read(SEARCH_MD), "Phase 1")
-    assert "--batch" in section, "Gate-Schritt benennt den `--batch`-Pfad nicht (#537)"
+    assert "--batch" not in section, (
+        "Gate-Schritt nennt weiterhin `--batch` -- die Option ist mit #632 entfallen"
+    )
+    assert "--interactive=off" in section, (
+        "Gate-Schritt benennt das dokumentierte Opt-out `--interactive=off` nicht (#537)"
+    )
     assert re.search(r"gate-frei|kein Gate|ohne Gate", section), (
         "Gate-Schritt benennt keinen gate-freien Pfad (#537)"
     )

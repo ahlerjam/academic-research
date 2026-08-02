@@ -1,17 +1,24 @@
 """parse_list.py — Reading-List-Import Skill (F14).
 
-Extrahiert strukturierte Bibliographieeintraege aus PDF/Markdown/Plaintext,
-resolvet DOI/ISBN via Crossref + book_resolve, und schreibt alles in den Vault.
+Zweistufig seit #632: das Parsen einer Literaturliste ist Arbeit des Skills in
+der laufenden Sitzung, nicht die eines Skripts mit eigenem Modellzugang. Das
+Skript liefert die beiden Haelften drumherum:
+
+1. ``--extract`` gibt den Rohtext einer PDF-/Markdown-/Plaintext-Liste aus.
+   Der Skill liest ihn und erzeugt daraus das Eintrags-JSON (Schema siehe
+   ``skills/reading-list-import/SKILL.md``).
+2. ``--entries`` nimmt genau dieses JSON entgegen, resolvet DOI/ISBN via
+   Crossref + book_resolve, prueft auf Retraktionen und schreibt in den Vault.
 
 CLI:
-    python skills/reading-list-import/scripts/parse_list.py --file refs.txt --db vault.db
+    python .../parse_list.py --extract --file refs.pdf
+    python .../parse_list.py --entries entries.json --db vault.db
 
 Verwendbar auch als Modul (fuer Tests und den Skill selbst).
 """
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
 import sys
@@ -28,8 +35,6 @@ try:
     _REQUESTS_AVAILABLE = True
 except ImportError:
     _REQUESTS_AVAILABLE = False
-
-_ANTHROPIC_AVAILABLE = importlib.util.find_spec("anthropic") is not None
 
 # book_resolve ist im scripts/-Verzeichnis des Repos
 _REPO_SCRIPTS = Path(__file__).resolve().parent.parent.parent.parent / "scripts"
@@ -186,21 +191,8 @@ def extract_text(file_path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# LLM-Parser
+# Eintrags-JSON (vom Skill erzeugt, siehe SKILL.md)
 # ---------------------------------------------------------------------------
-
-_SYSTEM_PROMPT = """Du bist ein Bibliographie-Parser.
-Analysiere die gegebene Referenzliste und extrahiere strukturierte Eintraege.
-Gib ein JSON-Array zurueck. Jedes Element hat folgende Felder:
-- author (string, Autoren getrennt durch '; ')
-- title (string)
-- year (string, vierstellig)
-- doi (string oder null)
-- isbn (string, nur Ziffern, oder null)
-- _ambiguous (boolean, true wenn mehrere moegliche Quellen in Frage kommen)
-- _candidates (array von {title, doi} falls _ambiguous true)
-
-Antworte NUR mit dem JSON-Array. Kein Prosatext davor oder danach."""
 
 
 def _strip_json_fence(text: str) -> str:
@@ -213,45 +205,31 @@ def _strip_json_fence(text: str) -> str:
     return text
 
 
-def llm_parse(text: str, client=None) -> list[dict]:
-    """Ruft Sonnet auf um Referenzliste zu parsen.
+def load_entries(raw: str) -> list[dict]:
+    """Nimmt das vom Skill geparste Eintrags-JSON entgegen.
+
+    Der Skill liefert ein JSON-Array; ein umschliessender Markdown-Codeblock
+    wird toleriert, weil Modellausgabe haeufig so verpackt ist.
 
     Args:
-        text: Rohtext der Referenzliste
-        client: anthropic.Anthropic-Instanz (optional; wird fuer Tests gemockt)
+        raw: JSON-Array als String, optional in ```json ... ``` eingefasst.
 
     Returns:
-        Liste von Eintraegen als Dicts
+        Liste von Eintraegen als Dicts.
 
     Raises:
-        ValueError: Falls LLM kein valides JSON zurueckgibt
+        ValueError: kein valides JSON oder kein Array von Objekten.
     """
-    if client is None:
-        if not _ANTHROPIC_AVAILABLE:
-            raise ImportError("anthropic-SDK benoetigt: pip install anthropic")
-        import anthropic
-
-        client = anthropic.Anthropic()
-
-    response = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=4096,
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": text}],
-    )
-
-    raw = response.content[0].text
     cleaned = _strip_json_fence(raw)
-
     try:
         parsed = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"LLM-Parser hat kein valides JSON zurueckgegeben: {exc}\nRohtext: {raw[:200]}"
-        ) from exc
+        raise ValueError(f"Eintrags-JSON ist nicht valide: {exc}\nRohtext: {raw[:200]}") from exc
 
     if not isinstance(parsed, list):
-        raise ValueError(f"LLM-Parser: Erwartet JSON-Array, erhalten: {type(parsed)}")
+        raise ValueError(f"Eintrags-JSON: Erwartet JSON-Array, erhalten: {type(parsed)}")
+    if not all(isinstance(item, dict) for item in parsed):
+        raise ValueError("Eintrags-JSON: Jedes Element muss ein Objekt sein.")
 
     return parsed
 
@@ -475,23 +453,22 @@ def _handle_ambiguous(entry: dict) -> dict | None:
 
 
 def import_reading_list(
-    file_path: str,
+    entries: list[dict],
     db_path: str = "vault.db",
-    llm_client=None,
 ) -> dict:
-    """Hauptfunktion: importiert eine Referenzliste in den Vault.
+    """Hauptfunktion: schreibt die vom Skill geparsten Eintraege in den Vault.
+
+    Das Parsen selbst passiert seit #632 im Skill (in der Sitzung, ohne
+    eigenen Modellzugang) — hier kommen die fertigen Eintraege an.
 
     Args:
-        file_path: Pfad zu .pdf / .md / .txt
+        entries: Eintraege im Schema aus ``SKILL.md`` (author/title/year/doi/
+            isbn, optional ``_ambiguous``/``_candidates``).
         db_path: Pfad zur Vault-SQLite-Datenbank
-        llm_client: anthropic.Anthropic-Instanz (optional; fuer Tests mocken)
 
     Returns:
         {imported: int, skipped: int, errors: list[str], total: int}
     """
-    text = extract_text(file_path)
-    entries = llm_parse(text, client=llm_client)
-
     imported = 0
     skipped = 0
     errors: list[str] = []
@@ -577,11 +554,32 @@ def _cli():
     import argparse
 
     parser = argparse.ArgumentParser(description="Reading-List-Import: Bibliographie → Vault")
-    parser.add_argument("--file", required=True, help="Pfad zur Referenzliste (.pdf/.md/.txt)")
+    parser.add_argument(
+        "--extract",
+        action="store_true",
+        help="Nur Rohtext von --file ausgeben (Stufe 1; der Skill parst ihn in der Sitzung)",
+    )
+    parser.add_argument("--file", help="Pfad zur Referenzliste (.pdf/.md/.txt), fuer --extract")
+    parser.add_argument(
+        "--entries",
+        help="Pfad zum Eintrags-JSON des Skills, '-' liest von stdin (Stufe 2)",
+    )
     parser.add_argument("--db", default="vault.db", help="Vault-DB-Pfad (default: vault.db)")
     args = parser.parse_args()
 
-    result = import_reading_list(args.file, db_path=args.db)
+    if args.extract:
+        if not args.file:
+            parser.error("--extract braucht --file")
+        print(extract_text(args.file))
+        return
+
+    if not args.entries:
+        parser.error("Entweder --extract --file <liste> oder --entries <json> angeben")
+
+    raw = (
+        sys.stdin.read() if args.entries == "-" else Path(args.entries).read_text(encoding="utf-8")
+    )
+    result = import_reading_list(load_entries(raw), db_path=args.db)
     print(
         f"Import abgeschlossen: {result['imported']} importiert, "
         f"{result['skipped']} uebersprungen, "
