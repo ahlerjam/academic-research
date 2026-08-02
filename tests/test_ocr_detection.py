@@ -1,10 +1,11 @@
 """Tests fuer OCR-Detection und ocrmypdf-Workflow."""
 
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ocr import run_ocrmypdf
+from ocr import OcrTimeoutError, run_ocrmypdf
 
 # scripts/ im Suchpfad
 
@@ -140,6 +141,118 @@ class TestRunOcrmypdf:
             with patch("subprocess.run", return_value=mock_result):
                 with pytest.raises(RuntimeError, match="ocrmypdf"):
                     run_ocrmypdf("input.pdf", "output.pdf")
+
+    def test_ocrmypdf_default_lang_is_deu_plus_eng(self, monkeypatch):
+        """Ohne Parameter/Env → '-l deu+eng' im Aufruf (Issue #594)."""
+        monkeypatch.delenv("ACADEMIC_RESEARCH_OCR_LANG", raising=False)
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"):
+            with patch("subprocess.run", return_value=mock_result) as mock_run:
+                run_ocrmypdf("input.pdf", "output.pdf")
+
+        call_args = mock_run.call_args[0][0]
+        assert "-l" in call_args
+        assert call_args[call_args.index("-l") + 1] == "deu+eng"
+
+    def test_ocrmypdf_lang_param_overrides_default(self, monkeypatch):
+        """lang-Parameter uebersteuert den Default."""
+        monkeypatch.delenv("ACADEMIC_RESEARCH_OCR_LANG", raising=False)
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"):
+            with patch("subprocess.run", return_value=mock_result) as mock_run:
+                run_ocrmypdf("input.pdf", "output.pdf", lang="eng")
+
+        call_args = mock_run.call_args[0][0]
+        assert call_args[call_args.index("-l") + 1] == "eng"
+
+    def test_ocrmypdf_lang_env_overrides_default(self, monkeypatch):
+        """Env ACADEMIC_RESEARCH_OCR_LANG uebersteuert den Default, wenn kein
+        Parameter gesetzt ist."""
+        monkeypatch.setenv("ACADEMIC_RESEARCH_OCR_LANG", "fra")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"):
+            with patch("subprocess.run", return_value=mock_result) as mock_run:
+                run_ocrmypdf("input.pdf", "output.pdf")
+
+        call_args = mock_run.call_args[0][0]
+        assert call_args[call_args.index("-l") + 1] == "fra"
+
+    def test_ocrmypdf_timeout_raises_distinct_error(self):
+        """Zeitlimit-Ueberschreitung -> OcrTimeoutError, unterscheidbar vom
+        inhaltlichen Fehlschlag (RuntimeError, aber nicht OcrTimeoutError).
+        Kein echter Langlaeufer: subprocess.run wird per side_effect gemockt."""
+        with patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"):
+            with patch(
+                "subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd=["ocrmypdf"], timeout=5),
+            ):
+                with pytest.raises(OcrTimeoutError, match="Zeitlimit"):
+                    run_ocrmypdf("input.pdf", "output.pdf", timeout=5)
+
+    def test_ocrmypdf_timeout_error_is_runtime_error_subclass(self):
+        """OcrTimeoutError ist ein RuntimeError (Abwaertskompatibilitaet zu
+        bestehenden ``except RuntimeError``-Stellen)."""
+        assert issubclass(OcrTimeoutError, RuntimeError)
+
+    def test_ocrmypdf_missing_language_package_names_install_path(self):
+        """Exit-Code 3 (missing_dependency) mit sprachbezogenem stderr ->
+        Fehlermeldung nennt Paketname und Installationsweg statt der
+        generischen Meldung."""
+        mock_result = MagicMock()
+        mock_result.returncode = 3
+        mock_result.stderr = b"Error: deu.traineddata not installed"
+
+        with patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"):
+            with patch("subprocess.run", return_value=mock_result):
+                with pytest.raises(RuntimeError) as exc_info:
+                    run_ocrmypdf("input.pdf", "output.pdf", lang="deu+eng")
+
+        message = str(exc_info.value)
+        assert "tesseract-ocr-deu" in message
+        assert "brew install tesseract-lang" in message
+        assert "apt-get install" in message
+
+    def test_ocrmypdf_exit_3_without_language_hint_uses_generic_message(self):
+        """Exit-Code 3 (missing_dependency) OHNE sprachbezogenen stderr-Hinweis
+        (z. B. fehlendes Ghostscript) -> generische Fehlermeldung statt einer
+        irrefuehrenden Sprachpaket-Diagnose (Review-Finding, PR #613)."""
+        mock_result = MagicMock()
+        mock_result.returncode = 3
+        mock_result.stderr = b"Error: gs (Ghostscript) not found in PATH"
+
+        with patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"):
+            with patch("subprocess.run", return_value=mock_result):
+                with pytest.raises(RuntimeError) as exc_info:
+                    run_ocrmypdf("input.pdf", "output.pdf", lang="deu+eng")
+
+        message = str(exc_info.value)
+        assert "tesseract-ocr-deu" not in message
+        assert "brew install tesseract-lang" not in message
+        assert "Ghostscript" in message
+        assert "ocrmypdf fehlgeschlagen" in message
+
+    def test_ocrmypdf_invalid_timeout_env_logs_warning_and_falls_back(self, monkeypatch, caplog):
+        """Ungueltiger ACADEMIC_RESEARCH_OCR_TIMEOUT (nicht-numerisch oder
+        <= 0) wird nicht still verworfen, sondern geloggt, bevor auf die
+        Seitenzahl-Schaetzung zurueckgefallen wird (Review-Finding, PR #613)."""
+        monkeypatch.setenv("ACADEMIC_RESEARCH_OCR_TIMEOUT", "2h")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with caplog.at_level("WARNING"):
+            with patch("shutil.which", return_value="/usr/local/bin/ocrmypdf"):
+                with patch("pypdf.PdfReader", side_effect=Exception("n/a")):
+                    with patch("subprocess.run", return_value=mock_result):
+                        run_ocrmypdf("input.pdf", "output.pdf")
+
+        assert any("ACADEMIC_RESEARCH_OCR_TIMEOUT" in r.message for r in caplog.records)
+        assert any("2h" in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
