@@ -1,6 +1,15 @@
 """Shared helpers fuer Evals-Suites.
 
-Laedt Eval-JSON-Dateien, ruft die Claude-API auf und prueft Expectations.
+Laedt Eval-JSON-Dateien, ruft Claude auf und prueft Expectations.
+
+Aufrufweg (Issue #631): Ist ``ANTHROPIC_API_KEY`` gesetzt, laeuft der
+bestehende SDK-Pfad unveraendert (AC2). Sonst, wenn die ``claude``-CLI im
+PATH gefunden wird, laeuft ein Subprozess-Aufruf ueber die OAuth-Session
+(``claude --print``, Vorbild ``evals/sparring-partner/record.py`` -- kein
+separat abgerechnetes API-Budget noetig, CI setzt dafuer
+``CLAUDE_CODE_OAUTH_TOKEN``, das die CLI automatisch liest). Ist weder ein
+Key gesetzt noch die CLI vorhanden, bleibt es beim bisherigen
+``pytest.skip()``.
 """
 
 from __future__ import annotations
@@ -8,6 +17,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +34,11 @@ EVALS_ROOT = Path(__file__).parent.parent.parent / "evals"
 SKILLS_ROOT = Path(__file__).parent.parent.parent / "skills"
 AGENTS_ROOT = Path(__file__).parent.parent.parent / "agents"
 BASELINES_ROOT = Path(__file__).parent.parent / "baselines"
+
+# Harter Deckel fuer einen einzelnen CLI-Subprozess-Aufruf (Issue #631).
+# Grosszuegig wie evals/sparring-partner/record.py, damit ein haengender
+# Aufruf nicht den ganzen Testlauf blockiert.
+CLI_TIMEOUT_SECONDS = 300
 
 # Maximal zulaessiger Quality-Drop (PASS-Rate) gegenueber Baseline.
 # README verspricht Schwelle Delta >= 20 pp; konfigurierbar via ENV.
@@ -98,7 +115,45 @@ def require_api_key() -> str:
     return key
 
 
-def call_claude(system: str, user: str, model: str = "claude-sonnet-4-6") -> str:
+class ClaudeCliError(RuntimeError):
+    """Auth-/Rate-Limit-/API-Fehler des claude-CLI-Subprozess-Pfads (Issue #631, AC5).
+
+    Getrennt von einer regulaeren (moeglicherweise inhaltlich falschen)
+    Modellantwort: eine Trigger- oder Quality-Eval-Callsite, die diese
+    Exception nicht abfaengt, bricht den Testlauf sichtbar ab statt den
+    Fehler stillschweigend als Fehlklassifikation in die Recall/FPR-Quote
+    einfliessen zu lassen.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        exit_code: int | None = None,
+        api_error_status: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+        self.api_error_status = api_error_status
+
+
+def claude_cli_available() -> bool:
+    """True wenn die claude-CLI im PATH gefunden wird (Issue #631)."""
+    return shutil.which("claude") is not None
+
+
+def _log_model_used(mode: str, model: str) -> None:
+    """Macht die je Aufruf verwendete Modellkennung sichtbar (Issue #631, AC4).
+
+    Schreibt nach stderr statt stdout, damit pytest -q/-v die Zeile nicht als
+    Testausgabe verschluckt (stderr wird bei Fehlschlaegen ohnehin angezeigt;
+    bei -v/-s ist sie live sichtbar).
+    """
+    print(f"[eval_runner] mode={mode} model={model}", file=sys.stderr)
+
+
+def _call_claude_sdk(system: str, user: str, model: str) -> tuple[str, int, int]:
+    """SDK-Pfad: unveraendert gegenueber vor Issue #631 (AC2)."""
     if anthropic is None:
         pytest.skip("anthropic-Package nicht installiert")
     assert anthropic is not None  # narrow fuer Type-Checker nach pytest.skip
@@ -111,7 +166,89 @@ def call_claude(system: str, user: str, model: str = "claude-sonnet-4-6") -> str
         system=system,
         messages=[{"role": "user", "content": user}],
     )
-    return "".join(getattr(block, "text", "") for block in resp.content)
+    text = "".join(getattr(block, "text", "") for block in resp.content)
+    tokens_in = resp.usage.input_tokens if resp.usage else 0
+    tokens_out = resp.usage.output_tokens if resp.usage else 0
+    _log_model_used("sdk", model)
+    return text, tokens_in, tokens_out
+
+
+def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
+    """Ruft ``claude --print`` als Subprozess auf, liefert das geparste JSON.
+
+    Muster analog ``evals/sparring-partner/record.py``: keine Tools
+    (``--allowedTools ""``), keine Projekt-/User-Settings
+    (``--setting-sources ""``), damit die Umgebung des Ausfuehrungsrechners
+    nicht in die Antwort einfaerbt. ``--output-format json`` liefert u.a.
+    ``result``, ``is_error``, ``usage`` und ``stop_reason`` in einer Antwort.
+
+    Bekannte Luecke gegenueber dem SDK-Pfad (Issue #631, AC6): die CLI kennt
+    kein ``--temperature``-Flag (lt. ``claude --help``), der
+    Determinismus-Schutz aus Issue #231 (``temperature=0``) greift auf
+    diesem Pfad also nicht. Dokumentiert in docs/evals/STRATEGY.md.
+
+    Raises:
+        ClaudeCliError: bei Timeout, ungueltigem JSON, nicht-null Exit-Code
+            oder ``is_error: true`` in der Antwort (Auth-/Rate-Limit-/
+            API-Fehler) -- unterscheidbar von einer regulaeren Antwort.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "claude",
+                "--print",
+                "--model",
+                model,
+                "--output-format",
+                "json",
+                "--system-prompt",
+                system,
+                "--allowedTools",
+                "",
+                "--setting-sources",
+                "",
+                user,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=CLI_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ClaudeCliError(f"claude --print Timeout nach {CLI_TIMEOUT_SECONDS}s") from exc
+    except FileNotFoundError as exc:
+        raise ClaudeCliError("claude-CLI nicht gefunden") from exc
+
+    try:
+        parsed: dict[str, Any] = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ClaudeCliError(
+            f"claude --print lieferte kein gueltiges JSON (exit={result.returncode}): "
+            f"{(result.stderr or result.stdout)[:500]}",
+            exit_code=result.returncode,
+        ) from exc
+
+    if result.returncode != 0 or parsed.get("is_error"):
+        raise ClaudeCliError(
+            str(parsed.get("result") or result.stderr[:500] or "claude --print schlug fehl"),
+            exit_code=result.returncode,
+            api_error_status=parsed.get("api_error_status"),
+        )
+    return parsed
+
+
+def call_claude(system: str, user: str, model: str = "claude-sonnet-4-6") -> str:
+    """Ruft Claude auf: SDK bei ``ANTHROPIC_API_KEY`` (AC2 unveraendert),
+    sonst die claude-CLI ueber die OAuth-Session (Issue #631, AC1), sonst
+    Skip -- exakt das bisherige Verhalten (AC7).
+    """
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        text, _, _ = _call_claude_sdk(system, user, model)
+        return text
+    if claude_cli_available():
+        parsed = _run_claude_cli(system, user, model)
+        _log_model_used("cli", model)
+        return str(parsed.get("result", ""))
+    pytest.skip("Weder ANTHROPIC_API_KEY noch claude-CLI verfuegbar - Eval uebersprungen")
 
 
 def _as_patterns(value: Any) -> list[str]:
@@ -199,24 +336,25 @@ def call_claude_with_tokens(
 ) -> tuple[str, int, int]:
     """Ruft Claude auf und gibt (text, tokens_in, tokens_out) zurueck.
 
-    Benoetigt ANTHROPIC_API_KEY. Ohne Key: pytest.skip().
+    SDK bei ``ANTHROPIC_API_KEY`` (AC2 unveraendert). Sonst CLI-Pfad (Issue
+    #631, AC1): das oberste ``usage``-Feld aus ``claude --print
+    --output-format json`` traegt input_tokens/output_tokens fuer genau
+    diesen Aufruf (ohne die interne, session-weite Cache-Erstellung des
+    Agenten-Scaffolds mitzuzaehlen) -- semantisch vergleichbar mit
+    ``resp.usage`` im SDK-Pfad, s. AC6-Vermerk in docs/evals/STRATEGY.md.
+    Ohne Key und ohne CLI: pytest.skip() (AC7 unveraendert).
     """
-    if anthropic is None:
-        pytest.skip("anthropic-Package nicht installiert")
-    assert anthropic is not None
-    key = require_api_key()
-    client = anthropic.Anthropic(api_key=key)
-    resp = client.messages.create(
-        model=model,
-        max_tokens=2048,
-        temperature=0,  # deterministisch — verhindert flaky Trigger-Evals (#231)
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
-    text = "".join(getattr(block, "text", "") for block in resp.content)
-    tokens_in = resp.usage.input_tokens if resp.usage else 0
-    tokens_out = resp.usage.output_tokens if resp.usage else 0
-    return text, tokens_in, tokens_out
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return _call_claude_sdk(system, user, model)
+    if claude_cli_available():
+        parsed = _run_claude_cli(system, user, model)
+        _log_model_used("cli", model)
+        text = str(parsed.get("result", ""))
+        usage = parsed.get("usage") or {}
+        tokens_in = int(usage.get("input_tokens", 0))
+        tokens_out = int(usage.get("output_tokens", 0))
+        return text, tokens_in, tokens_out
+    pytest.skip("Weder ANTHROPIC_API_KEY noch claude-CLI verfuegbar - Eval uebersprungen")
 
 
 def _jsonpath_check(obj: Any, expected: dict[str, Any]) -> bool:
