@@ -14,6 +14,7 @@ tools:
   - mcp__academic-vault__vault_add_figure
   - mcp__academic-vault__vault_get_figure
   - mcp__academic-vault__vault_list_figures
+  - mcp__academic-vault__vault_add_decision
 maxTurns: 8
 ---
 
@@ -49,6 +50,13 @@ Fuer jede Figure oder Tabelle im angegebenen Paper:
    `data_extracted_json` als JSON-Array geparst statt als String abgelegt). Erst
    der gelesene Record ist der Beleg — nicht die zurueckgegebene figure_id. Weicht
    er ab, korrigiere den Eintrag und melde die Abweichung im Output.
+6. Einmal pro Lauf (nicht pro Figure): `vault.add_decision(category="model-version",
+   text="figure-verifier: sonnet", rationale="Issue #617")` — protokolliert die
+   eingesetzte Modellkennung fuer den Material-Passport (`model_versions`).
+   Der Wert `sonnet` ist der Modell-Alias aus dem eigenen Frontmatter
+   (`model: sonnet` oben) — Claude Code loest Aliase serverseitig auf eine
+   konkrete Snapshot-Version auf, ohne dem Agenten diese introspektierbar zu
+   machen; die protokollierte Kennung bleibt deshalb auf Alias-Ebene.
 
 ## Qualitaetskriterien
 

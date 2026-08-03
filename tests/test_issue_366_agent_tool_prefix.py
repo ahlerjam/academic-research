@@ -155,6 +155,13 @@ _LIVE_CALL_ARGS = {
     # erzeugte ID durchreichen zu muessen.
     "vault.get_figure": {"figure_id": "issue366-figure"},
     "vault.list_figures": {"paper_id": "issue366-paper"},
+    # #617: figure-verifier protokolliert einmal pro Lauf die eingesetzte
+    # Modellkennung als Decision der Kategorie "model-version".
+    "vault.add_decision": {
+        "category": "model-version",
+        "text": "figure-verifier: sonnet",
+        "rationale": "Issue #617",
+    },
     "vault.ensure_file": {"paper_id": "issue366-paper"},
     # Wie "vault.ensure_file" bewusst OHNE pdf_path-Seed: erreicht real den
     # ValueError-Zweig der gemeinsamen Paper-/pdf_path-Aufloesung
