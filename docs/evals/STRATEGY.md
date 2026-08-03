@@ -173,12 +173,68 @@ bestehen.
 **Realer Ausführungspfad (Issue #470):** `.github/workflows/eval-behavior.yml`
 ist der einzige Weg, diese ca. 400 Aufrufe tatsächlich abzurufen — ein separat
 per `workflow_dispatch` auslösbarer Job, begrenzt auf `tests/evals/` (nicht
-`tests/`), mit `timeout-minutes: 30` als hartem Deckel. Der Job bricht mit
-`::error::` ab, wenn `ANTHROPIC_API_KEY` als Repo-Secret fehlt, statt
-täuschend grün als „0 failed, N skipped" durchzulaufen. `ci.yml` bleibt davon
-unberührt: kein Key dort, weiterhin nur `push`/`pull_request`, die 147
-API-gateten Skips bestehen im regulären Lauf unverändert fort. Ob das Secret
-hinterlegt wird, bleibt — wie oben beschrieben — Operator-Entscheidung.
+`tests/`), mit `timeout-minutes: 60` als hartem Deckel (angehoben in #631, da
+der CLI-Pfad pro Aufruf deutlich teurer ist als der SDK-Pfad). Der Job bricht mit
+`::error::` ab, wenn weder `ANTHROPIC_API_KEY` noch `CLAUDE_CODE_OAUTH_TOKEN`
+als Repo-Secret hinterlegt ist, statt täuschend grün als „0 failed, N
+skipped" durchzulaufen. `ci.yml` bleibt davon unberührt: keine Auth dort,
+weiterhin nur `push`/`pull_request`, die API-gateten Skips bestehen im
+regulären Lauf unverändert fort. Ob eines der beiden Secrets hinterlegt wird,
+bleibt — wie oben beschrieben — Operator-Entscheidung.
+
+**Zwei Aufrufwege (Issue #631).** `tests/evals/eval_runner.py` probiert bei
+jedem Aufruf zwei Wege statt einem:
+
+1. **SDK-Pfad** (unverändert seit vor #631): `ANTHROPIC_API_KEY` gesetzt →
+   `anthropic.Anthropic(...)`. Separates, eigens abgerechnetes API-Budget.
+2. **CLI-Pfad** (neu): kein `ANTHROPIC_API_KEY`, aber die `claude`-CLI im
+   PATH gefunden → `claude --print --output-format json` als Subprozess,
+   Vorbild `evals/sparring-partner/record.py`. Läuft über die
+   OAuth-Session — lokal die bereits eingeloggte Session, in CI
+   `CLAUDE_CODE_OAUTH_TOKEN` (dasselbe Secret, das `pr-deep-review.yml`
+   bereits fünffach nutzt), ohne zweites Abrechnungsverhältnis.
+3. Weder Key noch CLI gefunden → `pytest.skip()`, exakt wie zuvor.
+
+Ist die CLI vorhanden (**geändertes Verhalten, AC1**): Ein Rechner mit
+einer bereits eingeloggten `claude`-Session löst künftig bei jedem
+`pytest tests/`-Lauf reale (Abo-)Aufrufe aus, wo vorher lautlos geskippt
+wurde. Das ist der beabsichtigte Kern von #631, keine Nebenwirkung —
+wer offline entwickeln will, muss die CLI vom PATH nehmen oder sich ausloggen.
+Fehlen dagegen sowohl Key als auch CLI, bleibt es beim bisherigen
+`pytest.skip()` (**unverändertes Skip-Verhalten, AC7**).
+
+**Was auf dem CLI-Pfad entfällt oder anders aussieht (AC6):**
+
+- **Kein `--temperature`-Flag.** Laut `claude --help` kennt die CLI keine
+  Temperatur-Steuerung. Der Determinismus-Schutz aus Issue #231
+  (`temperature=0`, verhindert flaky Trigger-Evals) greift auf dem CLI-Pfad
+  **nicht**. Betroffen: `test_should_trigger_recall` /
+  `test_should_not_trigger_fpr` (ca. 280 Haiku-Klassifikationsaufrufe) — bei
+  CLI-Betrieb potenziell leicht flakier als auf dem SDK-Pfad. Keine
+  Kompensation umgesetzt (Out of Scope für #631); falls das in der Praxis zu
+  Flakiness führt, ist ein Retry- oder Toleranz-Mechanismus ein Folge-Issue.
+- **Typisierte SDK-Exceptions weg.** Der SDK-Pfad kann
+  `anthropic.RateLimitError`, `anthropic.AuthenticationError` etc. werfen.
+  Der CLI-Pfad kennt nur `eval_runner.ClaudeCliError` mit einem generischen
+  `api_error_status` (aus dem JSON-Feld `api_error_status` der CLI-Antwort)
+  — weniger granular, aber ausreichend, um einen Auth-/Rate-Limit-Fehler von
+  einer inhaltlich falschen (aber technisch sauberen) Modellantwort zu
+  unterscheiden (AC5).
+- **Tokenzahlen bleiben verfügbar, aber anders geschnitten.** Das
+  `usage`-Feld aus `--output-format json` liefert `input_tokens`/
+  `output_tokens` für den jeweiligen Aufruf — kein bestehender
+  Token-Baseline-Konsument (`call_claude_with_tokens`) ist bisher an eine
+  reale Suite verdrahtet, betroffen ist also aktuell nur die
+  Infrastruktur-Funktion selbst, keine bestehende Baseline in
+  `tests/baselines/tokens.json`. Wichtig für spätere Nutzung: ein einzelner
+  CLI-Aufruf erzeugt zusätzlich einen großen, hier nicht ausgewerteten
+  Cache-Erstellungs-Block (`cache_creation_input_tokens`, im Probelauf
+  ca. 17–18k Tokens für das Agenten-Scaffold) — Kostengrößenordnung pro
+  Aufruf liegt dadurch spürbar über einem reinen SDK-`messages.create()`-Call
+  mit demselben System-Prompt; die Bezifferung „ca. 400 Aufrufe" oben bleibt
+  eine Aufrufzahl, keine Kostenaussage für den CLI-Pfad.
+- **`stop_reason` bleibt erhalten**, wird aber wie zuvor nicht ausgewertet
+  (weder SDK- noch CLI-Pfad extrahieren es aktuell).
 
 ## Alt-Issue #55
 
