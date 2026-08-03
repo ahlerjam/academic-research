@@ -589,9 +589,25 @@ def commit_double_screening(
     """
     buckets = merge_double(session_dir, stage=stage)
     if db_path:
+        # Lookup-Datenstruktur nach paper_id für Gründe
+        pairs = _double_screening_pairs(session_dir, stage=stage)
         for paper_id in buckets["exclude"]:
+            # Bestimme den verwendeten Grund basierend auf Konsolidierungslogik
+            rounds = pairs.get(paper_id, {})
+            r1, r2 = rounds.get(1), rounds.get(2)
+            human = rounds.get("human")
+
+            # Logik entspricht merge_double()
+            if human is not None:
+                reason = human.get("reason", "")
+            elif r1 is not None and r2 is not None and r1["decision"] == r2["decision"]:
+                reason = r1.get("reason", "")
+            else:
+                # Fallback: verwende r1 wenn vorhanden
+                reason = r1.get("reason", "") if r1 else ""
+
             _add_excluded_source(
-                db_path, paper_id, f"{stage} (double-screening): konsolidierter Ausschluss"
+                db_path, paper_id, f"{stage}: {reason}" if reason else f"{stage}: ausgeschlossen"
             )
     return buckets
 
@@ -639,8 +655,25 @@ def to_prisma_counters_double(
 
 
 def open_cases(session_dir: str | Path) -> list[dict[str, Any]]:
-    """Alle uneindeutigen Fälle über alle Stufen — nichts davon ist entschieden."""
-    return [e for e in read_ledger(session_dir) if e.get("decision") == "unclear"]
+    """Alle uneindeutigen Fälle über alle Stufen — nichts davon ist entschieden.
+
+    Bei Doppel-Screening: nur Runde-1-Einträge (oder menschliche Auflösung),
+    um ein Paper nicht doppelt zu zählen, wenn beide Runden `unclear` sind.
+    """
+    seen_papers: set[str] = set()
+    result: list[dict[str, Any]] = []
+    for e in read_ledger(session_dir):
+        if e.get("decision") != "unclear":
+            continue
+        paper_id = e["paper_id"]
+        if paper_id in seen_papers:
+            continue
+        # Nur Runde 1 oder menschliche Einträge
+        round_val = _row_round(e)
+        if round_val == 1 or round_val == "human":
+            result.append(e)
+            seen_papers.add(paper_id)
+    return result
 
 
 def open_cases_report(session_dir: str | Path) -> str:
