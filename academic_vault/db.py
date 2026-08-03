@@ -88,6 +88,17 @@ VALID_EXTRACTION_METHODS = frozenset({"citations-api", "manual", "local-verbatim
 # liefert die lesbare Fehlermeldung.
 VALID_SOURCE_KINDS = frozenset({"literature", "primary"})
 
+# Dateisuffix des Sidecar-Markers, mit dem der scihub-fetcher-Agent einen
+# erfolgreichen Download kennzeichnet (Issue #627). add_paper() erzwingt
+# provenance="scihub" fuer jeden pdf_path, neben dem eine Datei mit diesem
+# Suffix liegt -- unabhaengig davon, was der aufrufende Prompt als
+# provenance-Parameter uebergibt oder wegläßt. Das verlagert die
+# Durchsetzung von einer Prompt-Anweisung (agents/scihub-fetcher.md) an die
+# einzige tatsaechliche Schreibstelle fuer die papers-Tabelle. Bewusst kein
+# Wildcard-Suffix (z.B. nur ".provenance"), um keine fremden Dateien
+# fehlzuinterpretieren.
+SCIHUB_PROVENANCE_SIDECAR_SUFFIX = ".provenance-scihub"
+
 # Erlaubte Werte fuer `codings.category_origin` (Issue #473): ob eine Kategorie
 # am Material entwickelt (induktiv) oder aus der Theorie abgeleitet (deduktiv)
 # wurde. Die Herkunft gehoert zur Methodendokumentation und wird deshalb
@@ -116,11 +127,18 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 # 7 = quotes.context_source (Issue #520): Herkunftsnachweis fuer
 #     context_before/context_after ('fulltext' oder NULL), gesetzt von
 #     server.resolve_quote_context().
-# 8 = embedding_meta (Issue #629): Modell-ID und Dimension des Bestands.
+# 8 = papers.retraction_checked_at (Issue #604): Zeitpunkt der letzten
+#     Crossref-Retraction-Pruefung, Grundlage fuer server.check_retractions().
+# 9 = embedding_meta (Issue #629): Modell-ID und Dimension des Bestands.
+#     Beanspruchte urspruenglich ebenfalls die 8 (Entwicklung parallel zu
+#     #604) und musste beim Zusammenfuehren eine Generation hoeherruecken --
+#     sonst wuerde eine DB, die #604 bereits auf 8 gestempelt hat,
+#     `apply_pending_migrations()` nie wieder betreten und bliebe ohne
+#     embedding_meta zurueck (derselbe Fall wie #473 vs. #539 oben, Version 5).
 #     Erste Migration, die eine ganze TABELLE nachtraegt statt einer Spalte --
 #     verifiziert wird sie deshalb ueber `_REQUIRED_MIGRATION_TABLES`
 #     (siehe `init_schema()`), nicht ueber `_LEGACY_MIGRATION_COLUMNS`.
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 9
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -142,6 +160,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
             "page_first",
             "page_last",
             "container_title",
+            "retraction_checked_at",
         }
     ),
     "quotes": frozenset({"stance", "context_source"}),
@@ -355,6 +374,91 @@ def csl_year(csl: dict) -> int | None:
     return None
 
 
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+
+def _normalized_words(text: str) -> set[str]:
+    """Tokenisiert Text und faltet jedes Wort wie ``normalize_family_name()``.
+
+    Baustein der Kapitelzitat-Heuristik (Issue #604, AC5): dieselbe
+    Umlaut-/Diakritika-Faltung wie bei Autorennamen wird auf jedes Wort des
+    Kapiteltexts angewendet, damit ``family_names_match``-kompatible
+    Varianten (``Müller``/``Mueller``/``Muller``) als Wort-Treffer erkannt
+    werden -- ohne Namenspartikel-Behandlung, die ist bei Fliesstext nicht
+    sinnvoll (kein "von"/"van" isoliert am Satzanfang zu erwarten).
+    """
+    variants: set[str] = set()
+    for token in _WORD_RE.findall(text):
+        lowered = token.lower()
+        folded = "".join(_UMLAUT_FOLD.get(ch, ch) for ch in lowered)
+        stripped = "".join(
+            ch for ch in unicodedata.normalize("NFD", lowered) if not unicodedata.combining(ch)
+        )
+        variants |= {re.sub(r"[^a-z]", "", v) for v in (folded, stripped)}
+    return variants - {""}
+
+
+def paper_cited_in_chapters(csl: dict, kapitel_dir: str | Path) -> bool:
+    """Heuristische Pruefung: taucht das Paper in einem Kapiteltext auf? (#604, AC5)
+
+    Ein Paper gilt als "im Kapiteltext zitiert", wenn mindestens eine
+    ``*.md``-Datei unter ``kapitel_dir`` (Unterordner eingeschlossen, Ordner-
+    konvention aus ``scripts/bootstrap/CLAUDE.md``) sowohl das Erscheinungs-
+    jahr des Papers als String ENTHAELT als auch mindestens einen seiner
+    Autoren-Familiennamen als Wort-Treffer aufweist.
+
+    Bewusst approximativ (Autor-Familienname + Jahr statt echtem
+    Zitat-Parsing): False Negatives bei reiner Paraphrase ohne Klammerbeleg,
+    False Positives bei Namensgleichheit unterschiedlicher Autoren. Das ist
+    fuer diesen Anwendungsfall tragbar, weil das Ergebnis dem Nutzer nur
+    vorgelegt wird (AC4) -- keine automatische Aktion haengt daran; der
+    Aufrufer kennzeichnet das Ergebnis entsprechend als heuristisch.
+
+    Gibt ``False`` zurueck, wenn das Paper keine Autoren/kein Jahr im
+    CSL-JSON traegt oder ``kapitel_dir`` nicht existiert -- kein Fehler, denn
+    ohne Kapitelordner ist "ungenutzter Vault-Eintrag" die korrekte Auskunft.
+    """
+    year = csl_year(csl)
+    families = csl_families(csl)
+    if not families or year is None:
+        return False
+
+    kapitel_path = Path(kapitel_dir)
+    if not kapitel_path.is_dir():
+        return False
+
+    year_str = str(year)
+    family_variant_sets = [normalize_family_name(family) for family in families]
+
+    for md_file in sorted(kapitel_path.glob("**/*.md")):
+        try:
+            text = md_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if year_str not in text:
+            continue
+        words = _normalized_words(text)
+        if any(variants & words for variants in family_variant_sets):
+            return True
+    return False
+
+
+def format_table_evidence(
+    paper_id: str,
+    page: int,
+    table_index: int,
+    row: int,
+    col: int,
+) -> str:
+    """Formatiert den Beleg zu einer Tabellenzelle (Issue #630 AC2).
+
+    Intern sind ``table_index``, ``row`` und ``col`` 0-basiert; im Beleg stehen
+    sie 1-basiert, weil ihn ein Mensch gegen das PDF haelt. ``page`` ist die
+    PDF-Seite und bereits 1-basiert.
+    """
+    return f"{paper_id}, S. {page}, Tabelle {table_index + 1}, Zeile {row + 1}, Spalte {col + 1}"
+
+
 # Escape-Zeichen fuer LIKE-Patterns (siehe escape_like / ESCAPE-Klauseln unten).
 _LIKE_ESCAPE_CHAR = "\\"
 
@@ -450,6 +554,11 @@ class VaultDB:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         self.vec_available: bool = False
+        # Fehlerursache des letzten load_vec_extension()-Fehlschlags (Issue
+        # #624): vorher wurde die Exception in zwei der drei Fehlschlagszweigen
+        # stillschweigend verschluckt. ``None`` heisst "kein Fehler bekannt" --
+        # entweder laedt die Extension, oder es gab noch keinen Ladeversuch.
+        self.vec_unavailable_reason: str | None = None
         self._conn: sqlite3.Connection | None = None
 
     # ------------------------------------------------------------------
@@ -547,12 +656,20 @@ class VaultDB:
 
         if not hasattr(target, "enable_load_extension"):
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                "Python-Interpreter unterstuetzt keine ladbaren SQLite-Erweiterungen "
+                "(kein enable_load_extension) -- typisch fuer System-Python ohne "
+                "--enable-loadable-sqlite-extensions."
+            )
             return False
 
         try:
             target.enable_load_extension(True)
-        except (AttributeError, sqlite3.OperationalError, sqlite3.NotSupportedError):
+        except (AttributeError, sqlite3.OperationalError, sqlite3.NotSupportedError) as exc:
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                f"enable_load_extension() nicht nutzbar ({type(exc).__name__}: {exc})"
+            )
             return False
 
         try:
@@ -563,8 +680,12 @@ class VaultDB:
 
                 target.load_extension(sqlite_vec.loadable_path())
             self.vec_available = True
-        except Exception:
+            self.vec_unavailable_reason = None
+        except Exception as exc:
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                f"sqlite-vec-Extension nicht ladbar ({type(exc).__name__}: {exc})"
+            )
         finally:
             try:
                 target.enable_load_extension(False)
@@ -781,6 +902,23 @@ class VaultDB:
                 f"Ungueltiger source_kind '{source_kind}' -- erlaubt: {sorted(VALID_SOURCE_KINDS)}"
             )
 
+        # Sci-Hub-Provenance-Durchsetzung (Issue #627): Wird in diesem Aufruf
+        # ein pdf_path uebergeben und liegt daneben der Sidecar-Marker des
+        # scihub-fetcher-Agenten, wird provenance hart auf "scihub" gesetzt --
+        # auch wenn der Aufrufer provenance weglaesst (_UNSET) oder einen
+        # abweichenden Wert uebergibt. Ohne uebergebenen pdf_path (Sentinel
+        # oder None) gibt es nichts zu pruefen; der Bestandswert bleibt dann
+        # ohnehin unangetastet. Der Marker wird nach erfolgreicher
+        # Persistierung in der DB konsumiert (gelöscht), damit er keinen
+        # Einfluss auf einen späteren Überschreibvorgang derselben PDF hat
+        # (Issue #627 Audit P1).
+        sidecar_path_to_consume: Path | None = None
+        if not isinstance(pdf_path, _Unset) and pdf_path is not None:
+            sidecar_path = Path(str(pdf_path) + SCIHUB_PROVENANCE_SIDECAR_SUFFIX)
+            if sidecar_path.is_file():
+                provenance = "scihub"
+                sidecar_path_to_consume = sidecar_path
+
         supplied: dict[str, object] = {
             "doi": doi,
             "isbn": isbn,
@@ -842,6 +980,12 @@ class VaultDB:
                 values,
             )
 
+        # Marker nach Persistierung konsumieren (Issue #627 Audit P1):
+        # Verhindert, dass ein Marker einen späteren Überschreibvorgang
+        # derselben PDF beeinflusst.
+        if sidecar_path_to_consume is not None:
+            sidecar_path_to_consume.unlink(missing_ok=True)
+
     def get_paper(self, paper_id: str) -> dict | None:
         """Gibt Paper-Record als dict zurueck oder None."""
         with self._connection() as conn:
@@ -880,6 +1024,36 @@ class VaultDB:
                 (provenance,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def list_literature_papers(self) -> list[dict]:
+        """Gibt alle Papers mit ``source_kind='literature'`` zurueck (#604).
+
+        Grundlage fuer ``server.check_retractions()``: unabhaengig vom
+        Importweg (zotero-import, reading-list-import, anchor-paper-survey,
+        github-repo-research, fetch, ...) liefert diese Abfrage jedes
+        Literatur-Paper -- eigenes Erhebungsmaterial (``source_kind='primary'``,
+        Transkripte etc.) ist bewusst ausgeschlossen, ein Retraction-Check
+        ergibt dafuer keinen Sinn.
+        """
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM papers WHERE source_kind = 'literature' ORDER BY added_at",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_retraction_checked_at(self, paper_id: str, checked_at: int) -> None:
+        """Setzt ``retraction_checked_at`` fuer ein Paper (#604).
+
+        Wird nur nach einer erfolgreichen Crossref-Pruefung aufgerufen
+        (``server.check_retractions()``) -- ein Crossref-Ausfall darf den
+        Zeitstempel nicht vorruecken, sonst wuerde der naechste Lauf faelschlich
+        annehmen, das Paper sei bereits aktuell geprueft.
+        """
+        with self._connection(commit=True) as conn:
+            conn.execute(
+                "UPDATE papers SET retraction_checked_at = ? WHERE paper_id = ?",
+                (checked_at, paper_id),
+            )
 
     # ------------------------------------------------------------------
     # Quotes CRUD
@@ -1248,25 +1422,22 @@ class VaultDB:
     # Klammer-Zitat-Verifikation (Issue #378)
     # ------------------------------------------------------------------
 
-    def find_papers_by_author_year(self, family: str, year: int) -> list[dict]:
-        """Findet Papers, deren CSL-Autorenliste ``family`` enthaelt und deren
-        Erscheinungsjahr exakt ``year`` ist.
+    def _papers_snapshot(self) -> list[dict]:
+        """Liest die komplette ``papers``-Tabelle einmal und parst ``csl_json``.
 
-        Der Namensvergleich laeuft ueber :func:`normalize_family_name`
-        (Umlaut-Faltung + Diakritika-Strip), damit ``Müller``/``Mueller``/
-        ``Muller`` denselben Eintrag treffen. Es gibt bewusst keine
-        SQL-seitige Vorfilterung: ``csl_json`` ist ein Textblob, dessen
-        Autorenfelder sich nicht zuverlaessig per LIKE eingrenzen lassen,
-        ohne genau diese Schreibvarianten zu verlieren.
+        Extrahiert aus :meth:`find_papers_by_author_year` (Issue #501), damit
+        Aufrufer mit mehreren Belegen (:func:`academic_vault.server.verify_citations`)
+        sich einen Scan + Parse-Durchlauf ueber die komplette Tabelle teilen
+        koennen, statt ihn je Beleg zu wiederholen. Zeilen mit kaputtem oder
+        nicht-dict ``csl_json`` werden stillschweigend uebersprungen (wie bisher
+        in :meth:`find_papers_by_author_year`). Ergebnis enthaelt zusaetzlich
+        das bereits geparste ``csl``-Feld.
         """
-        wanted = normalize_family_name(family)
-        if not wanted or year is None:
-            return []
         with self._connection() as conn:
             rows = conn.execute(
                 "SELECT paper_id, csl_json, page_first, page_last FROM papers"
             ).fetchall()
-        matches: list[dict] = []
+        snapshot: list[dict] = []
         for row in rows:
             record = dict(row)
             try:
@@ -1275,11 +1446,53 @@ class VaultDB:
                 continue
             if not isinstance(csl, dict):
                 continue
+            record["csl"] = csl
+            snapshot.append(record)
+        return snapshot
+
+    def _match_papers_in_snapshot(
+        self, snapshot: list[dict], family: str, year: int | None
+    ) -> list[dict]:
+        """Matcht ``family``/``year`` gegen einen bereits gelesenen :meth:`_papers_snapshot`.
+
+        Reine In-Memory-Filterung (kein DB-Zugriff) -- Kern von
+        :meth:`find_papers_by_author_year`, extrahiert (Issue #501), damit
+        :func:`academic_vault.server.verify_citations` denselben Snapshot fuer
+        mehrere Belege wiederverwenden kann, statt ihn je Beleg neu einzulesen.
+        Der Namensvergleich laeuft ueber :func:`normalize_family_name`
+        (Umlaut-Faltung + Diakritika-Strip), damit ``Müller``/``Mueller``/
+        ``Muller`` denselben Eintrag treffen.
+        """
+        wanted = normalize_family_name(family)
+        if not wanted or year is None:
+            return []
+        matches: list[dict] = []
+        for record in snapshot:
+            csl = record["csl"]
             if csl_year(csl) != int(year):
                 continue
             if any(normalize_family_name(f) & wanted for f in csl_families(csl)):
-                matches.append(record)
+                matches.append(
+                    {
+                        "paper_id": record["paper_id"],
+                        "csl_json": record["csl_json"],
+                        "page_first": record["page_first"],
+                        "page_last": record["page_last"],
+                    }
+                )
         return matches
+
+    def find_papers_by_author_year(self, family: str, year: int) -> list[dict]:
+        """Findet Papers, deren CSL-Autorenliste ``family`` enthaelt und deren
+        Erscheinungsjahr exakt ``year`` ist.
+
+        Es gibt bewusst keine SQL-seitige Vorfilterung: ``csl_json`` ist ein
+        Textblob, dessen Autorenfelder sich nicht zuverlaessig per LIKE
+        eingrenzen lassen, ohne genau diese Schreibvarianten zu verlieren.
+        Fuer Aufrufer mit mehreren Belegen (Batch) siehe
+        :meth:`_papers_snapshot` + :meth:`_match_papers_in_snapshot`.
+        """
+        return self._match_papers_in_snapshot(self._papers_snapshot(), family, year)
 
     def page_coverage(self, paper_id: str, page: int) -> str:
         """Prueft, ob ``page`` von den im Vault bekannten Seitendaten gedeckt ist.
@@ -1427,6 +1640,130 @@ class VaultDB:
         with self._connection() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Strukturerhaltend extrahierte Tabellen (Issue #630)
+    # ------------------------------------------------------------------
+
+    def set_paper_tables(self, paper_id: str, tables: list[dict], backend: str) -> int:
+        """Ersetzt die gespeicherten Tabellen eines Papers. Gibt deren Anzahl zurueck.
+
+        Ersetzen statt Anhaengen: eine zweite Extraktion desselben PDFs soll
+        denselben Stand ergeben und nicht die alte Fassung daneben stehen
+        lassen. ``papers``, ``paper_fulltext`` und ``papers_fts`` werden dabei
+        nicht angefasst -- der FTS5-Volltext bleibt byteweise unveraendert.
+
+        Args:
+            paper_id: Referenz auf ``papers.paper_id``.
+            tables: Tabellen aus :func:`academic_vault.tables.extract_tables`.
+            backend: Herkunft der Struktur (z. B. ``"pdfplumber"``).
+
+        Returns:
+            Anzahl geschriebener Tabellen.
+        """
+        now = int(time.time())
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute("DELETE FROM paper_tables WHERE paper_id = ?", (paper_id,))
+            for table in tables:
+                conn.execute(
+                    """
+                    INSERT INTO paper_tables
+                      (table_id, paper_id, page, table_index, backend,
+                       n_rows, n_cols, bbox_json, rows_json, cells_json, extracted_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(uuid4()),
+                        paper_id,
+                        int(table["page"]),
+                        int(table["table_index"]),
+                        backend,
+                        int(table["n_rows"]),
+                        int(table["n_cols"]),
+                        json.dumps(table["bbox"]),
+                        json.dumps(table["rows"], ensure_ascii=False),
+                        json.dumps(table["cells"], ensure_ascii=False),
+                        now,
+                    ),
+                )
+        return len(tables)
+
+    def list_paper_tables(self, paper_id: str, page: int | None = None) -> list[dict]:
+        """Gibt die gespeicherten Tabellen eines Papers zurueck (Struktur inklusive).
+
+        Auf einer Bestands-DB ohne ``paper_tables`` ist das Ergebnis eine leere
+        Liste statt eines ``sqlite3.OperationalError``: ein Vault, in dem nie
+        eine Tabelle extrahiert wurde, hat schlicht keine.
+        """
+        sql = "SELECT * FROM paper_tables WHERE paper_id = ?"
+        params: list = [paper_id]
+        if page is not None:
+            sql += " AND page = ?"
+            params.append(int(page))
+        sql += " ORDER BY page, table_index"
+        with self._connection() as conn:
+            try:
+                rows = conn.execute(sql, params).fetchall()
+            except sqlite3.OperationalError:
+                return []
+        return [self._table_row_to_dict(row) for row in rows]
+
+    @staticmethod
+    def _table_row_to_dict(row: sqlite3.Row) -> dict:
+        record = dict(row)
+        record["rows"] = json.loads(record.pop("rows_json"))
+        record["cells"] = json.loads(record.pop("cells_json"))
+        record["bbox"] = json.loads(record.pop("bbox_json"))
+        return record
+
+    def get_table_cell(
+        self,
+        paper_id: str,
+        page: int,
+        table_index: int,
+        row: int,
+        col: int,
+    ) -> dict | None:
+        """Loest eine einzelne Zelle zu Wert **und** Beleg auf (Issue #630 AC2).
+
+        Returns:
+            ``{"paper_id", "page", "table_index", "row", "col", "value", "bbox",
+            "backend", "evidence"}`` oder ``None``, wenn es die Zelle nicht
+            gibt. ``None`` statt eines Naeherungstreffers: ein geratener Beleg
+            waere schlimmer als gar keiner.
+        """
+        with self._connection() as conn:
+            try:
+                found = conn.execute(
+                    """
+                    SELECT * FROM paper_tables
+                    WHERE paper_id = ? AND page = ? AND table_index = ?
+                    """,
+                    (paper_id, int(page), int(table_index)),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                return None
+        if found is None:
+            return None
+
+        for cell in json.loads(found["cells_json"]):
+            if cell["row"] != row or cell["col"] != col:
+                continue
+            return {
+                "paper_id": paper_id,
+                "page": int(found["page"]),
+                "table_index": int(found["table_index"]),
+                "row": row,
+                "col": col,
+                "value": cell["value"],
+                "bbox": cell["bbox"],
+                "backend": str(found["backend"]),
+                "evidence": format_table_evidence(
+                    paper_id, int(found["page"]), int(found["table_index"]), row, col
+                ),
+            }
+        return None
 
     # ------------------------------------------------------------------
     # Figures CRUD

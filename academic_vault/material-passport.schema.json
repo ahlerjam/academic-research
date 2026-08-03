@@ -54,7 +54,7 @@
     },
     "model_versions": {
       "type": "object",
-      "description": "Verwendete Modell-Versionen (z.B. {relevance_scorer: claude-sonnet-4-6}).",
+      "description": "Verwendete Modell-Versionen je Arbeitsschritt (z.B. {relevance_scorer: claude-sonnet-4-6}). Befuellt aus Decisions der Kategorie 'model-version' (Format '<schritt>: <modell>', siehe decision_log.MODEL_VERSION_CATEGORY), analog zu 'file-change' (#527) aus decisions_snapshot ausgenommen. Caveat (#617): ein leeres Objekt bedeutet NICHT zuverlaessig 'kein Modell beteiligt', sondern nur, dass keine model-version-Decision erfasst wurde -- die Verdrahtung ist absichtlich lueckenhaft/unvollstaendig (Stand #617 ist nur ein Teil der modellgestuetzten Skills/Agents angeschlossen).",
       "additionalProperties": { "type": "string" }
     },
     "per_uni_profile_hash": {

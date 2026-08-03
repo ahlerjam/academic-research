@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **39 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **41 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -59,6 +59,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `material-passport` | *„Material-Passport"*, *„Artefakt sichern"* | Unveränderlicher Repro-Passport |
 | `instrument-design` | *„Interviewleitfaden erstellen"*, *„Fragebogen entwickeln"* | Erhebungsinstrument aus Forschungsfrage + Methodik, mit Rückverweis-Matrix je Frage ([SKILL.md](../../skills/instrument-design/SKILL.md)) |
 | `qualitative-coding` | *„Transkript kodieren"*, *„Kategorien aus dem Material bilden"* | Transkript-Ingest mit belegfähiger Stellenangabe, induktive/deduktive Kategorienbildung, Kodier-Übersicht ([SKILL.md](../../skills/qualitative-coding/SKILL.md)) |
+| `quantitative-analysis` | *„quantitative Auswertung rechnen"*, *„Datensatz auswerten"*, *„t-Test rechnen"* | Eigener Rohdatensatz vom Analyseplan bis zum Protokoll: Deskription, Gruppenvergleich, Zusammenhangsmaß — je mit Voraussetzungsprüfung, Effektstärke und Konfidenzintervall ([SKILL.md](../../skills/quantitative-analysis/SKILL.md)) |
 
 ## Output-Skills (opt-in via `output_targets`)
 
@@ -83,6 +84,7 @@ Diese Skills sind per Default aus. Sie laufen erst, wenn im Projekt-State der pa
 | `abstract-generator` | *„Abstract schreiben"*, *„Zusammenfassung"* | IMRaD-konform, DE + EN |
 | `title-generator` | *„Titelvorschläge"*, *„Arbeitstitel"* | 5–7 Varianten mit Rationale |
 | `submission-checker` | *„abgabefertig"*, *„Formalia prüfen"* | Formalia-Check, Default: FH Leibniz -- beschränkt auf am Markdown-Material Prüfbares, Rest als „Nicht geprüft" ausgewiesen |
+| `ai-disclosure` | *„KI-Nutzung offenlegen"*, *„Offenlegungserklärung erstellen"* | Zweigeteilte Offenlegungserklärung (Danksagung + Methodenteil, DE/EN) nach ICMJE 01/2026; Vault-Spuren als Vorschlag statt Behauptung ([SKILL.md](../../skills/ai-disclosure/SKILL.md)) |
 | `latex-layout-auditor` | *„LaTeX-Layout prüfen / pruefen"*, *„.tex auditieren"* | Read-only Prüfung eines `.tex`-Exports auf LaTeX-Layout-Fehler: Listen-Strukturen, Zitationskommandos, Kapitel-Nummerierung, Package-Konflikte ([SKILL.md](../../skills/latex-layout-auditor/SKILL.md)) |
 | `defense-prep` | *„Verteidigung vorbereiten"*, *„Fragenkatalog Kolloquium"* | Vortragsgliederung mit Zeitrahmen + Kernaussage je Kapitel, Fragenkatalog zu Methodik/Limitationen ([SKILL.md](../../skills/defense-prep/SKILL.md)) |
 

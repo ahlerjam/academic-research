@@ -66,6 +66,16 @@ dependencies = [
     # Textstelle fuer leicht abweichende Zitat-Kandidaten. >=3.14.5: der Stand,
     # mit dem die Suite tatsaechlich laeuft (uv.lock).
     "rapidfuzz>=3.14.5",
+    # Rechenkern von quantitative-analysis (#610):
+    # skills/quantitative-analysis/scripts/analyze.py braucht t-, F-, chi2- und
+    # U-Verteilungen (scipy.stats) sowie Vektor-Arithmetik fuer Kennwerte und
+    # Bootstrap (numpy). Beide liegen ohnehin im Closure jeder Installation
+    # (sentence-transformers -> scikit-learn -> scipy -> numpy), stehen hier
+    # aber ABSICHTLICH explizit: eine implizite transitive Dependency
+    # verschwindet beim naechsten Umbau des ML-Stacks still, und der Skill
+    # bricht dann erst zur Laufzeit. Zweitstelle: scripts/requirements.txt.
+    "numpy>=1.26",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
@@ -97,6 +107,26 @@ dev = [
 rerank-cloud = [
     "voyageai>=0.5,<1.0",
     "cohere>=5.0,<8.0",
+]
+
+# Strukturerhaltende Tabellenextraktion (#630): academic_vault/tables.py liest
+# Zeilen/Spalten/Zellen inkl. Bounding-Box aus einem PDF, damit Effektstaerken
+# und Stichprobengroessen mit Seiten- und Zellbeleg in die Extraktionsmatrix und
+# die Meta-Analyse gehen statt als kollabierter Fliesstext zu verschwinden.
+#
+# ABSICHTLICH ein Extra und KEINE Hard-Dependency: ohne pdfplumber laeuft der
+# bestehende Volltextpfad unveraendert weiter, `extract_tables()` meldet dann
+# `status="backend-missing"` mit der Installationsanweisung (AC5 von #630).
+#
+# Backend-Wahl (Vergleich dokumentiert in docs/reference/vault.md, Abschnitt
+# "Tabellenextraktion"): pdfplumber ist reines Python (pdfminer.six + Pillow +
+# pypdfium2), liefert ueber `Page.find_tables()` Zellen als Bounding-Boxen und
+# braucht keine Systembinaries. camelot setzt Ghostscript/OpenCV voraus,
+# Docling und Marker ziehen Layout-Modelle im GB-Bereich in uv.lock — dieselbe
+# Falle, die oben schon fuer FlagEmbedding dokumentiert ist.
+# Zweitstelle beim Aendern: scripts/requirements.txt (Endnutzer-Installation).
+tables = [
+    "pdfplumber>=0.11",
 ]
 
 # Lokaler Reranker-Fallback (BAAI/bge-reranker-v2-m3, #376): FlagEmbedding ist

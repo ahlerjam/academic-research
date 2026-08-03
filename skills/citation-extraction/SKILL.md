@@ -172,7 +172,8 @@ read-only Snapshot — nicht beschreiben. Regenerieren:
 ```bash
 node scripts/export-literature-state.mjs
 ```
-Zitatanzahlen und Coverage über `vault.stats()`.
+Zitatanzahlen und Coverage über `vault.stats()`. Backend-Zustand (Embedding-Modell,
+sqlite-vec) via `vault.component_status()`.
 
 ## Lückenerkennung
 

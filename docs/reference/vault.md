@@ -122,9 +122,84 @@ Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers`
 python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --backfill-fulltext
 ```
 
-## MCP-Tools (alle 42)
+## Tabellenextraktion
 
-Der Server registriert **42 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Die Meta-Analyse (`agents/meta-analysis.md`), die Extraktionsmatrix
+(`skills/extraction-matrix/SKILL.md`) und die Verzerrungsbewertung (`agents/risk-of-bias.md`) stehen
+und fallen mit Zahlen aus den Primärstudien — und diese Zahlen stehen in Tabellen. Der
+Volltextpfad oben kann sie nicht liefern: `normalize_whitespace()` kollabiert jede
+Whitespace-Folge zu einem Leerzeichen, was für den FTS5-Index richtig ist und die letzte
+Strukturinformation einer Tabelle vernichtet. Seit Issue #630 gibt es deshalb einen
+**zweiten, danebenliegenden Pfad** (`academic_vault/tables.py` → Tabelle `paper_tables`).
+Er fasst `paper_fulltext`, `papers_fts` und die FTS5-Trigger nicht an; der Volltext bleibt
+byteweise unverändert (Regressionstest: `test_fts5_fulltext_is_byte_identical_after_table_extraction`).
+
+```
+vault.extract_tables("smith2020")            # PDF -> paper_tables
+vault.list_tables("smith2020")               # Zeilen-/Spaltenmatrix je Tabelle
+vault.get_table_cell("smith2020", 1, 0, 1, 1)  # eine Zelle mit Beleg
+```
+
+`vault.get_table_cell()` liefert neben `value` und `bbox` das Feld `evidence` — einen
+fertigen Beleg der Form `smith2020, S. 1, Tabelle 1, Zeile 2, Spalte 2`. `page` ist die
+PDF-Seite (1-basiert), `table_index`, `row` und `col` sind 0-basiert; im Beleg stehen sie
+1-basiert, weil ihn ein Mensch gegen das PDF hält.
+
+**Backend: pdfplumber, optionales Extra**
+
+Installation: `uv sync --extra tables` (Endnutzer: `pip install 'pdfplumber>=0.11'`). Ohne
+das Extra läuft der bestehende Volltextpfad unverändert weiter und `vault.extract_tables()`
+meldet `status="backend-missing"` mit genau dieser Installationsanweisung — keine Exception,
+kein stilles Nichts.
+
+| Kandidat | Bewertung |
+|---|---|
+| **pdfplumber** (gewählt) | Reines Python (pdfminer.six, Pillow, pypdfium2), keine Systembinaries. `Page.find_tables()` gibt Zellen als Bounding-Boxen zurück — genau die Adressierbarkeit, die der Zellbeleg braucht. Drei zusätzliche Pakete im Lock. |
+| camelot | Setzt Ghostscript und OpenCV als Systembinaries voraus. Eine Installationsanleitung, die am Betriebssystem hängt, ist für ein Claude-Code-Plugin die falsche Grundlage. |
+| Docling | Layout-Modelle im GB-Bereich landen in `uv.lock` und in jedem CI-Job — dieselbe Falle, die in `pyproject.toml` bereits für FlagEmbedding dokumentiert ist. Bessere Erkennung, unverhältnismäßiger Preis. |
+| Marker | Wie Docling modellgestützt, zusätzlich auf GPU ausgelegt. Für den Offline-Anspruch des Vaults zu schwer. |
+
+**Statusmodell** — „nichts gefunden" ist nie eine leere Liste ohne Begründung:
+
+| `status` | Bedeutung |
+|---|---|
+| `ok` | Mindestens eine Tabelle erkannt und in `paper_tables` abgelegt. |
+| `no-tables` | Text-Layer vorhanden, aber kein auswertbares Tabellengitter. |
+| `no-textlayer` | Keine Zeichen im PDF (Scan) — erst OCR, dann erneut extrahieren. |
+| `backend-missing` | pdfplumber nicht installiert; `message` nennt die Nachinstallation. |
+
+**Bekannte Grenzen**
+
+Beide Fälle sind als Fixture abgedeckt (`tests/fixtures/tables/`) und ihr tatsächlicher
+Ist-Zustand ist in `tests/test_issue_630_table_extraction.py` festgeschrieben — nicht
+schöngefärbt:
+
+- **Verbundene Kopfzellen** (`merged_header.pdf`): Eine über zwei Spalten laufende
+  Kopfzelle wird als *eine* breite Zelle geliefert; die von ihr geschluckte Position
+  erscheint in `rows` als `null` und taucht in `cells` gar nicht auf (eine Zelle ohne
+  eigene Bounding-Box wäre kein Beleg). Die Datenzeilen darunter bleiben davon unberührt
+  und korrekt zugeordnet. Wer die Spaltenüberschrift braucht, liest sie aus der zweiten
+  Kopfzeile.
+- **Zweispaltiges Layout** (`two_column_layout.pdf`): Eine Tabelle in der linken Spalte
+  wird korrekt erkannt und der Fließtext der rechten Spalte gerät nicht hinein — weil
+  pdfplumber per Default über *gezeichnete Linien* erkennt und nicht über Textausrichtung.
+  Die Kehrseite derselben Voreinstellung: eine Tabelle **ohne** Gitterlinien (reine
+  Whitespace-Ausrichtung, in Preprints verbreitet) wird nicht gefunden und meldet
+  `no-tables`.
+
+Eine extrahierte Zahl ist ein **Vorschlag mit Beleg**, keine übernommene Tatsache:
+`scripts/meta_analysis.py` bekommt `yi`/`vi` weiterhin nur nach ausdrücklicher Bestätigung,
+und `extraction-matrix` markiert eine Zelle ohne Tabellenbeleg unverändert als `— fehlend —`.
+
+Bestands-Datenbanken bekommen `paper_tables` idempotent nachgezogen:
+
+```bash
+python -c "from academic_vault.migrate import add_paper_tables_table as m; m('<pfad>/vault.db')"
+```
+
+## MCP-Tools (alle 47)
+
+Der Server registriert **47 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -138,6 +213,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` |
 | `vault.stats()` | DB-Counts (`paper_count`, `quote_count`) plus Embedding-Bestand (`embedding_model`, `embedding_dim`) | `vault.stats()` |
+| `vault.component_status()` | Zustand der optionalen Bestandteile (Embedding-Modell, `sqlite-vec`, FTS5): je `loaded`, laienverständlicher `impact`-Text bei Fehlen, `reason` sofern ermittelbar, plus `python_executable` und `db_path` (#624) | `vault.component_status()` |
 
 **Zitate (Quotes)**
 
@@ -261,6 +337,9 @@ greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbati
 | `vault.set_page_offset(paper_id, offset)` | Setzt `page_offset` (Bücher mit Vorseiten/Vorwort) | `vault.set_page_offset("book2020", 12)` |
 | `vault.get_printed_page(paper_id, pdf_page)` | Berechnet gedruckte Seite: `pdf_page - page_offset` | `vault.get_printed_page("book2020", 25)` |
 | `vault.extract_fulltext(paper_id, backend="auto")` | Extrahiert den PDF-Volltext und indiziert ihn in `papers_fts.fulltext` (#373) | `vault.extract_fulltext("vaswani2017")` |
+| `vault.extract_tables(paper_id, backend="auto")` | Extrahiert Tabellen strukturerhaltend nach `paper_tables`; `papers_fts` bleibt unverändert (#630). `status` ∈ `ok`/`no-tables`/`no-textlayer`/`backend-missing` | `vault.extract_tables("smith2020")` |
+| `vault.list_tables(paper_id, page=None)` | Gespeicherte Tabellenstrukturen eines Papers (`rows` = Textmatrix, `cells` = Zellen mit Bounding-Box) (#630) | `vault.list_tables("smith2020")` |
+| `vault.get_table_cell(paper_id, page, table_index, row, col)` | Eine Zelle mit `value`, `bbox` und fertigem `evidence`-Beleg; `None` statt Näherungstreffer (#630). `table_index`/`row`/`col` 0-basiert | `vault.get_table_cell("smith2020", 1, 0, 1, 1)` |
 
 **Decision-Log & Ausschlüsse**
 
@@ -273,6 +352,7 @@ greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbati
 | `vault.is_excluded(paper_id)` | Prüft, ob `paper_id` ausgeschlossen ist | `vault.is_excluded("smith2010")` |
 | `vault.list_excluded_sources()` | Gibt alle ausgeschlossenen Quellen zurück | `vault.list_excluded_sources()` |
 | `vault.list_papers_by_provenance(provenance)` | Provenance-Audit: alle Papers mit gegebenem Herkunfts-Tag (z.B. `"scihub"`) | `vault.list_papers_by_provenance("scihub")` |
+| `vault.check_retractions(max_age_days=90, force=False, project_dir=".")` | Vault-weite Crossref-Retraction-Pruefung über alle Papers mit `source_kind='literature'` und DOI (#604); prüft nur seit `max_age_days` nicht (oder noch nie) geprüfte Papers, `force=True` erzwingt eine erneute Prüfung. Legt Treffer nur **vor** (`retracted`-Liste mit Fundstelle `source` und heuristischem `cited_in_chapter`-Flag) — schreibt **nie** automatisch nach `excluded_sources`. Papers ohne DOI landen unter `no_doi`, ein Crossref-Ausfall unter `error` (`error_count` macht einen Teilausfall sichtbar) | `vault.check_retractions(max_age_days=30)` |
 
 **Risk-of-Bias & Score-Historie** (v6.4)
 

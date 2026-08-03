@@ -1,0 +1,274 @@
+{
+  "description": "Hartes Recall@k-Goldset mit thematisch ueberlappenden Papers (Issue #628). Anders als retrieval_goldset_de_en.json (#375, 6 scharf getrennte Themencluster, auf dem alle drei bisherigen Modellkandidaten Recall@10 = 1.0 erreichen) besteht dieses Set aus nur 2 Themen (transformer-efficiency, retrieval-augmented-generation), die jeweils in 3 eng verwandte Subtopics zerfallen. Alle Papers eines Themas teilen Kernvokabular (z. B. 'Transformer', 'Attention', 'effizient' bzw. 'Retrieval', 'Generation', 'Sprachmodell'); die Subtopics unterscheiden sich nur im technischen Detail (welcher Attention-Mechanismus, welche Fusion-Strategie). Zusaetzlich enthaelt jedes Thema eine themenweite Query, deren relevant_paper_ids alle 12 Papers des Themas umfasst -- da k=10, ist Recall@10 fuer diese beiden Queries durch das Schubfachprinzip strukturell auf maximal 10/12 = 0.8333 gedeckelt, unabhaengig von Modellqualitaet. Das stellt AC2 (mind. ein Kandidat < 1.0) unabhaengig vom tatsaechlichen Live-Lauf sicher; die 6 Subtopic-Queries pruefen zusaetzlich, ob die Modelle innerhalb eines Themas semantisch fein genug trennen.",
+  "version": "1.0",
+  "topics": {
+    "transformer-efficiency": ["sparse-attention", "linear-attention", "quantized-inference"],
+    "retrieval-augmented-generation": ["dense-retrieval", "hybrid-fusion", "long-context-rag"]
+  },
+  "papers": [
+    {
+      "paper_id": "h001",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "sparse-attention",
+      "title": "Block-Sparse Attention Patterns for Efficient Transformer Inference",
+      "abstract": "We introduce fixed block-sparse attention patterns that reduce the quadratic cost of self-attention while preserving most of the modeling quality of dense transformers on long sequences."
+    },
+    {
+      "paper_id": "h002",
+      "lang": "de",
+      "topic": "transformer-efficiency",
+      "subtopic": "sparse-attention",
+      "title": "Sparse-Attention-Muster fuer skalierbare Transformer-Modelle",
+      "abstract": "Wir untersuchen lokale Fenster-Sparsity in Selbstaufmerksamkeits-Schichten, um den quadratischen Rechenaufwand von Transformer-Modellen bei langen Eingabesequenzen zu reduzieren."
+    },
+    {
+      "paper_id": "h003",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "sparse-attention",
+      "title": "Learned Sparse Attention Masks for Long-Sequence Transformers",
+      "abstract": "We propose learned, input-dependent sparse attention masks trained via a differentiable gating mechanism, achieving better accuracy-efficiency trade-offs than fixed sparsity patterns."
+    },
+    {
+      "paper_id": "h004",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "sparse-attention",
+      "title": "Adaptive Sparsity in Self-Attention for Efficient Sequence Modeling",
+      "abstract": "This work adapts attention sparsity thresholds per layer and per head at inference time, cutting compute cost on long sequences without retraining the underlying transformer."
+    },
+    {
+      "paper_id": "h005",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "linear-attention",
+      "title": "Linear Attention Mechanisms via Kernel Feature Maps for Transformers",
+      "abstract": "We replace the softmax attention kernel with a linearizable kernel feature map, reducing the complexity of self-attention from quadratic to linear in sequence length."
+    },
+    {
+      "paper_id": "h006",
+      "lang": "de",
+      "topic": "transformer-efficiency",
+      "subtopic": "linear-attention",
+      "title": "Linearisierte Aufmerksamkeit mit Kernel-Approximationen in Transformer-Modellen",
+      "abstract": "Diese Arbeit approximiert die Softmax-Aufmerksamkeit durch Kernel-Feature-Abbildungen und erreicht dadurch eine lineare statt quadratische Laufzeit in der Sequenzlaenge."
+    },
+    {
+      "paper_id": "h007",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "linear-attention",
+      "title": "Recurrent Formulations of Linear Attention for Streaming Inference",
+      "abstract": "We reformulate linear attention as a recurrent update rule, enabling constant-memory streaming inference for transformer models over arbitrarily long input streams."
+    },
+    {
+      "paper_id": "h008",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "linear-attention",
+      "title": "Performer-Style Random Feature Approximations for Linear-Time Attention",
+      "abstract": "We use random feature approximations of the softmax kernel to build an unbiased estimator of full attention, yielding linear-time and linear-space transformer inference."
+    },
+    {
+      "paper_id": "h009",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "quantized-inference",
+      "title": "Post-Training Quantization of Transformer Weights for Efficient Inference",
+      "abstract": "We apply post-training quantization to transformer weight matrices, reducing memory footprint and inference latency with minimal loss in downstream task accuracy."
+    },
+    {
+      "paper_id": "h010",
+      "lang": "de",
+      "topic": "transformer-efficiency",
+      "subtopic": "quantized-inference",
+      "title": "Quantisierte Inferenz grosser Transformer-Modelle mit INT8-Gewichten",
+      "abstract": "Wir quantisieren die Gewichte grosser Transformer-Modelle auf INT8-Praezision und zeigen, dass sich Inferenzgeschwindigkeit und Speicherbedarf deutlich verbessern lassen."
+    },
+    {
+      "paper_id": "h011",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "quantized-inference",
+      "title": "Mixed-Precision Quantization Strategies for Transformer Deployment",
+      "abstract": "We assign different bit-widths to different transformer layers based on sensitivity analysis, achieving better accuracy retention than uniform low-bit quantization."
+    },
+    {
+      "paper_id": "h012",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "quantized-inference",
+      "title": "Quantization-Aware Training for Low-Bit Transformer Inference",
+      "abstract": "We simulate low-bit quantization noise during training so that transformer models learn weights robust to post-deployment quantization, closing the gap to full-precision accuracy."
+    },
+    {
+      "paper_id": "h013",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "dense-retrieval",
+      "title": "Dense Passage Embeddings for Retrieval-Augmented Question Answering",
+      "abstract": "We train dense passage embeddings with a dual-encoder objective so that a generator model can retrieve relevant passages at inference time for open-domain question answering."
+    },
+    {
+      "paper_id": "h014",
+      "lang": "de",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "dense-retrieval",
+      "title": "Dichte Passagen-Repraesentationen fuer retrieval-gestuetzte Sprachmodelle",
+      "abstract": "Wir trainieren dichte Vektor-Repraesentationen von Textpassagen, damit ein Sprachmodell zur Generierungszeit relevante Passagen aus einem grossen Korpus abrufen kann."
+    },
+    {
+      "paper_id": "h015",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "dense-retrieval",
+      "title": "Contrastive Training of Dense Retrievers for Open-Domain RAG",
+      "abstract": "We use in-batch negative contrastive training to sharpen dense retriever embeddings, improving passage ranking quality for retrieval-augmented generation pipelines."
+    },
+    {
+      "paper_id": "h016",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "dense-retrieval",
+      "title": "Dual-Encoder Architectures for Dense Document Retrieval in RAG Pipelines",
+      "abstract": "We compare dual-encoder architectures for dense document retrieval, analyzing how encoder capacity and negative sampling affect retrieval quality within RAG systems."
+    },
+    {
+      "paper_id": "h017",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "hybrid-fusion",
+      "title": "Reciprocal Rank Fusion of Sparse and Dense Retrievers for RAG",
+      "abstract": "We combine sparse lexical retrieval and dense vector retrieval via reciprocal rank fusion, improving passage recall for retrieval-augmented generation over either method alone."
+    },
+    {
+      "paper_id": "h018",
+      "lang": "de",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "hybrid-fusion",
+      "title": "Hybride Fusion von Volltext- und Vektorsuche fuer generative Sprachmodelle",
+      "abstract": "Diese Arbeit verschmilzt Ergebnislisten aus Volltextsuche und Vektorsuche zu einer gemeinsamen Rangfolge, um die Trefferquote retrieval-gestuetzter generativer Modelle zu erhoehen."
+    },
+    {
+      "paper_id": "h019",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "hybrid-fusion",
+      "title": "Weighted Score Fusion for Hybrid Retrieval in Retrieval-Augmented Generation",
+      "abstract": "We propose a learned weighted score fusion scheme that combines sparse and dense retrieval signals, tuned specifically for downstream retrieval-augmented generation quality."
+    },
+    {
+      "paper_id": "h020",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "hybrid-fusion",
+      "title": "Late-Interaction Fusion Strategies for Retrieval-Augmented Language Models",
+      "abstract": "We study late-interaction fusion of token-level sparse and dense similarity scores, showing gains in passage recall for retrieval-augmented language model pipelines."
+    },
+    {
+      "paper_id": "h021",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "long-context-rag",
+      "title": "Long-Context Retrieval-Augmented Generation with Extended Document Windows",
+      "abstract": "We extend the retrieved-document context window of a retrieval-augmented generation pipeline, evaluating how much longer passages improve downstream generation quality."
+    },
+    {
+      "paper_id": "h022",
+      "lang": "de",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "long-context-rag",
+      "title": "Retrieval-gestuetzte Generierung mit langen Kontextfenstern fuer Sprachmodelle",
+      "abstract": "Wir vergroessern das Kontextfenster abgerufener Dokumente in einer retrieval-gestuetzten Generierungs-Pipeline und messen den Effekt auf die Qualitaet der generierten Antworten."
+    },
+    {
+      "paper_id": "h023",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "long-context-rag",
+      "title": "Chunking and Reranking Strategies for Long-Document RAG Pipelines",
+      "abstract": "We evaluate chunking granularity and reranking strategies for retrieval-augmented generation over long documents, balancing context length against retrieval precision."
+    },
+    {
+      "paper_id": "h024",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "long-context-rag",
+      "title": "Scaling Retrieval-Augmented Generation to Book-Length Contexts",
+      "abstract": "We scale a retrieval-augmented generation pipeline to book-length source contexts, studying how retrieval window size trades off against generation latency and coherence."
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "hq01",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "sparse-attention",
+      "query": "sparse attention patterns for efficient transformer inference",
+      "relevant_paper_ids": ["h001", "h002", "h003", "h004"]
+    },
+    {
+      "query_id": "hq02",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": "linear-attention",
+      "query": "linear attention kernel approximation for transformers",
+      "relevant_paper_ids": ["h005", "h006", "h007", "h008"]
+    },
+    {
+      "query_id": "hq03",
+      "lang": "de",
+      "topic": "transformer-efficiency",
+      "subtopic": "quantized-inference",
+      "query": "Quantisierung von Transformer-Gewichten fuer effiziente Inferenz",
+      "relevant_paper_ids": ["h009", "h010", "h011", "h012"]
+    },
+    {
+      "query_id": "hq04",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "dense-retrieval",
+      "query": "dense passage retrieval embeddings for question answering",
+      "relevant_paper_ids": ["h013", "h014", "h015", "h016"]
+    },
+    {
+      "query_id": "hq05",
+      "lang": "de",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "hybrid-fusion",
+      "query": "hybride Fusion von Volltext- und Vektorsuche fuer generative Modelle",
+      "relevant_paper_ids": ["h017", "h018", "h019", "h020"]
+    },
+    {
+      "query_id": "hq06",
+      "lang": "en",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": "long-context-rag",
+      "query": "long-context retrieval augmented generation with extended document windows",
+      "relevant_paper_ids": ["h021", "h022", "h023", "h024"]
+    },
+    {
+      "query_id": "hq07",
+      "lang": "en",
+      "topic": "transformer-efficiency",
+      "subtopic": null,
+      "query": "efficient transformer inference techniques",
+      "relevant_paper_ids": [
+        "h001", "h002", "h003", "h004", "h005", "h006",
+        "h007", "h008", "h009", "h010", "h011", "h012"
+      ]
+    },
+    {
+      "query_id": "hq08",
+      "lang": "de",
+      "topic": "retrieval-augmented-generation",
+      "subtopic": null,
+      "query": "retrieval-gestuetzte Generierung Effizienztechniken",
+      "relevant_paper_ids": [
+        "h013", "h014", "h015", "h016", "h017", "h018",
+        "h019", "h020", "h021", "h022", "h023", "h024"
+      ]
+    }
+  ]
+}

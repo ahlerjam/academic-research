@@ -162,8 +162,15 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "20"
+      # Das Tabellen-Extra (#630) ist bewusst KEINE Hard-Dependency, muss aber
+      # in CI installiert sein: sonst skippen die AC1-AC4-Tests in
+      # tests/test_issue_630_table_extraction.py still (importorskip) und die
+      # Tabellenextraktion waere ungetestet gruen. Die Setup-Action nimmt nur
+      # ein Extra entgegen, daher hier ein zweiter, expliziter Sync.
+      - name: Tabellen-Extra nachinstallieren (#630)
+        run: uv sync --extra dev --extra tables
       - name: Smoke-Test der Kern-Importe
-        run: uv run python -c "import requests, httpx, anthropic, yaml, barcode, lxml"
+        run: uv run python -c "import requests, httpx, anthropic, yaml, barcode, lxml, pdfplumber"
       # tests/test_smoke_e2e.py braucht ein eigenstaendiges venv unter
       # ~/.academic-research/venv mit installiertem mcp-SDK (harte Voraussetzung,
       # siehe tests/helpers/smoke_core.py:VENV_PYTHON). Ohne diesen Step skippt
