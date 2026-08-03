@@ -10,12 +10,25 @@ Start via: python -m academic_vault.server
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from uuid import uuid4
 
-from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset, default_db_path
+from . import retraction as _retraction
+from .db import (
+    _UNSET,
+    VALID_PAPER_TYPES,
+    VaultDB,
+    _sanitize_fts5_query,
+    _Unset,
+    default_db_path,
+    paper_cited_in_chapters,
+)
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
+from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
+from .decision_log import parse_model_version_text as _parse_model_version_text
 from .embedding_model import get_embedder
+from .health import get_component_status
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +96,9 @@ def validate_csl_json(csl_json: str) -> dict:
 # sqlite3.OperationalError laeuft statt ein leeres Ergebnis zu liefern.
 # Fehlt eine davon, zieht _ensure_schema_for_read() die Migration einmalig
 # nach. Jede kuenftige Tabelle mit eigenem Lesepfad gehoert hier hinein.
-_READ_REQUIRED_TABLES = frozenset({"papers", "notes_fts", "transcript_segments", "codings"})
+_READ_REQUIRED_TABLES = frozenset(
+    {"papers", "notes_fts", "transcript_segments", "codings", "paper_tables"}
+)
 
 
 def _ensure_schema_for_read(db_path: str) -> None:
@@ -868,6 +883,49 @@ def find_quotes(
     return db.find_quotes(paper_id, query, k)
 
 
+def verify_citations(db_path: str, items: list[dict]) -> list[dict]:
+    """Batch-Variante von :func:`verify_citation` (Issue #501).
+
+    Prueft mehrere Belege (Autor/Jahr/Seite) gegen den Vault in EINEM
+    Papers-Scan statt N: ``VaultDB.find_papers_by_author_year()`` liest und
+    parst je Aufruf die komplette ``papers``-Tabelle. Bei N Belegen pro Write
+    (bis ``ACADEMIC_CITATION_MAX_PER_WRITE``, Default 100) summiert sich das
+    innerhalb des 10-s-Timeouts von ``hooks/verbatim-guard.mjs``. Diese
+    Funktion teilt sich eine ``VaultDB``-Instanz und einen einzigen
+    :meth:`~academic_vault.db.VaultDB._papers_snapshot`-Aufruf ueber alle
+    Items; das Matching pro Item laeuft danach nur noch in-memory ueber den
+    bereits geparsten Snapshot (kein O(1)-Lookup, siehe Docstring von
+    :meth:`~academic_vault.db.VaultDB._match_papers_in_snapshot` --
+    ``normalize_family_name()`` liefert ein Set aus Schreibvarianten, das sich
+    nicht per Dict-Key exakt cachen laesst).
+
+    ``items``: Liste von ``{"family": str, "year": int, "page": int | None}``.
+    Rueckgabe: Liste von ``{"status": ..., "paper_ids": [...]}`` in derselben
+    Reihenfolge wie ``items`` -- Status-Bedeutung siehe :func:`verify_citation`.
+    """
+    db = VaultDB(db_path)
+    snapshot = db._papers_snapshot()
+    results: list[dict] = []
+    for item in items:
+        papers = db._match_papers_in_snapshot(snapshot, item["family"], int(item["year"]))
+        if not papers:
+            results.append({"status": "no-match", "paper_ids": []})
+            continue
+
+        paper_ids = [p["paper_id"] for p in papers]
+        page = item.get("page")
+        if page is None:
+            results.append({"status": "verified", "paper_ids": paper_ids})
+            continue
+
+        coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
+        if any(c in ("covered", "unknown") for c in coverages):
+            results.append({"status": "verified", "paper_ids": paper_ids})
+        else:
+            results.append({"status": "page-mismatch", "paper_ids": paper_ids})
+    return results
+
+
 def verify_citation(
     db_path: str,
     family: str,
@@ -879,6 +937,7 @@ def verify_citation(
     Kein MCP-Tool-Dekorator: die Funktion wird ausschliesslich aus
     ``hooks/verbatim-guard.mjs`` per ``python3 -c``-Subprozess aufgerufen
     (analog zu :func:`search_quote_text` und :func:`find_figure_by_caption`).
+    Duenner Ein-Item-Wrapper ueber :func:`verify_citations` (Issue #501).
 
     Rueckgabe ``{"status": ..., "paper_ids": [...]}`` mit Status:
       ``"verified"``      — Autor/Jahr im Vault und (falls angegeben) Seite gedeckt
@@ -889,19 +948,7 @@ def verify_citation(
                             Seitenzahlen nicht pruefen und wird uebersprungen.
       ``"no-match"``      — kein Paper mit dieser Autor/Jahr-Kombination.
     """
-    db = VaultDB(db_path)
-    papers = db.find_papers_by_author_year(family, int(year))
-    if not papers:
-        return {"status": "no-match", "paper_ids": []}
-
-    paper_ids = [p["paper_id"] for p in papers]
-    if page is None:
-        return {"status": "verified", "paper_ids": paper_ids}
-
-    coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
-    if any(c in ("covered", "unknown") for c in coverages):
-        return {"status": "verified", "paper_ids": paper_ids}
-    return {"status": "page-mismatch", "paper_ids": paper_ids}
+    return verify_citations(db_path, [{"family": family, "year": year, "page": page}])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1224,6 +1271,15 @@ def get_stats(db_path: str) -> dict:
     }
 
 
+def component_status(db_path: str) -> dict:
+    """Zustandsausgabe fuer die optionalen Vault-Bestandteile (Issue #624).
+
+    Meldet je Embedding-Modell, sqlite-vec und FTS5, ob geladen und welche
+    Funktion bei Nichtladen fehlt -- siehe :func:`academic_vault.health.get_component_status`.
+    """
+    return get_component_status(db_path)
+
+
 def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
     """Setzt ocr_done-Flag fuer ein Paper im Vault."""
     db = VaultDB(db_path)
@@ -1303,6 +1359,127 @@ def is_excluded(db_path: str, paper_id: str) -> bool:
     db = VaultDB(db_path)
     db.init_schema()
     return db.is_excluded(paper_id=paper_id)
+
+
+# ---------------------------------------------------------------------------
+# Vault-weite Retraction-Pruefung (Issue #604)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_KAPITEL_DIRNAME = "kapitel"
+
+
+def check_retractions(
+    db_path: str,
+    max_age_days: int = 90,
+    force: bool = False,
+    project_dir: str = ".",
+) -> dict:
+    """Prueft alle Vault-Papers mit DOI vault-weit auf Rueckzug (Issue #604).
+
+    Iteriert ueber alle Papers mit ``source_kind='literature'`` -- unabhaengig
+    davon, ueber welchen Weg sie in den Vault kamen (zotero-import,
+    reading-list-import, anchor-paper-survey, github-repo-research, fetch,
+    ...; AC1). Nutzt die geteilte Crossref-Logik aus
+    ``academic_vault.retraction`` (AC2, dieselbe Logik wie
+    ``reading-list-import``).
+
+    Ein Paper wird nur erneut geprueft, wenn es noch nie geprueft wurde oder
+    die letzte Pruefung laenger als ``max_age_days`` zurueckliegt;
+    ``force=True`` erzwingt eine erneute Pruefung fuer alle Papers mit DOI
+    (AC3). Ein Crossref-Ausfall aktualisiert den Zeitstempel NICHT -- der
+    naechste Lauf versucht das betroffene Paper automatisch erneut.
+
+    Ein gefundener Rueckzug wird nur VORGELEGT, nie automatisch nach
+    ``excluded_sources`` geschrieben (AC4) -- das unterscheidet diesen Weg
+    bewusst von ``reading-list-import.check_retraction()``, der weiterhin
+    automatisch ausschliesst (Plan-Kommentar zu #604, Widerspruch 1). Jeder
+    Treffer traegt seine Fundstelle (``source``, der Crossref-DOI der
+    Retraction-Notiz) sowie ein ``cited_in_chapter``-Flag: eine heuristische
+    (Autor-Familienname + Jahr, s. ``db.paper_cited_in_chapters``) Pruefung,
+    ob das Paper bereits in einem Kapiteltext unter ``<project_dir>/kapitel/``
+    vorkommt (AC5).
+
+    Papers ohne DOI erscheinen unter ``no_doi`` -- "nicht pruefbar", nicht
+    stillschweigend uebergangen (AC6). Ein Crossref-Ausfall pro Paper landet
+    unter ``error`` mit Klartext-Ursache; ``error_count`` macht einen
+    Teilausfall im Gesamtergebnis sichtbar statt ihn wie ein leeres "keine
+    Rueckzuege"-Resultat aussehen zu lassen (AC7).
+
+    Rueckgabe:
+        {
+          "retracted": [{"paper_id", "doi", "source", "cited_in_chapter"}, ...],
+          "clean": [paper_id, ...],
+          "error": [{"paper_id", "doi", "error_message"}, ...],
+          "no_doi": [paper_id, ...],
+          "checked_count": int,   # tatsaechlich gegen Crossref geprueft
+          "skipped_fresh_count": int,  # uebersprungen, da noch nicht "stale"
+          "error_count": int,
+        }
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+
+    papers = db.list_literature_papers()
+    now = int(time.time())
+    stale_cutoff = now - max_age_days * 86400
+    kapitel_dir = Path(project_dir) / _DEFAULT_KAPITEL_DIRNAME
+
+    result: dict = {
+        "retracted": [],
+        "clean": [],
+        "error": [],
+        "no_doi": [],
+        "checked_count": 0,
+        "skipped_fresh_count": 0,
+    }
+
+    for paper in papers:
+        paper_id = paper["paper_id"]
+        doi = paper.get("doi")
+        if not doi:
+            result["no_doi"].append(paper_id)
+            continue
+
+        checked_at = paper.get("retraction_checked_at")
+        is_fresh = not force and checked_at is not None and checked_at >= stale_cutoff
+        if is_fresh:
+            result["skipped_fresh_count"] += 1
+            continue
+
+        check = _retraction.check_retraction(doi)
+        result["checked_count"] += 1
+
+        if check.status == "error":
+            result["error"].append(
+                {"paper_id": paper_id, "doi": doi, "error_message": check.error_message}
+            )
+            continue  # kein Timestamp-Update -- naechster Lauf versucht erneut.
+
+        if check.status == "clean":
+            db.update_retraction_checked_at(paper_id, now)
+            result["clean"].append(paper_id)
+            continue
+
+        # status == "retracted"
+        # Timestamp NICHT aktualisieren -- der Rückzug soll in jedem Lauf
+        # angezeigt werden, bis der Nutzer eine Entscheidung trifft (AC4).
+        # Analog zum Nicht-Update bei "error".
+        try:
+            csl = json.loads(paper.get("csl_json") or "{}")
+        except json.JSONDecodeError:
+            csl = {}
+        cited = paper_cited_in_chapters(csl, kapitel_dir)
+        result["retracted"].append(
+            {
+                "paper_id": paper_id,
+                "doi": doi,
+                "source": check.source,
+                "cited_in_chapter": cited,
+            }
+        )
+
+    result["error_count"] = len(result["error"])
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1406,7 +1583,7 @@ def export_material_passport(
     slug: str,
     output_dir: str = ".",
     score_algo_version: str = "1.0",
-    plugin_version: str = "6.4",
+    plugin_version: str | None = None,
     model_versions: dict | None = None,
     per_uni_profile_hash: str | None = None,
 ) -> str:
@@ -1414,16 +1591,17 @@ def export_material_passport(
 
     Gibt den Pfad zur erzeugten Datei zurueck.
     """
-    from .material_passport import build_passport, validate_passport
+    from .material_passport import build_passport, read_plugin_version, validate_passport
+
+    if plugin_version is None:
+        plugin_version = read_plugin_version()
 
     db = VaultDB(db_path)
     db.init_schema()
 
     conn = VaultDB._open(db_path)
     try:
-        paper_rows = conn.execute(
-            "SELECT paper_id, doi, csl_json FROM papers ORDER BY paper_id"
-        ).fetchall()
+        paper_rows = conn.execute("SELECT paper_id, doi FROM papers ORDER BY paper_id").fetchall()
     finally:
         conn.close()
 
@@ -1433,12 +1611,27 @@ def export_material_passport(
     # `file-change`, die der PostToolUse-Hook seit #527 bei jedem `.md`-Write
     # schreibt, sind kein Material: sie wuerden den Snapshot fluten und den
     # `passport_hash` bei jeder Kapitel-Aenderung bewegen, obwohl sich am
-    # Material nichts geaendert hat (#380).
+    # Material nichts geaendert hat (#380). Symmetrisch dazu ist die Kategorie
+    # `model-version` (#617) Material-Herkunft, keine methodische Entscheidung
+    # -- sie fliesst stattdessen in `model_versions` (siehe unten).
     decisions = [
         d
         for d in db.list_decisions(active_only=True)
-        if d.get("category") != _AUTO_DECISION_CATEGORY
+        if d.get("category") not in (_AUTO_DECISION_CATEGORY, _MODEL_VERSION_CATEGORY)
     ]
+
+    # model_versions aus den `model-version`-Decisions herleiten (#617):
+    # Text-Konvention "<schritt>: <modell>". Malformed Eintraege werden
+    # uebersprungen statt den Export scheitern zu lassen. Ein explizit
+    # uebergebenes `model_versions`-Kwarg gewinnt bei Kollision.
+    model_versions_from_decisions: dict[str, str] = {}
+    for d in db.list_decisions(category=_MODEL_VERSION_CATEGORY, active_only=True):
+        parsed = _parse_model_version_text(d.get("text") or "")
+        if parsed is not None:
+            step, model_id = parsed
+            # Only keep the first (newest) decision per step (list_decisions returns DESC by created_at)
+            model_versions_from_decisions.setdefault(step, model_id)
+    merged_model_versions = {**model_versions_from_decisions, **(model_versions or {})}
 
     scores_5d: dict = {}
     for pid in paper_ids:
@@ -1455,7 +1648,7 @@ def export_material_passport(
         scores_5d=scores_5d,
         score_algo_version=score_algo_version,
         plugin_version=plugin_version,
-        model_versions=model_versions or {},
+        model_versions=merged_model_versions,
         per_uni_profile_hash=per_uni_profile_hash,
         decisions_snapshot=decisions,
         pdf_hashes=pdf_hashes,
@@ -1694,6 +1887,82 @@ def extract_fulltext_for_paper(
         "chars": len(text),
         "indexed": indexed,
     }
+
+
+def extract_tables_for_paper(
+    db_path: str,
+    paper_id: str,
+    backend: str = "auto",
+) -> dict:
+    """Extrahiert die Tabellen eines Papers strukturerhaltend (Issue #630).
+
+    Laeuft **neben** dem Volltextpfad: ``paper_fulltext`` und ``papers_fts``
+    werden nicht angefasst, der FTS5-Volltext bleibt byteweise identisch.
+    Fehlt das optionale Backend, ist das Ergebnis ein sichtbarer Status mit
+    Installationsanweisung statt einer Exception — der Volltextpfad laeuft
+    unveraendert weiter.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        paper_id: Paper mit hinterlegtem ``pdf_path``.
+        backend: ``"auto"`` oder ``"pdfplumber"``.
+
+    Returns:
+        ``{"paper_id", "status", "message", "backend", "tables", "cells"}``.
+        ``status`` ist ``"ok"``, ``"no-tables"``, ``"no-textlayer"`` oder
+        ``"backend-missing"``; ``tables``/``cells`` sind Anzahlen.
+
+    Raises:
+        ValueError: Paper unbekannt oder ohne ``pdf_path``.
+        FileNotFoundError: Hinterlegter ``pdf_path`` existiert nicht.
+        VaultLockedError: Der Materialpass ist eingefroren.
+    """
+    from .tables import STATUS_OK, extract_tables
+
+    db = VaultDB(db_path)
+    db.init_schema()
+    paper = db.get_paper(paper_id)
+    if paper is None:
+        raise ValueError(f"Paper unbekannt: {paper_id}")
+    pdf_path = (paper.get("pdf_path") or "").strip()
+    if not pdf_path:
+        raise ValueError(f"Paper '{paper_id}' hat keinen pdf_path -- nichts zu extrahieren.")
+
+    result = extract_tables(pdf_path, backend=backend)
+    found = result["tables"]
+    if result["status"] == STATUS_OK:
+        db.set_paper_tables(paper_id, found, result["backend"])
+    return {
+        "paper_id": paper_id,
+        "status": result["status"],
+        "message": result["message"],
+        "backend": result["backend"],
+        "tables": len(found),
+        "cells": sum(len(table["cells"]) for table in found),
+    }
+
+
+def list_paper_tables(db_path: str, paper_id: str, page: int | None = None) -> list[dict]:
+    """Gibt die gespeicherten Tabellenstrukturen eines Papers zurueck (Issue #630)."""
+    _ensure_schema_for_read(db_path)
+    return VaultDB(db_path).list_paper_tables(paper_id, page=page)
+
+
+def get_table_cell(
+    db_path: str,
+    paper_id: str,
+    page: int,
+    table_index: int,
+    row: int,
+    col: int,
+) -> dict | None:
+    """Loest eine Tabellenzelle zu Wert und Beleg auf (Issue #630 AC2).
+
+    ``None`` bei unbekannter Zelle — ein geratener Beleg waere schlimmer als
+    gar keiner.
+    """
+    _ensure_schema_for_read(db_path)
+    return VaultDB(db_path).get_table_cell(paper_id, page, table_index, row, col)
 
 
 # ---------------------------------------------------------------------------
@@ -1942,6 +2211,11 @@ def _build_mcp_server():
         """Counts: paper_count, quote_count."""
         return get_stats(db_path)
 
+    @mcp.tool(name="vault.component_status")
+    def _vault_component_status() -> dict:
+        """Zustand optionaler Bestandteile: Embedding-Modell, sqlite-vec, FTS5 (#624)."""
+        return component_status(db_path)
+
     @mcp.tool(name="vault.set_ocr_done")
     def _vault_set_ocr_done(paper_id: str, value: int = 1) -> None:
         """Setzt ocr_done-Flag (1=OCR durchgefuehrt) fuer ein Paper."""
@@ -1971,6 +2245,36 @@ def _build_mcp_server():
         backend: "auto" (GROBID falls GROBID_URL gesetzt, sonst pypdf), "grobid", "pypdf".
         """
         return extract_fulltext_for_paper(db_path, paper_id, backend=backend)
+
+    @mcp.tool(name="vault.extract_tables")
+    def _vault_extract_tables(paper_id: str, backend: str = "auto") -> dict:
+        """Extrahiert Tabellen strukturerhaltend (Zeilen/Spalten/Zellen, #630).
+
+        Laeuft neben dem Volltextpfad -- papers_fts bleibt unveraendert. status:
+        "ok" | "no-tables" | "no-textlayer" | "backend-missing" (dann nennt
+        message die Installation `uv sync --extra tables`).
+        """
+        return extract_tables_for_paper(db_path, paper_id, backend=backend)
+
+    @mcp.tool(name="vault.list_tables")
+    def _vault_list_tables(paper_id: str, page: int | None = None) -> list[dict]:
+        """Gespeicherte Tabellenstrukturen eines Papers (rows = Textmatrix, #630)."""
+        return list_paper_tables(db_path, paper_id, page=page)
+
+    @mcp.tool(name="vault.get_table_cell")
+    def _vault_get_table_cell(
+        paper_id: str,
+        page: int,
+        table_index: int,
+        row: int,
+        col: int,
+    ) -> dict | None:
+        """Eine Tabellenzelle mit Wert, Bounding-Box und fertigem Beleg (#630).
+
+        table_index/row/col sind 0-basiert, page ist die PDF-Seite (1-basiert).
+        None bei unbekannter Zelle -- kein Naeherungstreffer.
+        """
+        return get_table_cell(db_path, paper_id, page, table_index, row, col)
 
     @mcp.tool(name="vault.add_figure")
     def _vault_add_figure(
@@ -2034,6 +2338,23 @@ def _build_mcp_server():
         """Prueft ob paper_id in excluded_sources ist."""
         return is_excluded(db_path, paper_id=paper_id)
 
+    @mcp.tool(name="vault.check_retractions")
+    def _vault_check_retractions(
+        max_age_days: int = 90,
+        force: bool = False,
+        project_dir: str = ".",
+    ) -> dict:
+        """Prueft alle Vault-Papers mit DOI vault-weit auf Rueckzug (#604).
+
+        Legt Treffer nur VOR (Fundstelle in `source`, `cited_in_chapter`
+        heuristisch) -- schreibt nie automatisch nach `excluded_sources`.
+        `force=True` erzwingt eine erneute Pruefung auch frisch gepruefter
+        Papers.
+        """
+        return check_retractions(
+            db_path, max_age_days=max_age_days, force=force, project_dir=project_dir
+        )
+
     # -----------------------------------------------------------------------
     # v6.4: Risk-of-Bias Tools (#100)
     # -----------------------------------------------------------------------
@@ -2081,7 +2402,7 @@ def _build_mcp_server():
         slug: str,
         output_dir: str = ".",
         score_algo_version: str = "1.0",
-        plugin_version: str = "6.4",
+        plugin_version: str | None = None,
     ) -> str:
         """Exportiert material-passport.json. Gibt Dateipfad zurueck."""
         return export_material_passport(

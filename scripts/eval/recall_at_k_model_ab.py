@@ -1,28 +1,39 @@
 #!/usr/bin/env python3
-"""A/B-Vergleich dreier Embedding-Modellkandidaten auf dem DE/EN-Goldset (#375).
+"""A/B-Vergleich von Embedding-Modellkandidaten auf einem Recall@k-Goldset.
 
 Vergleicht Recall@k von:
   - intfloat/multilingual-e5-small              (aktueller Default, 384d nativ)
   - paraphrase-multilingual-MiniLM-L12-v2       (Alternative, 384d nativ)
   - Qwen/Qwen3-Embedding-0.6B (truncate_dim=384) (dokumentierter Upgrade-Pfad)
+  - BAAI/bge-m3                                  (1024d nativ, 8192 Tokens, #628)
+  - intfloat/multilingual-e5-large               (1024d nativ, 512 Tokens, #628)
 
-Dies laeuft NICHT hermetisch (drei echte Modell-Downloads von HuggingFace,
+Dies laeuft NICHT hermetisch (fuenf echte Modell-Downloads von HuggingFace,
 CPU-Inferenzzeit) und ist deshalb bewusst kein pytest-Test, sondern ein
 manuell/einmalig auszufuehrendes Skript -- analog zum bestehenden
 env-gated-Live-Test-Muster (``VAULT_E5_LIVE_TEST=1`` in
 ``tests/test_vault_embeddings_ingest.py``). Das Ergebnis wird als statische
-Tabelle in ``docs/evals/recall-at-k-model-ab-375.md`` dokumentiert.
+Tabelle in ``docs/evals/recall-at-k-model-ab-375.md`` (Default-Goldset) bzw.
+``docs/evals/recall-at-k-model-ab-hard-628.md`` (hartes Goldset, ``--goldset
+hard``) dokumentiert.
 
 Jedes Modell nutzt sein jeweils korrektes Query/Passage-Prompting:
-  - e5-Familie:  "query: "/"passage: "-Praefixe (Teil des Trainings-Setups).
+  - e5-Familie (e5-small, e5-large): "query: "/"passage: "-Praefixe (Teil des
+    Trainings-Setups; fuer e5-large auf der Modellkarte verifiziert -- "Each
+    input text should start with 'query: ' or 'passage: ', even for
+    non-English texts").
   - MiniLM:      symmetrisches Modell, kein Praefix/Prompt noetig.
   - Qwen3-Embedding: ``prompt_name="query"`` fuer Queries (im Modell
     hinterlegter Prompt), Dokumente ohne Prompt (siehe sentence-transformers-
     Doku, verifiziert via Context7).
+  - BGE-M3:      kein Praefix/Prompt noetig (Modellkarte: "the BGE-M3 model
+    no longer requires adding instructions to the queries", anders als
+    fruehere BGE-Generationen).
 
 Nutzung:
     uv run python scripts/eval/recall_at_k_model_ab.py
     uv run python scripts/eval/recall_at_k_model_ab.py --model e5-small
+    uv run python scripts/eval/recall_at_k_model_ab.py --goldset hard
 """
 
 from __future__ import annotations
@@ -37,6 +48,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 GOLDSET_PATH = REPO_ROOT / "tests" / "fixtures" / "retrieval_goldset_de_en.json"
+HARD_GOLDSET_PATH = REPO_ROOT / "tests" / "fixtures" / "retrieval_goldset_hard_overlap_628.json"
+GOLDSET_PATHS: dict[str, Path] = {
+    "default": GOLDSET_PATH,
+    "hard": HARD_GOLDSET_PATH,
+}
 
 
 @dataclass
@@ -69,11 +85,23 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         truncate_dim=384,
         query_prompt_name="query",
     ),
+    "bge-m3": ModelConfig(
+        key="bge-m3",
+        model_id="BAAI/bge-m3",
+        truncate_dim=None,
+    ),
+    "e5-large": ModelConfig(
+        key="e5-large",
+        model_id="intfloat/multilingual-e5-large",
+        truncate_dim=None,
+        query_prefix="query: ",
+        passage_prefix="passage: ",
+    ),
 }
 
 
-def _load_goldset() -> dict:
-    return json.loads(GOLDSET_PATH.read_text(encoding="utf-8"))
+def _load_goldset(path: Path = GOLDSET_PATH) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _l2_normalize_rows(matrix):
@@ -147,13 +175,23 @@ def main() -> int:
         choices=sorted(MODEL_CONFIGS),
         action="append",
         dest="models",
-        help="Nur dieses Modell laufen lassen (mehrfach angebbar). Default: alle drei.",
+        help="Nur dieses Modell laufen lassen (mehrfach angebbar). Default: alle fuenf.",
     )
     parser.add_argument("--k", type=int, default=10, help="Recall@k Cutoff (Default: 10).")
+    parser.add_argument(
+        "--goldset",
+        choices=sorted(GOLDSET_PATHS),
+        default="default",
+        help=(
+            "'default' = 24 Papers/6 scharf getrennte Cluster (#375), "
+            "'hard' = 24 Papers/2 Themen mit ueberlappenden Subtopics (#628). "
+            "Default: default."
+        ),
+    )
     args = parser.parse_args()
 
     keys = args.models or list(MODEL_CONFIGS)
-    data = _load_goldset()
+    data = _load_goldset(GOLDSET_PATHS[args.goldset])
 
     results = []
     for key in keys:

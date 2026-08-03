@@ -47,3 +47,19 @@ sentence-transformers>=3.0
 # naechstliegende Textstelle fuer leicht abweichende Zitat-Kandidaten.
 # Zweitstelle: pyproject.toml [project.dependencies].
 rapidfuzz>=3.14.5
+# Rechenkern von quantitative-analysis (Issue #610):
+# skills/quantitative-analysis/scripts/analyze.py rechnet Teststatistiken,
+# Effektstaerken und Bootstrap-Intervalle. numpy/scipy kommen ohnehin mit
+# sentence-transformers ins Environment, stehen hier aber explizit -- sonst
+# haengt ein Skill an einer transitiven Dependency, die niemand versprochen hat.
+# Zweitstelle: pyproject.toml [project.dependencies].
+numpy>=1.26
+scipy>=1.11
+# OPTIONAL (Issue #630) -- strukturerhaltende Tabellenextraktion,
+# academic_vault/tables.py. Bewusst auskommentiert: ohne pdfplumber laeuft der
+# Volltextpfad unveraendert weiter und vault.extract_tables() meldet
+# status="backend-missing" samt Installationsanweisung. Wer Effektstaerken und
+# Stichprobengroessen mit Zellbeleg aus Ergebnistabellen ziehen will,
+# entkommentiert die Zeile (bzw. `uv sync --extra tables` im Dev-Setup).
+# Zweitstelle: pyproject.toml [project.optional-dependencies].tables.
+# pdfplumber>=0.11

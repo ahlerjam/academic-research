@@ -155,6 +155,13 @@ _LIVE_CALL_ARGS = {
     # erzeugte ID durchreichen zu muessen.
     "vault.get_figure": {"figure_id": "issue366-figure"},
     "vault.list_figures": {"paper_id": "issue366-paper"},
+    # #617: figure-verifier protokolliert einmal pro Lauf die eingesetzte
+    # Modellkennung als Decision der Kategorie "model-version".
+    "vault.add_decision": {
+        "category": "model-version",
+        "text": "figure-verifier: sonnet",
+        "rationale": "Issue #617",
+    },
     "vault.ensure_file": {"paper_id": "issue366-paper"},
     # Wie "vault.ensure_file" bewusst OHNE pdf_path-Seed: erreicht real den
     # ValueError-Zweig der gemeinsamen Paper-/pdf_path-Aufloesung
@@ -164,7 +171,28 @@ _LIVE_CALL_ARGS = {
         "paper_id": "issue366-paper",
         "candidate": "Some candidate text.",
     },
+    # Tabellenextraktion (#630): ebenfalls ohne pdf_path-Seed -- erreicht real
+    # den ValueError-Zweig, ohne ein PDF ueber den stdio-Transport zu brauchen.
+    "vault.extract_tables": {"paper_id": "issue366-paper"},
+    # Reine Lesepfade: liefern regulaer [] bzw. None, kein Fehler.
+    "vault.list_tables": {"paper_id": "issue366-paper"},
+    "vault.get_table_cell": {
+        "paper_id": "issue366-paper",
+        "page": 1,
+        "table_index": 0,
+        "row": 0,
+        "col": 0,
+    },
 }
+
+#: Tools, deren Fixture bewusst in einen Business-Logic-Fehler laeuft. Der Test
+#: verlangt dort ``isError`` -- entscheidend ist, dass es NICHT der
+#: MCP-Protokollfehler "Unknown tool" aus Issue #366 ist.
+_LIVE_EXPECTED_BUSINESS_ERRORS = (
+    "vault.ensure_file",
+    "vault.verify_verbatim",
+    "vault.extract_tables",
+)
 
 
 async def _run_live_dispatch_check(vault_db_path: Path) -> None:
@@ -265,7 +293,7 @@ async def _run_live_dispatch_check(vault_db_path: Path) -> None:
                         real_name, arguments=_LIVE_CALL_ARGS[real_name]
                     )
 
-                    if real_name in ("vault.ensure_file", "vault.verify_verbatim"):
+                    if real_name in _LIVE_EXPECTED_BUSINESS_ERRORS:
                         # Business-Logic-Fehler (kein pdf_path) statt Erfolg --
                         # aber entscheidend: NICHT der MCP-Protokollfehler
                         # "Unknown tool: ...", der bei falschem Praefix kaeme.

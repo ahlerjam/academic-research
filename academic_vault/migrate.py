@@ -693,7 +693,66 @@ def apply_pending_migrations(db_path: str) -> None:
     add_notes_fts(db_path)
     add_source_kind_column(db_path)
     add_empirical_tables(db_path)
+    add_paper_tables_table(db_path)
+    add_retraction_checked_at_column(db_path)
     drop_dead_v64_tables(db_path)
+
+
+def add_paper_tables_table(db_path: str) -> None:
+    """Erstellt ``paper_tables`` falls nicht vorhanden. Idempotent. (#630)
+
+    Rein additiv: kein FTS5-Trigger wird angefasst, ``paper_fulltext`` bleibt
+    unberuehrt. Wie bei ``add_empirical_tables`` legt ``schema.sql`` die Tabelle
+    ohnehin bei jedem ``init_schema()``-Lauf an; dieser Helfer haelt den
+    Bestands-Pfad (``apply_pending_migrations``) unabhaengig von der Reihenfolge
+    aus DDL und Migration vollstaendig.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS paper_tables (
+              table_id     TEXT PRIMARY KEY,
+              paper_id     TEXT NOT NULL REFERENCES papers(paper_id) ON DELETE CASCADE,
+              page         INTEGER NOT NULL,
+              table_index  INTEGER NOT NULL,
+              backend      TEXT NOT NULL,
+              n_rows       INTEGER NOT NULL,
+              n_cols       INTEGER NOT NULL,
+              bbox_json    TEXT NOT NULL,
+              rows_json    TEXT NOT NULL,
+              cells_json   TEXT NOT NULL,
+              extracted_at INTEGER NOT NULL,
+              UNIQUE(paper_id, page, table_index)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_tables_paper ON paper_tables(paper_id)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_retraction_checked_at_column(db_path: str) -> None:
+    """Fuegt retraction_checked_at-Spalte zu papers hinzu. Idempotent. (#604)
+
+    Haelt fest, wann ein Paper zuletzt auf Crossref-Retraction geprueft wurde
+    -- Grundlage fuer den "nur unzureichend geprueft erneut abfragen"-Filter
+    von ``server.check_retractions()``. Default NULL fuer bestehende
+    Eintraege (noch nie geprueft). Aufruf-sicher: kann mehrfach auf
+    derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute("ALTER TABLE papers ADD COLUMN retraction_checked_at INTEGER DEFAULT NULL")
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def add_chunk_vectors_table(db_path: str) -> int:

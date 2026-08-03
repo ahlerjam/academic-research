@@ -489,6 +489,51 @@ def test_export_material_passport_schema_validates(tmp_path):
         os.unlink(db_path)
 
 
+def _manifest_version() -> str:
+    import json as _json
+    from pathlib import Path
+
+    manifest = Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
+    return _json.loads(manifest.read_text(encoding="utf-8"))["version"]
+
+
+def test_export_material_passport_plugin_version_matches_manifest(tmp_path):
+    """plugin_version im Passport entspricht .claude-plugin/plugin.json (#616).
+
+    Kein hartkodiertes Literal im Test — sonst wiederholt sich der Fehlerklasse-Typ
+    des Issues (Passport driftet vom Manifest) beim naechsten Release im Test selbst.
+    """
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert data["plugin_version"] == _manifest_version()
+    finally:
+        os.unlink(db_path)
+
+
+def test_export_material_passport_plugin_version_override_respected(tmp_path):
+    """Ein explizit uebergebenes plugin_version-Kwarg gewinnt weiterhin."""
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+            plugin_version="9.9.9",
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert data["plugin_version"] == "9.9.9"
+    finally:
+        os.unlink(db_path)
+
+
 # ---------------------------------------------------------------------------
 # Migration-Idempotenz
 # ---------------------------------------------------------------------------

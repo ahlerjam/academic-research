@@ -157,7 +157,7 @@ Das JSON-Dokument enthält:
 | `scores_5d` | Aktuelle 5D-Scores je Paper |
 | `score_algo_version` | Version des Scoring-Algorithmus |
 | `plugin_version` | Version des academic-research Plugins |
-| `model_versions` | Eingesetzte KI-Modellversionen |
+| `model_versions` | KI-Modellversionen je Arbeitsschritt (Kategorie `model-version`, Format `<schritt>: <modell>`). Leer heisst *nicht erfasst*, nicht *kein Modell beteiligt* — lueckenhaft (#617). |
 | `per_uni_profile_hash` | Hash des Uni-Bewertungsprofils (optional) |
 | `decisions_snapshot` | Snapshot der aktiven **methodischen** Decisions (ohne die Auto-Einträge der Kategorie `file-change`) |
 | `pdf_sha256_hashes` | SHA-256-Hashes aller vorhandenen PDFs |

@@ -13,6 +13,32 @@ from pathlib import Path
 from typing import Any
 
 _SCHEMA_FILE = Path(__file__).parent / "material-passport.schema.json"
+_MANIFEST_FILE = Path(__file__).parent.parent / ".claude-plugin" / "plugin.json"
+
+
+def read_plugin_version() -> str:
+    """Liest die Plugin-Version aus .claude-plugin/plugin.json.
+
+    Wird bei jedem Aufruf frisch gelesen (kein Modul-Import-Caching), damit ein
+    lang laufender MCP-Server-Prozess ueber ein Plugin-Upgrade hinweg nicht mit
+    einer veralteten Version antwortet. Wirft eine sprechende Fehlermeldung statt
+    still auf einen Platzhalter zurueckzufallen (#616): ein Passport, der falsch
+    aussieht statt sichtbar zu scheitern, ist genau die Fehlerklasse, die dieser
+    Fix beheben soll.
+    """
+    try:
+        data = json.loads(_MANIFEST_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"Plugin-Manifest nicht gefunden: {_MANIFEST_FILE}. "
+            "plugin_version kann nicht ermittelt werden."
+        ) from exc
+    try:
+        return data["version"]
+    except KeyError as exc:
+        raise RuntimeError(
+            f"Plugin-Manifest {_MANIFEST_FILE} enthaelt kein 'version'-Feld."
+        ) from exc
 
 
 def build_passport(

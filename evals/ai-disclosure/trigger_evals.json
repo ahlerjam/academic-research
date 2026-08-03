@@ -1,0 +1,25 @@
+{
+  "component": "ai-disclosure",
+  "should_trigger": [
+    "Ich brauche eine Offenlegungserklärung zur KI-Nutzung für meine Abgabe.",
+    "Kannst du mir eine Erklärung erstellen, wo ich KI in der Arbeit eingesetzt habe?",
+    "Ich muss offenlegen, dass ich KI beim Schreiben genutzt habe.",
+    "Wie formuliere ich die KI-Nutzung im Methodenteil?",
+    "Meine Zeitschrift verlangt ein AI disclosure statement.",
+    "Erstelle mir die Danksagung für die KI-Unterstützung.",
+    "Welche KI-Nutzung muss ich für die Einreichung angeben?",
+    "Formuliere die Offenlegungserklärung für KI-Tools auf Deutsch und Englisch."
+  ],
+  "should_not_trigger": [
+    "Prüfe die Formalia meiner Abgabe.",
+    "Exportiere die Thesis als Word-Datei.",
+    "Erstelle die eidesstattliche Erklärung.",
+    "Kodiere mein Transkript nach Kategorien.",
+    "Wie wähle ich die richtige Methodik?",
+    "Fasse das Paper in einem Abstract zusammen.",
+    "Schreibe die Einleitung des Kapitels.",
+    "Prüfe meinen Text auf Plagiate.",
+    "Erstelle ein Reproduzierbarkeits-Manifest.",
+    "Importiere meine Zotero-Bibliothek."
+  ]
+}
