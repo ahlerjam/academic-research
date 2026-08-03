@@ -30,11 +30,14 @@ jobs:
   eval-behavior:
     name: Verhaltens-Evals real ausfuehren
     runs-on: ubuntu-latest
-    # Harter Budget-Deckel (Issue #470 AC2): ein Vollauf (~400 API-Aufrufe,
-    # ueberwiegend Haiku-Trigger-Klassifikation) braucht in der Praxis wenige
-    # Minuten; 30 Minuten sind ein grosszuegiger, aber endlicher Deckel gegen
-    # einen haengenden Lauf, der sonst unbegrenzt Budget verbrennen wuerde.
-    timeout-minutes: 30
+    # Harter Budget-Deckel (Issue #470 AC2): auf dem SDK-Pfad braucht ein
+    # Vollauf (~400 API-Aufrufe, ueberwiegend Haiku-Trigger-Klassifikation) in
+    # der Praxis wenige Minuten. Der CLI-Pfad (Issue #631) ist pro Aufruf
+    # deutlich teurer -- der reale Probelauf im PR maß ~6s/Aufruf inkl.
+    # Agenten-Scaffold-Cache-Erstellung, macht 400 Aufrufe ~40min statt
+    # wenigen Minuten. 60 Minuten decken beide Pfade grosszuegig ab und
+    # bleiben ein endlicher Deckel gegen einen haengenden Lauf.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -63,7 +66,13 @@ jobs:
         # Nur noetig fuer den CLI-Subprozess-Pfad in eval_runner.py (aktiv, wenn
         # ANTHROPIC_API_KEY fehlt). setup-claude-action installiert die
         # claude-code-action, nicht die nackte CLI -- getrennter Schritt hier.
-        if: ${{ secrets.ANTHROPIC_API_KEY == '' }}
+        # `secrets` ist im step-level `if:` nicht verfuegbar (nur github, needs,
+        # strategy, matrix, job, runner, env, vars, steps, inputs) -- daher wie
+        # im Vorbedingungs-Step oben ueber env: binden und in der Shell/im if
+        # auswerten.
+        if: env.HAS_API_KEY != 'true'
+        env:
+          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
         run: npm install -g @anthropic-ai/claude-code
 
       - name: pytest tests/evals/ (real, mit API-Key oder OAuth-Session)

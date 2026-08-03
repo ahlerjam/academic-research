@@ -171,7 +171,8 @@ bestehen.
 **Realer Ausführungspfad (Issue #470):** `.github/workflows/eval-behavior.yml`
 ist der einzige Weg, diese ca. 400 Aufrufe tatsächlich abzurufen — ein separat
 per `workflow_dispatch` auslösbarer Job, begrenzt auf `tests/evals/` (nicht
-`tests/`), mit `timeout-minutes: 30` als hartem Deckel. Der Job bricht mit
+`tests/`), mit `timeout-minutes: 60` als hartem Deckel (angehoben in #631, da
+der CLI-Pfad pro Aufruf deutlich teurer ist als der SDK-Pfad). Der Job bricht mit
 `::error::` ab, wenn weder `ANTHROPIC_API_KEY` noch `CLAUDE_CODE_OAUTH_TOKEN`
 als Repo-Secret hinterlegt ist, statt täuschend grün als „0 failed, N
 skipped" durchzulaufen. `ci.yml` bleibt davon unberührt: keine Auth dort,
@@ -192,11 +193,13 @@ jedem Aufruf zwei Wege statt einem:
    bereits fünffach nutzt), ohne zweites Abrechnungsverhältnis.
 3. Weder Key noch CLI gefunden → `pytest.skip()`, exakt wie zuvor.
 
-Fehlt beides nicht (**unverändertes Skip-Verhalten, AC7**): Ein Rechner mit
+Ist die CLI vorhanden (**geändertes Verhalten, AC1**): Ein Rechner mit
 einer bereits eingeloggten `claude`-Session löst künftig bei jedem
 `pytest tests/`-Lauf reale (Abo-)Aufrufe aus, wo vorher lautlos geskippt
-wurde. Das ist der beabsichtigte Kern von #631 (AC1), keine Nebenwirkung —
+wurde. Das ist der beabsichtigte Kern von #631, keine Nebenwirkung —
 wer offline entwickeln will, muss die CLI vom PATH nehmen oder sich ausloggen.
+Fehlen dagegen sowohl Key als auch CLI, bleibt es beim bisherigen
+`pytest.skip()` (**unverändertes Skip-Verhalten, AC7**).
 
 **Was auf dem CLI-Pfad entfällt oder anders aussieht (AC6):**
 
