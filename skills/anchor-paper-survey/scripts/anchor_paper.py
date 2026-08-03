@@ -8,7 +8,7 @@ verwandte Arbeiten zu finden. Die Folge-Suche liefert nur Kandidaten zur
 Anzeige -- Treffer werden NICHT automatisch in den Vault geschrieben (keine
 neue Zitations-Graph-Datenbank, siehe Issue-Scope "Out").
 
-Folge-Suche, zweigleisig (PR #440 Review, P1; erweitert um DOI-Ankern fuer
+Folge-Suche, zweigleisig (PR #440 Review, P1; erweitert um DOI-Anker fuer
 PDF in Issue #599):
   - **arXiv-Anker** und **PDF-Anker mit auffindbarer DOI**: echte Zitations-/
     Referenz-Traversierung ueber die Semantic-Scholar-Graph-API
@@ -293,7 +293,7 @@ def resolve_arxiv_id(arxiv_id: str) -> str | None:
 # (kein Cross-Skill-Import, Praezedenzfall Issue #401).
 # ---------------------------------------------------------------------------
 
-_DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\]\)\"'<>]+)", re.IGNORECASE)
+_DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\]\)\"'<>?#%]+)", re.IGNORECASE)
 
 # Ein PDF-DOI sitzt so gut wie immer auf der Titelseite/im Header (Zeitschriften-
 # Impressum, Kopfzeile) -- ein Scan des VOLLEN Textes traefe eher eine zitierte
@@ -647,26 +647,40 @@ def _handle_pdf(pdf_path: str, db_path: str) -> dict:
     existing_paper = vault_get_paper(db_path, paper_id)
     existing_doi = (existing_paper or {}).get("doi") if existing_paper else None
     doi = existing_doi if existing_doi else extract_doi_from_text(text)
+    # P1 fix (flowkit review): extrahierte DOI wird erst nach S2-Verifikation
+    # persistiert (siehe anchor_paper_survey). Vault-DOI wird immer persistiert.
+    doi_source = "vault" if existing_doi else ("extracted" if doi else None)
 
     csl: dict = {"type": "article-journal", "title": title, "author": authors}
     if doi:
         csl["DOI"] = doi
     csl_json = json.dumps(csl, ensure_ascii=False)
 
-    if doi:
-        # Explizites doi=... setzt/erhaelt den Wert. Ohne DOI wird der
+    if existing_doi:
+        # Explizites doi=... setzt/erhaelt den Wert fuer Vault-DOI. Ohne DOI wird der
         # doi-Kwarg bewusst WEGGELASSEN (Sentinel-Default in vault_add_paper()
         # statt doi=None) -- sonst wuerde ein zuvor gespeicherter DOI bei
         # einem Lauf ohne neuen Fund auf NULL zurueckgesetzt (Risiko 2).
         vault_add_paper(
-            db_path=db_path, paper_id=paper_id, csl_json=csl_json, doi=doi, pdf_path=pdf_path
+            db_path=db_path,
+            paper_id=paper_id,
+            csl_json=csl_json,
+            doi=existing_doi,
+            pdf_path=pdf_path,
         )
     else:
+        # Extrahierte DOI wird NICHT persistiert -- nur fuer s2_ref benutzt.
+        # Sie wird erst in anchor_paper_survey() gespeichert, nachdem Semantic
+        # Scholar sie verifiziert hat (mindestens eine Relation != failed).
         vault_add_paper(db_path=db_path, paper_id=paper_id, csl_json=csl_json, pdf_path=pdf_path)
 
     result: dict = {"status": "ok", "paper_id": paper_id, "source": "pdf", "title": title}
+    if authors:
+        # Authoren speichern fuer naechstliche Vault-Updates, falls DOI persistiert werden soll
+        result["authors"] = authors
     if doi:
         result["doi"] = doi
+        result["doi_source"] = doi_source
         # Wie beim arXiv-Anker (s2_ref="ARXIV:<id>") akzeptiert die
         # Semantic-Scholar-Graph-API DOIs direkt als {paper_ref} in diesem
         # Format (real verifiziert, Issue #599) -- damit bekommt auch der
@@ -754,6 +768,23 @@ def anchor_paper_survey(
             method = "keyword"
         else:
             method = "citation"
+            # P1 fix (flowkit review): extrahierte DOI wird erst hier persistiert, nachdem
+            # Semantic Scholar sie verifiziert hat (mindestens eine Relation != failed).
+            if anchor.get("doi_source") == "extracted" and anchor.get("doi"):
+                # Vault-Upsert mit der nun verifizierten DOI
+                authors = anchor.get("authors", [])
+                csl_with_doi: dict = {
+                    "type": "article-journal",
+                    "title": anchor["title"],
+                    "author": authors,
+                    "DOI": anchor["doi"],
+                }
+                vault_add_paper(
+                    db_path=db_path,
+                    paper_id=anchor["paper_id"],
+                    csl_json=json.dumps(csl_with_doi, ensure_ascii=False),
+                    doi=anchor["doi"],
+                )
     else:
         modules = list(search_modules) if search_modules else list(DEFAULT_SEARCH_MODULES)
         raw_hits, failed = run_search(anchor["title"], modules, limit=search_limit)
@@ -770,7 +801,7 @@ def anchor_paper_survey(
         "beruht auf einer nachgewiesenen Zitationsbeziehung (Semantic Scholar "
         "/citations + /references)"
         if method == "citation"
-        else "beruht auf einer thematischen Titel-Naeherung, keine geprueft Zitationsbeziehung"
+        else "beruht auf einer thematischen Titel-Naeherung, keine gepruefte Zitationsbeziehung"
     )
     reason_note = f" ({fallback_reason})" if fallback_reason else ""
 
