@@ -53,7 +53,9 @@ REFERENCE_MD = SKILL_DIR / "references" / "active-learning.md"
 CONFIG_PATH = REPO_ROOT / "config" / "parallel_agents.json"
 GOLD_PATH = REPO_ROOT / "tests" / "fixtures" / "active_learning" / "gold_screening.jsonl"
 
-sys.path.insert(0, str(SCRIPTS_DIR))
+# Skill-spezifischer Pfad, keine Repo-Root-Boilerplate (#183): der Ausdruck
+# nennt SKILL_DIR, damit die Herkunft aus skills/ auch statisch erkennbar ist.
+sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
 import active_learning as al  # noqa: E402
 import screening_ledger as sl  # noqa: E402
