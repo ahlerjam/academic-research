@@ -219,6 +219,21 @@ und `unavailable` schreibt der Hook den Tool-Input per
 | `ACADEMIC_CITATION_ARXIV_URL` | arXiv-API | Base-URL, überschreibbar (Tests/Proxy) |
 | `ACADEMIC_CITATION_CROSSREF_URL` | CrossRef-API | Base-URL, überschreibbar (Tests/Proxy) |
 | `ACADEMIC_CITATION_S2_URL` | Semantic-Scholar-API | Base-URL, überschreibbar (Tests/Proxy) |
+| `ACADEMIC_CITATION_UNAVAILABLE_RATE_THRESHOLD` | `0.5` | Anteil `unavailable`/Gesamtanfragen, ab dem eine Warnung ausgegeben wird (Issue #601) |
+| `ACADEMIC_CITATION_UNAVAILABLE_RATE_MIN_REQUESTS` | `5` | Mindestzahl Kaskaden-Anfragen im Lauf, unterhalb derer keine Warnung ausgelöst wird (Issue #601) |
+
+**Beobachtung: dauerhaft blockierter Egress.** Eine einzelne `unavailable`-
+Antwort ist Betriebsrauschen (Drosselung, kurzer Ausfall). Läuft der Egress
+über einen ganzen Lauf dauerhaft ins Leere — falsch gesetzter Proxy,
+abgelaufener API-Key, verlegter Endpunkt —, meldet jede Einzelanfrage brav
+`unavailable` und niemand zieht die Summe. `resolveCitations()` zählt daher
+je Lauf Gesamtanfragen und `unavailable`-Fälle; überschreitet der Anteil
+`ACADEMIC_CITATION_UNAVAILABLE_RATE_THRESHOLD` bei mindestens
+`ACADEMIC_CITATION_UNAVAILABLE_RATE_MIN_REQUESTS` Anfragen, schreibt der Hook
+eine Warnung auf stderr mit beiden Zahlen, dem Prozentsatz und dem häufigsten
+Grund (Statuscode oder Fehlerart). Die Bewertung einzelner HTTP-Antworten
+(jeder Nicht-2xx bleibt `unavailable`) ändert sich dadurch nicht — es wird
+nur mitgezählt, nicht umklassifiziert.
 
 Die Kaskade ist die einzige Stelle, an der ein Hook dieses Plugins ins Netz
 geht. Wer das nicht möchte, setzt `ACADEMIC_CITATION_CASCADE=off` — dann
