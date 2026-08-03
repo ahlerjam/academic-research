@@ -15,6 +15,8 @@ from uuid import uuid4
 
 from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset, default_db_path
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
+from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
+from .decision_log import parse_model_version_text as _parse_model_version_text
 from .embedding_model import get_embedder
 
 logger = logging.getLogger(__name__)
@@ -1435,12 +1437,27 @@ def export_material_passport(
     # `file-change`, die der PostToolUse-Hook seit #527 bei jedem `.md`-Write
     # schreibt, sind kein Material: sie wuerden den Snapshot fluten und den
     # `passport_hash` bei jeder Kapitel-Aenderung bewegen, obwohl sich am
-    # Material nichts geaendert hat (#380).
+    # Material nichts geaendert hat (#380). Symmetrisch dazu ist die Kategorie
+    # `model-version` (#617) Material-Herkunft, keine methodische Entscheidung
+    # -- sie fliesst stattdessen in `model_versions` (siehe unten).
     decisions = [
         d
         for d in db.list_decisions(active_only=True)
-        if d.get("category") != _AUTO_DECISION_CATEGORY
+        if d.get("category") not in (_AUTO_DECISION_CATEGORY, _MODEL_VERSION_CATEGORY)
     ]
+
+    # model_versions aus den `model-version`-Decisions herleiten (#617):
+    # Text-Konvention "<schritt>: <modell>". Malformed Eintraege werden
+    # uebersprungen statt den Export scheitern zu lassen. Ein explizit
+    # uebergebenes `model_versions`-Kwarg gewinnt bei Kollision.
+    model_versions_from_decisions: dict[str, str] = {}
+    for d in db.list_decisions(category=_MODEL_VERSION_CATEGORY, active_only=True):
+        parsed = _parse_model_version_text(d.get("text") or "")
+        if parsed is not None:
+            step, model_id = parsed
+            # Only keep the first (newest) decision per step (list_decisions returns DESC by created_at)
+            model_versions_from_decisions.setdefault(step, model_id)
+    merged_model_versions = {**model_versions_from_decisions, **(model_versions or {})}
 
     scores_5d: dict = {}
     for pid in paper_ids:
@@ -1457,7 +1474,7 @@ def export_material_passport(
         scores_5d=scores_5d,
         score_algo_version=score_algo_version,
         plugin_version=plugin_version,
-        model_versions=model_versions or {},
+        model_versions=merged_model_versions,
         per_uni_profile_hash=per_uni_profile_hash,
         decisions_snapshot=decisions,
         pdf_hashes=pdf_hashes,

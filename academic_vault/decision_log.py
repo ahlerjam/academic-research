@@ -33,9 +33,45 @@ from .db import VaultDB, VaultLockedError
 #: Definition — Hook und Reinforcement lesen sie von hier.
 AUTO_CATEGORY = "file-change"
 
+#: Kategorie der Modellkennungs-Decisions (Issue #617). Symmetrisch zu
+#: ``AUTO_CATEGORY``: Material-Herkunft, keine methodische Entscheidung —
+#: bleibt deshalb ebenfalls aus ``decisions_snapshot`` im Material-Passport
+#: ausgeschlossen (``server.export_material_passport``). Text-Konvention
+#: ``"<schritt>: <modell>"``, geparst von ``parse_model_version_text``.
+MODEL_VERSION_CATEGORY = "model-version"
+
 #: Praefix des Decision-Textes. Der Text ist zugleich der Schluessel, ueber den
 #: der Vorgaenger-Eintrag derselben Datei gefunden wird.
 _TEXT_PREFIX = "Datei geaendert: "
+
+#: Trennzeichen zwischen Arbeitsschritt und Modellkennung im
+#: ``MODEL_VERSION_CATEGORY``-Decision-Text.
+_MODEL_VERSION_SEP = ":"
+
+
+def parse_model_version_text(text: str) -> tuple[str, str] | None:
+    """Parst einen ``MODEL_VERSION_CATEGORY``-Decision-Text ``"<schritt>: <modell>"``.
+
+    Gibt ``(schritt, modell)`` zurueck. Liefert ``None`` (statt zu werfen) bei
+    fehlendem Trennzeichen oder leerem Schritt/Modell nach dem Trimmen —
+    ``decisions.category`` ist ein freies TEXT-Feld ohne CHECK-Constraint,
+    ein fremder oder verstuemmelter Eintrag in dieser Kategorie darf den
+    Passport-Export nicht zum Absturz bringen (weicher Fehlschlag).
+
+    Args:
+        text: Der rohe ``decisions.text``-Wert.
+
+    Returns:
+        ``(schritt, modell)`` bei gueltigem Format, sonst ``None``.
+    """
+    if _MODEL_VERSION_SEP not in text:
+        return None
+    step, _, model = text.partition(_MODEL_VERSION_SEP)
+    step = step.strip()
+    model = model.strip()
+    if not step or not model:
+        return None
+    return step, model
 
 
 def decision_text(rel_path: str) -> str:
