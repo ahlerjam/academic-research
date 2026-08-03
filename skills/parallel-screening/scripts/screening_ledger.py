@@ -657,22 +657,26 @@ def to_prisma_counters_double(
 def open_cases(session_dir: str | Path) -> list[dict[str, Any]]:
     """Alle uneindeutigen Fälle über alle Stufen — nichts davon ist entschieden.
 
-    Bei Doppel-Screening: nur Runde-1-Einträge (oder menschliche Auflösung),
-    um ein Paper nicht doppelt zu zählen, wenn beide Runden `unclear` sind.
+    Bei Doppel-Screening: nur Runde-1-Einträge, um ein Paper nicht doppelt
+    zu zählen, wenn beide Runden `unclear` sind. Berücksichtigt mehrere Stufen:
+    ein Paper kann in screening UND in eligibility unclear sein — beide gehören
+    in die Vorlage (unterschiedliche Stufen-Spalten).
     """
-    seen_papers: set[str] = set()
+    seen_cases: set[tuple[str, str]] = set()
     result: list[dict[str, Any]] = []
     for e in read_ledger(session_dir):
         if e.get("decision") != "unclear":
             continue
         paper_id = e["paper_id"]
-        if paper_id in seen_papers:
+        stage = e.get("stage", "")
+        case_key = (paper_id, stage)
+        if case_key in seen_cases:
             continue
-        # Nur Runde 1 oder menschliche Einträge
+        # Nur Runde 1, nicht Runde 2 (bei Doppel-Screening)
         round_val = _row_round(e)
-        if round_val == 1 or round_val == "human":
+        if round_val == 1:
             result.append(e)
-            seen_papers.add(paper_id)
+            seen_cases.add(case_key)
     return result
 
 
