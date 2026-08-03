@@ -10,6 +10,24 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **KI-Offenlegungserklärung nach ICMJE 01/2026 (#605):** Neuer Skill
+  `skills/ai-disclosure/` erzeugt eine zweigeteilte Offenlegungserklärung zur
+  KI-Nutzung (Danksagung + Methodenteil, je DE/EN) entlang der
+  ICMJE-Aufteilung vom Januar 2026 (Section V, "Use of Artificial
+  Intelligence in Publishing"): Sprachpolitur/Übersetzung/Textaufbereitung
+  gehören in die Danksagung, Datenerhebung/Analyse/Klassifikation/
+  Abbildungserzeugung in den Methodenteil. Vorhandene Vault-Spuren
+  (`quotes.extraction_method`, `papers.provenance`, `quotes.stance`,
+  `codings.category_origin`) werden über vier read-only-MCP-Tools als
+  **Vorschlag** vorgelegt statt behauptet — der Nutzer bestätigt oder
+  korrigiert per `AskUserQuestion`. Angaben ohne Vault-Beleg (insbesondere
+  die gesamte Danksagungs-Kategorie, für die es in diesem Vault kein
+  Aktivitätsprotokoll gibt) sind im Output explizit als "Nutzerangabe, kein
+  Vault-Beleg" markiert. Keine fakultäts-/zeitschriftenspezifischen
+  Vorlagen — die Fundstelle (`skills/ai-disclosure/references/icmje-2026.md`)
+  nennt die zugrunde gelegte ICMJE-Fassung, gegen die der Nutzer sein eigenes
+  Merkblatt prüft. Skill-Zähler 39 → 40 (README.md, AGENTS.md, plugin.json,
+  marketplace.json, docs/reference/skills.md).
 - **Härteres Recall-Goldset für den Embedding-Modell-A/B (#628):** Das
   bestehende A/B (`docs/evals/recall-at-k-model-ab-375.md`, #375) erreichte
   auf 6 scharf getrennten Themenclustern mit allen drei Kandidaten
