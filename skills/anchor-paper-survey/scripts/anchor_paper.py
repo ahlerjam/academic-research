@@ -652,8 +652,10 @@ def _handle_pdf(pdf_path: str, db_path: str) -> dict:
     doi_source = "vault" if existing_doi else ("extracted" if doi else None)
 
     csl: dict = {"type": "article-journal", "title": title, "author": authors}
-    if doi:
-        csl["DOI"] = doi
+    # P1 fix: nur Vault-DOIs werden ins CSL geschrieben. Extrahierte DOIs werden
+    # erst nach S2-Verifikation hinzugefuegt (siehe anchor_paper_survey).
+    if existing_doi:
+        csl["DOI"] = existing_doi
     csl_json = json.dumps(csl, ensure_ascii=False)
 
     if existing_doi:
@@ -678,6 +680,9 @@ def _handle_pdf(pdf_path: str, db_path: str) -> dict:
     if authors:
         # Authoren speichern fuer naechstliche Vault-Updates, falls DOI persistiert werden soll
         result["authors"] = authors
+    if doi_source == "extracted":
+        # PDF-Pfad speichern fuer den Nachtrags-Upsert nach S2-Verifikation (Daten-Verlust vermeiden)
+        result["pdf_path"] = abs_path
     if doi:
         result["doi"] = doi
         result["doi_source"] = doi_source
@@ -784,6 +789,7 @@ def anchor_paper_survey(
                     paper_id=anchor["paper_id"],
                     csl_json=json.dumps(csl_with_doi, ensure_ascii=False),
                     doi=anchor["doi"],
+                    pdf_path=anchor.get("pdf_path"),  # Vermeidet Datenverlust der PDF-Pfad-Spalte
                 )
     else:
         modules = list(search_modules) if search_modules else list(DEFAULT_SEARCH_MODULES)
