@@ -12,7 +12,10 @@
     "plugin_version",
     "decisions_snapshot",
     "passport_hash",
-    "created_at"
+    "created_at",
+    "quote_extraction_methods",
+    "manual_quotes_count",
+    "manual_quotes_ratio"
   ],
   "properties": {
     "slug": {
@@ -79,6 +82,22 @@
       "type": "object",
       "description": "SHA-256-Hashes der PDFs pro paper_id.",
       "additionalProperties": { "type": "string" }
+    },
+    "quote_extraction_methods": {
+      "type": "object",
+      "description": "extraction_method je quote_id fuer ALLE Zitate im Vault (#595). Immer vorhanden, auch leer ({}) wenn keine Zitate erfasst sind.",
+      "additionalProperties": { "type": "string" }
+    },
+    "manual_quotes_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Anzahl Zitate mit extraction_method='manual' (#595). Immer vorhanden, auch 0 -- die Abwesenheit manueller Zitate ist ein Ergebnis, keine fehlende Angabe."
+    },
+    "manual_quotes_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "manual_quotes_count / Gesamtzahl Zitate (#595). 0.0 bei keinen Zitaten im Vault (kein ZeroDivisionError)."
     },
     "created_at": {
       "type": "integer",

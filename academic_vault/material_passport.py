@@ -52,10 +52,19 @@ def build_passport(
     per_uni_profile_hash: str | None,
     decisions_snapshot: list[dict],
     pdf_hashes: dict[str, str],
+    quote_extraction_methods: dict[str, str],
+    manual_quotes_count: int,
+    manual_quotes_ratio: float,
 ) -> dict:
     """Erstellt den Material-Passport-Dict.
 
     Der passport_hash wird ueber alle uebrigen Felder berechnet.
+
+    ``quote_extraction_methods``/``manual_quotes_count``/``manual_quotes_ratio``
+    (#595) werden IMMER als Top-Level-Felder gesetzt -- auch bei 0 Zitaten im
+    Vault (``{}``/``0``/``0.0``). Kein bedingtes Weglassen: die Abwesenheit
+    manueller Zitate muss im Passport sichtbar bleiben, statt wie ein
+    fehlendes Feature auszusehen.
     """
     passport: dict[str, Any] = {
         "slug": slug,
@@ -69,6 +78,9 @@ def build_passport(
         "per_uni_profile_hash": per_uni_profile_hash,
         "decisions_snapshot": decisions_snapshot,
         "pdf_sha256_hashes": pdf_hashes,
+        "quote_extraction_methods": quote_extraction_methods,
+        "manual_quotes_count": manual_quotes_count,
+        "manual_quotes_ratio": manual_quotes_ratio,
         "created_at": int(time.time()),
     }
     # Hash ueber serialisiertes Passport-Dict (ohne passport_hash selbst)
