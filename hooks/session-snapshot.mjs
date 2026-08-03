@@ -260,7 +260,7 @@ async function main() {
   const currentSessionId = stopPayload?.session_id || null;
 
   // Drosseln pro Sitzung: schon in dieser Sitzung exportiert?
-  if (marker && marker.sessionId === currentSessionId && currentSessionId !== null) {
+  if (marker && marker.session_id === currentSessionId && currentSessionId !== null) {
     const lastAt = marker.lastSnapshotAt || 'unbekannt';
     process.stderr.write(`[Session-Snapshot] Snapshot bereits in dieser Sitzung erstellt (${lastAt}). Uebersprungen.\n`);
     process.exit(0);
