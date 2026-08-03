@@ -1410,7 +1410,7 @@ def export_material_passport(
     slug: str,
     output_dir: str = ".",
     score_algo_version: str = "1.0",
-    plugin_version: str = "6.4",
+    plugin_version: str | None = None,
     model_versions: dict | None = None,
     per_uni_profile_hash: str | None = None,
 ) -> str:
@@ -1418,16 +1418,17 @@ def export_material_passport(
 
     Gibt den Pfad zur erzeugten Datei zurueck.
     """
-    from .material_passport import build_passport, validate_passport
+    from .material_passport import build_passport, read_plugin_version, validate_passport
+
+    if plugin_version is None:
+        plugin_version = read_plugin_version()
 
     db = VaultDB(db_path)
     db.init_schema()
 
     conn = VaultDB._open(db_path)
     try:
-        paper_rows = conn.execute(
-            "SELECT paper_id, doi, csl_json FROM papers ORDER BY paper_id"
-        ).fetchall()
+        paper_rows = conn.execute("SELECT paper_id, doi FROM papers ORDER BY paper_id").fetchall()
     finally:
         conn.close()
 
@@ -2206,7 +2207,7 @@ def _build_mcp_server():
         slug: str,
         output_dir: str = ".",
         score_algo_version: str = "1.0",
-        plugin_version: str = "6.4",
+        plugin_version: str | None = None,
     ) -> str:
         """Exportiert material-passport.json. Gibt Dateipfad zurueck."""
         return export_material_passport(
