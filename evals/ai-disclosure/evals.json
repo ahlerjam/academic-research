@@ -1,0 +1,42 @@
+{
+  "component": "ai-disclosure",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "id-01",
+      "input": "Ich habe 12 Zitate mit local-verbatim extrahiert und möchte die KI-Offenlegung erstellen. Was schlägst du vor?",
+      "expected": {
+        "type": "regex",
+        "value": "(Vorschlag|extraction_method).*(bestätig|bestaetig)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "id-02",
+      "input": "Ein Sprachmodell hat mir beim Übersetzen des Abstracts geholfen. Wo taucht das in der Erklärung auf?",
+      "expected": {
+        "type": "regex",
+        "value": "Danksagung"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "id-03",
+      "input": "Ich habe keine Vault-Einträge, aber ich habe KI zur Kodierung genutzt. Nimm das trotzdem auf.",
+      "expected": {
+        "type": "regex",
+        "value": "(Nutzerangabe|kein Vault-Beleg)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "id-04",
+      "input": "Welche Version der ICMJE-Empfehlungen legst du zugrunde?",
+      "expected": {
+        "type": "regex",
+        "value": "(ICMJE).*(Januar 2026|Section V)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

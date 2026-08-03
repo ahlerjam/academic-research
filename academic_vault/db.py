@@ -115,7 +115,9 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 # 7 = quotes.context_source (Issue #520): Herkunftsnachweis fuer
 #     context_before/context_after ('fulltext' oder NULL), gesetzt von
 #     server.resolve_quote_context().
-CURRENT_SCHEMA_VERSION = 7
+# 8 = papers.retraction_checked_at (Issue #604): Zeitpunkt der letzten
+#     Crossref-Retraction-Pruefung, Grundlage fuer server.check_retractions().
+CURRENT_SCHEMA_VERSION = 8
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -137,6 +139,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
             "page_first",
             "page_last",
             "container_title",
+            "retraction_checked_at",
         }
     ),
     "quotes": frozenset({"stance", "context_source"}),
@@ -342,6 +345,75 @@ def csl_year(csl: dict) -> int | None:
     return None
 
 
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+
+def _normalized_words(text: str) -> set[str]:
+    """Tokenisiert Text und faltet jedes Wort wie ``normalize_family_name()``.
+
+    Baustein der Kapitelzitat-Heuristik (Issue #604, AC5): dieselbe
+    Umlaut-/Diakritika-Faltung wie bei Autorennamen wird auf jedes Wort des
+    Kapiteltexts angewendet, damit ``family_names_match``-kompatible
+    Varianten (``Müller``/``Mueller``/``Muller``) als Wort-Treffer erkannt
+    werden -- ohne Namenspartikel-Behandlung, die ist bei Fliesstext nicht
+    sinnvoll (kein "von"/"van" isoliert am Satzanfang zu erwarten).
+    """
+    variants: set[str] = set()
+    for token in _WORD_RE.findall(text):
+        lowered = token.lower()
+        folded = "".join(_UMLAUT_FOLD.get(ch, ch) for ch in lowered)
+        stripped = "".join(
+            ch for ch in unicodedata.normalize("NFD", lowered) if not unicodedata.combining(ch)
+        )
+        variants |= {re.sub(r"[^a-z]", "", v) for v in (folded, stripped)}
+    return variants - {""}
+
+
+def paper_cited_in_chapters(csl: dict, kapitel_dir: str | Path) -> bool:
+    """Heuristische Pruefung: taucht das Paper in einem Kapiteltext auf? (#604, AC5)
+
+    Ein Paper gilt als "im Kapiteltext zitiert", wenn mindestens eine
+    ``*.md``-Datei unter ``kapitel_dir`` (Unterordner eingeschlossen, Ordner-
+    konvention aus ``scripts/bootstrap/CLAUDE.md``) sowohl das Erscheinungs-
+    jahr des Papers als String ENTHAELT als auch mindestens einen seiner
+    Autoren-Familiennamen als Wort-Treffer aufweist.
+
+    Bewusst approximativ (Autor-Familienname + Jahr statt echtem
+    Zitat-Parsing): False Negatives bei reiner Paraphrase ohne Klammerbeleg,
+    False Positives bei Namensgleichheit unterschiedlicher Autoren. Das ist
+    fuer diesen Anwendungsfall tragbar, weil das Ergebnis dem Nutzer nur
+    vorgelegt wird (AC4) -- keine automatische Aktion haengt daran; der
+    Aufrufer kennzeichnet das Ergebnis entsprechend als heuristisch.
+
+    Gibt ``False`` zurueck, wenn das Paper keine Autoren/kein Jahr im
+    CSL-JSON traegt oder ``kapitel_dir`` nicht existiert -- kein Fehler, denn
+    ohne Kapitelordner ist "ungenutzter Vault-Eintrag" die korrekte Auskunft.
+    """
+    year = csl_year(csl)
+    families = csl_families(csl)
+    if not families or year is None:
+        return False
+
+    kapitel_path = Path(kapitel_dir)
+    if not kapitel_path.is_dir():
+        return False
+
+    year_str = str(year)
+    family_variant_sets = [normalize_family_name(family) for family in families]
+
+    for md_file in sorted(kapitel_path.glob("**/*.md")):
+        try:
+            text = md_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if year_str not in text:
+            continue
+        words = _normalized_words(text)
+        if any(variants & words for variants in family_variant_sets):
+            return True
+    return False
+
+
 def format_table_evidence(
     paper_id: str,
     page: int,
@@ -453,6 +525,11 @@ class VaultDB:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         self.vec_available: bool = False
+        # Fehlerursache des letzten load_vec_extension()-Fehlschlags (Issue
+        # #624): vorher wurde die Exception in zwei der drei Fehlschlagszweigen
+        # stillschweigend verschluckt. ``None`` heisst "kein Fehler bekannt" --
+        # entweder laedt die Extension, oder es gab noch keinen Ladeversuch.
+        self.vec_unavailable_reason: str | None = None
         self._conn: sqlite3.Connection | None = None
 
     # ------------------------------------------------------------------
@@ -550,12 +627,20 @@ class VaultDB:
 
         if not hasattr(target, "enable_load_extension"):
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                "Python-Interpreter unterstuetzt keine ladbaren SQLite-Erweiterungen "
+                "(kein enable_load_extension) -- typisch fuer System-Python ohne "
+                "--enable-loadable-sqlite-extensions."
+            )
             return False
 
         try:
             target.enable_load_extension(True)
-        except (AttributeError, sqlite3.OperationalError, sqlite3.NotSupportedError):
+        except (AttributeError, sqlite3.OperationalError, sqlite3.NotSupportedError) as exc:
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                f"enable_load_extension() nicht nutzbar ({type(exc).__name__}: {exc})"
+            )
             return False
 
         try:
@@ -566,8 +651,12 @@ class VaultDB:
 
                 target.load_extension(sqlite_vec.loadable_path())
             self.vec_available = True
-        except Exception:
+            self.vec_unavailable_reason = None
+        except Exception as exc:
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                f"sqlite-vec-Extension nicht ladbar ({type(exc).__name__}: {exc})"
+            )
         finally:
             try:
                 target.enable_load_extension(False)
@@ -893,6 +982,36 @@ class VaultDB:
                 (provenance,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def list_literature_papers(self) -> list[dict]:
+        """Gibt alle Papers mit ``source_kind='literature'`` zurueck (#604).
+
+        Grundlage fuer ``server.check_retractions()``: unabhaengig vom
+        Importweg (zotero-import, reading-list-import, anchor-paper-survey,
+        github-repo-research, fetch, ...) liefert diese Abfrage jedes
+        Literatur-Paper -- eigenes Erhebungsmaterial (``source_kind='primary'``,
+        Transkripte etc.) ist bewusst ausgeschlossen, ein Retraction-Check
+        ergibt dafuer keinen Sinn.
+        """
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM papers WHERE source_kind = 'literature' ORDER BY added_at",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_retraction_checked_at(self, paper_id: str, checked_at: int) -> None:
+        """Setzt ``retraction_checked_at`` fuer ein Paper (#604).
+
+        Wird nur nach einer erfolgreichen Crossref-Pruefung aufgerufen
+        (``server.check_retractions()``) -- ein Crossref-Ausfall darf den
+        Zeitstempel nicht vorruecken, sonst wuerde der naechste Lauf faelschlich
+        annehmen, das Paper sei bereits aktuell geprueft.
+        """
+        with self._connection(commit=True) as conn:
+            conn.execute(
+                "UPDATE papers SET retraction_checked_at = ? WHERE paper_id = ?",
+                (checked_at, paper_id),
+            )
 
     # ------------------------------------------------------------------
     # Quotes CRUD
@@ -1256,25 +1375,22 @@ class VaultDB:
     # Klammer-Zitat-Verifikation (Issue #378)
     # ------------------------------------------------------------------
 
-    def find_papers_by_author_year(self, family: str, year: int) -> list[dict]:
-        """Findet Papers, deren CSL-Autorenliste ``family`` enthaelt und deren
-        Erscheinungsjahr exakt ``year`` ist.
+    def _papers_snapshot(self) -> list[dict]:
+        """Liest die komplette ``papers``-Tabelle einmal und parst ``csl_json``.
 
-        Der Namensvergleich laeuft ueber :func:`normalize_family_name`
-        (Umlaut-Faltung + Diakritika-Strip), damit ``Müller``/``Mueller``/
-        ``Muller`` denselben Eintrag treffen. Es gibt bewusst keine
-        SQL-seitige Vorfilterung: ``csl_json`` ist ein Textblob, dessen
-        Autorenfelder sich nicht zuverlaessig per LIKE eingrenzen lassen,
-        ohne genau diese Schreibvarianten zu verlieren.
+        Extrahiert aus :meth:`find_papers_by_author_year` (Issue #501), damit
+        Aufrufer mit mehreren Belegen (:func:`academic_vault.server.verify_citations`)
+        sich einen Scan + Parse-Durchlauf ueber die komplette Tabelle teilen
+        koennen, statt ihn je Beleg zu wiederholen. Zeilen mit kaputtem oder
+        nicht-dict ``csl_json`` werden stillschweigend uebersprungen (wie bisher
+        in :meth:`find_papers_by_author_year`). Ergebnis enthaelt zusaetzlich
+        das bereits geparste ``csl``-Feld.
         """
-        wanted = normalize_family_name(family)
-        if not wanted or year is None:
-            return []
         with self._connection() as conn:
             rows = conn.execute(
                 "SELECT paper_id, csl_json, page_first, page_last FROM papers"
             ).fetchall()
-        matches: list[dict] = []
+        snapshot: list[dict] = []
         for row in rows:
             record = dict(row)
             try:
@@ -1283,11 +1399,53 @@ class VaultDB:
                 continue
             if not isinstance(csl, dict):
                 continue
+            record["csl"] = csl
+            snapshot.append(record)
+        return snapshot
+
+    def _match_papers_in_snapshot(
+        self, snapshot: list[dict], family: str, year: int | None
+    ) -> list[dict]:
+        """Matcht ``family``/``year`` gegen einen bereits gelesenen :meth:`_papers_snapshot`.
+
+        Reine In-Memory-Filterung (kein DB-Zugriff) -- Kern von
+        :meth:`find_papers_by_author_year`, extrahiert (Issue #501), damit
+        :func:`academic_vault.server.verify_citations` denselben Snapshot fuer
+        mehrere Belege wiederverwenden kann, statt ihn je Beleg neu einzulesen.
+        Der Namensvergleich laeuft ueber :func:`normalize_family_name`
+        (Umlaut-Faltung + Diakritika-Strip), damit ``Müller``/``Mueller``/
+        ``Muller`` denselben Eintrag treffen.
+        """
+        wanted = normalize_family_name(family)
+        if not wanted or year is None:
+            return []
+        matches: list[dict] = []
+        for record in snapshot:
+            csl = record["csl"]
             if csl_year(csl) != int(year):
                 continue
             if any(normalize_family_name(f) & wanted for f in csl_families(csl)):
-                matches.append(record)
+                matches.append(
+                    {
+                        "paper_id": record["paper_id"],
+                        "csl_json": record["csl_json"],
+                        "page_first": record["page_first"],
+                        "page_last": record["page_last"],
+                    }
+                )
         return matches
+
+    def find_papers_by_author_year(self, family: str, year: int) -> list[dict]:
+        """Findet Papers, deren CSL-Autorenliste ``family`` enthaelt und deren
+        Erscheinungsjahr exakt ``year`` ist.
+
+        Es gibt bewusst keine SQL-seitige Vorfilterung: ``csl_json`` ist ein
+        Textblob, dessen Autorenfelder sich nicht zuverlaessig per LIKE
+        eingrenzen lassen, ohne genau diese Schreibvarianten zu verlieren.
+        Fuer Aufrufer mit mehreren Belegen (Batch) siehe
+        :meth:`_papers_snapshot` + :meth:`_match_papers_in_snapshot`.
+        """
+        return self._match_papers_in_snapshot(self._papers_snapshot(), family, year)
 
     def page_coverage(self, paper_id: str, page: int) -> str:
         """Prueft, ob ``page`` von den im Vault bekannten Seitendaten gedeckt ist.

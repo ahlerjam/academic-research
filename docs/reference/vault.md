@@ -169,9 +169,9 @@ Bestands-Datenbanken bekommen `paper_tables` idempotent nachgezogen:
 python -c "from academic_vault.migrate import add_paper_tables_table as m; m('<pfad>/vault.db')"
 ```
 
-## MCP-Tools (alle 45)
+## MCP-Tools (alle 47)
 
-Der Server registriert **45 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **47 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -185,6 +185,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` |
 | `vault.stats()` | DB-Counts (`paper_count`, `quote_count`) | `vault.stats()` |
+| `vault.component_status()` | Zustand der optionalen Bestandteile (Embedding-Modell, `sqlite-vec`, FTS5): je `loaded`, laienverständlicher `impact`-Text bei Fehlen, `reason` sofern ermittelbar, plus `python_executable` und `db_path` (#624) | `vault.component_status()` |
 
 **Zitate (Quotes)**
 
@@ -323,6 +324,7 @@ greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbati
 | `vault.is_excluded(paper_id)` | Prüft, ob `paper_id` ausgeschlossen ist | `vault.is_excluded("smith2010")` |
 | `vault.list_excluded_sources()` | Gibt alle ausgeschlossenen Quellen zurück | `vault.list_excluded_sources()` |
 | `vault.list_papers_by_provenance(provenance)` | Provenance-Audit: alle Papers mit gegebenem Herkunfts-Tag (z.B. `"scihub"`) | `vault.list_papers_by_provenance("scihub")` |
+| `vault.check_retractions(max_age_days=90, force=False, project_dir=".")` | Vault-weite Crossref-Retraction-Pruefung über alle Papers mit `source_kind='literature'` und DOI (#604); prüft nur seit `max_age_days` nicht (oder noch nie) geprüfte Papers, `force=True` erzwingt eine erneute Prüfung. Legt Treffer nur **vor** (`retracted`-Liste mit Fundstelle `source` und heuristischem `cited_in_chapter`-Flag) — schreibt **nie** automatisch nach `excluded_sources`. Papers ohne DOI landen unter `no_doi`, ein Crossref-Ausfall unter `error` (`error_count` macht einen Teilausfall sichtbar) | `vault.check_retractions(max_age_days=30)` |
 
 **Risk-of-Bias & Score-Historie** (v6.4)
 

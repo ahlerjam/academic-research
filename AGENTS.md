@@ -1,6 +1,6 @@
 # academic-research — Agent Guide
 
-Claude-Code-Plugin für akademisches Arbeiten: 39 Skills, 28 Agents,
+Claude-Code-Plugin für akademisches Arbeiten: 41 Skills, 28 Agents,
 11 Slash-Commands, MCP-Server `academic_vault/` (SQLite+FTS5+sqlite-vec).
 Details: README.md (lang!), CHANGELOG.md.
 
@@ -19,6 +19,9 @@ Details: README.md (lang!), CHANGELOG.md.
 - Shell-Syntax-Gate: `bash scripts/dev/check-shell-syntax.sh` (`bash -n` ueber
   alle `git ls-files '*.sh'`; CI-blockierend seit #469; Regression-Harness:
   `bash scripts/dev/test-check-shell-syntax.sh`)
+- Live-Fetch-Report-Harness: `bash scripts/dev/test-report-live-fetch-failure.sh`
+  (Stub-gh, prueft Issue-Anlage/Dedup fuer `scripts/ci/report_live_fetch_failure.sh`,
+  aufgerufen aus `.github/workflows/live-fetch-weekly.yml`; Issue #603)
 - Push: `git push` (kein lokales CI-Gate konfiguriert)
 
 ## Verzeichnisgrenzen (wichtig)

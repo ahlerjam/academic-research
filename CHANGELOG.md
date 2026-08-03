@@ -22,6 +22,110 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `ACADEMIC_SNAPSHOTS_KEEP` (Default 20) `.tgz`-Dateien je Projekt, älteste
   zuerst geprunt. Fail-open bei Exportfehlern (sichtbare `⚠️`-Meldung, Sitzung
   läuft weiter). Details: `docs/reference/hooks.md`.
+
+- **Manuelle Zitate im Material-Passport ausweisen (#595):** `manual` ist der
+  einzige Pfad, auf dem ein Zitat ohne maschinelle Verifikation in den Vault
+  gelangt — der Material-Passport unterschied ihn bislang nicht von
+  `local-verbatim`-geprüften Zitaten. `vault.export_material_passport` weist
+  jetzt je `quote_id` die verwendete `extraction_method` aus
+  (`quote_extraction_methods`) und nennt Anzahl sowie Anteil manuell
+  erfasster Zitate (`manual_quotes_count`, `manual_quotes_ratio`). Beide
+  Felder sind immer gesetzt, auch bei 0 manuellen Zitaten — die Abwesenheit
+  ist ein Ergebnis, keine fehlende Angabe. `material-passport.schema.json`
+  nimmt die drei Felder in `required` auf; bereits exportierte
+  `material-passport.json`-Dateien validieren rückwirkend nicht mehr gegen
+  das neue Schema.
+
+- **Eigene quantitative Auswertung vom Rohdatensatz bis zum Ergebniskapitel
+  (#610):** Zwischen `instrument-design` (Instrument bauen) und
+  `chapter-writer` (Ergebniskapitel schreiben) klaffte bei quantitativen
+  Arbeiten eine Lücke — `meta-analysis` rechnet über **fremde** Studien, für
+  eigene Erhebungsdaten gab es nichts. Neuer Skill `quantitative-analysis` mit
+  dem deterministischen Rechenkern
+  `skills/quantitative-analysis/scripts/analyze.py` (Subkommandos `describe`,
+  `run`, `report`). Umfang der ersten Fassung bewusst begrenzt: Deskription,
+  Gruppenvergleiche (t-Test unabhängig/Welch/gepaart, Mann-Whitney-U,
+  Wilcoxon), Mehrgruppenvergleiche (einfaktorielle ANOVA, Kruskal-Wallis) und
+  Zusammenhangsmaße (χ²-Unabhängigkeitstest, Pearson r, Spearman ρ).
+  Regression, mehrfaktorielle Designs, Post-hoc-Vergleiche und Poweranalyse
+  sind ausdrücklich **nicht** abgedeckt und werden im Skill so benannt, statt
+  von Hand nachgeschoben zu werden.
+  Die drei harten Zusagen des Issues sind strukturell erzwungen, nicht als
+  Prosa: (1) Der Renderer bricht mit `ValueError` ab, sobald einem
+  inferenzstatistischen Ergebnis Effektstärke, Konfidenzintervall oder
+  Voraussetzungsblock fehlt — ein Bericht mit nackten p-Werten kann gar nicht
+  erst entstehen. (2) Jede Voraussetzungsprüfung (Shapiro-Wilk, Levene,
+  erwartete Zellhäufigkeit, Mindestfallzahl) wird mit Kennwert, p-Wert und
+  Verdikt berichtet, auch die erfüllte; eine Verletzung wird im Klartext
+  ausgesprochen und mit benannter Alternative versehen, wechselt das geplante
+  Verfahren aber **nie** still. (3) Reproduzierbarkeit über einen
+  versionierbaren Analyseplan (JSON) plus getrennte Ausgabe: `ergebnisse.json`
+  trägt keinen Zeitstempel und ist zwischen zwei Läufen byte-identisch, alles
+  Laufabhängige (Zeit, Pfade, Python-/numpy-/scipy-Version) steht in
+  `lauf_meta.json`, und `protokoll.md` enthält die vollständige
+  Wiederhol-Kommandozeile samt SHA-256 der Rohdatei.
+  Die Rohdaten bleiben außerhalb des Vaults (ein Datensatz mit tausend Fällen
+  gehört nicht in eine Literatur-Datenbank); in den Vault gehen nur der
+  `papers`-Anker mit `source_kind='primary'`, je Ergebnis eine `figures`-Zeile
+  und jede Verfahrensentscheidung als `decisions`-Eintrag mit
+  `category="auswertung"`. Der Skill formuliert keine inhaltliche Deutung: Das
+  Protokoll weist sie als `Deutung: [vom Autor zu ergänzen]` aus.
+  Neue explizite Runtime-Dependencies `numpy` und `scipy` (lagen bislang nur
+  transitiv über `sentence-transformers` im Environment). Skill-Zähler
+  40 → 41 in README.md, AGENTS.md, plugin.json, marketplace.json und
+  docs/reference/skills.md.
+
+- **Vault-weite, wiederholbare Retraction-Prüfung (#604):** Der bisherige
+  Crossref-Retraction-Check lief nur einmalig beim `reading-list-import` und
+  erreichte damit weder Papers aus anderen Importwegen (`zotero-import`,
+  `anchor-paper-survey`, `github-repo-research`, `fetch`) noch spätere
+  Rückzüge längst importierter Papers (eine Dissertation läuft Jahre, ein
+  2024 sauber importiertes Paper kann 2026 zurückgezogen sein). Neu ist das
+  MCP-Tool `vault.check_retractions(max_age_days=90, force=False,
+  project_dir=".")`: iteriert über alle Vault-Papers mit
+  `source_kind='literature'` und DOI, prüft standardmäßig nur seit
+  `max_age_days` nicht (oder noch nie) geprüfte Papers (neue Spalte
+  `papers.retraction_checked_at`, gesetzt nur bei erfolgreichem Check — ein
+  Crossref-Ausfall lässt den Zeitstempel unangetastet, sodass der nächste
+  Lauf automatisch erneut versucht). Die Crossref-Abfragelogik selbst zieht
+  aus `skills/reading-list-import/scripts/parse_list.py` in das neue,
+  geteilte Modul `academic_vault/retraction.py` um (vgl. #527, wo zwei
+  Implementierungen desselben Checks auseinanderdrifteten); der Rückgabetyp
+  wechselt dabei von einem fail-safe `bool` auf ein `RetractionCheckResult`
+  (`retracted`/`clean`/`error` + Fundstelle bei Treffer), weil ein
+  Crossref-Ausfall im vault-weiten Check sichtbar bleiben muss statt wie
+  „kein Rückzug" auszusehen. `reading-list-import` selbst bleibt an seinem
+  alten Vertrag (automatisches `excluded_sources`, Ingest blockiert nie,
+  Issue #383) — bewusst zwei unterschiedliche Verhalten für zwei
+  unterschiedliche Kontexte. Ein Treffer wird dem Nutzer nur **vorgelegt**
+  (nie automatisch nach `excluded_sources` geschrieben — ein Rückzug kann
+  bewusst zitiert bleiben, wenn die Arbeit ihn selbst zum Gegenstand hat)
+  und trägt die Fundstelle (Crossref-DOI der Retraction-Notiz) sowie ein
+  heuristisches `cited_in_chapter`-Flag (Autor-Familienname + Jahr gegen
+  `kapitel/**/*.md`, neue Funktion `db.paper_cited_in_chapters()`). Papers
+  ohne DOI erscheinen als „nicht prüfbar" (`no_doi`), ein Crossref-Ausfall
+  als eigene, sichtbare Fehlerkategorie (`error`, `error_count`) statt als
+  leeres „keine Rückzüge gefunden". Workflow dokumentiert in
+  `skills/reading-list-import/SKILL.md`. MCP-Tool-Zähler 45 → 46
+  (README.md, docs/reference/vault.md).
+- **KI-Offenlegungserklärung nach ICMJE 01/2026 (#605):** Neuer Skill
+  `skills/ai-disclosure/` erzeugt eine zweigeteilte Offenlegungserklärung zur
+  KI-Nutzung (Danksagung + Methodenteil, je DE/EN) entlang der
+  ICMJE-Aufteilung vom Januar 2026 (Section V, "Use of Artificial
+  Intelligence in Publishing"): Sprachpolitur/Übersetzung/Textaufbereitung
+  gehören in die Danksagung, Datenerhebung/Analyse/Klassifikation/
+  Abbildungserzeugung in den Methodenteil. Vorhandene Vault-Spuren
+  (`quotes.extraction_method`, `papers.provenance`, `quotes.stance`,
+  `codings.category_origin`) werden über vier read-only-MCP-Tools als
+  **Vorschlag** vorgelegt statt behauptet — der Nutzer bestätigt oder
+  korrigiert per `AskUserQuestion`. Angaben ohne Vault-Beleg (insbesondere
+  die gesamte Danksagungs-Kategorie, für die es in diesem Vault kein
+  Aktivitätsprotokoll gibt) sind im Output explizit als "Nutzerangabe, kein
+  Vault-Beleg" markiert. Keine fakultäts-/zeitschriftenspezifischen
+  Vorlagen — die Fundstelle (`skills/ai-disclosure/references/icmje-2026.md`)
+  nennt die zugrunde gelegte ICMJE-Fassung, gegen die der Nutzer sein eigenes
+  Merkblatt prüft. Skill-Zähler 39 → 40 (README.md, AGENTS.md, plugin.json,
+  marketplace.json, docs/reference/skills.md).
 - **Härteres Recall-Goldset für den Embedding-Modell-A/B (#628):** Das
   bestehende A/B (`docs/evals/recall-at-k-model-ab-375.md`, #375) erreichte
   auf 6 scharf getrennten Themenclustern mit allen drei Kandidaten
@@ -228,6 +332,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   wieder als Voraussetzung nennt oder `vault.ensure_file` zurückkehrt.
 
 ### Changed
+
+- **Citation-Guard: ein Papers-Scan je Write statt je Beleg (#501):**
+  `VaultDB.find_papers_by_author_year()` las bisher pro Aufruf die komplette
+  `papers`-Tabelle inklusive `json.loads()` je Zeile; `server.verify_citation()`
+  lief je Beleg einzeln, sodass ein Kapitel mit dem vollen Kontingent
+  (`ACADEMIC_CITATION_MAX_PER_WRITE`, Default 100) gegen einen Vault mit
+  einigen tausend Papers 100 Full Scans innerhalb des 10-s-Timeouts von
+  `hooks/verbatim-guard.mjs` auslöste — riss das Timeout, meldete der Hook
+  `unavailable` und alle Belege liefen fail-open mit `[UNVERIFIED]` durch.
+  Neuer Batch-Einstieg `server.verify_citations(db_path, items)` teilt sich
+  eine `VaultDB`-Instanz und genau einen
+  `VaultDB._papers_snapshot()`-Aufruf über alle Belege eines Writes;
+  `verify_citation()` bleibt als dünner Ein-Item-Wrapper mit unverändertem
+  Rückgabeformat erhalten. `hooks/verbatim-guard.mjs::verifyCitationsInVault`
+  ruft jetzt `verify_citations` statt einer Listcomprehension über
+  `verify_citation` je Item auf.
 
 - **`page_offset` wird beim Buch-Import bestätigt statt still gespeichert (#538):**
   `skills/book-handler/SKILL.md` Schritt 2.5 übernahm das Ergebnis von

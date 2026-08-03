@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "titel": "Fixture-Analyseplan (Issue #610)",
+  "alpha": 0.05,
+  "konfidenzniveau": 0.95,
+  "bootstrap": {
+    "replikationen": 2000,
+    "seed": 610
+  },
+  "fehlende_werte": ["", "NA", "-99"],
+  "variablen": {
+    "score": "metrisch",
+    "alter": "metrisch",
+    "dauer": "metrisch",
+    "vor": "metrisch",
+    "nach": "metrisch",
+    "gruppe": "nominal",
+    "standort": "nominal",
+    "geschlecht": "nominal",
+    "entscheidung": "nominal"
+  },
+  "analysen": [
+    {
+      "id": "d1",
+      "verfahren": "deskriptiv",
+      "variablen": ["score", "alter", "dauer", "gruppe"]
+    },
+    {
+      "id": "t1",
+      "verfahren": "t_test_unabhaengig",
+      "messwert": "score",
+      "gruppierung": "gruppe"
+    },
+    {
+      "id": "t2",
+      "verfahren": "welch_test",
+      "messwert": "score",
+      "gruppierung": "gruppe"
+    },
+    {
+      "id": "t3",
+      "verfahren": "t_test_gepaart",
+      "messwert_vorher": "vor",
+      "messwert_nachher": "nach"
+    },
+    {
+      "id": "t4",
+      "verfahren": "t_test_unabhaengig",
+      "messwert": "dauer",
+      "gruppierung": "gruppe"
+    },
+    {
+      "id": "u1",
+      "verfahren": "mann_whitney_u",
+      "messwert": "dauer",
+      "gruppierung": "gruppe"
+    },
+    {
+      "id": "w1",
+      "verfahren": "wilcoxon",
+      "messwert_vorher": "vor",
+      "messwert_nachher": "nach"
+    },
+    {
+      "id": "a1",
+      "verfahren": "anova_einfaktoriell",
+      "messwert": "score",
+      "gruppierung": "standort"
+    },
+    {
+      "id": "k1",
+      "verfahren": "kruskal_wallis",
+      "messwert": "dauer",
+      "gruppierung": "standort"
+    },
+    {
+      "id": "c1",
+      "verfahren": "chi_quadrat_unabhaengigkeit",
+      "merkmale": ["geschlecht", "entscheidung"]
+    },
+    {
+      "id": "p1",
+      "verfahren": "pearson_r",
+      "merkmale": ["alter", "score"]
+    },
+    {
+      "id": "s1",
+      "verfahren": "spearman_rho",
+      "merkmale": ["alter", "dauer"]
+    }
+  ]
+}

@@ -35,7 +35,13 @@ CREATE TABLE IF NOT EXISTS papers (
   -- sie auf Bestands-DBs ebenfalls hinten an, so bleibt die Spaltenreihenfolge
   -- zwischen frischer und migrierter DB identisch (Muster quotes.stance).
   source_kind           TEXT NOT NULL DEFAULT 'literature'
-                          CHECK(source_kind IN ('literature','primary'))
+                          CHECK(source_kind IN ('literature','primary')),
+  -- Zeitpunkt (Unix-Epoch) der letzten Crossref-Retraction-Pruefung
+  -- (Issue #604). NULL = noch nie geprueft. Nur bei erfolgreichem Check
+  -- gesetzt (server.check_retractions()) -- ein Crossref-Ausfall laesst den
+  -- Wert unangetastet, damit der naechste Lauf automatisch erneut prueft.
+  -- Bewusst als LETZTE Spalte (gleiche Begruendung wie source_kind oben).
+  retraction_checked_at INTEGER DEFAULT NULL
 );
 
 -- FTS5 als eigenstaendige virtuelle Tabelle (kein content=, manuell befuellt).

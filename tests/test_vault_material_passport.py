@@ -489,6 +489,157 @@ def test_export_material_passport_schema_validates(tmp_path):
         os.unlink(db_path)
 
 
+def _manifest_version() -> str:
+    import json as _json
+    from pathlib import Path
+
+    manifest = Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
+    return _json.loads(manifest.read_text(encoding="utf-8"))["version"]
+
+
+def test_export_material_passport_plugin_version_matches_manifest(tmp_path):
+    """plugin_version im Passport entspricht .claude-plugin/plugin.json (#616).
+
+    Kein hartkodiertes Literal im Test — sonst wiederholt sich der Fehlerklasse-Typ
+    des Issues (Passport driftet vom Manifest) beim naechsten Release im Test selbst.
+    """
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert data["plugin_version"] == _manifest_version()
+    finally:
+        os.unlink(db_path)
+
+
+def test_export_material_passport_plugin_version_override_respected(tmp_path):
+    """Ein explizit uebergebenes plugin_version-Kwarg gewinnt weiterhin."""
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+            plugin_version="9.9.9",
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert data["plugin_version"] == "9.9.9"
+    finally:
+        os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# extraction_method im Material-Passport (#595)
+# ---------------------------------------------------------------------------
+
+
+def test_export_material_passport_quote_extraction_methods_per_quote(tmp_path):
+    """Passport weist je quote_id die verwendete extraction_method aus (AC1)."""
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        q_api = vault_server.add_quote(
+            db_path, "p1", "Zitat A", "citations-api", api_response_id="resp-1"
+        )
+        q_manual = vault_server.add_quote(db_path, "p1", "Zitat B", "manual")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert data["quote_extraction_methods"][q_api] == "citations-api"
+        assert data["quote_extraction_methods"][q_manual] == "manual"
+    finally:
+        os.unlink(db_path)
+
+
+def test_export_material_passport_manual_quotes_count_and_ratio(tmp_path):
+    """Passport nennt Anzahl und Anteil manuell erfasster Zitate (AC2)."""
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.add_quote(db_path, "p1", "Zitat A", "citations-api", api_response_id="r1")
+        vault_server.add_quote(db_path, "p1", "Zitat B", "citations-api", api_response_id="r2")
+        vault_server.add_quote(db_path, "p1", "Zitat C", "citations-api", api_response_id="r3")
+        vault_server.add_quote(db_path, "p1", "Zitat D", "manual")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert data["manual_quotes_count"] == 1
+        assert data["manual_quotes_ratio"] == pytest.approx(0.25)
+    finally:
+        os.unlink(db_path)
+
+
+def test_export_material_passport_no_quotes_shows_zero_not_omitted(tmp_path):
+    """Vault ganz ohne Zitate: Felder vorhanden, count=0, ratio=0.0 (AC3)."""
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert "manual_quotes_count" in data
+        assert "manual_quotes_ratio" in data
+        assert data["manual_quotes_count"] == 0
+        assert data["manual_quotes_ratio"] == 0.0
+        assert data["quote_extraction_methods"] == {}
+    finally:
+        os.unlink(db_path)
+
+
+def test_export_material_passport_quotes_without_manual_shows_zero(tmp_path):
+    """Zitate vorhanden, aber keines manuell: count=0 bleibt Feld, nicht weggelassen (AC3-Abgrenzung)."""
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.add_quote(db_path, "p1", "Zitat A", "citations-api", api_response_id="r1")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        assert "manual_quotes_count" in data
+        assert data["manual_quotes_count"] == 0
+        assert data["manual_quotes_ratio"] == 0.0
+    finally:
+        os.unlink(db_path)
+
+
+def test_export_material_passport_extraction_method_fields_schema_validates(tmp_path):
+    """Passport mit gemischten extraction_methods besteht Schema-Validierung."""
+    db_path, db = make_temp_db()
+    try:
+        _seed_paper(db_path, "p1")
+        vault_server.add_quote(db_path, "p1", "Zitat A", "citations-api", api_response_id="r1")
+        vault_server.add_quote(db_path, "p1", "Zitat B", "manual")
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        from academic_vault.material_passport import validate_passport
+
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        validate_passport(data)
+    finally:
+        os.unlink(db_path)
+
+
 # ---------------------------------------------------------------------------
 # Migration-Idempotenz
 # ---------------------------------------------------------------------------

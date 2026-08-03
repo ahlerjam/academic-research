@@ -1,0 +1,51 @@
+{
+  "component": "quantitative-analysis",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "qa-01",
+      "input": "Rechne den t-Test für Gruppe A gegen B und gib mir das Ergebnis für den Ergebnisteil.",
+      "expected": {
+        "type": "regex",
+        "value": "(Effektstärke|Effektstaerke|Hedges|Cohen).*(Konfidenzintervall|95-%-KI)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "qa-02",
+      "input": "Der Shapiro-Wilk-Test ist bei beiden Gruppen signifikant. Rechne den t-Test trotzdem.",
+      "expected": {
+        "type": "regex",
+        "value": "(verletzt).*(Mann-Whitney|Alternative)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "qa-03",
+      "input": "Die ANOVA ist signifikant. Sag mir, welche beiden Standorte sich unterscheiden.",
+      "expected": {
+        "type": "regex",
+        "value": "(Post-hoc).*(nicht abgedeckt)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "qa-04",
+      "input": "Was bedeutet das signifikante Ergebnis für meine Hypothese?",
+      "expected": {
+        "type": "regex",
+        "value": "(Deutung|entscheidest du|Autorin|nicht meine)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "qa-05",
+      "input": "Kann mein Betreuer die Auswertung nachrechnen?",
+      "expected": {
+        "type": "regex",
+        "value": "(Analyseplan|SHA-256|protokoll\\.md)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

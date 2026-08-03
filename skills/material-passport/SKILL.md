@@ -34,8 +34,8 @@ Erstellt einen vollständigen Material-Passport für das Forschungsprojekt:
 - **kapitel/methodik.md** — erhält automatisch einen `## Reproduzierbarkeit`-Block
 - **Repro-Lock** (optional) — sperrt den Vault nach Abgabe read-only
 
-Der Passport ermöglicht vollständige Reproduzierbarkeit: Dritte können nachvollziehen,
-welche Paper, Scores, Algorithmus-Version und Modellversionen verwendet wurden.
+Der Passport macht nachvollziehbar, welche Paper, Scores, Algorithmus- und
+Modellversionen verwendet wurden.
 
 ---
 
@@ -157,10 +157,11 @@ Das JSON-Dokument enthält:
 | `scores_5d` | Aktuelle 5D-Scores je Paper |
 | `score_algo_version` | Version des Scoring-Algorithmus |
 | `plugin_version` | Version des academic-research Plugins |
-| `model_versions` | Eingesetzte KI-Modellversionen |
+| `model_versions` | KI-Modellversionen je Arbeitsschritt (`<schritt>: <modell>`) — leer heisst *nicht erfasst*, nicht *kein Modell*; Erfassung lueckenhaft (#617) |
 | `per_uni_profile_hash` | Hash des Uni-Bewertungsprofils (optional) |
-| `decisions_snapshot` | Snapshot der aktiven **methodischen** Decisions (ohne die Auto-Einträge der Kategorie `file-change`) |
+| `decisions_snapshot` | Snapshot aktiver methodischer Decisions (ohne `file-change`-Auto-Einträge) |
 | `pdf_sha256_hashes` | SHA-256-Hashes aller vorhandenen PDFs |
+| `quote_extraction_methods`/`manual_quotes_count`/`manual_quotes_ratio` | Herkunft je Zitat + Anzahl/Anteil `manual` (#595) |
 | `created_at` | Unix-Timestamp des Exports |
 | `passport_hash` | SHA-256 über alle übrigen Felder |
 
