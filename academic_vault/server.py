@@ -1413,13 +1413,15 @@ def check_retractions(
             )
             continue  # kein Timestamp-Update -- naechster Lauf versucht erneut.
 
-        db.update_retraction_checked_at(paper_id, now)
-
         if check.status == "clean":
+            db.update_retraction_checked_at(paper_id, now)
             result["clean"].append(paper_id)
             continue
 
         # status == "retracted"
+        # Timestamp NICHT aktualisieren -- der Rückzug soll in jedem Lauf
+        # angezeigt werden, bis der Nutzer eine Entscheidung trifft (AC4).
+        # Analog zum Nicht-Update bei "error".
         try:
             csl = json.loads(paper.get("csl_json") or "{}")
         except json.JSONDecodeError:
