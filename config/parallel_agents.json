@@ -1,4 +1,6 @@
 {
   "_comment": "Obergrenze gleichzeitig gestarteter Subagents fuer den Screening-/RoB-Fan-out (Issue #460). Vorrang: Argument > ACADEMIC_RESEARCH_MAX_PARALLEL > diese Datei > Default 4. Harte Obergrenze: 8.",
-  "max_parallel_agents": 4
+  "max_parallel_agents": 4,
+  "_comment_double_screening": "Schalter fuer blindes Doppel-Screening (Issue #598). Vorrang: Argument > ACADEMIC_RESEARCH_DOUBLE_SCREENING > diese Datei > Default true (methodisch sauberer Weg ist der Standardweg). Bei false verhaelt sich das Screening exakt wie vor #598 (ein Judge-Lauf je Treffer).",
+  "double_screening": true
 }
