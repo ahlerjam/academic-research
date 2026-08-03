@@ -40,8 +40,8 @@ Degradations-Pfade des Setups zeigt (siehe Schritt 1).
   dem Durchlauf in [„Realer `local-verbatim`-Lauf"](#realer-local-verbatim-lauf-2026-08-03)
   unten geschlossen: dort erzeugt derselbe `local-verbatim`-Pfad, den der
   `quote-extractor`-Agent laut `agents/quote-extractor.md` verwendet, ein echtes
-  Zitat aus einem echten PDF, serverseitig fail-closed verifiziert — ohne
-  `ANTHROPIC_API_KEY` (seit #514/#632 kein Blocker mehr).
+  Zitat aus einem echten PDF, serverseitig fail-closed verifiziert — ohne eigenen
+  API-Schlüssel (seit #514/#632 kein Blocker mehr).
 
 ## 1. Setup
 
@@ -275,8 +275,8 @@ einzutragen.
    ```
 
 **Was das belegt:** Die Kette PDF → lokale Extraktion → serverseitige
-Fail-Closed-Verifikation → Vault → Guard läuft vollständig ohne
-`ANTHROPIC_API_KEY` und ohne dass irgendein Zitattext von Hand als Ergebnis
+Fail-Closed-Verifikation → Vault → Guard läuft vollständig ohne eigenen
+API-Schlüssel und ohne dass irgendein Zitattext von Hand als Ergebnis
 eingetragen wurde — jeder Kandidat musste `vault.verify_verbatim`/`vault.add_quote`
 tatsächlich bestehen.
 
