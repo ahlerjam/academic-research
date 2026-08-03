@@ -1640,6 +1640,10 @@ def export_material_passport(
             scores_5d[pid] = json.loads(history[0]["scores_json"])
 
     pdf_hashes = _compute_pdf_hashes(db_path)
+    quote_extraction_methods, manual_quotes_count, total_quotes_count = (
+        _compute_quote_extraction_summary(db_path)
+    )
+    manual_quotes_ratio = manual_quotes_count / total_quotes_count if total_quotes_count else 0.0
 
     passport = build_passport(
         slug=slug,
@@ -1652,6 +1656,9 @@ def export_material_passport(
         per_uni_profile_hash=per_uni_profile_hash,
         decisions_snapshot=decisions,
         pdf_hashes=pdf_hashes,
+        quote_extraction_methods=quote_extraction_methods,
+        manual_quotes_count=manual_quotes_count,
+        manual_quotes_ratio=manual_quotes_ratio,
     )
 
     validate_passport(passport)
@@ -1683,6 +1690,28 @@ def _compute_pdf_hashes(db_path: str) -> dict:
                     sha.update(chunk)
             hashes[row["paper_id"]] = sha.hexdigest()
     return hashes
+
+
+def _compute_quote_extraction_summary(db_path: str) -> tuple[dict[str, str], int, int]:
+    """Liest ``extraction_method`` je Zitat aus dem Vault (#595).
+
+    Eine Vault-DB entspricht einem Projekt/Slug -- kein WHERE-Filter noetig
+    (analog zur ``paper_rows``-Query in :func:`export_material_passport`).
+
+    Gibt ``(quote_extraction_methods, manual_count, total_count)`` zurueck:
+    ``quote_extraction_methods`` ist ``{quote_id: extraction_method}`` fuer
+    ALLE Zitate im Vault, ``manual_count`` die Anzahl mit
+    ``extraction_method == 'manual'``, ``total_count`` die Gesamtzahl.
+    """
+    conn = VaultDB._open(db_path)
+    try:
+        rows = conn.execute("SELECT quote_id, extraction_method FROM quotes").fetchall()
+    finally:
+        conn.close()
+
+    quote_extraction_methods = {row["quote_id"]: row["extraction_method"] for row in rows}
+    manual_count = sum(1 for row in rows if row["extraction_method"] == "manual")
+    return quote_extraction_methods, manual_count, len(rows)
 
 
 # ---------------------------------------------------------------------------
