@@ -118,15 +118,36 @@ Verifiziere nach Download: Datei existiert und hat Groesse > 0 Bytes.
 
 ---
 
-## Schritt 5: Provenance taggen
+## Schritt 5: Provenance-Sidecar anlegen
 
-Kein Wiederholungshinweis pro Fund (Issue #459): Bei Erfolg wird
-ausschliesslich das Vault-Tag `provenance:scihub` gesetzt, kein Ausgabetext
-an den User. Die rechtliche Aufklaerung ist bereits **einmalig beim Opt-in**
-erfolgt (`commands/setup.md` Schritt 8) — sie wiederholt sich nicht bei jedem
-Treffer. Die Herkunft bleibt ueber den Vault jederzeit korrekt beantwortbar
-(`vault.get_paper()`, `vault.list_papers_by_provenance("scihub")`),
-beeinflusst aber keine nachgelagerte Textarbeit.
+Dieser Agent hat **keine Vault-Tools** (nur `Bash(browser-use:*)`, `Read`,
+`Write`) und kann `provenance:scihub` daher nicht selbst im Vault
+persistieren — das geschieht erst zwei Hops spaeter in `commands/fetch.md`
+Schritt 4 (`mcp__academic-vault__vault_add_paper`). Damit die Markierung
+trotzdem nicht an einem einzelnen Prompt-Hop haengt, der sie fehlerfrei
+durchreichen muss (Issue #627: „Ein Prompt ist keine Durchsetzung"), legst du
+nach erfolgreichem Download zusaetzlich eine Sidecar-Markerdatei an:
+
+```
+Write: {output_path}.provenance-scihub
+Inhalt: scihub
+```
+
+`VaultDB.add_paper()` prueft bei jedem Aufruf mit diesem `pdf_path`, ob die
+Sidecar-Datei existiert, und erzwingt in diesem Fall `provenance="scihub"`
+serverseitig — unabhaengig davon, was der aufrufende Prompt als
+`provenance`-Parameter uebergibt oder wegläßt. Die Sidecar-Datei ist damit
+die eigentliche Durchsetzung; das `provenance:scihub`-Feld im Output-Schema
+unten bleibt zusaetzlich als Signal fuer den aufrufenden Prompt bestehen,
+ist aber nicht mehr die einzige Verteidigungslinie.
+
+Kein Wiederholungshinweis pro Fund (Issue #459): Bei Erfolg wird kein
+Ausgabetext an den User erzeugt. Die rechtliche Aufklaerung ist bereits
+**einmalig beim Opt-in** erfolgt (`commands/setup.md` Schritt 8) — sie
+wiederholt sich nicht bei jedem Treffer. Die Herkunft bleibt ueber den Vault
+jederzeit korrekt beantwortbar (`vault.get_paper()`,
+`vault.list_papers_by_provenance("scihub")`), beeinflusst aber keine
+nachgelagerte Textarbeit.
 
 ---
 
@@ -147,7 +168,10 @@ beeinflusst aber keine nachgelagerte Textarbeit.
 }
 ```
 
-**Wichtig:** `tags` enthält IMMER `"provenance:scihub"` bei `status: success` — fuer Vault-Auditing.
+**Wichtig:** `tags` enthält IMMER `"provenance:scihub"` bei `status: success` — als Signal fuer
+den aufrufenden Prompt. Die tatsaechliche Durchsetzung erfolgt aber ueber die
+Sidecar-Datei aus Schritt 5, die `VaultDB.add_paper()` beim spaeteren
+Vault-Schreibvorgang prueft (Issue #627) — nicht ueber dieses Feld.
 
 ---
 
