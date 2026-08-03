@@ -18,13 +18,44 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `SessionStart` (kein Matcher) | `bypass-log-report.mjs` | Meldet neue Nutzungen des `vault-guard`-Bypass-Markers seit der letzten Session |
 | `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
+| `Stop` | `session-snapshot.mjs` | Vault-Snapshot am Sitzungsende (#625) — zusätzlich zum `PreCompact`-Snapshot, unabhängig davon |
 
-Das sind **7 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
+Das sind **8 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
 `context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`, `pre-compact.mjs`,
-`mid-session-reinforcement.mjs`, `bypass-log-report.mjs`) plus **2
-Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
+`mid-session-reinforcement.mjs`, `bypass-log-report.mjs`, `session-snapshot.mjs`)
+plus **2 Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
 Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
 `PreToolUse` ruft drei Skripte nacheinander auf.
+
+### Session-Ende-Snapshot (`session-snapshot.mjs`, #625)
+
+Läuft zusätzlich zum bestehenden `PreCompact`-Snapshot unter `Stop` — er
+ersetzt ihn nicht, sondern deckt die Fälle ab, in denen eine Sitzung nie
+verdichtet wird (kurze Sitzungen erzeugten bis #625 über Wochen keinen
+einzigen Snapshot). Ein billiger Fingerprint der Vault-DB (Dateigröße +
+`mtimeMs`) wird gegen die Marker-Datei
+`<ACADEMIC_SNAPSHOTS_DIR>/<slug>/.last-session-snapshot.json` aus dem letzten
+Lauf verglichen: unverändert → kein neuer Snapshot, aber eine Stderr-Zeile mit
+dem Zeitpunkt der letzten Sicherung; verändert (oder Marker fehlt/kaputt) →
+Export über dieselbe Python-Funktion wie `pre-compact.mjs`
+(`academic_vault.server.export_snapshot()`), aufgerufen über die
+Interpreter-Kaskade aus `hooks/lib/vault-bridge.mjs` (#382).
+
+**Retention:** je Slug-Verzeichnis werden maximal `ACADEMIC_SNAPSHOTS_KEEP`
+(Default **20**, env-überschreibbar) `.tgz`-Dateien aufbewahrt — ältere werden
+nach jedem erfolgreichen Export gelöscht (Sortierung über den
+`YYYYMMDD-HHMM`-Dateinamen). Die Marker-Datei selbst ist vom Pruning
+ausgenommen. Ein Fehlschlag beim Export (z. B. kein funktionierender
+Python-Interpreter erreichbar) bricht die Sitzung nicht ab: `exit 0`, aber
+eine sichtbare `⚠️`-Meldung auf stderr, und der Marker bleibt unverändert
+stehen, damit der nächste Lauf erneut einen Export versucht.
+
+**Grenzen (bewusst akzeptiert für Umfang size/S):** Der Fingerprint ist kein
+Volltext-Hash — ein False-Negative bei einer Änderung exakt gleicher
+Dateigröße innerhalb derselben Millisekunde ist theoretisch möglich, aber für
+die Größenordnung „Vault über zwei Jahre" vernachlässigbar. Zwei parallele
+Sitzungen auf demselben Projekt können sich beim Marker-Update oder Pruning
+überschneiden — es gibt kein Locking.
 
 > **Nicht verdrahtet:** `hooks/lib/vault-bridge.mjs` ist **kein** Hook, sondern ein
 > gemeinsames Modul, das die Vault-Hooks importieren (DB-Pfad-Auflösung und

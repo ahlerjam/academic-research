@@ -10,6 +10,18 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Vault-Snapshot auch am Sitzungsende (#625):** Der einzige automatische
+  Snapshot hing bislang am `PreCompact`-Hook, der nur in langen Sitzungen
+  feuert — kurze Sitzungen erzeugten über Wochen keinen einzigen Snapshot.
+  Neu ist `hooks/session-snapshot.mjs`, zusätzlich (nicht ersetzend) unter
+  `Stop` verdrahtet: ein Fingerprint der Vault-DB (Größe + `mtimeMs`) gegen
+  eine Marker-Datei entscheidet, ob ein neuer Export nötig ist, unveränderte
+  Vaults erzeugen keinen überflüssigen Snapshot. Export läuft über die
+  vorhandene `academic_vault.server.export_snapshot()` via
+  `hooks/lib/vault-bridge.mjs`s Interpreter-Kaskade. Retention:
+  `ACADEMIC_SNAPSHOTS_KEEP` (Default 20) `.tgz`-Dateien je Projekt, älteste
+  zuerst geprunt. Fail-open bei Exportfehlern (sichtbare `⚠️`-Meldung, Sitzung
+  läuft weiter). Details: `docs/reference/hooks.md`.
 - **Härteres Recall-Goldset für den Embedding-Modell-A/B (#628):** Das
   bestehende A/B (`docs/evals/recall-at-k-model-ab-375.md`, #375) erreichte
   auf 6 scharf getrennten Themenclustern mit allen drei Kandidaten
