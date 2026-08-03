@@ -75,4 +75,4 @@ Login-Wall zurück; den tatsächlichen Aufruf macht ausschließlich der Master
 | `risk-of-bias` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Cochrane RoB 2 / ROBINS-I / CASP |
 | `meta-analysis` | Sonnet | direkt | manuell | DerSimonian-Laird Random-Effects + Forest-Plot |
 | `figure-verifier` | Sonnet | direkt | manuell | VLM-basierte Abbildungsverifikation |
-| `quote-fidelity-auditor` | Sonnet | direkt (Empfehlung aus `claim-drift-guard`-Warnung) | manuell | Urteilt über ein bestehendes Zitat gegen Kapitel-Behauptung, Quote-Kontext und Abstract; persistiert `quotes.stance` |
+| `quote-fidelity-auditor` | Sonnet | direkt (Empfehlung aus `claim-drift-guard`-Warnung oder aus dem NLI-Batch-Vorfilter `academic_vault/nli_prefilter.py`, #592, Default AUS) | manuell | Urteilt über ein bestehendes Zitat gegen Kapitel-Behauptung, Quote-Kontext und Abstract; persistiert `quotes.stance` |

@@ -34,6 +34,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   erfragen. Automatisches Einreichen bei OSF/PROSPERO und Registered Reports
   bleiben bewusst out of scope.
 
+- **mDeBERTa-XNLI als lokaler NLI-Vorfilter vor dem Zitat-Richter (#592):**
+  `academic_vault/nli_prefilter.py` bewertet Kapitelbehauptung gegen
+  Quote-Kontext lokal (keine API, kein Netz nach dem einmaligen
+  Modell-Download) und entscheidet, ob ein Zitat unveraendert an
+  `quote-fidelity-auditor` (#523) weitergereicht wird. Neu: ein
+  Vollkapitel-Scanpfad (`scan_chapter_quotes` + `run_batch_prefilter`), der
+  ALLE im Vault belegten Zitate eines Kapitels prueft — nicht nur die mit
+  Claim-Drift-Warnung. Treue Zitate werden im Report explizit als
+  „vorgefiltert, nicht inhaltlich geprueft" markiert, nie stillschweigend
+  ausgelassen. Schalter `nli_prefilter_enabled` in
+  `config/parallel_agents.json` (Vorrang: Argument >
+  `ACADEMIC_RESEARCH_NLI_PREFILTER` > Config > Default `false`) — Default
+  bleibt AUS, bei Deaktivierung verhaelt sich der Pruefpfad bytegleich zum
+  Zustand ohne Vorfilter. Validierungslauf gegen 60 ECHTE, per WebFetch
+  verifizierte Zitat-Paare aus 15 real veroeffentlichten arXiv-Papern:
+  Precision 1.00, Recall 0.767, FP = 0/30 (Rule-of-Three-Obergrenze ~10 %,
+  kein Nullbeweis) — Details und Einschalt-Empfehlung in
+  `evals/524-nli-prefilter/README.md`.
+
 - **node:sqlite gegen Python-Subprozess gemessen und dokumentiert (#600):**
   CI läuft jetzt auf Node 22 (`node:sqlite` unflagged ab 22.13.0) statt Node
   20. Ein Mikrobenchmark (`scripts/dev/bench_vault_bridge.mjs`) belegt den
