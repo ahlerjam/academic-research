@@ -180,6 +180,10 @@ def lade_osf_felder(template: str, pfad: Path = OSF_TEMPLATES_MD) -> dict[str, l
 
 
 def _feld_block(name: str, wert: str | None) -> list[str]:
+    if wert is not None and not isinstance(wert, str):
+        raise TypeError(
+            f"Feldwert für '{name}' muss ein String oder None sein, nicht {type(wert).__name__}"
+        )
     return [f"### {name}", "", (wert.strip() if wert and wert.strip() else PLATZHALTER), ""]
 
 
@@ -203,15 +207,28 @@ def rendere_protokoll(plan: dict[str, Any]) -> str:
     if plan.get("begruendung"):
         zeilen += [f"Begründung der Vorlagenwahl: {plan['begruendung']}", ""]
 
+    # Sammle bekannte Feldnamen je nach Template
+    bekannte_felder: set[str] = set()
     if template == "prospero":
         zeilen += ["## Pflichtfelder (PROSPERO)", ""]
-        for name in lade_pflichtfelder():
+        bekannte_felder = set(lade_pflichtfelder())
+        for name in bekannte_felder:
             zeilen += _feld_block(name, felder.get(name))
     else:
         for sektion, namen in lade_osf_felder(template).items():
             zeilen += [f"## {sektion}", ""]
+            bekannte_felder.update(namen)
             for name in namen:
                 zeilen += _feld_block(name, felder.get(name))
+
+    # Fehler, wenn es unbekannte Feldschlüssel gibt (Datenverlust verhindern)
+    unbekannte = set(felder.keys()) - bekannte_felder
+    if unbekannte:
+        raise ValueError(
+            f"Plan enthält unbekannte Feldschlüssel, die im Template '{template}' nicht "
+            f"existieren: {', '.join(sorted(unbekannte))}. Diese würden ohne Fehler "
+            f"verworfen; bitte überprüfen Sie die Feldnamen."
+        )
 
     zeilen += [
         "## Abweichungen vom Protokoll",
@@ -242,6 +259,18 @@ def rendere_protokoll(plan: dict[str, Any]) -> str:
 def _liste_oder_platzhalter(eintraege: list[str] | None) -> list[str]:
     if not eintraege:
         return [PLATZHALTER]
+    if not isinstance(eintraege, list):
+        raise TypeError(
+            f"Kriterien/Liste muss vom Typ list sein, nicht {type(eintraege).__name__}. "
+            f"Wert: {repr(eintraege)}"
+        )
+    # Zusätzliche Validierung: jeder Eintrag muss ein String sein
+    for idx, eintrag in enumerate(eintraege):
+        if not isinstance(eintrag, str):
+            raise TypeError(
+                f"Listeneintrag [{idx}] muss ein String sein, nicht {type(eintrag).__name__}: "
+                f"{repr(eintrag)}"
+            )
     return [f"- {e}" for e in eintraege]
 
 
