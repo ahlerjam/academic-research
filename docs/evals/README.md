@@ -21,6 +21,8 @@ danach höchstens den passenden Report.
 | [`TEMPLATE.md`](TEMPLATE.md) | Leere Vorlage fuer einen neuen Report |
 | [`2026-04-23-summary.md`](2026-04-23-summary.md) | Momentaufnahme: Eval-Infrastruktur zu v5.2.0 |
 | [`recall-at-k-model-ab-375.md`](recall-at-k-model-ab-375.md) | Momentaufnahme: Recall@10-Goldset + Embedding-Modell-A/B (#375) |
+| [`recall-at-k-model-ab-hard-628.md`](recall-at-k-model-ab-hard-628.md) | Momentaufnahme: hartes Recall@10-Goldset mit Themen-Overlap + BGE-M3/e5-large-A/B (#628) |
+| [`recall-at-k-model-ab-hard-628-live-results.json`](recall-at-k-model-ab-hard-628-live-results.json) | Rohdaten des manuellen Live-Laufs zu obigem Report (Per-Query-Aufschlüsselung aller fünf Kandidaten) |
 | [`v6.2-tier-eval.md`](v6.2-tier-eval.md) | Momentaufnahme: Auto-Download-Tier-Pipeline v6.2 |
 
 ## Konvention

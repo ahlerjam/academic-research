@@ -10,6 +10,17 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Härteres Recall-Goldset für den Embedding-Modell-A/B (#628):** Das
+  bestehende A/B (`docs/evals/recall-at-k-model-ab-375.md`, #375) erreichte
+  auf 6 scharf getrennten Themenclustern mit allen drei Kandidaten
+  Recall@10 = 1.0 — ein Deckeneffekt, keine Modell-Aussage. Neu ist ein
+  zweites Goldset (`tests/fixtures/retrieval_goldset_hard_overlap_628.json`,
+  24 Papers/2 Themen/6 eng verwandten Subtopics) sowie zwei zusätzliche
+  A/B-Kandidaten in `scripts/eval/recall_at_k_model_ab.py`: `BAAI/bge-m3`
+  (1024d, 8192 Tokens, kein Prompt-Präfix) und
+  `intfloat/multilingual-e5-large` (1024d, 512 Tokens, `query:`/`passage:`
+  -Präfixschema wie e5-small). Ein `--goldset {default,hard}`-Schalter wählt
+  zwischen beiden Sets. Report: `docs/evals/recall-at-k-model-ab-hard-628.md`.
 - **Tabellen strukturerhaltend extrahieren (#630):** Meta-Analyse,
   Extraktionsmatrix und Verzerrungsbewertung stehen und fallen mit Zahlen aus
   den Primärstudien — die stehen in Tabellen, und der einzige Volltextpfad
