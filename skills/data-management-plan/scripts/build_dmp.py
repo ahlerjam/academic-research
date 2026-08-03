@@ -48,6 +48,7 @@ def _offen(text: str) -> str:
 
 def _aggregate_vault(db_path: str) -> dict:
     """Liest den Vault-Bestand read-only aus (kein Schreibzugriff)."""
+    vault_server._ensure_schema_for_read(db_path)
     conn = VaultDB._open(db_path)
     try:
         total_papers = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]

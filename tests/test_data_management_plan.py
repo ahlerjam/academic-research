@@ -140,8 +140,15 @@ class TestAusgangslage:
         _seed_vault(db_path, n_literature=2, n_primary=1)
         _run_script(db_path, "test-projekt", output)
         content = output.read_text(encoding="utf-8")
-        assert "3" in content, "Gesamtzahl der Paper (3) nicht im Dokument"
-        assert "2" in content, "Anzahl Literatur-Paper (2) nicht im Dokument"
+        ausgangslage_idx = content.find("## Ausgangslage im Vault")
+        next_heading_idx = content.find("\n## ", ausgangslage_idx + 1)
+        section = content[ausgangslage_idx:next_heading_idx]
+        assert "**3 Paper/Quellen**" in section, (
+            "Gesamtzahl der Paper (3) nicht in Ausgangslage-Abschnitt"
+        )
+        assert "**2 Literatur**" in section, (
+            "Anzahl Literatur-Paper (2) nicht in Ausgangslage-Abschnitt"
+        )
 
     def test_ausgangslage_reports_segment_and_coding_counts(self, tmp_path):
         db_path = _make_db()
@@ -162,8 +169,10 @@ class TestAusgangslage:
         output = tmp_path / "datenmanagementplan.md"
         _run_script(db_path, "leeres-projekt", output)
         content = output.read_text(encoding="utf-8")
-        assert "## Ausgangslage im Vault" in content
-        assert "0" in content
+        ausgangslage_idx = content.find("## Ausgangslage im Vault")
+        next_heading_idx = content.find("\n## ", ausgangslage_idx + 1)
+        section = content[ausgangslage_idx:next_heading_idx]
+        assert "**0 Paper/Quellen**" in section, "Null-Paper nicht in Ausgangslage-Abschnitt"
 
 
 # ---------------------------------------------------------------------------
