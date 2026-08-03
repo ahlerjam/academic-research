@@ -206,6 +206,8 @@ class TestWriteFailsLoudlyOnMismatch:
         from academic_vault import server as server_module
 
         db_path = str(tmp_path / "vault.db")
+        if not VaultDB(db_path).vec_extension_loadable():
+            pytest.skip("sqlite-vec-Extension nicht ladbar (optionales Feature)")
         monkeypatch.setattr(ingest_module, "get_embedder", lambda: SizedEmbedder(384))
         monkeypatch.setattr(server_module, "get_embedder", lambda: SizedEmbedder(384))
         server_module.add_paper(
