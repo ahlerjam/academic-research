@@ -11,6 +11,8 @@ description: >
   Parst Referenzen in der Sitzung, resolvet DOI/ISBN ("Auflösung / Resolution"
   via Crossref + DNB), und schreibt alles in den Vault (vault.add_paper).
   Optional: anystyle (Ruby) als Backend, falls installiert.
+  Deckt auch die vault-weite Retraction-Prüfung ab (#604, Trigger u.a.
+  "Rückzüge im Vault prüfen / pruefen"): `vault.check_retractions()`.
 license: MIT
 allowed-tools:
   - Bash
@@ -150,6 +152,13 @@ gleichnamige Arbeiten verschiedener Autoren), gehört er mit `_ambiguous: true`
 und `_candidates` ins JSON — der Import fragt den User dann via
 `AskUserQuestion` nach der gemeinten Quelle. Beispiel:
 `references/entry-schema.md`.
+
+## Vault-weite Retraction-Prüfung (Issue #604)
+
+Wiederholbarer Check über den gesamten Vault statt nur beim Import: MCP-Tool
+`vault.check_retractions(max_age_days=90, force=False, project_dir=".")`.
+Ablauf, Fundstelle-Semantik und `cited_in_chapter`-Heuristik:
+`references/vault-wide-retraction-check.md`.
 
 ## Sicherheitshinweise
 

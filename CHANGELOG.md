@@ -10,6 +10,39 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Vault-weite, wiederholbare Retraction-Prüfung (#604):** Der bisherige
+  Crossref-Retraction-Check lief nur einmalig beim `reading-list-import` und
+  erreichte damit weder Papers aus anderen Importwegen (`zotero-import`,
+  `anchor-paper-survey`, `github-repo-research`, `fetch`) noch spätere
+  Rückzüge längst importierter Papers (eine Dissertation läuft Jahre, ein
+  2024 sauber importiertes Paper kann 2026 zurückgezogen sein). Neu ist das
+  MCP-Tool `vault.check_retractions(max_age_days=90, force=False,
+  project_dir=".")`: iteriert über alle Vault-Papers mit
+  `source_kind='literature'` und DOI, prüft standardmäßig nur seit
+  `max_age_days` nicht (oder noch nie) geprüfte Papers (neue Spalte
+  `papers.retraction_checked_at`, gesetzt nur bei erfolgreichem Check — ein
+  Crossref-Ausfall lässt den Zeitstempel unangetastet, sodass der nächste
+  Lauf automatisch erneut versucht). Die Crossref-Abfragelogik selbst zieht
+  aus `skills/reading-list-import/scripts/parse_list.py` in das neue,
+  geteilte Modul `academic_vault/retraction.py` um (vgl. #527, wo zwei
+  Implementierungen desselben Checks auseinanderdrifteten); der Rückgabetyp
+  wechselt dabei von einem fail-safe `bool` auf ein `RetractionCheckResult`
+  (`retracted`/`clean`/`error` + Fundstelle bei Treffer), weil ein
+  Crossref-Ausfall im vault-weiten Check sichtbar bleiben muss statt wie
+  „kein Rückzug" auszusehen. `reading-list-import` selbst bleibt an seinem
+  alten Vertrag (automatisches `excluded_sources`, Ingest blockiert nie,
+  Issue #383) — bewusst zwei unterschiedliche Verhalten für zwei
+  unterschiedliche Kontexte. Ein Treffer wird dem Nutzer nur **vorgelegt**
+  (nie automatisch nach `excluded_sources` geschrieben — ein Rückzug kann
+  bewusst zitiert bleiben, wenn die Arbeit ihn selbst zum Gegenstand hat)
+  und trägt die Fundstelle (Crossref-DOI der Retraction-Notiz) sowie ein
+  heuristisches `cited_in_chapter`-Flag (Autor-Familienname + Jahr gegen
+  `kapitel/**/*.md`, neue Funktion `db.paper_cited_in_chapters()`). Papers
+  ohne DOI erscheinen als „nicht prüfbar" (`no_doi`), ein Crossref-Ausfall
+  als eigene, sichtbare Fehlerkategorie (`error`, `error_count`) statt als
+  leeres „keine Rückzüge gefunden". Workflow dokumentiert in
+  `skills/reading-list-import/SKILL.md`. MCP-Tool-Zähler 45 → 46
+  (README.md, docs/reference/vault.md).
 - **KI-Offenlegungserklärung nach ICMJE 01/2026 (#605):** Neuer Skill
   `skills/ai-disclosure/` erzeugt eine zweigeteilte Offenlegungserklärung zur
   KI-Nutzung (Danksagung + Methodenteil, je DE/EN) entlang der

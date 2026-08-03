@@ -115,7 +115,9 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 # 7 = quotes.context_source (Issue #520): Herkunftsnachweis fuer
 #     context_before/context_after ('fulltext' oder NULL), gesetzt von
 #     server.resolve_quote_context().
-CURRENT_SCHEMA_VERSION = 7
+# 8 = papers.retraction_checked_at (Issue #604): Zeitpunkt der letzten
+#     Crossref-Retraction-Pruefung, Grundlage fuer server.check_retractions().
+CURRENT_SCHEMA_VERSION = 8
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -137,6 +139,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
             "page_first",
             "page_last",
             "container_title",
+            "retraction_checked_at",
         }
     ),
     "quotes": frozenset({"stance", "context_source"}),
@@ -340,6 +343,75 @@ def csl_year(csl: dict) -> int | None:
             if match:
                 return int(match.group(1))
     return None
+
+
+_WORD_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+
+
+def _normalized_words(text: str) -> set[str]:
+    """Tokenisiert Text und faltet jedes Wort wie ``normalize_family_name()``.
+
+    Baustein der Kapitelzitat-Heuristik (Issue #604, AC5): dieselbe
+    Umlaut-/Diakritika-Faltung wie bei Autorennamen wird auf jedes Wort des
+    Kapiteltexts angewendet, damit ``family_names_match``-kompatible
+    Varianten (``Müller``/``Mueller``/``Muller``) als Wort-Treffer erkannt
+    werden -- ohne Namenspartikel-Behandlung, die ist bei Fliesstext nicht
+    sinnvoll (kein "von"/"van" isoliert am Satzanfang zu erwarten).
+    """
+    variants: set[str] = set()
+    for token in _WORD_RE.findall(text):
+        lowered = token.lower()
+        folded = "".join(_UMLAUT_FOLD.get(ch, ch) for ch in lowered)
+        stripped = "".join(
+            ch for ch in unicodedata.normalize("NFD", lowered) if not unicodedata.combining(ch)
+        )
+        variants |= {re.sub(r"[^a-z]", "", v) for v in (folded, stripped)}
+    return variants - {""}
+
+
+def paper_cited_in_chapters(csl: dict, kapitel_dir: str | Path) -> bool:
+    """Heuristische Pruefung: taucht das Paper in einem Kapiteltext auf? (#604, AC5)
+
+    Ein Paper gilt als "im Kapiteltext zitiert", wenn mindestens eine
+    ``*.md``-Datei unter ``kapitel_dir`` (Unterordner eingeschlossen, Ordner-
+    konvention aus ``scripts/bootstrap/CLAUDE.md``) sowohl das Erscheinungs-
+    jahr des Papers als String ENTHAELT als auch mindestens einen seiner
+    Autoren-Familiennamen als Wort-Treffer aufweist.
+
+    Bewusst approximativ (Autor-Familienname + Jahr statt echtem
+    Zitat-Parsing): False Negatives bei reiner Paraphrase ohne Klammerbeleg,
+    False Positives bei Namensgleichheit unterschiedlicher Autoren. Das ist
+    fuer diesen Anwendungsfall tragbar, weil das Ergebnis dem Nutzer nur
+    vorgelegt wird (AC4) -- keine automatische Aktion haengt daran; der
+    Aufrufer kennzeichnet das Ergebnis entsprechend als heuristisch.
+
+    Gibt ``False`` zurueck, wenn das Paper keine Autoren/kein Jahr im
+    CSL-JSON traegt oder ``kapitel_dir`` nicht existiert -- kein Fehler, denn
+    ohne Kapitelordner ist "ungenutzter Vault-Eintrag" die korrekte Auskunft.
+    """
+    year = csl_year(csl)
+    families = csl_families(csl)
+    if not families or year is None:
+        return False
+
+    kapitel_path = Path(kapitel_dir)
+    if not kapitel_path.is_dir():
+        return False
+
+    year_str = str(year)
+    family_variant_sets = [normalize_family_name(family) for family in families]
+
+    for md_file in sorted(kapitel_path.glob("**/*.md")):
+        try:
+            text = md_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if year_str not in text:
+            continue
+        words = _normalized_words(text)
+        if any(variants & words for variants in family_variant_sets):
+            return True
+    return False
 
 
 def format_table_evidence(
@@ -893,6 +965,36 @@ class VaultDB:
                 (provenance,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def list_literature_papers(self) -> list[dict]:
+        """Gibt alle Papers mit ``source_kind='literature'`` zurueck (#604).
+
+        Grundlage fuer ``server.check_retractions()``: unabhaengig vom
+        Importweg (zotero-import, reading-list-import, anchor-paper-survey,
+        github-repo-research, fetch, ...) liefert diese Abfrage jedes
+        Literatur-Paper -- eigenes Erhebungsmaterial (``source_kind='primary'``,
+        Transkripte etc.) ist bewusst ausgeschlossen, ein Retraction-Check
+        ergibt dafuer keinen Sinn.
+        """
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM papers WHERE source_kind = 'literature' ORDER BY added_at",
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_retraction_checked_at(self, paper_id: str, checked_at: int) -> None:
+        """Setzt ``retraction_checked_at`` fuer ein Paper (#604).
+
+        Wird nur nach einer erfolgreichen Crossref-Pruefung aufgerufen
+        (``server.check_retractions()``) -- ein Crossref-Ausfall darf den
+        Zeitstempel nicht vorruecken, sonst wuerde der naechste Lauf faelschlich
+        annehmen, das Paper sei bereits aktuell geprueft.
+        """
+        with self._connection(commit=True) as conn:
+            conn.execute(
+                "UPDATE papers SET retraction_checked_at = ? WHERE paper_id = ?",
+                (checked_at, paper_id),
+            )
 
     # ------------------------------------------------------------------
     # Quotes CRUD

@@ -694,6 +694,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_source_kind_column(db_path)
     add_empirical_tables(db_path)
     add_paper_tables_table(db_path)
+    add_retraction_checked_at_column(db_path)
     drop_dead_v64_tables(db_path)
 
 
@@ -727,6 +728,28 @@ def add_paper_tables_table(db_path: str) -> None:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_tables_paper ON paper_tables(paper_id)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_retraction_checked_at_column(db_path: str) -> None:
+    """Fuegt retraction_checked_at-Spalte zu papers hinzu. Idempotent. (#604)
+
+    Haelt fest, wann ein Paper zuletzt auf Crossref-Retraction geprueft wurde
+    -- Grundlage fuer den "nur unzureichend geprueft erneut abfragen"-Filter
+    von ``server.check_retractions()``. Default NULL fuer bestehende
+    Eintraege (noch nie geprueft). Aufruf-sicher: kann mehrfach auf
+    derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute("ALTER TABLE papers ADD COLUMN retraction_checked_at INTEGER DEFAULT NULL")
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
         conn.commit()
     finally:
         conn.close()
