@@ -40,6 +40,7 @@ from pathlib import Path
 import pytest
 
 from tests.helpers.generic_fetcher_nav import GenericFetcherNavigator
+from tests.test_issue_450_live_fetch import IA_NODE_HOST_RE
 
 REPO_ROOT = Path(__file__).parent.parent
 EVALS_PATH = REPO_ROOT / "evals" / "free-archive-fetchers" / "evals.json"
@@ -59,7 +60,9 @@ SINGLE_USE_PATTERNS = {
     "IPv4-Adresse": re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
     "Cloudflare-Ray-ID": re.compile(r"\b[0-9a-f]{16}-[A-Z]{3}\b"),
     "MDZ-Job-Praefix": re.compile(r"/pdf/\d+bsb\d+\.pdf"),
-    "archive.org-CDN-Knoten": re.compile(r"\bdn\d+\.[a-z]{2}\.archive\.org\b"),
+    # Beide real beobachteten Praefixe (Issue #612 Fix-Runde, 2026-08-03) --
+    # siehe IA_NODE_HOST_RE in tests/test_issue_450_live_fetch.py.
+    "archive.org-CDN-Knoten": re.compile(r"\b(?:ia|dn)\d+\.[a-z]{2}\.archive\.org\b"),
 }
 
 
@@ -290,3 +293,40 @@ def test_every_run_names_its_volatile_fields_instead_of_using_them(case_id: str)
     assert excluded["fields"], f"{case_id}: kein einziges fluechtiges Feld benannt."
     assert excluded["reason"].strip()
     assert excluded["evidence_is_instead"].strip()
+
+
+# ---------------------------------------------------------------------------
+# Issue #612 Fix-Runde: archive.org vergibt Speicherknoten unter mehr als
+# einem Praefix -- die urspruengliche Annahme (nur "dn") war zu eng.
+# ---------------------------------------------------------------------------
+
+
+#: Echte Umleitungsziele der stabilen fa-02-Download-URL, beobachtet am
+#: 2026-08-03 in zwei unabhaengigen Netzen: GitHub-Actions-Runner (Workflow-Lauf
+#: https://github.com/ahlerjam/academic-research/actions/runs/30851138735) und
+#: ein zweites, unabhaengiges Netz derselben Session. Zwei verschiedene
+#: Praefixe ("ia", "dn") fuer denselben stabilen Einstiegspunkt -- genau das
+#: "verschiedene Regionen"-Verhalten, das 'volatile_fields_excluded' in
+#: live-verification.json schon 2026-07-31 beschrieb, nur eben nicht als
+#: konkretes Hostnamen-Muster.
+OBSERVED_IA_NODE_HOSTS = ("ia800108.us.archive.org", "dn720200.ca.archive.org")
+
+
+@pytest.mark.parametrize("host", OBSERVED_IA_NODE_HOSTS)
+def test_ia_node_host_pattern_accepts_both_observed_node_prefixes(host: str):
+    """Regression Issue #612: die urspruengliche Annahme war nur ``dn``-Knoten.
+
+    ``tests/test_issue_450_live_fetch.py::test_internet_archive_redirects_to_an_assigned_node``
+    schlug am 2026-08-03 fehl, weil archive.org mit 'ia800108.us.archive.org'
+    antwortete -- einem real beobachteten, aber vom Muster nicht abgedeckten
+    Knotennamen. Der eigentliche archive.org-Fetcher (agents/internetarchive-fetcher.md)
+    war davon nicht betroffen: derselbe Lauf lieferte das PDF byteweise korrekt
+    (test_internet_archive_still_serves_the_recorded_pdf PASSED). Das Muster
+    muss beide real beobachteten Praefixe abdecken, sonst ist der Live-Test
+    flaky ueber etwas, das kein Fetcher-Fehler ist.
+    """
+    assert IA_NODE_HOST_RE.match(host), (
+        f"{host!r} wurde real als Umleitungsziel beobachtet, matcht aber nicht "
+        f"IA_NODE_HOST_RE. Das Muster ist zu eng fuer die tatsaechliche "
+        f"Knoten-Namensvielfalt von archive.org."
+    )

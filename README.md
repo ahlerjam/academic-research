@@ -202,7 +202,7 @@ Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
 
 - [Commands](docs/reference/commands.md) — alle 11 Slash-Commands mit Syntax und Beispielen
 - [Skills](docs/reference/skills.md) — alle 41 Skills und ihre Trigger
-- [Agents](docs/reference/agents.md) — alle 27 Subagents
+- [Agents](docs/reference/agents.md) — alle 28 Subagents
 - [Vault-MCP-Server](docs/reference/vault.md) — alle 47 MCP-Tools, Volltext- und Vektor-Index
 - [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt
 - [Hooks-Stack](docs/reference/hooks.md) — was wann eingreift, und was geloggt wird
