@@ -227,9 +227,13 @@ Trage das Ergebnis in `tries` ein.
 - `status: no_match` / `opted_out` / `error` → kein Sonderfall. Das bereits
   ermittelte `pickup_required`-Ergebnis aus Schritt 5 bleibt gueltig.
 
-`scihub-fetcher` taggt erfolgreiche Funde selbst mit `provenance:scihub` im
-Vault (Auditing bleibt vollstaendig erhalten); der Master gibt dieses Tag
-nicht gesondert weiter, es ist ueber `vault.get_paper()` abfragbar.
+`scihub-fetcher` hat keine Vault-Tools und persistiert `provenance:scihub`
+daher nicht selbst — er legt lediglich die Sidecar-Markerdatei
+`{output_path}.provenance-scihub` an. Die tatsaechliche Markierung erzwingt
+`VaultDB.add_paper()` serverseitig beim Vault-Schreibvorgang in
+`commands/fetch.md` Schritt 4, sobald dieser mit dem markierten `pdf_path`
+aufgerufen wird (Issue #627). Der Master gibt das Tag nicht gesondert
+weiter, die Herkunft ist ueber `vault.get_paper()` abfragbar.
 
 ---
 

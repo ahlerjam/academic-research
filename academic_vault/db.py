@@ -76,6 +76,17 @@ VALID_EXTRACTION_METHODS = frozenset({"citations-api", "manual", "local-verbatim
 # liefert die lesbare Fehlermeldung.
 VALID_SOURCE_KINDS = frozenset({"literature", "primary"})
 
+# Dateisuffix des Sidecar-Markers, mit dem der scihub-fetcher-Agent einen
+# erfolgreichen Download kennzeichnet (Issue #627). add_paper() erzwingt
+# provenance="scihub" fuer jeden pdf_path, neben dem eine Datei mit diesem
+# Suffix liegt -- unabhaengig davon, was der aufrufende Prompt als
+# provenance-Parameter uebergibt oder wegläßt. Das verlagert die
+# Durchsetzung von einer Prompt-Anweisung (agents/scihub-fetcher.md) an die
+# einzige tatsaechliche Schreibstelle fuer die papers-Tabelle. Bewusst kein
+# Wildcard-Suffix (z.B. nur ".provenance"), um keine fremden Dateien
+# fehlzuinterpretieren.
+SCIHUB_PROVENANCE_SIDECAR_SUFFIX = ".provenance-scihub"
+
 # Erlaubte Werte fuer `codings.category_origin` (Issue #473): ob eine Kategorie
 # am Material entwickelt (induktiv) oder aus der Theorie abgeleitet (deduktiv)
 # wurde. Die Herkunft gehoert zur Methodendokumentation und wird deshalb
@@ -760,6 +771,23 @@ class VaultDB:
                 f"Ungueltiger source_kind '{source_kind}' -- erlaubt: {sorted(VALID_SOURCE_KINDS)}"
             )
 
+        # Sci-Hub-Provenance-Durchsetzung (Issue #627): Wird in diesem Aufruf
+        # ein pdf_path uebergeben und liegt daneben der Sidecar-Marker des
+        # scihub-fetcher-Agenten, wird provenance hart auf "scihub" gesetzt --
+        # auch wenn der Aufrufer provenance weglaesst (_UNSET) oder einen
+        # abweichenden Wert uebergibt. Ohne uebergebenen pdf_path (Sentinel
+        # oder None) gibt es nichts zu pruefen; der Bestandswert bleibt dann
+        # ohnehin unangetastet. Der Marker wird nach erfolgreicher
+        # Persistierung in der DB konsumiert (gelöscht), damit er keinen
+        # Einfluss auf einen späteren Überschreibvorgang derselben PDF hat
+        # (Issue #627 Audit P1).
+        sidecar_path_to_consume: Path | None = None
+        if not isinstance(pdf_path, _Unset) and pdf_path is not None:
+            sidecar_path = Path(str(pdf_path) + SCIHUB_PROVENANCE_SIDECAR_SUFFIX)
+            if sidecar_path.is_file():
+                provenance = "scihub"
+                sidecar_path_to_consume = sidecar_path
+
         supplied: dict[str, object] = {
             "doi": doi,
             "isbn": isbn,
@@ -820,6 +848,12 @@ class VaultDB:
                 """,
                 values,
             )
+
+        # Marker nach Persistierung konsumieren (Issue #627 Audit P1):
+        # Verhindert, dass ein Marker einen späteren Überschreibvorgang
+        # derselben PDF beeinflusst.
+        if sidecar_path_to_consume is not None:
+            sidecar_path_to_consume.unlink(missing_ok=True)
 
     def get_paper(self, paper_id: str) -> dict | None:
         """Gibt Paper-Record als dict zurueck oder None."""
