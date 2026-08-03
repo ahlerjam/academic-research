@@ -282,6 +282,65 @@ def test_unknown_template_is_rejected(render) -> None:
         render.rendere_protokoll({"template": "sciencing-harder", "felder": {}})
 
 
+def test_unknown_field_key_raises_error(render) -> None:
+    """Unbekannte Feldschlüssel führen zu ValueError, nicht zu Datenverlust."""
+    plan = {"template": "general", "felder": {"Nonexistent Field": "Some Value"}}
+    with pytest.raises(ValueError, match="unbekannte Feldschlüssel"):
+        render.rendere_protokoll(plan)
+
+
+def test_non_string_field_value_raises_error(render) -> None:
+    """Feldwerte müssen Strings sein, nicht Listen oder andere Typen."""
+    plan = {"template": "general", "felder": {"Research questions or hypotheses": ["Q1", "Q2"]}}
+    with pytest.raises(TypeError, match="muss ein String"):
+        render.rendere_protokoll(plan)
+
+
+def test_criteria_must_be_list_not_string(render) -> None:
+    """Kriterien müssen Listen sein, nicht Strings (verhindert Zeichen-weise Iteration)."""
+    text = "### Profil\n- x\n"
+    with pytest.raises(TypeError, match="muss vom Typ list sein"):
+        render.aktualisiere_academic_context(
+            text,
+            suchstrategie="S",
+            einschlusskriterien="peer-reviewed",  # String statt Liste
+            ausschlusskriterien=None,
+        )
+
+
+def test_criteria_list_entries_must_be_strings(render) -> None:
+    """Jeder Kriterieneintrag muss ein String sein."""
+    text = "### Profil\n- x\n"
+    with pytest.raises(TypeError, match="muss ein String sein"):
+        render.aktualisiere_academic_context(
+            text,
+            suchstrategie="S",
+            einschlusskriterien=["peer-reviewed", 42],  # 42 ist kein String
+            ausschlusskriterien=None,
+        )
+
+
+def test_field_order_preserved_in_prospero(render) -> None:
+    """PROSPERO-Feldleihenfolge folgt der Referenzdatei, nicht Set-Iterationen (AC4)."""
+    # Zwei Aufrufe im selben Prozess sollten identische Reihenfolge haben
+    plan = {"template": "prospero", "felder": {"Review question(s)": "Frage"}}
+    result1 = render.rendere_protokoll(plan)
+    result2 = render.rendere_protokoll(plan)
+    # Zeichenweise Gleichheit (AC4)
+    assert result1 == result2
+    # Feldleihenfolge sollte gegen die Referenzdatei passen (erste Feldnamen sollten
+    # in der Referenzdatei-Reihenfolge auftauchen)
+    labels1 = [zeile[4:].strip() for zeile in result1.splitlines() if zeile.startswith("### ")]
+    ref_labels = render.lade_pflichtfelder()
+    # Prüfe, dass die Feldleihenfolge in result1 die gleiche Reihenfolge wie in der
+    # Referenzdatei hat (nicht randomisiert durch Set)
+    ref_indices = {label: i for i, label in enumerate(ref_labels)}
+    result_order = [ref_indices.get(label, -1) for label in labels1 if label in ref_indices]
+    assert result_order == sorted(result_order), (
+        "PROSPERO-Feldleihenfolge entspricht nicht der Referenzdatei (Set-Iteration?)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # AC5 — Ablageort fuer Abweichungen ist festgelegt
 # ---------------------------------------------------------------------------

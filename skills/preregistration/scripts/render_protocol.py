@@ -174,6 +174,27 @@ def lade_osf_felder(template: str, pfad: Path = OSF_TEMPLATES_MD) -> dict[str, l
     return sektionen
 
 
+def _alle_bekannten_felder(template: str) -> set[str]:
+    """Sammelt alle bekannten Feldnamen fuer ein Template (Pflicht + Optional)."""
+    if template == "prospero":
+        result = set(lade_pflichtfelder())
+        # Auch optionale Felder parsen
+        ref_text = PROSPERO_FIELDS_MD.read_text(encoding="utf-8")
+        optional_treffer = re.search(
+            r"^## Optionale Felder.*?\n(.*?)(?=^## |\Z)", ref_text, re.M | re.S
+        )
+        if optional_treffer:
+            for zeile in optional_treffer.group(1).splitlines():
+                if zeile.startswith("- "):
+                    result.add(zeile[2:].strip())
+        return result
+    else:
+        result: set[str] = set()
+        for namen in lade_osf_felder(template).values():
+            result.update(namen)
+        return result
+
+
 # ---------------------------------------------------------------------------
 # Protokoll rendern (AC2, AC4, AC5, AC6)
 # ---------------------------------------------------------------------------
@@ -207,27 +228,27 @@ def rendere_protokoll(plan: dict[str, Any]) -> str:
     if plan.get("begruendung"):
         zeilen += [f"Begründung der Vorlagenwahl: {plan['begruendung']}", ""]
 
-    # Sammle bekannte Feldnamen je nach Template
-    bekannte_felder: set[str] = set()
+    # Rendere Felder je nach Template, erhalte aber die Reihenfolge aus der Referenz
     if template == "prospero":
         zeilen += ["## Pflichtfelder (PROSPERO)", ""]
-        bekannte_felder = set(lade_pflichtfelder())
-        for name in bekannte_felder:
+        # Reihenfolge aus der Referenzdatei erhalten (nicht aus Set iterieren!)
+        pflichtfelder_liste = lade_pflichtfelder()
+        for name in pflichtfelder_liste:
             zeilen += _feld_block(name, felder.get(name))
     else:
         for sektion, namen in lade_osf_felder(template).items():
             zeilen += [f"## {sektion}", ""]
-            bekannte_felder.update(namen)
             for name in namen:
                 zeilen += _feld_block(name, felder.get(name))
 
-    # Fehler, wenn es unbekannte Feldschlüssel gibt (Datenverlust verhindern)
-    unbekannte = set(felder.keys()) - bekannte_felder
+    # Validiere, dass keine unbekannten Feldschlüssel vorhanden sind
+    bekannte = _alle_bekannten_felder(template)
+    unbekannte = set(felder.keys()) - bekannte
     if unbekannte:
         raise ValueError(
             f"Plan enthält unbekannte Feldschlüssel, die im Template '{template}' nicht "
             f"existieren: {', '.join(sorted(unbekannte))}. Diese würden ohne Fehler "
-            f"verworfen; bitte überprüfen Sie die Feldnamen."
+            f"verworfen; bitte überprüfen Sie die Feldnamen gegen die Referenzdatei."
         )
 
     zeilen += [
