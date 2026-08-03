@@ -10,6 +10,21 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **node:sqlite gegen Python-Subprozess gemessen und dokumentiert (#600):**
+  CI läuft jetzt auf Node 22 (`node:sqlite` unflagged ab 22.13.0) statt Node
+  20. Ein Mikrobenchmark (`scripts/dev/bench_vault_bridge.mjs`) belegt den
+  reinen Zugriffswegs-Unterschied — Median über 20 Wiederholungen:
+  Python-Subprozess ~22,7 ms gegen `node:sqlite` in-process ~0,9 ms (~25x).
+  Der Python-Subprozess bleibt trotzdem der Zugriffsweg der Node-Hooks: die
+  drei Aufrufer der Bridge (`post-tool-use-decisions.mjs`,
+  `mid-session-reinforcement.mjs`, `context-fidelity-guard.mjs`) rufen keine
+  rohen SELECTs auf, sondern Geschäftslogik, die ausschließlich in
+  `academic_vault` existiert (Dedup/Supersede, FTS5-Suche, Fuzzy-Matching) —
+  eine Migration würde diese Logik in JavaScript duplizieren und damit genau
+  die Divergenz zwischen zwei Speicherorten riskieren, derentwegen die Brücke
+  (#527) überhaupt existiert. Begründung im Modulkopf von
+  `hooks/lib/vault-bridge.mjs`.
+
 - **Vault-Snapshot auch am Sitzungsende (#625):** Der einzige automatische
   Snapshot hing bislang am `PreCompact`-Hook, der nur in langen Sitzungen
   feuert — kurze Sitzungen erzeugten über Wochen keinen einzigen Snapshot.
