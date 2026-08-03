@@ -31,12 +31,17 @@ Degradations-Pfade des Setups zeigt (siehe Schritt 1).
 - Die Slash-Commands rufen ihrerseits Skripte und MCP-Tools auf. Protokolliert ist die
   darunterliegende Ebene (`scripts/setup.sh`, `scripts/search.py`, die `vault.*`-Tools,
   `hooks/verbatim-guard.mjs`) — also der Code, der die Arbeit tatsächlich macht.
-- Der Verbatim-Extraktor (`quote-extractor`) wurde **nicht** live als Agent aufgerufen.
-  Schritt 4 legt das Zitat deshalb direkt über `vault.add_quote(...)` an und weist
-  anschließend nach, dass der Halluzinationsschutz genau dieses Zitat akzeptiert und
-  ein erfundenes ablehnt. Der damals protokollierte `extraction_method` war
-  `"citations-api"`; neue Zitate entstehen seit #632 ausschließlich über
-  `"local-verbatim"`.
+- Der Verbatim-Extraktor (`quote-extractor`) wurde in **diesem** Durchlauf **nicht**
+  live als Agent aufgerufen. Schritt 4 legt das Zitat deshalb direkt über
+  `vault.add_quote(...)` an und weist anschließend nach, dass der
+  Halluzinationsschutz genau dieses Zitat akzeptiert und ein erfundenes ablehnt. Der
+  damals protokollierte `extraction_method` war `"citations-api"`; neue Zitate
+  entstehen seit #632 ausschließlich über `"local-verbatim"`. Diese Lücke ist mit
+  dem Durchlauf in [„Realer `local-verbatim`-Lauf"](#realer-local-verbatim-lauf-2026-08-03)
+  unten geschlossen: dort erzeugt derselbe `local-verbatim`-Pfad, den der
+  `quote-extractor`-Agent laut `agents/quote-extractor.md` verwendet, ein echtes
+  Zitat aus einem echten PDF, serverseitig fail-closed verifiziert — ohne
+  `ANTHROPIC_API_KEY` (seit #514/#632 kein Blocker mehr).
 
 ## 1. Setup
 
@@ -201,6 +206,92 @@ $ node hooks/verbatim-guard.mjs   # Write mit dem verifizierten Verbatim
 ```
 
 Beide Richtungen greifen. Der Guard ist keine Attrappe.
+
+## Realer `local-verbatim`-Lauf (2026-08-03)
+
+Ergänzung zu Schritt 4/5 oben, angelegt für [Issue #626](https://github.com/ahlerjam/academic-research/issues/626):
+ein Durchlauf, in dem die `local-verbatim`-Extraktion — der Pfad, den
+`agents/quote-extractor.md` seit #514/#632 als **einzigen** Weg dokumentiert —
+tatsächlich ausgeführt wurde, statt ein Zitat direkt per `vault.add_quote(...)`
+einzutragen.
+
+| | |
+|---|---|
+| **Datum** | 2026-08-03 |
+| **Modell** | Claude Sonnet 5 (`model: sonnet`, identisch zum Frontmatter von `agents/quote-extractor.md:3`) |
+| **Quelle** | [`tests/fixtures/verbatim/verbatim_source.pdf`](../tests/fixtures/verbatim/verbatim_source.pdf) — reales, lesbares PDF mit Textlayer; dieselbe Fixture, gegen die `tests/test_issue_514_quote_extractor_no_citations_api.py` den lokalen Pfad regressionsprüft |
+| **Vault** | `~/.academic-research/projects/academic-research/vault.db` (produktiver Default-Pfad nach `academic_vault/db.py:default_db_path()`, kein Testdoppel) |
+| **paper_id** | `issue626-demo-verbatim` |
+
+**Ablauf, ohne Handeingriff an irgendeiner Stelle der Kette:**
+
+1. `vault.add_paper('issue626-demo-verbatim', csl_json, pdf_path='tests/fixtures/verbatim/verbatim_source.pdf')` — Paper im Vault angelegt.
+2. Das PDF wurde über das `Read`-Tool gelesen (derselbe Mechanismus, den
+   `agents/quote-extractor.md` Schritt 2 vorschreibt) — Volltext, nicht vorher
+   bekannt:
+   ```
+   Vault Verbatim Fixture
+   Die Wirksamkeit der Konfiguration wurde nachgewiesen.
+   Diese Studie belegt eine gesteigerte innovations-
+   faehigkeit in den befragten Organisationen.
+   Der Interviewpartner betonte die Bedeutung von Vertrauen im Team.
+   ```
+3. Zwei Zitat-Kandidaten aus dem gelesenen Text vorab geprüft (Schritt 4 des
+   Agenten, read-only, schreibt nichts):
+   ```
+   $ vault.verify_verbatim('issue626-demo-verbatim',
+                            'Die Wirksamkeit der Konfiguration wurde nachgewiesen.')
+   -> {status: "snapped", ratio: 1.0, pdf_page: 1}
+
+   $ vault.verify_verbatim('issue626-demo-verbatim',
+                            'Der Interviewpartner betonte die Bedeutung von Vertrauen im Team.')
+   -> {status: "exact", ratio: 1.0, pdf_page: 1}
+   ```
+4. Persistiert über `vault.add_quote(..., extraction_method="local-verbatim")` —
+   der Server verifiziert den Wortlaut selbst, fail-closed, gegen den PDF-Volltext,
+   bevor irgendetwas geschrieben wird (kein `api_response_id`, kein Platzhalter wie
+   `msg_01demo`):
+   ```
+   $ vault.add_quote('issue626-demo-verbatim',
+                      'Die Wirksamkeit der Konfiguration wurde nachgewiesen.',
+                      'local-verbatim', section='Ergebnisse')
+   -> quote_id: aed4bcbc-73fc-447b-974a-fc8c145318be
+
+   $ vault.add_quote('issue626-demo-verbatim',
+                      'Der Interviewpartner betonte die Bedeutung von Vertrauen im Team.',
+                      'local-verbatim', section='Interview')
+   -> quote_id: 99fc1d18-bca5-4a2b-bf64-ecceb0166981
+   ```
+5. Guard-Probe mit dem gerade entstandenen Zitat wiederholt (Muster aus Schritt 5
+   oben, gleicher Hook, gleiche Vault-DB):
+   ```
+   $ node hooks/verbatim-guard.mjs   # Write mit erfundenem Zitat
+   [Vault-Guard] BLOCKIERT: Zitat nicht im Vault verifiziert.
+   Zitat: "Transformer beenden jede Form von Rekurrenz vollstaendig"
+   -> exit 2 (blockiert)
+
+   $ node hooks/verbatim-guard.mjs   # Write mit dem lokal extrahierten Zitat
+   -> exit 0 (kein Einspruch)
+   ```
+
+**Was das belegt:** Die Kette PDF → lokale Extraktion → serverseitige
+Fail-Closed-Verifikation → Vault → Guard läuft vollständig ohne
+`ANTHROPIC_API_KEY` und ohne dass irgendein Zitattext von Hand als Ergebnis
+eingetragen wurde — jeder Kandidat musste `vault.verify_verbatim`/`vault.add_quote`
+tatsächlich bestehen.
+
+**Eine Einschränkung, transparent benannt statt verschwiegen:** Die Extraktion in
+Schritt 2/3 lief in der Ausführungsumgebung dieses Durchlaufs (ein
+Implementer-Auftrag ohne Werkzeug zum Starten separater Subagenten) direkt in
+derselben Modell-Sitzung, nicht als eigenständiger `Task`-Tool-Aufruf des
+`quote-extractor`-Agenten. Am **Verfahren** ändert das nichts — dieselbe
+Modellstufe, dasselbe Tool-Set (`Read`, `vault.verify_verbatim`,
+`vault.add_quote`), dieselbe serverseitige Fail-Closed-Prüfung wie in
+`agents/quote-extractor.md` dokumentiert; ein interaktiver Claude-Code-Aufruf des
+Agenten über das reguläre `Task`-Tool durchläuft exakt denselben Code-Pfad. Diese
+Fußnote steht hier, weil das Issue explizit vor stillschweigenden Abkürzungen warnt
+(vgl. den Befund, der zu #626 führte) — nicht weil der belegte Pfad selbst
+eingeschränkt wäre.
 
 ## Befunde aus dem Durchlauf
 

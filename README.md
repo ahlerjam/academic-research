@@ -30,10 +30,12 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 [docs/assets/quickstart.cast](docs/assets/quickstart.cast).</sub>
 
 > [!WARNING]
-> **Zitate trotzdem gegenprüfen.** Der `citation-extraction`-Skill arbeitet mit der
-> Claude-Citations-API und liefert seitengenaue Belege — trotzdem können Modelle
-> halluzinieren. Prüfe jedes Zitat im Originaltext, bevor es in deine Arbeit wandert.
-> Das gilt besonders für Seitenzahlen, Autorennamen und Erscheinungsjahre.
+> **Zitate trotzdem gegenprüfen.** Der `citation-extraction`-Skill liest PDFs lokal
+> und prüft jeden Wortlaut serverseitig fail-closed gegen den PDF-Volltext
+> (`local-verbatim`, kein eigener API-Key nötig) — trotzdem kann die Auswahl der
+> Zitate danebenliegen. Prüfe jedes Zitat im Originaltext, bevor es in deine Arbeit
+> wandert. Das gilt besonders für Seitenzahlen, Autorennamen und Erscheinungsjahre.
+> Die Claude-Citations-API bleibt ein optionaler Alt-Pfad für Bestandszitate.
 
 ---
 
