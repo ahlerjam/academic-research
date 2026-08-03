@@ -25,21 +25,17 @@ ruft `${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/export_thesis.py` auf:
    (`%%CONTENT%%`-Platzhalter; fehlt sie, Export ohne Vorlage)
 4. `build_bib.py` → `.bib` aus Vault, Pfad unabhängig von `--output`
 
-## Abgrenzung zu citation-extraction
+## Abgrenzung zu citation-extraction und word-export
 
-`latex-export` = vollständiger `.bib`-Export aller Vault-Papers + `.tex`-Konvertierung.
-`citation-extraction` = Einzelzitat aus PDF / Inline-Zitat belegen.
+`latex-export` = vollständiger `.bib`-Dump aller Vault-Papers + `.tex`-Konvertierung.
+`citation-extraction` = Einzelzitat aus PDF (one-shot), keine Vault-weite Bibliography.
+`word-export` = Word/PDF statt `.tex`/`.bib`, siehe dort.
 
 ## Fehlerpfade
 
 - **Pandoc fehlt:** Custom-Renderer-Fallback (kein Absturz). Pandoc installieren empfehlen.
 - **Vault leer:** Leere `.bib` + Meldung „Vault leer – Papers via `add` hinzufügen."
 - **Template nicht gefunden:** Ausgabe ohne Vorlage + Meldung „Template `<uni>` fehlt."
-
-## BibTeX-Abgrenzung
-
-BibTeX hier = Vault-weiter Bibliography-Dump (alle Papers).
-Einzelzitat aus PDF (one-shot) → `citation-extraction`.
 
 ## Verbatim-Guard
 
