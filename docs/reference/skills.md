@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **41 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **42 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -48,6 +48,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `chapter-writer` | *„Kapitel schreiben"*, *„Einleitung"*, *„Fazit"* | Kapitel-Entwürfe mit Vault-Zitaten |
 | `style-evaluator` | *„Stil prüfen"*, *„KI-Erkennung"* | 9-Metriken-Analyse + Anti-KI-Detection |
 | `plagiarism-check` | *„Plagiat prüfen"*, *„zu nah am Original"* | N-Gramm-Overlap gegen Vault-Quellen |
+| `peer-review` | *„Manuskript begutachten"*, *„Peer-Review-Gutachten verfassen"* | Strukturiertes Gutachten zu einem fremden Manuskript: 5 Bereiche, getrennte Blöcke Redaktion/Autor:innen, genau eine Empfehlung ([SKILL.md](../../skills/peer-review/SKILL.md)) |
 | `humanizer-de` | *„humanisieren"*, *„menschlicher klingen"* | Anti-KI-Audit mit Severity-Ranking |
 
 ## Methodik-Skills
