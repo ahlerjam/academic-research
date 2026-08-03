@@ -31,8 +31,18 @@ nicht „der Skill liefert die versprochene Qualität".
 zusätzlichen bestandenen Tests sind die drei neuen Suiten dieses Issues
 (Strategie-Guard, auto-download-Routing, humanizer-Tell-Dichte); der eine
 zusätzliche Skip ist die Kontroll-Quelle `general-06`, die per Definition
-keinen Tier erreicht. **Die 147 API-gateten Skips sind unverändert geblieben** —
-dieses Issue hat Transparenz geschaffen, keine LLM-Qualität gemessen.
+keinen Tier erreicht. Die 147 API-gateten Skips waren zu dem Zeitpunkt
+unverändert geblieben — dieses Issue hat Transparenz geschaffen, keine
+LLM-Qualität gemessen.
+
+**Heutiger Stand** (Issue #619, reproduzierbar mit `uv run pytest
+tests/evals/ -q` ohne `ANTHROPIC_API_KEY`): `247 passed, 186 skipped`. Seit
+#390 sind weitere Suiten dazugekommen (u. a. #524, #626, #628, #630); die
+Skip-Zahl ist gegenüber dem #390-Snapshot gestiegen, weil jede neue
+`structural`-Komponente eigene API-gatete Tests mitbringt. Diese Zahl wird
+durch `test_skip_count_matches_real_pytest_run` gegen einen echten
+Subprozesslauf gehalten, statt als Prosa zu veralten (#619 entstand, weil die
+vorherige Fassung dieses Satzes bereits um 34 veraltet war).
 
 Dieses Dokument benennt deshalb für **jede** Komponente unter `evals/` genau
 einen Zustand — und der Guard erzwingt, dass keine Komponente stillschweigend
@@ -58,7 +68,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `auto-download` | metric | `evals/auto-download/runner.py`, `tests/evals/test_auto_download_routing.py` | Routing der 20 kuratierten Quellen gegen `resolve_pdf_url()`, Tier-Stubs statt Netz. `expected_hit` bleibt netzabhängig und ungeprüft. |
 | `humanizer-de-pipeline` | metric | `evals/humanizer-de-pipeline/runner.py`, `tests/evals/test_humanizer_pipeline_evals.py` | Tell-Dichte (Marker/100 Wörter) je Vorher/Nachher-Draft, inkl. Detection-Floor und Substanz-Quotient als Negativkontrollen. |
 | `verbatim-guard` | metric | `evals/verbatim-guard/runner.py`, `tests/evals/test_verbatim_guard_evals.py` | 10 Vault-Lookup-Cases gegen `search_quote_text()`; echte vs. erfundene Zitate, FPR 0 %. |
-| `524-nli-prefilter` | structural | `evals/524-nli-prefilter/runner.py`, `tests/evals/test_nli_prefilter_evals.py` | Investigation (Issue #524): prueft, ob HHEM-2.1-Open (Apache-2.0) oder mDeBERTa-v3-XNLI (MIT) als lokaler NLI-Vorfilter fuer DE-Kapitelbehauptung/EN-Quellkontext taugt. Struktur-Checks (>= 30 Cases, beide Labels, Sprachkennzeichnung) laufen immer ohne Netz; der Inferenzlauf braucht ~1 GB Modellgewichte-Download (HHEM 418 MB + mDeBERTa 552 MB) und ist darum nicht hermetisch, `structural` statt `metric`. Nachfahrbar mit `RUN_LIVE_NLI_PREFILTER=1 uv run pytest tests/evals/test_nli_prefilter_evals.py`. Zielsystem `quote-fidelity-auditor` (#523) ist aktuell wegen eines CI-Hangs revertet (PR #582/#584) — Empfehlung bleibt Vorarbeit ohne Produktiv-Anschlusspunkt, dokumentiert als Kommentar an #524. |
+| `524-nli-prefilter` | structural | `evals/524-nli-prefilter/runner.py`, `tests/evals/test_nli_prefilter_evals.py` | Investigation (Issue #524): prueft, ob HHEM-2.1-Open (Apache-2.0) oder mDeBERTa-v3-XNLI (MIT) als lokaler NLI-Vorfilter fuer DE-Kapitelbehauptung/EN-Quellkontext taugt. Struktur-Checks (>= 30 Cases, beide Labels, Sprachkennzeichnung) laufen immer ohne Netz; der Inferenzlauf braucht ~1 GB Modellgewichte-Download (HHEM 418 MB + mDeBERTa 552 MB) und ist darum nicht hermetisch, `structural` statt `metric`. Nachfahrbar mit `RUN_LIVE_NLI_PREFILTER=1 uv run pytest tests/evals/test_nli_prefilter_evals.py`. Zielsystem `quote-fidelity-auditor` (#523) liegt auf main (PR #582); der Revert-PR #584 beruhte auf einer Fehlmessung (Post-Merge-Lauf war `cancelled`, nicht `failure`) und wurde geschlossen — ein Produktiv-Anschlusspunkt fuer einen Vorfilter existiert also, siehe `evals/524-nli-prefilter/README.md`. |
 | `abstract-generator` | structural | `tests/evals/test_abstract_generator_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Quality-Prompts bewerten generierten Fließtext; ohne LLM-Aufruf gibt es dafür kein deterministisches Surrogat. Läuft nur mit `ANTHROPIC_API_KEY`, sonst Skip. |
 | `academic-context` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Konversationsverhalten beim Kontext-Setup — nicht ohne Modell messbar; ohne Key Skip. |
 | `advisor` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Beratungsqualität ist ein Urteil über freien Text, kein prüfbares Artefakt; ohne Key Skip. |
@@ -111,14 +121,17 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 3 × `metric`, 45 × `structural`, 0 × `removed` (Stand Issue #446:
+**Bilanz:** 3 × `metric`, 52 × `structural`, 0 × `removed` (Stand Issue #446:
 `word-export`/`slide-export` neu, beide `structural`; Stand Issue #454:
 `sparring-partner` neu, `structural` — die Transkripte stammen aus echten,
 blinden Modellaufrufen gegen vorab committete Kriterien, aber pro pytest-Lauf
 wird kein Modell befragt; gemessen wird offline die Unterscheidungskraft der
 Kriterien gegen neun Negativkontrollen, siehe Zeile oben; Stand Issue #472:
 `defense-prep` neu, `structural` — Kernaussage- und Fragenkatalog-Qualität
-bleiben Modellurteile, die strukturellen Vorgaben deckt `tests/test_defense_prep.py`).
+bleiben Modellurteile, die strukturellen Vorgaben deckt `tests/test_defense_prep.py`;
+seither sind weitere Verzeichnisse dazugekommen, die Bilanzzahl wird durch
+`test_balance_line_matches_table_counts` gegen die Tabelle gehalten und muss bei
+jedem neuen `structural`-Eintrag mitgepflegt werden).
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).
