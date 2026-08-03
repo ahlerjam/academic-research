@@ -24,6 +24,7 @@ danach höchstens den passenden Report.
 | [`recall-at-k-model-ab-hard-628.md`](recall-at-k-model-ab-hard-628.md) | Momentaufnahme: hartes Recall@10-Goldset mit Themen-Overlap + BGE-M3/e5-large-A/B (#628) |
 | [`recall-at-k-model-ab-hard-628-live-results.json`](recall-at-k-model-ab-hard-628-live-results.json) | Rohdaten des manuellen Live-Laufs zu obigem Report (Per-Query-Aufschlüsselung aller fünf Kandidaten) |
 | [`v6.2-tier-eval.md`](v6.2-tier-eval.md) | Momentaufnahme: Auto-Download-Tier-Pipeline v6.2 |
+| [`2026-08-03-live-fetch-weekly-first-runs.md`](2026-08-03-live-fetch-weekly-first-runs.md) | Momentaufnahme: erste beiden echten `live-fetch-weekly`-Läufe, Auswertung je Fetcher (#612) |
 
 ## Konvention
 

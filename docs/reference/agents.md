@@ -53,7 +53,7 @@ Spalte **Live-Test** hält fest, ob ein wöchentlicher Live-Lauf
 | `nationallizenzen` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | nationallizenzen.de per browser-use | ungeprüft |
 | `ebook-central` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | ebookcentral.proquest.com per browser-use | ungeprüft |
 | `cambridge-core` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | cambridge.org/core per browser-use + Shibboleth | getestet (`test_issue_449_live_fetch.py`) |
-| `oxford-academic` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | academic.oup.com per browser-use + Shibboleth/OpenAthens | getestet (`test_issue_449_live_fetch.py`) |
+| `oxford-academic` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | academic.oup.com per browser-use + Shibboleth/OpenAthens | getestet (`test_issue_449_live_fetch.py`) — deckt nur den anonymen No-Login-Pfad ab, seit 2026-08-03 durch Cloudflare-Challenge gesperrt (Issue #612); der SSO-Pfad des Agenten selbst ist ungeprüft |
 | `jstor` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | jstor.org per browser-use + Shibboleth (hohes Anti-Scraping) | getestet (`test_issue_449_live_fetch.py`) |
 | `kvk-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | KVK Meta-Suche (80+ Kataloge) | n/a — kein Volltext-Host |
 | `hathitrust-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | catalog.hathitrust.org per browser-use, nur Full-View-Digitalisate | getestet (`test_issue_450_live_fetch.py`) |
