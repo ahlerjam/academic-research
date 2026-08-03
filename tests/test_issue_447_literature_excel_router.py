@@ -234,7 +234,8 @@ def test_readme_skills_doc_does_not_list_bare_excel_trigger():
 
 
 # --------------------------------------------------------------------------
-# Skill-Count-Synchronisation (40 -> 41, Issue #610: quantitative-analysis neu;
+# Skill-Count-Synchronisation (41 -> 42, Issue #607: preregistration neu;
+# zuvor 40 -> 41, Issue #610: quantitative-analysis neu;
 # zuvor 39 -> 40, Issue #605: ai-disclosure neu; zuvor
 # 37 -> 39, Issue #473: instrument-design + qualitative-coding neu; zuvor
 # 36 -> 37, Issue #392: latex-layout-auditor neu; zuvor 35 -> 36, Issue #472:
@@ -248,14 +249,14 @@ def test_skill_count_is_41_across_docs_and_manifests():
     skill_count = len(
         [p for p in (REPO_ROOT / "skills").glob("*/SKILL.md") if p.parent.name != "_common"]
     )
-    assert skill_count == 41, f"Erwartet 41 Skills, gefunden {skill_count}."
+    assert skill_count == 42, f"Erwartet 42 Skills, gefunden {skill_count}."
 
-    assert "skills-41" in README.read_text(encoding="utf-8")
-    assert "41 Skills" in _docs.SKILLS_DOC.read_text(encoding="utf-8")
-    assert "41 Skills" in AGENTS_MD.read_text(encoding="utf-8")
+    assert "skills-42" in README.read_text(encoding="utf-8")
+    assert "42 Skills" in _docs.SKILLS_DOC.read_text(encoding="utf-8")
+    assert "42 Skills" in AGENTS_MD.read_text(encoding="utf-8")
 
     plugin_data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-    assert "41" in plugin_data["description"]
+    assert "42" in plugin_data["description"]
 
     marketplace_data = json.loads(MARKETPLACE_JSON.read_text(encoding="utf-8"))
-    assert "41" in marketplace_data["plugins"][0]["description"]
+    assert "42" in marketplace_data["plugins"][0]["description"]

@@ -1,6 +1,6 @@
 {
   "abstract-generator": 10933,
-  "academic-context": 8178,
+  "academic-context": 8778,
   "advisor": 9366,
   "ai-disclosure": 9500,
   "anchor-paper-survey": 11060,
@@ -22,8 +22,9 @@
   "material-passport": 7500,
   "methodology-advisor": 10228,
   "notebook-bundle": 5500,
-  "parallel-screening": 8883,
+  "parallel-screening": 9138,
   "plagiarism-check": 7901,
+  "preregistration": 9400,
   "prisma-flow": 6257,
   "qualitative-coding": 8809,
   "quantitative-analysis": 9352,

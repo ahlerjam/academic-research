@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **41 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **42 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -54,6 +54,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 
 | Skill | Aktiviert bei | Beschreibung |
 |-------|--------------|-------------|
+| `preregistration` | *„Präregistrierung"*, *„PROSPERO-Anmeldung"*, *„OSF-Registrierung"* | Studienprotokoll vor der Erhebung: schlägt anhand des Vorhabens (Review/quantitativ/qualitativ/Sekundärdaten) eine Vorlage vor, erzwingt bei PROSPERO die dortigen Pflichtfelder, legt Suchstrategie/Kriterien für `parallel-screening` und `query-generator` in `./academic_context.md` ab ([SKILL.md](../../skills/preregistration/SKILL.md)) |
 | `prisma-flow` | *„PRISMA"*, *„Systematic Review"*, *„Flussdiagramm"* | Mermaid-Flow + 27-Punkte-Checkliste |
 | `parallel-screening` | *„viele Treffer screenen"*, *„Screening parallelisieren"*, *„Risk-of-Bias für mehrere Paper"* | Fächert Screening und Verzerrungsbewertung auf Subagents auf, Ledger + Resume + PRISMA-Zähler ([SKILL.md](../../skills/parallel-screening/SKILL.md)) |
 | `material-passport` | *„Material-Passport"*, *„Artefakt sichern"* | Unveränderlicher Repro-Passport |
