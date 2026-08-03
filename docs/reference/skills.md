@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **40 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **41 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -59,6 +59,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `material-passport` | *„Material-Passport"*, *„Artefakt sichern"* | Unveränderlicher Repro-Passport |
 | `instrument-design` | *„Interviewleitfaden erstellen"*, *„Fragebogen entwickeln"* | Erhebungsinstrument aus Forschungsfrage + Methodik, mit Rückverweis-Matrix je Frage ([SKILL.md](../../skills/instrument-design/SKILL.md)) |
 | `qualitative-coding` | *„Transkript kodieren"*, *„Kategorien aus dem Material bilden"* | Transkript-Ingest mit belegfähiger Stellenangabe, induktive/deduktive Kategorienbildung, Kodier-Übersicht ([SKILL.md](../../skills/qualitative-coding/SKILL.md)) |
+| `quantitative-analysis` | *„quantitative Auswertung rechnen"*, *„Datensatz auswerten"*, *„t-Test rechnen"* | Eigener Rohdatensatz vom Analyseplan bis zum Protokoll: Deskription, Gruppenvergleich, Zusammenhangsmaß — je mit Voraussetzungsprüfung, Effektstärke und Konfidenzintervall ([SKILL.md](../../skills/quantitative-analysis/SKILL.md)) |
 
 ## Output-Skills (opt-in via `output_targets`)
 

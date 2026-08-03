@@ -142,8 +142,9 @@ quantitativer Daten ist dieser Skill der falsche Ort.
 - `reading-notes` und `extraction-matrix` arbeiten mit **fremder Literatur**;
   dieser Skill ausschließlich mit eigenem Erhebungsmaterial (`source_kind='primary'`).
 - `citation-extraction` zieht Zitate aus PDFs; Transkriptzitate entstehen hier.
-- Statistische Auswertung quantitativer Erhebungen gehört zum
-  Meta-Analyse-Pfad, nicht hierher.
+- Die statistische Auswertung eigener quantitativer Erhebungsdaten gehört zu
+  `quantitative-analysis` — dort mit Voraussetzungsprüfung, Effektstärke und
+  Konfidenzintervall.
 
 ## Personenbezogene Daten
 

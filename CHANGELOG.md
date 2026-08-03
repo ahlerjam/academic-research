@@ -23,6 +23,45 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `material-passport.json`-Dateien validieren rückwirkend nicht mehr gegen
   das neue Schema.
 
+- **Eigene quantitative Auswertung vom Rohdatensatz bis zum Ergebniskapitel
+  (#610):** Zwischen `instrument-design` (Instrument bauen) und
+  `chapter-writer` (Ergebniskapitel schreiben) klaffte bei quantitativen
+  Arbeiten eine Lücke — `meta-analysis` rechnet über **fremde** Studien, für
+  eigene Erhebungsdaten gab es nichts. Neuer Skill `quantitative-analysis` mit
+  dem deterministischen Rechenkern
+  `skills/quantitative-analysis/scripts/analyze.py` (Subkommandos `describe`,
+  `run`, `report`). Umfang der ersten Fassung bewusst begrenzt: Deskription,
+  Gruppenvergleiche (t-Test unabhängig/Welch/gepaart, Mann-Whitney-U,
+  Wilcoxon), Mehrgruppenvergleiche (einfaktorielle ANOVA, Kruskal-Wallis) und
+  Zusammenhangsmaße (χ²-Unabhängigkeitstest, Pearson r, Spearman ρ).
+  Regression, mehrfaktorielle Designs, Post-hoc-Vergleiche und Poweranalyse
+  sind ausdrücklich **nicht** abgedeckt und werden im Skill so benannt, statt
+  von Hand nachgeschoben zu werden.
+  Die drei harten Zusagen des Issues sind strukturell erzwungen, nicht als
+  Prosa: (1) Der Renderer bricht mit `ValueError` ab, sobald einem
+  inferenzstatistischen Ergebnis Effektstärke, Konfidenzintervall oder
+  Voraussetzungsblock fehlt — ein Bericht mit nackten p-Werten kann gar nicht
+  erst entstehen. (2) Jede Voraussetzungsprüfung (Shapiro-Wilk, Levene,
+  erwartete Zellhäufigkeit, Mindestfallzahl) wird mit Kennwert, p-Wert und
+  Verdikt berichtet, auch die erfüllte; eine Verletzung wird im Klartext
+  ausgesprochen und mit benannter Alternative versehen, wechselt das geplante
+  Verfahren aber **nie** still. (3) Reproduzierbarkeit über einen
+  versionierbaren Analyseplan (JSON) plus getrennte Ausgabe: `ergebnisse.json`
+  trägt keinen Zeitstempel und ist zwischen zwei Läufen byte-identisch, alles
+  Laufabhängige (Zeit, Pfade, Python-/numpy-/scipy-Version) steht in
+  `lauf_meta.json`, und `protokoll.md` enthält die vollständige
+  Wiederhol-Kommandozeile samt SHA-256 der Rohdatei.
+  Die Rohdaten bleiben außerhalb des Vaults (ein Datensatz mit tausend Fällen
+  gehört nicht in eine Literatur-Datenbank); in den Vault gehen nur der
+  `papers`-Anker mit `source_kind='primary'`, je Ergebnis eine `figures`-Zeile
+  und jede Verfahrensentscheidung als `decisions`-Eintrag mit
+  `category="auswertung"`. Der Skill formuliert keine inhaltliche Deutung: Das
+  Protokoll weist sie als `Deutung: [vom Autor zu ergänzen]` aus.
+  Neue explizite Runtime-Dependencies `numpy` und `scipy` (lagen bislang nur
+  transitiv über `sentence-transformers` im Environment). Skill-Zähler
+  40 → 41 in README.md, AGENTS.md, plugin.json, marketplace.json und
+  docs/reference/skills.md.
+
 - **Vault-weite, wiederholbare Retraction-Prüfung (#604):** Der bisherige
   Crossref-Retraction-Check lief nur einmalig beim `reading-list-import` und
   erreichte damit weder Papers aus anderen Importwegen (`zotero-import`,
@@ -280,6 +319,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   wieder als Voraussetzung nennt oder `vault.ensure_file` zurückkehrt.
 
 ### Changed
+
+- **Citation-Guard: ein Papers-Scan je Write statt je Beleg (#501):**
+  `VaultDB.find_papers_by_author_year()` las bisher pro Aufruf die komplette
+  `papers`-Tabelle inklusive `json.loads()` je Zeile; `server.verify_citation()`
+  lief je Beleg einzeln, sodass ein Kapitel mit dem vollen Kontingent
+  (`ACADEMIC_CITATION_MAX_PER_WRITE`, Default 100) gegen einen Vault mit
+  einigen tausend Papers 100 Full Scans innerhalb des 10-s-Timeouts von
+  `hooks/verbatim-guard.mjs` auslöste — riss das Timeout, meldete der Hook
+  `unavailable` und alle Belege liefen fail-open mit `[UNVERIFIED]` durch.
+  Neuer Batch-Einstieg `server.verify_citations(db_path, items)` teilt sich
+  eine `VaultDB`-Instanz und genau einen
+  `VaultDB._papers_snapshot()`-Aufruf über alle Belege eines Writes;
+  `verify_citation()` bleibt als dünner Ein-Item-Wrapper mit unverändertem
+  Rückgabeformat erhalten. `hooks/verbatim-guard.mjs::verifyCitationsInVault`
+  ruft jetzt `verify_citations` statt einer Listcomprehension über
+  `verify_citation` je Item auf.
 
 - **`page_offset` wird beim Buch-Import bestätigt statt still gespeichert (#538):**
   `skills/book-handler/SKILL.md` Schritt 2.5 übernahm das Ergebnis von

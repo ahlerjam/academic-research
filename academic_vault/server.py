@@ -28,6 +28,7 @@ from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
 from .decision_log import parse_model_version_text as _parse_model_version_text
 from .embedding_model import get_embedder
+from .health import get_component_status
 
 logger = logging.getLogger(__name__)
 
@@ -882,6 +883,49 @@ def find_quotes(
     return db.find_quotes(paper_id, query, k)
 
 
+def verify_citations(db_path: str, items: list[dict]) -> list[dict]:
+    """Batch-Variante von :func:`verify_citation` (Issue #501).
+
+    Prueft mehrere Belege (Autor/Jahr/Seite) gegen den Vault in EINEM
+    Papers-Scan statt N: ``VaultDB.find_papers_by_author_year()`` liest und
+    parst je Aufruf die komplette ``papers``-Tabelle. Bei N Belegen pro Write
+    (bis ``ACADEMIC_CITATION_MAX_PER_WRITE``, Default 100) summiert sich das
+    innerhalb des 10-s-Timeouts von ``hooks/verbatim-guard.mjs``. Diese
+    Funktion teilt sich eine ``VaultDB``-Instanz und einen einzigen
+    :meth:`~academic_vault.db.VaultDB._papers_snapshot`-Aufruf ueber alle
+    Items; das Matching pro Item laeuft danach nur noch in-memory ueber den
+    bereits geparsten Snapshot (kein O(1)-Lookup, siehe Docstring von
+    :meth:`~academic_vault.db.VaultDB._match_papers_in_snapshot` --
+    ``normalize_family_name()`` liefert ein Set aus Schreibvarianten, das sich
+    nicht per Dict-Key exakt cachen laesst).
+
+    ``items``: Liste von ``{"family": str, "year": int, "page": int | None}``.
+    Rueckgabe: Liste von ``{"status": ..., "paper_ids": [...]}`` in derselben
+    Reihenfolge wie ``items`` -- Status-Bedeutung siehe :func:`verify_citation`.
+    """
+    db = VaultDB(db_path)
+    snapshot = db._papers_snapshot()
+    results: list[dict] = []
+    for item in items:
+        papers = db._match_papers_in_snapshot(snapshot, item["family"], int(item["year"]))
+        if not papers:
+            results.append({"status": "no-match", "paper_ids": []})
+            continue
+
+        paper_ids = [p["paper_id"] for p in papers]
+        page = item.get("page")
+        if page is None:
+            results.append({"status": "verified", "paper_ids": paper_ids})
+            continue
+
+        coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
+        if any(c in ("covered", "unknown") for c in coverages):
+            results.append({"status": "verified", "paper_ids": paper_ids})
+        else:
+            results.append({"status": "page-mismatch", "paper_ids": paper_ids})
+    return results
+
+
 def verify_citation(
     db_path: str,
     family: str,
@@ -893,6 +937,7 @@ def verify_citation(
     Kein MCP-Tool-Dekorator: die Funktion wird ausschliesslich aus
     ``hooks/verbatim-guard.mjs`` per ``python3 -c``-Subprozess aufgerufen
     (analog zu :func:`search_quote_text` und :func:`find_figure_by_caption`).
+    Duenner Ein-Item-Wrapper ueber :func:`verify_citations` (Issue #501).
 
     Rueckgabe ``{"status": ..., "paper_ids": [...]}`` mit Status:
       ``"verified"``      — Autor/Jahr im Vault und (falls angegeben) Seite gedeckt
@@ -903,19 +948,7 @@ def verify_citation(
                             Seitenzahlen nicht pruefen und wird uebersprungen.
       ``"no-match"``      — kein Paper mit dieser Autor/Jahr-Kombination.
     """
-    db = VaultDB(db_path)
-    papers = db.find_papers_by_author_year(family, int(year))
-    if not papers:
-        return {"status": "no-match", "paper_ids": []}
-
-    paper_ids = [p["paper_id"] for p in papers]
-    if page is None:
-        return {"status": "verified", "paper_ids": paper_ids}
-
-    coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
-    if any(c in ("covered", "unknown") for c in coverages):
-        return {"status": "verified", "paper_ids": paper_ids}
-    return {"status": "page-mismatch", "paper_ids": paper_ids}
+    return verify_citations(db_path, [{"family": family, "year": year, "page": page}])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1236,6 +1269,15 @@ def get_stats(db_path: str) -> dict:
         "paper_count": paper_count,
         "quote_count": quote_count,
     }
+
+
+def component_status(db_path: str) -> dict:
+    """Zustandsausgabe fuer die optionalen Vault-Bestandteile (Issue #624).
+
+    Meldet je Embedding-Modell, sqlite-vec und FTS5, ob geladen und welche
+    Funktion bei Nichtladen fehlt -- siehe :func:`academic_vault.health.get_component_status`.
+    """
+    return get_component_status(db_path)
 
 
 def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
@@ -2197,6 +2239,11 @@ def _build_mcp_server():
     def _vault_stats() -> dict:
         """Counts: paper_count, quote_count."""
         return get_stats(db_path)
+
+    @mcp.tool(name="vault.component_status")
+    def _vault_component_status() -> dict:
+        """Zustand optionaler Bestandteile: Embedding-Modell, sqlite-vec, FTS5 (#624)."""
+        return component_status(db_path)
 
     @mcp.tool(name="vault.set_ocr_done")
     def _vault_set_ocr_done(paper_id: str, value: int = 1) -> None:
