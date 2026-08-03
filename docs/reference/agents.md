@@ -28,26 +28,40 @@ Der `book-fetcher` ist der Master-Orchestrator; er entscheidet, welche Site-Agen
 welcher Reihenfolge probiert werden. Details zur Fallback-Kette in
 [commands.md](commands.md#academic-researchfetch).
 
-| Agent | Model | Genutzt von | Dispatch | Aufgabe |
-|-------|-------|-------------|----------|---------|
-| `book-fetcher` | Sonnet | `/fetch` | automatisch via `/fetch` | Master-Orchestrator: entscheidet Fallback-Reihenfolge für Site-Subagenten |
-| `tib-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | tib.eu per browser-use |
-| `springer-book` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | link.springer.com per browser-use + HAN |
-| `oapen-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | oapen.org per browser-use |
-| `doabooks-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | directory.doabooks.org per browser-use |
-| `degruyter` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | degruyter.com per browser-use + Shibboleth |
-| `nationallizenzen` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | nationallizenzen.de per browser-use |
-| `ebook-central` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | ebookcentral.proquest.com per browser-use |
-| `cambridge-core` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | cambridge.org/core per browser-use + Shibboleth |
-| `oxford-academic` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | academic.oup.com per browser-use + Shibboleth/OpenAthens |
-| `jstor` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | jstor.org per browser-use + Shibboleth (hohes Anti-Scraping) |
-| `kvk-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | KVK Meta-Suche (80+ Kataloge) |
-| `hathitrust-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | catalog.hathitrust.org per browser-use, nur Full-View-Digitalisate |
-| `internetarchive-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | archive.org/openlibrary.org per browser-use, kein Export von Borrow/CDL-Titeln |
-| `mdz-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | digitale-sammlungen.de (Münchener Digitalisierungszentrum) per browser-use |
-| `generic-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | Universeller Plattform-Navigator: 5 Seitenzustände, Viewer-/Embed-Erkennung, Profil-Lizenzroute, hartes Schritt-Budget |
-| `auth-helper` | Sonnet | `book-fetcher` (bei Login-Wall) | automatisch via `book-fetcher` | HAN / Shibboleth-WAYF / EZproxy Login-Flow |
-| `scihub-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` (opt-in) | SciHub-Tier — läuft nur bei `scihub_optin: true` |
+Von den 28 Agents greifen 16 als Site-Agent direkt auf fremde Verlags- oder
+Archivseiten zu, plus `auth-helper` als Grenzfall (führt SSO-Logins gegen
+Verlags-/Hochschulseiten aus, ist aber kein eigener Site-Agent). `book-fetcher`
+selbst ruft keine fremde Seite auf — er ist reiner Dispatcher (Issue #612). Die
+Spalte **Live-Test** hält fest, ob ein wöchentlicher Live-Lauf
+(`.github/workflows/live-fetch-weekly.yml`) den Zugriffsweg belegt:
+
+- **getestet** — verweist auf die konkrete Testdatei.
+- **ungeprüft** — es existiert (noch) kein Live-Test.
+- **n/a — kein Volltext-Host** — der Agent liefert strukturell kein PDF (Meta-Suche).
+- **n/a — Dispatcher** — der Agent ruft selbst keine fremde Seite auf.
+- **bewusst ungetestet (Opt-in)** — rechtlich heikler Zugriffsweg, Default OFF;
+  ein Live-Test würde den Opt-in-Charakter unterlaufen (Scope-Out Issue #603).
+
+| Agent | Model | Genutzt von | Dispatch | Aufgabe | Live-Test |
+|-------|-------|-------------|----------|---------|-----------|
+| `book-fetcher` | Sonnet | `/fetch` | automatisch via `/fetch` | Master-Orchestrator: entscheidet Fallback-Reihenfolge für Site-Subagenten | n/a — Dispatcher |
+| `tib-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | tib.eu per browser-use | ungeprüft |
+| `springer-book` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | link.springer.com per browser-use + HAN | ungeprüft |
+| `oapen-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | oapen.org per browser-use | ungeprüft |
+| `doabooks-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | directory.doabooks.org per browser-use | ungeprüft |
+| `degruyter` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | degruyter.com per browser-use + Shibboleth | ungeprüft |
+| `nationallizenzen` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | nationallizenzen.de per browser-use | ungeprüft |
+| `ebook-central` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | ebookcentral.proquest.com per browser-use | ungeprüft |
+| `cambridge-core` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | cambridge.org/core per browser-use + Shibboleth | getestet (`test_issue_449_live_fetch.py`) |
+| `oxford-academic` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | academic.oup.com per browser-use + Shibboleth/OpenAthens | getestet (`test_issue_449_live_fetch.py`) |
+| `jstor` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | jstor.org per browser-use + Shibboleth (hohes Anti-Scraping) | getestet (`test_issue_449_live_fetch.py`) |
+| `kvk-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | KVK Meta-Suche (80+ Kataloge) | n/a — kein Volltext-Host |
+| `hathitrust-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | catalog.hathitrust.org per browser-use, nur Full-View-Digitalisate | getestet (`test_issue_450_live_fetch.py`) |
+| `internetarchive-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | archive.org/openlibrary.org per browser-use, kein Export von Borrow/CDL-Titeln | getestet (`test_issue_450_live_fetch.py`) |
+| `mdz-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | digitale-sammlungen.de (Münchener Digitalisierungszentrum) per browser-use | getestet (`test_issue_450_live_fetch.py`) |
+| `generic-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | Universeller Plattform-Navigator: 5 Seitenzustände, Viewer-/Embed-Erkennung, Profil-Lizenzroute, hartes Schritt-Budget | ungeprüft |
+| `auth-helper` | Sonnet | `book-fetcher` (bei Login-Wall) | automatisch via `book-fetcher` | HAN / Shibboleth-WAYF / EZproxy Login-Flow | ungeprüft |
+| `scihub-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` (opt-in) | SciHub-Tier — läuft nur bei `scihub_optin: true` | bewusst ungetestet (Opt-in) |
 
 Site-Agents wie `degruyter` oder `ebook-central` können `auth-helper` nicht selbst
 starten (kein `Agent(auth-helper)`-Tool in ihrer Frontmatter) — sie melden nur eine
