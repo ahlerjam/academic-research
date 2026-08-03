@@ -10,6 +10,27 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Active Learning für das Titel-/Abstract-Screening (#602):** Neu ist
+  `skills/parallel-screening/scripts/active_learning.py` — ein lokal
+  trainierter Klassifikator (multinomiale Naive Bayes mit Laplace-Glättung,
+  reine Standardbibliothek, kein Netz, kein Schlüssel), der aus den bereits
+  gefällten `include`/`exclude`-Urteilen lernt und die noch offene Restliste
+  umsortiert. Die Rückgabe ist stets eine Permutation der Eingabe: nichts wird
+  ausgeschlossen, nichts übersprungen, nichts abgebrochen — Fälle ohne Titel
+  und Abstract behalten ihre Ursprungsposition. Nachtrainiert wird in
+  Intervallen (Default alle 10 Urteile), jede Umsortierung hängt eine Zeile an
+  `$SESSION_DIR/active_learning_log.jsonl` an (Trainingsgrundlage,
+  Modellkennung, vollständige Reihenfolge). `progress_report()` weist den
+  bearbeiteten Anteil und die Trefferausbeute je Abschnitt aus — die
+  Datengrundlage der Abbruchentscheidung, die ein Mensch trifft.
+  `validate_ranking()` liefert die Recall-Kurve gegen eine Liste mit bekanntem
+  Ergebnis. **Opt-in** (`active_learning`, Default `false`): abgeschaltet ist
+  ein Lauf von einem Lauf ohne dieses Feature nicht unterscheidbar. Die
+  Guard-Baselines für `parallel-screening` sind um den Netto-Zuwachs des
+  `SKILL.md`-Einstiegs angehoben (`skill_sizes.json` 8883 → 9419,
+  `tokens.json` 1846 → 2005) und mit zwei Tests an ihn gefesselt. Details:
+  `skills/parallel-screening/references/active-learning.md`.
+
 - **node:sqlite gegen Python-Subprozess gemessen und dokumentiert (#600):**
   CI läuft jetzt auf Node 22 (`node:sqlite` unflagged ab 22.13.0) statt Node
   20. Ein Mikrobenchmark (`scripts/dev/bench_vault_bridge.mjs`) belegt den

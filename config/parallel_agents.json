@@ -2,5 +2,11 @@
   "_comment": "Obergrenze gleichzeitig gestarteter Subagents fuer den Screening-/RoB-Fan-out (Issue #460). Vorrang: Argument > ACADEMIC_RESEARCH_MAX_PARALLEL > diese Datei > Default 4. Harte Obergrenze: 8.",
   "max_parallel_agents": 4,
   "_comment_double_screening": "Schalter fuer blindes Doppel-Screening (Issue #598). Vorrang: Argument > ACADEMIC_RESEARCH_DOUBLE_SCREENING > diese Datei > Default true (methodisch sauberer Weg ist der Standardweg). Bei false verhaelt sich das Screening exakt wie vor #598 (ein Judge-Lauf je Treffer).",
-  "double_screening": true
+  "double_screening": true,
+  "_comment_active_learning": "Schalter fuer Active Learning im Titel-/Abstract-Screening (Issue #602). Vorrang: Argument > ACADEMIC_RESEARCH_ACTIVE_LEARNING > diese Datei > Default false. Opt-in, weil die Umsortierung sonst jeden bestehenden Lauf still veraendern wuerde. Bei false verhaelt sich das Screening exakt wie vor #602.",
+  "active_learning": false,
+  "_comment_active_learning_retrain_interval": "Zahl der Urteile zwischen zwei Nachtrainings (Issue #602). Vorrang: Argument > ACADEMIC_RESEARCH_ACTIVE_LEARNING_INTERVAL > diese Datei > Default 10. Darunter bleibt die Ursprungsreihenfolge stehen (Kaltstart).",
+  "active_learning_retrain_interval": 10,
+  "_comment_active_learning_block_size": "Abschnittsgroesse der Fortschrittsanzeige (Issue #602). Vorrang: Argument > ACADEMIC_RESEARCH_ACTIVE_LEARNING_BLOCK > diese Datei > Default 25.",
+  "active_learning_block_size": 25
 }
