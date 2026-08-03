@@ -119,7 +119,13 @@ def test_session_snapshot_skips_when_vault_unchanged(tmp_path):
 
 
 def test_session_snapshot_prunes_to_retention_limit(tmp_path):
-    """AC3: Retention schneidet auf ACADEMIC_SNAPSHOTS_KEEP zurueck, aeltere zuerst."""
+    """AC3: Retention schneidet die EIGENEN Snapshots (*.session.tgz) auf
+    ACADEMIC_SNAPSHOTS_KEEP zurueck, aeltere zuerst. Dummy-Dateien tragen
+    absichtlich schon die Herkunftskennzeichnung dieses Hooks (Suffix
+    `.session.tgz`) — sie simulieren fruehere Laeufe DESSELBEN Hooks, nicht
+    fremde Snapshots (dafuer siehe
+    test_session_snapshot_prune_does_not_touch_foreign_tarballs, P1-Fix #650).
+    """
     slug = "test-project"
     snapshots_dir = tmp_path / "snapshots"
     project_dir = tmp_path / "project"
@@ -131,9 +137,10 @@ def test_session_snapshot_prunes_to_retention_limit(tmp_path):
     slug_dir.mkdir(parents=True)
 
     keep = 3
-    # 5 aeltere Dummy-Tarballs vorab anlegen (Namen sortierbar aeltester zuerst)
+    # 5 aeltere Dummy-Tarballs vorab anlegen (Namen sortierbar aeltester zuerst),
+    # mit der eigenen Kennzeichnung dieses Hooks.
     for i in range(5):
-        (slug_dir / f"2020010{i}-0000.tgz").write_bytes(b"dummy")
+        (slug_dir / f"2020010{i}-0000.session.tgz").write_bytes(b"dummy")
 
     env_overrides = {
         "ACADEMIC_SNAPSHOTS_DIR": str(snapshots_dir),
@@ -150,11 +157,56 @@ def test_session_snapshot_prunes_to_retention_limit(tmp_path):
     assert len(tarballs) == keep, f"Erwartet {keep} .tgz nach Pruning, gefunden: {tarballs}"
     # Die aeltesten Dummy-Dateien (20200100, 20200101) muessen weg sein
     names = {t.name for t in tarballs}
-    assert "20200100-0000.tgz" not in names
-    assert "20200101-0000.tgz" not in names
+    assert "20200100-0000.session.tgz" not in names
+    assert "20200101-0000.session.tgz" not in names
 
     marker = slug_dir / MARKER_NAME
     assert marker.exists(), "Marker-Datei muss Pruning ueberleben"
+
+
+def test_session_snapshot_prune_does_not_touch_foreign_tarballs(tmp_path):
+    """P1-Fix (PR #650, Audit-Finding zu #625): pruneOldSnapshots() darf
+    ausschliesslich .tgz-Dateien anfassen, die dieser Hook selbst erzeugt hat.
+
+    Das Slug-Verzeichnis wird mit `pre-compact.mjs` geteilt, das dort ganz
+    eigene .tgz-Dateien mit derselben `YYYYMMDD-HHMM.tgz`-Namenskonvention
+    ablegt (keine erkennbare Kennzeichnung). Blindes Pruning nach reinem
+    Dateicount wuerde solche fremden — potenziell vault-haltigen — Snapshots
+    vorzeitig verdraengen, sobald das eigene Kontingent (ACADEMIC_SNAPSHOTS_KEEP)
+    durch fremde Dateien mitgezaehlt wird. Erwartung: fremde .tgz-Dateien
+    ueberleben unangetastet, unabhaengig davon wie klein `keep` ist.
+    """
+    slug = "test-project"
+    snapshots_dir = tmp_path / "snapshots"
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    vault_db = tmp_path / "vault.db"
+    _make_vault_db(vault_db)
+
+    slug_dir = snapshots_dir / slug
+    slug_dir.mkdir(parents=True)
+
+    # Fremde .tgz-Datei im selben Slug-Verzeichnis, wie sie pre-compact.mjs
+    # erzeugen wuerde: gleiches Namensschema, aber nicht von diesem Hook
+    # geschrieben und daher nicht als "eigen" erkennbar.
+    foreign = slug_dir / "20200101-0000.tgz"
+    foreign.write_bytes(b"foreign-precompact-tarball")
+
+    env_overrides = {
+        "ACADEMIC_SNAPSHOTS_DIR": str(snapshots_dir),
+        "ACADEMIC_PROJECT_SLUG": slug,
+        "CLAUDE_PROJECT_DIR": str(project_dir),
+        "VAULT_DB_PATH": str(vault_db),
+        "ACADEMIC_SNAPSHOTS_KEEP": "1",
+    }
+
+    result = run_hook({"hook_event_name": "Stop"}, env_overrides=env_overrides)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+
+    assert foreign.exists(), (
+        "Fremde .tgz-Datei (z. B. von pre-compact.mjs) darf vom Pruning "
+        "dieses Hooks nicht geloescht werden."
+    )
 
 
 def test_session_snapshot_reports_last_backup_timestamp(tmp_path):

@@ -42,10 +42,16 @@ Export über dieselbe Python-Funktion wie `pre-compact.mjs`
 Interpreter-Kaskade aus `hooks/lib/vault-bridge.mjs` (#382).
 
 **Retention:** je Slug-Verzeichnis werden maximal `ACADEMIC_SNAPSHOTS_KEEP`
-(Default **20**, env-überschreibbar) `.tgz`-Dateien aufbewahrt — ältere werden
-nach jedem erfolgreichen Export gelöscht (Sortierung über den
-`YYYYMMDD-HHMM`-Dateinamen). Die Marker-Datei selbst ist vom Pruning
-ausgenommen. Ein Fehlschlag beim Export (z. B. kein funktionierender
+(Default **20**, env-überschreibbar) eigene `.tgz`-Dateien aufbewahrt — ältere
+werden nach jedem erfolgreichen Export gelöscht (Sortierung über den
+`YYYYMMDD-HHMM`-Dateinamen). Das Slug-Verzeichnis wird mit dem
+`PreCompact`-Snapshot geteilt; damit das Pruning dessen `.tgz`-Dateien nicht
+versehentlich mitzählt oder löscht, kennzeichnet `session-snapshot.mjs` seine
+eigenen Exporte mit dem Suffix `.session.tgz` und prunt ausschließlich danach
+(Audit-Finding, PR #650 — blindes Pruning aller `.tgz` unabhängig von der
+Herkunft konnte fremde, potenziell vault-haltige Snapshots vorzeitig
+verdrängen). Die Marker-Datei selbst ist vom Pruning ausgenommen. Ein
+Fehlschlag beim Export (z. B. kein funktionierender
 Python-Interpreter erreichbar) bricht die Sitzung nicht ab: `exit 0`, aber
 eine sichtbare `⚠️`-Meldung auf stderr, und der Marker bleibt unverändert
 stehen, damit der nächste Lauf erneut einen Export versucht.

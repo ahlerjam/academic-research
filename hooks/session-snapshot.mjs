@@ -18,8 +18,14 @@
  *      Python-Funktion academic_vault.server.export_snapshot(), aufgerufen
  *      via runVaultPython() aus hooks/lib/vault-bridge.mjs (dieselbe
  *      Interpreter-Kaskade wie die anderen Vault-Hooks, #382).
- *   4. Erfolg -> Marker aktualisieren, alte .tgz im Slug-Verzeichnis auf
- *      ACADEMIC_SNAPSHOTS_KEEP (Default 20) zurueckschneiden (AC3).
+ *   4. Erfolg -> Export-Datei mit dem Suffix `.session.tgz` kennzeichnen
+ *      (Herkunftsmarkierung, siehe OWN_SNAPSHOT_SUFFIX unten), Marker
+ *      aktualisieren, eigene alte `*.session.tgz` im Slug-Verzeichnis auf
+ *      ACADEMIC_SNAPSHOTS_KEEP (Default 20) zurueckschneiden (AC3). Das
+ *      Slug-Verzeichnis wird mit dem Compaction-Snapshot geteilt, dessen
+ *      eigene .tgz-Dateien vom Pruning dieses Hooks unangetastet bleiben
+ *      (Audit-Finding P1, PR #650: blindes Pruning nach reinem .tgz-Count
+ *      konnte fremde, potenziell vault-haltige Snapshots verdraengen).
  *   5. Fehlschlag -> sichtbare ⚠️-Meldung auf stderr, Marker NICHT
  *      aktualisiert, trotzdem exit 0 (AC5, fail-open).
  *
@@ -38,7 +44,7 @@
  *   ACADEMIC_SNAPSHOTS_KEEP  — Anzahl aufbewahrter .tgz je Slug (default: 20)
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, unlinkSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, unlinkSync, readdirSync, renameSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import * as os from 'node:os';
 
@@ -60,6 +66,43 @@ const KEEP = (() => {
 })();
 
 const MARKER_NAME = '.last-session-snapshot.json';
+
+// Kennzeichnungs-Suffix fuer von DIESEM Hook erzeugte Tarballs. Das
+// Slug-Verzeichnis wird mit dem PreCompact-Snapshot-Hook geteilt, der eigene
+// .tgz-Dateien nach demselben `YYYYMMDD-HHMM.tgz`-Schema ablegt, ohne
+// Herkunftskennzeichen.
+// Ohne diesen Suffix koennte pruneOldSnapshots() nicht zwischen eigenen und
+// fremden Dateien unterscheiden und faelschlich fremde (potenziell
+// vault-haltige) Snapshots loeschen (Audit-Finding P1, PR #650).
+const OWN_SNAPSHOT_SUFFIX = '.session.tgz';
+
+// (isOwnSnapshotFilename filtert genau die eigenen, oben markierten Dateien;
+// fremde .tgz-Dateien — z. B. vom PreCompact-Snapshot-Hook — matchen nicht.)
+function isOwnSnapshotFilename(name) {
+  return name.endsWith(OWN_SNAPSHOT_SUFFIX);
+}
+
+/**
+ * Haengt OWN_SNAPSHOT_SUFFIX an den von export_snapshot() gelieferten Pfad an
+ * (z. B. `20260803-1230.tgz` -> `20260803-1230.session.tgz`) und benennt die
+ * Datei entsprechend um. Damit bleibt die Namensordnung chronologisch
+ * sortierbar, ist aber eindeutig diesem Hook zuordenbar.
+ */
+function markAsOwnSnapshot(outPath) {
+  const markedPath = outPath.endsWith('.tgz')
+    ? outPath.slice(0, -'.tgz'.length) + OWN_SNAPSHOT_SUFFIX
+    : outPath + OWN_SNAPSHOT_SUFFIX;
+  try {
+    renameSync(outPath, markedPath);
+    return markedPath;
+  } catch (err) {
+    // Umbenennen fehlgeschlagen -> Original-Pfad weiterverwenden statt
+    // abzubrechen (fail-open); der Snapshot existiert bereits und ist gueltig,
+    // nur die Herkunftskennzeichnung fehlt fuer diesen einen Lauf.
+    process.stderr.write(`[Session-Snapshot] Konnte Snapshot nicht kennzeichnen (${err.message}), verwende Originalpfad.\n`);
+    return outPath;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Stdin lesen (tolerant, malformte Eingaben brechen den Hook nicht ab)
@@ -112,7 +155,9 @@ function writeMarker(markerPath, { fingerprint, snapshotPath, lastSnapshotAt }) 
 }
 
 // ---------------------------------------------------------------------------
-// Retention-Pruning: nur *.tgz im Slug-Verzeichnis, nie die Marker-Datei
+// Retention-Pruning: nur die EIGENEN *.session.tgz im (geteilten)
+// Slug-Verzeichnis, nie die Marker-Datei und nie fremde .tgz-Dateien (z. B.
+// vom PreCompact-Snapshot-Hook) — siehe OWN_SNAPSHOT_SUFFIX oben.
 // ---------------------------------------------------------------------------
 
 function pruneOldSnapshots(slugDir, keep) {
@@ -123,8 +168,8 @@ function pruneOldSnapshots(slugDir, keep) {
     return;
   }
   const tarballs = entries
-    .filter((name) => name.endsWith('.tgz'))
-    .sort(); // Dateinamen sind YYYYMMDD-HHMM.tgz -> lexikographisch == chronologisch
+    .filter(isOwnSnapshotFilename)
+    .sort(); // Dateinamen sind YYYYMMDD-HHMM.session.tgz -> lexikographisch == chronologisch
 
   const excess = tarballs.length - keep;
   if (excess <= 0) return;
@@ -203,12 +248,14 @@ async function main() {
     process.exit(0);
   }
 
-  const outPath = exportVaultSnapshot();
+  const exportedPath = exportVaultSnapshot();
 
-  if (!outPath) {
+  if (!exportedPath) {
     process.stderr.write('[Session-Snapshot] ⚠️ Vault-Sicherung fehlgeschlagen — Sitzung wird trotzdem fortgesetzt.\n');
     process.exit(0);
   }
+
+  const outPath = markAsOwnSnapshot(exportedPath);
 
   const now = new Date().toISOString();
   writeMarker(markerPath, {
