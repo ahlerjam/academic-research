@@ -646,6 +646,7 @@ class TestPdfDoiCitationSearch:
             patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
             patch.object(aps, "run_citation_search", return_value=([], [])) as mock_citation,
             patch.object(aps, "run_search") as mock_keyword,
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
         ):
             result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
 
@@ -672,6 +673,7 @@ class TestPdfDoiVaultPriority:
             patch.object(aps, "detect_needs_ocr", return_value=False),
             patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
             patch.object(aps, "run_citation_search", return_value=([], [])),
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
         ):
             first = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
 
@@ -851,6 +853,7 @@ class TestVaultAddPaperDoiSentinelDefault:
             patch.object(aps, "detect_needs_ocr", return_value=False),
             patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
             patch.object(aps, "run_citation_search", return_value=([], [])),
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
         ):
             first = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
 

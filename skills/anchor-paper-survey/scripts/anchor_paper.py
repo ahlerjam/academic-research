@@ -469,6 +469,42 @@ def run_citation_search(
     return hits, failed
 
 
+def _verify_extracted_doi_title_match(
+    paper_ref: str,
+    anchor_title: str,
+) -> bool:
+    """Verifiziert, dass der S2-Titel der DOI dem Anker-Titel ähnelt.
+
+    Extrahierte DOIs werden nur persistiert, wenn der S2-Titel dem extrahierten
+    Titel ähnelt (≥85% Schwelle). Das verhindert, dass fremde DOIs (Erratum-
+    Header, Deckblatt) persistiert werden, auch wenn Semantic Scholar sie kennt.
+
+    Gibt True zurück bei erfolgreicher Verifikation, False bei Fehler/Mismatch.
+    Wird in Tests via patch() ersetzt.
+    """
+    if not paper_ref or not _REQUESTS_AVAILABLE:
+        return False
+
+    url = f"{_S2_PAPER_API}/{paper_ref}"
+    params = {"fields": "title"}
+    headers = {"User-Agent": _USER_AGENT}
+    if api_key := os.environ.get("SS_API_KEY"):
+        headers["x-api-key"] = api_key
+    try:
+        resp = requests.get(url, params=params, timeout=_TIMEOUT, headers=headers)
+        if resp.status_code != 200:
+            return False
+        payload = resp.json()
+        s2_title = (payload.get("title") or "").strip()
+        if not s2_title:
+            return False
+        # Nutze die gleiche Ähnlichkeitsschwelle wie bei _filter_and_dedupe()
+        ratio = SequenceMatcher(None, s2_title.lower(), anchor_title.lower()).ratio()
+        return ratio >= _ANCHOR_TITLE_SIMILARITY_THRESHOLD
+    except Exception:
+        return False
+
+
 def _filter_and_dedupe(
     hits: list[dict],
     anchor_title: str,
@@ -775,22 +811,30 @@ def anchor_paper_survey(
             method = "citation"
             # P1 fix (flowkit review): extrahierte DOI wird erst hier persistiert, nachdem
             # Semantic Scholar sie verifiziert hat (mindestens eine Relation != failed).
+            # Zusätzlich wird der S2-Titel gegen den extrahierten Titel abgeglichen,
+            # um fremde DOIs (Erratum-Header, Deckblatt) auszuschließen.
             if anchor.get("doi_source") == "extracted" and anchor.get("doi"):
-                # Vault-Upsert mit der nun verifizierten DOI
-                authors = anchor.get("authors", [])
-                csl_with_doi: dict = {
-                    "type": "article-journal",
-                    "title": anchor["title"],
-                    "author": authors,
-                    "DOI": anchor["doi"],
-                }
-                vault_add_paper(
-                    db_path=db_path,
-                    paper_id=anchor["paper_id"],
-                    csl_json=json.dumps(csl_with_doi, ensure_ascii=False),
-                    doi=anchor["doi"],
-                    pdf_path=anchor.get("pdf_path"),  # Vermeidet Datenverlust der PDF-Pfad-Spalte
+                doi_verified = _verify_extracted_doi_title_match(
+                    f"DOI:{anchor['doi']}", anchor["title"]
                 )
+                if doi_verified:
+                    # Vault-Upsert mit der nun verifizierten DOI
+                    authors = anchor.get("authors", [])
+                    csl_with_doi: dict = {
+                        "type": "article-journal",
+                        "title": anchor["title"],
+                        "author": authors,
+                        "DOI": anchor["doi"],
+                    }
+                    vault_add_paper(
+                        db_path=db_path,
+                        paper_id=anchor["paper_id"],
+                        csl_json=json.dumps(csl_with_doi, ensure_ascii=False),
+                        doi=anchor["doi"],
+                        pdf_path=anchor.get(
+                            "pdf_path"
+                        ),  # Vermeidet Datenverlust der PDF-Pfad-Spalte
+                    )
     else:
         modules = list(search_modules) if search_modules else list(DEFAULT_SEARCH_MODULES)
         raw_hits, failed = run_search(anchor["title"], modules, limit=search_limit)
