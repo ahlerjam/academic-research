@@ -4,29 +4,40 @@
  *
  * Der einzige automatische Vault-Snapshot hing bislang am `PreCompact`-Event,
  * das nur in langen Sitzungen feuert. Wer in kurzen Sitzungen arbeitet,
- * erzeugte über Wochen keinen einzigen Snapshot. Dieser Hook laeuft
- * ZUSAETZLICH unter dem bestehenden `Stop`-Event und sichert den Vault auch
- * am Ende jeder Sitzung — als eigenstaendiger Snapshot-Pfad, ohne den
+ * erzeugte über Wochen keinen einzigen Snapshot. Dieser Hook läuft
+ * ZUSÄTZLICH unter dem bestehenden `Stop`-Event und sichert den Vault auch
+ * am Ende jeder Sitzung — als eigenständiger Snapshot-Pfad, ohne den
  * Compaction-Snapshot zu importieren oder aufzurufen (AC6).
  *
+ * DROSSELUNG PRO SITZUNG (Audit P1, PR #650): Der `Stop`-Event feuert nach
+ * JEDEM Turn, nicht nur am Sitzungsende. Um Perf-Regression und Retention-
+ * Kollaps zu vermeiden, trackt der Hook die session_id aus dem Stop-Payload:
+ * Pro Sitzung wird maximal einmal exportiert, nachfolgende Turns in derselben
+ * Sitzung überspringen den Export. Neue Sitzung (neue session_id) triggert
+ * erneut einen Export.
+ *
  * Ablauf:
- *   1. Fingerprint der Vault-DB (size + mtimeMs) gegen den Marker aus dem
+ *   1. session_id aus dem Stop-Payload extrahieren. Ist sie identisch mit
+ *      der im Marker gespeicherten (und beide non-null), überspringen wir
+ *      Punkte 2–4 und beenden mit Meldung (P1-Audit-Fix).
+ *   2. Fingerprint der Vault-DB (size + mtimeMs) gegen den Marker aus dem
  *      letzten Lauf vergleichen (<snapshotsDir>/<slug>/.last-session-snapshot.json).
- *   2. Unveraendert -> kein neuer Snapshot, aber Stderr-Meldung mit dem
+ *   3. Unveraendert -> kein neuer Snapshot, aber Stderr-Meldung mit dem
  *      Zeitpunkt der letzten Sicherung (AC2, AC4).
- *   3. Veraendert (oder Marker fehlt/kaputt) -> Export ueber die vorhandene
+ *   4. Veraendert (oder Marker fehlt/kaputt) -> Export ueber die vorhandene
  *      Python-Funktion academic_vault.server.export_snapshot(), aufgerufen
  *      via runVaultPython() aus hooks/lib/vault-bridge.mjs (dieselbe
  *      Interpreter-Kaskade wie die anderen Vault-Hooks, #382).
- *   4. Erfolg -> Export-Datei mit dem Suffix `.session.tgz` kennzeichnen
+ *   5. Erfolg -> Export-Datei mit dem Suffix `.session.tgz` kennzeichnen
  *      (Herkunftsmarkierung, siehe OWN_SNAPSHOT_SUFFIX unten), Marker
- *      aktualisieren, eigene alte `*.session.tgz` im Slug-Verzeichnis auf
- *      ACADEMIC_SNAPSHOTS_KEEP (Default 20) zurueckschneiden (AC3). Das
- *      Slug-Verzeichnis wird mit dem Compaction-Snapshot geteilt, dessen
- *      eigene .tgz-Dateien vom Pruning dieses Hooks unangetastet bleiben
- *      (Audit-Finding P1, PR #650: blindes Pruning nach reinem .tgz-Count
- *      konnte fremde, potenziell vault-haltige Snapshots verdraengen).
- *   5. Fehlschlag -> sichtbare ⚠️-Meldung auf stderr, Marker NICHT
+ *      aktualisieren (session_id speichern), eigene alte `*.session.tgz` im
+ *      Slug-Verzeichnis auf ACADEMIC_SNAPSHOTS_KEEP (Default 20)
+ *      zurückschneiden (AC3). Das Slug-Verzeichnis wird mit dem Compaction-
+ *      Snapshot geteilt, dessen eigene .tgz-Dateien vom Pruning dieses Hooks
+ *      unangetastet bleiben (Audit-Finding P1, PR #650: blindes Pruning nach
+ *      reinem .tgz-Count konnte fremde, potenziell vault-haltige Snapshots
+ *      verdrängen).
+ *   6. Fehlschlag -> sichtbare ⚠️-Meldung auf stderr, Marker NICHT
  *      aktualisiert, trotzdem exit 0 (AC5, fail-open).
  *
  * Bekannte Grenzen (im Plan-Kommentar zu #625 dokumentiert, akzeptiert fuer
@@ -35,6 +46,9 @@
  *     komplette DB — billig, aber theoretisches False-Negative bei
  *     gleich grosser Aenderung binnen derselben Millisekunde.
  *   - Kein Locking zwischen parallelen Sitzungen auf demselben Projekt.
+ *   - session_id abhängig von Claude-Code-Implementierung: Wenn das System
+ *     die session_id nicht im Stop-Payload mitteilt (oder null), fällt die
+ *     Pro-Sitzungs-Drosselung weg und der Hook exportiert wie in Punkt 3–5.
  *
  * Konfiguration via Umgebungsvariablen (analog zu den anderen Vault-Hooks, #382):
  *   ACADEMIC_SNAPSHOTS_DIR   — Zielverzeichnis (default: ~/.academic-research/snapshots)
@@ -149,8 +163,8 @@ function fingerprintsEqual(a, b) {
   return a.size === b.size && a.mtimeMs === b.mtimeMs;
 }
 
-function writeMarker(markerPath, { fingerprint, snapshotPath, lastSnapshotAt }) {
-  const payload = { fingerprint, snapshotPath, lastSnapshotAt };
+function writeMarker(markerPath, { fingerprint, snapshotPath, lastSnapshotAt, sessionId }) {
+  const payload = { fingerprint, snapshotPath, lastSnapshotAt, sessionId };
   writeFileSync(markerPath, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
 }
 
@@ -214,10 +228,11 @@ function exportVaultSnapshot() {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  let stopPayload = null;
   try {
     const raw = await readStdin();
     if (raw.trim()) {
-      JSON.parse(raw);
+      stopPayload = JSON.parse(raw);
     }
   } catch {
     // Malformed stdin — trotzdem weitermachen (fail-open)
@@ -241,6 +256,14 @@ async function main() {
   }
 
   const marker = readMarker(markerPath);
+  const currentSessionId = stopPayload?.sessionId || null;
+
+  // Drosseln pro Sitzung: schon in dieser Sitzung exportiert?
+  if (marker && marker.sessionId === currentSessionId && currentSessionId !== null) {
+    const lastAt = marker.lastSnapshotAt || 'unbekannt';
+    process.stderr.write(`[Session-Snapshot] Snapshot bereits in dieser Sitzung erstellt (${lastAt}). Uebersprungen.\n`);
+    process.exit(0);
+  }
 
   if (marker && fingerprintsEqual(marker.fingerprint, currentFingerprint)) {
     const lastAt = marker.lastSnapshotAt || 'unbekannt';
@@ -262,6 +285,7 @@ async function main() {
     fingerprint: currentFingerprint,
     snapshotPath: outPath,
     lastSnapshotAt: now,
+    sessionId: currentSessionId,
   });
   pruneOldSnapshots(slugDir, KEEP);
 

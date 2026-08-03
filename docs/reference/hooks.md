@@ -18,7 +18,7 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `SessionStart` (kein Matcher) | `bypass-log-report.mjs` | Meldet neue Nutzungen des `vault-guard`-Bypass-Markers seit der letzten Session |
 | `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
-| `Stop` | `session-snapshot.mjs` | Vault-Snapshot am Sitzungsende (#625) — zusätzlich zum `PreCompact`-Snapshot, unabhängig davon |
+| `Stop` | `session-snapshot.mjs` | Vault-Snapshot pro Sitzung (#625, PR #650) — zusätzlich zum `PreCompact`-Snapshot, unabhängig davon; pro Sitzung maximal einmal exportiert (Drosselung nach session_id) |
 
 Das sind **8 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
 `context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`, `pre-compact.mjs`,
@@ -27,19 +27,26 @@ plus **2 Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
 Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
 `PreToolUse` ruft drei Skripte nacheinander auf.
 
-### Session-Ende-Snapshot (`session-snapshot.mjs`, #625)
+### Session-Ende-Snapshot (`session-snapshot.mjs`, #625, PR #650)
 
 Läuft zusätzlich zum bestehenden `PreCompact`-Snapshot unter `Stop` — er
 ersetzt ihn nicht, sondern deckt die Fälle ab, in denen eine Sitzung nie
 verdichtet wird (kurze Sitzungen erzeugten bis #625 über Wochen keinen
-einzigen Snapshot). Ein billiger Fingerprint der Vault-DB (Dateigröße +
+einzigen Snapshot). Der `Stop`-Event feuert nach jedem Assistenten-Turn, nicht
+nur einmal am Sitzungsende; um Perf-Regression und unnötige Exporte zu
+vermeiden, drosselt der Hook pro Sitzung: die `session_id` aus dem Stop-Payload
+wird im Marker gespeichert, und pro Sitzung wird maximal einmal exportiert
+(Audit P1, PR #650). Nachfolgende Turns in derselben Sitzung überspringen den
+Export; eine neue Sitzung triggert einen erneuten Export.
+
+**Fingerprint-Vergleich:** Ein billiger Fingerprint der Vault-DB (Dateigröße +
 `mtimeMs`) wird gegen die Marker-Datei
 `<ACADEMIC_SNAPSHOTS_DIR>/<slug>/.last-session-snapshot.json` aus dem letzten
-Lauf verglichen: unverändert → kein neuer Snapshot, aber eine Stderr-Zeile mit
-dem Zeitpunkt der letzten Sicherung; verändert (oder Marker fehlt/kaputt) →
-Export über dieselbe Python-Funktion wie `pre-compact.mjs`
-(`academic_vault.server.export_snapshot()`), aufgerufen über die
-Interpreter-Kaskade aus `hooks/lib/vault-bridge.mjs` (#382).
+Lauf verglichen: unverändert (und gleiche session_id, falls vorhanden) → kein
+neuer Snapshot, aber eine Stderr-Zeile mit dem Zeitpunkt der letzten Sicherung;
+verändert (oder Marker fehlt/kaputt, oder neue Sitzung) → Export über dieselbe
+Python-Funktion wie `pre-compact.mjs` (`academic_vault.server.export_snapshot()`),
+aufgerufen über die Interpreter-Kaskade aus `hooks/lib/vault-bridge.mjs` (#382).
 
 **Retention:** je Slug-Verzeichnis werden maximal `ACADEMIC_SNAPSHOTS_KEEP`
 (Default **20**, env-überschreibbar) eigene `.tgz`-Dateien aufbewahrt — ältere
@@ -59,9 +66,12 @@ stehen, damit der nächste Lauf erneut einen Export versucht.
 **Grenzen (bewusst akzeptiert für Umfang size/S):** Der Fingerprint ist kein
 Volltext-Hash — ein False-Negative bei einer Änderung exakt gleicher
 Dateigröße innerhalb derselben Millisekunde ist theoretisch möglich, aber für
-die Größenordnung „Vault über zwei Jahre" vernachlässigbar. Zwei parallele
-Sitzungen auf demselben Projekt können sich beim Marker-Update oder Pruning
-überschneiden — es gibt kein Locking.
+die Größenordnung „Vault über zwei Jahre" vernachlässigbar. Die Pro-Sitzungs-
+Drosselung basiert auf der `session_id` des Stop-Payload: Wenn Claude Code
+diese nicht mitteilt (oder `null` ist), fällt die Drosselung weg und der Hook
+exportiert wie gewohnt nach Fingerprint. Zwei parallele Sitzungen auf
+demselben Projekt können sich beim Marker-Update oder Pruning überschneiden
+— es gibt kein Locking.
 
 > **Nicht verdrahtet:** `hooks/lib/vault-bridge.mjs` ist **kein** Hook, sondern ein
 > gemeinsames Modul, das die Vault-Hooks importieren (DB-Pfad-Auflösung und
