@@ -10,6 +10,19 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Manuelle Zitate im Material-Passport ausweisen (#595):** `manual` ist der
+  einzige Pfad, auf dem ein Zitat ohne maschinelle Verifikation in den Vault
+  gelangt — der Material-Passport unterschied ihn bislang nicht von
+  `local-verbatim`-geprüften Zitaten. `vault.export_material_passport` weist
+  jetzt je `quote_id` die verwendete `extraction_method` aus
+  (`quote_extraction_methods`) und nennt Anzahl sowie Anteil manuell
+  erfasster Zitate (`manual_quotes_count`, `manual_quotes_ratio`). Beide
+  Felder sind immer gesetzt, auch bei 0 manuellen Zitaten — die Abwesenheit
+  ist ein Ergebnis, keine fehlende Angabe. `material-passport.schema.json`
+  nimmt die drei Felder in `required` auf; bereits exportierte
+  `material-passport.json`-Dateien validieren rückwirkend nicht mehr gegen
+  das neue Schema.
+
 - **Eigene quantitative Auswertung vom Rohdatensatz bis zum Ergebniskapitel
   (#610):** Zwischen `instrument-design` (Instrument bauen) und
   `chapter-writer` (Ergebniskapitel schreiben) klaffte bei quantitativen
