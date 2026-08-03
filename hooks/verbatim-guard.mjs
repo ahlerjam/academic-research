@@ -438,7 +438,10 @@ function uniqueByKey(citations) {
 
 /**
  * Prüft alle Belege in EINEM Python-Subprozess (nicht einer pro Beleg —
- * sonst dominieren Interpreter-Starts das Hook-Timeout).
+ * sonst dominieren Interpreter-Starts das Hook-Timeout) über
+ * `server.verify_citations()`, das sich innerhalb des Subprozesses zusätzlich
+ * einen einzigen Papers-Tabellen-Scan für alle Belege teilt statt einen je
+ * Beleg (Issue #501).
  * Gibt Map key -> "verified" | "page-mismatch" | "no-match" | "unavailable"
  * zurück; "unavailable" bedeutet Python/Vault-Fehler (fail-open).
  */
@@ -447,10 +450,10 @@ function verifyCitationsInVault(citations) {
   const pyCode = [
     'import sys, json',
     `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-    'from academic_vault.server import verify_citation',
+    'from academic_vault.server import verify_citations',
     'items = json.loads(sys.argv[2])',
-    'print(json.dumps([verify_citation(sys.argv[1], i["family"], i["year"], i["page"])["status"] '
-      + 'for i in items]))',
+    'results = verify_citations(sys.argv[1], items)',
+    'print(json.dumps([r["status"] for r in results]))',
   ].join('; ');
 
   const payload = JSON.stringify(

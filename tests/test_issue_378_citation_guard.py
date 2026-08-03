@@ -394,6 +394,54 @@ def test_verify_citation_statuses(vault_with_mueller):
 
 
 # ---------------------------------------------------------------------------
+# Issue #501 — Batch-Lookup: ein Papers-Scan je Write statt je Beleg
+# ---------------------------------------------------------------------------
+
+
+def test_verify_citations_batch_scans_papers_table_once(vault_with_mueller, monkeypatch):
+    """AC1/AC3: N Belege in einem Write loesen genau einen Papers-Scan aus."""
+    from academic_vault import db as db_module
+    from academic_vault.server import verify_citations
+
+    call_count = 0
+    original = db_module.VaultDB._papers_snapshot
+
+    def counting_snapshot(self):
+        nonlocal call_count
+        call_count += 1
+        return original(self)
+
+    monkeypatch.setattr(db_module.VaultDB, "_papers_snapshot", counting_snapshot)
+
+    items = [
+        {"family": "Müller", "year": 2021, "page": 45},
+        {"family": "Müller", "year": 2021, "page": None},
+        {"family": "Fantasius", "year": 1999, "page": None},
+    ]
+    results = verify_citations(vault_with_mueller, items)
+
+    assert call_count == 1
+    assert [r["status"] for r in results] == ["verified", "verified", "no-match"]
+
+
+def test_verify_citations_batch_matches_single_item_behavior(vault_with_mueller):
+    """AC2: verify_citations() liefert je Beleg identisch zu verify_citation()."""
+    from academic_vault.server import verify_citation, verify_citations
+
+    items = [
+        {"family": "Müller", "year": 2021, "page": 45},
+        {"family": "Müller", "year": 2021, "page": None},
+        {"family": "Müller", "year": 2021, "page": 999},
+        {"family": "Fantasius", "year": 1999, "page": None},
+    ]
+    batch_results = verify_citations(vault_with_mueller, items)
+    single_results = [
+        verify_citation(vault_with_mueller, i["family"], i["year"], i["page"]) for i in items
+    ]
+    assert batch_results == single_results
+
+
+# ---------------------------------------------------------------------------
 # AC1 — Vault-Treffer blockiert nicht
 # ---------------------------------------------------------------------------
 

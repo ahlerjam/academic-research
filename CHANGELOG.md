@@ -268,6 +268,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Citation-Guard: ein Papers-Scan je Write statt je Beleg (#501):**
+  `VaultDB.find_papers_by_author_year()` las bisher pro Aufruf die komplette
+  `papers`-Tabelle inklusive `json.loads()` je Zeile; `server.verify_citation()`
+  lief je Beleg einzeln, sodass ein Kapitel mit dem vollen Kontingent
+  (`ACADEMIC_CITATION_MAX_PER_WRITE`, Default 100) gegen einen Vault mit
+  einigen tausend Papers 100 Full Scans innerhalb des 10-s-Timeouts von
+  `hooks/verbatim-guard.mjs` auslöste — riss das Timeout, meldete der Hook
+  `unavailable` und alle Belege liefen fail-open mit `[UNVERIFIED]` durch.
+  Neuer Batch-Einstieg `server.verify_citations(db_path, items)` teilt sich
+  eine `VaultDB`-Instanz und genau einen
+  `VaultDB._papers_snapshot()`-Aufruf über alle Belege eines Writes;
+  `verify_citation()` bleibt als dünner Ein-Item-Wrapper mit unverändertem
+  Rückgabeformat erhalten. `hooks/verbatim-guard.mjs::verifyCitationsInVault`
+  ruft jetzt `verify_citations` statt einer Listcomprehension über
+  `verify_citation` je Item auf.
+
 - **`page_offset` wird beim Buch-Import bestätigt statt still gespeichert (#538):**
   `skills/book-handler/SKILL.md` Schritt 2.5 übernahm das Ergebnis von
   `scripts/page_offset.py` ohne Rückfrage in `vault.set_page_offset` — ein
