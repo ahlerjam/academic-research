@@ -1358,25 +1358,22 @@ class VaultDB:
     # Klammer-Zitat-Verifikation (Issue #378)
     # ------------------------------------------------------------------
 
-    def find_papers_by_author_year(self, family: str, year: int) -> list[dict]:
-        """Findet Papers, deren CSL-Autorenliste ``family`` enthaelt und deren
-        Erscheinungsjahr exakt ``year`` ist.
+    def _papers_snapshot(self) -> list[dict]:
+        """Liest die komplette ``papers``-Tabelle einmal und parst ``csl_json``.
 
-        Der Namensvergleich laeuft ueber :func:`normalize_family_name`
-        (Umlaut-Faltung + Diakritika-Strip), damit ``Müller``/``Mueller``/
-        ``Muller`` denselben Eintrag treffen. Es gibt bewusst keine
-        SQL-seitige Vorfilterung: ``csl_json`` ist ein Textblob, dessen
-        Autorenfelder sich nicht zuverlaessig per LIKE eingrenzen lassen,
-        ohne genau diese Schreibvarianten zu verlieren.
+        Extrahiert aus :meth:`find_papers_by_author_year` (Issue #501), damit
+        Aufrufer mit mehreren Belegen (:func:`academic_vault.server.verify_citations`)
+        sich einen Scan + Parse-Durchlauf ueber die komplette Tabelle teilen
+        koennen, statt ihn je Beleg zu wiederholen. Zeilen mit kaputtem oder
+        nicht-dict ``csl_json`` werden stillschweigend uebersprungen (wie bisher
+        in :meth:`find_papers_by_author_year`). Ergebnis enthaelt zusaetzlich
+        das bereits geparste ``csl``-Feld.
         """
-        wanted = normalize_family_name(family)
-        if not wanted or year is None:
-            return []
         with self._connection() as conn:
             rows = conn.execute(
                 "SELECT paper_id, csl_json, page_first, page_last FROM papers"
             ).fetchall()
-        matches: list[dict] = []
+        snapshot: list[dict] = []
         for row in rows:
             record = dict(row)
             try:
@@ -1385,11 +1382,53 @@ class VaultDB:
                 continue
             if not isinstance(csl, dict):
                 continue
+            record["csl"] = csl
+            snapshot.append(record)
+        return snapshot
+
+    def _match_papers_in_snapshot(
+        self, snapshot: list[dict], family: str, year: int | None
+    ) -> list[dict]:
+        """Matcht ``family``/``year`` gegen einen bereits gelesenen :meth:`_papers_snapshot`.
+
+        Reine In-Memory-Filterung (kein DB-Zugriff) -- Kern von
+        :meth:`find_papers_by_author_year`, extrahiert (Issue #501), damit
+        :func:`academic_vault.server.verify_citations` denselben Snapshot fuer
+        mehrere Belege wiederverwenden kann, statt ihn je Beleg neu einzulesen.
+        Der Namensvergleich laeuft ueber :func:`normalize_family_name`
+        (Umlaut-Faltung + Diakritika-Strip), damit ``Müller``/``Mueller``/
+        ``Muller`` denselben Eintrag treffen.
+        """
+        wanted = normalize_family_name(family)
+        if not wanted or year is None:
+            return []
+        matches: list[dict] = []
+        for record in snapshot:
+            csl = record["csl"]
             if csl_year(csl) != int(year):
                 continue
             if any(normalize_family_name(f) & wanted for f in csl_families(csl)):
-                matches.append(record)
+                matches.append(
+                    {
+                        "paper_id": record["paper_id"],
+                        "csl_json": record["csl_json"],
+                        "page_first": record["page_first"],
+                        "page_last": record["page_last"],
+                    }
+                )
         return matches
+
+    def find_papers_by_author_year(self, family: str, year: int) -> list[dict]:
+        """Findet Papers, deren CSL-Autorenliste ``family`` enthaelt und deren
+        Erscheinungsjahr exakt ``year`` ist.
+
+        Es gibt bewusst keine SQL-seitige Vorfilterung: ``csl_json`` ist ein
+        Textblob, dessen Autorenfelder sich nicht zuverlaessig per LIKE
+        eingrenzen lassen, ohne genau diese Schreibvarianten zu verlieren.
+        Fuer Aufrufer mit mehreren Belegen (Batch) siehe
+        :meth:`_papers_snapshot` + :meth:`_match_papers_in_snapshot`.
+        """
+        return self._match_papers_in_snapshot(self._papers_snapshot(), family, year)
 
     def page_coverage(self, paper_id: str, page: int) -> str:
         """Prueft, ob ``page`` von den im Vault bekannten Seitendaten gedeckt ist.
