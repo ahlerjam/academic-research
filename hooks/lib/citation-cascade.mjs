@@ -317,12 +317,13 @@ export async function resolveCitations(citations, config = loadConfig()) {
   // Stufe 1: eine Anfrage fuer alle offenen Belege.
   let pending = open();
   if (pending.length > 0) {
-    stats.total += 1;
     try {
       const candidates = await stageArxiv(pending, config, deadline);
+      stats.total += 1;
       for (const citation of pending) apply(citation, candidates);
     } catch (err) {
       if (!(err instanceof UnavailableError)) throw err;
+      stats.total += 1;
       stats.unavailable += 1;
       recordReason(stats.reasons, err.message);
       for (const citation of pending) state.get(citation.key).unavailable = true;
@@ -335,9 +336,9 @@ export async function resolveCitations(citations, config = loadConfig()) {
     if (pending.length === 0) break;
     for (const citation of pending) {
       const entry = state.get(citation.key);
-      stats.total += 1;
       try {
         let candidates = await stage(citation, config, deadline);
+        stats.total += 1;
         if (stage === stageSemanticScholar) {
           candidates = candidates.filter(
             (c) => authorOverlap(citation.authors, c.authors) >= config.s2MinOverlap,
@@ -346,6 +347,7 @@ export async function resolveCitations(citations, config = loadConfig()) {
         apply(citation, candidates);
       } catch (err) {
         if (!(err instanceof UnavailableError)) throw err;
+        stats.total += 1;
         stats.unavailable += 1;
         recordReason(stats.reasons, err.message);
         entry.unavailable = true;
