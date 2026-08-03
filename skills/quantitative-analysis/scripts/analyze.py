@@ -296,10 +296,9 @@ def epsilon_quadrat(gruppen: Sequence[np.ndarray]) -> float:
     """epsilon^2 zum Kruskal-Wallis-H (Tomczak & Tomczak 2014)."""
     h = float(stats.kruskal(*gruppen).statistic)
     n = sum(len(g) for g in gruppen)
-    k = len(gruppen)
-    if n - k <= 0:
+    if n - 1 <= 0:
         return 0.0
-    return (h - k + 1) / (n - k)
+    return h / (n - 1)
 
 
 def cramers_v(a: Sequence[str], b: Sequence[str]) -> float:
