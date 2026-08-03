@@ -71,12 +71,17 @@ Rohdaten (per-Query-Aufschlüsselung aller fünf Kandidaten):
 
 Anders als auf dem #375-Set erreicht **kein** Kandidat Recall@10 = 1.0 über
 alle 8 Queries: Bereits die beiden themenweiten Queries (`hq07`, `hq08`)
-deckeln jeden Kandidaten strukturell auf maximal 0.8333, und alle fünf
-Kandidaten liegen auch auf den Subtopic-Queries streckenweise unter 1.0
-(niedrigster Einzelwert 0.6667 bei e5-small) — sie verwechseln gelegentlich
-Papers benachbarter Subtopics innerhalb desselben Themas. Damit erfüllt
-dieses Set AC2 nachweisbar, nicht nur strukturell erzwungen: selbst ohne die
-beiden themenweiten Queries bliebe die Differenzierung sichtbar.
+deckeln jeden Kandidaten strukturell auf maximal 0.8333. Auf den reinen
+Subtopic-Queries (`hq01`–`hq06`) zeigt sich eine stärker differenzierte Lage:
+Qwen3-Embedding-0.6B, BGE-M3 und multilingual-e5-large erhalten auf allen
+Subtopic-Queries exakt 1.0 (vollständige Treffer), während e5-small und MiniLM
+mit Einzelwerten von 0.75 auf `hq04` ein schwaches Differenzierungssignal
+liefern. Der häufig zitierte Tiefstwert 0.6667 (e5-small) stammt dagegen
+ausschließlich von den themenweiten Queries (`hq08`), nicht von den
+Subtopic-Queries selbst. Die gesamte Rangfolge zwischen den drei besten
+Kandidaten wird daher allein durch die strukturell auf 0.8333 gedeckelten
+themenweiten Queries bestimmt; ohne diese beiden Queries läge die komplette
+Spitzengruppe erneut bei 1.0.
 
 **e5-small (aktueller Default) ist auf diesem härteren Set der schwächste der
 fünf Kandidaten** — sowohl im Mittel (0.8958, niedrigster Wert aller fünf)
