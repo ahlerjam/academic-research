@@ -206,6 +206,39 @@ def test_merge_group_doi_fallback_when_best_record_has_no_doi():
     assert merged["venue"] == "Some Venue"
 
 
+def test_merge_group_is_retracted_true_wins_even_from_non_best_record():
+    """Ein Retraction-Hinweis aus einer Nebenquelle darf beim Merge mit einem
+    vollstaendigeren, aber nicht-retracted Datensatz nicht verschwinden (#618 AC2)."""
+    group = [
+        {
+            "title": "Paper",
+            "authors": ["Alice"],
+            "abstract": "Long abstract",
+            "venue": "Some Venue",
+            "citations": 10,
+            "is_retracted": False,
+        },
+        {
+            "title": "Paper",
+            "authors": [],
+            "citations": 1,
+            "is_retracted": True,
+        },
+    ]
+    merged = merge_group(group)
+    assert merged["is_retracted"] is True
+
+
+def test_merge_group_is_retracted_stays_none_when_unknown_everywhere():
+    """Fehlt das Feld ueberall, bleibt das Ergebnis None (unbekannt), nicht False (#618 AC4)."""
+    group = [
+        {"title": "Paper", "authors": ["Alice"], "citations": 5, "is_retracted": None},
+        {"title": "Paper", "authors": [], "citations": 1, "is_retracted": None},
+    ]
+    merged = merge_group(group)
+    assert merged["is_retracted"] is None
+
+
 def test_dedup_real_world_multi_source_duplicate():
     """Dieselbe Arbeit, geliefert von vier Quellen-Schemata (Crossref, OpenAlex,
     Semantic-Scholar-artig mit dx.doi.org-Präfix, sowie ein BASE-Treffer ganz ohne

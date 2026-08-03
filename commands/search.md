@@ -183,7 +183,14 @@ Anzeigen:
 1. Die in Schritt 2 expandierten Queries aus `$SESSION_DIR/queries.json`
    (bei `--no-expand`: die rohe User-Query) — damit sichtbar ist, wonach
    tatsächlich gesucht wurde.
-2. Die Top-5-10-Treffer aus dem Preview als formatierte Tabelle.
+2. Die Top-5-10-Treffer aus dem Preview als formatierte Tabelle. Treffer mit
+   `is_retracted: true` erhalten eine sichtbare Markierung (z. B. Spalte/Badge
+   „⚠ Retracted") — **vor** dem Screening, damit niemand eine zurückgezogene
+   Arbeit unwissentlich mitscreent (#618). `is_retracted: false` bleibt
+   unmarkiert, `is_retracted` fehlend/`null` ebenfalls unmarkiert und darf
+   NICHT wie „nicht zurückgezogen" dargestellt werden — die Drei-Werte-Semantik
+   (zurückgezogen / nicht zurückgezogen / unbekannt) muss in der Tabelle
+   erkennbar bleiben.
 
 Dann **Approval-Gate via `AskUserQuestion`**:
 
@@ -269,6 +276,10 @@ gezählt.
 ### Schritt 11: Ergebnisse anzeigen
 
 Eine formatierte Tabelle mit Rang, Titel, Jahr, Score, Cluster und Quellmodul ausgeben.
+Treffer mit `is_retracted: true` wie in Schritt 7 sichtbar markieren („⚠ Retracted");
+`is_retracted: false` unmarkiert, fehlend/`null` ebenfalls unmarkiert und nicht als
+„nicht zurückgezogen" ausweisen (#618). Der Hinweis führt zu keinem automatischen
+Ausschluss — die Entscheidung trifft der Mensch.
 Pfad des Session-Verzeichnisses melden.
 
 Die Kontext-Datei `./literature_state.md` im Projekt-Ordner mit neuen Statistiken aktualisieren, falls akademischer Kontext vorliegt.

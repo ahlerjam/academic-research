@@ -76,6 +76,17 @@ def merge_group(group: list[dict[str, Any]]) -> dict[str, Any]:
         if not merged.get("open_access_pdf") and paper.get("open_access_pdf"):
             merged["open_access_pdf"] = paper["open_access_pdf"]
 
+    # Retraction status: True beats False beats None across the whole group,
+    # so a retraction hint from a secondary source is never lost when merged
+    # with a more complete but not-yet-flagged record (#618).
+    retraction_values = [p.get("is_retracted") for p in group]
+    if True in retraction_values:
+        merged["is_retracted"] = True
+    elif False in retraction_values:
+        merged["is_retracted"] = False
+    else:
+        merged["is_retracted"] = None
+
     # Track all source modules
     sources = list({p.get("source_module", "") for p in group if p.get("source_module")})
     if len(sources) > 1:
