@@ -2,5 +2,7 @@
   "_comment": "Obergrenze gleichzeitig gestarteter Subagents fuer den Screening-/RoB-Fan-out (Issue #460). Vorrang: Argument > ACADEMIC_RESEARCH_MAX_PARALLEL > diese Datei > Default 4. Harte Obergrenze: 8.",
   "max_parallel_agents": 4,
   "_comment_double_screening": "Schalter fuer blindes Doppel-Screening (Issue #598). Vorrang: Argument > ACADEMIC_RESEARCH_DOUBLE_SCREENING > diese Datei > Default true (methodisch sauberer Weg ist der Standardweg). Bei false verhaelt sich das Screening exakt wie vor #598 (ein Judge-Lauf je Treffer).",
-  "double_screening": true
+  "double_screening": true,
+  "_comment_nli_prefilter": "Schalter fuer den lokalen NLI-Batch-Vorfilter vor quote-fidelity-auditor (Issue #592). Vorrang: Argument > ACADEMIC_RESEARCH_NLI_PREFILTER > diese Datei > Default false (AUS, bis die Validierung an echtem Zitatmaterial vorliegt -- evals/524-nli-prefilter/README.md). Bei false erreichen alle Kapitel-Zitate ungefiltert den bestehenden Pruefpfad, exakt wie ohne Vorfilter.",
+  "nli_prefilter_enabled": false
 }

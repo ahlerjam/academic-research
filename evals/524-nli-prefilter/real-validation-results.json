@@ -1,0 +1,566 @@
+{
+  "run_at_utc": "2026-08-03T22:37:36Z",
+  "environment": {
+    "transformers_version": "5.14.1",
+    "torch_version": "2.13.0",
+    "python_version": "3.12.13",
+    "device": "cpu"
+  },
+  "n_source_papers": 15,
+  "result": {
+    "model": "mdeberta-xnli",
+    "n_cases": 60,
+    "tp": 23,
+    "fp": 0,
+    "fn": 7,
+    "tn": 30,
+    "precision": 1.0,
+    "recall": 0.7666666666666667,
+    "accuracy": 0.8833333333333333,
+    "fp_rate": 0.0,
+    "avg_latency_s": 0.5767168597327933,
+    "fp_examples": [],
+    "details": [
+      {
+        "id": "real-01-a",
+        "expected": "faithful",
+        "actual": "verzerrend",
+        "raw_score": 0.202392578125,
+        "latency_s": 28.75307687500026,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1706.03762"
+      },
+      {
+        "id": "real-01-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0052490234375,
+        "latency_s": 0.09708541596774012,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/1706.03762"
+      },
+      {
+        "id": "real-02-a",
+        "expected": "faithful",
+        "actual": "verzerrend",
+        "raw_score": 0.255615234375,
+        "latency_s": 0.08717633300693706,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1706.03762"
+      },
+      {
+        "id": "real-02-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.000896453857421875,
+        "latency_s": 0.08512079203501344,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/1706.03762"
+      },
+      {
+        "id": "real-03-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.6728515625,
+        "latency_s": 0.11166625004261732,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1810.04805"
+      },
+      {
+        "id": "real-03-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 7.295608520507812e-05,
+        "latency_s": 0.09617054200498387,
+        "verzerrend_type": "polarity-flip",
+        "source_url": "https://arxiv.org/abs/1810.04805"
+      },
+      {
+        "id": "real-04-a",
+        "expected": "faithful",
+        "actual": "verzerrend",
+        "raw_score": 0.0250091552734375,
+        "latency_s": 0.10234541702084243,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1810.04805"
+      },
+      {
+        "id": "real-04-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.00926971435546875,
+        "latency_s": 0.0916001659934409,
+        "verzerrend_type": "unsupported",
+        "source_url": "https://arxiv.org/abs/1810.04805"
+      },
+      {
+        "id": "real-05-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9248046875,
+        "latency_s": 0.11424062500009313,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1512.03385"
+      },
+      {
+        "id": "real-05-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0006241798400878906,
+        "latency_s": 0.09199258300941437,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/1512.03385"
+      },
+      {
+        "id": "real-06-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9853515625,
+        "latency_s": 0.09528912499081343,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1512.03385"
+      },
+      {
+        "id": "real-06-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.00423431396484375,
+        "latency_s": 0.0948912079911679,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/1512.03385"
+      },
+      {
+        "id": "real-07-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.8056640625,
+        "latency_s": 0.10633512499043718,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1406.2661"
+      },
+      {
+        "id": "real-07-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.00032806396484375,
+        "latency_s": 0.10298187501030043,
+        "verzerrend_type": "polarity-flip",
+        "source_url": "https://arxiv.org/abs/1406.2661"
+      },
+      {
+        "id": "real-08-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9970703125,
+        "latency_s": 0.10457704204600304,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1406.2661"
+      },
+      {
+        "id": "real-08-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 9.810924530029297e-05,
+        "latency_s": 0.09194745897548273,
+        "verzerrend_type": "unsupported",
+        "source_url": "https://arxiv.org/abs/1406.2661"
+      },
+      {
+        "id": "real-09-a",
+        "expected": "faithful",
+        "actual": "verzerrend",
+        "raw_score": 0.0018320083618164062,
+        "latency_s": 0.11016475001815706,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1412.6980"
+      },
+      {
+        "id": "real-09-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0025463104248046875,
+        "latency_s": 0.09383525000885129,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/1412.6980"
+      },
+      {
+        "id": "real-10-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.982421875,
+        "latency_s": 0.10120462498161942,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1412.6980"
+      },
+      {
+        "id": "real-10-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.025421142578125,
+        "latency_s": 0.08883991604670882,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/1412.6980"
+      },
+      {
+        "id": "real-11-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.94384765625,
+        "latency_s": 0.08627983299084008,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1301.3781"
+      },
+      {
+        "id": "real-11-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.00021135807037353516,
+        "latency_s": 0.09062404098222032,
+        "verzerrend_type": "polarity-flip",
+        "source_url": "https://arxiv.org/abs/1301.3781"
+      },
+      {
+        "id": "real-12-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.998046875,
+        "latency_s": 0.09489125001709908,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1301.3781"
+      },
+      {
+        "id": "real-12-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.00017631053924560547,
+        "latency_s": 0.08520920900627971,
+        "verzerrend_type": "unsupported",
+        "source_url": "https://arxiv.org/abs/1301.3781"
+      },
+      {
+        "id": "real-13-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9931640625,
+        "latency_s": 0.10234720900189131,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/2006.11239"
+      },
+      {
+        "id": "real-13-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0002994537353515625,
+        "latency_s": 0.09159533301135525,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/2006.11239"
+      },
+      {
+        "id": "real-14-a",
+        "expected": "faithful",
+        "actual": "verzerrend",
+        "raw_score": 0.374267578125,
+        "latency_s": 0.11237133399117738,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/2006.11239"
+      },
+      {
+        "id": "real-14-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.01328277587890625,
+        "latency_s": 0.10838270798558369,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/2006.11239"
+      },
+      {
+        "id": "real-15-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.99267578125,
+        "latency_s": 0.10526162496535107,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/2005.11401"
+      },
+      {
+        "id": "real-15-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 7.432699203491211e-05,
+        "latency_s": 0.08915370801696554,
+        "verzerrend_type": "polarity-flip",
+        "source_url": "https://arxiv.org/abs/2005.11401"
+      },
+      {
+        "id": "real-16-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.974609375,
+        "latency_s": 0.10852387500926852,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/2005.11401"
+      },
+      {
+        "id": "real-16-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0001035928726196289,
+        "latency_s": 0.09623608400579542,
+        "verzerrend_type": "unsupported",
+        "source_url": "https://arxiv.org/abs/2005.11401"
+      },
+      {
+        "id": "real-17-a",
+        "expected": "faithful",
+        "actual": "verzerrend",
+        "raw_score": 0.490966796875,
+        "latency_s": 0.09483004198409617,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1503.02531"
+      },
+      {
+        "id": "real-17-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0004413127899169922,
+        "latency_s": 0.09788283298257738,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/1503.02531"
+      },
+      {
+        "id": "real-18-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.5556640625,
+        "latency_s": 0.09799475001636893,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1503.02531"
+      },
+      {
+        "id": "real-18-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0004887580871582031,
+        "latency_s": 0.08606624999083579,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/1503.02531"
+      },
+      {
+        "id": "real-19-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9853515625,
+        "latency_s": 0.09180495794862509,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1409.1556"
+      },
+      {
+        "id": "real-19-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.1502685546875,
+        "latency_s": 0.09113958303350955,
+        "verzerrend_type": "polarity-flip",
+        "source_url": "https://arxiv.org/abs/1409.1556"
+      },
+      {
+        "id": "real-20-a",
+        "expected": "faithful",
+        "actual": "verzerrend",
+        "raw_score": 0.01190185546875,
+        "latency_s": 0.0933344999793917,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1409.1556"
+      },
+      {
+        "id": "real-20-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0019006729125976562,
+        "latency_s": 0.07373062503756955,
+        "verzerrend_type": "unsupported",
+        "source_url": "https://arxiv.org/abs/1409.1556"
+      },
+      {
+        "id": "real-21-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9970703125,
+        "latency_s": 0.0841757919988595,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1502.03167"
+      },
+      {
+        "id": "real-21-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0006399154663085938,
+        "latency_s": 0.07769399997778237,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/1502.03167"
+      },
+      {
+        "id": "real-22-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.99462890625,
+        "latency_s": 0.07916312501765788,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1502.03167"
+      },
+      {
+        "id": "real-22-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.006839752197265625,
+        "latency_s": 0.08334770903456956,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/1502.03167"
+      },
+      {
+        "id": "real-23-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.99609375,
+        "latency_s": 0.09919549996266142,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1409.0473"
+      },
+      {
+        "id": "real-23-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0007853507995605469,
+        "latency_s": 0.0992398330126889,
+        "verzerrend_type": "polarity-flip",
+        "source_url": "https://arxiv.org/abs/1409.0473"
+      },
+      {
+        "id": "real-24-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.98974609375,
+        "latency_s": 0.11116737499833107,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1409.0473"
+      },
+      {
+        "id": "real-24-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.00026726722717285156,
+        "latency_s": 0.10632241697749123,
+        "verzerrend_type": "unsupported",
+        "source_url": "https://arxiv.org/abs/1409.0473"
+      },
+      {
+        "id": "real-25-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.98046875,
+        "latency_s": 0.1267321670311503,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1312.6114"
+      },
+      {
+        "id": "real-25-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0006570816040039062,
+        "latency_s": 0.12226008297875524,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/1312.6114"
+      },
+      {
+        "id": "real-26-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.98291015625,
+        "latency_s": 0.12520633300300688,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1312.6114"
+      },
+      {
+        "id": "real-26-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.0036983489990234375,
+        "latency_s": 0.11053004197310656,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/1312.6114"
+      },
+      {
+        "id": "real-27-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9951171875,
+        "latency_s": 0.12707049999153242,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1607.06450"
+      },
+      {
+        "id": "real-27-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 7.551908493041992e-05,
+        "latency_s": 0.09720899997046217,
+        "verzerrend_type": "polarity-flip",
+        "source_url": "https://arxiv.org/abs/1607.06450"
+      },
+      {
+        "id": "real-28-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.9951171875,
+        "latency_s": 0.08780054096132517,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1607.06450"
+      },
+      {
+        "id": "real-28-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.00021898746490478516,
+        "latency_s": 0.08414445898961276,
+        "verzerrend_type": "unsupported",
+        "source_url": "https://arxiv.org/abs/1607.06450"
+      },
+      {
+        "id": "real-29-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.912109375,
+        "latency_s": 0.10927874996559694,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1911.02116"
+      },
+      {
+        "id": "real-29-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.051177978515625,
+        "latency_s": 0.08944666699972004,
+        "verzerrend_type": "overstated",
+        "source_url": "https://arxiv.org/abs/1911.02116"
+      },
+      {
+        "id": "real-30-a",
+        "expected": "faithful",
+        "actual": "faithful",
+        "raw_score": 0.97705078125,
+        "latency_s": 0.1323592090047896,
+        "verzerrend_type": null,
+        "source_url": "https://arxiv.org/abs/1911.02116"
+      },
+      {
+        "id": "real-30-b",
+        "expected": "verzerrend",
+        "actual": "verzerrend",
+        "raw_score": 0.13720703125,
+        "latency_s": 0.13246695802081376,
+        "verzerrend_type": "context-stripped",
+        "source_url": "https://arxiv.org/abs/1911.02116"
+      }
+    ]
+  }
+}
