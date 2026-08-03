@@ -164,7 +164,7 @@ function fingerprintsEqual(a, b) {
 }
 
 function writeMarker(markerPath, { fingerprint, snapshotPath, lastSnapshotAt, sessionId }) {
-  const payload = { fingerprint, snapshotPath, lastSnapshotAt, sessionId };
+  const payload = { fingerprint, snapshotPath, lastSnapshotAt, session_id: sessionId };
   writeFileSync(markerPath, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
 }
 
@@ -256,7 +256,8 @@ async function main() {
   }
 
   const marker = readMarker(markerPath);
-  const currentSessionId = stopPayload?.sessionId || null;
+  // Claude-Code-Hook-Payloads verwenden snake_case, nicht camelCase
+  const currentSessionId = stopPayload?.session_id || null;
 
   // Drosseln pro Sitzung: schon in dieser Sitzung exportiert?
   if (marker && marker.sessionId === currentSessionId && currentSessionId !== null) {

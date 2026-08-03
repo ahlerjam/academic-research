@@ -287,6 +287,103 @@ def test_session_snapshot_failopen_on_export_failure(tmp_path):
     assert len(tarballs) == 0, f"Bei Fehlschlag darf kein Tarball entstehen: {tarballs}"
 
 
+def test_session_snapshot_throttles_same_session_id(tmp_path):
+    """PR #650 P1-Fix: Pro-Sitzungs-Drosselung: zwei Laeufe mit identischem
+    session_id und zwischenzeitlich veraendertem Vault erzeugen genau 1 Snapshot
+    (Export im ersten Lauf, uebersprungen im zweiten).
+    Ohne diese Drosselung: Stop-Event feuert nach JEDEM Turn → Voll-Export pro
+    Turn → Retention kollabiert auf ~20 Minuten statt 20 Snapshots.
+    """
+    slug = "test-project"
+    snapshots_dir = tmp_path / "snapshots"
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    vault_db = tmp_path / "vault.db"
+    _make_vault_db(vault_db, b"vault-content-v1")
+
+    env_overrides = {
+        "ACADEMIC_SNAPSHOTS_DIR": str(snapshots_dir),
+        "ACADEMIC_PROJECT_SLUG": slug,
+        "CLAUDE_PROJECT_DIR": str(project_dir),
+        "VAULT_DB_PATH": str(vault_db),
+    }
+
+    session_id = "sess-test-session-abc123"
+
+    # Erster Lauf: Vault veraendert sich, Export erfolgt
+    result1 = run_hook(
+        {"hook_event_name": "Stop", "session_id": session_id},
+        env_overrides=env_overrides,
+    )
+    assert result1.returncode == 0, f"Lauf 1 fehlgeschlagen. stderr: {result1.stderr}"
+
+    slug_dir = snapshots_dir / slug
+    tarballs_after_first = list(slug_dir.glob("*.tgz"))
+    assert len(tarballs_after_first) == 1, (
+        f"Nach Lauf 1 sollte genau 1 Snapshot existieren, gefunden: {tarballs_after_first}"
+    )
+
+    # Zweiter Lauf: Vault veraendert sich ERNEUT, aber session_id ist identisch
+    # → Hook ueberspringt Export wegen Drosselung
+    vault_db.write_bytes(b"vault-content-v2")
+    result2 = run_hook(
+        {"hook_event_name": "Stop", "session_id": session_id},
+        env_overrides=env_overrides,
+    )
+    assert result2.returncode == 0, f"Lauf 2 fehlgeschlagen. stderr: {result2.stderr}"
+
+    tarballs_after_second = list(slug_dir.glob("*.tgz"))
+    assert len(tarballs_after_second) == 1, (
+        f"Nach Lauf 2 mit gleicher session_id sollte noch genau 1 Snapshot "
+        f"existieren (Drosselung greift), gefunden: {tarballs_after_second}"
+    )
+
+
+def test_session_snapshot_exports_on_different_session_id(tmp_path):
+    """PR #650 P1-Fix: Neue Sitzung (unterschiedliche session_id) trigert
+    neuen Export, unabhaengig von Fingerprint.
+    """
+    slug = "test-project"
+    snapshots_dir = tmp_path / "snapshots"
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    vault_db = tmp_path / "vault.db"
+    _make_vault_db(vault_db, b"vault-content-v1")
+
+    env_overrides = {
+        "ACADEMIC_SNAPSHOTS_DIR": str(snapshots_dir),
+        "ACADEMIC_PROJECT_SLUG": slug,
+        "CLAUDE_PROJECT_DIR": str(project_dir),
+        "VAULT_DB_PATH": str(vault_db),
+    }
+
+    # Lauf 1: Sitzung A, Snapshot erfolgt
+    result1 = run_hook(
+        {"hook_event_name": "Stop", "session_id": "sess-session-a"},
+        env_overrides=env_overrides,
+    )
+    assert result1.returncode == 0
+
+    slug_dir = snapshots_dir / slug
+    tarballs_after_first = list(slug_dir.glob("*.tgz"))
+    assert len(tarballs_after_first) == 1
+
+    # Lauf 2: Sitzung B (unterschiedliche session_id), Vault unveraendert
+    # → Normalement wuerde der Fingerprint-Check den Export ueberspringen,
+    # aber neue session_id trigert trotzdem einen Export
+    result2 = run_hook(
+        {"hook_event_name": "Stop", "session_id": "sess-session-b"},
+        env_overrides=env_overrides,
+    )
+    assert result2.returncode == 0, f"stderr: {result2.stderr}"
+
+    tarballs_after_second = list(slug_dir.glob("*.tgz"))
+    assert len(tarballs_after_second) == 2, (
+        f"Nach Lauf 2 mit unterschiedlicher session_id sollten 2 Snapshots "
+        f"existieren, gefunden: {tarballs_after_second}"
+    )
+
+
 def test_hooks_json_wires_session_snapshot_under_stop():
     """hooks/hooks.json muss session-snapshot.mjs zusaetzlich unter Stop verdrahten,
     ohne den bestehenden Inline-Bash-Reminder zu entfernen."""
