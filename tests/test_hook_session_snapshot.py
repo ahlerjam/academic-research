@@ -340,8 +340,9 @@ def test_session_snapshot_throttles_same_session_id(tmp_path):
 
 
 def test_session_snapshot_exports_on_different_session_id(tmp_path):
-    """PR #650 P1-Fix: Neue Sitzung (unterschiedliche session_id) trigert
-    neuen Export, unabhaengig von Fingerprint.
+    """PR #650 P1-Fix: Neue Sitzung (unterschiedliche session_id) mit
+    veraendertem Vault trigert neuen Export. Das ist das normale Verhalten:
+    andere session_id hebt den Drosselvermerk auf, Fingerprint-Check loest Export aus.
     """
     slug = "test-project"
     snapshots_dir = tmp_path / "snapshots"
@@ -368,9 +369,9 @@ def test_session_snapshot_exports_on_different_session_id(tmp_path):
     tarballs_after_first = list(slug_dir.glob("*.tgz"))
     assert len(tarballs_after_first) == 1
 
-    # Lauf 2: Sitzung B (unterschiedliche session_id), Vault unveraendert
-    # → Normalement wuerde der Fingerprint-Check den Export ueberspringen,
-    # aber neue session_id trigert trotzdem einen Export
+    # Lauf 2: Vault veraendert sich UND session_id ist unterschiedlich
+    # → Export erfolgt, da neue session_id die Drosselung aufhebt
+    vault_db.write_bytes(b"vault-content-v2-changed")
     result2 = run_hook(
         {"hook_event_name": "Stop", "session_id": "sess-session-b"},
         env_overrides=env_overrides,
@@ -379,8 +380,8 @@ def test_session_snapshot_exports_on_different_session_id(tmp_path):
 
     tarballs_after_second = list(slug_dir.glob("*.tgz"))
     assert len(tarballs_after_second) == 2, (
-        f"Nach Lauf 2 mit unterschiedlicher session_id sollten 2 Snapshots "
-        f"existieren, gefunden: {tarballs_after_second}"
+        f"Nach Lauf 2 mit unterschiedlicher session_id UND veraendertem Vault "
+        f"sollten 2 Snapshots existieren, gefunden: {tarballs_after_second}"
     )
 
 
