@@ -105,7 +105,7 @@ Vier Dinge müssen da sein, der Rest erweitert nur:
 | **Python 3.11+** | Pflicht | Vault-MCP-Server, Such- und PDF-Skripte |
 | **Node.js** | Pflicht | Die Hooks laufen als `node …mjs` — ohne Node kein Zitat-Guard |
 | **Git** | Pflicht | Installation über den Plugin-Marketplace |
-| Modell `intfloat/multilingual-e5-small` | Pflicht, lädt sich selbst | ~470 MB einmalig beim ersten PDF; danach läuft die Vektor-Suche offline |
+| Modell `intfloat/multilingual-e5-small` | Optional, lädt sich selbst | ~470 MB einmalig beim ersten PDF; ohne das Modell läuft die Suche sauber auf Stichwortsuche (FTS5) zurück — Zustand siehe [Vault-MCP-Server](docs/reference/vault.md#mcp-tools-alle-47) |
 | `uv` oder `pipx` | Optional | installiert die `browser-use`-CLI für die 7 Browser-Module |
 | `ocrmypdf` | Optional | OCR für gescannte PDFs ohne Textebene |
 
@@ -203,7 +203,7 @@ Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
 - [Commands](docs/reference/commands.md) — alle 11 Slash-Commands mit Syntax und Beispielen
 - [Skills](docs/reference/skills.md) — alle 40 Skills und ihre Trigger
 - [Agents](docs/reference/agents.md) — alle 27 Subagents
-- [Vault-MCP-Server](docs/reference/vault.md) — alle 46 MCP-Tools, Volltext- und Vektor-Index
+- [Vault-MCP-Server](docs/reference/vault.md) — alle 47 MCP-Tools, Volltext- und Vektor-Index
 - [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt
 - [Hooks-Stack](docs/reference/hooks.md) — was wann eingreift, und was geloggt wird
 - [Per-Uni-Profile](docs/reference/uni-profiles.md) — Hochschulzugänge einrichten

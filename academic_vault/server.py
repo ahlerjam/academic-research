@@ -28,6 +28,7 @@ from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
 from .decision_log import parse_model_version_text as _parse_model_version_text
 from .embedding_model import get_embedder
+from .health import get_component_status
 
 logger = logging.getLogger(__name__)
 
@@ -1238,6 +1239,15 @@ def get_stats(db_path: str) -> dict:
     }
 
 
+def component_status(db_path: str) -> dict:
+    """Zustandsausgabe fuer die optionalen Vault-Bestandteile (Issue #624).
+
+    Meldet je Embedding-Modell, sqlite-vec und FTS5, ob geladen und welche
+    Funktion bei Nichtladen fehlt -- siehe :func:`academic_vault.health.get_component_status`.
+    """
+    return get_component_status(db_path)
+
+
 def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
     """Setzt ocr_done-Flag fuer ein Paper im Vault."""
     db = VaultDB(db_path)
@@ -2168,6 +2178,11 @@ def _build_mcp_server():
     def _vault_stats() -> dict:
         """Counts: paper_count, quote_count."""
         return get_stats(db_path)
+
+    @mcp.tool(name="vault.component_status")
+    def _vault_component_status() -> dict:
+        """Zustand optionaler Bestandteile: Embedding-Modell, sqlite-vec, FTS5 (#624)."""
+        return component_status(db_path)
 
     @mcp.tool(name="vault.set_ocr_done")
     def _vault_set_ocr_done(paper_id: str, value: int = 1) -> None:

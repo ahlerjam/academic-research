@@ -156,10 +156,17 @@ class E5SmallEmbedder:
 # Import-/Ladeversuch startet.
 _EMBEDDER_CACHE: dict[str, Embedder | None] = {}
 
+# Fehlerursache pro Modell-ID, parallel zu _EMBEDDER_CACHE gepflegt (Issue #624):
+# vorher wurde die Exception nur geloggt, nie zurueckgegeben. ``None`` bedeutet
+# "kein Fehler bekannt" -- entweder weil das Backend laedt, oder weil noch kein
+# Ladeversuch stattfand.
+_EMBEDDER_ERROR_CACHE: dict[str, str | None] = {}
+
 
 def reset_embedder_cache() -> None:
-    """Leert den Embedder-Cache (Tests, Modellwechsel zur Laufzeit)."""
+    """Leert Embedder- und Fehlerursache-Cache (Tests, Modellwechsel zur Laufzeit)."""
     _EMBEDDER_CACHE.clear()
+    _EMBEDDER_ERROR_CACHE.clear()
 
 
 def get_embedder(model_id: str | None = None) -> Embedder | None:
@@ -179,6 +186,7 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
         candidate = E5SmallEmbedder(model_id=key)
         candidate.load()
         embedder = candidate
+        _EMBEDDER_ERROR_CACHE[key] = None
     except Exception as exc:
         # ImportError (Backend deinstalliert), OSError (kein Modell-Download
         # moeglich), RuntimeError (inkompatibles Backend) — gleicher Ausgang,
@@ -191,6 +199,23 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
             exc,
         )
         embedder = None
+        # Reason gecacht neben dem Ergebnis (Issue #624): ein zweiter Aufruf im
+        # selben Prozess trifft den Cache-Hit oben und laedt nicht erneut --
+        # ohne diesen Cache waere die Fehlerursache nach dem ersten Aufruf
+        # verloren, obwohl vault.component_status() sie braucht.
+        _EMBEDDER_ERROR_CACHE[key] = f"{type(exc).__name__}: {exc}"
 
     _EMBEDDER_CACHE[key] = embedder
     return embedder
+
+
+def get_embedder_error(model_id: str | None = None) -> str | None:
+    """Fehlerursache des letzten ``get_embedder()``-Ladeversuchs fuer ``model_id``.
+
+    ``None`` heisst: entweder laedt der Embedder erfolgreich, oder es gab noch
+    keinen Ladeversuch (Cache leer) -- ``get_embedder()`` zuerst aufrufen, wenn
+    der Ladeversuch garantiert stattgefunden haben soll (Issue #624,
+    ``vault.component_status``).
+    """
+    key = model_id or os.environ.get(ENV_MODEL_ID) or DEFAULT_MODEL_ID
+    return _EMBEDDER_ERROR_CACHE.get(key)
