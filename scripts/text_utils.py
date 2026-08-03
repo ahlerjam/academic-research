@@ -25,6 +25,7 @@ class Paper:
     source_module: str = ""
     oa_url: str | None = None
     open_access_pdf: str | None = None
+    is_retracted: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -50,6 +51,7 @@ def normalize_paper(data: dict[str, Any], source_module: str) -> dict[str, Any]:
         "source_module": source_module,
         "oa_url": data.get("oa_url"),
         "open_access_pdf": data.get("open_access_pdf"),
+        "is_retracted": data.get("is_retracted"),
     }
 
 
