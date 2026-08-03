@@ -66,6 +66,16 @@ dependencies = [
     # Textstelle fuer leicht abweichende Zitat-Kandidaten. >=3.14.5: der Stand,
     # mit dem die Suite tatsaechlich laeuft (uv.lock).
     "rapidfuzz>=3.14.5",
+    # Rechenkern von quantitative-analysis (#610):
+    # skills/quantitative-analysis/scripts/analyze.py braucht t-, F-, chi2- und
+    # U-Verteilungen (scipy.stats) sowie Vektor-Arithmetik fuer Kennwerte und
+    # Bootstrap (numpy). Beide liegen ohnehin im Closure jeder Installation
+    # (sentence-transformers -> scikit-learn -> scipy -> numpy), stehen hier
+    # aber ABSICHTLICH explizit: eine implizite transitive Dependency
+    # verschwindet beim naechsten Umbau des ML-Stacks still, und der Skill
+    # bricht dann erst zur Laufzeit. Zweitstelle: scripts/requirements.txt.
+    "numpy>=1.26",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]

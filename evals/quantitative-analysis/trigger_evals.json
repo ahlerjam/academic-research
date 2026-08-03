@@ -1,0 +1,27 @@
+{
+  "component": "quantitative-analysis",
+  "should_trigger": [
+    "Ich habe meine Fragebogendaten als CSV und will sie jetzt quantitativ auswerten.",
+    "Rechne mir einen t-Test zwischen Kontroll- und Interventionsgruppe.",
+    "Brauche ich für den Gruppenvergleich eine Varianzanalyse oder reicht ein t-Test?",
+    "Wie berechne ich die Effektstärke zu meinem Ergebnis?",
+    "Mein Ergebnisteil hat nur p-Werte — da fehlen Effektstärken und Konfidenzintervalle.",
+    "Prüf bitte die Voraussetzungen, bevor du den t-Test rechnest.",
+    "Ich möchte den Zusammenhang zwischen Alter und Score in meinen Erhebungsdaten prüfen.",
+    "Schreib mir einen Analyseplan für meine Erhebung, damit die Auswertung nachvollziehbar ist.",
+    "Die Auswertung muss reproduzierbar dokumentiert sein — wie mache ich das?",
+    "Vergleiche die drei Standorte in meinem Datensatz statistisch."
+  ],
+  "should_not_trigger": [
+    "Kodiere mein Interviewtranskript nach Kategorien.",
+    "Welches Forschungsdesign passt zu meiner Fragestellung?",
+    "Fasse die Effektstärken aus den 14 gefundenen Studien zu einer Meta-Analyse zusammen.",
+    "Entwirf mir einen Fragebogen zur Arbeitszufriedenheit.",
+    "Schreibe das Ergebniskapitel meiner Arbeit.",
+    "Importiere meine Zotero-Bibliothek in den Vault.",
+    "Prüfe meinen Text auf Plagiate.",
+    "Exportiere die Thesis als Word-Datei.",
+    "Suche mir Literatur zu Selbstwirksamkeit im Lehrberuf.",
+    "Bilde induktive Kategorien aus meinem Erhebungsmaterial."
+  ]
+}

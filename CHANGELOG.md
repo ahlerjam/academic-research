@@ -10,6 +10,45 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Eigene quantitative Auswertung vom Rohdatensatz bis zum Ergebniskapitel
+  (#610):** Zwischen `instrument-design` (Instrument bauen) und
+  `chapter-writer` (Ergebniskapitel schreiben) klaffte bei quantitativen
+  Arbeiten eine Lücke — `meta-analysis` rechnet über **fremde** Studien, für
+  eigene Erhebungsdaten gab es nichts. Neuer Skill `quantitative-analysis` mit
+  dem deterministischen Rechenkern
+  `skills/quantitative-analysis/scripts/analyze.py` (Subkommandos `describe`,
+  `run`, `report`). Umfang der ersten Fassung bewusst begrenzt: Deskription,
+  Gruppenvergleiche (t-Test unabhängig/Welch/gepaart, Mann-Whitney-U,
+  Wilcoxon), Mehrgruppenvergleiche (einfaktorielle ANOVA, Kruskal-Wallis) und
+  Zusammenhangsmaße (χ²-Unabhängigkeitstest, Pearson r, Spearman ρ).
+  Regression, mehrfaktorielle Designs, Post-hoc-Vergleiche und Poweranalyse
+  sind ausdrücklich **nicht** abgedeckt und werden im Skill so benannt, statt
+  von Hand nachgeschoben zu werden.
+  Die drei harten Zusagen des Issues sind strukturell erzwungen, nicht als
+  Prosa: (1) Der Renderer bricht mit `ValueError` ab, sobald einem
+  inferenzstatistischen Ergebnis Effektstärke, Konfidenzintervall oder
+  Voraussetzungsblock fehlt — ein Bericht mit nackten p-Werten kann gar nicht
+  erst entstehen. (2) Jede Voraussetzungsprüfung (Shapiro-Wilk, Levene,
+  erwartete Zellhäufigkeit, Mindestfallzahl) wird mit Kennwert, p-Wert und
+  Verdikt berichtet, auch die erfüllte; eine Verletzung wird im Klartext
+  ausgesprochen und mit benannter Alternative versehen, wechselt das geplante
+  Verfahren aber **nie** still. (3) Reproduzierbarkeit über einen
+  versionierbaren Analyseplan (JSON) plus getrennte Ausgabe: `ergebnisse.json`
+  trägt keinen Zeitstempel und ist zwischen zwei Läufen byte-identisch, alles
+  Laufabhängige (Zeit, Pfade, Python-/numpy-/scipy-Version) steht in
+  `lauf_meta.json`, und `protokoll.md` enthält die vollständige
+  Wiederhol-Kommandozeile samt SHA-256 der Rohdatei.
+  Die Rohdaten bleiben außerhalb des Vaults (ein Datensatz mit tausend Fällen
+  gehört nicht in eine Literatur-Datenbank); in den Vault gehen nur der
+  `papers`-Anker mit `source_kind='primary'`, je Ergebnis eine `figures`-Zeile
+  und jede Verfahrensentscheidung als `decisions`-Eintrag mit
+  `category="auswertung"`. Der Skill formuliert keine inhaltliche Deutung: Das
+  Protokoll weist sie als `Deutung: [vom Autor zu ergänzen]` aus.
+  Neue explizite Runtime-Dependencies `numpy` und `scipy` (lagen bislang nur
+  transitiv über `sentence-transformers` im Environment). Skill-Zähler
+  40 → 41 in README.md, AGENTS.md, plugin.json, marketplace.json und
+  docs/reference/skills.md.
+
 - **Vault-weite, wiederholbare Retraction-Prüfung (#604):** Der bisherige
   Crossref-Retraction-Check lief nur einmalig beim `reading-list-import` und
   erreichte damit weder Papers aus anderen Importwegen (`zotero-import`,

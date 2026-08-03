@@ -21,9 +21,9 @@ auf geeignete Methoden und skizziert Operationalisierung.
 ## Abgrenzung
 
 Wählt und begründet Methoden passend zur Forschungsfrage.
-Für Schärfung der Forschungsfrage selbst → `research-question-refiner`.
-Für Einbettung in die Gliederung → `advisor`.
-Passt die Methode zur These? → `sparring-partner`.
+Forschungsfrage schärfen → `research-question-refiner`; Gliederung → `advisor`.
+Methode gegen die These → `sparring-partner`.
+Ausführung der Methode: siehe Methodenkatalog.
 
 ## Methoden-Scoring-Matrix
 
