@@ -525,6 +525,11 @@ class VaultDB:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         self.vec_available: bool = False
+        # Fehlerursache des letzten load_vec_extension()-Fehlschlags (Issue
+        # #624): vorher wurde die Exception in zwei der drei Fehlschlagszweigen
+        # stillschweigend verschluckt. ``None`` heisst "kein Fehler bekannt" --
+        # entweder laedt die Extension, oder es gab noch keinen Ladeversuch.
+        self.vec_unavailable_reason: str | None = None
         self._conn: sqlite3.Connection | None = None
 
     # ------------------------------------------------------------------
@@ -622,12 +627,20 @@ class VaultDB:
 
         if not hasattr(target, "enable_load_extension"):
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                "Python-Interpreter unterstuetzt keine ladbaren SQLite-Erweiterungen "
+                "(kein enable_load_extension) -- typisch fuer System-Python ohne "
+                "--enable-loadable-sqlite-extensions."
+            )
             return False
 
         try:
             target.enable_load_extension(True)
-        except (AttributeError, sqlite3.OperationalError, sqlite3.NotSupportedError):
+        except (AttributeError, sqlite3.OperationalError, sqlite3.NotSupportedError) as exc:
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                f"enable_load_extension() nicht nutzbar ({type(exc).__name__}: {exc})"
+            )
             return False
 
         try:
@@ -638,8 +651,12 @@ class VaultDB:
 
                 target.load_extension(sqlite_vec.loadable_path())
             self.vec_available = True
-        except Exception:
+            self.vec_unavailable_reason = None
+        except Exception as exc:
             self.vec_available = False
+            self.vec_unavailable_reason = (
+                f"sqlite-vec-Extension nicht ladbar ({type(exc).__name__}: {exc})"
+            )
         finally:
             try:
                 target.enable_load_extension(False)
