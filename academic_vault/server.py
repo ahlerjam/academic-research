@@ -10,10 +10,20 @@ Start via: python -m academic_vault.server
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from uuid import uuid4
 
-from .db import _UNSET, VALID_PAPER_TYPES, VaultDB, _sanitize_fts5_query, _Unset, default_db_path
+from . import retraction as _retraction
+from .db import (
+    _UNSET,
+    VALID_PAPER_TYPES,
+    VaultDB,
+    _sanitize_fts5_query,
+    _Unset,
+    default_db_path,
+    paper_cited_in_chapters,
+)
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
 from .decision_log import parse_model_version_text as _parse_model_version_text
@@ -1310,6 +1320,125 @@ def is_excluded(db_path: str, paper_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Vault-weite Retraction-Pruefung (Issue #604)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_KAPITEL_DIRNAME = "kapitel"
+
+
+def check_retractions(
+    db_path: str,
+    max_age_days: int = 90,
+    force: bool = False,
+    project_dir: str = ".",
+) -> dict:
+    """Prueft alle Vault-Papers mit DOI vault-weit auf Rueckzug (Issue #604).
+
+    Iteriert ueber alle Papers mit ``source_kind='literature'`` -- unabhaengig
+    davon, ueber welchen Weg sie in den Vault kamen (zotero-import,
+    reading-list-import, anchor-paper-survey, github-repo-research, fetch,
+    ...; AC1). Nutzt die geteilte Crossref-Logik aus
+    ``academic_vault.retraction`` (AC2, dieselbe Logik wie
+    ``reading-list-import``).
+
+    Ein Paper wird nur erneut geprueft, wenn es noch nie geprueft wurde oder
+    die letzte Pruefung laenger als ``max_age_days`` zurueckliegt;
+    ``force=True`` erzwingt eine erneute Pruefung fuer alle Papers mit DOI
+    (AC3). Ein Crossref-Ausfall aktualisiert den Zeitstempel NICHT -- der
+    naechste Lauf versucht das betroffene Paper automatisch erneut.
+
+    Ein gefundener Rueckzug wird nur VORGELEGT, nie automatisch nach
+    ``excluded_sources`` geschrieben (AC4) -- das unterscheidet diesen Weg
+    bewusst von ``reading-list-import.check_retraction()``, der weiterhin
+    automatisch ausschliesst (Plan-Kommentar zu #604, Widerspruch 1). Jeder
+    Treffer traegt seine Fundstelle (``source``, der Crossref-DOI der
+    Retraction-Notiz) sowie ein ``cited_in_chapter``-Flag: eine heuristische
+    (Autor-Familienname + Jahr, s. ``db.paper_cited_in_chapters``) Pruefung,
+    ob das Paper bereits in einem Kapiteltext unter ``<project_dir>/kapitel/``
+    vorkommt (AC5).
+
+    Papers ohne DOI erscheinen unter ``no_doi`` -- "nicht pruefbar", nicht
+    stillschweigend uebergangen (AC6). Ein Crossref-Ausfall pro Paper landet
+    unter ``error`` mit Klartext-Ursache; ``error_count`` macht einen
+    Teilausfall im Gesamtergebnis sichtbar statt ihn wie ein leeres "keine
+    Rueckzuege"-Resultat aussehen zu lassen (AC7).
+
+    Rueckgabe:
+        {
+          "retracted": [{"paper_id", "doi", "source", "cited_in_chapter"}, ...],
+          "clean": [paper_id, ...],
+          "error": [{"paper_id", "doi", "error_message"}, ...],
+          "no_doi": [paper_id, ...],
+          "checked_count": int,   # tatsaechlich gegen Crossref geprueft
+          "skipped_fresh_count": int,  # uebersprungen, da noch nicht "stale"
+          "error_count": int,
+        }
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+
+    papers = db.list_literature_papers()
+    now = int(time.time())
+    stale_cutoff = now - max_age_days * 86400
+    kapitel_dir = Path(project_dir) / _DEFAULT_KAPITEL_DIRNAME
+
+    result: dict = {
+        "retracted": [],
+        "clean": [],
+        "error": [],
+        "no_doi": [],
+        "checked_count": 0,
+        "skipped_fresh_count": 0,
+    }
+
+    for paper in papers:
+        paper_id = paper["paper_id"]
+        doi = paper.get("doi")
+        if not doi:
+            result["no_doi"].append(paper_id)
+            continue
+
+        checked_at = paper.get("retraction_checked_at")
+        is_fresh = not force and checked_at is not None and checked_at >= stale_cutoff
+        if is_fresh:
+            result["skipped_fresh_count"] += 1
+            continue
+
+        check = _retraction.check_retraction(doi)
+        result["checked_count"] += 1
+
+        if check.status == "error":
+            result["error"].append(
+                {"paper_id": paper_id, "doi": doi, "error_message": check.error_message}
+            )
+            continue  # kein Timestamp-Update -- naechster Lauf versucht erneut.
+
+        db.update_retraction_checked_at(paper_id, now)
+
+        if check.status == "clean":
+            result["clean"].append(paper_id)
+            continue
+
+        # status == "retracted"
+        try:
+            csl = json.loads(paper.get("csl_json") or "{}")
+        except json.JSONDecodeError:
+            csl = {}
+        cited = paper_cited_in_chapters(csl, kapitel_dir)
+        result["retracted"].append(
+            {
+                "paper_id": paper_id,
+                "doi": doi,
+                "source": check.source,
+                "cited_in_chapter": cited,
+            }
+        )
+
+    result["error_count"] = len(result["error"])
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Risk-of-Bias Funktionen (v6.4, #100)
 # ---------------------------------------------------------------------------
 
@@ -2159,6 +2288,23 @@ def _build_mcp_server():
     def _vault_is_excluded(paper_id: str) -> bool:
         """Prueft ob paper_id in excluded_sources ist."""
         return is_excluded(db_path, paper_id=paper_id)
+
+    @mcp.tool(name="vault.check_retractions")
+    def _vault_check_retractions(
+        max_age_days: int = 90,
+        force: bool = False,
+        project_dir: str = ".",
+    ) -> dict:
+        """Prueft alle Vault-Papers mit DOI vault-weit auf Rueckzug (#604).
+
+        Legt Treffer nur VOR (Fundstelle in `source`, `cited_in_chapter`
+        heuristisch) -- schreibt nie automatisch nach `excluded_sources`.
+        `force=True` erzwingt eine erneute Pruefung auch frisch gepruefter
+        Papers.
+        """
+        return check_retractions(
+            db_path, max_age_days=max_age_days, force=force, project_dir=project_dir
+        )
 
     # -----------------------------------------------------------------------
     # v6.4: Risk-of-Bias Tools (#100)

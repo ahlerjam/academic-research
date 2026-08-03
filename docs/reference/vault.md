@@ -169,9 +169,9 @@ Bestands-Datenbanken bekommen `paper_tables` idempotent nachgezogen:
 python -c "from academic_vault.migrate import add_paper_tables_table as m; m('<pfad>/vault.db')"
 ```
 
-## MCP-Tools (alle 45)
+## MCP-Tools (alle 46)
 
-Der Server registriert **45 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **46 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -323,6 +323,7 @@ greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbati
 | `vault.is_excluded(paper_id)` | Prüft, ob `paper_id` ausgeschlossen ist | `vault.is_excluded("smith2010")` |
 | `vault.list_excluded_sources()` | Gibt alle ausgeschlossenen Quellen zurück | `vault.list_excluded_sources()` |
 | `vault.list_papers_by_provenance(provenance)` | Provenance-Audit: alle Papers mit gegebenem Herkunfts-Tag (z.B. `"scihub"`) | `vault.list_papers_by_provenance("scihub")` |
+| `vault.check_retractions(max_age_days=90, force=False, project_dir=".")` | Vault-weite Crossref-Retraction-Pruefung über alle Papers mit `source_kind='literature'` und DOI (#604); prüft nur seit `max_age_days` nicht (oder noch nie) geprüfte Papers, `force=True` erzwingt eine erneute Prüfung. Legt Treffer nur **vor** (`retracted`-Liste mit Fundstelle `source` und heuristischem `cited_in_chapter`-Flag) — schreibt **nie** automatisch nach `excluded_sources`. Papers ohne DOI landen unter `no_doi`, ein Crossref-Ausfall unter `error` (`error_count` macht einen Teilausfall sichtbar) | `vault.check_retractions(max_age_days=30)` |
 
 **Risk-of-Bias & Score-Historie** (v6.4)
 

@@ -51,6 +51,24 @@ try:
 except ImportError:
     _VAULT_NATIVE = False
 
+# Geteilte Crossref-Retraction-Logik (Issue #604): existiert genau einmal im
+# Repo, in academic_vault.retraction. Der obige sys.path-Insert deckt auch
+# diesen Import ab.
+try:
+    from academic_vault.retraction import CROSSREF_WORKS_URL as _CROSSREF_WORKS_URL
+    from academic_vault.retraction import check_retraction as _shared_check_retraction
+    from academic_vault.retraction import normalize_doi as _shared_normalize_doi
+
+    _RETRACTION_MODULE_AVAILABLE = True
+except ImportError:
+    _RETRACTION_MODULE_AVAILABLE = False
+    # Kein eigener Crossref-URL-String als Fallback (Issue #604, AC2: die
+    # Crossref-Abfragelogik existiert genau einmal im Repo) -- ohne das
+    # geteilte Modul bleiben resolve_doi()/check_retraction() unten
+    # funktionsunfaehig und melden das ueber ihre bestehenden
+    # Fail-safe-Rueckgaben (None bzw. False).
+    _CROSSREF_WORKS_URL = None
+
 
 # ---------------------------------------------------------------------------
 # Oeffentliche Interfaces (werden in Tests gemockt)
@@ -238,17 +256,20 @@ def load_entries(raw: str) -> list[dict]:
 # DOI-Resolution via Crossref
 # ---------------------------------------------------------------------------
 
-_CROSSREF_API = "https://api.crossref.org/works/{doi}"
-_DOI_URL_RE = re.compile(r"(?:https?://)?(?:dx\.)?doi\.org/(.+)")
-
 
 def _normalize_doi(doi: str) -> str:
-    """Normalisiert DOI: entfernt doi.org-Praefix, lowercase."""
-    doi = doi.strip()
-    m = _DOI_URL_RE.match(doi)
-    if m:
-        doi = m.group(1)
-    return doi
+    """Normalisiert DOI: entfernt doi.org-Praefix.
+
+    Delegiert an ``academic_vault.retraction.normalize_doi`` (Issue #604):
+    dieselbe Logik brauchen sowohl die Retraction-Pruefung als auch die
+    DOI-Resolution hier -- eine eigene Kopie wuerde AC2 verletzen ("Logik
+    existiert genau einmal im Repo"). Ohne verfuegbares Modul (z.B. isoliertes
+    Test-Setup ohne Repo-Root im sys.path) minimaler Fallback ohne
+    URL-Praefix-Strip.
+    """
+    if _RETRACTION_MODULE_AVAILABLE:
+        return _shared_normalize_doi(doi)
+    return doi.strip()
 
 
 def _crossref_message_to_csl(msg: dict) -> str:
@@ -300,9 +321,11 @@ def resolve_doi(doi: str) -> str | None:
         return None
     if not _REQUESTS_AVAILABLE:
         return None
+    if _CROSSREF_WORKS_URL is None:
+        return None
 
     doi_clean = _normalize_doi(doi)
-    url = _CROSSREF_API.format(doi=doi_clean)
+    url = _CROSSREF_WORKS_URL.format(doi=doi_clean)
 
     try:
         resp = requests.get(url, timeout=10, headers={"User-Agent": "academic-research/1.0"})
@@ -320,50 +343,28 @@ def resolve_doi(doi: str) -> str | None:
     return _crossref_message_to_csl(msg)
 
 
-def _is_retraction_update(updated_by: object) -> bool:
-    """Prueft ob eine Crossref `updated-by`-Liste einen Retraction-Eintrag enthaelt.
-
-    Robust gegen fehlendes Feld und gegen explizites JSON-null: Crossref liefert
-    `updated-by` nur bei tatsaechlich aktualisierten Werken.
-    """
-    if not isinstance(updated_by, list):
-        return False
-    return any(
-        isinstance(entry, dict) and entry.get("type") == "retraction" for entry in updated_by
-    )
-
-
 def check_retraction(doi: str) -> bool:
     """Prueft via Crossref ob ein DOI als zurueckgezogen (retracted) markiert ist.
 
-    Nutzt die seit 09/2023 in Crossref integrierten Retraction-Watch-Daten.
-
-    Ausgewertet wird `message.updated-by` mit `type == "retraction"`: Crossref
-    haengt dieses Feld an den ZURUECKGEZOGENEN Artikel. Das Gegenstueck
-    `message.update-to` gehoert zur Retraction-NOTIZ und zeigt von dieser auf den
-    Artikel — es auszuwerten drehte die Relation um und liefe fuer jedes real
-    zurueckgezogene Paper ins Leere (Regression, PR #419).
-
-    Fail-safe: Jeder Netzwerk-/Parse-Fehler oder fehlender DOI liefert False —
-    blockiert niemals den regulaeren Paper-Ingest (AC3, Issue #383).
+    Fail-safe Wrapper um die geteilte Crossref-Pruefung
+    ``academic_vault.retraction.check_retraction()`` (Issue #604): die
+    eigentliche Crossref-Abfrage- und Auswertungslogik existiert seither nur
+    noch dort (AC2). Dieser Importpfad bleibt an seinem alten Vertrag (Issue
+    #383, AC3) -- der Ingest darf nie blockieren, deshalb werden hier sowohl
+    ``"clean"`` als auch ``"error"`` als "kein Rueckzug" (``False``)
+    behandelt. Die Unterscheidung "sauber" vs. "Crossref-Ausfall" existiert
+    erst im vault-weiten Check (``academic_vault.server.check_retractions``),
+    der eine sichtbare Fehlermeldung braucht (AC7) -- eine Anforderung, die
+    sich mit dem fail-safe-Vertrag hier nicht vertraegt (Plan-Kommentar zu
+    #604, Widerspruch 2, bewusst nicht aufgeloest).
     """
-    if not doi:
+    if not _RETRACTION_MODULE_AVAILABLE:
         return False
-    if not _REQUESTS_AVAILABLE:
-        return False
-
     try:
-        doi_clean = _normalize_doi(doi)
-        url = _CROSSREF_API.format(doi=doi_clean)
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "academic-research/1.0"})
-
-        if resp.status_code != 200:
-            return False
-
-        msg = resp.json().get("message", {})
-        return _is_retraction_update(msg.get("updated-by"))
+        result = _shared_check_retraction(doi)
     except Exception:
         return False
+    return result.status == "retracted"
 
 
 # ---------------------------------------------------------------------------
