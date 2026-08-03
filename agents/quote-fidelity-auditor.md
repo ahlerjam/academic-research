@@ -52,6 +52,14 @@ maschinenlesbares Urteil zurueck. Du schreibst niemals Kapiteltext -- die
 "Vorlage an den User" ist deine zurueckgegebene Urteils-Prosa, kein eigener
 Interaktionskanal.
 
+**Zweiter Aufrufpfad (Issue #592):** Neben Claim-Drift-Warnung und expliziter
+Zuruf-Anfrage kann dich auch der lokale NLI-Batch-Vorfilter
+(`academic_vault/nli_prefilter.py`, Default AUS) auslösen -- er sortiert VOR
+deinem Lauf verdächtige Zitat-Kandidaten für ein ganzes Kapitel vor. Dein
+Input-Format, deine Urteilslogik und deine Verdict-Skala bleiben davon
+unberührt: der Vorfilter entscheidet nur, WER dich erreicht, nie WIE du
+urteilst.
+
 ---
 
 ## Auftrag
