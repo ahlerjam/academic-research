@@ -262,9 +262,9 @@ def _mann_whitney_u(x: np.ndarray, y: np.ndarray) -> float:
 
 
 def rang_biserial(x: np.ndarray, y: np.ndarray) -> float:
-    """Rang-biseriale Korrelation aus U (Kerby 2014): 1 - 2U/(n1*n2)."""
+    """Rang-biseriale Korrelation aus U (Kerby 2014): 2U/(n1*n2) - 1."""
     u = _mann_whitney_u(x, y)
-    return 1 - 2 * u / (len(x) * len(y))
+    return 2 * u / (len(x) * len(y)) - 1
 
 
 def rang_biserial_gepaart(vorher: np.ndarray, nachher: np.ndarray) -> float:
@@ -1032,7 +1032,7 @@ def verfahren_deskriptiv(daten: Datensatz, analyse: dict, konf: dict) -> dict[st
     for name in analyse["variablen"]:
         skala = skalen.get(name, "metrisch")
         n_fehlend = daten.n_fehlend(name)
-        if skala in ("nominal", "ordinal_kategorial"):
+        if skala in ("nominal", "ordinal", "ordinal_kategorial"):
             werte = daten.kategorial(name)
             haeufigkeiten: dict[str, int] = {}
             for wert in werte:
