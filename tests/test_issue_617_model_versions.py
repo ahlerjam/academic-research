@@ -24,6 +24,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 
 from academic_vault import server as vault_server
@@ -140,6 +141,30 @@ def test_export_material_passport_model_versions_multiple_steps(tmp_path):
             "figure-verifier": "sonnet",
             "relevance_scorer": "opus",
         }
+    finally:
+        os.unlink(db_path)
+
+
+def test_export_material_passport_model_versions_keeps_newest_per_step(tmp_path):
+    """Mehrere model-version-Decisions fuer denselben Schritt: der NEUESTE gewinnt."""
+    db_path = make_temp_db()
+    try:
+        _seed_paper(db_path)
+        # Erstes Lauf (aelter): sonnet
+        vault_server.add_decision(db_path, MODEL_VERSION_CATEGORY, "figure-verifier: sonnet")
+        # Slight delay to ensure different created_at
+        time.sleep(1)
+        # Zweites Lauf (neuer): opus
+        vault_server.add_decision(db_path, MODEL_VERSION_CATEGORY, "figure-verifier: opus")
+
+        vault_server.export_material_passport(
+            db_path=db_path,
+            slug="proj",
+            output_dir=str(tmp_path),
+        )
+        data = json.loads((tmp_path / "material-passport.json").read_text())
+        # Der neueste (opus) sollte benutzt werden, nicht der aelteste (sonnet)
+        assert data["model_versions"] == {"figure-verifier": "opus"}
     finally:
         os.unlink(db_path)
 

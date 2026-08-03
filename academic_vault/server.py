@@ -1455,7 +1455,8 @@ def export_material_passport(
         parsed = _parse_model_version_text(d.get("text") or "")
         if parsed is not None:
             step, model_id = parsed
-            model_versions_from_decisions[step] = model_id
+            # Only keep the first (newest) decision per step (list_decisions returns DESC by created_at)
+            model_versions_from_decisions.setdefault(step, model_id)
     merged_model_versions = {**model_versions_from_decisions, **(model_versions or {})}
 
     scores_5d: dict = {}
