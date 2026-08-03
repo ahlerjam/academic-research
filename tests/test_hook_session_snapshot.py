@@ -46,9 +46,23 @@ def _make_vault_db(path: Path, content: bytes = b"vault-content-v1") -> None:
     path.write_bytes(content)
 
 
-def test_hook_exits_zero_on_empty_input():
-    """Hook ist fail-open: exit 0 auch bei leerem Payload."""
-    result = run_hook({})
+def test_hook_exits_zero_on_empty_input(tmp_path):
+    """Hook ist fail-open: exit 0 auch bei leerem Payload.
+
+    Env-isoliert (PR #650, Review-Runde 3/4/5, P2-Finding): ohne
+    env_overrides faellt der Hook auf ~/.academic-research/snapshots und die
+    reale Vault-DB zurueck und pruneOldSnapshots() koennte dort echte
+    Snapshots aus fruehereren Sitzungen loeschen.
+    """
+    result = run_hook(
+        {},
+        env_overrides={
+            "ACADEMIC_SNAPSHOTS_DIR": str(tmp_path / "snapshots"),
+            "ACADEMIC_PROJECT_SLUG": "test-project",
+            "CLAUDE_PROJECT_DIR": str(tmp_path),
+            "VAULT_DB_PATH": str(tmp_path / "vault.db"),
+        },
+    )
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
 
 
@@ -323,6 +337,9 @@ def test_session_snapshot_throttles_same_session_id(tmp_path):
         f"Nach Lauf 1 sollte genau 1 Snapshot existieren, gefunden: {tarballs_after_first}"
     )
 
+    marker_path = slug_dir / MARKER_NAME
+    marker_after_first = json.loads(marker_path.read_text(encoding="utf-8"))
+
     # Zweiter Lauf: Vault veraendert sich ERNEUT, aber session_id ist identisch
     # → Hook ueberspringt Export wegen Drosselung
     vault_db.write_bytes(b"vault-content-v2")
@@ -332,10 +349,24 @@ def test_session_snapshot_throttles_same_session_id(tmp_path):
     )
     assert result2.returncode == 0, f"Lauf 2 fehlgeschlagen. stderr: {result2.stderr}"
 
+    # Tarball-Count ist wegen Minutengranularitaet des Export-Dateinamens
+    # (YYYYMMDD-HHMM.tgz, siehe academic_vault/server.py) kein verlaessliches
+    # Signal: ein tatsaechlich stattfindender zweiter Export in derselben
+    # Minute wuerde die erste Datei ueberschreiben und den Count faelschlich
+    # bei 1 belassen (PR #650, Review-Runde 5, P2-Finding). Stattdessen auf
+    # unveraenderten Marker-Inhalt und die explizite Drossel-Meldung pruefen.
     tarballs_after_second = list(slug_dir.glob("*.tgz"))
     assert len(tarballs_after_second) == 1, (
         f"Nach Lauf 2 mit gleicher session_id sollte noch genau 1 Snapshot "
         f"existieren (Drosselung greift), gefunden: {tarballs_after_second}"
+    )
+    marker_after_second = json.loads(marker_path.read_text(encoding="utf-8"))
+    assert marker_after_second == marker_after_first, (
+        "Marker darf sich bei gedrosseltem Lauf nicht aendern "
+        f"(vorher: {marker_after_first}, nachher: {marker_after_second})"
+    )
+    assert "bereits in dieser Sitzung erstellt" in result2.stderr, (
+        f"Drossel-Meldung fehlt in stderr: {result2.stderr!r}"
     )
 
 
@@ -369,6 +400,9 @@ def test_session_snapshot_exports_on_different_session_id(tmp_path):
     tarballs_after_first = list(slug_dir.glob("*.tgz"))
     assert len(tarballs_after_first) == 1
 
+    marker_path = slug_dir / MARKER_NAME
+    marker_after_first = json.loads(marker_path.read_text(encoding="utf-8"))
+
     # Lauf 2: Vault veraendert sich UND session_id ist unterschiedlich
     # → Export erfolgt, da neue session_id die Drosselung aufhebt
     vault_db.write_bytes(b"vault-content-v2-changed")
@@ -378,11 +412,25 @@ def test_session_snapshot_exports_on_different_session_id(tmp_path):
     )
     assert result2.returncode == 0, f"stderr: {result2.stderr}"
 
-    tarballs_after_second = list(slug_dir.glob("*.tgz"))
-    assert len(tarballs_after_second) == 2, (
-        f"Nach Lauf 2 mit unterschiedlicher session_id UND veraendertem Vault "
-        f"sollten 2 Snapshots existieren, gefunden: {tarballs_after_second}"
+    # Tarball-Count ist wegen Minutengranularitaet des Export-Dateinamens
+    # (YYYYMMDD-HHMM.tgz) kein verlaessliches Signal: liegen beide Laeufe in
+    # derselben Minute, ueberschreibt Lauf 2 dieselbe Datei und der Count
+    # bleibt bei 1, obwohl der Export stattgefunden hat (PR #650,
+    # Review-Runde 5, P1-Finding). Stattdessen auf den veraenderten
+    # Marker-Inhalt und die explizite Erfolgs-Meldung pruefen.
+    assert "Snapshot erstellt" in result2.stderr, (
+        f"Erfolgs-Meldung fuer den zweiten Export fehlt in stderr: {result2.stderr!r}"
     )
+    marker_after_second = json.loads(marker_path.read_text(encoding="utf-8"))
+    assert marker_after_second["lastSnapshotAt"] != marker_after_first["lastSnapshotAt"], (
+        "Marker-Zeitstempel haette sich durch den zweiten Export aendern muessen "
+        f"(vorher: {marker_after_first}, nachher: {marker_after_second})"
+    )
+    assert marker_after_second["fingerprint"] != marker_after_first["fingerprint"], (
+        "Marker-Fingerprint haette den geaenderten Vault widerspiegeln muessen "
+        f"(vorher: {marker_after_first}, nachher: {marker_after_second})"
+    )
+    assert marker_after_second["session_id"] == "sess-session-b"
 
 
 def test_hooks_json_wires_session_snapshot_under_stop():
