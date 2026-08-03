@@ -1,0 +1,95 @@
+name: Live-Fetch Woechentlich (echte Verlags-/Archivseiten)
+
+# Getrennt von ci.yml (Issue #603): fuehrt die beiden opt-in Live-Suiten
+# tests/test_issue_449_live_fetch.py (Publisher: Cambridge Core, Oxford
+# Academic, JSTOR) und tests/test_issue_450_live_fetch.py (freie Archive:
+# Internet Archive, MDZ, HathiTrust) real gegen die echten Seiten aus, statt
+# sie wie im regulaeren `pytest tests/`-Lauf per Env-Schalter zu skippen.
+# 17 der 28 Agents sind Fetcher -- ein stillschweigend kaputter Fetcher ist
+# schlechter als ein fehlender, weil er ein falsches Negativ erzeugt (Issue
+# #603, "Why").
+#
+# Bewusst NICHT auf push/pull_request verdrahtet: ein Ausfall bei einem
+# Verlag/Archiv ist kein Grund, einen regulaeren PR-Merge zu blockieren
+# (Issue #603, Scope "In"/"Out"). Woechentlich statt haeufiger -- Verlagsseiten
+# aendern sich nicht taeglich, und haeufige automatisierte Zugriffe koennten
+# als Missbrauch gewertet werden (Issue #603, Scope "Out").
+#
+# Der optionale MDZ-Gesamtwerk-Schalter aus Issue #450 (steuert den Abruf
+# von ~148 MiB statt eines Seitenbereichs) wird hier ABSICHTLICH NICHT
+# gesetzt -- der schonende Standardweg bleibt auch im geplanten Lauf
+# bestehen (Issue #603, Scope "In"; siehe tests/test_issue_450_live_fetch.py
+# fuer den vollen Namen des Schalters).
+on:
+  schedule:
+    # Montag 06:00 UTC -- ausserhalb ueblicher Spitzenlast der Zielserver,
+    # reine Konvention (Issue #603 Plan, Risiken: "Cron-Zeitpunkt").
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: live-fetch-weekly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  live-fetch:
+    name: Live-Fetch-Suiten real ausfuehren
+    runs-on: ubuntu-latest
+    # Harter Budget-Deckel (analog eval-behavior.yml): beide Suiten zusammen
+    # brauchen in der Praxis wenige Minuten; 30 Minuten sind ein
+    # grosszuegiger, aber endlicher Deckel gegen einen haengenden Lauf.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          python-version: "3.12"
+
+      - name: pytest beide Live-Suiten (real, mit gesetzten Schaltern)
+        id: run_live
+        env:
+          RUN_LIVE_PUBLISHER_FETCH: "1"
+          RUN_LIVE_FREE_ARCHIVE_FETCH: "1"
+        run: |
+          set -o pipefail
+          uv run pytest \
+            tests/test_issue_449_live_fetch.py \
+            tests/test_issue_450_live_fetch.py \
+            -v --junitxml=live-fetch-results.xml 2>&1 | tee live-fetch-output.log
+
+      - name: Ergebnis nach GITHUB_STEP_SUMMARY schreiben
+        if: always()
+        run: |
+          set -euo pipefail
+          echo "## Live-Fetch Woechentlich -- Ergebnis" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          if [ -f live-fetch-results.xml ]; then
+            python3 scripts/dev/summarize_eval_junit.py live-fetch-results.xml >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**live-fetch-results.xml wurde nicht erzeugt -- Lauf ist vorzeitig abgebrochen.**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fehlschlaege als Issue melden (pro Fetcher, dedupliziert)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          bash scripts/ci/report_live_fetch_failure.sh live-fetch-results.xml "$RUN_URL"
+
+      - name: Ergebnis-Artefakte hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-fetch-weekly-results
+          path: |
+            live-fetch-results.xml
+            live-fetch-output.log
+          retention-days: 30
+          if-no-files-found: warn
