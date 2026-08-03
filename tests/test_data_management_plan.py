@@ -160,8 +160,12 @@ class TestAusgangslage:
         next_heading_idx = content.find("\n## ", ausgangslage_idx + 1)
         section = content[ausgangslage_idx:next_heading_idx]
         # 2 Paper x 2 Segmente = 4 Segmente, 2 Codings (1 je Paper)
-        assert "4" in section, f"Segmentzahl (4) fehlt in Ausgangslage-Abschnitt: {section}"
-        assert "2" in section, f"Coding-Zahl (2) fehlt in Ausgangslage-Abschnitt: {section}"
+        assert "**4 Transkriptsegmente**" in section, (
+            f"Segmentzahl (4) nicht in Ausgangslage-Abschnitt: {section}"
+        )
+        assert "**2 Kodierungen**" in section, (
+            f"Coding-Zahl (2) nicht in Ausgangslage-Abschnitt: {section}"
+        )
 
     def test_empty_vault_reports_zero_not_omission(self, tmp_path):
         """Leerer Vault -> Zahlen sind 0, Abschnitt bleibt trotzdem sichtbar (kein stilles Weglassen)."""
