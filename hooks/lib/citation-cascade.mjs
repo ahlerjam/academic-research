@@ -116,9 +116,11 @@ export function scoreCandidate(citation, candidate) {
 
 class UnavailableError extends Error {}
 
+class BudgetExhaustedError extends Error {}
+
 async function fetchText(url, config, deadline) {
   const remaining = deadline - Date.now();
-  if (remaining <= 0) throw new UnavailableError('Kaskaden-Budget aufgebraucht');
+  if (remaining <= 0) throw new BudgetExhaustedError('Kaskaden-Budget aufgebraucht');
   const timeout = Math.min(config.requestTimeoutMs, remaining);
   let response;
   try {
@@ -322,11 +324,17 @@ export async function resolveCitations(citations, config = loadConfig()) {
       stats.total += 1;
       for (const citation of pending) apply(citation, candidates);
     } catch (err) {
-      if (!(err instanceof UnavailableError)) throw err;
-      stats.total += 1;
-      stats.unavailable += 1;
-      recordReason(stats.reasons, err.message);
-      for (const citation of pending) state.get(citation.key).unavailable = true;
+      if (err instanceof BudgetExhaustedError) {
+        // Budget-Abbrueche sind Betriebsrauschen, nicht Verfuegbarkeitsprobleme.
+        for (const citation of pending) state.get(citation.key).unavailable = true;
+      } else if (err instanceof UnavailableError) {
+        stats.total += 1;
+        stats.unavailable += 1;
+        recordReason(stats.reasons, err.message);
+        for (const citation of pending) state.get(citation.key).unavailable = true;
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -346,11 +354,17 @@ export async function resolveCitations(citations, config = loadConfig()) {
         }
         apply(citation, candidates);
       } catch (err) {
-        if (!(err instanceof UnavailableError)) throw err;
-        stats.total += 1;
-        stats.unavailable += 1;
-        recordReason(stats.reasons, err.message);
-        entry.unavailable = true;
+        if (err instanceof BudgetExhaustedError) {
+          // Budget-Abbrueche sind Betriebsrauschen, nicht Verfuegbarkeitsprobleme.
+          entry.unavailable = true;
+        } else if (err instanceof UnavailableError) {
+          stats.total += 1;
+          stats.unavailable += 1;
+          recordReason(stats.reasons, err.message);
+          entry.unavailable = true;
+        } else {
+          throw err;
+        }
       }
     }
   }
