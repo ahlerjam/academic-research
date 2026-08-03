@@ -503,8 +503,11 @@ def test_setup_sh_hook_count_is_current():
     assert "6 der 8 Hooks" not in setup, (
         "scripts/setup.sh nennt veraltete Hook-Anzahl '6 der 8 Hooks'."
     )
-    assert "7 der 9 Hooks" in setup, (
-        "scripts/setup.sh nennt die aktuelle Hook-Anzahl nicht ('7 der 9 Hooks')."
+    assert "7 der 9 Hooks" not in setup, (
+        "scripts/setup.sh nennt veraltete Hook-Anzahl '7 der 9 Hooks'."
+    )
+    assert "8 der 10 Hooks" in setup, (
+        "scripts/setup.sh nennt die aktuelle Hook-Anzahl nicht ('8 der 10 Hooks')."
     )
 
 
