@@ -42,6 +42,13 @@ const DEFAULTS = {
   s2MinOverlap: 0.6,
   requestTimeoutMs: 2000,
   budgetMs: 6000,
+  // Beobachtungs-Schwelle fuer Issue #601: gelegentliche Drosselung ist
+  // Betriebsrauschen, eine hohe unavailable-Quote ueber einen ganzen Lauf ist
+  // ein Infrastrukturdefekt. Defaults so gewaehlt, dass ein einzelner Beleg
+  // (bis zu 3 Anfragen: arXiv-Batch + CrossRef + S2) unter der Mindestfallzahl
+  // bleibt und keine Warnung ausloest.
+  unavailableRateThreshold: 0.5,
+  unavailableRateMinRequests: 5,
 };
 
 function envNumber(name, fallback) {
@@ -62,6 +69,14 @@ export function loadConfig(env = process.env) {
     s2MinOverlap: envNumber('ACADEMIC_CITATION_S2_MIN_OVERLAP', DEFAULTS.s2MinOverlap),
     requestTimeoutMs: envNumber('ACADEMIC_CITATION_TIMEOUT_MS', DEFAULTS.requestTimeoutMs),
     budgetMs: envNumber('ACADEMIC_CITATION_BUDGET_MS', DEFAULTS.budgetMs),
+    unavailableRateThreshold: envNumber(
+      'ACADEMIC_CITATION_UNAVAILABLE_RATE_THRESHOLD',
+      DEFAULTS.unavailableRateThreshold,
+    ),
+    unavailableRateMinRequests: envNumber(
+      'ACADEMIC_CITATION_UNAVAILABLE_RATE_MIN_REQUESTS',
+      DEFAULTS.unavailableRateMinRequests,
+    ),
   };
 }
 
@@ -101,9 +116,11 @@ export function scoreCandidate(citation, candidate) {
 
 class UnavailableError extends Error {}
 
+class BudgetExhaustedError extends Error {}
+
 async function fetchText(url, config, deadline) {
   const remaining = deadline - Date.now();
-  if (remaining <= 0) throw new UnavailableError('Kaskaden-Budget aufgebraucht');
+  if (remaining <= 0) throw new BudgetExhaustedError('Kaskaden-Budget aufgebraucht');
   const timeout = Math.min(config.requestTimeoutMs, remaining);
   let response;
   try {
@@ -231,6 +248,39 @@ function classify(score, unavailable, config) {
   return unavailable ? 'unavailable' : 'no-match';
 }
 
+/** Erfasst einen Kaskaden-Fehlgrund fuer die Mode-Bestimmung in den Stats. */
+function recordReason(reasons, message) {
+  reasons.set(message, (reasons.get(message) || 0) + 1);
+}
+
+/**
+ * Issue #601: eine einzelne `unavailable`-Antwort ist Betriebsrauschen, eine
+ * hohe Quote ueber einen ganzen Lauf ist ein Infrastrukturdefekt (falsch
+ * gesetzter Proxy, abgelaufener Key, verlegter Endpunkt). Bei ausreichender
+ * Fallzahl UND ueberschrittener Schwelle wird das auf stderr sichtbar
+ * gemeldet — die Bewertung einzelner HTTP-Antworten (jeder Nicht-2xx bleibt
+ * `unavailable`) ist davon unberuehrt, es wird nur mitgezaehlt.
+ */
+function maybeWarnUnavailableRate(stats, config) {
+  if (stats.total < config.unavailableRateMinRequests) return;
+  const rate = stats.unavailable / stats.total;
+  if (rate <= config.unavailableRateThreshold) return;
+  let topReason = null;
+  let topCount = -1;
+  for (const [reason, count] of stats.reasons) {
+    if (count > topCount) {
+      topReason = reason;
+      topCount = count;
+    }
+  }
+  const percent = Math.round(rate * 1000) / 10;
+  process.stderr.write(
+    `[Citation-Cascade] ${stats.unavailable}/${stats.total} Anfragen ohne Auskunft ` +
+      `(${percent}%, Schwelle ${config.unavailableRateThreshold * 100}%) — ` +
+      `haeufigster Grund: ${topReason ?? 'unbekannt'}\n`,
+  );
+}
+
 /**
  * Loest offene Belege ueber die Kaskade auf.
  *
@@ -254,6 +304,7 @@ export async function resolveCitations(citations, config = loadConfig()) {
   const state = new Map(
     citations.map((c) => [c.key, { citation: c, best: 0, unavailable: false }]),
   );
+  const stats = { total: 0, unavailable: 0, reasons: new Map() };
 
   const open = () =>
     [...state.values()].filter((s) => s.best < config.confirmedMin).map((s) => s.citation);
@@ -270,10 +321,20 @@ export async function resolveCitations(citations, config = loadConfig()) {
   if (pending.length > 0) {
     try {
       const candidates = await stageArxiv(pending, config, deadline);
+      stats.total += 1;
       for (const citation of pending) apply(citation, candidates);
     } catch (err) {
-      if (!(err instanceof UnavailableError)) throw err;
-      for (const citation of pending) state.get(citation.key).unavailable = true;
+      if (err instanceof BudgetExhaustedError) {
+        // Budget-Abbrueche sind Betriebsrauschen, nicht Verfuegbarkeitsprobleme.
+        for (const citation of pending) state.get(citation.key).unavailable = true;
+      } else if (err instanceof UnavailableError) {
+        stats.total += 1;
+        stats.unavailable += 1;
+        recordReason(stats.reasons, err.message);
+        for (const citation of pending) state.get(citation.key).unavailable = true;
+      } else {
+        throw err;
+      }
     }
   }
 
@@ -285,6 +346,7 @@ export async function resolveCitations(citations, config = loadConfig()) {
       const entry = state.get(citation.key);
       try {
         let candidates = await stage(citation, config, deadline);
+        stats.total += 1;
         if (stage === stageSemanticScholar) {
           candidates = candidates.filter(
             (c) => authorOverlap(citation.authors, c.authors) >= config.s2MinOverlap,
@@ -292,11 +354,22 @@ export async function resolveCitations(citations, config = loadConfig()) {
         }
         apply(citation, candidates);
       } catch (err) {
-        if (!(err instanceof UnavailableError)) throw err;
-        entry.unavailable = true;
+        if (err instanceof BudgetExhaustedError) {
+          // Budget-Abbrueche sind Betriebsrauschen, nicht Verfuegbarkeitsprobleme.
+          entry.unavailable = true;
+        } else if (err instanceof UnavailableError) {
+          stats.total += 1;
+          stats.unavailable += 1;
+          recordReason(stats.reasons, err.message);
+          entry.unavailable = true;
+        } else {
+          throw err;
+        }
       }
     }
   }
+
+  maybeWarnUnavailableRate(stats, config);
 
   for (const [key, entry] of state) {
     results.set(key, {
