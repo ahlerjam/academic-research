@@ -52,3 +52,20 @@
 - **Designs**: Sequential Exploratory, Sequential Explanatory, Convergent
 - **Stärken**: Umfassendes Bild, Triangulation
 - **Schwächen**: Methodisch anspruchsvoll, zeitintensiv
+
+## Ausführung
+
+Dieser Skill wählt die Methode. Ausgeführt wird sie anderswo — der Übergang ist
+die häufigste Stelle, an der eine Arbeit hängen bleibt:
+
+| Nach der Entscheidung für … | zuständig |
+| --- | --- |
+| ein Erhebungsinstrument (Leitfaden, Fragebogen) | `instrument-design` |
+| eigenes Textmaterial auswerten (Transkripte, Kategorien) | `qualitative-coding` |
+| eigenen Zahlendatensatz auswerten (Deskription, Gruppenvergleich, Zusammenhang) | `quantitative-analysis` |
+| Effektgrößen fremder Studien aggregieren | `meta-analysis` (Agent) |
+| PRISMA-Ablauf eines systematischen Reviews | `prisma-flow` |
+
+`quantitative-analysis` und der `meta-analysis`-Agent werden regelmäßig
+verwechselt: Der Skill rechnet über **eigene** Rohdaten, der Agent über
+**fremde** publizierte Effektgrößen.
