@@ -27,7 +27,7 @@ from .db import (
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
 from .decision_log import parse_model_version_text as _parse_model_version_text
-from .embedding_model import get_embedder
+from .embedding_model import REINDEX_HINT, EmbeddingDimensionMismatchError, get_embedder
 from .health import get_component_status
 
 logger = logging.getLogger(__name__)
@@ -438,6 +438,13 @@ def embed_quote(db_path: str, quote_id: str, embedder: object | None = None) -> 
     if quote is None:
         raise ValueError(f"vault.embed_quote: Quote '{quote_id}' nicht gefunden.")
 
+    # Bestandsabgleich vor der Inferenz (#629): passt die Dimension nicht,
+    # wirft das hier, statt den Vektor spaeter stillschweigend zu verwerfen.
+    db.register_embedding_inventory(
+        getattr(active_embedder, "model_id", None),
+        int(active_embedder.dim),  # type: ignore[attr-defined]
+    )
+
     text = _quote_embedding_text(quote)
     vectors = active_embedder.embed_documents([text])  # type: ignore[attr-defined]
     if not vectors:
@@ -459,6 +466,8 @@ def _maybe_embed_quote(db_path: str, quote_id: str) -> bool:
     """
     try:
         return embed_quote(db_path, quote_id)
+    except EmbeddingDimensionMismatchError:
+        raise  # Carve-out (#629), siehe _maybe_ingest_embeddings
     except Exception as exc:  # Embedding ist optional -- nie fatal fuer add_quote
         logger.warning(
             "vault.add_quote: embed_quote() fuer Quote '%s' fehlgeschlagen: %s (#521)",
@@ -513,7 +522,22 @@ def quote_context_similarity(
         return None
 
     query_vector = active_embedder.embed_query(text)  # type: ignore[attr-defined]
-    if not query_vector or len(query_vector) != len(stored):
+    if not query_vector:
+        return None
+    if len(query_vector) != len(stored):
+        # Kein harter Fehler wie in den Schreibpfaden (#629): diese Funktion
+        # haengt im PreToolUse-Hook, wo eine Exception das Schreiben blockieren
+        # wuerde, obwohl der Beleg selbst in Ordnung ist. Der Grund wird aber
+        # benannt, statt als "nicht bestimmbar" unterzugehen.
+        logger.warning(
+            "vault.quote_context_similarity: gespeichertes Embedding von Quote '%s' hat "
+            "%d Dimensionen, das aktuelle Modell liefert %d -- der Vergleich entfaellt. "
+            "%s",
+            quote_id,
+            len(stored),
+            len(query_vector),
+            REINDEX_HINT,
+        )
         return None
 
     left = l2_normalize(query_vector)
@@ -765,6 +789,12 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
         # Mehr Chunks als Paper anfragen: mehrere Chunks koennen zum selben
         # Paper gehoeren und werden anschliessend aggregiert.
         hits = VaultDB(db_path).knn_chunks(query_vector, k=max(k * 4, k))
+    except EmbeddingDimensionMismatchError:
+        # Carve-out (#629): hier still auf FTS5-only zurueckzufallen waere die
+        # teuerste Variante des Fehlers -- die Suche liefe weiter und lieferte
+        # ploetzlich nur noch Volltext-Treffer, ohne dass jemand erfaehrt,
+        # dass der halbe Index unerreichbar ist.
+        raise
     except Exception as exc:  # Vektorsuche ist optional — nie fatal fuer die Textsuche
         logger.warning("vec0-Suche fehlgeschlagen, Fallback auf FTS5-only: %s", exc)
         return []
@@ -859,6 +889,12 @@ def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
         from .ingest import ingest_paper_embeddings
 
         return ingest_paper_embeddings(db_path, paper_id)
+    except EmbeddingDimensionMismatchError:
+        # Carve-out (#629): ein falsch konfiguriertes Modell ist kein
+        # Degradationsfall. Bliebe es hier eine Log-Zeile, liefe der Vault
+        # weiter voll mit Papern ohne Vektoren -- genau die stille Variante,
+        # die #629 abstellt. Das Paper selbst ist bereits committet.
+        raise
     except Exception as exc:  # Ingest ist optional — nie fatal fuer add_paper
         logger.warning("Embedding-Ingest fuer '%s' fehlgeschlagen: %s", paper_id, exc)
         return 0
@@ -1251,12 +1287,19 @@ def list_papers_by_provenance(db_path: str, provenance: str) -> list[dict]:
 
 
 def get_stats(db_path: str) -> dict:
-    """Gibt Statistik-Dict zurueck: paper_count, quote_count.
+    """Gibt Statistik-Dict zurueck: paper_count, quote_count, embedding_model, embedding_dim.
 
     Keine Token-Ersparnis-Schaetzung (#534) und seit #632 auch kein
     ``cached_files`` mehr: der Files-API-Upload-Cache ist mit dem
     Anthropic-SDK entfallen, ein dauerhaft auf 0 stehendes Feld waere genau
     die Phantomgroesse, die die Honesty-Linie #387/#453 verbietet.
+
+    ``embedding_model``/``embedding_dim`` (Issue #629) machen den Bestand
+    ablesbar, ohne in den Code zu sehen: mit welchem Modell und in welcher
+    Breite die Vektoren dieses Vaults entstanden sind. Beide sind ``None``,
+    solange noch nie ein Embedding geschrieben wurde -- das ist eine Aussage
+    ueber den Bestand, keine ueber die Konfiguration, und es wird dafuer
+    ausdruecklich kein Modell geladen.
     """
     conn = VaultDB._open(db_path)
     try:
@@ -1265,9 +1308,13 @@ def get_stats(db_path: str) -> dict:
     finally:
         conn.close()
 
+    inventory = VaultDB(db_path).embedding_inventory()
+
     return {
         "paper_count": paper_count,
         "quote_count": quote_count,
+        "embedding_model": inventory["model_id"] if inventory else None,
+        "embedding_dim": inventory["dim"] if inventory else None,
     }
 
 
@@ -2237,7 +2284,7 @@ def _build_mcp_server():
 
     @mcp.tool(name="vault.stats")
     def _vault_stats() -> dict:
-        """Counts: paper_count, quote_count."""
+        """Counts: paper_count, quote_count -- plus embedding_model/embedding_dim (#629)."""
         return get_stats(db_path)
 
     @mcp.tool(name="vault.component_status")

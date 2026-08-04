@@ -69,10 +69,13 @@ def _offline_env(monkeypatch):
 
 
 class TestEmbeddingModel:
-    def test_embedding_dim_is_384(self):
-        from academic_vault.embedding_model import EMBEDDING_DIM
+    def test_default_embedding_dim_is_384(self):
+        # Seit #629 nur noch die Breite eines FRISCHEN Vaults, nicht mehr
+        # "die" Embedding-Dimension: die eines Bestands steht in
+        # embedding_meta, die eines Modells liefert der Embedder selbst.
+        from academic_vault.embedding_model import DEFAULT_EMBEDDING_DIM
 
-        assert EMBEDDING_DIM == 384
+        assert DEFAULT_EMBEDDING_DIM == 384
 
     def test_default_model_is_multilingual_e5_small(self):
         from academic_vault.embedding_model import DEFAULT_MODEL_ID
@@ -266,23 +269,61 @@ class TestChunkVectorStorage:
         assert fallback == with_extension
         assert fallback[0] in ("p001", "p003")
 
-    def test_knn_chunks_skips_dimension_mismatch(self, temp_vault_db, fake_embedder):
+    def test_add_chunk_embedding_refuses_dimension_mismatch(self, temp_vault_db, fake_embedder):
+        """Seit #629 kommt ein Fremdmass gar nicht erst in den Vault.
+
+        Vorher landete so ein Vektor in ``chunk_embeddings``, waehrend der
+        vec0-Spiegel ihn still verwarf -- die Suche sah danach nur noch den
+        Teilbestand der zufaellig passenden Breite.
+        """
+        from academic_vault.db import VaultDB
+        from academic_vault.embedding_model import (
+            EmbeddingDimensionMismatchError,
+            serialize_f32,
+        )
+
+        _add_paper(temp_vault_db, "p001", "A", "A")
+        _add_paper(temp_vault_db, "p002", "B", "B")
+        db = VaultDB(temp_vault_db)
+
+        with pytest.raises(EmbeddingDimensionMismatchError):
+            db.add_chunk_embedding(
+                paper_id="p002",
+                chunk_text="Alt-Vektor aus einem anderen Modell",
+                context_sentence="",
+                embedding_text="Alt-Vektor",
+                embedding_vector=serialize_f32([0.1] * 128),
+            )
+
+    def test_knn_chunks_skips_legacy_rows_of_other_dimension(self, temp_vault_db, fake_embedder):
+        """Bestands-DBs koennen den Mischbestand aus der Zeit vor #629 noch tragen.
+
+        Der Weg dorthin fuehrt jetzt nur noch an der API vorbei (Direkt-INSERT),
+        aber gelesen werden muss er weiterhin: die Suche liefert die passenden
+        Treffer und ignoriert die Altlast, statt an ihr zu scheitern.
+        ``migrate.reindex_embeddings()`` raeumt sie auf.
+        """
+        import sqlite3
+
         from academic_vault.db import VaultDB
         from academic_vault.embedding_model import serialize_f32
 
         _add_paper(temp_vault_db, "p001", "A", "A")
         _add_paper(temp_vault_db, "p002", "B", "B")
-        db = VaultDB(temp_vault_db)
-        db.add_chunk_embedding(
-            paper_id="p002",
-            chunk_text="Alt-Vektor aus einem anderen Modell",
-            context_sentence="",
-            embedding_text="Alt-Vektor",
-            embedding_vector=serialize_f32([0.1] * 128),
-        )
+        conn = sqlite3.connect(temp_vault_db)
+        try:
+            conn.execute(
+                "INSERT INTO chunk_embeddings (chunk_id, paper_id, chunk_text, "
+                "context_sentence, embedding_text, embedding_vector, created_at) "
+                "VALUES ('legacy', 'p002', 'Alt-Vektor', '', 'Alt-Vektor', ?, 0)",
+                (serialize_f32([0.1] * 128),),
+            )
+            conn.commit()
+        finally:
+            conn.close()
         _store_chunk(temp_vault_db, "p001", "Transformer attention", fake_embedder)
 
-        hits = db.knn_chunks(fake_embedder.embed_query("transformer"), k=5)
+        hits = VaultDB(temp_vault_db).knn_chunks(fake_embedder.embed_query("transformer"), k=5)
 
         assert [h["paper_id"] for h in hits] == ["p001"]
 
@@ -765,13 +806,15 @@ class TestMigration:
 )
 def test_e5_small_real_model_roundtrip():
     pytest.importorskip("sentence_transformers")
-    from academic_vault.embedding_model import EMBEDDING_DIM, get_embedder, reset_embedder_cache
+    from academic_vault.embedding_model import get_embedder, reset_embedder_cache
 
     reset_embedder_cache()
     embedder = get_embedder()
     assert embedder is not None
     vector = embedder.embed_query("Wie funktioniert Retrieval-Augmented Generation?")
-    assert len(vector) == EMBEDDING_DIM
+    # Gegen die vom Backend gemeldete Dimension, nicht gegen eine Konstante
+    # (#629): dieser Test laeuft auch, wenn VAULT_EMBEDDING_MODEL gesetzt ist.
+    assert len(vector) == embedder.dim
     assert abs(math.sqrt(sum(v * v for v in vector)) - 1.0) < 1e-3
 
 
