@@ -15,9 +15,9 @@ description: >
   Extrahiert Titel/Autoren aus arXiv-Metadaten (arXiv-API) bzw. heuristisch
   aus einem lokalen PDF (`scripts/pdf.py`), legt genau einen Vault-Eintrag
   via `vault.add_paper(provenance="anchor-paper")` an und lädt danach
-  verwandte Arbeiten nach: bei arXiv-Ankern per echter Zitations-/
-  Referenz-Abfrage (Semantic Scholar), bei PDF-Ankern per Titelsuche über
-  `scripts/search.py::run_search()`.
+  verwandte Arbeiten nach: bei arXiv-Ankern und bei PDF-Ankern mit DOI
+  (Vault oder `extract_doi_from_text()`) per echter Zitations-/Referenz-
+  Abfrage (Semantic Scholar), sonst per Titelsuche via `search.py::run_search()`.
 license: MIT
 allowed-tools:
   - Bash
@@ -47,16 +47,12 @@ an (`provenance="anchor-paper"`) und lädt darauf aufbauend verwandte Arbeiten
 nach — analog zum Geschwister-Feature `github-repo-research` (Issue #401),
 nur mit einem Paper statt einem Code-Repository als Anker.
 
-Die Folge-Suche ist bewusst zweigleisig: arXiv-Anker besitzen mit ihrer ID
-einen stabilen Semantic-Scholar-Identifier (`ARXIV:<id>`) und bekommen damit
-eine **echte** Zitations-/Referenz-Traversierung (`/paper/{id}/citations` +
-`/paper/{id}/references`) — Arbeiten, die den Anker tatsächlich zitieren
-bzw. die er zitiert, kein Text-Match. PDF-Anker haben keinen solchen
-externen Identifier und fallen auf eine Titelsuche über die bereits
-vorhandenen Fetcher (`scripts/search.py`) zurück. In beiden Fällen wird das
-Anker-Paper selbst aus der Trefferliste gefiltert und die Rohtreffer werden
-über die kanonische Repo-Pipeline (`scripts/dedup.py`) dedupliziert, bevor
-gezählt/gemeldet wird.
+Die Folge-Suche ist zweigleisig: arXiv-/DOI-Anker (Vault oder
+`extract_doi_from_text()`, Issue #599) bekommen eine **echte**
+Zitations-/Referenz-Traversierung über Semantic Scholar — kein Text-Match.
+Sonst fällt der Skill auf eine Titelsuche zurück, nie auf einen Abbruch.
+Details siehe Pipeline/Verhalten unten; `search.method`
+(`"citation"`/`"keyword"`) macht den Unterschied im Ergebnis explizit.
 
 Konzept-Idee lose angelehnt an `JeanDiable/academic-research-plugin` (MIT) —
 ausschließlich als Ideengeber zitiert; diese Implementierung teilt keinen
@@ -64,16 +60,8 @@ Code mit dem Originalrepo.
 
 ## Voraussetzungen
 
-### 1. Abhängigkeiten
-
-```bash
-# requests, httpx, pypdf sind bereits Projekt-Dependencies (pyproject.toml)
-uv sync --extra dev
-```
-
-### 2. Vault-Datenbank vorhanden
-
-Der Vault muss initialisiert sein (z.B. via `vault.init_schema()`).
+`uv sync --extra dev` (requests/httpx/pypdf sind bereits Projekt-Dependencies)
+und ein initialisierter Vault (`vault.init_schema()`).
 
 ## Verwendung
 
@@ -112,22 +100,24 @@ CSL-JSON (Titel/Autoren/DOI)   extract_text_from_pdf() + Titel/Autoren-Heuristik
     ↓
 vault.add_paper(..., provenance="anchor-paper")
     ↓                              ↘
-arXiv-Anker                     PDF-Anker
-    ↓                              ↓
-run_citation_search(              run_search(query=Titel,
-  "ARXIV:<id>")                     modules=[arxiv, semantic_scholar,
-  → /citations + /references         openalex, crossref])
-    ↓                              ↓
-    ←── _filter_and_dedupe() ───→   (Anker raus, scripts/dedup.py)
+arXiv-Anker                     PDF-Anker: vault_get_paper() bzw.
+    ↓                              extract_doi_from_text() -> DOI?
+    ↓                              ↓ ja (extrahiert: erst Titel-Check)  ↓ nein
+s2_ref="ARXIV:<id>"        s2_ref="DOI:<doi>"                    (kein s2_ref)
+    ↘                              ↓ Mismatch -> run_search()          ↓
+     run_citation_search(s2_ref) → /citations+/references              ↓
+       ↓ S2 kennt Ref nicht (beide Relationen failed) → run_search()   ↓
+       ↓ sonst: method="citation"                       → method="keyword"
+    ↓                              ↓                     ↓
+    ←──────────── _filter_and_dedupe() ───────────────→
     ↓
-Ergebnis: {status: "ok"|"error", paper_id, source, title,
-           search: {hits, count, failed_modules}, message}
+Ergebnis: {status, paper_id, source, title, doi?,
+           search: {hits, count, failed_modules, method}, message}
 ```
 
 Kein Kandidat auflösbar (arXiv-ID unbekannt, PDF ohne Textlayer/Text)?
-→ strukturierter Fehler (`status: "error"`), kein Vault-Eintrag, keine
-Fabrikation. Ungültige Eingabe (weder arXiv-URL/-ID noch existierender
-Pfad)? → `ValueError` mit Klartextmeldung, ebenfalls ohne jede Vault-Mutation.
+→ strukturierter Fehler, kein Vault-Eintrag, keine Fabrikation. Ungültige
+Eingabe? → `ValueError` mit Klartextmeldung, ohne jede Vault-Mutation.
 
 ## Verhalten
 
@@ -142,67 +132,69 @@ Pfad)? → `ValueError` mit Klartextmeldung, ebenfalls ohne jede Vault-Mutation.
    `extract_text_from_pdf()` und Titel/Autoren-Heuristik (erste nicht-leere
    Zeile = Titel, zweite = Autoren — Best-Effort, siehe Einschränkungen)
 5. Erfolgreich aufgelöstes Anker-Paper via `vault.add_paper()` ablegen
-   (`provenance="anchor-paper"`) — **genau ein** Eintrag, kein Mehr, kein
-   Weniger
-6. Folge-Suche anstoßen — **arXiv-Anker**: `run_citation_search()` fragt
-   die Semantic-Scholar-Graph-API nach Arbeiten, die den Anker zitieren
-   (`/citations`) bzw. die er zitiert (`/references`); **PDF-Anker**:
-   `scripts/search.py::run_search()` mit dem extrahierten Titel als Query
-   (kein stabiler externer Identifier verfügbar). Danach entfernt
-   `_filter_and_dedupe()` das Anker-Paper aus der Rohtrefferliste und
-   dedupliziert den Rest über `scripts/dedup.py`. Treffer werden **nur
-   angezeigt**, nicht automatisch in den Vault geschrieben
-7. Ergebnis melden: Anker angelegt + N verwandte Arbeiten gefunden, oder
-   sauberer Fehlertext bei Auflösungs-/Extraktions-/Suchfehlern
+   (`provenance="anchor-paper"`) — **genau ein** Eintrag
+6. **DOI-Auflösung für PDF-Anker** (Issue #599): `vault_get_paper()` hat
+   Vorrang, sonst `extract_doi_from_text()` auf ein Zeichenfenster am Anfang
+   des Volltexts (Best-Effort, siehe Einschränkungen)
+7. Folge-Suche: **arXiv-/DOI-Anker** → `run_citation_search()`
+   (`s2_ref="ARXIV:<id>"`/`"DOI:<doi>"`); scheitern beide Relationen, Rückfall
+   auf Titelsuche statt Abbruch. Bei einer **extrahierten** (unverifizierten)
+   DOI läuft `_verify_extracted_doi_title_match()` zuerst — vor der
+   Zitationssuche, sonst würde bei Titel-Mismatch (Verlags-Deckblatt, Erratum)
+   der falsche Zitationsgraph abgefragt; scheitert der Abgleich, derselbe
+   Rückfall, DOI wird weder gespeichert noch gemeldet. **Ohne DOI** direkt
+   `run_search()`. Danach `_filter_and_dedupe()` (Anker raus,
+   `scripts/dedup.py`). Treffer nur angezeigt, nicht automatisch importiert
+8. Ergebnis melden inkl. `search.method` (`"citation"`=nachgewiesene
+   Zitationsbeziehung, `"keyword"`=Titel-Näherung), oder sauberer Fehlertext
 
 ## Abgrenzung
 
-- **Kein neuer externer Dienst und keine Zitations-Graph-Datenbank** — die
-  Zitations-/Referenz-Abfrage nutzt ausschließlich die Semantic-Scholar-API,
-  die bereits Teil des `network_allowlist` ist; es wird kein eigener
-  Zitations-Graph aufgebaut oder persistiert.
+- **Kein neuer externer Dienst und keine Zitations-Graph-Datenbank** — nur
+  die bereits im `network_allowlist` stehende Semantic-Scholar-API, kein
+  eigener persistierter Zitations-Graph.
 - **Folge-Treffer werden nicht automatisch importiert**: nur das Anker-Paper
-  selbst landet im Vault, die Suchergebnisse sind Kandidaten zur Anzeige.
-- Kein Cross-Skill-Import aus `github-repo-research`: eigenständige
-  arXiv-Resolver-Implementierung, analog im Muster, aber ohne Code-Teilung.
+  landet im Vault, Suchergebnisse sind Kandidaten zur Anzeige.
+- Kein Cross-Skill-Import aus `github-repo-research`: eigenständige, analoge
+  Implementierung ohne Code-Teilung.
 - Findet die PDF-Heuristik keinen brauchbaren Titel, wird das offen
-  gemeldet — es wird niemals ein Titel/Autor fabriziert.
+  gemeldet, nie fabriziert.
 
 ## Sicherheitshinweise
 
-- **Read-only Netz**: Nur lesende API-Zugriffe (arXiv; Semantic Scholar
-  direkt für die Zitations-/Referenz-Abfrage der arXiv-Anker; Crossref,
-  OpenAlex, Semantic Scholar über `scripts/search.py` für die
-  Titel-Stichwortsuche der PDF-Anker)
-- **Kein Schreiben in externe Systeme**: Nur der lokale Vault wird beschrieben
-- **Keine Codeausführung**: Es wird kein Skript/Code aus einer PDF oder von
-  arXiv ausgeführt, ausschließlich Text-/Metadaten-Extraktion
-- **Provenance-Tag**: jeder Vault-Eintrag trägt `provenance="anchor-paper"`
-  für den Audit-Trail (analog Issue #195)
+- **Read-only Netz**: nur lesende API-Zugriffe (arXiv, Semantic Scholar,
+  Crossref/OpenAlex via `scripts/search.py`)
+- **Kein Schreiben in externe Systeme**: nur der lokale Vault wird beschrieben
+- **Keine Codeausführung**: kein Skript/Code aus PDF oder arXiv, nur
+  Text-/Metadaten-Extraktion
+- **Provenance-Tag**: jeder Eintrag trägt `provenance="anchor-paper"` (Audit,
+  analog Issue #195)
 
 ## Bekannte Einschränkungen
 
 - **Titel/Autoren-Heuristik aus PDF ist bewusst unscharf**: "erste
   nicht-leere Zeile = Titel, zweite = Autoren" ist ein Best-Effort-Ansatz
-  ohne Genauigkeitsanspruch (kein Layout-Parsing, keine belegte
-  Bibliographie-Extraktion) — deckt sich mit der bewusst weichen
-  Issue-Formulierung "korrekt genug für eine Folge-Suche", nicht mit einer
-  zitierfähigen Metadaten-Extraktion
+  ohne Genauigkeitsanspruch (kein Layout-Parsing) — "korrekt genug für eine
+  Folge-Suche", keine zitierfähige Metadaten-Extraktion
 - Scan-PDFs ohne Textlayer werden erkannt (`detect_needs_ocr`), aber nicht
   automatisch per OCR nachbearbeitet — das bleibt ein manueller,
   vorgelagerter Schritt (`scripts/ocr.py`)
-- **Nur arXiv-Anker bekommen eine geprüfte Zitations-/Referenz-Beziehung**
-  (Semantic-Scholar-`/citations`+`/references`). PDF-Anker haben keinen
-  stabilen externen Paper-Identifier und fallen auf eine Titel-Stichwortsuche
-  zurück — deren Treffer sind thematisch ähnlich, aber KEINE nachgewiesene
-  Zitationsbeziehung. Trigger wie "welche Arbeiten zitieren dieses Paper"
-  lösen den Skill für PDF-Anker korrekt aus, liefern in diesem Fall aber nur
-  die Titel-Näherung, keine verifizierte Zitationsliste. Sehr generische
-  oder gekürzte extrahierte Titel können dabei zusätzlich zu Streutreffern
-  oder keinem Treffer führen
-- Netz-Ausfälle bei arXiv/der Folge-Suche führen zu einem sauberen
-  Fehlertext statt Crash oder fabriziertem Ergebnis — "nicht gelesen" ist
-  nicht "nicht vorhanden"
-- **Nur arXiv-IDs im Format `YYMM.NNNNN`** (seit 2007) werden erkannt;
-  alte IDs (z. B. `hep-th/9901001`) scheitern mit Fehlermeldung (bekannte
-  Lücke, kein Bug)
+- **PDF-Anker bekommen eine geprüfte Zitations-/Referenz-Beziehung, sobald
+  sich eine DOI ermitteln lässt** (Issue #599, Vault oder
+  `extract_doi_from_text()`, Suchfenster bewusst auf den Textanfang begrenzt
+  gegen Fremd-DOIs aus der Bibliographie — eine DOI weiter hinten bleibt
+  dadurch unentdeckt, bekannte Lücke). Eine extrahierte DOI ist zunächst
+  unverifiziert: `_verify_extracted_doi_title_match()` gleicht ihren
+  S2-Titel **vor** der Zitationssuche gegen den Anker-Titel ab (≥85 %),
+  sonst könnte ein Verlags-Deckblatt/Erratum-Header eine fremde DOI ins
+  Suchfenster gebracht haben. Rückfall auf `run_search()` in **drei**
+  Fällen: keine auffindbare DOI, S2 kennt sie nicht/nicht erreichbar, oder
+  der Titel-Abgleich einer extrahierten DOI scheitert — dann thematisch
+  ähnlich statt nachgewiesener Zitationsbeziehung (`search.method`/Meldung
+  weisen das aus; im Mismatch-Fall wird die DOI zusätzlich weder
+  gespeichert noch ausgewiesen). Generische/gekürzte Titel können zu
+  Streutreffern führen
+- Netz-Ausfälle führen zu sauberem Fehlertext statt Crash/Fabrikation —
+  "nicht gelesen" ist nicht "nicht vorhanden"
+- **Nur arXiv-IDs im Format `YYMM.NNNNN`** (seit 2007); alte IDs (z. B.
+  `hep-th/9901001`) scheitern mit Fehlermeldung (bekannte Lücke, kein Bug)
