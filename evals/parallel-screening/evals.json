@@ -25,6 +25,12 @@
       "input": "Das Screening wurde nach 12 von 22 Treffern abgebrochen. Was passiert beim naechsten Lauf?",
       "expected": {"type": "regex", "value": "(screening_ledger|pending|fortsetz|nicht erneut)"},
       "mode": "with_skill"
+    },
+    {
+      "id": "ps-05",
+      "input": "Active Learning laeuft, und seit 60 Abstracts kam kein Treffer mehr dazu. Darf das Screening damit automatisch enden?",
+      "expected": {"type": "regex", "value": "(kein automatischer Abbruch|entscheidet (ein )?Mensch|nicht automatisch|sortiert nur|keine Entscheidung)"},
+      "mode": "with_skill"
     }
   ]
 }

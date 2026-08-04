@@ -7,7 +7,8 @@ description: >
   screenen", "Screening parallelisieren", "Ein- und Ausschluss für alle
   Treffer entscheiden", "Verzerrungsbewertung für viele Studien /
   Verzerrungsbewertung fuer viele Studien", "Risk-of-Bias für mehrere Paper",
-  "Screening nach Abbruch fortsetzen", "Doppel-Screening". Fächert die Fälle
+  "Screening nach Abbruch fortsetzen", "Doppel-Screening",
+  "Active Learning". Fächert die Fälle
   auf Subagents auf (`screening-judge` bzw. `risk-of-bias`), führt die
   Einzelurteile zusammen, schreibt Ausschlüsse nach `excluded_sources` und
   legt uneindeutige Fälle gesammelt zur menschlichen Entscheidung vor. Für
@@ -104,10 +105,18 @@ verrutschte Konfiguration nicht dreißig Agents gleichzeitig startet.
 exakt der Ablauf unten. Details (Kappa, Dissens, Vault-Commit) →
 `references/double-screening.md`.
 
+**Active Learning (#602) ist Opt-in** (Schalter `resolve_active_learning()`,
+Default `False`): ein lokal trainierter Klassifikator sortiert die Restliste
+um, sodass wahrscheinlich relevante Treffer zuerst kommen. Er sortiert nur —
+kein Ausschluss, keine Kürzung, kein automatischer Abbruch. `reorder_pending`
+und `progress_report` kommen aus `scripts/active_learning.py` (gleicher
+`sys.path`-Eintrag wie oben). Details → `references/active-learning.md`.
+
 ### Schritt 1: Offene Fälle bestimmen
 
 ```python
 todo = pending(paper_ids, session_dir)
+todo = reorder_pending(todo, papers, session_dir)  # nur bei Active Learning
 waves = plan_waves(todo, max_parallel)
 ```
 
