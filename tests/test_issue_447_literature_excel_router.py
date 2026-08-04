@@ -234,7 +234,9 @@ def test_readme_skills_doc_does_not_list_bare_excel_trigger():
 
 
 # --------------------------------------------------------------------------
-# Skill-Count-Synchronisation (42 -> 43, Issue #391: bibliography-auditor neu;
+# Skill-Count-Synchronisation (43 -> 44, Issue #609: data-management-plan neu;
+# zuvor 42 -> 43, Issue #391: bibliography-auditor neu; davor 41 -> 42, Issue
+# #608: peer-review neu;
 # zuvor 41 -> 42, Issue #608: peer-review neu; davor 40 -> 41, Issue #610:
 # quantitative-analysis neu;
 # zuvor 39 -> 40, Issue #605: ai-disclosure neu; zuvor
@@ -246,18 +248,18 @@ def test_readme_skills_doc_does_not_list_bare_excel_trigger():
 # --------------------------------------------------------------------------
 
 
-def test_skill_count_is_43_across_docs_and_manifests():
+def test_skill_count_is_44_across_docs_and_manifests():
     skill_count = len(
         [p for p in (REPO_ROOT / "skills").glob("*/SKILL.md") if p.parent.name != "_common"]
     )
-    assert skill_count == 43, f"Erwartet 43 Skills, gefunden {skill_count}."
+    assert skill_count == 44, f"Erwartet 44 Skills, gefunden {skill_count}."
 
-    assert "skills-43" in README.read_text(encoding="utf-8")
-    assert "43 Skills" in _docs.SKILLS_DOC.read_text(encoding="utf-8")
-    assert "43 Skills" in AGENTS_MD.read_text(encoding="utf-8")
+    assert "skills-44" in README.read_text(encoding="utf-8")
+    assert "44 Skills" in _docs.SKILLS_DOC.read_text(encoding="utf-8")
+    assert "44 Skills" in AGENTS_MD.read_text(encoding="utf-8")
 
     plugin_data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-    assert "43" in plugin_data["description"]
+    assert "44" in plugin_data["description"]
 
     marketplace_data = json.loads(MARKETPLACE_JSON.read_text(encoding="utf-8"))
-    assert "43" in marketplace_data["plugins"][0]["description"]
+    assert "44" in marketplace_data["plugins"][0]["description"]
