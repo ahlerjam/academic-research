@@ -25,6 +25,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   [andrehuang/academic-writing-agents](https://github.com/andrehuang/academic-writing-agents)
   (MIT). Skills-Count 41 → 42.
 
+- **Peer-Review-Gutachten schreiben (#608):** Neuer Read-only-Skill
+  `skills/peer-review/` für die Gutachterrolle — ein strukturiertes
+  Peer-Review-Gutachten zu einem **fremden** Manuskript, komplementär zu
+  `reviewer-response` (Antwort auf erhaltene Gutachten zur eigenen Arbeit).
+  Deckt fünf Standardbereiche ab (Fragestellung/Beitrag, Methodik,
+  Ergebnisdarstellung, Literatur-Einordnung, Darstellung/Sprache), weist
+  nicht beurteilbare Bereiche explizit aus statt sie zu übergehen, trennt
+  vertrauliche Redaktionsanmerkungen von den Anmerkungen an die
+  Autor:innen (`references/gutachten-structure.md`) und mündet in genau
+  eine begründete Empfehlung (Annahme/kleinere/größere
+  Überarbeitung/Ablehnung). Anmerkungen sind nummeriert und tragen eine
+  Fundstelle im Manuskript; erfundene „übersehene" Literatur ist
+  ausdrücklich verboten, Aussagen bleiben am Manuskripttext festgemacht statt
+  Absicht/Kompetenz der Autor:innen zu unterstellen. `reviewer-response`s
+  Abgrenzung verweist rückgekoppelt auf `peer-review` (Lehre aus
+  #610-Learning: Abgrenzung muss beidseitig sein). Skill-Zahl 41 → 42
+  (README, AGENTS.md, `plugin.json`/`marketplace.json`,
+  `docs/reference/skills.md`).
+
 - **Active Learning für das Titel-/Abstract-Screening (#602):** Neu ist
   `skills/parallel-screening/scripts/active_learning.py` — ein lokal
   trainierter Klassifikator (multinomiale Naive Bayes mit Laplace-Glättung,
