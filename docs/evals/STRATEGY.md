@@ -36,7 +36,7 @@ unverändert geblieben — dieses Issue hat Transparenz geschaffen, keine
 LLM-Qualität gemessen.
 
 **Heutiger Stand** (Issue #619, reproduzierbar mit `uv run pytest
-tests/evals/ -q` ohne `ANTHROPIC_API_KEY`): `268 passed, 188 skipped`. Seit
+tests/evals/ -q` ohne `ANTHROPIC_API_KEY`): `270 passed, 190 skipped`. Seit
 #390 sind weitere Suiten dazugekommen (u. a. #524, #626, #628, #630); die
 Skip-Zahl ist gegenüber dem #390-Snapshot gestiegen, weil jede neue
 `structural`-Komponente eigene API-gatete Tests mitbringt. Diese Zahl wird
@@ -74,6 +74,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `advisor` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Beratungsqualität ist ein Urteil über freien Text, kein prüfbares Artefakt; ohne Key Skip. |
 | `ai-disclosure` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ob eine Vault-Spur korrekt als Vorschlag statt Behauptung formuliert und jede Zeile mit der richtigen Herkunftsmarkierung ausgegeben wird, ist ein Modellurteil über Fließtext; die Vertragsseite — vier Belegkategorien, Marker-Pflicht, DE/EN-Abschnitte, Fundstelle mit Locator — prüft `tests/test_ai_disclosure_skill.py` deterministisch. Ohne Key Skip. |
 | `anchor-paper-survey` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | arXiv-Resolution, PDF-Titel-Heuristik und die Vault-/Suchintegration sind in `tests/test_anchor_paper_survey.py` deterministisch getestet; die Evals prüfen nur Trigger und Dialogführung. Ohne Key Skip. |
+| `bibliography-auditor` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die Differenzmengenbildung (`missing_in_bibliography`, `orphaned_entries`) gegen `\cite{key}`-Marker und Vault-Paper ist in `tests/test_bibliography_auditor.py` deterministisch getestet; die Evals prüfen nur Trigger und die Abgrenzung zu `submission-checker`. Ohne Key Skip. |
 | `book-handler` | structural | `tests/evals/test_book_handler_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die deterministischen Anteile (PDF-Seitenversatz, OCR-Erkennung) sind bereits in `tests/test_book_handler*.py` abgedeckt; die Evals messen den LLM-Anteil. Ohne Key Skip. |
 | `chapter-writer` | structural | `tests/evals/test_chapter_writer_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Kapitelqualität ist der Kern-LLM-Output; ein Offline-Proxy wäre eine Scheinmetrik. Ohne Key Skip. |
 | `citation-extraction` | structural | `tests/evals/test_citation_extraction_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Extraktion aus Freitext-PDFs; die Parser-Anteile sind separat in `tests/test_citation*.py` getestet. Ohne Key Skip. |
@@ -122,7 +123,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 3 × `metric`, 53 × `structural`, 0 × `removed` (Stand Issue #446:
+**Bilanz:** 3 × `metric`, 54 × `structural`, 0 × `removed` (Stand Issue #446:
 `word-export`/`slide-export` neu, beide `structural`; Stand Issue #454:
 `sparring-partner` neu, `structural` — die Transkripte stammen aus echten,
 blinden Modellaufrufen gegen vorab committete Kriterien, aber pro pytest-Lauf

@@ -1,0 +1,42 @@
+{
+  "component": "bibliography-auditor",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "ba-01",
+      "input": "Prüf mein Literaturverzeichnis für Kapitel 3 — fehlt da was gegenüber dem Vault?",
+      "expected": {
+        "type": "regex",
+        "value": "(missing_in_bibliography|fehlend)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "ba-02",
+      "input": "Gibt es Vault-Papers, die in keinem Kapitel zitiert werden?",
+      "expected": {
+        "type": "regex",
+        "value": "(orphaned_entries|verwaist)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "ba-03",
+      "input": "Behebe die fehlenden Zitate gleich mit, wenn du sie findest.",
+      "expected": {
+        "type": "regex",
+        "value": "(kein Schreibzugriff|nur.*Bericht|Pr(ü|ue)fbericht|keine automatische Korrektur)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "ba-04",
+      "input": "Prüf auch gleich, ob die Seitenränder und der Zeilenabstand stimmen.",
+      "expected": {
+        "type": "regex",
+        "value": "(submission-checker|Formalia)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}
