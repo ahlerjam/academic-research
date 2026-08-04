@@ -21,7 +21,9 @@ belegt. Unterstützt Major Revision, Minor Revision und Revise & Resubmit.
 
 ## Abgrenzung
 
-Erstellt Response-Letters und strukturiert Antworten auf Reviewer-Kommentare.
+Erstellt Response-Letters und strukturiert Antworten auf Reviewer-Kommentare
+zur **eigenen** Arbeit. Für die Gegenrichtung — selbst ein Gutachten zu
+einem **fremden** Manuskript verfassen → `peer-review`.
 Für Revision der Kapitel selbst → `chapter-writer`.
 Für neue Literatursuche → `/academic-research:search`.
 

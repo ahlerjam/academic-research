@@ -1,0 +1,27 @@
+{
+  "component": "peer-review",
+  "should_trigger": [
+    "Ich soll ein Gutachten fuer ein Manuskript schreiben, hilf mir.",
+    "Kannst du mir helfen, ein fremdes Manuskript zu begutachten?",
+    "Ich muss ein Peer-Review-Gutachten verfassen.",
+    "Schreibe mir einen Referee-Report zu diesem Paper.",
+    "Ich soll als Gutachter urteilen ueber diese Einreichung.",
+    "Die Redaktion hat mich als Reviewer eingeteilt, ich brauche ein Gutachten.",
+    "Bewerte dieses fremde Manuskript strukturiert als Peer Reviewer.",
+    "Ich habe ein Manuskript zur Begutachtung bekommen und weiss nicht, wie ich anfangen soll.",
+    "Erstelle ein Referee-Gutachten mit Empfehlung fuer dieses Paper.",
+    "Ich soll ein Journal-Manuskript begutachten und ein Gutachten abgeben."
+  ],
+  "should_not_trigger": [
+    "Schreibe eine Antwort fuer die Reviewer zu meinem eigenen Paper.",
+    "Pruefe die Peer-Review-Quellenqualitaet meiner Literaturbasis.",
+    "Pruefe meinen Text auf Plagiate.",
+    "Welches Thema soll ich waehlen?",
+    "Schreibe Kapitel 1 meiner Arbeit.",
+    "Exportiere mein Kapitel nach LaTeX.",
+    "Erstelle ein Konferenz-Poster.",
+    "Generiere einen Titel fuer meine Arbeit.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Schaerfe meine Forschungsfrage."
+  ]
+}

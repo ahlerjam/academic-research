@@ -37,10 +37,10 @@ def test_marketplace_json_version():
 
 
 def test_plugin_json_description_mentions_current_skill_count():
-    """plugin.json description soll die aktuelle Skill-Zahl (41, Issue #610) nennen."""
+    """plugin.json description soll die aktuelle Skill-Zahl (42, Issue #608) nennen."""
     data = json.loads(PLUGIN_JSON.read_text())
     description = data["description"]
-    assert "41" in description, f"plugin.json description enthält nicht '41': '{description}'"
+    assert "42" in description, f"plugin.json description enthält nicht '42': '{description}'"
 
 
 def test_plugin_json_version_matches_marketplace():
