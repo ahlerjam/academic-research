@@ -8,5 +8,7 @@
   "_comment_active_learning_retrain_interval": "Zahl der Urteile zwischen zwei Nachtrainings (Issue #602). Vorrang: Argument > ACADEMIC_RESEARCH_ACTIVE_LEARNING_INTERVAL > diese Datei > Default 10. Darunter bleibt die Ursprungsreihenfolge stehen (Kaltstart).",
   "active_learning_retrain_interval": 10,
   "_comment_active_learning_block_size": "Abschnittsgroesse der Fortschrittsanzeige (Issue #602). Vorrang: Argument > ACADEMIC_RESEARCH_ACTIVE_LEARNING_BLOCK > diese Datei > Default 25.",
-  "active_learning_block_size": 25
+  "active_learning_block_size": 25,
+  "_comment_nli_prefilter": "Schalter fuer den lokalen NLI-Batch-Vorfilter vor quote-fidelity-auditor (Issue #592). Vorrang: Argument > ACADEMIC_RESEARCH_NLI_PREFILTER > diese Datei > Default false (AUS, bis die Validierung an echtem Zitatmaterial vorliegt -- evals/524-nli-prefilter/README.md). Bei false erreichen alle Kapitel-Zitate ungefiltert den bestehenden Pruefpfad, exakt wie ohne Vorfilter.",
+  "nli_prefilter_enabled": false
 }

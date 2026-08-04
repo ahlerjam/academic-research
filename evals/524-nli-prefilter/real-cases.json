@@ -1,0 +1,1025 @@
+{
+  "description": "50+ ECHTE Zitat-Kapitel-Paare (Issue #592-AC) -- verbatim sind kurze, woertliche Fair-Use-Ausschnitte aus real veroeffentlichten, oeffentlich zugaenglichen arXiv-Abstracts (Quelle je Case in source.url, per WebFetch gegen den Originaltext verifiziert). chapter_claim ist von Hand formuliert: faithful = treue deutsche Paraphrase, verzerrend = bewusst verzerrte Behauptung nach dem Verdict-Schema aus agents/quote-fidelity-auditor.md.",
+  "cases": [
+    {
+      "id": "real-01-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Vaswani et al. (2017) stellen mit dem Transformer eine neue, einfache Netzwerkarchitektur vor, die ausschließlich auf Attention-Mechanismen beruht.",
+      "context_before": "",
+      "verbatim": "We propose a new simple network architecture, the Transformer, based solely on attention mechanisms",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Attention Is All You Need",
+        "arxiv_id": "1706.03762",
+        "url": "https://arxiv.org/abs/1706.03762",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-01-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Vaswani et al. (2017) zeigen, dass der Transformer die einzige noch sinnvolle Architektur für jegliche Sequenzverarbeitung ist und alle rekurrenten Modelle vollständig überflüssig macht.",
+      "context_before": "",
+      "verbatim": "We propose a new simple network architecture, the Transformer, based solely on attention mechanisms",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Attention Is All You Need",
+        "arxiv_id": "1706.03762",
+        "url": "https://arxiv.org/abs/1706.03762",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-02-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Das vorgeschlagene Modell erreicht 28,4 BLEU-Punkte auf der WMT-2014-Übersetzungsaufgabe Englisch-Deutsch.",
+      "context_before": "",
+      "verbatim": "Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Attention Is All You Need",
+        "arxiv_id": "1706.03762",
+        "url": "https://arxiv.org/abs/1706.03762",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-02-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "Das Modell erreicht durchgehend BLEU-Werte über 28 Punkte auf sämtlichen maschinellen Übersetzungsaufgaben.",
+      "context_before": "",
+      "verbatim": "Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Attention Is All You Need",
+        "arxiv_id": "1706.03762",
+        "url": "https://arxiv.org/abs/1706.03762",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-03-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "BERT ist darauf ausgelegt, tiefe bidirektionale Repräsentationen aus unannotiertem Text vorzutrainieren, indem es linken und rechten Kontext gemeinsam berücksichtigt.",
+      "context_before": "",
+      "verbatim": "BERT is designed to pre-train deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+        "arxiv_id": "1810.04805",
+        "url": "https://arxiv.org/abs/1810.04805",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-03-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "polarity-flip",
+      "chapter_claim": "BERT verzichtet bewusst auf bidirektionalen Kontext und verarbeitet Text ausschließlich unidirektional von links nach rechts.",
+      "context_before": "",
+      "verbatim": "BERT is designed to pre-train deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+        "arxiv_id": "1810.04805",
+        "url": "https://arxiv.org/abs/1810.04805",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-04-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Das Modell erzielt neue State-of-the-Art-Ergebnisse auf elf Aufgaben der Sprachverarbeitung, darunter einen GLUE-Score von 80,5 %.",
+      "context_before": "",
+      "verbatim": "It obtains new state-of-the-art results on eleven natural language processing tasks, including pushing the GLUE score to 80.5%",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+        "arxiv_id": "1810.04805",
+        "url": "https://arxiv.org/abs/1810.04805",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-04-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "unsupported",
+      "chapter_claim": "Das Modell übertrifft menschliche Annotatoren auf allen getesteten Aufgaben deutlich.",
+      "context_before": "",
+      "verbatim": "It obtains new state-of-the-art results on eleven natural language processing tasks, including pushing the GLUE score to 80.5%",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+        "arxiv_id": "1810.04805",
+        "url": "https://arxiv.org/abs/1810.04805",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-05-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Autoren formulieren die Schichten explizit so um, dass sie Residualfunktionen bezogen auf die Schichteingaben lernen.",
+      "context_before": "",
+      "verbatim": "We explicitly reformulate the layers as learning residual functions with reference to the layer inputs",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Deep Residual Learning for Image Recognition",
+        "arxiv_id": "1512.03385",
+        "url": "https://arxiv.org/abs/1512.03385",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-05-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Die Autoren beweisen, dass Residualfunktionen jede Form von Overfitting in tiefen Netzen vollständig eliminieren.",
+      "context_before": "",
+      "verbatim": "We explicitly reformulate the layers as learning residual functions with reference to the layer inputs",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Deep Residual Learning for Image Recognition",
+        "arxiv_id": "1512.03385",
+        "url": "https://arxiv.org/abs/1512.03385",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-06-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Ein Ensemble dieser residualen Netze erreicht eine Fehlerrate von 3,57 % auf dem ImageNet-Testset.",
+      "context_before": "",
+      "verbatim": "An ensemble of these residual nets achieves 3.57% error on the ImageNet test set.",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Deep Residual Learning for Image Recognition",
+        "arxiv_id": "1512.03385",
+        "url": "https://arxiv.org/abs/1512.03385",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-06-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "Das residuale Netz erreicht durchgängig eine Fehlerrate von 3,57 % auf beliebigen Bilddatensätzen.",
+      "context_before": "",
+      "verbatim": "An ensemble of these residual nets achieves 3.57% error on the ImageNet test set.",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Deep Residual Learning for Image Recognition",
+        "arxiv_id": "1512.03385",
+        "url": "https://arxiv.org/abs/1512.03385",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-07-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Arbeit stellt ein neues Framework vor, das generative Modelle über einen adversarialen Prozess schätzt, bei dem zwei Modelle gleichzeitig trainiert werden.",
+      "context_before": "",
+      "verbatim": "a new framework for estimating generative models via an adversarial process, in which we simultaneously train two models",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Generative Adversarial Networks",
+        "arxiv_id": "1406.2661",
+        "url": "https://arxiv.org/abs/1406.2661",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-07-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "polarity-flip",
+      "chapter_claim": "Die Arbeit zeigt, dass ein einzelnes Modell ausreicht und ein adversariales Training zweier Modelle keinen Mehrwert bringt.",
+      "context_before": "",
+      "verbatim": "a new framework for estimating generative models via an adversarial process, in which we simultaneously train two models",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Generative Adversarial Networks",
+        "arxiv_id": "1406.2661",
+        "url": "https://arxiv.org/abs/1406.2661",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-08-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Das gesamte System lässt sich per Backpropagation trainieren, ohne dass Markov-Ketten oder entrollte Approximationsnetzwerke nötig sind.",
+      "context_before": "",
+      "verbatim": "the entire system can be trained with backpropagation. There is no need for any Markov chains or unrolled approximate inference networks",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Generative Adversarial Networks",
+        "arxiv_id": "1406.2661",
+        "url": "https://arxiv.org/abs/1406.2661",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-08-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "unsupported",
+      "chapter_claim": "Das Training des Systems dauert im Schnitt nur drei Minuten auf einer einzelnen CPU.",
+      "context_before": "",
+      "verbatim": "the entire system can be trained with backpropagation. There is no need for any Markov chains or unrolled approximate inference networks",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Generative Adversarial Networks",
+        "arxiv_id": "1406.2661",
+        "url": "https://arxiv.org/abs/1406.2661",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-09-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Adam ist ein Algorithmus zur gradientenbasierten Optimierung stochastischer Zielfunktionen erster Ordnung, der auf adaptiven Schätzungen beruht.",
+      "context_before": "",
+      "verbatim": "an algorithm for first-order gradient-based optimization of stochastic objective functions, based on adaptive estimates",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Adam: A Method for Stochastic Optimization",
+        "arxiv_id": "1412.6980",
+        "url": "https://arxiv.org/abs/1412.6980",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-09-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Adam garantiert für jede stochastische Zielfunktion die global optimale Lösung.",
+      "context_before": "",
+      "verbatim": "an algorithm for first-order gradient-based optimization of stochastic objective functions, based on adaptive estimates",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Adam: A Method for Stochastic Optimization",
+        "arxiv_id": "1412.6980",
+        "url": "https://arxiv.org/abs/1412.6980",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-10-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Empirische Ergebnisse zeigen, dass Adam in der Praxis gut funktioniert und im Vergleich zu anderen stochastischen Optimierungsverfahren günstig abschneidet.",
+      "context_before": "",
+      "verbatim": "Empirical results demonstrate that Adam works well in practice and compares favorably to other stochastic optimization methods",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Adam: A Method for Stochastic Optimization",
+        "arxiv_id": "1412.6980",
+        "url": "https://arxiv.org/abs/1412.6980",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-10-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "Adam schneidet in jedem denkbaren Anwendungsfall besser ab als sämtliche konkurrierenden Optimierungsverfahren.",
+      "context_before": "",
+      "verbatim": "Empirical results demonstrate that Adam works well in practice and compares favorably to other stochastic optimization methods",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Adam: A Method for Stochastic Optimization",
+        "arxiv_id": "1412.6980",
+        "url": "https://arxiv.org/abs/1412.6980",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-11-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Autoren schlagen zwei neuartige Modellarchitekturen zur Berechnung kontinuierlicher Vektorrepräsentationen von Wörtern vor.",
+      "context_before": "",
+      "verbatim": "We propose two novel model architectures for computing continuous vector representations of words",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Efficient Estimation of Word Representations in Vector Space",
+        "arxiv_id": "1301.3781",
+        "url": "https://arxiv.org/abs/1301.3781",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-11-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "polarity-flip",
+      "chapter_claim": "Die Autoren zeigen, dass sich kontinuierliche Vektorrepräsentationen von Wörtern grundsätzlich nicht sinnvoll berechnen lassen.",
+      "context_before": "",
+      "verbatim": "We propose two novel model architectures for computing continuous vector representations of words",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Efficient Estimation of Word Representations in Vector Space",
+        "arxiv_id": "1301.3781",
+        "url": "https://arxiv.org/abs/1301.3781",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-12-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Das Training hochwertiger Wortvektoren aus einem 1,6-Milliarden-Wörter-Datensatz dauert weniger als einen Tag.",
+      "context_before": "",
+      "verbatim": "it takes less than a day to learn high quality word vectors from a 1.6 billion words data set",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Efficient Estimation of Word Representations in Vector Space",
+        "arxiv_id": "1301.3781",
+        "url": "https://arxiv.org/abs/1301.3781",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-12-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "unsupported",
+      "chapter_claim": "Das Verfahren benötigt spezielle GPU-Cluster mit mindestens 64 Grafikkarten für das Training.",
+      "context_before": "",
+      "verbatim": "it takes less than a day to learn high quality word vectors from a 1.6 billion words data set",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Efficient Estimation of Word Representations in Vector Space",
+        "arxiv_id": "1301.3781",
+        "url": "https://arxiv.org/abs/1301.3781",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-13-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Arbeit präsentiert hochwertige Bildsynthese-Ergebnisse mit Diffusions-Wahrscheinlichkeitsmodellen, einer Klasse latenter Variablenmodelle.",
+      "context_before": "",
+      "verbatim": "We present high quality image synthesis results using diffusion probabilistic models, a class of latent variable models",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Denoising Diffusion Probabilistic Models",
+        "arxiv_id": "2006.11239",
+        "url": "https://arxiv.org/abs/2006.11239",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-13-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Die Arbeit weist nach, dass Diffusionsmodelle jede andere Bildsynthese-Methode in jeder Hinsicht obsolet machen.",
+      "context_before": "",
+      "verbatim": "We present high quality image synthesis results using diffusion probabilistic models, a class of latent variable models",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Denoising Diffusion Probabilistic Models",
+        "arxiv_id": "2006.11239",
+        "url": "https://arxiv.org/abs/2006.11239",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-14-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Auf dem unbedingten CIFAR10-Datensatz erreichen die Autoren einen Inception-Score von 9,46 und einen State-of-the-Art-FID-Wert von 3,17.",
+      "context_before": "",
+      "verbatim": "On the unconditional CIFAR10 dataset, we obtain an Inception score of 9.46 and a state-of-the-art FID score of 3.17.",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Denoising Diffusion Probabilistic Models",
+        "arxiv_id": "2006.11239",
+        "url": "https://arxiv.org/abs/2006.11239",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-14-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "Das Modell erzielt durchgängig einen FID-Wert von 3,17 auf beliebigen Bilddatensätzen.",
+      "context_before": "",
+      "verbatim": "On the unconditional CIFAR10 dataset, we obtain an Inception score of 9.46 and a state-of-the-art FID score of 3.17.",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Denoising Diffusion Probabilistic Models",
+        "arxiv_id": "2006.11239",
+        "url": "https://arxiv.org/abs/2006.11239",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-15-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die vorgestellten Modelle kombinieren vortrainierten parametrischen und nicht-parametrischen Speicher zur Sprachgenerierung.",
+      "context_before": "",
+      "verbatim": "models which combine pre-trained parametric and non-parametric memory for language generation",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "arxiv_id": "2005.11401",
+        "url": "https://arxiv.org/abs/2005.11401",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-15-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "polarity-flip",
+      "chapter_claim": "Die vorgestellten Modelle verzichten bewusst auf jede Form von externem, nicht-parametrischem Speicher.",
+      "context_before": "",
+      "verbatim": "models which combine pre-trained parametric and non-parametric memory for language generation",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "arxiv_id": "2005.11401",
+        "url": "https://arxiv.org/abs/2005.11401",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-16-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "RAG-Modelle erzeugen spezifischere, vielfältigere und faktentreuere Sprache als eine rein parametrische Seq2Seq-Baseline nach dem Stand der Technik.",
+      "context_before": "",
+      "verbatim": "RAG models generate more specific, diverse and factual language than a state-of-the-art parametric-only seq2seq baseline",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "arxiv_id": "2005.11401",
+        "url": "https://arxiv.org/abs/2005.11401",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-16-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "unsupported",
+      "chapter_claim": "RAG-Modelle sind vollständig halluzinationsfrei und produzieren niemals falsche Fakten.",
+      "context_before": "",
+      "verbatim": "RAG models generate more specific, diverse and factual language than a state-of-the-art parametric-only seq2seq baseline",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "arxiv_id": "2005.11401",
+        "url": "https://arxiv.org/abs/2005.11401",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-17-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Das Verfahren komprimiert das Wissen eines Ensembles in ein einzelnes Modell, das sich deutlich leichter einsetzen lässt.",
+      "context_before": "",
+      "verbatim": "compress the knowledge in an ensemble into a single model which is much easier to deploy",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Distilling the Knowledge in a Neural Network",
+        "arxiv_id": "1503.02531",
+        "url": "https://arxiv.org/abs/1503.02531",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-17-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Das Verfahren erreicht mit dem komprimierten Einzelmodell in jedem Fall eine höhere Genauigkeit als das ursprüngliche Ensemble.",
+      "context_before": "",
+      "verbatim": "compress the knowledge in an ensemble into a single model which is much easier to deploy",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Distilling the Knowledge in a Neural Network",
+        "arxiv_id": "1503.02531",
+        "url": "https://arxiv.org/abs/1503.02531",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-18-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Autoren verbessern durch Wissensdistillation das akustische Modell eines stark genutzten kommerziellen Systems deutlich.",
+      "context_before": "",
+      "verbatim": "significantly improve the acoustic model of a heavily used commercial system by distilling the knowledge",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Distilling the Knowledge in a Neural Network",
+        "arxiv_id": "1503.02531",
+        "url": "https://arxiv.org/abs/1503.02531",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-18-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "Wissensdistillation verbessert grundsätzlich jedes akustische Modell unabhängig vom Anwendungskontext.",
+      "context_before": "",
+      "verbatim": "significantly improve the acoustic model of a heavily used commercial system by distilling the knowledge",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Distilling the Knowledge in a Neural Network",
+        "arxiv_id": "1503.02531",
+        "url": "https://arxiv.org/abs/1503.02531",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-19-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Architektur verwendet sehr kleine 3x3-Faltungsfilter und zeigt damit eine deutliche Verbesserung.",
+      "context_before": "",
+      "verbatim": "architecture with very small (3x3) convolution filters, which shows that a significant improvement",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Very Deep Convolutional Networks for Large-Scale Image Recognition",
+        "arxiv_id": "1409.1556",
+        "url": "https://arxiv.org/abs/1409.1556",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-19-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "polarity-flip",
+      "chapter_claim": "Die Autoren zeigen, dass große Faltungsfilter kleinen 3x3-Filtern grundsätzlich überlegen sind.",
+      "context_before": "",
+      "verbatim": "architecture with very small (3x3) convolution filters, which shows that a significant improvement",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Very Deep Convolutional Networks for Large-Scale Image Recognition",
+        "arxiv_id": "1409.1556",
+        "url": "https://arxiv.org/abs/1409.1556",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-20-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Das Team belegte bei der ImageNet-Challenge den ersten Platz in der Lokalisierungs- und den zweiten Platz in der Klassifikationsaufgabe.",
+      "context_before": "",
+      "verbatim": "our team secured the first and the second places in the localisation and classification tracks",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Very Deep Convolutional Networks for Large-Scale Image Recognition",
+        "arxiv_id": "1409.1556",
+        "url": "https://arxiv.org/abs/1409.1556",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-20-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "unsupported",
+      "chapter_claim": "Das Team gewann alle acht ausgeschriebenen Teilwettbewerbe der Challenge.",
+      "context_before": "",
+      "verbatim": "our team secured the first and the second places in the localisation and classification tracks",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Very Deep Convolutional Networks for Large-Scale Image Recognition",
+        "arxiv_id": "1409.1556",
+        "url": "https://arxiv.org/abs/1409.1556",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-21-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Methode gewinnt ihre Wirksamkeit daraus, dass Normalisierung Teil der Modellarchitektur wird.",
+      "context_before": "",
+      "verbatim": "Our method draws its strength from making normalization a part of the model architecture",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift",
+        "arxiv_id": "1502.03167",
+        "url": "https://arxiv.org/abs/1502.03167",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-21-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Die Methode macht jede weitere Regularisierungstechnik in tiefen Netzen vollständig überflüssig.",
+      "context_before": "",
+      "verbatim": "Our method draws its strength from making normalization a part of the model architecture",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift",
+        "arxiv_id": "1502.03167",
+        "url": "https://arxiv.org/abs/1502.03167",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-22-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Batch Normalization erreicht dieselbe Genauigkeit mit 14-mal weniger Trainingsschritten.",
+      "context_before": "",
+      "verbatim": "Batch Normalization achieves the same accuracy with 14 times fewer training steps",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift",
+        "arxiv_id": "1502.03167",
+        "url": "https://arxiv.org/abs/1502.03167",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-22-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "Batch Normalization benötigt in jedem Trainingsszenario grundsätzlich 14-mal weniger Rechenzeit.",
+      "context_before": "",
+      "verbatim": "Batch Normalization achieves the same accuracy with 14 times fewer training steps",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift",
+        "arxiv_id": "1502.03167",
+        "url": "https://arxiv.org/abs/1502.03167",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-23-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Autoren vermuten, dass die Verwendung eines Vektors fester Länge einen Flaschenhals für die Leistungsverbesserung darstellt.",
+      "context_before": "",
+      "verbatim": "we conjecture that the use of a fixed-length vector is a bottleneck in improving the performance",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Neural Machine Translation by Jointly Learning to Align and Translate",
+        "arxiv_id": "1409.0473",
+        "url": "https://arxiv.org/abs/1409.0473",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-23-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "polarity-flip",
+      "chapter_claim": "Die Autoren belegen, dass Vektoren fester Länge die Leistung nachweislich nicht einschränken.",
+      "context_before": "",
+      "verbatim": "we conjecture that the use of a fixed-length vector is a bottleneck in improving the performance",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Neural Machine Translation by Jointly Learning to Align and Translate",
+        "arxiv_id": "1409.0473",
+        "url": "https://arxiv.org/abs/1409.0473",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-24-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die vom Modell gefundenen weichen Alignments stimmen gut mit der menschlichen Intuition überein.",
+      "context_before": "",
+      "verbatim": "the (soft-)alignments found by the model agree well with our intuition",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Neural Machine Translation by Jointly Learning to Align and Translate",
+        "arxiv_id": "1409.0473",
+        "url": "https://arxiv.org/abs/1409.0473",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-24-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "unsupported",
+      "chapter_claim": "Das Modell liefert für jedes Satzpaar mathematisch beweisbar optimale Alignments.",
+      "context_before": "",
+      "verbatim": "the (soft-)alignments found by the model agree well with our intuition",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Neural Machine Translation by Jointly Learning to Align and Translate",
+        "arxiv_id": "1409.0473",
+        "url": "https://arxiv.org/abs/1409.0473",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-25-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Vorgestellt wird ein stochastischer Algorithmus für Variationsinferenz und -lernen, der auf große Datensätze skaliert.",
+      "context_before": "",
+      "verbatim": "a stochastic variational inference and learning algorithm that scales to large datasets",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Auto-Encoding Variational Bayes",
+        "arxiv_id": "1312.6114",
+        "url": "https://arxiv.org/abs/1312.6114",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-25-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Der vorgestellte Algorithmus skaliert nachweislich auf beliebig große Datensätze ohne jede Effizienzgrenze.",
+      "context_before": "",
+      "verbatim": "a stochastic variational inference and learning algorithm that scales to large datasets",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Auto-Encoding Variational Bayes",
+        "arxiv_id": "1312.6114",
+        "url": "https://arxiv.org/abs/1312.6114",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-26-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Posterior-Inferenz lässt sich besonders effizient gestalten, indem ein approximatives Inferenzmodell angepasst wird.",
+      "context_before": "",
+      "verbatim": "posterior inference can be made especially efficient by fitting an approximate inference model",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Auto-Encoding Variational Bayes",
+        "arxiv_id": "1312.6114",
+        "url": "https://arxiv.org/abs/1312.6114",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-26-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "Posterior-Inferenz ist bei diesem Ansatz grundsätzlich immer effizienter als bei exakten Verfahren.",
+      "context_before": "",
+      "verbatim": "posterior inference can be made especially efficient by fitting an approximate inference model",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Auto-Encoding Variational Bayes",
+        "arxiv_id": "1312.6114",
+        "url": "https://arxiv.org/abs/1312.6114",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-27-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Mittelwert und Varianz für die Normalisierung werden aus allen summierten Eingaben der Neuronen einer Schicht berechnet.",
+      "context_before": "",
+      "verbatim": "computing the mean and variance used for normalization from all of the summed inputs to the neurons in a layer",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Layer Normalization",
+        "arxiv_id": "1607.06450",
+        "url": "https://arxiv.org/abs/1607.06450",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-27-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "polarity-flip",
+      "chapter_claim": "Mittelwert und Varianz werden bewusst pro einzelnem Neuron getrennt und nie über die Schicht hinweg berechnet.",
+      "context_before": "",
+      "verbatim": "computing the mean and variance used for normalization from all of the summed inputs to the neurons in a layer",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Layer Normalization",
+        "arxiv_id": "1607.06450",
+        "url": "https://arxiv.org/abs/1607.06450",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-28-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Layer Normalization kann die Trainingszeit im Vergleich zu zuvor veröffentlichten Verfahren erheblich verkürzen.",
+      "context_before": "",
+      "verbatim": "Layer normalization can substantially reduce the training time compared with previously published techniques.",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Layer Normalization",
+        "arxiv_id": "1607.06450",
+        "url": "https://arxiv.org/abs/1607.06450",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-28-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "unsupported",
+      "chapter_claim": "Layer Normalization halbiert nachweislich den Energieverbrauch von GPU-Clustern beim Training.",
+      "context_before": "",
+      "verbatim": "Layer normalization can substantially reduce the training time compared with previously published techniques.",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Layer Normalization",
+        "arxiv_id": "1607.06450",
+        "url": "https://arxiv.org/abs/1607.06450",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-29-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "Die Autoren trainieren ein transformerbasiertes maskiertes Sprachmodell auf hundert Sprachen anhand von mehr als zwei Terabyte gefilterter CommonCrawl-Daten.",
+      "context_before": "",
+      "verbatim": "We train a Transformer-based masked language model on one hundred languages, using more than two terabytes of filtered CommonCrawl data.",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Unsupervised Cross-lingual Representation Learning at Scale",
+        "arxiv_id": "1911.02116",
+        "url": "https://arxiv.org/abs/1911.02116",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-29-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "overstated",
+      "chapter_claim": "Die Autoren trainieren das Modell auf sämtlichen weltweit existierenden Sprachen.",
+      "context_before": "",
+      "verbatim": "We train a Transformer-based masked language model on one hundred languages, using more than two terabytes of filtered CommonCrawl data.",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Unsupervised Cross-lingual Representation Learning at Scale",
+        "arxiv_id": "1911.02116",
+        "url": "https://arxiv.org/abs/1911.02116",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-30-a",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": null,
+      "chapter_claim": "XLM-R schneidet bei ressourcenarmen Sprachen besonders gut ab und verbessert die XNLI-Genauigkeit für Suaheli um 15,7 Prozentpunkte und für Urdu um 11,4 Prozentpunkte gegenüber früheren XLM-Modellen.",
+      "context_before": "",
+      "verbatim": "XLM-R performs particularly well on low-resource languages, improving 15.7% in XNLI accuracy for Swahili and 11.4% for Urdu over previous XLM models.",
+      "context_after": "",
+      "label": "faithful",
+      "source": {
+        "title": "Unsupervised Cross-lingual Representation Learning at Scale",
+        "arxiv_id": "1911.02116",
+        "url": "https://arxiv.org/abs/1911.02116",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    },
+    {
+      "id": "real-30-b",
+      "claim_lang": "de",
+      "context_lang": "en",
+      "verzerrend_type": "context-stripped",
+      "chapter_claim": "XLM-R verbessert die Genauigkeit gegenüber früheren Modellen in jeder Sprache um mindestens 15 Prozentpunkte.",
+      "context_before": "",
+      "verbatim": "XLM-R performs particularly well on low-resource languages, improving 15.7% in XNLI accuracy for Swahili and 11.4% for Urdu over previous XLM models.",
+      "context_after": "",
+      "label": "verzerrend",
+      "source": {
+        "title": "Unsupervised Cross-lingual Representation Learning at Scale",
+        "arxiv_id": "1911.02116",
+        "url": "https://arxiv.org/abs/1911.02116",
+        "excerpt_verified": "webfetch-2026-08-04"
+      }
+    }
+  ]
+}

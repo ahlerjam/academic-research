@@ -269,7 +269,14 @@ def test_stats():
         # cached_files ist mit dem Files-API-Pfad entfallen (#632): ohne
         # Schreiber waere das Feld dauerhaft 0 -- genau die Phantomgroesse,
         # die #387/#453/#534 verbieten.
-        assert set(stats.keys()) == {"paper_count", "quote_count"}
+        # embedding_model/embedding_dim seit #629: Bestandsnachweis der
+        # Vektoren, ohne dass dafuer ein Modell geladen wird.
+        assert set(stats.keys()) == {
+            "paper_count",
+            "quote_count",
+            "embedding_model",
+            "embedding_dim",
+        }
         assert "token_savings_estimate" not in stats
         assert stats["paper_count"] >= 1
         assert stats["quote_count"] >= 1
