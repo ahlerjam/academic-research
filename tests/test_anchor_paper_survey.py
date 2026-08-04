@@ -599,6 +599,394 @@ class TestRunCitationSearch:
 
 
 # ---------------------------------------------------------------------------
+# Issue #599: DOI-Aufloesung fuer PDF-Anker -- echte Zitations-Traversierung
+# auch ohne arXiv-ID, sobald ein stabiler Identifier (DOI) vorliegt.
+# ---------------------------------------------------------------------------
+
+PDF_TEXT_WITH_DOI = (
+    "A Great Paper About Testing\n"
+    "Jane Doe, John Smith\n"
+    "DOI: 10.1234/great.testing.2024\n\n"
+    "Abstract: ...\n"
+)
+
+
+class TestExtractDoiFromText:
+    """Unit-Tests fuer extract_doi_from_text() (textquellenagnostisch,
+    analog skills/github-repo-research/scripts/analyze_repo.py::extract_dois(),
+    Praezedenzfall Issue #401 -- eigenstaendige Implementierung)."""
+
+    def test_extracts_doi_from_header_window(self):
+        assert aps.extract_doi_from_text(PDF_TEXT_WITH_DOI) == "10.1234/great.testing.2024"
+
+    def test_returns_none_without_doi(self):
+        assert aps.extract_doi_from_text(PDF_SAMPLE_TEXT) is None
+
+    def test_returns_none_for_empty_or_missing_text(self):
+        assert aps.extract_doi_from_text("") is None
+        assert aps.extract_doi_from_text(None) is None
+
+    def test_ignores_doi_outside_the_search_window(self):
+        """Eine DOI weit hinten im Volltext (z.B. in der Bibliographie) darf
+        nicht als die EIGENE DOI des Papers missverstanden werden -- die
+        Extraktion ist bewusst auf ein Fenster am Textanfang begrenzt
+        (Issue #599 Plan, Risiko 1)."""
+        padding = "x" * (aps._DOI_SEARCH_WINDOW_CHARS + 100)
+        text = f"Title\nAuthors\n{padding}\nDOI: 10.1234/too.late\n"
+        assert aps.extract_doi_from_text(text) is None
+
+
+class TestPdfDoiCitationSearch:
+    """AC1: PDF-Anker mit DOI im Text -> Zitations-/Referenz-Abfrage ueber
+    Semantic Scholar, nicht die Titel-Stichwortsuche."""
+
+    def test_pdf_with_doi_in_text_uses_citation_search_not_keyword(self, sample_pdf, temp_vault_db):
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            patch.object(aps, "run_citation_search", return_value=([], [])) as mock_citation,
+            patch.object(aps, "run_search") as mock_keyword,
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
+        ):
+            result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        assert result["status"] == "ok"
+        mock_citation.assert_called_once_with(
+            "DOI:10.1234/great.testing.2024", limit=aps.DEFAULT_SEARCH_LIMIT
+        )
+        mock_keyword.assert_not_called()
+        assert result["search"]["method"] == "citation"
+        assert result["doi"] == "10.1234/great.testing.2024"
+
+        paper = vault_get_paper(temp_vault_db, result["paper_id"])
+        assert paper is not None
+        assert paper["doi"] == "10.1234/great.testing.2024"
+
+
+class TestPdfDoiVaultPriority:
+    """AC2: ein Anker, der bereits mit DOI im Vault liegt, nutzt diesen,
+    ohne den DOI erneut aus dem PDF zu ziehen."""
+
+    def test_existing_vault_doi_is_reused_without_reextraction(self, sample_pdf, temp_vault_db):
+        # Erster Lauf: DOI wird aus dem Text extrahiert und im Vault abgelegt.
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            patch.object(aps, "run_citation_search", return_value=([], [])),
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
+        ):
+            first = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        # Zweiter Lauf: der PDF-Text liefert diesmal KEINE DOI -- trotzdem
+        # muss die bereits im Vault gespeicherte DOI benutzt werden.
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_SAMPLE_TEXT),
+            patch.object(aps, "run_citation_search", return_value=([], [])) as mock_citation,
+            patch.object(aps, "run_search") as mock_keyword,
+        ):
+            second = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        assert first["paper_id"] == second["paper_id"]
+        mock_citation.assert_called_once_with(
+            "DOI:10.1234/great.testing.2024", limit=aps.DEFAULT_SEARCH_LIMIT
+        )
+        mock_keyword.assert_not_called()
+        assert second["search"]["method"] == "citation"
+
+
+class TestPdfWithoutDoiFallback:
+    """AC3: ohne auffindbaren DOI laeuft der Skill wie bisher ueber die
+    Titel-Stichwortsuche und meldet das offen."""
+
+    def test_pdf_without_doi_uses_keyword_search_and_reports_it(self, sample_pdf, temp_vault_db):
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_SAMPLE_TEXT),
+            patch.object(
+                aps, "run_search", return_value=([{"title": "A Related Testing Paper"}], [])
+            ) as mock_keyword,
+            patch.object(aps, "run_citation_search") as mock_citation,
+        ):
+            result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        mock_keyword.assert_called_once()
+        mock_citation.assert_not_called()
+        assert result["search"]["method"] == "keyword"
+        assert "kein doi" in result["message"].lower()
+
+
+class TestSearchMethodLabel:
+    """AC4: das Ergebnis weist aus, ob die Treffer aus einer nachgewiesenen
+    Zitationsbeziehung oder aus einer thematischen Naeherung stammen --
+    literal unterscheidbar, ueber alle drei Pfade (arXiv, PDF+DOI, PDF ohne
+    DOI)."""
+
+    def test_method_and_message_distinguish_citation_from_keyword(self, sample_pdf, temp_vault_db):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = _read("arxiv_response.xml")
+        with (
+            patch("requests.get", return_value=mock_resp),
+            patch.object(aps, "run_citation_search", return_value=([], [])),
+        ):
+            arxiv_result = aps.anchor_paper_survey(
+                "https://arxiv.org/abs/2005.14165", db_path=temp_vault_db
+            )
+        assert arxiv_result["search"]["method"] == "citation"
+
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            patch.object(aps, "run_citation_search", return_value=([], [])),
+            # Ohne diesen Patch feuert die (seit Issue #599, Operator-Review
+            # Runde 4) vorgezogene Titel-Verifikation einen echten GET gegen
+            # api.semanticscholar.org -- kein Netzzugriff in Tests (P2-Fund).
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
+        ):
+            pdf_doi_result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+        assert pdf_doi_result["search"]["method"] == "citation"
+
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_SAMPLE_TEXT),
+            patch.object(aps, "run_search", return_value=([], [])),
+        ):
+            pdf_keyword_result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+        assert pdf_keyword_result["search"]["method"] == "keyword"
+
+        # Bewusst disjunkte Formulierungen (keine gemeinsame Teilphrase), s.
+        # anchor_paper_survey()-Kommentar zu method_note.
+        assert "nachgewiesenen Zitationsbeziehung" in arxiv_result["message"]
+        assert "nachgewiesenen Zitationsbeziehung" in pdf_doi_result["message"]
+        assert "nachgewiesenen Zitationsbeziehung" not in pdf_keyword_result["message"]
+        assert "thematische" in pdf_keyword_result["message"].lower()
+        assert "thematische" not in arxiv_result["message"].lower()
+
+
+class TestS2UnknownReferenceFallback:
+    """AC5: eine DOI (bzw. ein s2_ref), die Semantic Scholar nicht kennt,
+    fuehrt zu einer verstaendlichen Meldung und zum Rueckfall auf die
+    Titelsuche -- nicht zum Abbruch."""
+
+    def test_unknown_doi_falls_back_to_keyword_search_no_crash(self, sample_pdf, temp_vault_db):
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            # Titel-Verifikation laeuft seit Issue #599 (Operator-Review Runde
+            # 4) VOR run_citation_search() -- muss hier auf True gemockt sein,
+            # damit dieser Test den "S2 kennt die DOI nicht"-Fallback prueft
+            # und nicht den (separat getesteten) Titel-Mismatch-Fallback.
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
+            patch.object(
+                aps, "run_citation_search", return_value=([], ["citations", "references"])
+            ) as mock_citation,
+            patch.object(
+                aps, "run_search", return_value=([{"title": "Fallback Hit"}], [])
+            ) as mock_keyword,
+        ):
+            result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        assert result["status"] == "ok"
+        mock_citation.assert_called_once()
+        mock_keyword.assert_called_once()
+        assert result["search"]["method"] == "keyword"
+        assert result["search"]["count"] == 1
+        assert "kennt" in result["message"].lower()
+
+    def test_single_relation_failure_stays_report_only_no_fallback(self, temp_vault_db):
+        """Gegenprobe: nur EINE Relation fehlgeschlagen darf NICHT auf die
+        Titelsuche zurueckfallen (Unterscheidung zu AC5) -- Regressionsschutz
+        fuer den bestehenden Test test_partial_relation_failure_is_reported."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = _read("arxiv_response.xml")
+        with (
+            patch("requests.get", return_value=mock_resp),
+            patch.object(aps, "run_citation_search", return_value=([], ["references"])),
+            patch.object(aps, "run_search") as mock_keyword,
+        ):
+            result = aps.anchor_paper_survey(
+                "https://arxiv.org/abs/2005.14165", db_path=temp_vault_db
+            )
+
+        mock_keyword.assert_not_called()
+        assert result["search"]["method"] == "citation"
+
+
+class TestDoiTitleMismatchFallback:
+    """Operator-Entscheidung (Konvergenz-Regel, Runde 4, 2026-08-04): die
+    Titel-Verifikation einer aus dem PDF extrahierten DOI muss VOR
+    run_citation_search() laufen. Scheitert sie (S2-Titel der DOI passt nicht
+    zum Anker-Titel -- z.B. Verlags-Deckblatt/Erratum-Header), darf der
+    Zitationsgraph des falschen Papers gar nicht erst abgefragt werden --
+    sonst wird er faelschlich als "nachgewiesene Zitationsbeziehung" dieses
+    Ankers gemeldet (der P1-Fund aus Review-Runde 4)."""
+
+    def test_title_mismatch_skips_citation_search_and_falls_back_to_keyword(
+        self, sample_pdf, temp_vault_db
+    ):
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=False),
+            patch.object(aps, "run_citation_search") as mock_citation,
+            patch.object(
+                aps, "run_search", return_value=([{"title": "Fallback Hit"}], [])
+            ) as mock_keyword,
+        ):
+            result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        assert result["status"] == "ok"
+        # Beweis fuer den eigentlichen Bug (Runde 4): der Zitationsgraph der
+        # unverifizierten DOI wird gar nicht erst abgefragt.
+        mock_citation.assert_not_called()
+        mock_keyword.assert_called_once()
+        assert result["search"]["method"] == "keyword"
+        assert "doi" not in result
+        assert "nachgewiesenen Zitationsbeziehung" not in result["message"]
+
+        # Die nie verifizierte DOI wird nicht in den Vault geschrieben.
+        paper = vault_get_paper(temp_vault_db, result["paper_id"])
+        assert paper is not None
+        assert paper["doi"] is None
+
+
+class TestS2UrlQuoting:
+    """Operator-Review Runde 4, P2: paper_ref (aus _DOI_RE, erlaubt '/' im
+    DOI-Suffix) wird ungequotet in die S2-URL interpoliert -- ein DOI mit
+    Pfad-Traversal-Anteil duerfte nicht als dekodiertes Pfadsegment in der
+    tatsaechlich abgesetzten Request-URL landen."""
+
+    def test_fetch_s2_relation_quotes_slash_in_paper_ref(self):
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"data": []}
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            aps._fetch_s2_relation("DOI:10.1234/../../etc/passwd", "citations", 5)
+
+        assert mock_get.call_args_list
+        url = mock_get.call_args_list[0].args[0]
+        assert "../" not in url
+        assert "%2F" in url
+
+    def test_verify_extracted_doi_title_match_quotes_slash_in_paper_ref(self):
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"title": "Some Title"}
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            aps._verify_extracted_doi_title_match("DOI:10.1234/../../etc/passwd", "Some Title")
+
+        assert mock_get.call_args_list
+        url = mock_get.call_args_list[0].args[0]
+        assert "../" not in url
+        assert "%2F" in url
+
+
+class TestSkillMdDocumentsDoiPath:
+    """AC6: SKILL.md 'Bekannte Einschraenkungen' beschreibt den neuen Stand
+    (DOI-Pfad fuer PDF-Anker), nicht mehr die absolute alte Aussage."""
+
+    def test_old_absolute_claim_is_gone(self):
+        text = SKILL_MD.read_text(encoding="utf-8")
+        assert "Nur arXiv-Anker bekommen eine geprüfte Zitations-/Referenz-Beziehung" not in text
+
+    def test_doi_path_for_pdf_anchors_is_documented(self):
+        text = SKILL_MD.read_text(encoding="utf-8")
+        assert "DOI" in text
+        assert "extract_doi_from_text" in text
+
+
+# ---------------------------------------------------------------------------
+# Regressionsschutz (Issue #599 Plan-Risiken 2 und 5, nicht selbst ACs)
+# ---------------------------------------------------------------------------
+
+
+class TestVaultAddPaperDoiSentinelDefault:
+    """Plan-Risiko 2: vault_add_paper()s doi-Parameter darf, wenn nicht
+    uebergeben, einen bereits gespeicherten DOI nicht auf NULL zuruecksetzen
+    (Sentinel-Default statt doi=None)."""
+
+    def test_omitting_doi_kwarg_does_not_clear_existing_doi(self, temp_vault_db):
+        aps.vault_add_paper(
+            db_path=temp_vault_db,
+            paper_id="anchor-regression-test",
+            csl_json=json.dumps({"type": "article-journal", "title": "T", "author": []}),
+            doi="10.9999/existing",
+        )
+        aps.vault_add_paper(
+            db_path=temp_vault_db,
+            paper_id="anchor-regression-test",
+            csl_json=json.dumps({"type": "article-journal", "title": "T2", "author": []}),
+        )
+        paper = vault_get_paper(temp_vault_db, "anchor-regression-test")
+        assert paper["doi"] == "10.9999/existing"
+
+    def test_pdf_rerun_without_new_doi_does_not_clear_existing_vault_doi(
+        self, sample_pdf, temp_vault_db
+    ):
+        """End-to-End-Gegenstueck ueber die volle Pipeline (nicht nur den
+        Wrapper direkt)."""
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            patch.object(aps, "run_citation_search", return_value=([], [])),
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
+        ):
+            first = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_SAMPLE_TEXT),
+            patch.object(aps, "run_citation_search", return_value=([], [])),
+        ):
+            aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        paper = vault_get_paper(temp_vault_db, first["paper_id"])
+        assert paper["doi"] == "10.1234/great.testing.2024"
+
+
+class TestS2ApiKeyHeader:
+    """Plan-Risiko 4/5: SS_API_KEY (falls gesetzt) muss als x-api-key-Header
+    bei _fetch_s2_relation() ankommen -- ohne Key skaliert das Rate-Limit-
+    Risiko mit jedem DOI-tragenden PDF-Anker (#599-Gegenpruefung)."""
+
+    def test_ss_api_key_env_var_sent_as_header(self, monkeypatch):
+        monkeypatch.setenv("SS_API_KEY", "test-key-123")
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"data": []}
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            aps.run_citation_search("ARXIV:2005.14165", limit=5)
+
+        assert mock_get.call_args_list
+        for call in mock_get.call_args_list:
+            assert call.kwargs["headers"]["x-api-key"] == "test-key-123"
+
+    def test_no_ss_api_key_env_var_omits_header(self, monkeypatch):
+        monkeypatch.delenv("SS_API_KEY", raising=False)
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"data": []}
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            aps.run_citation_search("ARXIV:2005.14165", limit=5)
+
+        assert mock_get.call_args_list
+        for call in mock_get.call_args_list:
+            assert "x-api-key" not in call.kwargs["headers"]
+
+    def test_retries_multiple_times_on_repeated_429(self):
+        """Vor #599 gab es nur EINEN Retry -- ein zweiter 429 in Folge waere
+        als None zurueckgekommen. Jetzt: mehrere Retries mit exponentiellem
+        Backoff (_S2_MAX_RETRIES)."""
+        rate_limited = MagicMock(status_code=429)
+        ok = MagicMock(status_code=200)
+        ok.json.return_value = {"data": []}
+        with (
+            patch("requests.get", side_effect=[rate_limited, rate_limited, ok]),
+            patch.object(aps.time, "sleep"),
+        ):
+            payload = aps._fetch_s2_relation("ARXIV:2005.14165", "citations", 5)
+        assert payload == {"data": []}
+
+
+# ---------------------------------------------------------------------------
 # Sicherheits-/Abgrenzungs-Checks (Frontmatter + Quelltext)
 # ---------------------------------------------------------------------------
 

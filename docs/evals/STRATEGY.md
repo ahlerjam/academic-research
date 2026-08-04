@@ -179,8 +179,8 @@ reale Modell-Aufrufe. Größenordnung, gerechnet auf dem heutigen Bestand:
 | Posten | Aufrufe pro Vollauf |
 | --- | --- |
 | Quality-Evals (`prompts[]`, je `with_skill` + `without_skill`) | ca. 120 |
-| Trigger-Evals (28 Skills × 10 Cases, Haiku-Klassifikation) | ca. 280 |
-| **Summe** | **ca. 400 Aufrufe** |
+| Trigger-Evals (45 Skills, 871 Faelle: 428 `should_trigger` + 443 `should_not_trigger`, Haiku-Klassifikation; live nachgezaehlt, Issue #614) | 871 |
+| **Summe** | **ca. 991 Aufrufe** |
 
 Bei überwiegend kurzen Prompts und Haiku für den Trigger-Block liegt ein
 Vollauf im niedrigen einstelligen USD-Bereich; die Quality-Evals mit einem
@@ -195,7 +195,7 @@ erzwungen), und die 147 Skips bleiben bis zu einer Operator-Entscheidung
 bestehen.
 
 **Realer Ausführungspfad (Issue #470):** `.github/workflows/eval-behavior.yml`
-ist der einzige Weg, diese ca. 400 Aufrufe tatsächlich abzurufen — ein separat
+ist der einzige Weg, diese ca. 991 Aufrufe tatsächlich abzurufen — ein separat
 per `workflow_dispatch` auslösbarer Job, begrenzt auf `tests/evals/` (nicht
 `tests/`), mit `timeout-minutes: 60` als hartem Deckel (angehoben in #631, da
 der CLI-Pfad pro Aufruf deutlich teurer ist als der SDK-Pfad). Der Job bricht mit
@@ -233,7 +233,8 @@ Fehlen dagegen sowohl Key als auch CLI, bleibt es beim bisherigen
   Temperatur-Steuerung. Der Determinismus-Schutz aus Issue #231
   (`temperature=0`, verhindert flaky Trigger-Evals) greift auf dem CLI-Pfad
   **nicht**. Betroffen: `test_should_trigger_recall` /
-  `test_should_not_trigger_fpr` (ca. 280 Haiku-Klassifikationsaufrufe) — bei
+  `test_should_not_trigger_fpr` (871 Haiku-Klassifikationsaufrufe, Stand
+  Issue #614) — bei
   CLI-Betrieb potenziell leicht flakier als auf dem SDK-Pfad. Keine
   Kompensation umgesetzt (Out of Scope für #631); falls das in der Praxis zu
   Flakiness führt, ist ein Retry- oder Toleranz-Mechanismus ein Folge-Issue.
@@ -255,7 +256,7 @@ Fehlen dagegen sowohl Key als auch CLI, bleibt es beim bisherigen
   Cache-Erstellungs-Block (`cache_creation_input_tokens`, im Probelauf
   ca. 17–18k Tokens für das Agenten-Scaffold) — Kostengrößenordnung pro
   Aufruf liegt dadurch spürbar über einem reinen SDK-`messages.create()`-Call
-  mit demselben System-Prompt; die Bezifferung „ca. 400 Aufrufe" oben bleibt
+  mit demselben System-Prompt; die Bezifferung „ca. 991 Aufrufe" oben bleibt
   eine Aufrufzahl, keine Kostenaussage für den CLI-Pfad.
 - **`stop_reason` bleibt erhalten**, wird aber wie zuvor nicht ausgewertet
   (weder SDK- noch CLI-Pfad extrahieren es aktuell).
