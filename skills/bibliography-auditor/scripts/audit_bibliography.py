@@ -94,15 +94,26 @@ def audit_bibliography(
       orphaned_entries        -- Vault-Paper-IDs, die in keinem Kapitel
                                   zitiert werden (sortierte Liste, AC3)
       cited_count / paper_count -- Kennzahlen fuer den Klartext-Report
+
+    Verwaiste Eintraege (orphaned) werden IMMER gegen alle Kapitel geprueft,
+    unabhaengig vom selector (Regression-Fix fuer #391: numerischer Selektor
+    darf nicht den gesamten Vault als verwaist melden). Fehlende Eintraege
+    (missing) werden gegen die ausgewahlten Kapitel geprueft.
     """
+    # Kapitel-Auswahl fuer missing_in_bibliography
     chapters = resolve_chapters(kapitel_dir, selector)
     cited_keys = extract_cited_keys(chapters)
+
+    # ALLE Kapitel fuer orphaned_entries -- um sicherzustellen, dass bei
+    # numerischem Selektor nicht der gesamte Vault als verwaist gemeldet wird
+    all_chapters = resolve_chapters(kapitel_dir, "all")
+    all_cited_keys = extract_cited_keys(all_chapters)
 
     papers = get_all_papers(vault_db_path)
     paper_ids = {p.get("paper_id") for p in papers if p.get("paper_id")}
 
     missing = sorted(cited_keys - paper_ids)
-    orphaned = sorted(paper_ids - cited_keys)
+    orphaned = sorted(paper_ids - all_cited_keys)
 
     return {
         "missing_in_bibliography": missing,

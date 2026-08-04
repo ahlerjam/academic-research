@@ -216,6 +216,69 @@ class TestAuditBibliography:
         with pytest.raises(ChapterResolutionError):
             audit_bibliography(str(tmp_path / "nope"), "all", db_path)
 
+    def test_numeric_selector_does_not_orphan_uncited_papers_from_other_chapters(self, tmp_path):
+        """Regression-Test fuer Issue #391: numerischer Selektor darf nicht den
+        gesamten Vault als verwaist melden. Mehrere Kapitel, viele uncitierte
+        Papers, Aufruf mit --kapitel 2 (numerischer Selektor):
+
+        - Kapitel 1 zitiert paper_a
+        - Kapitel 2 zitiert paper_b, paper_c
+        - Kapitel 3 zitiert paper_d
+        - Vault enthält paper_a, paper_b, paper_c, paper_d, paper_e (uncitiert)
+
+        Mit --kapitel 2 sollte:
+        - missing: [] (alle zitieren Paper sind im Vault)
+        - orphaned: [paper_e] (nur paper_e ist im Vault aber NIRGENDS zitiert)
+
+        Nicht [paper_a, paper_d, paper_e] wie bei dem bugierten Verhalten.
+        """
+        from academic_vault.db import VaultDB
+        from academic_vault.server import add_paper
+        from audit_bibliography import audit_bibliography
+
+        db_path = str(tmp_path / "vault.db")
+        VaultDB(db_path).init_schema()
+
+        # Alle Papers ins Vault
+        for paper_id in ["paper_a", "paper_b", "paper_c", "paper_d", "paper_e"]:
+            add_paper(
+                db_path=db_path,
+                paper_id=paper_id,
+                csl_json=json.dumps(
+                    {
+                        "title": f"Paper {paper_id}",
+                        "type": "article-journal",
+                        "author": [{"family": "Author", "given": "A"}],
+                        "issued": {"date-parts": [[2023]]},
+                    }
+                ),
+            )
+
+        kapitel_dir = tmp_path / "kapitel"
+        kapitel_dir.mkdir()
+        (kapitel_dir / "1.md").write_text(
+            "# Kapitel 1\n\nZitat \\cite{paper_a}.\n", encoding="utf-8"
+        )
+        (kapitel_dir / "2.md").write_text(
+            "# Kapitel 2\n\nZitate \\cite{paper_b,paper_c}.\n", encoding="utf-8"
+        )
+        (kapitel_dir / "3.md").write_text(
+            "# Kapitel 3\n\nZitat \\cite{paper_d}.\n", encoding="utf-8"
+        )
+
+        # Aufruf mit --kapitel 2 (numerischer Selektor)
+        result = audit_bibliography(str(kapitel_dir), "2", db_path)
+
+        # missing sollte leer sein (paper_b, paper_c sind im Vault)
+        assert result["missing_in_bibliography"] == []
+        # orphaned sollte ALLE Papers enthalten, die nirgends zitiert sind
+        # (paper_e ist uncitiert, paper_a/paper_d sind in anderen Kapiteln zitiert)
+        assert result["orphaned_entries"] == ["paper_e"]
+        # cited_count sollte nur die Zitate aus Kapitel 2 zaehlen
+        assert result["cited_count"] == 2
+        # paper_count ist immer die gesamte Vault-Menge
+        assert result["paper_count"] == 5
+
 
 # ---------------------------------------------------------------------------
 # CLI-Smoke-Test
