@@ -1,0 +1,23 @@
+{
+  "component": "data-management-plan",
+  "should_trigger": [
+    "Erstelle mir einen Datenmanagementplan für mein Projekt.",
+    "Aktualisiere den Datenmanagementplan.",
+    "Ich brauche ein DMP für meinen Förderantrag.",
+    "Schreib mir den DMP.",
+    "Prüf meinen Datenmanagementplan.",
+    "Wie soll ich mit meinen Forschungsdaten während des Projekts umgehen?",
+    "Generiere die datenmanagementplan.md.",
+    "Dokumentiere das Forschungsdatenmanagement für meine Arbeit."
+  ],
+  "should_not_trigger": [
+    "Erstelle das Material-Passport für die Abgabe.",
+    "Exportiere die Thesis als Word-Datei.",
+    "Kodiere mein Interviewtranskript nach Kategorien.",
+    "Wie wähle ich die richtige Methodik?",
+    "Erstelle die KI-Offenlegungserklärung.",
+    "Prüfe die Formalia meiner Abgabe.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Schreibe die Einleitung des Kapitels."
+  ]
+}

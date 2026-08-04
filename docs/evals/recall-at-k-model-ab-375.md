@@ -76,7 +76,11 @@ groesserer Upgrade-Pfad (0.6B Parameter vs. e5-small ~118M).
   hinterlegter Prompt, ueber `sentence-transformers.encode(..., prompt_name=
   "query")`), Dokumente ohne Prompt; `truncate_dim=384` beim Laden gesetzt
   (natives Modell liefert 1024 Dimensionen), damit die Vergleichbarkeit zur
-  vec0-Spaltenbreite (`FLOAT[384]`) gegeben ist. API-Details verifiziert via
+  vec0-Spaltenbreite (`FLOAT[384]`) gegeben ist. Diese Randbedingung galt zum
+  Zeitpunkt des Laufs: seit #629 ist die Spaltenbreite nicht mehr fest, ein
+  1024d-Modell braucht also kein `truncate_dim` mehr, sondern einen Re-Index
+  (`docs/reference/vault.md`). Die Zahlen oben bleiben trotzdem gueltig — sie
+  sind an der truncierten Variante gemessen. API-Details verifiziert via
   Context7 (`sentence-transformers`-Doku, `docs/sentence_transformer/usage/
   usage.rst` + Migration-Guide zu `truncate_dim`).
 

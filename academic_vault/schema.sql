@@ -1,6 +1,6 @@
 -- academic_vault SQLite Schema
 -- Tabellen: papers, papers_fts, paper_fulltext, quotes, quote_embeddings,
---           decisions, notes, notes_fts
+--           decisions, notes, notes_fts, embedding_meta
 -- FTS5-Trigger: papers_ai, papers_ad, papers_au, notes_ai, notes_ad, notes_au
 
 CREATE TABLE IF NOT EXISTS papers (
@@ -94,15 +94,31 @@ CREATE TABLE IF NOT EXISTS quotes (
 
 -- vec0 Virtual Tables: optional, nur wenn sqlite-vec Extension geladen ist.
 -- Werden in db.py per try/except erstellt (quote_embeddings + chunk_vectors,
--- letztere als Spiegel der chunk_embeddings-Vektoren, Issue #372).
+-- letztere als Spiegel der chunk_embeddings-Vektoren, Issue #372). Die Breite
+-- ist seit #629 KEINE Konstante mehr, sondern kommt aus `embedding_meta`
+-- (Default fuer einen frischen Vault: embedding_model.DEFAULT_EMBEDDING_DIM):
 -- CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings USING vec0(
 --   quote_id TEXT PRIMARY KEY,
---   embedding FLOAT[384]
+--   embedding FLOAT[<embedding_meta.dim>]
 -- );
 -- CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0(
 --   chunk_id TEXT PRIMARY KEY,
---   embedding FLOAT[384]
+--   embedding FLOAT[<embedding_meta.dim>]
 -- );
+
+-- Bestandsnachweis der Vektoren (Issue #629): mit WELCHEM Modell und in
+-- welcher Breite der Vault gefuellt wurde. Singleton (`CHECK(id = 1)`) --
+-- mehrere Embedding-Modelle nebeneinander sind bewusst nicht vorgesehen,
+-- Vektoren aus zwei Modellen liegen nicht im selben Raum. Fehlt die Zeile,
+-- ist noch nie ein Embedding geschrieben worden; die vec0-Tabellen haben
+-- dann die Default-Breite. Geschrieben wird ausschliesslich ueber
+-- `VaultDB.register_embedding_inventory()`, gelesen u. a. von `vault.stats`.
+CREATE TABLE IF NOT EXISTS embedding_meta (
+  id         INTEGER PRIMARY KEY CHECK(id = 1),
+  model_id   TEXT,
+  dim        INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS decisions (
   decision_id   TEXT PRIMARY KEY,

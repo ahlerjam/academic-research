@@ -128,6 +128,12 @@ def ingest_paper_embeddings(
     Returns:
         Anzahl geschriebener Chunks. 0, wenn kein Embedder verfuegbar ist, das
         Paper nicht existiert oder kein Text gefunden wurde.
+
+    Raises:
+        EmbeddingDimensionMismatchError: Das Modell liefert eine andere
+            Dimension als der vorhandene Bestand (Issue #629). Geprueft wird
+            VOR der Berechnung -- ein Modellwechsel ohne Re-Index soll nicht
+            erst Minuten Inferenz kosten, um dann zu scheitern.
     """
     active_embedder = embedder if embedder is not None else get_embedder()
     if active_embedder is None:
@@ -136,6 +142,14 @@ def ingest_paper_embeddings(
     db = VaultDB(db_path)
     if db.get_paper(paper_id) is None:
         return 0
+
+    # Bestandsabgleich vor dem teuren Teil: passt die Modell-Dimension nicht
+    # zum Vault, wirft das hier -- statt spaeter halb geschriebene Chunks in
+    # zwei Vektorraeumen zu hinterlassen.
+    db.register_embedding_inventory(
+        getattr(active_embedder, "model_id", None),
+        int(active_embedder.dim),  # type: ignore[attr-defined]
+    )
 
     source = text if text is not None else resolve_paper_text(db_path, paper_id)
     if not source or not source.strip():

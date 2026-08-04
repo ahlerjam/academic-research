@@ -10,6 +10,64 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Embedding-Modelle jenseits von 384 Dimensionen (#629):** `VAULT_EMBEDDING_MODEL`
+  trug bislang nur Modelle mit exakt 384 Dimensionen — `E5SmallEmbedder.dim` war
+  ein Klassenattribut mit diesem Wert, das geladene Backend wurde nie gefragt. Ein
+  1024d-Modell (`multilingual-e5-large`, `BAAI/bge-m3`) lief deshalb **still**
+  durch: die BLOBs landeten in `chunk_embeddings`, der vec0-Spiegel verwarf sie
+  wortlos, und jede Suche sah danach nur den Teilbestand der zufällig passenden
+  Breite. Jetzt liefert `dim` die Dimension des geladenen Modells
+  (`get_sentence_embedding_dimension()`, sonst Probe-Encode), die neue Tabelle
+  `embedding_meta` hält Modell-ID und Breite des Bestands (Schema-Version 9 —
+  urspruenglich 8, beim Zusammenfuehren mit dem parallel gemergten #604 eine
+  Generation hoehergerueckt, Bestands-DBs migriert
+  `migrate.add_embedding_meta_table()`), und jeder Schreibpfad prüft dagegen:
+  bei Abweichung `EmbeddingDimensionMismatchError` mit
+  Ursache und Ausweg statt Degradation — auch durch die Catch-all-Wrapper von
+  `vault.add_paper`/`vault.add_quote`/`vault.search` hindurch. Ein leerer Vault
+  übernimmt die Dimension des ersten Modells ohne Zwischenschritt. Für befüllte
+  Vaults gibt es `python -m academic_vault.migrate --db <pfad> --reindex-embeddings`:
+  rechnet Chunk- und Zitat-Vektoren mit dem aktuellen Modell neu, legt die
+  vec0-Tabellen in der neuen Breite an und ersetzt dabei den **gesamten** Bestand
+  (anders als die Backfills — nur so verschwindet ein Mischbestand aus zwei
+  Modellen). `vault.stats()` weist `embedding_model` und `embedding_dim` aus, ohne
+  dafür ein Modell zu laden. Das Default-Modell bleibt unverändert; welches Modell
+  am Ende gewinnt, ist eine eigene Entscheidung.
+
+- **mDeBERTa-XNLI als lokaler NLI-Vorfilter vor dem Zitat-Richter (#592):**
+  `academic_vault/nli_prefilter.py` bewertet Kapitelbehauptung gegen
+  Quote-Kontext lokal (keine API, kein Netz nach dem einmaligen
+  Modell-Download) und entscheidet, ob ein Zitat unveraendert an
+  `quote-fidelity-auditor` (#523) weitergereicht wird. Neu: ein
+  Vollkapitel-Scanpfad (`scan_chapter_quotes` + `run_batch_prefilter`), der
+  ALLE im Vault belegten Zitate eines Kapitels prueft — nicht nur die mit
+  Claim-Drift-Warnung. Treue Zitate werden im Report explizit als
+  „vorgefiltert, nicht inhaltlich geprueft" markiert, nie stillschweigend
+  ausgelassen. Schalter `nli_prefilter_enabled` in
+  `config/parallel_agents.json` (Vorrang: Argument >
+  `ACADEMIC_RESEARCH_NLI_PREFILTER` > Config > Default `false`) — Default
+  bleibt AUS, bei Deaktivierung verhaelt sich der Pruefpfad bytegleich zum
+  Zustand ohne Vorfilter. Validierungslauf gegen 60 ECHTE, per WebFetch
+  verifizierte Zitat-Paare aus 15 real veroeffentlichten arXiv-Papern:
+  Precision 1.00, Recall 0.767, FP = 0/30 (Rule-of-Three-Obergrenze ~10 %,
+  kein Nullbeweis) — Details und Einschalt-Empfehlung in
+  `evals/524-nli-prefilter/README.md`.
+
+- **node:sqlite gegen Python-Subprozess gemessen und dokumentiert (#600):**
+  CI läuft jetzt auf Node 22 (`node:sqlite` unflagged ab 22.13.0) statt Node
+  20. Ein Mikrobenchmark (`scripts/dev/bench_vault_bridge.mjs`) belegt den
+  reinen Zugriffswegs-Unterschied — Median über 20 Wiederholungen:
+  Python-Subprozess ~22,7 ms gegen `node:sqlite` in-process ~0,9 ms (~25x).
+  Der Python-Subprozess bleibt trotzdem der Zugriffsweg der Node-Hooks: die
+  drei Aufrufer der Bridge (`post-tool-use-decisions.mjs`,
+  `mid-session-reinforcement.mjs`, `context-fidelity-guard.mjs`) rufen keine
+  rohen SELECTs auf, sondern Geschäftslogik, die ausschließlich in
+  `academic_vault` existiert (Dedup/Supersede, FTS5-Suche, Fuzzy-Matching) —
+  eine Migration würde diese Logik in JavaScript duplizieren und damit genau
+  die Divergenz zwischen zwei Speicherorten riskieren, derentwegen die Brücke
+  (#527) überhaupt existiert. Begründung im Modulkopf von
+  `hooks/lib/vault-bridge.mjs`.
+
 - **Vault-Snapshot auch am Sitzungsende (#625):** Der einzige automatische
   Snapshot hing bislang am `PreCompact`-Hook, der nur in langen Sitzungen
   feuert — kurze Sitzungen erzeugten über Wochen keinen einzigen Snapshot.
@@ -1190,6 +1248,10 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 ### Removed
 
 - **Tote Schema-Tabellen `glossary` und `style_overrides` (#539):** Beide standen seit v6.4 in `schema.sql` und in `migrate.add_v64_tables()`, hatten aber nie einen Lese- oder Schreibpfad (null Treffer in `db.py`/`server.py`) — sie täuschten ein Glossar-/Stil-Feature vor und liefen bei jeder Migration mit. Frische DBs legen sie nicht mehr an; Bestands-DBs räumt der neue idempotente Helfer `migrate.drop_dead_v64_tables()` am Ende von `apply_pending_migrations()` ab. Damit das Versions-Gate aus #368 die bereits auf `user_version = 3` gestempelten DBs überhaupt noch einmal anfasst, steigt `db.CURRENT_SCHEMA_VERSION` auf 4. Datensicherheit vor Aufräumen: Gedroppt wird nur bei `COUNT(*) = 0`; enthält eine der Tabellen wider Erwarten Zeilen, bleibt sie stehen, `init_schema()` verweigert den `user_version`-Stempel (nächster Aufruf versucht es erneut) und warnt mit dem Tabellennamen — kein `raise`, das würde den MCP-Server lahmlegen. Die Tabellennamen existieren im Paket nur noch als `migrate.DEAD_TABLES`; `db.py` importiert die Konstante, statt sie zu duplizieren, und `tests/test_issue_539_drop_dead_tables.py` hält beides fest. **Nicht enthalten:** die `decisions`-Tabelle (bleibt) und der Aufbau eines echten Glossar-Features (eigenes Feature-Issue). Kein Änderungsbedarf an der Doku: `docs/reference/glossary.md` ist das Begriffs-Glossar der Doku und hat mit der DB-Tabelle nichts zu tun.
+
+### Fixed
+
+- **Erste echte `live-fetch-weekly`-Läufe ausgewertet, zwei Live-Test-Fehlbefunde behoben (#612):** `live-fetch-weekly.yml` hatte bis dahin 0 Runs; diese Fix-Runde hat den Workflow zweimal real per `workflow_dispatch` laufen lassen (Runs [30851138735](https://github.com/ahlerjam/academic-research/actions/runs/30851138735), [30851295819](https://github.com/ahlerjam/academic-research/actions/runs/30851295819)) und die Ergebnisse je Fetcher ausgewertet (`docs/evals/2026-08-03-live-fetch-weekly-first-runs.md`). Zwei echte Befunde daraus behoben: (1) `IA_NODE_HOST_RE` in `tests/test_issue_450_live_fetch.py` akzeptierte nur mit `dn` beginnende archive.org-Speicherknoten — real beobachtet wurden in zwei unabhängigen Netzen sowohl `ia800108.us.archive.org` als auch `dn720200.ca.archive.org`; das Muster deckt jetzt beide Präfixe ab (Regression: `tests/test_issue_450_fetcher_evidence.py::test_ia_node_host_pattern_accepts_both_observed_node_prefixes`), der `internetarchive-fetcher` selbst war in beiden Läufen zuverlässig (PDF byteweise korrekt). (2) Der anonyme No-Login-Abruf, mit dem `pf-07` (Oxford Academic, Issue #449) ursprünglich am 2026-07-29 aufgezeichnet wurde, ist seit mindestens 2026-08-03 durch eine Cloudflare-Managed-Challenge gesperrt (HTTP 403, `Cf-Mitigated: challenge`) — bestätigt über beide Workflow-Läufe plus einen dritten, unabhängigen Abruf außerhalb von GitHub Actions. Da der produktive Zugriffsweg von `agents/oxford-academic.md` (`browser-use` + Shibboleth/OpenAthens) diesen anonymen Pfad nie genutzt hat, bleibt der Agent unverändert; korrigiert wurde stattdessen der jetzt irreführende Live-Test: `tests/test_issue_449_live_fetch.py::test_oxford_academic_still_serves_the_recorded_pdf`/`test_oxford_academic_pdf_is_served_without_login` sind jetzt `xfail(strict=True)` (schlägt der Anbieter die Sperre wieder ab, meldet CI das laut als XPASS), ein neuer Test bestätigt aktiv die Cloudflare-Challenge als aktuellen Zustand. `evals/publisher-fetchers/live-verification.json` trägt bei `pf-07` eine additive Korrekturnotiz (`anonymous_access_correction_612`) — der ursprüngliche Beleg von #449 bleibt als historischer Datensatz unverändert stehen.
 
 ---
 
