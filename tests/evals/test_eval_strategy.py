@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.evals.eval_runner import claude_cli_available
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 STRATEGY_PATH = REPO_ROOT / "docs" / "evals" / "STRATEGY.md"
 EVALS_ROOT = REPO_ROOT / "evals"
@@ -250,10 +252,12 @@ def _current_skip_sentence(text: str) -> str:
 
 def test_skip_count_matches_real_pytest_run(strategy_text):
     """Die dokumentierte Skip-Zahl muss zu einem echten Lauf passen (Issue #619)."""
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    if os.environ.get("ANTHROPIC_API_KEY") or claude_cli_available():
         pytest.skip(
-            "Mit gesetztem ANTHROPIC_API_KEY skippen deutlich weniger Tests; die "
-            "dokumentierte Zahl gilt nur fuer den Lauf ohne Key."
+            "Mit gesetztem ANTHROPIC_API_KEY oder installierter claude-CLI (Issue "
+            "#631, CLI-Rueckfallpfad in eval_runner.call_claude) laufen deutlich "
+            "weniger Tests still durch/echt statt zu skippen; die dokumentierte "
+            "Zahl gilt nur fuer den Lauf ohne beides."
         )
     sentence = _current_skip_sentence(strategy_text)
     match = re.search(r"(\d+)\s*passed,\s*(\d+)\s*skipped", sentence)
