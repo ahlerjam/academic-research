@@ -5,7 +5,9 @@ name: Live-Fetch Woechentlich (echte Verlags-/Archivseiten)
 # Academic, JSTOR) und tests/test_issue_450_live_fetch.py (freie Archive:
 # Internet Archive, MDZ, HathiTrust) real gegen die echten Seiten aus, statt
 # sie wie im regulaeren `pytest tests/`-Lauf per Env-Schalter zu skippen.
-# 17 der 28 Agents sind Fetcher -- ein stillschweigend kaputter Fetcher ist
+# 16 Fetcher (plus auth-helper als Grenzfall) greifen auf fremde Verlags-/
+# Archivseiten zu; book-fetcher selbst ist Dispatcher, kein Fetcher (Issue
+# #612 Gegenpruefung zu #603). Ein stillschweigend kaputter Fetcher ist
 # schlechter als ein fehlender, weil er ein falsches Negativ erzeugt (Issue
 # #603, "Why").
 #

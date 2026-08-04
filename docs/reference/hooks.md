@@ -441,8 +441,13 @@ ohne Gate immer mit.
 
 `mid-session-reinforcement.mjs` liest die Decisions über einen Python-Subprozess,
 `post-tool-use-decisions.mjs` schreibt sie über denselben Weg; die Kaskade steht einmal in
-`hooks/lib/vault-bridge.mjs` (Node hat vor 22.5 kein `node:sqlite`, die CI pinnt Node 20 —
-ein direkter DB-Zugriff aus dem Hook scheidet aus). Hooks
+`hooks/lib/vault-bridge.mjs`. Ein Wechsel auf `node:sqlite` wurde geprüft (#600, CI läuft
+seit dort auf Node 22): ein Mikrobenchmark bestätigt zwar den erwarteten Geschwindigkeits­
+vorteil des reinen Zugriffswegs (Median über 20 Wiederholungen: Python-Subprozess ~22,7 ms
+gegen `node:sqlite` in-process ~0,9 ms), aber die drei Aufrufer rufen keine rohen SELECTs
+auf, sondern Geschäftslogik, die ausschließlich in `academic_vault` (Python) existiert —
+eine Migration müsste diese Logik in JavaScript duplizieren statt nur den Treiber zu
+tauschen. Details und Zahlen: Modulkopf von `vault-bridge.mjs`. Hooks
 erben in einer echten Session die `PATH` des Nutzers — dort steht meist das System-Python
 (macOS: `/usr/bin/python3` == 3.9), das `academic_vault` mangels PEP-604-Syntax nicht
 importieren kann. Der Hook probiert daher in dieser Reihenfolge:
