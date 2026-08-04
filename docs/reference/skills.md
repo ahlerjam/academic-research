@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **43 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **44 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -88,6 +88,7 @@ Diese Skills sind per Default aus. Sie laufen erst, wenn im Projekt-State der pa
 | `submission-checker` | *„abgabefertig"*, *„Formalia prüfen"* | Formalia-Check, Default: FH Leibniz -- beschränkt auf am Markdown-Material Prüfbares, Rest als „Nicht geprüft" ausgewiesen |
 | `ai-disclosure` | *„KI-Nutzung offenlegen"*, *„Offenlegungserklärung erstellen"* | Zweigeteilte Offenlegungserklärung (Danksagung + Methodenteil, DE/EN) nach ICMJE 01/2026; Vault-Spuren als Vorschlag statt Behauptung ([SKILL.md](../../skills/ai-disclosure/SKILL.md)) |
 | `latex-layout-auditor` | *„LaTeX-Layout prüfen / pruefen"*, *„.tex auditieren"* | Read-only Prüfung eines `.tex`-Exports auf LaTeX-Layout-Fehler: Listen-Strukturen, Zitationskommandos, Kapitel-Nummerierung, Package-Konflikte ([SKILL.md](../../skills/latex-layout-auditor/SKILL.md)) |
+| `bibliography-auditor` | *„Literaturverzeichnis prüfen / pruefen"*, *„Zitate gegen Vault abgleichen"* | Read-only Gegenprobe zwischen `\cite{key}`-Zitaten in `kapitel/*.md` und der Vault-Paper-Menge: fehlende Verzeichniseinträge und verwaiste Vault-Einträge ([SKILL.md](../../skills/bibliography-auditor/SKILL.md)) |
 | `defense-prep` | *„Verteidigung vorbereiten"*, *„Fragenkatalog Kolloquium"* | Vortragsgliederung mit Zeitrahmen + Kernaussage je Kapitel, Fragenkatalog zu Methodik/Limitationen ([SKILL.md](../../skills/defense-prep/SKILL.md)) |
 
 ## Externe Skills (Plugin-Dependencies)

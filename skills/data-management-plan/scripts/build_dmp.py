@@ -47,7 +47,17 @@ def _offen(text: str) -> str:
 
 
 def _aggregate_vault(db_path: str) -> dict:
-    """Liest den Vault-Bestand read-only aus (kein Schreibzugriff)."""
+    """Liest den Vault-Bestand read-only aus (kein Schreibzugriff).
+
+    Prueft die DB-Existenz VOR ``_ensure_schema_for_read()``: dieser legt bei
+    fehlender Datei sonst still eine leere DB an (``VaultDB._open()`` ->
+    ``parent.mkdir()`` + ``sqlite3.connect``), und ein Tippfehler im
+    ``--db``-Pfad wuerde als "0 Paper/Segmente/Kodierungen" gemeldet -- ein
+    erfundener Bestand statt des dokumentierten FEHLER-Pfads (Issue #609,
+    Code-Review-Fund P1).
+    """
+    if not Path(db_path).exists():
+        raise FileNotFoundError(f"Vault-DB nicht gefunden: {db_path}")
     vault_server._ensure_schema_for_read(db_path)
     conn = VaultDB._open(db_path)
     try:

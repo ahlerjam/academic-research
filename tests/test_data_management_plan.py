@@ -178,6 +178,18 @@ class TestAusgangslage:
         section = content[ausgangslage_idx:next_heading_idx]
         assert "**0 Paper/Quellen**" in section, "Null-Paper nicht in Ausgangslage-Abschnitt"
 
+    def test_missing_db_path_errors_instead_of_inventing_empty_vault(self, tmp_path):
+        """Falscher/fehlender --db-Pfad -> FEHLER, keine still angelegte leere DB (Code-Review-Fund P1)."""
+        missing_db_path = str(tmp_path / "vault.bd")  # Tippfehler-Simulation
+        output = tmp_path / "datenmanagementplan.md"
+        result = _run_script(missing_db_path, "test-projekt", output)
+        assert result.returncode != 0, "Fehlender --db-Pfad haette nicht-null exiten muessen"
+        assert "FEHLER" in result.stderr, f"Kein FEHLER-Hinweis in stderr: {result.stderr!r}"
+        assert not Path(missing_db_path).exists(), (
+            "_aggregate_vault() hat trotz fehlendem Pfad still eine leere DB angelegt"
+        )
+        assert not output.exists(), "Trotz Fehler wurde eine Ausgabedatei erzeugt"
+
 
 # ---------------------------------------------------------------------------
 # AC3: Personenbezogene-Daten-Abschnitt mit den 4 Pflichtfragen
