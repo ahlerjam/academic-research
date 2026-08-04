@@ -84,6 +84,16 @@ type: project
 output_targets:
   - [grant-proposal | conference-poster | reviewer-response, je einmal pro gewünschter Form; leer lassen, wenn keine gebraucht wird]
 
+### Suchstrategie
+[Optional — wird von `preregistration` befüllt, sobald ein Vorhaben präregistriert
+wird. `parallel-screening` und der `query-generator`-Agent lesen diese Section,
+statt die Suchstrategie erneut zu erfragen. Bis dahin leer lassen, nicht erfinden.]
+
+### Ein-/Ausschlusskriterien
+[Optional — wird von `preregistration` befüllt (Einschluss/Ausschluss getrennt).
+Dieselbe Section nutzt `parallel-screening` als Kriterienliste im Screening-Dialog.
+Bis dahin leer lassen, nicht erfinden.]
+
 ### Gliederung
 [Nummerierte Gliederung, falls vorhanden]
 

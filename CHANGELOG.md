@@ -10,6 +10,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Präregistrierung: Studienprotokoll und PROSPERO-Anmeldung (#607):** Zwischen
+  Methodenwahl (`methodology-advisor`) und Datenerhebung fehlte der Schritt,
+  Fragestellung, Ein-/Ausschlusskriterien, Suchstrategie und Auswertungsplan
+  öffentlich festzuhalten, **bevor** erhoben oder gesichtet wird. Neuer Skill
+  `preregistration` mit dem deterministischen Kern
+  `skills/preregistration/scripts/render_protocol.py`: klassifiziert das
+  Vorhaben (systematischer Review / quantitativ / qualitativ / Sekundärdaten),
+  schlägt eine passende Vorlage vor und begründet die Wahl — ein qualitatives
+  Vorhaben bekommt nie das quantitative Raster. Für systematische Reviews
+  erzwingt der Renderer alle PROSPERO-Pflichtfelder als Labels im Protokoll
+  (`references/prospero-fields.md`); für quantitativ/qualitativ/Sekundärdaten
+  stehen drei OSF-Preregistration-Vorlagen zur Wahl
+  (`references/osf-templates.md`) — beide Referenzdateien mit Quelle und
+  Abrufdatum, keine Formularvolltexte (Scope-Grenze). Unbeantwortete Felder
+  werden mit dem festen Platzhalter `[OFFEN]` ausgewiesen statt mit
+  Plausiblem gefüllt; derselbe Plan liefert bei jedem Lauf denselben Text.
+  Jedes Protokoll trägt fest den Abschnitt „Abweichungen vom Protokoll" für
+  spätere Begründungen. Suchstrategie und Ein-/Ausschlusskriterien schreibt
+  der Skill zusätzlich strukturiert in `./academic_context.md`
+  (`### Suchstrategie`, `### Ein-/Ausschlusskriterien`) — `parallel-screening`
+  und der `query-generator`-Agent lesen sie von dort, statt sie erneut zu
+  erfragen. Automatisches Einreichen bei OSF/PROSPERO und Registered Reports
+  bleiben bewusst out of scope.
+
 - **Neuer Skill `bibliography-auditor` (#391):** Read-only Gegenprobe
   zwischen den `\cite{key}`-Zitaten in `kapitel/*.md` und der Vault-Paper-
   Menge — meldet zitierte Keys ohne Vault-Paper (`missing_in_bibliography`)

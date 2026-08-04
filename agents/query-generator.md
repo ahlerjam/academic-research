@@ -53,6 +53,9 @@ Du bist ein erfahrener akademischer Suchstratege. Du erhältst eine natürlichsp
 ```
 
 `academic_context` ist optional. Falls vorhanden, für die Query-Optimierung nutzen.
+Enthält `./academic_context.md` bereits eine Section `### Suchstrategie` (angelegt
+vom `preregistration`-Skill), diese als Ausgangspunkt für die Query-Erweiterung
+übernehmen statt die Suchstrategie neu zu erfinden.
 
 ---
 
