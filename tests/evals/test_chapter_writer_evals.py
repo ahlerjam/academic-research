@@ -1,4 +1,5 @@
 """Evals fuer chapter-writer-Skill."""
+
 import json
 from pathlib import Path
 
@@ -12,10 +13,13 @@ from tests.evals.eval_runner import (
 )
 
 _EVALS_PATH: Path = EVALS_ROOT / "chapter-writer" / "evals.json"
-pytestmark = pytest.mark.skipif(
-    not _EVALS_PATH.exists(),
-    reason=f"evals-Datei fehlt: {_EVALS_PATH}",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not _EVALS_PATH.exists(),
+        reason=f"evals-Datei fehlt: {_EVALS_PATH}",
+    ),
+    pytest.mark.eval_core_set,
+]
 EVALS: dict = json.loads(_EVALS_PATH.read_text()) if _EVALS_PATH.exists() else {"prompts": []}
 
 
@@ -34,8 +38,7 @@ def test_chapter_writer_eval(prompt, mode):
 def test_chapter_writer_evals_has_vault_case():
     """Mindestens ein cw-Prompt muss einen Vault-Search-Pfad exercisen (paper_ids oder vault)."""
     vault_prompts = [
-        p for p in EVALS["prompts"]
-        if "paper_ids" in p["input"] or "vault" in p["input"].lower()
+        p for p in EVALS["prompts"] if "paper_ids" in p["input"] or "vault" in p["input"].lower()
     ]
     assert len(vault_prompts) >= 1, (
         "Kein einziger chapter-writer-Prompt referenziert paper_ids oder vault — "

@@ -254,6 +254,61 @@ Fehlen dagegen sowohl Key als auch CLI, bleibt es beim bisherigen
 - **`stop_reason` bleibt erhalten**, wird aber wie zuvor nicht ausgewertet
   (weder SDK- noch CLI-Pfad extrahieren es aktuell).
 
+## Geplanter woechentlicher Lauf ueber ein Kern-Set (Issue #597)
+
+Ein Vollauf (~991 Aufrufe, siehe API-Budget oben) laeuft nur manuell per
+`workflow_dispatch`. Zusaetzlich fuehrt `.github/workflows/eval-behavior.yml`
+seit Issue #597 einmal **woechentlich** (`schedule`-Trigger, Montag 07:00 UTC —
+zeitversetzt zu `live-fetch-weekly.yml`, Montag 06:00 UTC) ein benanntes
+**Kern-Set** aus: eine Teilmenge der API-gateten Suiten, nicht den Vollauf.
+
+Die **eine Stelle**, an der das Kern-Set steht, ist der pytest-Marker
+`eval_core_set` (registriert in `pyproject.toml`). Er sitzt als module-level
+`pytestmark` an genau neun Dateien unter `tests/evals/`:
+
+1. `test_abstract_generator_evals.py`
+2. `test_chapter_writer_evals.py`
+3. `test_citation_extraction_evals.py`
+4. `test_quote_extractor_evals.py`
+5. `test_quality_reviewer_evals.py`
+6. `test_source_quality_audit_evals.py`
+7. `test_sparring_partner_evals.py`
+8. `test_rest_evals.py` (9 Skills + 1 Agent)
+9. `test_triggers.py` (Trigger-Recall/FPR ueber alle Skills — der groesste
+   Anteil am API-Budget und genau das Beispiel fuer stille Modell-Drift, das
+   Issue #597 im "Why" nennt)
+
+Reproduzierbar mit `uv run pytest tests/evals/ -m eval_core_set`. Der Guard
+`test_eval_core_set_matches_documented_files` haelt diese Liste gegen den
+tatsaechlichen Marker-Treffer (Datei-Ebene, nicht Test-Ebene) — eine neue
+API-gatete Suite, die den Marker vergisst, faellt sonst lautlos aus dem
+geplanten Lauf.
+
+**Korrektur zum urspruenglichen Issue-Text:** Der Issue-Body nannte fuenf
+konkrete Dateien plus vage "von `eval_runner` und `test_eval_strategy`
+gegatete Faelle" als "sieben API-gatete Suiten". Codepruefung ergab: vier der
+fuenf genannten Dateien (`test_sparring_partner_criteria.py`,
+`test_sparring_partner_recording.py`, `test_humanizer_pipeline_evals.py`,
+`test_issue_231_temperature.py`) sind **nicht** API-gated — sie laufen CI-fest
+offline oder mocken `anthropic` vollstaendig. `test_eval_strategy.py` ist
+ebenfalls **kein** Kandidat: sein einziger auf CLI/Key reagierender Test
+(`test_skip_count_matches_real_pytest_run`) skippt gerade dann, wenn ein
+Key/die CLI vorhanden ist — invertierte Pruefrichtung, kein Verhaltens-Signal.
+Waere das Kern-Set woertlich aus dem Issue-Text uebernommen worden, fehlten
+`test_triggers.py` und `test_rest_evals.py` — die beiden Suiten mit dem
+groessten Anteil am API-Budget.
+
+`workflow_dispatch` bleibt unveraendert: ein manueller Lauf kann weiterhin
+alle Verhaltens-Evals anfordern (optional gefiltert ueber den bestehenden
+`component`-Input), nur der geplante Lauf ist auf `-m eval_core_set`
+eingeschraenkt. Schlaegt der geplante Lauf fehl, legt
+`scripts/ci/report_eval_behavior_failure.sh` ein Issue mit der gerissenen
+Suite im Titel an (Label `eval-behavior-failure`); ein wiederholter
+Fehlschlag derselben Suite erzeugt kein Duplikat — dieselbe Dedup-Logik wie
+`scripts/ci/report_live_fetch_failure.sh` (Issue #603), ueber eine
+gemeinsame Bibliothek (`scripts/ci/lib/report_pytest_failure.sh`) geteilt statt
+dupliziert.
+
 ## Alt-Issue #55
 
 Issue #55 („Baseline-Eval v5.2.0") verlangte denselben Nachweis auf altem

@@ -1,4 +1,5 @@
 """Evals fuer source-quality-audit-Skill."""
+
 import json
 from pathlib import Path
 
@@ -12,10 +13,13 @@ from tests.evals.eval_runner import (
 )
 
 _EVALS_PATH: Path = EVALS_ROOT / "source-quality-audit" / "evals.json"
-pytestmark = pytest.mark.skipif(
-    not _EVALS_PATH.exists(),
-    reason=f"evals-Datei fehlt: {_EVALS_PATH}",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not _EVALS_PATH.exists(),
+        reason=f"evals-Datei fehlt: {_EVALS_PATH}",
+    ),
+    pytest.mark.eval_core_set,
+]
 EVALS: dict = json.loads(_EVALS_PATH.read_text()) if _EVALS_PATH.exists() else {"prompts": []}
 
 

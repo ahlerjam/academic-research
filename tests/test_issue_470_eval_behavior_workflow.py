@@ -19,6 +19,7 @@ API-Call noetig):
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -144,9 +145,31 @@ def test_workflow_uploads_result_artifact_and_writes_summary():
 
 
 def test_workflow_has_timeout_cap():
+    """Ein positiver Deckel muss in JEDEM moeglichen Zweig gelten.
+
+    Seit Issue #597 ist ``timeout-minutes`` ein event-abhaengiger GH-Actions-
+    Ausdruck (kleinerer Deckel fuer den geplanten Kern-Set-Lauf, der
+    bestehende fuer den manuellen Vollauf) statt eines einzelnen Literals --
+    ``timeout-minutes`` akzeptiert Ausdruecke nur ueber github/inputs/vars-
+    Kontexte. Der Guard akzeptiert deshalb entweder ein einzelnes positives
+    Int-Literal ODER einen String-Ausdruck, in dem JEDE als Ganzzahl
+    auftretende Zahl positiv ist (deckt z.B. ``a && 20 || 60`` ab).
+    """
     job = _job(_load_workflow())
-    assert isinstance(job.get("timeout-minutes"), int) and job["timeout-minutes"] > 0, (
-        "eval-behavior.yml braucht einen positiven timeout-minutes-Deckel (Issue #470, AC2)."
+    timeout = job.get("timeout-minutes")
+    if isinstance(timeout, int):
+        assert timeout > 0, (
+            "eval-behavior.yml braucht einen positiven timeout-minutes-Deckel (Issue #470, AC2)."
+        )
+        return
+    assert isinstance(timeout, str) and "${{" in timeout, (
+        f"timeout-minutes hat unerwarteten Typ/Form: {timeout!r} (Issue #470 AC2 / #597)."
+    )
+    numbers = [int(n) for n in re.findall(r"\b\d+\b", timeout)]
+    assert numbers, f"Kein Zahlenliteral im timeout-minutes-Ausdruck gefunden: {timeout!r}."
+    assert all(n > 0 for n in numbers), (
+        f"Mindestens ein Zweig des timeout-minutes-Ausdrucks ist nicht positiv: {timeout!r} "
+        "(Issue #470, AC2)."
     )
 
 

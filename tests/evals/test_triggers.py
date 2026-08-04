@@ -9,6 +9,8 @@ import pytest
 
 from tests.evals.eval_runner import EVALS_ROOT, SKILLS_ROOT, call_claude
 
+pytestmark = pytest.mark.eval_core_set
+
 ALL_SKILLS = sorted(p.parent.name for p in SKILLS_ROOT.glob("*/SKILL.md"))
 
 # Externe Konkurrenz-Skills, die NICHT unter SKILLS_ROOT liegen (Marketplace-

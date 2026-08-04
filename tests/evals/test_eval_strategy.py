@@ -300,6 +300,83 @@ def test_skip_count_matches_real_pytest_run(strategy_text):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Issue #597: Das Kern-Set fuer den woechentlichen geplanten Lauf
+# (eval-behavior.yml) ist ausschliesslich ueber den pytest-Marker
+# `eval_core_set` definiert (pyproject.toml registriert ihn, die neun Dateien
+# unten tragen ihn als module-level pytestmark). Dieser Guard haelt die
+# Marker-Treffer gegen eine explizite Liste -- eine neue API-gatete Suite, die
+# den Marker vergisst, faellt sonst stillschweigend aus dem geplanten Lauf
+# (Analogie zu test_every_eval_dir_has_exactly_one_status).
+# ---------------------------------------------------------------------------
+
+EXPECTED_EVAL_CORE_SET_FILES = frozenset(
+    {
+        "tests/evals/test_abstract_generator_evals.py",
+        "tests/evals/test_chapter_writer_evals.py",
+        "tests/evals/test_citation_extraction_evals.py",
+        "tests/evals/test_quote_extractor_evals.py",
+        "tests/evals/test_quality_reviewer_evals.py",
+        "tests/evals/test_source_quality_audit_evals.py",
+        "tests/evals/test_sparring_partner_evals.py",
+        "tests/evals/test_rest_evals.py",
+        "tests/evals/test_triggers.py",
+    }
+)
+
+
+def test_eval_core_set_matches_documented_files():
+    """`-m eval_core_set --collect-only` deckt exakt die neun dokumentierten
+    Dateien ab -- weder mehr (versehentlich zu breiter Marker) noch weniger
+    (Suite vergisst den Marker und faellt lautlos aus dem geplanten Lauf,
+    Issue #597 AC2)."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/evals/",
+            "-m",
+            "eval_core_set",
+            "--collect-only",
+            "-q",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, (
+        f"--collect-only fuer eval_core_set schlug fehl:\n{result.stdout}\n{result.stderr}"
+    )
+    collected_files = {
+        line.split("::", 1)[0] for line in result.stdout.splitlines() if "::" in line
+    }
+    missing = EXPECTED_EVAL_CORE_SET_FILES - collected_files
+    unexpected = collected_files - EXPECTED_EVAL_CORE_SET_FILES
+    assert not missing, (
+        f"Dateien ohne eval_core_set-Marker, obwohl im Kern-Set erwartet: {sorted(missing)} "
+        f"(Issue #597 AC2)."
+    )
+    assert not unexpected, (
+        f"Dateien mit eval_core_set-Marker, die nicht zum dokumentierten Kern-Set "
+        f"gehoeren: {sorted(unexpected)} (Issue #597 AC2)."
+    )
+
+
+def test_strategy_documents_eval_core_set_schedule():
+    """AC6: STRATEGY.md nennt Rhythmus und Umfang des geplanten Kern-Set-Laufs."""
+    text = _strategy_text()
+    assert "woechentlich" in text.lower() or "wöchentlich" in text.lower(), (
+        "STRATEGY.md muss den Rhythmus des geplanten Laufs (woechentlich) benennen "
+        "(Issue #597 AC6)."
+    )
+    assert "eval_core_set" in text, (
+        "STRATEGY.md muss auf den Marker eval_core_set als Quelle der Wahrheit fuer "
+        "das Kern-Set verweisen (Issue #597 AC6)."
+    )
+
+
 def test_no_eval_runner_requires_api_key():
     """Alle Runner unter evals/ laufen offline — kein anthropic-Client, kein API-Key."""
     for runner in sorted(EVALS_ROOT.glob("*/runner.py")):
