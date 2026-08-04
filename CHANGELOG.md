@@ -34,6 +34,21 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   erfragen. Automatisches Einreichen bei OSF/PROSPERO und Registered Reports
   bleiben bewusst out of scope.
 
+- **Neuer Skill `bibliography-auditor` (#391):** Read-only Gegenprobe
+  zwischen den `\cite{key}`-Zitaten in `kapitel/*.md` und der Vault-Paper-
+  Menge — meldet zitierte Keys ohne Vault-Paper (`missing_in_bibliography`)
+  und Vault-Paper, die nirgends zitiert werden (`orphaned_entries`).
+  Wiederverwendet `export_thesis.resolve_chapters()` und
+  `build_bib.get_all_papers()` aus `latex-export` (kein zweiter Vault-Query-
+  Nachbau, analog zu `word-export/scripts/collect_references.py`). Prüft die
+  tatsächliche `\cite{}`-Konvention dieses Repos (Issue #386) statt freier
+  Autor/Jahr-Prosa — bewusste Abweichung vom Issue-Wortlaut, siehe
+  Plan-Kommentar zu #391. `allowed-tools: [Read, Bash]` ohne
+  `Write`/`Edit`/`NotebookEdit`, keine schreibenden Vault-Aufrufe. Prinzip-
+  Katalog-Herkunft (Kategorie E3 „Bibliography Hygiene"):
+  [andrehuang/academic-writing-agents](https://github.com/andrehuang/academic-writing-agents)
+  (MIT). Skills-Count 41 → 42.
+
 - **Peer-Review-Gutachten schreiben (#608):** Neuer Read-only-Skill
   `skills/peer-review/` für die Gutachterrolle — ein strukturiertes
   Peer-Review-Gutachten zu einem **fremden** Manuskript, komplementär zu

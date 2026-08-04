@@ -1,0 +1,25 @@
+{
+  "component": "bibliography-auditor",
+  "should_trigger": [
+    "Prüf mal mein Literaturverzeichnis auf Vollständigkeit.",
+    "Gleiche meine Zitate gegen den Vault ab.",
+    "Kannst du die Bibliographie auditieren?",
+    "Finde fehlende Quellen im Literaturverzeichnis.",
+    "Gibt es verwaiste Literatureinträge, die nirgends zitiert werden?",
+    "Ich will die Zitat-Vollständigkeit vor der Abgabe prüfen.",
+    "Stimmen die \\cite-Marker in meinen Kapiteln mit dem Vault überein?",
+    "Sind alle Vault-Papers auch tatsächlich irgendwo zitiert?"
+  ],
+  "should_not_trigger": [
+    "Prüf die Formalia meiner Abgabe (Seitenränder, Zeilenabstand).",
+    "Exportiere die Thesis als Word-Datei.",
+    "Erstelle die eidesstattliche Erklärung.",
+    "Kodiere mein Interviewtranskript nach Kategorien.",
+    "Wie wähle ich die richtige Methodik?",
+    "Fasse das Paper in einem Abstract zusammen.",
+    "Schreibe die Einleitung des Kapitels.",
+    "Prüfe meinen Text auf Plagiate.",
+    "Importiere meine Zotero-Bibliothek.",
+    "Formatiere meine Quellenangaben im APA-Stil."
+  ]
+}
