@@ -16,27 +16,39 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from uuid import uuid4
 
-from .embedding_model import EMBEDDING_DIM, deserialize_f32, serialize_f32
+from .embedding_model import (
+    DEFAULT_EMBEDDING_DIM,
+    deserialize_f32,
+    dimension_mismatch_error,
+    serialize_f32,
+)
 
 logger = logging.getLogger(__name__)
 
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
+
 # vec0-Spiegel der chunk_embeddings-Vektoren (Issue #372). Die DDL steht hier
 # statt in schema.sql, weil sie die geladene sqlite-vec-Extension voraussetzt.
-_CHUNK_VECTORS_DDL = (
-    "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors "
-    f"USING vec0(chunk_id TEXT PRIMARY KEY, embedding FLOAT[{EMBEDDING_DIM}])"
-)
+# Seit #629 ist die Breite ein Parameter statt einer Konstante: sie kommt aus
+# `embedding_meta` (Bestand) und nicht mehr aus dem Modell-Default.
+def _chunk_vectors_ddl(dim: int) -> str:
+    return (
+        "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors "
+        f"USING vec0(chunk_id TEXT PRIMARY KEY, embedding FLOAT[{dim}])"
+    )
+
 
 # vec0-Tabelle fuer verifizierte Zitat-Embeddings (Issue #521). Anders als
 # chunk_vectors gibt es KEINE BLOB-Basistabelle -- ist die sqlite-vec-
 # Extension in diesem Prozess nicht ladbar, ist Embedding fuer Quotes ein
 # vollstaendiges No-Op (bewusste Scope-Entscheidung, s. Plan-Kommentar #521).
-_QUOTE_EMBEDDINGS_DDL = (
-    "CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings "
-    f"USING vec0(quote_id TEXT PRIMARY KEY, embedding FLOAT[{EMBEDDING_DIM}])"
-)
+def _quote_embeddings_ddl(dim: int) -> str:
+    return (
+        "CREATE VIRTUAL TABLE IF NOT EXISTS quote_embeddings "
+        f"USING vec0(quote_id TEXT PRIMARY KEY, embedding FLOAT[{dim}])"
+    )
+
 
 VALID_PAPER_TYPES = frozenset({"article-journal", "book", "chapter"})
 
@@ -117,7 +129,16 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #     server.resolve_quote_context().
 # 8 = papers.retraction_checked_at (Issue #604): Zeitpunkt der letzten
 #     Crossref-Retraction-Pruefung, Grundlage fuer server.check_retractions().
-CURRENT_SCHEMA_VERSION = 8
+# 9 = embedding_meta (Issue #629): Modell-ID und Dimension des Bestands.
+#     Beanspruchte urspruenglich ebenfalls die 8 (Entwicklung parallel zu
+#     #604) und musste beim Zusammenfuehren eine Generation hoeherruecken --
+#     sonst wuerde eine DB, die #604 bereits auf 8 gestempelt hat,
+#     `apply_pending_migrations()` nie wieder betreten und bliebe ohne
+#     embedding_meta zurueck (derselbe Fall wie #473 vs. #539 oben, Version 5).
+#     Erste Migration, die eine ganze TABELLE nachtraegt statt einer Spalte --
+#     verifiziert wird sie deshalb ueber `_REQUIRED_MIGRATION_TABLES`
+#     (siehe `init_schema()`), nicht ueber `_LEGACY_MIGRATION_COLUMNS`.
+CURRENT_SCHEMA_VERSION = 9
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -145,6 +166,14 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
     "quotes": frozenset({"stance", "context_source"}),
     "notes": frozenset({"page"}),
 }
+
+# Tabellen, die `migrate.apply_pending_migrations()` auf einer Bestands-DB
+# anlegen muss (Issue #629). Eigene Verifikationsart neben
+# `_LEGACY_MIGRATION_COLUMNS` (Spalten) und `DEAD_TABLES` (Drops): eine fehlende
+# Tabelle waere ueber `PRAGMA table_info()` unsichtbar, und der
+# `user_version`-Stempel wuerde sich irrtuemlich schliessen -- exakt der
+# Review-Fund aus PR #427, nur eine Ebene hoeher.
+_REQUIRED_MIGRATION_TABLES = frozenset({"embedding_meta"})
 
 
 class _Unset:
@@ -703,11 +732,16 @@ class VaultDB:
             # Basis-Schema ausfuehren (ohne vec0-Block — der ist auskommentiert)
             conn.executescript(ddl)
 
-            # quote_embeddings via vec0 versuchen (nur wenn Extension geladen)
+            # quote_embeddings via vec0 versuchen (nur wenn Extension geladen).
+            # Breite aus dem Bestand (embedding_meta), nicht aus dem
+            # Modell-Default: eine DB, die per Re-Index auf ein 1024d-Modell
+            # umgestellt wurde, bekaeme sonst bei jedem init_schema()-Aufruf
+            # wieder 384er-Tabellen angeboten (#629).
             if self.vec_available:
+                dim = self._expected_embedding_dim(conn)
                 try:
-                    conn.execute(_QUOTE_EMBEDDINGS_DDL)
-                    conn.execute(_CHUNK_VECTORS_DDL)
+                    conn.execute(_quote_embeddings_ddl(dim))
+                    conn.execute(_chunk_vectors_ddl(dim))
                 except sqlite3.OperationalError:
                     self.vec_available = False
 
@@ -758,6 +792,12 @@ class VaultDB:
             }
             undropped = sorted(migrate.DEAD_TABLES & existing_tables)
 
+            # Vierte Verifikationsart (#629): `add_embedding_meta_table()` legt
+            # eine ganze Tabelle an. Fehlt sie hinterher, darf nicht gestempelt
+            # werden -- sonst bliebe der Bestandsnachweis fuer immer aus und
+            # jeder Modellwechsel liefe wieder ins Stille.
+            uncreated = sorted(_REQUIRED_MIGRATION_TABLES - existing_tables)
+
             # Dritte Verifikationsart (#512): `widen_extraction_method_check()`
             # aendert einen CHECK-Constraint statt eine Spalte -- ein
             # fehlgeschlagener Tabellen-Rebuild waere ueber
@@ -774,7 +814,7 @@ class VaultDB:
                 else ["quotes.extraction_method CHECK ohne 'local-verbatim'"]
             )
 
-            if not missing and not undropped and not unwidened:
+            if not missing and not undropped and not unwidened and not uncreated:
                 conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
             else:
                 # Stempel bewusst auslassen: user_version bleibt unter
@@ -785,14 +825,16 @@ class VaultDB:
                 logger.warning(
                     "Migration auf Schema-Version %d nicht verifizierbar -- "
                     "es fehlen weiterhin Spalten %s, diese toten Tabellen "
-                    "sind nicht leer und daher nicht gedroppt: %s, und diese "
-                    "Constraints wurden nicht erweitert: %s. user_version "
-                    "bleibt unveraendert, naechster init_schema()-Aufruf "
-                    "migriert erneut (#368, #539, #512).",
+                    "sind nicht leer und daher nicht gedroppt: %s, diese "
+                    "Constraints wurden nicht erweitert: %s, und diese Tabellen "
+                    "fehlen weiterhin: %s. user_version bleibt unveraendert, "
+                    "naechster init_schema()-Aufruf migriert erneut "
+                    "(#368, #539, #512, #629).",
                     CURRENT_SCHEMA_VERSION,
                     missing,
                     undropped,
                     unwidened,
+                    uncreated,
                 )
 
     # ------------------------------------------------------------------
@@ -1191,24 +1233,29 @@ class VaultDB:
     def add_quote_embedding(self, quote_id: str, embedding_vector: bytes) -> bool:
         """Schreibt (oder ersetzt) den Embedding-Vektor eines Quotes in vec0.
 
-        Best effort, analog zu ``_mirror_chunk_vector`` (Issue #372): gibt
-        ``False`` zurueck, wenn ``embedding_vector`` nicht die erwartete
-        Dimension hat oder die sqlite-vec-Extension nicht ladbar ist -- wirft
-        in diesen Faellen nie. Anders als bei Chunks gibt es fuer Quotes KEINE
-        BLOB-Basistabelle: ohne ladbare Extension ist dies ein vollstaendiges
-        No-Op (Issue #521, bewusste Scope-Entscheidung).
+        Best effort in einer Hinsicht (Issue #521, bewusste
+        Scope-Entscheidung): bei leerem Vektor oder ohne ladbare
+        sqlite-vec-Extension ist der Aufruf ein No-Op mit Rueckgabe ``False``
+        -- anders als bei Chunks gibt es fuer Quotes keine BLOB-Basistabelle.
+
+        NICHT mehr best effort ist die Dimension (Issue #629): ein Vektor
+        fremder Breite wurde frueher stillschweigend verworfen und der Quote
+        blieb ohne Embedding, ohne dass die Ursache irgendwo auftauchte.
 
         Raises:
             VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+            EmbeddingDimensionMismatchError: Vektorbreite passt nicht zum
+                Bestand (``embedding_meta``).
         """
-        if not embedding_vector or len(embedding_vector) != EMBEDDING_DIM * 4:
+        if not embedding_vector:
             return False
         with self._connection(commit=True) as conn:
             self._raise_if_locked(conn)
+            self._assert_vector_dim(conn, embedding_vector)
             if not self.load_vec_extension(conn):
                 return False
             try:
-                conn.execute(_QUOTE_EMBEDDINGS_DDL)
+                conn.execute(_quote_embeddings_ddl(self._expected_embedding_dim(conn)))
                 conn.execute(
                     "INSERT OR REPLACE INTO quote_embeddings (quote_id, embedding) VALUES (?, ?)",
                     (quote_id, embedding_vector),
@@ -1263,7 +1310,7 @@ class VaultDB:
             if not self.load_vec_extension(conn):
                 return []
             try:
-                conn.execute(_QUOTE_EMBEDDINGS_DDL)
+                conn.execute(_quote_embeddings_ddl(self._expected_embedding_dim(conn)))
             except sqlite3.OperationalError:
                 return []
             sql = """
@@ -2182,11 +2229,21 @@ class VaultDB:
             context_sentence: 1-Satz-Kontext generiert via Anthropic API.
             embedding_text: Kombinierter Text (context_sentence + chunk_text).
             embedding_vector: Serialisierter Embedding-Vektor (bytes) oder None.
+
+        Raises:
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+            EmbeddingDimensionMismatchError: ``embedding_vector`` hat nicht die
+                Breite des Bestands (Issue #629). Frueher landete so ein Vektor
+                in ``chunk_embeddings``, waehrend der vec0-Spiegel ihn still
+                verwarf -- der Vault trug danach zwei unvergleichbare
+                Vektorraeume, und jede Suche sah nur einen davon.
         """
         chunk_id = str(uuid4())
         now = int(time.time())
         with self._connection(commit=True) as conn:
             self._raise_if_locked(conn)
+            if embedding_vector:
+                self._assert_vector_dim(conn, embedding_vector)
             conn.execute(
                 """
                 INSERT INTO chunk_embeddings
@@ -2242,6 +2299,239 @@ class VaultDB:
         return len(chunk_ids)
 
     # ------------------------------------------------------------------
+    # Embedding-Bestand: Modell-ID + Dimension (Issue #629)
+    # ------------------------------------------------------------------
+
+    def _expected_embedding_dim(self, conn: sqlite3.Connection) -> int:
+        """Dimension des Bestands auf einer bestehenden Connection.
+
+        Quelle ist ``embedding_meta``; fehlt die Zeile (frischer Vault) oder
+        die Tabelle (Bestands-DB vor der Migration auf Schema 8), gilt die
+        Breite, in der vec0-Tabellen bislang angelegt wurden:
+        ``DEFAULT_EMBEDDING_DIM``. Bewusst ohne jeden Embedder-Zugriff -- ein
+        Modell-Load haengt hier an jedem Lesepfad (u. a.
+        ``quote_context_similarity`` im PreToolUse-Hook) und waere ein
+        Timeout-Kandidat.
+        """
+        try:
+            row = conn.execute("SELECT dim FROM embedding_meta WHERE id = 1").fetchone()
+        except sqlite3.OperationalError:
+            return DEFAULT_EMBEDDING_DIM
+        if row is None or not row["dim"]:
+            return DEFAULT_EMBEDDING_DIM
+        return int(row["dim"])
+
+    def expected_embedding_dim(self) -> int:
+        """Dimension, die dieser Vault von einem Embedder erwartet (#629)."""
+        with self._connection() as conn:
+            return self._expected_embedding_dim(conn)
+
+    def embedding_inventory(self) -> dict | None:
+        """Modell-ID, Dimension und Zeitstempel des Bestands -- oder ``None``.
+
+        ``None`` heisst "noch nie ein Embedding geschrieben" (bzw. Bestands-DB
+        vor Schema 8), nicht "Dimension unbekannt": die erwartete Breite
+        liefert in dem Fall :meth:`expected_embedding_dim`.
+        """
+        with self._connection() as conn:
+            try:
+                row = conn.execute(
+                    "SELECT model_id, dim, updated_at FROM embedding_meta WHERE id = 1"
+                ).fetchone()
+            except sqlite3.OperationalError:
+                return None
+        return dict(row) if row is not None else None
+
+    def _embedding_inventory_is_empty(self, conn: sqlite3.Connection) -> bool:
+        """Ob im Vault ueberhaupt Vektoren liegen, die ein Wechsel entwerten koennte."""
+        row = conn.execute(
+            "SELECT 1 FROM chunk_embeddings WHERE embedding_vector IS NOT NULL LIMIT 1"
+        ).fetchone()
+        if row is not None:
+            return False
+        if not self.load_vec_extension(conn):
+            return True
+        try:
+            return conn.execute("SELECT count(*) FROM quote_embeddings").fetchone()[0] == 0
+        except sqlite3.OperationalError:
+            return True
+
+    def _write_embedding_meta(
+        self, conn: sqlite3.Connection, model_id: str | None, dim: int
+    ) -> None:
+        """Schreibt die Singleton-Zeile in ``embedding_meta`` (Upsert)."""
+        conn.execute(
+            "INSERT INTO embedding_meta (id, model_id, dim, updated_at) VALUES (1, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET model_id = excluded.model_id, "
+            "dim = excluded.dim, updated_at = excluded.updated_at",
+            (model_id, dim, int(time.time())),
+        )
+
+    def _rebuild_vector_tables(self, conn: sqlite3.Connection, dim: int) -> None:
+        """Legt die vec0-Tabellen in neuer Breite an (DROP + CREATE).
+
+        vec0 kann die Spaltenbreite nicht aendern, also ist der Neuaufbau der
+        einzige Weg. Aufrufer muessen sicherstellen, dass der Inhalt entweder
+        leer oder rekonstruierbar ist (``migrate.reindex_embeddings``).
+        """
+        if not self.load_vec_extension(conn):
+            return
+        with contextlib.suppress(sqlite3.OperationalError):
+            conn.execute("DROP TABLE IF EXISTS chunk_vectors")
+            conn.execute("DROP TABLE IF EXISTS quote_embeddings")
+            conn.execute(_chunk_vectors_ddl(dim))
+            conn.execute(_quote_embeddings_ddl(dim))
+
+    def register_embedding_inventory(self, model_id: str | None, dim: int) -> None:
+        """Meldet Modell und Dimension an, bevor Vektoren geschrieben werden (#629).
+
+        Drei Ausgaenge:
+
+        * **Leerer Bestand** -- die Dimension wird uebernommen, die vec0-Tabellen
+          werden in dieser Breite neu angelegt. Ein frischer Vault laesst sich so
+          ohne Re-Index mit jedem Modell betreiben.
+        * **Gleiche Dimension** -- nur die Modell-ID wird nachgefuehrt.
+        * **Abweichende Dimension bei vorhandenem Bestand** --
+          ``EmbeddingDimensionMismatchError``. Das ist der Fall, den #629
+          adressiert: stillschweigend weiterzuschreiben ergaebe zwei
+          unvergleichbare Vektorraeume in derselben Tabelle.
+
+        Raises:
+            ValueError: ``dim`` ist kein positiver Wert.
+            EmbeddingDimensionMismatchError: Bestand hat eine andere Breite.
+            VaultLockedError: Vault ist gesperrt (nur wenn geschrieben wuerde).
+        """
+        if dim <= 0:
+            raise ValueError(f"Embedding-Dimension muss positiv sein, war {dim}")
+        with self._connection(commit=True) as conn:
+            try:
+                row = conn.execute(
+                    "SELECT model_id, dim FROM embedding_meta WHERE id = 1"
+                ).fetchone()
+            except sqlite3.OperationalError:
+                # Bestands-DB vor Schema 8: init_schema() legt die Tabelle an.
+                return
+            vault_dim = int(row["dim"]) if row is not None and row["dim"] else None
+            if vault_dim is None:
+                # Kein Bestandsnachweis: Legacy-Vaults sind per Definition in
+                # DEFAULT_EMBEDDING_DIM gebaut -- alles andere braucht einen
+                # leeren Bestand oder einen Re-Index.
+                vault_dim = DEFAULT_EMBEDDING_DIM
+                inventory_empty = self._embedding_inventory_is_empty(conn)
+            else:
+                inventory_empty = (
+                    self._embedding_inventory_is_empty(conn) if dim != vault_dim else False
+                )
+
+            if dim != vault_dim and not inventory_empty:
+                raise dimension_mismatch_error(
+                    model_id=model_id,
+                    model_dim=dim,
+                    vault_dim=vault_dim,
+                    vault_model_id=row["model_id"] if row is not None else None,
+                )
+
+            if row is not None and int(row["dim"] or 0) == dim and row["model_id"] == model_id:
+                return  # nichts zu tun -- kein Schreibzugriff, kein Lock-Check
+
+            self._raise_if_locked(conn)
+            if dim != vault_dim:
+                self._rebuild_vector_tables(conn, dim)
+            self._write_embedding_meta(conn, model_id, dim)
+
+    def raise_if_locked(self) -> None:
+        """Oeffentlicher Lock-Check ohne Schreibzugriff (Issue #629).
+
+        Fuer Ablaeufe, die VOR der ersten Aenderung wissen muessen, ob sie
+        ueberhaupt schreiben duerfen -- ``migrate.reindex_embeddings()`` raeumt
+        vec0-Tabellen ab und darf einen gesperrten Vault nicht halb
+        abgeraeumt zuruecklassen.
+        """
+        with self._connection() as conn:
+            self._raise_if_locked(conn)
+
+    def all_chunk_embedding_texts(self) -> list[dict]:
+        """``chunk_id`` + ``embedding_text`` aller Chunks (Re-Index-Quelle, #629)."""
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT chunk_id, embedding_text FROM chunk_embeddings ORDER BY created_at, chunk_id"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def all_quotes_for_embedding(self) -> list[dict]:
+        """Alle Quotes mit ihrem Kontext (Re-Index-Quelle fuer ``quote_embeddings``)."""
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT quote_id, verbatim, context_before, context_after FROM quotes "
+                "ORDER BY created_at, quote_id"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def replace_chunk_vectors(
+        self,
+        vectors: Sequence[tuple[str, bytes]],
+        model_id: str | None,
+        dim: int,
+    ) -> int:
+        """Ersetzt ALLE Chunk-Vektoren durch die uebergebenen (Issue #629).
+
+        Ein Transaktionsblock: Bestand leeren, vec0-Tabellen in der neuen
+        Breite neu anlegen, neue Vektoren schreiben und spiegeln,
+        ``embedding_meta`` fortschreiben. Chunks, fuer die kein Vektor
+        uebergeben wurde, bleiben bewusst ohne (``NULL``) -- ein Vektor aus dem
+        alten Modell waere nach dem Wechsel schlicht falsch.
+
+        Returns:
+            Anzahl geschriebener Vektoren.
+        """
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            for _, blob in vectors:
+                if len(blob) != dim * 4:
+                    raise dimension_mismatch_error(
+                        model_id=model_id,
+                        model_dim=len(blob) // 4,
+                        vault_dim=dim,
+                    )
+            conn.execute("UPDATE chunk_embeddings SET embedding_vector = NULL")
+            self._rebuild_vector_tables(conn, dim)
+            self._write_embedding_meta(conn, model_id, dim)
+            for chunk_id, blob in vectors:
+                conn.execute(
+                    "UPDATE chunk_embeddings SET embedding_vector = ? WHERE chunk_id = ?",
+                    (blob, chunk_id),
+                )
+                self._mirror_chunk_vector(conn, chunk_id, blob)
+        return len(vectors)
+
+    def _assert_vector_dim(self, conn: sqlite3.Connection, embedding_vector: bytes) -> None:
+        """Wirft, wenn ein Vektor nicht die Breite des Bestands hat (#629).
+
+        Zweite Verteidigungslinie hinter :meth:`register_embedding_inventory`:
+        greift auch fuer Aufrufer, die direkt schreiben, und kennt dafuer nur
+        die Byte-Laenge -- die Modell-ID steht in der Meldung nur, wenn sie im
+        Bestand hinterlegt ist.
+        """
+        if len(embedding_vector) % 4 != 0:
+            raise ValueError(
+                f"Embedding-BLOB hat Laenge {len(embedding_vector)} (kein Vielfaches von 4 Bytes)"
+            )
+        dim = len(embedding_vector) // 4
+        expected = self._expected_embedding_dim(conn)
+        if dim == expected:
+            return
+        try:
+            row = conn.execute("SELECT model_id FROM embedding_meta WHERE id = 1").fetchone()
+        except sqlite3.OperationalError:
+            row = None
+        raise dimension_mismatch_error(
+            model_id=None,
+            model_dim=dim,
+            vault_dim=expected,
+            vault_model_id=row["model_id"] if row is not None else None,
+        )
+
+    # ------------------------------------------------------------------
     # Vektor-Suche ueber Chunks (Issue #372)
     # ------------------------------------------------------------------
 
@@ -2255,14 +2545,19 @@ class VaultDB:
 
         Gibt False zurueck, wenn kein (passender) Vektor vorliegt oder die
         sqlite-vec-Extension nicht ladbar ist — dann uebernimmt der
-        Python-Fallback in :meth:`knn_chunks` die Suche.
+        Python-Fallback in :meth:`knn_chunks` die Suche. Die Breite wird gegen
+        den Bestand geprueft, nicht gegen eine Konstante (#629); der laute
+        Fehler bei Abweichung kommt von den aufrufenden Schreibpfaden.
         """
-        if not embedding_vector or len(embedding_vector) != EMBEDDING_DIM * 4:
+        if not embedding_vector:
+            return False
+        dim = self._expected_embedding_dim(conn)
+        if len(embedding_vector) != dim * 4:
             return False
         if not self.load_vec_extension(conn):
             return False
         try:
-            conn.execute(_CHUNK_VECTORS_DDL)
+            conn.execute(_chunk_vectors_ddl(dim))
             conn.execute(
                 "INSERT OR REPLACE INTO chunk_vectors (chunk_id, embedding) VALUES (?, ?)",
                 (chunk_id, embedding_vector),
@@ -2281,14 +2576,15 @@ class VaultDB:
         with self._connection(commit=True) as conn:
             if not self.load_vec_extension(conn):
                 return 0
+            dim = self._expected_embedding_dim(conn)
             try:
-                conn.execute(_CHUNK_VECTORS_DDL)
+                conn.execute(_chunk_vectors_ddl(dim))
             except sqlite3.OperationalError:
                 return 0
             rows = conn.execute(
                 "SELECT chunk_id, embedding_vector FROM chunk_embeddings "
                 "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
-                (EMBEDDING_DIM * 4,),
+                (dim * 4,),
             ).fetchall()
             for row in rows:
                 if self._mirror_chunk_vector(conn, row["chunk_id"], row["embedding_vector"]):
@@ -2308,14 +2604,36 @@ class VaultDB:
         L2-normalisiert gespeichert werden, ist deren Rangfolge identisch zur
         Kosinus-Rangfolge — und beide Pfade liefern dieselbe Reihenfolge.
 
+        Passt die Breite des Query-Vektors nicht zum Bestand, wirft die Methode
+        ``EmbeddingDimensionMismatchError`` (Issue #629), statt lautlos eine
+        leere Trefferliste zu liefern: beide Pfade filtern die Kandidaten nach
+        Byte-Laenge, ein 1024d-Query auf einem 384d-Bestand haette also
+        schlicht "nichts gefunden" gemeldet -- ununterscheidbar von "es gibt
+        keine passenden Chunks".
+
         Returns:
             Liste aus ``{chunk_id, paper_id, chunk_text, distance}``,
             aufsteigend nach Distanz (nahester Treffer zuerst).
+
+        Raises:
+            EmbeddingDimensionMismatchError: Query-Dimension passt nicht zum
+                Bestand.
         """
         if not query_vector or k <= 0:
             return []
         dim = len(query_vector)
         with self._connection() as conn:
+            expected = self._expected_embedding_dim(conn)
+            if dim != expected and not self._embedding_inventory_is_empty(conn):
+                inventory = conn.execute(
+                    "SELECT model_id FROM embedding_meta WHERE id = 1"
+                ).fetchone()
+                raise dimension_mismatch_error(
+                    model_id=None,
+                    model_dim=dim,
+                    vault_dim=expected,
+                    vault_model_id=inventory["model_id"] if inventory is not None else None,
+                )
             total = conn.execute(
                 "SELECT count(*) FROM chunk_embeddings "
                 "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
@@ -2324,7 +2642,7 @@ class VaultDB:
             if total == 0:
                 return []
             hits: list[dict] | None = None
-            if dim == EMBEDDING_DIM and self.load_vec_extension(conn):
+            if dim == expected and self.load_vec_extension(conn):
                 hits = self._knn_chunks_vec0(conn, query_vector, k, total)
             if hits is None:
                 hits = self._knn_chunks_python(conn, query_vector, k)
