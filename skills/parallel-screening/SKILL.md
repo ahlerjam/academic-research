@@ -130,7 +130,9 @@ Pro Welle **einen `Task`-Aufruf je Fall** in derselben Nachricht, Subagent
 Kriterienliste und das verfügbare Material (Titel/Abstract oder Volltext).
 
 Die Kriterienliste ist über alle Fälle identisch — sie gehört wörtlich in jeden
-Aufruf, damit die Urteile vergleichbar bleiben.
+Aufruf, damit die Urteile vergleichbar bleiben. Steht in `./academic_context.md`
+bereits eine Section `### Ein-/Ausschlusskriterien` (aus `preregistration`),
+diese als Kriterienliste übernehmen statt erneut zu erfragen.
 
 ### Schritt 3: Einzelurteile protokollieren
 

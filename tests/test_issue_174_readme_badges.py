@@ -29,9 +29,9 @@ def _skill_count() -> int:
 def test_skills_badge_matches_actual_skill_count():
     text = README.read_text(encoding="utf-8")
     count = _skill_count()
-    # Stand Issue #609 (data-management-plan neu, nach bereits gemergten #608/#391): 44.
+    # Stand Issue #607 (preregistration neu, nach bereits gemergten #608/#391/#609): 45.
     # Steigt die Zahl der SKILL.md-Verzeichnisse weiter, hier mitziehen (Test ggf. anpassen).
-    assert count == 44, f"Erwartet 44 SKILL.md, gefunden {count} (Test ggf. anpassen)."
+    assert count == 45, f"Erwartet 45 SKILL.md, gefunden {count} (Test ggf. anpassen)."
     # Veraltetes "skills-23+"-Badge darf nicht mehr vorkommen.
     assert "skills-23+" not in text, "Veraltetes skills-23+-Badge noch vorhanden."
     badge = re.search(r"!\[Skills\]\(https://img\.shields\.io/badge/skills-(\d+)", text)
