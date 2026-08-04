@@ -52,10 +52,10 @@ def test_issue_206_named_skills_documented():
     )
 
 
-def test_skills_badge_count_is_41():
+def test_skills_badge_count_is_42():
     text = README.read_text(encoding="utf-8")
-    assert re.search(r"img\.shields\.io/badge/skills-41", text), (
-        "Skills-Badge muss auf 'skills-41' stehen (41 SKILL.md, Stand Issue #610)."
+    assert re.search(r"img\.shields\.io/badge/skills-42", text), (
+        "Skills-Badge muss auf 'skills-42' stehen (42 SKILL.md, Stand Issue #391)."
     )
 
 

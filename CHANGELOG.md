@@ -10,6 +10,21 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Neuer Skill `bibliography-auditor` (#391):** Read-only Gegenprobe
+  zwischen den `\cite{key}`-Zitaten in `kapitel/*.md` und der Vault-Paper-
+  Menge — meldet zitierte Keys ohne Vault-Paper (`missing_in_bibliography`)
+  und Vault-Paper, die nirgends zitiert werden (`orphaned_entries`).
+  Wiederverwendet `export_thesis.resolve_chapters()` und
+  `build_bib.get_all_papers()` aus `latex-export` (kein zweiter Vault-Query-
+  Nachbau, analog zu `word-export/scripts/collect_references.py`). Prüft die
+  tatsächliche `\cite{}`-Konvention dieses Repos (Issue #386) statt freier
+  Autor/Jahr-Prosa — bewusste Abweichung vom Issue-Wortlaut, siehe
+  Plan-Kommentar zu #391. `allowed-tools: [Read, Bash]` ohne
+  `Write`/`Edit`/`NotebookEdit`, keine schreibenden Vault-Aufrufe. Prinzip-
+  Katalog-Herkunft (Kategorie E3 „Bibliography Hygiene"):
+  [andrehuang/academic-writing-agents](https://github.com/andrehuang/academic-writing-agents)
+  (MIT). Skills-Count 41 → 42.
+
 - **mDeBERTa-XNLI als lokaler NLI-Vorfilter vor dem Zitat-Richter (#592):**
   `academic_vault/nli_prefilter.py` bewertet Kapitelbehauptung gegen
   Quote-Kontext lokal (keine API, kein Netz nach dem einmaligen
