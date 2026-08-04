@@ -56,7 +56,7 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | Skill | Aktiviert bei | Beschreibung |
 |-------|--------------|-------------|
 | `prisma-flow` | *„PRISMA"*, *„Systematic Review"*, *„Flussdiagramm"* | Mermaid-Flow + 27-Punkte-Checkliste |
-| `parallel-screening` | *„viele Treffer screenen"*, *„Screening parallelisieren"*, *„Risk-of-Bias für mehrere Paper"* | Fächert Screening und Verzerrungsbewertung auf Subagents auf, Ledger + Resume + PRISMA-Zähler ([SKILL.md](../../skills/parallel-screening/SKILL.md)) |
+| `parallel-screening` | *„viele Treffer screenen"*, *„Screening parallelisieren"*, *„Risk-of-Bias für mehrere Paper"*, *„Active Learning"* | Fächert Screening und Verzerrungsbewertung auf Subagents auf, Ledger + Resume + PRISMA-Zähler; optional Active Learning zur Umsortierung der Restliste ([SKILL.md](../../skills/parallel-screening/SKILL.md)) |
 | `material-passport` | *„Material-Passport"*, *„Artefakt sichern"* | Unveränderlicher Repro-Passport |
 | `instrument-design` | *„Interviewleitfaden erstellen"*, *„Fragebogen entwickeln"* | Erhebungsinstrument aus Forschungsfrage + Methodik, mit Rückverweis-Matrix je Frage ([SKILL.md](../../skills/instrument-design/SKILL.md)) |
 | `qualitative-coding` | *„Transkript kodieren"*, *„Kategorien aus dem Material bilden"* | Transkript-Ingest mit belegfähiger Stellenangabe, induktive/deduktive Kategorienbildung, Kodier-Übersicht ([SKILL.md](../../skills/qualitative-coding/SKILL.md)) |
