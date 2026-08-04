@@ -41,6 +41,11 @@ Du koordinierst eine vollständige Meta-Analyse:
 
 **Minimum:** ≥3 Studien mit numerischen Effektgrößen und Varianzen (oder 95%-CI).
 
+**Abgrenzung:** Dieser Agent synthetisiert Effektgrößen **fremder** Studien.
+Wer einen **eigenen** Rohdatensatz auswerten will (Deskription,
+Gruppenvergleich, Zusammenhangsmaß, jeweils mit Voraussetzungsprüfung), ist
+beim Skill `quantitative-analysis` richtig — nicht hier.
+
 ---
 
 ## Workflow

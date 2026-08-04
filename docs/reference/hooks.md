@@ -18,13 +18,60 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `SessionStart` (kein Matcher) | `bypass-log-report.mjs` | Meldet neue Nutzungen des `vault-guard`-Bypass-Markers seit der letzten Session |
 | `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
+| `Stop` | `session-snapshot.mjs` | Vault-Snapshot pro Sitzung (#625, PR #650) — zusätzlich zum `PreCompact`-Snapshot, unabhängig davon; pro Sitzung maximal einmal exportiert (Drosselung nach session_id) |
 
-Das sind **7 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
+Das sind **8 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
 `context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`, `pre-compact.mjs`,
-`mid-session-reinforcement.mjs`, `bypass-log-report.mjs`) plus **2
-Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
+`mid-session-reinforcement.mjs`, `bypass-log-report.mjs`, `session-snapshot.mjs`)
+plus **2 Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
 Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
 `PreToolUse` ruft drei Skripte nacheinander auf.
+
+### Session-Ende-Snapshot (`session-snapshot.mjs`, #625, PR #650)
+
+Läuft zusätzlich zum bestehenden `PreCompact`-Snapshot unter `Stop` — er
+ersetzt ihn nicht, sondern deckt die Fälle ab, in denen eine Sitzung nie
+verdichtet wird (kurze Sitzungen erzeugten bis #625 über Wochen keinen
+einzigen Snapshot). Der `Stop`-Event feuert nach jedem Assistenten-Turn, nicht
+nur einmal am Sitzungsende; um Perf-Regression und unnötige Exporte zu
+vermeiden, drosselt der Hook pro Sitzung: die `session_id` aus dem Stop-Payload
+wird im Marker gespeichert, und pro Sitzung wird maximal einmal exportiert
+(Audit P1, PR #650). Nachfolgende Turns in derselben Sitzung überspringen den
+Export; eine neue Sitzung triggert einen erneuten Export.
+
+**Fingerprint-Vergleich:** Ein billiger Fingerprint der Vault-DB (Dateigröße +
+`mtimeMs`) wird gegen die Marker-Datei
+`<ACADEMIC_SNAPSHOTS_DIR>/<slug>/.last-session-snapshot.json` aus dem letzten
+Lauf verglichen: unverändert (und gleiche session_id, falls vorhanden) → kein
+neuer Snapshot, aber eine Stderr-Zeile mit dem Zeitpunkt der letzten Sicherung;
+verändert (oder Marker fehlt/kaputt, oder neue Sitzung) → Export über dieselbe
+Python-Funktion wie `pre-compact.mjs` (`academic_vault.server.export_snapshot()`),
+aufgerufen über die Interpreter-Kaskade aus `hooks/lib/vault-bridge.mjs` (#382).
+
+**Retention:** je Slug-Verzeichnis werden maximal `ACADEMIC_SNAPSHOTS_KEEP`
+(Default **20**, env-überschreibbar) eigene `.tgz`-Dateien aufbewahrt — ältere
+werden nach jedem erfolgreichen Export gelöscht (Sortierung über den
+`YYYYMMDD-HHMM`-Dateinamen). Das Slug-Verzeichnis wird mit dem
+`PreCompact`-Snapshot geteilt; damit das Pruning dessen `.tgz`-Dateien nicht
+versehentlich mitzählt oder löscht, kennzeichnet `session-snapshot.mjs` seine
+eigenen Exporte mit dem Suffix `.session.tgz` und prunt ausschließlich danach
+(Audit-Finding, PR #650 — blindes Pruning aller `.tgz` unabhängig von der
+Herkunft konnte fremde, potenziell vault-haltige Snapshots vorzeitig
+verdrängen). Die Marker-Datei selbst ist vom Pruning ausgenommen. Ein
+Fehlschlag beim Export (z. B. kein funktionierender
+Python-Interpreter erreichbar) bricht die Sitzung nicht ab: `exit 0`, aber
+eine sichtbare `⚠️`-Meldung auf stderr, und der Marker bleibt unverändert
+stehen, damit der nächste Lauf erneut einen Export versucht.
+
+**Grenzen (bewusst akzeptiert für Umfang size/S):** Der Fingerprint ist kein
+Volltext-Hash — ein False-Negative bei einer Änderung exakt gleicher
+Dateigröße innerhalb derselben Millisekunde ist theoretisch möglich, aber für
+die Größenordnung „Vault über zwei Jahre" vernachlässigbar. Die Pro-Sitzungs-
+Drosselung basiert auf der `session_id` des Stop-Payload: Wenn Claude Code
+diese nicht mitteilt (oder `null` ist), fällt die Drosselung weg und der Hook
+exportiert wie gewohnt nach Fingerprint. Zwei parallele Sitzungen auf
+demselben Projekt können sich beim Marker-Update oder Pruning überschneiden
+— es gibt kein Locking.
 
 > **Nicht verdrahtet:** `hooks/lib/vault-bridge.mjs` ist **kein** Hook, sondern ein
 > gemeinsames Modul, das die Vault-Hooks importieren (DB-Pfad-Auflösung und
@@ -219,6 +266,21 @@ und `unavailable` schreibt der Hook den Tool-Input per
 | `ACADEMIC_CITATION_ARXIV_URL` | arXiv-API | Base-URL, überschreibbar (Tests/Proxy) |
 | `ACADEMIC_CITATION_CROSSREF_URL` | CrossRef-API | Base-URL, überschreibbar (Tests/Proxy) |
 | `ACADEMIC_CITATION_S2_URL` | Semantic-Scholar-API | Base-URL, überschreibbar (Tests/Proxy) |
+| `ACADEMIC_CITATION_UNAVAILABLE_RATE_THRESHOLD` | `0.5` | Anteil `unavailable`/Gesamtanfragen, ab dem eine Warnung ausgegeben wird (Issue #601) |
+| `ACADEMIC_CITATION_UNAVAILABLE_RATE_MIN_REQUESTS` | `5` | Mindestzahl Kaskaden-Anfragen im Lauf, unterhalb derer keine Warnung ausgelöst wird (Issue #601) |
+
+**Beobachtung: dauerhaft blockierter Egress.** Eine einzelne `unavailable`-
+Antwort ist Betriebsrauschen (Drosselung, kurzer Ausfall). Läuft der Egress
+über einen ganzen Lauf dauerhaft ins Leere — falsch gesetzter Proxy,
+abgelaufener API-Key, verlegter Endpunkt —, meldet jede Einzelanfrage brav
+`unavailable` und niemand zieht die Summe. `resolveCitations()` zählt daher
+je Lauf Gesamtanfragen und `unavailable`-Fälle; überschreitet der Anteil
+`ACADEMIC_CITATION_UNAVAILABLE_RATE_THRESHOLD` bei mindestens
+`ACADEMIC_CITATION_UNAVAILABLE_RATE_MIN_REQUESTS` Anfragen, schreibt der Hook
+eine Warnung auf stderr mit beiden Zahlen, dem Prozentsatz und dem häufigsten
+Grund (Statuscode oder Fehlerart). Die Bewertung einzelner HTTP-Antworten
+(jeder Nicht-2xx bleibt `unavailable`) ändert sich dadurch nicht — es wird
+nur mitgezählt, nicht umklassifiziert.
 
 Die Kaskade ist die einzige Stelle, an der ein Hook dieses Plugins ins Netz
 geht. Wer das nicht möchte, setzt `ACADEMIC_CITATION_CASCADE=off` — dann
@@ -379,8 +441,13 @@ ohne Gate immer mit.
 
 `mid-session-reinforcement.mjs` liest die Decisions über einen Python-Subprozess,
 `post-tool-use-decisions.mjs` schreibt sie über denselben Weg; die Kaskade steht einmal in
-`hooks/lib/vault-bridge.mjs` (Node hat vor 22.5 kein `node:sqlite`, die CI pinnt Node 20 —
-ein direkter DB-Zugriff aus dem Hook scheidet aus). Hooks
+`hooks/lib/vault-bridge.mjs`. Ein Wechsel auf `node:sqlite` wurde geprüft (#600, CI läuft
+seit dort auf Node 22): ein Mikrobenchmark bestätigt zwar den erwarteten Geschwindigkeits­
+vorteil des reinen Zugriffswegs (Median über 20 Wiederholungen: Python-Subprozess ~22,7 ms
+gegen `node:sqlite` in-process ~0,9 ms), aber die drei Aufrufer rufen keine rohen SELECTs
+auf, sondern Geschäftslogik, die ausschließlich in `academic_vault` (Python) existiert —
+eine Migration müsste diese Logik in JavaScript duplizieren statt nur den Treiber zu
+tauschen. Details und Zahlen: Modulkopf von `vault-bridge.mjs`. Hooks
 erben in einer echten Session die `PATH` des Nutzers — dort steht meist das System-Python
 (macOS: `/usr/bin/python3` == 3.9), das `academic_vault` mangels PEP-604-Syntax nicht
 importieren kann. Der Hook probiert daher in dieser Reihenfolge:

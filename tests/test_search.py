@@ -50,6 +50,17 @@ def test_normalize_paper_missing_fields():
     assert result["source_module"] == "test"
 
 
+def test_normalize_paper_is_retracted_unknown_when_field_missing():
+    """Quelle ohne is_retracted-Feld -> None (unbekannt), nicht False (#618 AC4)."""
+    result = normalize_paper({}, "test")
+    assert result["is_retracted"] is None
+
+
+def test_normalize_paper_is_retracted_passthrough():
+    result = normalize_paper({"is_retracted": True}, "test")
+    assert result["is_retracted"] is True
+
+
 def test_paper_dataclass():
     p = Paper(doi="10.1109/X", title="Test", year=2024, source_module="crossref")
     d = p.to_dict()

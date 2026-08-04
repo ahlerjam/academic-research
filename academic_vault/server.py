@@ -27,7 +27,8 @@ from .db import (
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
 from .decision_log import parse_model_version_text as _parse_model_version_text
-from .embedding_model import get_embedder
+from .embedding_model import REINDEX_HINT, EmbeddingDimensionMismatchError, get_embedder
+from .health import get_component_status
 
 logger = logging.getLogger(__name__)
 
@@ -437,6 +438,13 @@ def embed_quote(db_path: str, quote_id: str, embedder: object | None = None) -> 
     if quote is None:
         raise ValueError(f"vault.embed_quote: Quote '{quote_id}' nicht gefunden.")
 
+    # Bestandsabgleich vor der Inferenz (#629): passt die Dimension nicht,
+    # wirft das hier, statt den Vektor spaeter stillschweigend zu verwerfen.
+    db.register_embedding_inventory(
+        getattr(active_embedder, "model_id", None),
+        int(active_embedder.dim),  # type: ignore[attr-defined]
+    )
+
     text = _quote_embedding_text(quote)
     vectors = active_embedder.embed_documents([text])  # type: ignore[attr-defined]
     if not vectors:
@@ -458,6 +466,8 @@ def _maybe_embed_quote(db_path: str, quote_id: str) -> bool:
     """
     try:
         return embed_quote(db_path, quote_id)
+    except EmbeddingDimensionMismatchError:
+        raise  # Carve-out (#629), siehe _maybe_ingest_embeddings
     except Exception as exc:  # Embedding ist optional -- nie fatal fuer add_quote
         logger.warning(
             "vault.add_quote: embed_quote() fuer Quote '%s' fehlgeschlagen: %s (#521)",
@@ -512,7 +522,22 @@ def quote_context_similarity(
         return None
 
     query_vector = active_embedder.embed_query(text)  # type: ignore[attr-defined]
-    if not query_vector or len(query_vector) != len(stored):
+    if not query_vector:
+        return None
+    if len(query_vector) != len(stored):
+        # Kein harter Fehler wie in den Schreibpfaden (#629): diese Funktion
+        # haengt im PreToolUse-Hook, wo eine Exception das Schreiben blockieren
+        # wuerde, obwohl der Beleg selbst in Ordnung ist. Der Grund wird aber
+        # benannt, statt als "nicht bestimmbar" unterzugehen.
+        logger.warning(
+            "vault.quote_context_similarity: gespeichertes Embedding von Quote '%s' hat "
+            "%d Dimensionen, das aktuelle Modell liefert %d -- der Vergleich entfaellt. "
+            "%s",
+            quote_id,
+            len(stored),
+            len(query_vector),
+            REINDEX_HINT,
+        )
         return None
 
     left = l2_normalize(query_vector)
@@ -764,6 +789,12 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
         # Mehr Chunks als Paper anfragen: mehrere Chunks koennen zum selben
         # Paper gehoeren und werden anschliessend aggregiert.
         hits = VaultDB(db_path).knn_chunks(query_vector, k=max(k * 4, k))
+    except EmbeddingDimensionMismatchError:
+        # Carve-out (#629): hier still auf FTS5-only zurueckzufallen waere die
+        # teuerste Variante des Fehlers -- die Suche liefe weiter und lieferte
+        # ploetzlich nur noch Volltext-Treffer, ohne dass jemand erfaehrt,
+        # dass der halbe Index unerreichbar ist.
+        raise
     except Exception as exc:  # Vektorsuche ist optional — nie fatal fuer die Textsuche
         logger.warning("vec0-Suche fehlgeschlagen, Fallback auf FTS5-only: %s", exc)
         return []
@@ -858,6 +889,12 @@ def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
         from .ingest import ingest_paper_embeddings
 
         return ingest_paper_embeddings(db_path, paper_id)
+    except EmbeddingDimensionMismatchError:
+        # Carve-out (#629): ein falsch konfiguriertes Modell ist kein
+        # Degradationsfall. Bliebe es hier eine Log-Zeile, liefe der Vault
+        # weiter voll mit Papern ohne Vektoren -- genau die stille Variante,
+        # die #629 abstellt. Das Paper selbst ist bereits committet.
+        raise
     except Exception as exc:  # Ingest ist optional — nie fatal fuer add_paper
         logger.warning("Embedding-Ingest fuer '%s' fehlgeschlagen: %s", paper_id, exc)
         return 0
@@ -882,6 +919,49 @@ def find_quotes(
     return db.find_quotes(paper_id, query, k)
 
 
+def verify_citations(db_path: str, items: list[dict]) -> list[dict]:
+    """Batch-Variante von :func:`verify_citation` (Issue #501).
+
+    Prueft mehrere Belege (Autor/Jahr/Seite) gegen den Vault in EINEM
+    Papers-Scan statt N: ``VaultDB.find_papers_by_author_year()`` liest und
+    parst je Aufruf die komplette ``papers``-Tabelle. Bei N Belegen pro Write
+    (bis ``ACADEMIC_CITATION_MAX_PER_WRITE``, Default 100) summiert sich das
+    innerhalb des 10-s-Timeouts von ``hooks/verbatim-guard.mjs``. Diese
+    Funktion teilt sich eine ``VaultDB``-Instanz und einen einzigen
+    :meth:`~academic_vault.db.VaultDB._papers_snapshot`-Aufruf ueber alle
+    Items; das Matching pro Item laeuft danach nur noch in-memory ueber den
+    bereits geparsten Snapshot (kein O(1)-Lookup, siehe Docstring von
+    :meth:`~academic_vault.db.VaultDB._match_papers_in_snapshot` --
+    ``normalize_family_name()`` liefert ein Set aus Schreibvarianten, das sich
+    nicht per Dict-Key exakt cachen laesst).
+
+    ``items``: Liste von ``{"family": str, "year": int, "page": int | None}``.
+    Rueckgabe: Liste von ``{"status": ..., "paper_ids": [...]}`` in derselben
+    Reihenfolge wie ``items`` -- Status-Bedeutung siehe :func:`verify_citation`.
+    """
+    db = VaultDB(db_path)
+    snapshot = db._papers_snapshot()
+    results: list[dict] = []
+    for item in items:
+        papers = db._match_papers_in_snapshot(snapshot, item["family"], int(item["year"]))
+        if not papers:
+            results.append({"status": "no-match", "paper_ids": []})
+            continue
+
+        paper_ids = [p["paper_id"] for p in papers]
+        page = item.get("page")
+        if page is None:
+            results.append({"status": "verified", "paper_ids": paper_ids})
+            continue
+
+        coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
+        if any(c in ("covered", "unknown") for c in coverages):
+            results.append({"status": "verified", "paper_ids": paper_ids})
+        else:
+            results.append({"status": "page-mismatch", "paper_ids": paper_ids})
+    return results
+
+
 def verify_citation(
     db_path: str,
     family: str,
@@ -893,6 +973,7 @@ def verify_citation(
     Kein MCP-Tool-Dekorator: die Funktion wird ausschliesslich aus
     ``hooks/verbatim-guard.mjs`` per ``python3 -c``-Subprozess aufgerufen
     (analog zu :func:`search_quote_text` und :func:`find_figure_by_caption`).
+    Duenner Ein-Item-Wrapper ueber :func:`verify_citations` (Issue #501).
 
     Rueckgabe ``{"status": ..., "paper_ids": [...]}`` mit Status:
       ``"verified"``      — Autor/Jahr im Vault und (falls angegeben) Seite gedeckt
@@ -903,19 +984,7 @@ def verify_citation(
                             Seitenzahlen nicht pruefen und wird uebersprungen.
       ``"no-match"``      — kein Paper mit dieser Autor/Jahr-Kombination.
     """
-    db = VaultDB(db_path)
-    papers = db.find_papers_by_author_year(family, int(year))
-    if not papers:
-        return {"status": "no-match", "paper_ids": []}
-
-    paper_ids = [p["paper_id"] for p in papers]
-    if page is None:
-        return {"status": "verified", "paper_ids": paper_ids}
-
-    coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
-    if any(c in ("covered", "unknown") for c in coverages):
-        return {"status": "verified", "paper_ids": paper_ids}
-    return {"status": "page-mismatch", "paper_ids": paper_ids}
+    return verify_citations(db_path, [{"family": family, "year": year, "page": page}])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1218,12 +1287,19 @@ def list_papers_by_provenance(db_path: str, provenance: str) -> list[dict]:
 
 
 def get_stats(db_path: str) -> dict:
-    """Gibt Statistik-Dict zurueck: paper_count, quote_count.
+    """Gibt Statistik-Dict zurueck: paper_count, quote_count, embedding_model, embedding_dim.
 
     Keine Token-Ersparnis-Schaetzung (#534) und seit #632 auch kein
     ``cached_files`` mehr: der Files-API-Upload-Cache ist mit dem
     Anthropic-SDK entfallen, ein dauerhaft auf 0 stehendes Feld waere genau
     die Phantomgroesse, die die Honesty-Linie #387/#453 verbietet.
+
+    ``embedding_model``/``embedding_dim`` (Issue #629) machen den Bestand
+    ablesbar, ohne in den Code zu sehen: mit welchem Modell und in welcher
+    Breite die Vektoren dieses Vaults entstanden sind. Beide sind ``None``,
+    solange noch nie ein Embedding geschrieben wurde -- das ist eine Aussage
+    ueber den Bestand, keine ueber die Konfiguration, und es wird dafuer
+    ausdruecklich kein Modell geladen.
     """
     conn = VaultDB._open(db_path)
     try:
@@ -1232,10 +1308,23 @@ def get_stats(db_path: str) -> dict:
     finally:
         conn.close()
 
+    inventory = VaultDB(db_path).embedding_inventory()
+
     return {
         "paper_count": paper_count,
         "quote_count": quote_count,
+        "embedding_model": inventory["model_id"] if inventory else None,
+        "embedding_dim": inventory["dim"] if inventory else None,
     }
+
+
+def component_status(db_path: str) -> dict:
+    """Zustandsausgabe fuer die optionalen Vault-Bestandteile (Issue #624).
+
+    Meldet je Embedding-Modell, sqlite-vec und FTS5, ob geladen und welche
+    Funktion bei Nichtladen fehlt -- siehe :func:`academic_vault.health.get_component_status`.
+    """
+    return get_component_status(db_path)
 
 
 def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
@@ -1598,6 +1687,10 @@ def export_material_passport(
             scores_5d[pid] = json.loads(history[0]["scores_json"])
 
     pdf_hashes = _compute_pdf_hashes(db_path)
+    quote_extraction_methods, manual_quotes_count, total_quotes_count = (
+        _compute_quote_extraction_summary(db_path)
+    )
+    manual_quotes_ratio = manual_quotes_count / total_quotes_count if total_quotes_count else 0.0
 
     passport = build_passport(
         slug=slug,
@@ -1610,6 +1703,9 @@ def export_material_passport(
         per_uni_profile_hash=per_uni_profile_hash,
         decisions_snapshot=decisions,
         pdf_hashes=pdf_hashes,
+        quote_extraction_methods=quote_extraction_methods,
+        manual_quotes_count=manual_quotes_count,
+        manual_quotes_ratio=manual_quotes_ratio,
     )
 
     validate_passport(passport)
@@ -1641,6 +1737,28 @@ def _compute_pdf_hashes(db_path: str) -> dict:
                     sha.update(chunk)
             hashes[row["paper_id"]] = sha.hexdigest()
     return hashes
+
+
+def _compute_quote_extraction_summary(db_path: str) -> tuple[dict[str, str], int, int]:
+    """Liest ``extraction_method`` je Zitat aus dem Vault (#595).
+
+    Eine Vault-DB entspricht einem Projekt/Slug -- kein WHERE-Filter noetig
+    (analog zur ``paper_rows``-Query in :func:`export_material_passport`).
+
+    Gibt ``(quote_extraction_methods, manual_count, total_count)`` zurueck:
+    ``quote_extraction_methods`` ist ``{quote_id: extraction_method}`` fuer
+    ALLE Zitate im Vault, ``manual_count`` die Anzahl mit
+    ``extraction_method == 'manual'``, ``total_count`` die Gesamtzahl.
+    """
+    conn = VaultDB._open(db_path)
+    try:
+        rows = conn.execute("SELECT quote_id, extraction_method FROM quotes").fetchall()
+    finally:
+        conn.close()
+
+    quote_extraction_methods = {row["quote_id"]: row["extraction_method"] for row in rows}
+    manual_count = sum(1 for row in rows if row["extraction_method"] == "manual")
+    return quote_extraction_methods, manual_count, len(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -2166,8 +2284,13 @@ def _build_mcp_server():
 
     @mcp.tool(name="vault.stats")
     def _vault_stats() -> dict:
-        """Counts: paper_count, quote_count."""
+        """Counts: paper_count, quote_count -- plus embedding_model/embedding_dim (#629)."""
         return get_stats(db_path)
+
+    @mcp.tool(name="vault.component_status")
+    def _vault_component_status() -> dict:
+        """Zustand optionaler Bestandteile: Embedding-Modell, sqlite-vec, FTS5 (#624)."""
+        return component_status(db_path)
 
     @mcp.tool(name="vault.set_ocr_done")
     def _vault_set_ocr_done(paper_id: str, value: int = 1) -> None:

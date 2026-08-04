@@ -35,9 +35,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+      # Node 22 statt 20 (#600): node:sqlite ist ab 22.13.0 ohne
+      # --experimental-sqlite-Flag nutzbar; "22" holt die jeweils aktuelle
+      # 22.x-LTS-Version, die diese Schwelle erfuellt.
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
       # Rekursiv ueber alle getrackten *.mjs (#542): der frueher hier inline
       # stehende Glob `hooks/*.mjs` rekursierte nicht und verlor jede Datei,
       # die nach hooks/lib/ wanderte.
@@ -161,7 +164,7 @@ jobs:
       # Hook-Tests starten .mjs-Hooks per `node` — daher zwingend noetig
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
       # Das Tabellen-Extra (#630) ist bewusst KEINE Hard-Dependency, muss aber
       # in CI installiert sein: sonst skippen die AC1-AC4-Tests in
       # tests/test_issue_630_table_extraction.py still (importorskip) und die

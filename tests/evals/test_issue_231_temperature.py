@@ -3,7 +3,15 @@
 `call_claude()` / `call_claude_with_tokens()` muessen `temperature=0` an die
 Claude-API uebergeben, damit Trigger-Evals deterministisch sind und nicht durch
 nicht-deterministisches Sampling intermittierend in der CI fehlschlagen.
+
+Deckt hier ausschliesslich den SDK-Pfad ab (ANTHROPIC_API_KEY gesetzt). Der
+mit Issue #631 hinzugekommene CLI-Pfad kennt laut `claude --help` kein
+`--temperature`-Flag -- dieser Determinismus-Schutz greift dort NICHT.
+Das ist eine bekannte, dokumentierte Luecke (s. Docstring von
+`eval_runner._run_claude_cli`, Test in `test_issue_631_oauth_path.py`, sowie
+`docs/evals/STRATEGY.md`), kein Regressions-Ziel dieser Datei.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace

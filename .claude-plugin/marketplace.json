@@ -14,7 +14,7 @@
     {
       "name": "academic-research",
       "source": "./",
-      "description": "Modulares akademisches Forschungs-Toolkit mit 40 selbstaktivierenden Skills, Vault-MCP-Server (SQLite + FTS5 + sqlite-vec), Universal Book Fetcher (16 Fetcher-Subagenten mit Fallback-Kette), humanizer-de Anti-KI-Audit, LaTeX-/Word-/Slide-Export, Per-Uni-Profile, 5D-Scoring.",
+      "description": "Modulares akademisches Forschungs-Toolkit mit 45 selbstaktivierenden Skills, Vault-MCP-Server (SQLite + FTS5 + sqlite-vec), Universal Book Fetcher (16 Fetcher-Subagenten mit Fallback-Kette), humanizer-de Anti-KI-Audit, LaTeX-/Word-/Slide-Export, Per-Uni-Profile, 5D-Scoring.",
       "version": "6.5.1",
       "category": "research",
       "tags": [

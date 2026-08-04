@@ -10,6 +10,208 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Präregistrierung: Studienprotokoll und PROSPERO-Anmeldung (#607):** Zwischen
+  Methodenwahl (`methodology-advisor`) und Datenerhebung fehlte der Schritt,
+  Fragestellung, Ein-/Ausschlusskriterien, Suchstrategie und Auswertungsplan
+  öffentlich festzuhalten, **bevor** erhoben oder gesichtet wird. Neuer Skill
+  `preregistration` mit dem deterministischen Kern
+  `skills/preregistration/scripts/render_protocol.py`: klassifiziert das
+  Vorhaben (systematischer Review / quantitativ / qualitativ / Sekundärdaten),
+  schlägt eine passende Vorlage vor und begründet die Wahl — ein qualitatives
+  Vorhaben bekommt nie das quantitative Raster. Für systematische Reviews
+  erzwingt der Renderer alle PROSPERO-Pflichtfelder als Labels im Protokoll
+  (`references/prospero-fields.md`); für quantitativ/qualitativ/Sekundärdaten
+  stehen drei OSF-Preregistration-Vorlagen zur Wahl
+  (`references/osf-templates.md`) — beide Referenzdateien mit Quelle und
+  Abrufdatum, keine Formularvolltexte (Scope-Grenze). Unbeantwortete Felder
+  werden mit dem festen Platzhalter `[OFFEN]` ausgewiesen statt mit
+  Plausiblem gefüllt; derselbe Plan liefert bei jedem Lauf denselben Text.
+  Jedes Protokoll trägt fest den Abschnitt „Abweichungen vom Protokoll" für
+  spätere Begründungen. Suchstrategie und Ein-/Ausschlusskriterien schreibt
+  der Skill zusätzlich strukturiert in `./academic_context.md`
+  (`### Suchstrategie`, `### Ein-/Ausschlusskriterien`) — `parallel-screening`
+  und der `query-generator`-Agent lesen sie von dort, statt sie erneut zu
+  erfragen. Automatisches Einreichen bei OSF/PROSPERO und Registered Reports
+  bleiben bewusst out of scope.
+
+- **Neuer Skill `bibliography-auditor` (#391):** Read-only Gegenprobe
+  zwischen den `\cite{key}`-Zitaten in `kapitel/*.md` und der Vault-Paper-
+  Menge — meldet zitierte Keys ohne Vault-Paper (`missing_in_bibliography`)
+  und Vault-Paper, die nirgends zitiert werden (`orphaned_entries`).
+  Wiederverwendet `export_thesis.resolve_chapters()` und
+  `build_bib.get_all_papers()` aus `latex-export` (kein zweiter Vault-Query-
+  Nachbau, analog zu `word-export/scripts/collect_references.py`). Prüft die
+  tatsächliche `\cite{}`-Konvention dieses Repos (Issue #386) statt freier
+  Autor/Jahr-Prosa — bewusste Abweichung vom Issue-Wortlaut, siehe
+  Plan-Kommentar zu #391. `allowed-tools: [Read, Bash]` ohne
+  `Write`/`Edit`/`NotebookEdit`, keine schreibenden Vault-Aufrufe. Prinzip-
+  Katalog-Herkunft (Kategorie E3 „Bibliography Hygiene"):
+  [andrehuang/academic-writing-agents](https://github.com/andrehuang/academic-writing-agents)
+  (MIT). Skills-Count 41 → 42.
+
+- **Peer-Review-Gutachten schreiben (#608):** Neuer Read-only-Skill
+  `skills/peer-review/` für die Gutachterrolle — ein strukturiertes
+  Peer-Review-Gutachten zu einem **fremden** Manuskript, komplementär zu
+  `reviewer-response` (Antwort auf erhaltene Gutachten zur eigenen Arbeit).
+  Deckt fünf Standardbereiche ab (Fragestellung/Beitrag, Methodik,
+  Ergebnisdarstellung, Literatur-Einordnung, Darstellung/Sprache), weist
+  nicht beurteilbare Bereiche explizit aus statt sie zu übergehen, trennt
+  vertrauliche Redaktionsanmerkungen von den Anmerkungen an die
+  Autor:innen (`references/gutachten-structure.md`) und mündet in genau
+  eine begründete Empfehlung (Annahme/kleinere/größere
+  Überarbeitung/Ablehnung). Anmerkungen sind nummeriert und tragen eine
+  Fundstelle im Manuskript; erfundene „übersehene" Literatur ist
+  ausdrücklich verboten, Aussagen bleiben am Manuskripttext festgemacht statt
+  Absicht/Kompetenz der Autor:innen zu unterstellen. `reviewer-response`s
+  Abgrenzung verweist rückgekoppelt auf `peer-review` (Lehre aus
+  #610-Learning: Abgrenzung muss beidseitig sein). Skill-Zahl 41 → 42
+  (README, AGENTS.md, `plugin.json`/`marketplace.json`,
+  `docs/reference/skills.md`).
+
+- **Active Learning für das Titel-/Abstract-Screening (#602):** Neu ist
+  `skills/parallel-screening/scripts/active_learning.py` — ein lokal
+  trainierter Klassifikator (multinomiale Naive Bayes mit Laplace-Glättung,
+  reine Standardbibliothek, kein Netz, kein Schlüssel), der aus den bereits
+  gefällten `include`/`exclude`-Urteilen lernt und die noch offene Restliste
+  umsortiert. Die Rückgabe ist stets eine Permutation der Eingabe: nichts wird
+  ausgeschlossen, nichts übersprungen, nichts abgebrochen — Fälle ohne Titel
+  und Abstract behalten ihre Ursprungsposition. Nachtrainiert wird in
+  Intervallen (Default alle 10 Urteile), jede Umsortierung hängt eine Zeile an
+  `$SESSION_DIR/active_learning_log.jsonl` an (Trainingsgrundlage,
+  Modellkennung, vollständige Reihenfolge). `progress_report()` weist den
+  bearbeiteten Anteil und die Trefferausbeute je Abschnitt aus — die
+  Datengrundlage der Abbruchentscheidung, die ein Mensch trifft.
+  `validate_ranking()` liefert die Recall-Kurve gegen eine Liste mit bekanntem
+  Ergebnis. **Opt-in** (`active_learning`, Default `false`): abgeschaltet ist
+  ein Lauf von einem Lauf ohne dieses Feature nicht unterscheidbar. Die
+  Guard-Baselines für `parallel-screening` sind um den Netto-Zuwachs des
+  `SKILL.md`-Einstiegs angehoben (`skill_sizes.json` 8883 → 9419,
+  `tokens.json` 1846 → 2005) und mit zwei Tests an ihn gefesselt. Details:
+  `skills/parallel-screening/references/active-learning.md`.
+
+- **Embedding-Modelle jenseits von 384 Dimensionen (#629):** `VAULT_EMBEDDING_MODEL`
+  trug bislang nur Modelle mit exakt 384 Dimensionen — `E5SmallEmbedder.dim` war
+  ein Klassenattribut mit diesem Wert, das geladene Backend wurde nie gefragt. Ein
+  1024d-Modell (`multilingual-e5-large`, `BAAI/bge-m3`) lief deshalb **still**
+  durch: die BLOBs landeten in `chunk_embeddings`, der vec0-Spiegel verwarf sie
+  wortlos, und jede Suche sah danach nur den Teilbestand der zufällig passenden
+  Breite. Jetzt liefert `dim` die Dimension des geladenen Modells
+  (`get_sentence_embedding_dimension()`, sonst Probe-Encode), die neue Tabelle
+  `embedding_meta` hält Modell-ID und Breite des Bestands (Schema-Version 9 —
+  urspruenglich 8, beim Zusammenfuehren mit dem parallel gemergten #604 eine
+  Generation hoehergerueckt, Bestands-DBs migriert
+  `migrate.add_embedding_meta_table()`), und jeder Schreibpfad prüft dagegen:
+  bei Abweichung `EmbeddingDimensionMismatchError` mit
+  Ursache und Ausweg statt Degradation — auch durch die Catch-all-Wrapper von
+  `vault.add_paper`/`vault.add_quote`/`vault.search` hindurch. Ein leerer Vault
+  übernimmt die Dimension des ersten Modells ohne Zwischenschritt. Für befüllte
+  Vaults gibt es `python -m academic_vault.migrate --db <pfad> --reindex-embeddings`:
+  rechnet Chunk- und Zitat-Vektoren mit dem aktuellen Modell neu, legt die
+  vec0-Tabellen in der neuen Breite an und ersetzt dabei den **gesamten** Bestand
+  (anders als die Backfills — nur so verschwindet ein Mischbestand aus zwei
+  Modellen). `vault.stats()` weist `embedding_model` und `embedding_dim` aus, ohne
+  dafür ein Modell zu laden. Das Default-Modell bleibt unverändert; welches Modell
+  am Ende gewinnt, ist eine eigene Entscheidung.
+
+- **mDeBERTa-XNLI als lokaler NLI-Vorfilter vor dem Zitat-Richter (#592):**
+  `academic_vault/nli_prefilter.py` bewertet Kapitelbehauptung gegen
+  Quote-Kontext lokal (keine API, kein Netz nach dem einmaligen
+  Modell-Download) und entscheidet, ob ein Zitat unveraendert an
+  `quote-fidelity-auditor` (#523) weitergereicht wird. Neu: ein
+  Vollkapitel-Scanpfad (`scan_chapter_quotes` + `run_batch_prefilter`), der
+  ALLE im Vault belegten Zitate eines Kapitels prueft — nicht nur die mit
+  Claim-Drift-Warnung. Treue Zitate werden im Report explizit als
+  „vorgefiltert, nicht inhaltlich geprueft" markiert, nie stillschweigend
+  ausgelassen. Schalter `nli_prefilter_enabled` in
+  `config/parallel_agents.json` (Vorrang: Argument >
+  `ACADEMIC_RESEARCH_NLI_PREFILTER` > Config > Default `false`) — Default
+  bleibt AUS, bei Deaktivierung verhaelt sich der Pruefpfad bytegleich zum
+  Zustand ohne Vorfilter. Validierungslauf gegen 60 ECHTE, per WebFetch
+  verifizierte Zitat-Paare aus 15 real veroeffentlichten arXiv-Papern:
+  Precision 1.00, Recall 0.767, FP = 0/30 (Rule-of-Three-Obergrenze ~10 %,
+  kein Nullbeweis) — Details und Einschalt-Empfehlung in
+  `evals/524-nli-prefilter/README.md`.
+
+- **node:sqlite gegen Python-Subprozess gemessen und dokumentiert (#600):**
+  CI läuft jetzt auf Node 22 (`node:sqlite` unflagged ab 22.13.0) statt Node
+  20. Ein Mikrobenchmark (`scripts/dev/bench_vault_bridge.mjs`) belegt den
+  reinen Zugriffswegs-Unterschied — Median über 20 Wiederholungen:
+  Python-Subprozess ~22,7 ms gegen `node:sqlite` in-process ~0,9 ms (~25x).
+  Der Python-Subprozess bleibt trotzdem der Zugriffsweg der Node-Hooks: die
+  drei Aufrufer der Bridge (`post-tool-use-decisions.mjs`,
+  `mid-session-reinforcement.mjs`, `context-fidelity-guard.mjs`) rufen keine
+  rohen SELECTs auf, sondern Geschäftslogik, die ausschließlich in
+  `academic_vault` existiert (Dedup/Supersede, FTS5-Suche, Fuzzy-Matching) —
+  eine Migration würde diese Logik in JavaScript duplizieren und damit genau
+  die Divergenz zwischen zwei Speicherorten riskieren, derentwegen die Brücke
+  (#527) überhaupt existiert. Begründung im Modulkopf von
+  `hooks/lib/vault-bridge.mjs`.
+
+- **Vault-Snapshot auch am Sitzungsende (#625):** Der einzige automatische
+  Snapshot hing bislang am `PreCompact`-Hook, der nur in langen Sitzungen
+  feuert — kurze Sitzungen erzeugten über Wochen keinen einzigen Snapshot.
+  Neu ist `hooks/session-snapshot.mjs`, zusätzlich (nicht ersetzend) unter
+  `Stop` verdrahtet: ein Fingerprint der Vault-DB (Größe + `mtimeMs`) gegen
+  eine Marker-Datei entscheidet, ob ein neuer Export nötig ist, unveränderte
+  Vaults erzeugen keinen überflüssigen Snapshot. Export läuft über die
+  vorhandene `academic_vault.server.export_snapshot()` via
+  `hooks/lib/vault-bridge.mjs`s Interpreter-Kaskade. Retention:
+  `ACADEMIC_SNAPSHOTS_KEEP` (Default 20) `.tgz`-Dateien je Projekt, älteste
+  zuerst geprunt. Fail-open bei Exportfehlern (sichtbare `⚠️`-Meldung, Sitzung
+  läuft weiter). Details: `docs/reference/hooks.md`.
+
+- **Manuelle Zitate im Material-Passport ausweisen (#595):** `manual` ist der
+  einzige Pfad, auf dem ein Zitat ohne maschinelle Verifikation in den Vault
+  gelangt — der Material-Passport unterschied ihn bislang nicht von
+  `local-verbatim`-geprüften Zitaten. `vault.export_material_passport` weist
+  jetzt je `quote_id` die verwendete `extraction_method` aus
+  (`quote_extraction_methods`) und nennt Anzahl sowie Anteil manuell
+  erfasster Zitate (`manual_quotes_count`, `manual_quotes_ratio`). Beide
+  Felder sind immer gesetzt, auch bei 0 manuellen Zitaten — die Abwesenheit
+  ist ein Ergebnis, keine fehlende Angabe. `material-passport.schema.json`
+  nimmt die drei Felder in `required` auf; bereits exportierte
+  `material-passport.json`-Dateien validieren rückwirkend nicht mehr gegen
+  das neue Schema.
+
+- **Eigene quantitative Auswertung vom Rohdatensatz bis zum Ergebniskapitel
+  (#610):** Zwischen `instrument-design` (Instrument bauen) und
+  `chapter-writer` (Ergebniskapitel schreiben) klaffte bei quantitativen
+  Arbeiten eine Lücke — `meta-analysis` rechnet über **fremde** Studien, für
+  eigene Erhebungsdaten gab es nichts. Neuer Skill `quantitative-analysis` mit
+  dem deterministischen Rechenkern
+  `skills/quantitative-analysis/scripts/analyze.py` (Subkommandos `describe`,
+  `run`, `report`). Umfang der ersten Fassung bewusst begrenzt: Deskription,
+  Gruppenvergleiche (t-Test unabhängig/Welch/gepaart, Mann-Whitney-U,
+  Wilcoxon), Mehrgruppenvergleiche (einfaktorielle ANOVA, Kruskal-Wallis) und
+  Zusammenhangsmaße (χ²-Unabhängigkeitstest, Pearson r, Spearman ρ).
+  Regression, mehrfaktorielle Designs, Post-hoc-Vergleiche und Poweranalyse
+  sind ausdrücklich **nicht** abgedeckt und werden im Skill so benannt, statt
+  von Hand nachgeschoben zu werden.
+  Die drei harten Zusagen des Issues sind strukturell erzwungen, nicht als
+  Prosa: (1) Der Renderer bricht mit `ValueError` ab, sobald einem
+  inferenzstatistischen Ergebnis Effektstärke, Konfidenzintervall oder
+  Voraussetzungsblock fehlt — ein Bericht mit nackten p-Werten kann gar nicht
+  erst entstehen. (2) Jede Voraussetzungsprüfung (Shapiro-Wilk, Levene,
+  erwartete Zellhäufigkeit, Mindestfallzahl) wird mit Kennwert, p-Wert und
+  Verdikt berichtet, auch die erfüllte; eine Verletzung wird im Klartext
+  ausgesprochen und mit benannter Alternative versehen, wechselt das geplante
+  Verfahren aber **nie** still. (3) Reproduzierbarkeit über einen
+  versionierbaren Analyseplan (JSON) plus getrennte Ausgabe: `ergebnisse.json`
+  trägt keinen Zeitstempel und ist zwischen zwei Läufen byte-identisch, alles
+  Laufabhängige (Zeit, Pfade, Python-/numpy-/scipy-Version) steht in
+  `lauf_meta.json`, und `protokoll.md` enthält die vollständige
+  Wiederhol-Kommandozeile samt SHA-256 der Rohdatei.
+  Die Rohdaten bleiben außerhalb des Vaults (ein Datensatz mit tausend Fällen
+  gehört nicht in eine Literatur-Datenbank); in den Vault gehen nur der
+  `papers`-Anker mit `source_kind='primary'`, je Ergebnis eine `figures`-Zeile
+  und jede Verfahrensentscheidung als `decisions`-Eintrag mit
+  `category="auswertung"`. Der Skill formuliert keine inhaltliche Deutung: Das
+  Protokoll weist sie als `Deutung: [vom Autor zu ergänzen]` aus.
+  Neue explizite Runtime-Dependencies `numpy` und `scipy` (lagen bislang nur
+  transitiv über `sentence-transformers` im Environment). Skill-Zähler
+  40 → 41 in README.md, AGENTS.md, plugin.json, marketplace.json und
+  docs/reference/skills.md.
+
 - **Vault-weite, wiederholbare Retraction-Prüfung (#604):** Der bisherige
   Crossref-Retraction-Check lief nur einmalig beim `reading-list-import` und
   erreichte damit weder Papers aus anderen Importwegen (`zotero-import`,
@@ -267,6 +469,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   wieder als Voraussetzung nennt oder `vault.ensure_file` zurückkehrt.
 
 ### Changed
+
+- **Citation-Guard: ein Papers-Scan je Write statt je Beleg (#501):**
+  `VaultDB.find_papers_by_author_year()` las bisher pro Aufruf die komplette
+  `papers`-Tabelle inklusive `json.loads()` je Zeile; `server.verify_citation()`
+  lief je Beleg einzeln, sodass ein Kapitel mit dem vollen Kontingent
+  (`ACADEMIC_CITATION_MAX_PER_WRITE`, Default 100) gegen einen Vault mit
+  einigen tausend Papers 100 Full Scans innerhalb des 10-s-Timeouts von
+  `hooks/verbatim-guard.mjs` auslöste — riss das Timeout, meldete der Hook
+  `unavailable` und alle Belege liefen fail-open mit `[UNVERIFIED]` durch.
+  Neuer Batch-Einstieg `server.verify_citations(db_path, items)` teilt sich
+  eine `VaultDB`-Instanz und genau einen
+  `VaultDB._papers_snapshot()`-Aufruf über alle Belege eines Writes;
+  `verify_citation()` bleibt als dünner Ein-Item-Wrapper mit unverändertem
+  Rückgabeformat erhalten. `hooks/verbatim-guard.mjs::verifyCitationsInVault`
+  ruft jetzt `verify_citations` statt einer Listcomprehension über
+  `verify_citation` je Item auf.
 
 - **`page_offset` wird beim Buch-Import bestätigt statt still gespeichert (#538):**
   `skills/book-handler/SKILL.md` Schritt 2.5 übernahm das Ergebnis von
@@ -1109,6 +1327,10 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 ### Removed
 
 - **Tote Schema-Tabellen `glossary` und `style_overrides` (#539):** Beide standen seit v6.4 in `schema.sql` und in `migrate.add_v64_tables()`, hatten aber nie einen Lese- oder Schreibpfad (null Treffer in `db.py`/`server.py`) — sie täuschten ein Glossar-/Stil-Feature vor und liefen bei jeder Migration mit. Frische DBs legen sie nicht mehr an; Bestands-DBs räumt der neue idempotente Helfer `migrate.drop_dead_v64_tables()` am Ende von `apply_pending_migrations()` ab. Damit das Versions-Gate aus #368 die bereits auf `user_version = 3` gestempelten DBs überhaupt noch einmal anfasst, steigt `db.CURRENT_SCHEMA_VERSION` auf 4. Datensicherheit vor Aufräumen: Gedroppt wird nur bei `COUNT(*) = 0`; enthält eine der Tabellen wider Erwarten Zeilen, bleibt sie stehen, `init_schema()` verweigert den `user_version`-Stempel (nächster Aufruf versucht es erneut) und warnt mit dem Tabellennamen — kein `raise`, das würde den MCP-Server lahmlegen. Die Tabellennamen existieren im Paket nur noch als `migrate.DEAD_TABLES`; `db.py` importiert die Konstante, statt sie zu duplizieren, und `tests/test_issue_539_drop_dead_tables.py` hält beides fest. **Nicht enthalten:** die `decisions`-Tabelle (bleibt) und der Aufbau eines echten Glossar-Features (eigenes Feature-Issue). Kein Änderungsbedarf an der Doku: `docs/reference/glossary.md` ist das Begriffs-Glossar der Doku und hat mit der DB-Tabelle nichts zu tun.
+
+### Fixed
+
+- **Erste echte `live-fetch-weekly`-Läufe ausgewertet, zwei Live-Test-Fehlbefunde behoben (#612):** `live-fetch-weekly.yml` hatte bis dahin 0 Runs; diese Fix-Runde hat den Workflow zweimal real per `workflow_dispatch` laufen lassen (Runs [30851138735](https://github.com/ahlerjam/academic-research/actions/runs/30851138735), [30851295819](https://github.com/ahlerjam/academic-research/actions/runs/30851295819)) und die Ergebnisse je Fetcher ausgewertet (`docs/evals/2026-08-03-live-fetch-weekly-first-runs.md`). Zwei echte Befunde daraus behoben: (1) `IA_NODE_HOST_RE` in `tests/test_issue_450_live_fetch.py` akzeptierte nur mit `dn` beginnende archive.org-Speicherknoten — real beobachtet wurden in zwei unabhängigen Netzen sowohl `ia800108.us.archive.org` als auch `dn720200.ca.archive.org`; das Muster deckt jetzt beide Präfixe ab (Regression: `tests/test_issue_450_fetcher_evidence.py::test_ia_node_host_pattern_accepts_both_observed_node_prefixes`), der `internetarchive-fetcher` selbst war in beiden Läufen zuverlässig (PDF byteweise korrekt). (2) Der anonyme No-Login-Abruf, mit dem `pf-07` (Oxford Academic, Issue #449) ursprünglich am 2026-07-29 aufgezeichnet wurde, ist seit mindestens 2026-08-03 durch eine Cloudflare-Managed-Challenge gesperrt (HTTP 403, `Cf-Mitigated: challenge`) — bestätigt über beide Workflow-Läufe plus einen dritten, unabhängigen Abruf außerhalb von GitHub Actions. Da der produktive Zugriffsweg von `agents/oxford-academic.md` (`browser-use` + Shibboleth/OpenAthens) diesen anonymen Pfad nie genutzt hat, bleibt der Agent unverändert; korrigiert wurde stattdessen der jetzt irreführende Live-Test: `tests/test_issue_449_live_fetch.py::test_oxford_academic_still_serves_the_recorded_pdf`/`test_oxford_academic_pdf_is_served_without_login` sind jetzt `xfail(strict=True)` (schlägt der Anbieter die Sperre wieder ab, meldet CI das laut als XPASS), ein neuer Test bestätigt aktiv die Cloudflare-Challenge als aktuellen Zustand. `evals/publisher-fetchers/live-verification.json` trägt bei `pf-07` eine additive Korrekturnotiz (`anonymous_access_correction_612`) — der ursprüngliche Beleg von #449 bleibt als historischer Datensatz unverändert stehen.
 
 ---
 

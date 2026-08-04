@@ -1,0 +1,42 @@
+{
+  "component": "data-management-plan",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "dmp-01",
+      "input": "Erstelle den Datenmanagementplan für mein Projekt.",
+      "expected": {
+        "type": "regex",
+        "value": "(datenmanagementplan\\.md|Datenarten|Archivierung)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "dmp-02",
+      "input": "Wer ist für die Speicherung meiner Rohdaten zuständig? Ich habe das noch nicht festgelegt.",
+      "expected": {
+        "type": "regex",
+        "value": "(\\[OFFEN)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "dmp-03",
+      "input": "Meine Interviews enthalten personenbezogene Daten — muss der DMP das gesondert behandeln?",
+      "expected": {
+        "type": "regex",
+        "value": "(personenbezogen)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "dmp-04",
+      "input": "Ist der DMP dasselbe wie das Material-Passport, das ich für die Abgabe brauche?",
+      "expected": {
+        "type": "regex",
+        "value": "(material-passport|organisatorisch|rechtlich).*(nicht|anders|Unterschied)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

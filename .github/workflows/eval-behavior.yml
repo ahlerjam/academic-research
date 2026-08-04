@@ -1,12 +1,13 @@
 name: Eval-Behavior (manuell, real)
 
-# Separat auslösbarer Lauf fuer die Verhaltens-Evals unter tests/evals/ (Issue #470).
-# Bewusst NICHT auf push/pull_request verdrahtet: die API-gateten Evals kosten
-# echtes Anthropic-Budget (~400 Aufrufe pro Vollauf, vgl. docs/evals/STRATEGY.md
-# Abschnitt "API-Budget") und sollen nicht bei jedem Commit laufen (Issue-Scope
-# "Out"). ci.yml bleibt unangetastet -- der reguläre `pytest tests/`-Lauf dort
-# ruft tests/evals/ weiterhin ohne ANTHROPIC_API_KEY auf und skippt die
-# API-gateten Faelle wie bisher.
+# Separat auslösbarer Lauf fuer die Verhaltens-Evals unter tests/evals/ (Issue #470,
+# Aufrufweg erweitert in #631). Bewusst NICHT auf push/pull_request verdrahtet: die
+# real gerufenen Evals kosten Budget -- entweder ein separates ANTHROPIC_API_KEY-
+# Kontingent oder Abo-Kontingent ueber CLAUDE_CODE_OAUTH_TOKEN (~991 Aufrufe pro
+# Vollauf, vgl. docs/evals/STRATEGY.md Abschnitt "API-Budget") -- und sollen nicht
+# bei jedem Commit laufen (Issue-Scope "Out"). ci.yml bleibt unangetastet -- der
+# reguläre `pytest tests/`-Lauf dort ruft tests/evals/ weiterhin ohne jede Auth auf
+# und skippt die real gerufenen Faelle wie bisher (AC7).
 on:
   workflow_dispatch:
     inputs:
@@ -29,11 +30,15 @@ jobs:
   eval-behavior:
     name: Verhaltens-Evals real ausfuehren
     runs-on: ubuntu-latest
-    # Harter Budget-Deckel (Issue #470 AC2): ein Vollauf (~400 API-Aufrufe,
-    # ueberwiegend Haiku-Trigger-Klassifikation) braucht in der Praxis wenige
-    # Minuten; 30 Minuten sind ein grosszuegiger, aber endlicher Deckel gegen
-    # einen haengenden Lauf, der sonst unbegrenzt Budget verbrennen wuerde.
-    timeout-minutes: 30
+    # Harter Budget-Deckel (Issue #470 AC2): auf dem SDK-Pfad braucht ein
+    # Vollauf (~991 API-Aufrufe, ueberwiegend Haiku-Trigger-Klassifikation, live
+    # nachgezaehlt in Issue #614) in der Praxis wenige Minuten. Der CLI-Pfad
+    # (Issue #631) ist pro Aufruf deutlich teurer -- der reale Probelauf im PR
+    # maß ~6s/Aufruf inkl. Agenten-Scaffold-Cache-Erstellung, macht 991 Aufrufe
+    # ~99min statt wenigen Minuten. 60 Minuten decken einen SDK-Vollauf
+    # grosszuegig ab, reichen fuer den CLI-Pfad bei diesem Volumen aber knapp
+    # nicht mehr aus -- der `component`-Filter-Input existiert genau dafuer.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -41,23 +46,41 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Vorbedingung -- ANTHROPIC_API_KEY muss gesetzt sein
+      - name: Vorbedingung -- ANTHROPIC_API_KEY oder CLAUDE_CODE_OAUTH_TOKEN muss gesetzt sein
         # Kein taeuschend gruener All-Skip-Lauf (das genaue Problem, das #470
-        # behebt): fehlt das Secret, bricht der Job sichtbar ab statt
-        # "0 failed, N skipped" als Erfolg zu melden.
+        # behebt): fehlt beide Auth-Wege, bricht der Job sichtbar ab statt
+        # "0 failed, N skipped" als Erfolg zu melden. Issue #631 erweitert den
+        # Aufrufweg um die OAuth-Session (eval_runner.call_claude faellt ohne
+        # ANTHROPIC_API_KEY auf die claude-CLI zurueck, die CLAUDE_CODE_OAUTH_TOKEN
+        # automatisch liest) -- entweder Weg reicht aus.
         env:
-          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
         run: |
           set -euo pipefail
-          if [ "${HAS_KEY}" != "true" ]; then
-            echo "::error::ANTHROPIC_API_KEY ist nicht als Repo-Secret hinterlegt. Dieser Lauf wuerde sonst taeuschend gruen durchlaufen (0 real geprueft, N geskippt) -- genau das Muster, das Issue #470 behebt. Secret ist Operator-Entscheidung (docs/evals/STRATEGY.md, Abschnitt API-Budget)."
+          if [ "${HAS_API_KEY}" != "true" ] && [ "${HAS_OAUTH_TOKEN}" != "true" ]; then
+            echo "::error::Weder ANTHROPIC_API_KEY noch CLAUDE_CODE_OAUTH_TOKEN ist als Repo-Secret hinterlegt. Dieser Lauf wuerde sonst taeuschend gruen durchlaufen (0 real geprueft, N geskippt) -- genau das Muster, das Issue #470 behebt. Secret ist Operator-Entscheidung (docs/evals/STRATEGY.md, Abschnitt API-Budget)."
             exit 1
           fi
 
-      - name: pytest tests/evals/ (real, mit API-Key)
+      - name: claude-CLI installieren (OAuth-Aufrufweg, Issue #631)
+        # Nur noetig fuer den CLI-Subprozess-Pfad in eval_runner.py (aktiv, wenn
+        # ANTHROPIC_API_KEY fehlt). setup-claude-action installiert die
+        # claude-code-action, nicht die nackte CLI -- getrennter Schritt hier.
+        # `secrets` ist im step-level `if:` nicht verfuegbar (nur github, needs,
+        # strategy, matrix, job, runner, env, vars, steps, inputs) -- daher wie
+        # im Vorbedingungs-Step oben ueber env: binden und in der Shell/im if
+        # auswerten.
+        if: env.HAS_API_KEY != 'true'
+        env:
+          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: pytest tests/evals/ (real, mit API-Key oder OAuth-Session)
         id: run_evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Ueber env: binden statt direkt in run: zu templaten: inputs.component
           # ist untrusted (jeder mit workflow_dispatch-Trigger-Recht setzt ihn frei).
           # Direkte ${{ }}-Interpolation im Skripttext waere Shell-Injection mit

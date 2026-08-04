@@ -250,6 +250,7 @@ def search_openalex(query: str, limit: int) -> list[dict[str, Any]]:
                     "citations": item.get("cited_by_count", 0),
                     "url": item.get("id"),
                     "oa_url": oa_info.get("oa_url"),
+                    "is_retracted": item.get("is_retracted"),
                 },
                 "openalex",
             )

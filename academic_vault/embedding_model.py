@@ -35,11 +35,50 @@ from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
-# Dimensionalitaet von intfloat/multilingual-e5-small. Muss mit der vec0-Tabelle
-# chunk_vectors (FLOAT[384]) und quote_embeddings uebereinstimmen.
-EMBEDDING_DIM = 384
+# Dimensionalitaet von intfloat/multilingual-e5-small und damit die Breite, in
+# der ein FRISCHER Vault seine vec0-Tabellen anlegt (Issue #629). Bewusst KEINE
+# Aussage mehr ueber "die" Embedding-Dimension: die eines Bestands steht in
+# ``embedding_meta`` (siehe schema.sql), die eines Modells liefert der Embedder
+# selbst (``Embedder.dim``). Wer hier wieder eine globale Konstante hineinliest,
+# baut den Fehler aus #629 nach.
+DEFAULT_EMBEDDING_DIM = 384
 
 DEFAULT_MODEL_ID = "intfloat/multilingual-e5-small"
+
+# Dokumentierter Ausweg bei Dimensions-Mismatch. Steht hier, weil die
+# Fehlermeldung aus mehreren Modulen erzeugt wird und ueberall denselben
+# Aufruf nennen muss.
+REINDEX_HINT = (
+    "python -m academic_vault.migrate --db <VAULT.DB> --reindex-embeddings "
+    "rechnet den Bestand mit dem aktuell konfigurierten Modell neu (#629)."
+)
+
+
+class EmbeddingDimensionMismatchError(RuntimeError):
+    """Modell-Dimension passt nicht zur Dimension des Vault-Bestands (#629).
+
+    Bewusst ein harter Fehler statt eines Degradationspfads: Vektoren aus zwei
+    Modellen liegen nicht im selben Raum. Wuerden sie nebeneinander im Vault
+    stehen, lieferte jede Suche nur den zufaellig passenden Teilbestand -- ohne
+    dass irgendwo sichtbar waere, dass die Haelfte der Treffer fehlt.
+    """
+
+
+def dimension_mismatch_error(
+    *,
+    model_id: str | None,
+    model_dim: int,
+    vault_dim: int,
+    vault_model_id: str | None = None,
+) -> EmbeddingDimensionMismatchError:
+    """Baut die Mismatch-Meldung: Ursache, Bestand und Ausweg in einem Satz."""
+    origin = f" (Bestand aufgebaut mit '{vault_model_id}')" if vault_model_id else ""
+    return EmbeddingDimensionMismatchError(
+        f"Embedding-Modell '{model_id or 'unbekannt'}' liefert {model_dim} Dimensionen, "
+        f"der Vault-Bestand hat {vault_dim}{origin}. Beide Vektorraeume sind nicht "
+        f"vergleichbar; ein Modellwechsel braucht einen Re-Index: {REINDEX_HINT}"
+    )
+
 
 # e5-Pflichtpraefixe (asymmetrisches Retrieval).
 QUERY_PREFIX = "query: "
@@ -87,7 +126,15 @@ def l2_normalize(vector: Sequence[float]) -> list[float]:
 class Embedder(Protocol):
     """Minimales Interface, das Ingest und Suche brauchen."""
 
-    dim: int
+    @property
+    def dim(self) -> int:
+        """Dimension der gelieferten Vektoren.
+
+        Read-only deklariert (statt als Attribut), damit Implementierungen sie
+        vom geladenen Backend erfragen duerfen -- ein festes Klassenattribut
+        erfuellt diese Signatur weiterhin (Tests injizieren solche).
+        """
+        ...
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Vektorisiert Chunks (Passage-Seite des asymmetrischen Retrievals)."""
@@ -117,8 +164,6 @@ class E5SmallEmbedder:
     Injektion wird das Backend beim ersten Encode lazy geladen.
     """
 
-    dim = EMBEDDING_DIM
-
     def __init__(
         self,
         model_id: str = DEFAULT_MODEL_ID,
@@ -128,12 +173,45 @@ class E5SmallEmbedder:
         self.model_id = model_id
         self.cache_dir = cache_dir if cache_dir is not None else default_cache_dir()
         self._model = model
+        self._dim: int | None = None
 
     def load(self) -> Any:
         """Laedt das Backend-Modell (idempotent) und gibt es zurueck."""
         if self._model is None:
             self._model = _load_backend_model(self.model_id, self.cache_dir)
         return self._model
+
+    @property
+    def dim(self) -> int:
+        """Dimension des GELADENEN Backends -- keine Annahme (Issue #629).
+
+        Zuvor war das ein Klassenattribut mit dem Wert 384. Ein per
+        ``VAULT_EMBEDDING_MODEL`` gesetztes 1024d-Modell (etwa
+        ``intfloat/multilingual-e5-large`` oder ``BAAI/bge-m3``) blieb damit
+        unbemerkt: der Vault bekam Vektoren, deren Breite nirgends zur
+        deklarierten passte.
+
+        Primaerquelle ist ``get_sentence_embedding_dimension()`` von
+        sentence-transformers; liefert das Backend die Methode nicht (oder
+        ``None``), wird die Dimension einmalig per Probe-Encode gemessen.
+        Der Wert wird gecacht -- der Zugriff loest allerdings einen
+        Modell-Load aus, ist also nichts fuer Latenz-kritische Pfade. Die
+        Dimension eines BESTANDS kommt deshalb nie von hier, sondern aus
+        ``embedding_meta`` (``VaultDB.expected_embedding_dim()``).
+        """
+        if self._dim is None:
+            self._dim = self._probe_dim()
+        return self._dim
+
+    def _probe_dim(self) -> int:
+        model = self.load()
+        getter = getattr(model, "get_sentence_embedding_dimension", None)
+        if callable(getter):
+            reported = getter()
+            if isinstance(reported, int) and reported > 0:
+                return reported
+        probe = model.encode([PASSAGE_PREFIX + "dimension probe"], normalize_embeddings=True)
+        return len(list(probe[0]))
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
         raw = self.load().encode(texts, normalize_embeddings=True)
@@ -156,10 +234,17 @@ class E5SmallEmbedder:
 # Import-/Ladeversuch startet.
 _EMBEDDER_CACHE: dict[str, Embedder | None] = {}
 
+# Fehlerursache pro Modell-ID, parallel zu _EMBEDDER_CACHE gepflegt (Issue #624):
+# vorher wurde die Exception nur geloggt, nie zurueckgegeben. ``None`` bedeutet
+# "kein Fehler bekannt" -- entweder weil das Backend laedt, oder weil noch kein
+# Ladeversuch stattfand.
+_EMBEDDER_ERROR_CACHE: dict[str, str | None] = {}
+
 
 def reset_embedder_cache() -> None:
-    """Leert den Embedder-Cache (Tests, Modellwechsel zur Laufzeit)."""
+    """Leert Embedder- und Fehlerursache-Cache (Tests, Modellwechsel zur Laufzeit)."""
     _EMBEDDER_CACHE.clear()
+    _EMBEDDER_ERROR_CACHE.clear()
 
 
 def get_embedder(model_id: str | None = None) -> Embedder | None:
@@ -179,6 +264,7 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
         candidate = E5SmallEmbedder(model_id=key)
         candidate.load()
         embedder = candidate
+        _EMBEDDER_ERROR_CACHE[key] = None
     except Exception as exc:
         # ImportError (Backend deinstalliert), OSError (kein Modell-Download
         # moeglich), RuntimeError (inkompatibles Backend) — gleicher Ausgang,
@@ -191,6 +277,23 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
             exc,
         )
         embedder = None
+        # Reason gecacht neben dem Ergebnis (Issue #624): ein zweiter Aufruf im
+        # selben Prozess trifft den Cache-Hit oben und laedt nicht erneut --
+        # ohne diesen Cache waere die Fehlerursache nach dem ersten Aufruf
+        # verloren, obwohl vault.component_status() sie braucht.
+        _EMBEDDER_ERROR_CACHE[key] = f"{type(exc).__name__}: {exc}"
 
     _EMBEDDER_CACHE[key] = embedder
     return embedder
+
+
+def get_embedder_error(model_id: str | None = None) -> str | None:
+    """Fehlerursache des letzten ``get_embedder()``-Ladeversuchs fuer ``model_id``.
+
+    ``None`` heisst: entweder laedt der Embedder erfolgreich, oder es gab noch
+    keinen Ladeversuch (Cache leer) -- ``get_embedder()`` zuerst aufrufen, wenn
+    der Ladeversuch garantiert stattgefunden haben soll (Issue #624,
+    ``vault.component_status``).
+    """
+    key = model_id or os.environ.get(ENV_MODEL_ID) or DEFAULT_MODEL_ID
+    return _EMBEDDER_ERROR_CACHE.get(key)

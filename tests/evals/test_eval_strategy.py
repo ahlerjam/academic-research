@@ -12,10 +12,16 @@ Existenz der genannten Runner — plus, dass kein neuer Runner API-Budget kostet
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
+
+from tests.evals.eval_runner import claude_cli_available
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 STRATEGY_PATH = REPO_ROOT / "docs" / "evals" / "STRATEGY.md"
@@ -195,6 +201,97 @@ def test_strategy_states_the_skip_count_honestly(strategy_text):
     """Ehrlichkeitsfalle: ``structural`` darf nicht als 'gruen' verkauft werden."""
     assert "skip" in strategy_text.lower(), (
         "STRATEGY.md muss offenlegen, dass die API-gateten Evals weiterhin skippen."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Issue #619: Die Bilanzzeile und die Skip-Zahl sind Prosa ueber pruefbare
+# Zahlen — der Guard muss sie gegen die Tabelle bzw. einen echten Lauf halten,
+# statt sie nur auf das Wort "skip" zu pruefen (das faengt keine veraltete
+# Zahl).
+# ---------------------------------------------------------------------------
+
+
+def _parse_balance_line(text: str) -> tuple[int, int, int]:
+    match = re.search(
+        r"\*\*Bilanz:\*\*\s*(\d+)\s*×\s*`metric`,\s*(\d+)\s*×\s*`structural`,"
+        r"\s*(\d+)\s*×\s*`removed`",
+        text,
+    )
+    assert match, "STRATEGY.md: Bilanzzeile nicht im erwarteten Format gefunden (Issue #619)."
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def test_balance_line_matches_table_counts(strategy_text, rows):
+    """Die Bilanzzeile muss der tatsaechlichen Tabelle entsprechen (Issue #619)."""
+    doc_metric, doc_structural, doc_removed = _parse_balance_line(strategy_text)
+    counts = Counter(row["status"] for row in rows.values())
+    assert doc_metric == counts.get("metric", 0), (
+        f"Bilanzzeile nennt {doc_metric} × metric, Tabelle hat "
+        f"{counts.get('metric', 0)} (Issue #619)."
+    )
+    assert doc_structural == counts.get("structural", 0), (
+        f"Bilanzzeile nennt {doc_structural} × structural, Tabelle hat "
+        f"{counts.get('structural', 0)} (Issue #619)."
+    )
+    assert doc_removed == counts.get("removed", 0), (
+        f"Bilanzzeile nennt {doc_removed} × removed, Tabelle hat "
+        f"{counts.get('removed', 0)} (Issue #619)."
+    )
+
+
+def _current_skip_sentence(text: str) -> str:
+    marker = "Heutiger Stand"
+    idx = text.find(marker)
+    assert idx != -1, (
+        "STRATEGY.md braucht einen als 'Heutiger Stand' markierten Satz mit der "
+        "aktuellen passed/skipped-Zahl (Issue #619)."
+    )
+    return text[idx : idx + 400]
+
+
+def test_skip_count_matches_real_pytest_run(strategy_text):
+    """Die dokumentierte Skip-Zahl muss zu einem echten Lauf passen (Issue #619)."""
+    if os.environ.get("ANTHROPIC_API_KEY") or claude_cli_available():
+        pytest.skip(
+            "Mit gesetztem ANTHROPIC_API_KEY oder installierter claude-CLI (Issue "
+            "#631, CLI-Rueckfallpfad in eval_runner.call_claude) laufen deutlich "
+            "weniger Tests still durch/echt statt zu skippen; die dokumentierte "
+            "Zahl gilt nur fuer den Lauf ohne beides."
+        )
+    sentence = _current_skip_sentence(strategy_text)
+    match = re.search(r"(\d+)\s*passed,\s*(\d+)\s*skipped", sentence)
+    assert match, (
+        f"Keine 'N passed, M skipped'-Angabe im 'Heutiger Stand'-Satz gefunden: {sentence!r}"
+    )
+    doc_passed, doc_skipped = int(match.group(1)), int(match.group(2))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/evals/",
+            "--deselect",
+            "tests/evals/test_eval_strategy.py::test_skip_count_matches_real_pytest_run",
+            "-q",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    summary_match = re.search(r"(\d+) passed(?:, (\d+) skipped)?", result.stdout)
+    assert summary_match, f"Konnte Summary-Zeile nicht parsen:\n{result.stdout}"
+    inner_passed = int(summary_match.group(1))
+    inner_skipped = int(summary_match.group(2) or 0)
+
+    assert inner_passed + 1 == doc_passed, (
+        f"Dokumentiert: {doc_passed} passed. Realer Lauf (ohne diesen Test): "
+        f"{inner_passed} passed (+1 fuer diesen Test = {inner_passed + 1}). Issue #619."
+    )
+    assert inner_skipped == doc_skipped, (
+        f"Dokumentiert: {doc_skipped} skipped. Realer Lauf: {inner_skipped} skipped (Issue #619)."
     )
 
 

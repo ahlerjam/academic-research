@@ -53,12 +53,40 @@ rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
 | Env-Variable | Default | Wirkung |
 |---|---|---|
 | `VAULT_AUTO_EMBED` | `1` | `0` schaltet den Embedding-Ingest in `vault.add_paper()` ab. |
-| `VAULT_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Alternatives Modell (muss 384 Dimensionen liefern). |
+| `VAULT_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Alternatives Modell, beliebige Dimension. Auf einem bereits befüllten Vault braucht ein Wechsel der Dimension einen Re-Index (siehe unten). |
 | `VAULT_EMBEDDING_CACHE` | `~/.academic-research/models` | Ablageort der Modellgewichte. |
 | `VAULT_MAX_CHUNKS` | `64` | Obergrenze der Chunks pro Ingest (Latenzschutz). |
 
 Bestands-Datenbanken bekommen den vec0-Spiegel per
 `python -c "from academic_vault.migrate import add_chunk_vectors_table; add_chunk_vectors_table('<pfad>/vault.db')"`.
+
+### Modellwechsel und Re-Index
+
+Welches Modell einen Vault gefüllt hat und in welcher Breite, steht in der Tabelle
+`embedding_meta` und ist über `vault.stats()` ablesbar (`embedding_model`,
+`embedding_dim`). Beide Felder sind `null`, solange noch nie ein Embedding geschrieben
+wurde — das ist eine Aussage über den Bestand, nicht über die Konfiguration, und es wird
+dafür kein Modell geladen.
+
+Vektoren zweier Modelle liegen nicht im selben Raum. Ein Modell mit abweichender Dimension
+schreibt deshalb **nicht** in einen befüllten Vault, sondern scheitert mit
+`EmbeddingDimensionMismatchError` und dem Hinweis auf den Re-Index (vorher lief so ein
+Wechsel still durch, und jede Suche sah danach nur den zufällig passenden Teilbestand,
+Issue #629). Ein **leerer** Vault übernimmt die Dimension des ersten Modells ohne
+Zwischenschritt.
+
+```bash
+python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --reindex-embeddings
+```
+
+Der Lauf berechnet alle Chunk- und Zitat-Vektoren mit dem aktuell konfigurierten Modell neu
+(Quelle: `chunk_embeddings.embedding_text` bzw. `quotes.verbatim` samt Kontext), legt die
+vec0-Tabellen in der neuen Breite an und schreibt `embedding_meta` fort. Anders als die
+Backfills füllt er keine Lücken, sondern **ersetzt den gesamten Bestand** — nur so
+verschwindet ein Mischbestand aus zwei Modellen. Ein gesperrter Vault (Material-Passport)
+wird vor der ersten Änderung abgewiesen. Nicht im Scope des Wechsels: die Chunk-Größen in
+`chunking.py` bleiben unverändert, ein Modell mit anderem Kontextfenster braucht dafür
+eine eigene Entscheidung.
 
 ## PDF-Volltext-Index
 
@@ -169,9 +197,9 @@ Bestands-Datenbanken bekommen `paper_tables` idempotent nachgezogen:
 python -c "from academic_vault.migrate import add_paper_tables_table as m; m('<pfad>/vault.db')"
 ```
 
-## MCP-Tools (alle 46)
+## MCP-Tools (alle 47)
 
-Der Server registriert **46 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **47 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -184,7 +212,8 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.get_paper(paper_id)` | Paper-Metadaten + `pdf_status` | `vault.get_paper("vaswani2017")` |
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` |
-| `vault.stats()` | DB-Counts (`paper_count`, `quote_count`) | `vault.stats()` |
+| `vault.stats()` | DB-Counts (`paper_count`, `quote_count`) plus Embedding-Bestand (`embedding_model`, `embedding_dim`) | `vault.stats()` |
+| `vault.component_status()` | Zustand der optionalen Bestandteile (Embedding-Modell, `sqlite-vec`, FTS5): je `loaded`, laienverständlicher `impact`-Text bei Fehlen, `reason` sofern ermittelbar, plus `python_executable` und `db_path` (#624) | `vault.component_status()` |
 
 **Zitate (Quotes)**
 

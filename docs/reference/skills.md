@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **40 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **45 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -48,17 +48,21 @@ damit die Tabelle keine Aktivierung verspricht, die der Skill nicht leistet.
 | `chapter-writer` | *„Kapitel schreiben"*, *„Einleitung"*, *„Fazit"* | Kapitel-Entwürfe mit Vault-Zitaten |
 | `style-evaluator` | *„Stil prüfen"*, *„KI-Erkennung"* | 9-Metriken-Analyse + Anti-KI-Detection |
 | `plagiarism-check` | *„Plagiat prüfen"*, *„zu nah am Original"* | N-Gramm-Overlap gegen Vault-Quellen |
+| `peer-review` | *„Manuskript begutachten"*, *„Peer-Review-Gutachten verfassen"* | Strukturiertes Gutachten zu einem fremden Manuskript: 5 Bereiche, getrennte Blöcke Redaktion/Autor:innen, genau eine Empfehlung ([SKILL.md](../../skills/peer-review/SKILL.md)) |
 | `humanizer-de` | *„humanisieren"*, *„menschlicher klingen"* | Anti-KI-Audit mit Severity-Ranking |
 
 ## Methodik-Skills
 
 | Skill | Aktiviert bei | Beschreibung |
 |-------|--------------|-------------|
+| `preregistration` | *„Präregistrierung"*, *„PROSPERO-Anmeldung"*, *„OSF-Registrierung"* | Studienprotokoll vor der Erhebung: schlägt anhand des Vorhabens (Review/quantitativ/qualitativ/Sekundärdaten) eine Vorlage vor, erzwingt bei PROSPERO die dortigen Pflichtfelder, legt Suchstrategie/Kriterien für `parallel-screening` und `query-generator` in `./academic_context.md` ab ([SKILL.md](../../skills/preregistration/SKILL.md)) |
 | `prisma-flow` | *„PRISMA"*, *„Systematic Review"*, *„Flussdiagramm"* | Mermaid-Flow + 27-Punkte-Checkliste |
-| `parallel-screening` | *„viele Treffer screenen"*, *„Screening parallelisieren"*, *„Risk-of-Bias für mehrere Paper"* | Fächert Screening und Verzerrungsbewertung auf Subagents auf, Ledger + Resume + PRISMA-Zähler ([SKILL.md](../../skills/parallel-screening/SKILL.md)) |
+| `parallel-screening` | *„viele Treffer screenen"*, *„Screening parallelisieren"*, *„Risk-of-Bias für mehrere Paper"*, *„Active Learning"* | Fächert Screening und Verzerrungsbewertung auf Subagents auf, Ledger + Resume + PRISMA-Zähler; optional Active Learning zur Umsortierung der Restliste ([SKILL.md](../../skills/parallel-screening/SKILL.md)) |
 | `material-passport` | *„Material-Passport"*, *„Artefakt sichern"* | Unveränderlicher Repro-Passport |
 | `instrument-design` | *„Interviewleitfaden erstellen"*, *„Fragebogen entwickeln"* | Erhebungsinstrument aus Forschungsfrage + Methodik, mit Rückverweis-Matrix je Frage ([SKILL.md](../../skills/instrument-design/SKILL.md)) |
 | `qualitative-coding` | *„Transkript kodieren"*, *„Kategorien aus dem Material bilden"* | Transkript-Ingest mit belegfähiger Stellenangabe, induktive/deduktive Kategorienbildung, Kodier-Übersicht ([SKILL.md](../../skills/qualitative-coding/SKILL.md)) |
+| `quantitative-analysis` | *„quantitative Auswertung rechnen"*, *„Datensatz auswerten"*, *„t-Test rechnen"* | Eigener Rohdatensatz vom Analyseplan bis zum Protokoll: Deskription, Gruppenvergleich, Zusammenhangsmaß — je mit Voraussetzungsprüfung, Effektstärke und Konfidenzintervall ([SKILL.md](../../skills/quantitative-analysis/SKILL.md)) |
+| `data-management-plan` | *„Datenmanagementplan erstellen"*, *„DMP erstellen"* | Plant Speicherung, Sicherung, rechtliche Aspekte inkl. personenbezogener Daten sowie Archivierung/Nachnutzung der Forschungsdaten; Vault-Bestand als Ausgangslage, offene Punkte als `[OFFEN: ...]` ([SKILL.md](../../skills/data-management-plan/SKILL.md)) |
 
 ## Output-Skills (opt-in via `output_targets`)
 
@@ -85,6 +89,7 @@ Diese Skills sind per Default aus. Sie laufen erst, wenn im Projekt-State der pa
 | `submission-checker` | *„abgabefertig"*, *„Formalia prüfen"* | Formalia-Check, Default: FH Leibniz -- beschränkt auf am Markdown-Material Prüfbares, Rest als „Nicht geprüft" ausgewiesen |
 | `ai-disclosure` | *„KI-Nutzung offenlegen"*, *„Offenlegungserklärung erstellen"* | Zweigeteilte Offenlegungserklärung (Danksagung + Methodenteil, DE/EN) nach ICMJE 01/2026; Vault-Spuren als Vorschlag statt Behauptung ([SKILL.md](../../skills/ai-disclosure/SKILL.md)) |
 | `latex-layout-auditor` | *„LaTeX-Layout prüfen / pruefen"*, *„.tex auditieren"* | Read-only Prüfung eines `.tex`-Exports auf LaTeX-Layout-Fehler: Listen-Strukturen, Zitationskommandos, Kapitel-Nummerierung, Package-Konflikte ([SKILL.md](../../skills/latex-layout-auditor/SKILL.md)) |
+| `bibliography-auditor` | *„Literaturverzeichnis prüfen / pruefen"*, *„Zitate gegen Vault abgleichen"* | Read-only Gegenprobe zwischen `\cite{key}`-Zitaten in `kapitel/*.md` und der Vault-Paper-Menge: fehlende Verzeichniseinträge und verwaiste Vault-Einträge ([SKILL.md](../../skills/bibliography-auditor/SKILL.md)) |
 | `defense-prep` | *„Verteidigung vorbereiten"*, *„Fragenkatalog Kolloquium"* | Vortragsgliederung mit Zeitrahmen + Kernaussage je Kapitel, Fragenkatalog zu Methodik/Limitationen ([SKILL.md](../../skills/defense-prep/SKILL.md)) |
 
 ## Externe Skills (Plugin-Dependencies)

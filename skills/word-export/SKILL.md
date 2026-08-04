@@ -1,6 +1,6 @@
 ---
 name: word-export
-description: Use this skill for Word-/PDF-Output / .docx-Export. Triggers on "Kapitel als Word exportieren / übersetzen / uebersetzen", "Thesis als .docx", "Abgabe als PDF", "/academic-research:word". Markdown-Kapitel + Vault-Bibliografie → .docx mit echten Formatvorlagen (Überschriften, Titelblatt, Verzeichnisse, eidesstattliche Erklärung), optional PDF-Konvertierung.
+description: Use this skill for Word-/PDF-Output / .docx-Export. Triggers on "Kapitel als Word exportieren / Word übersetzen / Word uebersetzen", "Thesis als .docx", "Abgabe als PDF", "/academic-research:word". Markdown-Kapitel + Vault-Bibliografie → .docx mit echten Formatvorlagen (Überschriften, Titelblatt, Verzeichnisse, eidesstattliche Erklärung), optional PDF-Konvertierung.
 license: MIT
 allowed-tools:
   - Bash
@@ -109,9 +109,8 @@ Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzur
 
 ## Abgrenzung
 
-- **`latex-export`**: paralleler Renderer für `.tex`/`.bib`. Beide teilen sich
-  die Vault-Bibliografie-Auswahl (`build_bib.get_all_papers()`), unterscheiden
-  sich nur in der Ausgabeform. Für LaTeX/biblatex → `latex-export`.
+- **`latex-export`**: paralleler Renderer für `.tex`/`.bib`, teilt sich die
+  Vault-Bibliografie-Auswahl. Für LaTeX/biblatex → `latex-export`.
 - **`citation-extraction`**: definiert die Zitierstil-Regeln (`references/*.md`).
   `word-export` lädt diese Regeln, definiert keine eigenen.
 - **`slide-export`**: Foliensatz aus denselben Kapiteln, eigener Skill (siehe dort).

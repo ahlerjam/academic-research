@@ -1,0 +1,21 @@
+{
+  "component": "preregistration",
+  "should_trigger": [
+    "Ich möchte meine Studie präregistrieren.",
+    "Bereite den PROSPERO-Eintrag für meinen systematischen Review vor.",
+    "Ich brauche eine PROSPERO-Anmeldung.",
+    "Erstelle die OSF-Registrierung für mein Vorhaben.",
+    "Wie halte ich das Studienprotokoll vor der Erhebung fest?",
+    "Lege den Analyseplan fest, bevor ich anfange zu erheben.",
+    "Ich will die Präregistrierung für meine quantitative Erhebung schreiben."
+  ],
+  "should_not_trigger": [
+    "Welche Methode passt zu meiner Fragestellung?",
+    "Erstelle das PRISMA-Flussdiagramm für mein Screening.",
+    "Screene bitte die gefundenen Treffer nach Ein-/Ausschlusskriterien.",
+    "Generiere mir Suchqueries für die Datenbanken.",
+    "Rechne mir einen t-Test zwischen den Gruppen.",
+    "Fasse die Studien in einer Meta-Analyse zusammen.",
+    "Schreibe die Einleitung des Kapitels."
+  ]
+}

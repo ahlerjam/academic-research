@@ -1,0 +1,1014 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "call_path": "claude-CLI/OAuth (Issue #631)",
+  "total_cases": 871,
+  "total_errors": 2,
+  "total_tokens_in": 9630,
+  "total_tokens_out": 474211,
+  "wall_seconds": 1029.7825332080247,
+  "workers": 10,
+  "per_skill": {
+    "abstract-generator": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Abstract 200 Woerter",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 6319,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "academic-context": {
+      "should_trigger_total": 11,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Mein Abgabetermin ist in 3 Monaten",
+          "got": "none"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Ich bin an der FH Leibniz, BWL, Bachelor",
+          "got": "none"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Update mein academic profile",
+          "got": "um"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Ich moechte spaeter ein Konferenz-Poster aus meiner Arbeit ableiten, trag das im Kontext ein",
+          "got": "verstanden!"
+        }
+      ],
+      "tokens_in": 250,
+      "tokens_out": 11772,
+      "recall": 0.6363636363636364,
+      "fpr": 0.0
+    },
+    "advisor": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Ist meine Argumentation schluessig?",
+          "got": "um"
+        }
+      ],
+      "tokens_in": 200,
+      "tokens_out": 9058,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "ai-disclosure": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Ich brauche eine Offenlegungserklärung zur KI-Nutzung für meine Abgabe.",
+          "got": "der"
+        }
+      ],
+      "tokens_in": 196,
+      "tokens_out": 8117,
+      "recall": 0.875,
+      "fpr": 0.0
+    },
+    "anchor-paper-survey": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 6,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Starte einen Survey ausgehend von diesem einen Papier.",
+          "got": "um"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Ich moechte meine Recherche von diesem Paper aus starten: https://arxiv.org/abs/2005.14165.",
+          "got": "der"
+        }
+      ],
+      "tokens_in": 188,
+      "tokens_out": 8840,
+      "recall": 0.75,
+      "fpr": 0.0
+    },
+    "bibliography-auditor": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Prüf mal mein Literaturverzeichnis auf Vollständigkeit.",
+          "got": "es"
+        }
+      ],
+      "tokens_in": 196,
+      "tokens_out": 10754,
+      "recall": 0.875,
+      "fpr": 0.0
+    },
+    "book-handler": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Importiere dieses Springer-Buch (DOI 10.1007/978-3-...).",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 8882,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "chapter-writer": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Schreib die Zusammenfassung",
+          "got": "abstract-generator"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "200 Woerter zu Theorie Y schreiben",
+          "got": "none"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 9631,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "citation-extraction": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 5,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Harvard-Zitation bitte",
+          "got": "none"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "DIN 1505-2 Format",
+          "got": "none"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "APA7 Eintrag fuer Smith 2023",
+          "got": "none"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Chicago Author-Date fuer dieses Paper",
+          "got": "none"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Bibliographic entry fuer dieses Buch",
+          "got": "none"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 12487,
+      "recall": 0.5,
+      "fpr": 0.0
+    },
+    "citation-style-import": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Hol den Stil aus GitHub und mach eine Variante.",
+          "got": "perfect!"
+        }
+      ],
+      "tokens_in": 232,
+      "tokens_out": 8045,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "cluster-visualizer": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 10,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [],
+      "tokens_in": 216,
+      "tokens_out": 8708,
+      "recall": 1.0,
+      "fpr": 0.0
+    },
+    "conference-poster": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Mach mir ein tikzposter aus meinen Ergebnissen.",
+          "got": "es"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Poster fuer die Tagung erstellen bitte.",
+          "got": "der"
+        }
+      ],
+      "tokens_in": 224,
+      "tokens_out": 9990,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "data-management-plan": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 5,
+      "should_not_trigger_total": 8,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Aktualisiere den Datenmanagementplan.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Schreib mir den DMP.",
+          "got": "es"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Generiere die datenmanagementplan.md.",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 216,
+      "tokens_out": 16235,
+      "recall": 0.625,
+      "fpr": 0.0
+    },
+    "defense-prep": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 10,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [],
+      "tokens_in": 200,
+      "tokens_out": 6925,
+      "recall": 1.0,
+      "fpr": 0.0
+    },
+    "extraction-matrix": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 6,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Erstell mir eine Extraktionsmatrix aus meinen Vault-Quellen.",
+          "got": "der"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Stell mir eine Merkmalstabelle aus meinen Quellen zusammen.",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 204,
+      "tokens_out": 8084,
+      "recall": 0.75,
+      "fpr": 0.0
+    },
+    "github-repo-research": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 3,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Kannst du dieses Repo analysieren und schauen ob es ein Paper dazu gibt?",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Analysiere dieses GitHub-Repo: https://github.com/foo/bar.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Welches Paper gehoert zu diesem Repository?",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Ich will von diesem GitHub-Repository aus recherchieren -- welche Publikation steckt dahinter?",
+          "got": "um"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Schau in der README nach einem arXiv-Link und lege das Paper im Vault an.",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 220,
+      "tokens_out": 11193,
+      "recall": 0.375,
+      "fpr": 0.0
+    },
+    "grant-proposal": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Unterstuetze mich bei der Foerderantragstellung.",
+          "got": "leider"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 8037,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "humanizer-de": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 6,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Humanisiere diesen deutschen Text.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Entferne KI-Floskeln aus diesem Absatz.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Pruefe meinen Entwurf auf Anzeichen fuer KI-generierte Inhalte.",
+          "got": "style-evaluator"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Entferne aufgeblaehte Symbolik und Werbesprache aus dem Text.",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 200,
+      "tokens_out": 16293,
+      "recall": 0.6,
+      "fpr": 0.0
+    },
+    "instrument-design": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 5,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Wie operationalisiere ich meine Forschungsfrage in konkrete Fragen?",
+          "got": "research-question-refiner"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Woran erkenne ich, dass eine Leitfadenfrage zur Forschungsfrage gehoert?",
+          "got": "das"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Bau mir ein Beobachtungsraster fuer die teilnehmende Beobachtung.",
+          "got": "um"
+        }
+      ],
+      "tokens_in": 204,
+      "tokens_out": 10916,
+      "recall": 0.625,
+      "fpr": 0.0
+    },
+    "latex-export": {
+      "should_trigger_total": 9,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [
+        {
+          "kind": "should_trigger",
+          "prompt": "LaTeX-Export der gesamten Arbeit starten.",
+          "error": "claude --print Timeout nach 300s"
+        }
+      ],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Baue mir die BibTeX aus den Quellen im Vault.",
+          "got": "perfect!"
+        }
+      ],
+      "tokens_in": 198,
+      "tokens_out": 9231,
+      "recall": 0.8888888888888888,
+      "fpr": 0.0
+    },
+    "latex-layout-auditor": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 8,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Meine Liste hat vermutlich einen tightlist Fehler, kannst du das checken?",
+          "got": "gerne"
+        }
+      ],
+      "tokens_in": 220,
+      "tokens_out": 12097,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "literature-excel": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 9,
+      "should_not_trigger_false_pos": 0,
+      "errors": [
+        {
+          "kind": "should_not_trigger",
+          "prompt": "Baue mir ein Excel-Sheet für die Inventarverwaltung",
+          "error": "claude --print Timeout nach 300s"
+        }
+      ],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Erstell mir eine Excel-Übersicht meiner Literatur",
+          "got": "der"
+        }
+      ],
+      "tokens_in": 214,
+      "tokens_out": 11913,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "literature-gap-analysis": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Welche Literaturluecken habe ich?",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 8602,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "material-passport": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Generiere die material-passport.json.",
+          "got": "der"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Material-Passport fuer das Projekt erstellen.",
+          "got": "entschuldigung"
+        }
+      ],
+      "tokens_in": 232,
+      "tokens_out": 12151,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "methodology-advisor": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Ist eine Fallstudie hier sinnvoll?",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 200,
+      "tokens_out": 11122,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "notebook-bundle": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Erstelle ein NotebookLM-Bundle.",
+          "got": "es"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Teile dieses Riesen-PDF fuer NotebookLM auf.",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 224,
+      "tokens_out": 8813,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "parallel-screening": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 6,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Welche Treffer konntest du nicht entscheiden?",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Wie viele Agents laufen beim Screening gleichzeitig?",
+          "got": "basierend"
+        }
+      ],
+      "tokens_in": 212,
+      "tokens_out": 9096,
+      "recall": 0.75,
+      "fpr": 0.0
+    },
+    "peer-review": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Schreibe mir einen Referee-Report zu diesem Paper.",
+          "got": "um"
+        }
+      ],
+      "tokens_in": 232,
+      "tokens_out": 9067,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "plagiarism-check": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Overlap-Analyse",
+          "got": "none"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 12865,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "preregistration": {
+      "should_trigger_total": 7,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 7,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [],
+      "tokens_in": 148,
+      "tokens_out": 8102,
+      "recall": 1.0,
+      "fpr": 0.0
+    },
+    "prisma-flow": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 4,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Erstelle ein PRISMA-Flow-Diagramm.",
+          "got": "der"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Mach ein PRISMA-2020-Flussdiagramm.",
+          "got": "der"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Render das Flussdiagramm der Literatursuche.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Erzeuge das PRISMA-Flowchart aus den Suchzaehlern.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Zeige die Einschluesse als PRISMA-Flow.",
+          "got": "um"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "PRISMA Flow mit n_identified und n_included rendern.",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 240,
+      "tokens_out": 12981,
+      "recall": 0.4,
+      "fpr": 0.0
+    },
+    "qualitative-coding": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Wie zitiere ich eine Stelle aus meinem eigenen Interview belegfaehig?",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 220,
+      "tokens_out": 13853,
+      "recall": 0.875,
+      "fpr": 0.0
+    },
+    "quantitative-analysis": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Die Auswertung muss reproduzierbar dokumentiert sein — wie mache ich das?",
+          "got": "material-passport"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Vergleiche die drei Standorte in meinem Datensatz statistisch.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Schreib mir einen Analyseplan für meine Erhebung, damit die Auswertung nachvollziehbar ist.",
+          "got": "preregistration"
+        }
+      ],
+      "tokens_in": 216,
+      "tokens_out": 17548,
+      "recall": 0.7,
+      "fpr": 0.0
+    },
+    "reading-list-import": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Lies meine Leseliste ein und resolve die DOIs.",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 232,
+      "tokens_out": 10523,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "reading-notes": {
+      "should_trigger_total": 8,
+      "should_trigger_hits": 6,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Ich lese gerade diese Quelle -- leg mir dazu eine Notiz an.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Schreib mir ein strukturiertes Exzerpt zu diesem Artikel.",
+          "got": "welchen"
+        }
+      ],
+      "tokens_in": 188,
+      "tokens_out": 6846,
+      "recall": 0.75,
+      "fpr": 0.0
+    },
+    "research-question-refiner": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Bitte bewerte meine Hauptfrage",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Wie formuliere ich eine nicht-falsifizierbare Frage um?",
+          "got": "gerne"
+        }
+      ],
+      "tokens_in": 208,
+      "tokens_out": 13055,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "reviewer-response": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Verfasse ein Response-Letter an die Gutachter.",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "R&R-Antwortschreiben aufsetzen bitte.",
+          "got": "der"
+        }
+      ],
+      "tokens_in": 232,
+      "tokens_out": 8498,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "slide-export": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 10,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [],
+      "tokens_in": 242,
+      "tokens_out": 9353,
+      "recall": 1.0,
+      "fpr": 0.0
+    },
+    "source-quality-audit": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Ist das ein Predatory Journal?",
+          "got": "um"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Welchen Impact hat dieses Paper?",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Ist Elsevier Open Access hier seriös?",
+          "got": "**none**"
+        }
+      ],
+      "tokens_in": 200,
+      "tokens_out": 6686,
+      "recall": 0.7,
+      "fpr": 0.0
+    },
+    "style-evaluator": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Akademisch genug?",
+          "got": "none"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Wortanzahl und Lesbarkeit",
+          "got": "none"
+        }
+      ],
+      "tokens_in": 200,
+      "tokens_out": 8297,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "submission-checker": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Zeilenabstand 1.5?",
+          "got": "ich"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Ist die Gliederung konform?",
+          "got": "ich"
+        }
+      ],
+      "tokens_in": 200,
+      "tokens_out": 10799,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "title-generator": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 8,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Titelvorschlaege fuer meine Arbeit",
+          "got": "es"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Arbeitstitel bitte",
+          "got": "um"
+        }
+      ],
+      "tokens_in": 232,
+      "tokens_out": 13526,
+      "recall": 0.8,
+      "fpr": 0.0
+    },
+    "topic-brainstorm": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 10,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [],
+      "tokens_in": 208,
+      "tokens_out": 13306,
+      "recall": 1.0,
+      "fpr": 0.0
+    },
+    "word-export": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 9,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Exportiere alle Kapitel als eine Word-Datei mit Formatvorlagen.",
+          "got": "perfekt!"
+        }
+      ],
+      "tokens_in": 274,
+      "tokens_out": 12018,
+      "recall": 0.9,
+      "fpr": 0.0
+    },
+    "zotero-import": {
+      "should_trigger_total": 10,
+      "should_trigger_hits": 7,
+      "should_not_trigger_total": 10,
+      "should_not_trigger_false_pos": 0,
+      "errors": [],
+      "misclassified": [
+        {
+          "kind": "should_trigger",
+          "prompt": "Zotero importieren bitte.",
+          "got": "es"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Importiere meine Zotero-Bibliothek.",
+          "got": "der"
+        },
+        {
+          "kind": "should_trigger",
+          "prompt": "Sync meine Zotero-Library, read-only.",
+          "got": "der"
+        }
+      ],
+      "tokens_in": 256,
+      "tokens_out": 13577,
+      "recall": 0.7,
+      "fpr": 0.0
+    }
+  }
+}

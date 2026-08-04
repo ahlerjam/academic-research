@@ -1,0 +1,42 @@
+{
+  "component": "preregistration",
+  "component_type": "skill",
+  "prompts": [
+    {
+      "id": "prereg-01",
+      "input": "Ich mache einen systematischen Review und will ihn präregistrieren. Was schlägst du vor?",
+      "expected": {
+        "type": "regex",
+        "value": "(PROSPERO)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "prereg-02",
+      "input": "Kannst du die Präregistrierung gleich bei PROSPERO einreichen?",
+      "expected": {
+        "type": "regex",
+        "value": "(out of scope|Einreichen.*Mensch|nicht selbst einreichen)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "prereg-03",
+      "input": "Screene schon mal die ersten Treffer, während ich die Präregistrierung noch fertig mache.",
+      "expected": {
+        "type": "regex",
+        "value": "(parallel-screening|vor der (Erhebung|Datenerhebung)|bevor.*erhoben)"
+      },
+      "mode": "with_skill"
+    },
+    {
+      "id": "prereg-04",
+      "input": "Welche Methode soll ich für meine Fragestellung überhaupt wählen?",
+      "expected": {
+        "type": "regex",
+        "value": "(methodology-advisor)"
+      },
+      "mode": "with_skill"
+    }
+  ]
+}

@@ -7,12 +7,13 @@ description: >
   screenen", "Screening parallelisieren", "Ein- und Ausschluss für alle
   Treffer entscheiden", "Verzerrungsbewertung für viele Studien /
   Verzerrungsbewertung fuer viele Studien", "Risk-of-Bias für mehrere Paper",
-  "Screening nach Abbruch fortsetzen". Fächert die Fälle auf Subagents auf
-  (`screening-judge` bzw. `risk-of-bias`), führt die Einzelurteile zusammen,
-  schreibt Ausschlüsse nach `excluded_sources` und legt uneindeutige Fälle
-  gesammelt zur menschlichen Entscheidung vor. Für das Rendern des
-  Flussdiagramms → `prisma-flow`. Für die inhaltliche Relevanzsortierung
-  einer Trefferliste → `relevance-scorer`-Agent.
+  "Screening nach Abbruch fortsetzen", "Doppel-Screening",
+  "Active Learning". Fächert die Fälle
+  auf Subagents auf (`screening-judge` bzw. `risk-of-bias`), führt die
+  Einzelurteile zusammen, schreibt Ausschlüsse nach `excluded_sources` und
+  legt uneindeutige Fälle gesammelt zur menschlichen Entscheidung vor. Für
+  das Rendern des Flussdiagramms → `prisma-flow`. Für die inhaltliche
+  Relevanzsortierung einer Trefferliste → `relevance-scorer`-Agent.
 license: MIT
 allowed-tools: [Bash, Read, Task, Write]
 ---
@@ -30,17 +31,15 @@ Screening und Verzerrungsbewertung sind mechanisch und gleichförmig: dieselbe
 Prüfung, auf dreißig Treffer angewendet. Dieser Skill schickt sie wellenweise
 an Subagents und führt Buch darüber, wer was entschieden hat.
 
-Die Nebenläufigkeit erzeugt der Harness (mehrere `Task`-Aufrufe in einer
-Nachricht). Das konfigurierte Limit ist eine **organisatorische Grenze** für die
-Wellengröße, kein technischer Semaphor.
+Die Nebenläufigkeit kommt vom Harness (mehrere `Task`-Aufrufe je Nachricht);
+das Limit ist **organisatorisch**, kein technischer Semaphor.
 
 ## Abgrenzung
 
 Deckt die parallelisierbaren Prüfschritte ab. Das PRISMA-Flussdiagramm rendert
 `prisma-flow` aus den hier erzeugten Zählern. Merkmalsextraktion über mehrere
-Quellen ist **nicht** Teil dieses Skills. Die bestehenden Fetcher-Agents
-(`book-fetcher` und Verwandte) haben ihr eigenes Fan-out-Muster und bleiben
-unangetastet.
+Quellen ist **nicht** Teil dieses Skills. Fetcher-Agents (`book-fetcher` u.
+Verwandte) haben ein eigenes Fan-out-Muster.
 
 ## Zielstrukturen (nicht neu erfinden)
 
@@ -100,10 +99,24 @@ verrutschte Konfiguration nicht dreißig Agents gleichzeitig startet.
 
 ## Ablauf Screening
 
+**Doppel-Screening (#598) ist Standard** (Schalter
+`resolve_double_screening()`, Default `True`): zwei blinde
+`screening-judge`-Läufe je Treffer, Runde 2 ohne Runde-1-Urteil. `False` →
+exakt der Ablauf unten. Details (Kappa, Dissens, Vault-Commit) →
+`references/double-screening.md`.
+
+**Active Learning (#602) ist Opt-in** (Schalter `resolve_active_learning()`,
+Default `False`): ein lokal trainierter Klassifikator sortiert die Restliste
+um, sodass wahrscheinlich relevante Treffer zuerst kommen. Er sortiert nur —
+kein Ausschluss, keine Kürzung, kein automatischer Abbruch. `reorder_pending`
+und `progress_report` kommen aus `scripts/active_learning.py` (gleicher
+`sys.path`-Eintrag wie oben). Details → `references/active-learning.md`.
+
 ### Schritt 1: Offene Fälle bestimmen
 
 ```python
 todo = pending(paper_ids, session_dir)
+todo = reorder_pending(todo, papers, session_dir)  # nur bei Active Learning
 waves = plan_waves(todo, max_parallel)
 ```
 
@@ -117,7 +130,9 @@ Pro Welle **einen `Task`-Aufruf je Fall** in derselben Nachricht, Subagent
 Kriterienliste und das verfügbare Material (Titel/Abstract oder Volltext).
 
 Die Kriterienliste ist über alle Fälle identisch — sie gehört wörtlich in jeden
-Aufruf, damit die Urteile vergleichbar bleiben.
+Aufruf, damit die Urteile vergleichbar bleiben. Steht in `./academic_context.md`
+bereits eine Section `### Ein-/Ausschlusskriterien` (aus `preregistration`),
+diese als Kriterienliste übernehmen statt erneut zu erfragen.
 
 ### Schritt 3: Einzelurteile protokollieren
 
@@ -173,15 +188,13 @@ for wave_no, wave in enumerate(plan_waves(todo, max_parallel), start=1):
     ...  # je Fall ein Task-Aufruf an risk-of-bias
 ```
 
-`pending_rob` prüft zusätzlich `vault.list_risk_of_bias(paper_id)`, weil
-`add_risk_of_bias` ein reines INSERT ist: ohne diese Prüfung legte ein zweiter
-Lauf ein zweites Assessment für dasselbe Paper an.
+`pending_rob` prüft zusätzlich `vault.list_risk_of_bias(paper_id)` —
+`add_risk_of_bias` ist reines INSERT, sonst legte ein zweiter Lauf ein
+zweites Assessment an.
 
-Kann eine Domain am Material nicht beurteilt werden, ist das kein
-`unclear`-Fall des Ganzen: der Framework-Score dafür lautet `some concerns`
-bzw. `can't tell` mit der Begründung „Nicht berichtet". Erst wenn das Paper als
-Ganzes nicht bewertbar ist (kein Volltext, falscher Studientyp), wird es als
-`unclear` protokolliert und vorgelegt.
+Ist nur eine Domain unklar, ist das kein `unclear`-Fall des Ganzen — Score
+`some concerns`/`can't tell`, Begründung „Nicht berichtet". Erst ein insgesamt
+nicht bewertbares Paper (kein Volltext, falscher Studientyp) wird `unclear`.
 
 ## Wichtige Regeln
 

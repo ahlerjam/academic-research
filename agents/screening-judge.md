@@ -103,6 +103,11 @@ erreichen keine Vault-Zielstruktur.
 
 - **Ein Fall pro Lauf.** Bekommst du mehrere Treffer, bewerte nur den ersten
   und melde das im `reason`. Die Auffächerung macht der Skill, nicht du.
+- **Isoliert bei Doppel-Screening (#598).** Läuft `parallel-screening` im
+  Doppel-Screening-Modus, bist du entweder Runde 1 oder Runde 2 für einen
+  Treffer — nie beide. Du bekommst nie das Urteil oder die Begründung der
+  jeweils anderen Runde im Kontext; dein Vertrag (Ein-Fall-JSON, s.o.) ändert
+  sich dadurch nicht.
 - **Keine Vault-Schreibzugriffe.** Du liest; `excluded_sources` und `papers`
   schreibt ausschließlich die Buchführung des Skills.
 - **Keine Fabrikation.** Steht eine Angabe nicht im Material, ist sie nicht

@@ -1,0 +1,9 @@
+{
+  "component": "peer-review",
+  "component_type": "skill",
+  "prompts": [
+    {"id": "pr-01", "input": "Hier ist ein Manuskript-Auszug: 'Wir untersuchen den Einfluss von Remote-Arbeit auf Teamkohaesion in 20 Softwareunternehmen.' Verfasse ein strukturiertes Gutachten mit Empfehlung.", "expected": {"type": "regex", "value": "(Empfehlung|Annahme|Ueberarbeitung|Ablehnung|Recommendation)"}, "mode": "with_skill"},
+    {"id": "pr-02", "input": "Begutachte dieses Manuskript und trenne vertrauliche Redaktionsanmerkungen von den Anmerkungen an die Autor:innen.", "expected": {"type": "regex", "value": "(Redaktion|Autor|vertraulich|confidential)"}, "mode": "with_skill"},
+    {"id": "pr-03", "input": "Formuliere die Anmerkungen zu diesem Manuskript nummeriert mit Fundstelle.", "expected": {"type": "regex", "value": "(Fundstelle|Abschnitt|Seite|Zeile|1\\.)"}, "mode": "with_skill"}
+  ]
+}
