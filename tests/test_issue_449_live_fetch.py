@@ -29,6 +29,16 @@ Was hart und was weich geprueft wird, ist nicht Geschmack, sondern gemessen:
   Challenge. Block-Referenz, VID, IP und Uhrzeit werden ausdruecklich **nicht**
   verglichen; sie sind pro Request neu. ``test_jstor_block_reference_rotates``
   fuehrt genau das vor, statt es nur zu behaupten.
+
+Nachtrag (Issue #612 Fix-Runde, 2026-08-03): Der oben beschriebene anonyme
+No-Login-Bezug bei Oxford Academic ist seit diesem Datum durch eine
+Cloudflare-Managed-Challenge gesperrt — bestaetigt ueber zwei echte
+``live-fetch-weekly``-Laeufe plus einen unabhaengigen Cross-Check ausserhalb
+GitHub Actions. Die beiden betroffenen Tests sind jetzt ``xfail(strict=True)``
+statt stillschweigend rot; ein neuer Test bestaetigt aktiv die Challenge als
+aktuellen Zustand. Details und die Entscheidung (Agent unveraendert, nur der
+Live-Test korrigiert): ``anonymous_access_correction_612`` in
+``evals/publisher-fetchers/live-verification.json``.
 """
 
 from __future__ import annotations
@@ -138,6 +148,26 @@ def test_cambridge_core_still_serves_the_recorded_pdf(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
+#: Issue #612 Fix-Runde, 2026-08-03: der anonyme No-Login-Abruf unten ist seit
+#: mindestens diesem Datum durch eine Cloudflare-Managed-Challenge gesperrt
+#: (HTTP 403, 'Cf-Mitigated: challenge', 'Just a moment...') — bestaetigt ueber
+#: zwei live-fetch-weekly-Laeufe (Runs 30851138735, 30851295819) plus einen
+#: dritten, unabhaengigen Abruf ausserhalb von GitHub Actions. Siehe
+#: 'anonymous_access_correction_612' bei pf-07 in live-verification.json fuer
+#: die volle Begruendung und die Entscheidung (Agent unveraendert, Live-Test
+#: korrigiert). strict=True: loest sich die Sperre wieder, muss das hier als
+#: XPASS auffallen, statt lautlos weiter zu "funktionieren".
+_OXFORD_ANONYMOUS_ACCESS_XFAIL = pytest.mark.xfail(
+    reason=(
+        "Seit 2026-08-03 durch Cloudflare-Managed-Challenge gesperrt (Issue #612 "
+        "Fix-Runde) — siehe anonymous_access_correction_612 in "
+        "evals/publisher-fetchers/live-verification.json."
+    ),
+    strict=True,
+)
+
+
+@_OXFORD_ANONYMOUS_ACCESS_XFAIL
 def test_oxford_academic_still_serves_the_recorded_pdf(tmp_path: Path):
     run, body = _fetch_recorded_pdf("pf-07", tmp_path)
     artifact = run["artifact"]
@@ -148,6 +178,7 @@ def test_oxford_academic_still_serves_the_recorded_pdf(tmp_path: Path):
     assert artifact["sha256_stable"] is False
 
 
+@_OXFORD_ANONYMOUS_ACCESS_XFAIL
 def test_oxford_academic_pdf_is_served_without_login(tmp_path: Path):
     """``by guest`` ist Oxfords eigene Kennzeichnung der anonymen Sitzung."""
     run, body = _fetch_recorded_pdf("pf-07", tmp_path)
@@ -157,6 +188,27 @@ def test_oxford_academic_pdf_is_served_without_login(tmp_path: Path):
         f"dafuer, dass der Bezug ohne Login lief — vgl. no_login_evidence im "
         f"Lauf '{run['agent']}'."
     )
+
+
+def test_oxford_academic_anonymous_access_is_now_gated_by_a_cloudflare_challenge():
+    """Die neue, aktuell zutreffende Aussage ueber pf-07 (Issue #612 Fix-Runde).
+
+    Ersetzt nicht die beiden Tests oben (die bleiben als xfail(strict=True)
+    stehen, damit eine Wiederherstellung des freien Zugriffs sichtbar auffaellt)
+    — dieser Test bestaetigt stattdessen aktiv, dass die Sperre die erwartete
+    Cloudflare-Challenge ist und keine andere Fehlerart (z. B. 404, 500).
+    """
+    run = _run("pf-07")
+    status, _, body = _fetch(run["url_chain"][-1], referer=run["url_chain"][-2])
+    html = body.decode("utf-8", errors="replace")
+
+    assert status == 403, (
+        f"Erwartet wurde die Cloudflare-Challenge (HTTP 403), bekommen {status}. "
+        f"Falls das dauerhaft so bleibt, ist anonymous_access_correction_612 in "
+        f"live-verification.json neu zu bewerten."
+    )
+    for marker in ("Just a moment", "challenges.cloudflare.com"):
+        assert marker in html, f"Stabil-Marker {marker!r} fehlt in der Live-Antwort."
 
 
 # ---------------------------------------------------------------------------

@@ -62,8 +62,15 @@ USER_AGENT = "academic-research/free-archive-fetchers (Issue #450 live verificat
 #: Ersetzt das pro Zusammenstellung neu vergebene ``/ID``-Array im PDF-Trailer.
 PDF_TRAILER_ID_RE = re.compile(rb"/ID\s*\[\s*<[0-9A-Fa-f]*>\s*<[0-9A-Fa-f]*>\s*\]")
 
-#: Speicherknoten, auf den archive.org die Download-URL umleitet.
-IA_NODE_HOST_RE = re.compile(r"^dn\d+\.[a-z]{2}\.archive\.org$")
+#: Speicherknoten, auf den archive.org die Download-URL umleitet. archive.org
+#: vergibt Knoten unter mehr als einem Praefix ("dn" und "ia" beide real
+#: beobachtet -- Issue #612 Fix-Runde, 2026-08-03: derselbe stabile
+#: Einstiegspunkt fa-02 leitete einmal auf 'ia800108.us.archive.org' und in
+#: einem zweiten, unabhaengigen Netz auf 'dn720200.ca.archive.org' um). Die
+#: urspruengliche Annahme (nur "dn") war zu eng und machte diesen Live-Test
+#: flaky ueber ein Detail, das kein Fetcher-Fehler ist -- siehe
+#: tests/test_issue_450_fetcher_evidence.py::test_ia_node_host_pattern_accepts_both_observed_node_prefixes.
+IA_NODE_HOST_RE = re.compile(r"^(?:ia|dn)\d+\.[a-z]{2}\.archive\.org$")
 
 #: Dateiname des von MDZ zusammengestellten PDF, inklusive Job-Praefix.
 MDZ_RESULT_RE = re.compile(r"/pdf/(\d+)(bsb\d+\.pdf)")
