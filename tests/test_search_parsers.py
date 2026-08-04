@@ -112,6 +112,33 @@ def test_openalex_parses_real_fixture(monkeypatch):
     assert all(r["source_module"] == "openalex" for r in results)
 
 
+def test_openalex_passes_through_is_retracted_true(monkeypatch):
+    """Ein Treffer mit is_retracted: true traegt das Merkmal nach der Normalisierung (#618 AC1)."""
+    payload = json.loads((FIXTURES / "openalex_response.json").read_bytes())
+    items = payload["results"]
+    retracted = copy.deepcopy(items[0])
+    retracted["is_retracted"] = True
+    payload["results"] = [retracted, *items[1:]]
+    body = json.dumps(payload).encode("utf-8")
+    _patch_client(monkeypatch, _json_handler(body))
+
+    results = search.search_openalex("climate change", limit=3)
+
+    matching = [r for r in results if r["title"] == retracted["title"]]
+    assert len(matching) == 1
+    assert matching[0]["is_retracted"] is True
+
+
+def test_openalex_passes_through_is_retracted_false(monkeypatch):
+    """Ein nicht zurueckgezogener Treffer traegt is_retracted: False, nicht None (#618 AC6)."""
+    body = (FIXTURES / "openalex_response.json").read_bytes()
+    _patch_client(monkeypatch, _json_handler(body))
+
+    results = search.search_openalex("climate change", limit=3)
+
+    assert all(r["is_retracted"] is False for r in results)
+
+
 def test_openalex_skips_broken_item_keeps_rest(monkeypatch):
     payload = json.loads((FIXTURES / "openalex_response.json").read_bytes())
     items = payload["results"]

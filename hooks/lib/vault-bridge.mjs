@@ -14,8 +14,24 @@
  * unterschiedliche DB-Pfade oder Interpreter zurueckkehrt, loesen beide Hooks
  * beides hier auf, an genau einer Stelle.
  *
- * Node hat vor 22.5 kein `node:sqlite`, die CI pinnt Node 20 — der DB-Zugriff
- * laeuft deshalb ueber einen Python-Subprozess.
+ * Warum weiterhin ein Python-Subprozess und kein `node:sqlite` (#600, geprueft
+ * nach dem CI-Bump auf Node 22):
+ *
+ * Ein Mikrobenchmark (scripts/dev/bench_vault_bridge.mjs, billigstmoeglicher
+ * Lesefall) bestaetigt den erwarteten Unterschied im reinen Zugriffsweg —
+ * Median ueber 20 Wiederholungen: Python-Subprozess ~22,7 ms,
+ * `node:sqlite` in-process ~0,9 ms (~25x). Das allein rechtfertigt die
+ * Umstellung aber nicht: die drei Aufrufer dieser Bruecke rufen keine rohen
+ * SELECTs auf, sondern Geschaeftslogik, die ausschliesslich in
+ * `academic_vault` (Python) existiert — Dedup/Supersede in
+ * `decision_log.record_file_change`, Sortierung/Filterung in
+ * `VaultDB.list_decisions`, FTS5-Suche + Fuzzy-Matching in
+ * `search_quote_text`/`get_quote`/`resolve_quote_context`. Eine Migration
+ * muesste diese Logik in JavaScript duplizieren statt nur den SQLite-Treiber
+ * zu tauschen — exakt die Divergenz zwischen zwei Speicherorten, derentwegen
+ * diese Bruecke ueberhaupt existiert (#527, siehe oben). Solange die Bruecke
+ * nur duenne Wrapper um `academic_vault`-Funktionen ist, bleibt der
+ * Python-Subprozess trotz seines Overheads der sicherere Weg.
  */
 
 import { execFileSync } from 'node:child_process';

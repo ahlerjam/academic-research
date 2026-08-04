@@ -21,6 +21,13 @@ CI-blockierenden ``pytest tests/``-Kernsuite — der Download braucht Netz.
 Aufruf: ``python3 evals/524-nli-prefilter/runner.py`` oder ueber
 ``tests/evals/test_nli_prefilter_evals.py`` mit ``RUN_LIVE_NLI_PREFILTER=1``.
 
+``MDebertaScorer`` ist seit Issue #592 kanonisch in
+``academic_vault/nli_prefilter.py`` beheimatet (dort auch der produktive
+Batch-Vorfilter vor ``quote-fidelity-auditor``) und wird hier importiert statt
+dupliziert. Der Validierungslauf gegen ECHTES Zitatmaterial (AC aus #592)
+liegt in ``real-cases.json`` / ``run_real_validation.py`` in diesem
+Verzeichnis, getrennt von den 32 konstruierten Faellen unten.
+
 Premise/Hypothesis-Konvention: ``premise`` ist der englische Quellkontext
 (``context_before`` + ``verbatim`` + ``context_after``), ``hypothesis`` ist
 die deutsche Kapitelbehauptung (``chapter_claim``). Das ist die eigentliche
@@ -32,12 +39,20 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any, Protocol
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CASES_PATH = Path(__file__).parent / "cases.json"
+
+sys.path.insert(0, str(REPO_ROOT))
+from academic_vault.nli_prefilter import (  # noqa: E402
+    MDebertaScorer,
+    build_premise as _build_premise_ctx,
+    default_cache_dir,
+)
 
 ENV_CACHE_DIR = "NLI_PREFILTER_MODEL_CACHE"
 
@@ -49,18 +64,15 @@ MDEBERTA_MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
 HHEM_THRESHOLD = 0.5
 
 
-def default_cache_dir() -> str:
-    """Ablageort fuer heruntergeladene Modellgewichte (Env-Override moeglich)."""
-    env = os.environ.get(ENV_CACHE_DIR)
-    if env:
-        return env
-    return str(Path.home() / ".academic-research" / "models")
-
-
 def build_premise(case: dict) -> str:
-    """Baut die englische Praemisse aus Kontext + Zitat (Vault-Quote-Format)."""
-    parts = [case.get("context_before", ""), case["verbatim"], case.get("context_after", "")]
-    return " ".join(p.strip() for p in parts if p and p.strip())
+    """Baut die englische Praemisse aus Kontext + Zitat (Vault-Quote-Format).
+
+    Duenner Wrapper um ``academic_vault.nli_prefilter.build_premise`` fuer
+    das hiesige Case-dict-Format (kein Duplikat der eigentlichen Logik).
+    """
+    return _build_premise_ctx(
+        case.get("context_before", ""), case["verbatim"], case.get("context_after", "")
+    )
 
 
 class NliScorer(Protocol):
@@ -103,41 +115,8 @@ class HhemScorer:
         return verdict, score
 
 
-class MDebertaScorer:
-    """mDeBERTa-v3-XNLI ueber klassische NLI-Logits (entailment/neutral/contradiction)."""
-
-    name = "mdeberta-xnli"
-
-    def __init__(self, cache_dir: str | None = None, model: Any | None = None) -> None:
-        self.cache_dir = cache_dir if cache_dir is not None else default_cache_dir()
-        self._model = model
-        self._tokenizer = None
-
-    def load(self) -> tuple[Any, Any]:
-        if self._model is None:
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                MDEBERTA_MODEL_ID, cache_dir=self.cache_dir
-            )
-            self._model = AutoModelForSequenceClassification.from_pretrained(
-                MDEBERTA_MODEL_ID, cache_dir=self.cache_dir
-            )
-        return self._model, self._tokenizer
-
-    def predict(self, premise: str, hypothesis: str) -> tuple[str, float]:
-        import torch
-
-        model, tokenizer = self.load()
-        inputs = tokenizer(premise, hypothesis, truncation=True, return_tensors="pt")
-        with torch.no_grad():
-            logits = model(**inputs).logits[0]
-        probs = torch.softmax(logits, dim=-1).tolist()
-        # Label-Reihenfolge lt. Modellkarte: entailment, neutral, contradiction.
-        entailment_prob = float(probs[0])
-        predicted_idx = max(range(len(probs)), key=lambda i: probs[i])
-        verdict = "faithful" if predicted_idx == 0 else "verzerrend"
-        return verdict, entailment_prob
+# MDebertaScorer ist kanonisch in academic_vault.nli_prefilter (Issue #592,
+# oben importiert) -- hier keine zweite Implementierung.
 
 
 def _load_cases() -> list[dict]:

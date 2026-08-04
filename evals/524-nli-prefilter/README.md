@@ -23,6 +23,12 @@ zitiert englische Quellen).
 > **Folge-Issue:** #592 nimmt mDeBERTa-v3-XNLI als Vorfilter auf — mit
 > konservativer Schwelle, Default AUS und einer Validierung an echtem
 > Zitatmaterial als Vorbedingung fuers Scharfschalten.
+>
+> **Update #592 (04.08.2026):** Die Validierung an echtem Zitatmaterial liegt
+> vor — siehe [„Validierung an echtem Zitatmaterial (#592)"](#validierung-an-echtem-zitatmaterial-592)
+> unten. Der Vorfilter (`academic_vault/nli_prefilter.py`) ist implementiert,
+> per Konfiguration abschaltbar und im Auslieferungsstand weiterhin AUS
+> (`config/parallel_agents.json` → `nli_prefilter_enabled: false`).
 
 ## Ergebnis auf einen Blick
 
@@ -157,12 +163,81 @@ ernstzunehmende Kandidat fuer ein Folge-Issue — mit realen (nicht
 synthetischen) DE-Kapitel/EN-Quote-Paaren und einer belastbaren
 FPR-Stichprobengroesse als Voraussetzung.
 
+## Validierung an echtem Zitatmaterial (#592)
+
+Issue #592 macht die Validierung an echtem Zitatmaterial zur Vorbedingung
+fuers Scharfschalten des Vorfilters: 32 KONSTRUIERTE Faelle (oben) sind ein
+Signal, kein Systembeleg. `real-cases.json` enthaelt darum 60 Zitat-Kapitel-
+Paare, deren `verbatim`-Feld ein woertliches, kurzes Fair-Use-Zitat
+(< 150 Zeichen) aus einem real veroeffentlichten, oeffentlich zugaenglichen
+arXiv-Paper ist — 15 Paper, je 2 Zitat-Stellen, je Stelle eine treue und eine
+bewusst verzerrte deutsche Kapitelbehauptung. Jeder Case traegt in `source`
+Titel, arXiv-ID und URL; die Zitate wurden per WebFetch gegen den
+Originaltext verifiziert (kurze Fair-Use-Ausschnitte statt Volltext-
+Reproduktion — WebFetch verweigert Volltext-Abstracts aus Urheberrechtsgruenden,
+was hier bewusst genutzt wird: die Ausschnitte bleiben unter 150 Zeichen).
+`context_before`/`context_after` bleiben leer — nur das woertliche Zitat
+selbst ist als real verifiziert dokumentiert, ein erfundener Kontext waere
+false Praezision.
+
+**Nur `MDebertaScorer`** laeuft gegen dieses Set (`run_real_validation.py`) —
+HHEM-2.1-Open ist laut Empfehlung oben bereits verworfen, ein zweiter Lauf
+gegen echtes Material haette daran nichts geaendert.
+
+### Ergebnis (Lauf vom 04.08.2026, `real-validation-results.json`)
+
+| n | TP | FP | FN | TN | Precision | Recall | Accuracy | FP-Rate |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 60 (30 faithful / 30 verzerrend) | 23 | 0 | 7 | 30 | 1.000 | 0.767 | 0.883 | 0.000 |
+
+**FP = 0 auf 30 `verzerrend`-Faellen ist kein Beleg fuer FP = 0 in der
+Produktion.** Rule-of-Three-Vorbehalt (wie in #524): bei 0 Fehlern aus 30
+Versuchen liegt die plausible Obergrenze der realen FPR bei rund 3/30 ≈ 10 %.
+Das ist enger als der Vorbehalt aus #524 (bis ~19 % bei n=16), aber weiterhin
+kein Nullbeleg. Recall sinkt leicht gegenueber den 32 konstruierten Faellen
+(0.767 vs. 0.812) — plausibel, weil `real-cases.json` KEINEN konstruierten
+`context_before`/`context_after` mitliefert (siehe oben) und die Modellentscheidung
+damit ausschliesslich auf dem kurzen Verbatim-Ausschnitt beruht, waehrend
+`cases.json` zusaetzlichen synthetischen Kontext liefert.
+
+### Einschalt-Empfehlung (AC6)
+
+Der Default bleibt bewusst AUS (`config/parallel_agents.json` →
+`nli_prefilter_enabled: false`), obwohl FP = 0 gemessen wurde:
+
+1. **FP = 0 ist ein Signal, kein Beweis** — die Rule-of-Three-Grenze (~10 %)
+   ist real. Ein durchgewunkenes verzerrtes Zitat bleibt unbemerkt in der
+   Arbeit stehen; das ist der teurere Fehler als ein unnoetiger Sonnet-Lauf.
+2. **`real-cases.json` deckt vier Verzerrungs-Subtypen zu je 7-8 Faellen ab,
+   aber nur 15 Quell-Paper aus einer einzigen Domaene** (ML/NLP-Paper,
+   englischsprachig). Reale Kapitel zitieren breiter gestreute Quellen
+   (Methodik-, Sozial-, Geisteswissenschaften) — die Uebertragbarkeit auf
+   diese Bandbreite ist mit diesem Set nicht geprueft.
+3. Wer den Vorfilter dennoch **opt-in** nutzen will: `nli_prefilter_enabled:
+   true` in `config/parallel_agents.json` oder
+   `ACADEMIC_RESEARCH_NLI_PREFILTER=1` — bei aktivem Vorfilter bleibt jedes
+   Item, das der Vorfilter als „verdaechtig" einstuft, unveraendert im
+   Pruefpfad; nur als „treu" eingestufte Items werden uebersprungen und im
+   Report explizit als „vorgefiltert, nicht inhaltlich geprueft" markiert
+   (nie stillschweigend, nie als „geprueft" ausgewiesen).
+4. Empfehlung fuer eine kuenftige Scharfschaltung: den Default erst nach
+   einem zweiten Validierungslauf gegen ein breiter gestreutes, groesseres
+   Set (Zielgroesse dreistellig, mehrere Fachdomaenen) auf `true` setzen.
+
+### Dateien (Validierung)
+
+| Datei | Inhalt |
+| --- | --- |
+| `real-cases.json` | 60 ECHTE Zitat-Kapitel-Paare (Quelle je Case in `source`) |
+| `run_real_validation.py` | Fuehrt `MDebertaScorer` gegen `real-cases.json`, schreibt `real-validation-results.json` |
+| `real-validation-results.json` | Ergebnis des Laufs vom 04.08.2026 (Modell-/`transformers`-Version, TP/FP/FN/TN, `fp_examples`, Case-Details) |
+
 ## Dateien
 
 | Datei | Inhalt |
 | --- | --- |
 | `cases.json` | 32 synthetische Cases (`cases[]`-Format nach `evals/SCHEMA.md`), 16 `faithful` / 16 `verzerrend` (je 4 pro Subtyp: `overstated`, `context-stripped`, `polarity-flip`, `unsupported`) |
-| `runner.py` | Lazy-laedt beide Modelle, berechnet Precision/Recall/Accuracy/Latenz; `run_eval_cases()` ohne `sys.exit`/Kernpfad-`print` |
+| `runner.py` | Lazy-laedt beide Modelle, berechnet Precision/Recall/Accuracy/Latenz; `run_eval_cases()` ohne `sys.exit`/Kernpfad-`print` (importiert `MDebertaScorer` aus `academic_vault/nli_prefilter.py`, Issue #592) |
 | `live-verification.json` | Realer Eval-Lauf (Modell-/`transformers`-Versionen, Zeitstempel, Ergebnis je Case) — nachfahrbares Artefakt, Muster wie `evals/publisher-fetchers/live-verification.json` |
 | `README.md` | Diese Datei |
 
@@ -184,6 +259,10 @@ RUN_LIVE_NLI_PREFILTER=1 uv run python evals/524-nli-prefilter/runner.py
 # HHEM lauffaehig machen (ephemere Umgebung, umgeht das Repo-Pin lokal):
 RUN_LIVE_NLI_PREFILTER=1 uv run --with "transformers==4.46.3" --with torch \
   python evals/524-nli-prefilter/runner.py
+
+# Validierung an ECHTEM Zitatmaterial (#592, 60 reale Paare, nur mDeBERTa,
+# Netz + Modell-Download beim ersten Lauf):
+uv run python evals/524-nli-prefilter/run_real_validation.py
 ```
 
 ## Case-Format
