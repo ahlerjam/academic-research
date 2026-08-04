@@ -68,6 +68,7 @@ import os
 import re
 import sys
 import time
+import urllib.parse
 import xml.etree.ElementTree as ET
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -387,7 +388,12 @@ def _fetch_s2_relation(paper_ref: str, relation: str, limit: int) -> dict | None
     Gibt das geparste JSON zurueck, oder None bei Netzwerkfehler/HTTP!=200
     nach allen Retries -- niemals eine Exception (Evidence before assertions).
     """
-    url = f"{_S2_PAPER_API}/{paper_ref}/{relation}"
+    # paper_ref stammt aus _DOI_RE (erlaubt '/' im DOI-Suffix) bzw. direkt vom
+    # Aufrufer -- ungequotet in den URL-Pfad interpoliert liesse sich damit
+    # theoretisch ein Pfad-Segment (z.B. "..") einschleusen (Issue #599,
+    # Operator-Review Runde 4, P2). quote(..., safe=":.") kodiert '/' zu
+    # '%2F', laesst aber das erwartete "DOI:"/"ARXIV:"-Praefix lesbar.
+    url = f"{_S2_PAPER_API}/{urllib.parse.quote(paper_ref, safe=':.')}/{relation}"
     params = {"fields": _S2_RELATION_FIELDS, "limit": limit}
     headers = {"User-Agent": _USER_AGENT}
     if api_key := os.environ.get("SS_API_KEY"):
@@ -485,7 +491,10 @@ def _verify_extracted_doi_title_match(
     if not paper_ref or not _REQUESTS_AVAILABLE:
         return False
 
-    url = f"{_S2_PAPER_API}/{paper_ref}"
+    # Selbes Quoting-Muster wie in _fetch_s2_relation() (Issue #599, Operator-
+    # Review Runde 4, P2) -- konsistent an beiden Stellen, die paper_ref in
+    # eine S2-URL interpolieren.
+    url = f"{_S2_PAPER_API}/{urllib.parse.quote(paper_ref, safe=':.')}"
     params = {"fields": "title"}
     headers = {"User-Agent": _USER_AGENT}
     if api_key := os.environ.get("SS_API_KEY"):
@@ -766,12 +775,18 @@ def anchor_paper_survey(
     auffindbarer DOI (Vault oder ``extract_doi_from_text()``) nutzen
     ``run_citation_search()`` (echte Zitations-/Referenz-Traversierung ueber
     Semantic Scholar). PDF-Anker ohne DOI -- sowie jeder Fall, in dem Semantic
-    Scholar eine vorhandene Referenz nicht kennt/nicht erreichbar ist --
-    fallen auf ``run_search()`` (Titel-Stichwortsuche) zurueck, niemals auf
-    einen Abbruch. In beiden Faellen entfernt ``_filter_and_dedupe()`` das
-    Anker-Paper aus der Rohtrefferliste und dedupliziert den Rest ueber die
-    kanonische Repo-Pipeline (``scripts/dedup.py``), bevor gezaehlt/gemeldet
-    wird.
+    Scholar eine vorhandene Referenz nicht kennt/nicht erreichbar ist, ODER
+    eine aus dem PDF extrahierte (noch unverifizierte) DOI beim S2-Titelabgleich
+    nicht zum Anker-Titel passt -- fallen auf ``run_search()``
+    (Titel-Stichwortsuche) zurueck, niemals auf einen Abbruch. Die
+    Titel-Verifikation laeuft dabei bewusst VOR ``run_citation_search()``:
+    sonst wuerde bei einer fremden DOI (Verlags-/Aggregator-Deckblatt,
+    Erratum-Header) bereits der Zitationsgraph des falschen Papers abgefragt
+    und faelschlich als nachgewiesene Zitationsbeziehung DIESES Ankers
+    gemeldet (Issue #599, Operator-Review Runde 4). In allen Faellen entfernt
+    ``_filter_and_dedupe()`` das Anker-Paper aus der Rohtrefferliste und
+    dedupliziert den Rest ueber die kanonische Repo-Pipeline
+    (``scripts/dedup.py``), bevor gezaehlt/gemeldet wird.
 
     Returns:
         {"status": "ok"|"error", "paper_id"?, "source"?, "title"?, "doi"?,
@@ -800,7 +815,38 @@ def anchor_paper_survey(
     # ein reiner Fehlerbericht ohne Fallback bleibt.
     s2_ref = anchor.get("s2_ref")
     fallback_reason: str | None = None
-    if s2_ref:
+
+    # Titel-Verifikation VOR run_citation_search() (Issue #599, Operator-
+    # Entscheidung Runde 4/Konvergenz-Regel): eine extrahierte DOI (im
+    # Unterschied zu einer bereits im Vault liegenden bzw. der arXiv-eigenen)
+    # ist unverifiziert -- Verlags-/Aggregator-Deckblaetter oder Erratum-Header
+    # koennen eine fremde DOI ins Textfenster gebracht haben. Wuerde
+    # run_citation_search() trotzdem zuerst laufen, meldet das Ergebnis den
+    # Zitationsgraphen des FALSCHEN Papers als "nachgewiesene
+    # Zitationsbeziehung" dieses Ankers -- genau der P1-Fund aus Review-Runde
+    # 4 (der bisherige Code verifizierte nur als Gate fuer den Vault-Upsert,
+    # NACHDEM die falsche Abfrage schon gelaufen war). Deshalb hier: bei
+    # fehlgeschlagener Verifikation wird der Zitationsgraph gar nicht erst
+    # abgefragt, sondern derselbe Rueckfall wie beim "S2 kennt die DOI
+    # nicht"-Fall genommen.
+    doi_mismatch = False
+    if s2_ref and anchor.get("doi_source") == "extracted" and anchor.get("doi"):
+        doi_verified = _verify_extracted_doi_title_match(s2_ref, anchor["title"])
+        if not doi_verified:
+            doi_mismatch = True
+
+    if doi_mismatch:
+        fallback_reason = "S2-Titel der extrahierten DOI passt nicht zum Anker-Titel"
+        modules = list(search_modules) if search_modules else list(DEFAULT_SEARCH_MODULES)
+        raw_hits, failed = run_search(anchor["title"], modules, limit=search_limit)
+        method = "keyword"
+        # Die nie verifizierte DOI darf weder im Ergebnis auftauchen noch
+        # (ueber anchor.get("doi") in _filter_and_dedupe() unten) als
+        # Anker-DOI behandelt werden -- sie wurde bereits in _handle_pdf()
+        # NICHT in den Vault geschrieben (Sentinel-Default), hier wird sie
+        # zusaetzlich aus dem In-Memory-Ergebnis entfernt.
+        anchor.pop("doi", None)
+    elif s2_ref:
         raw_hits, failed = run_citation_search(s2_ref, limit=search_limit)
         if set(failed) == {"citations", "references"}:
             fallback_reason = f"Semantic Scholar kennt '{s2_ref}' nicht oder war nicht erreichbar"
@@ -809,32 +855,26 @@ def anchor_paper_survey(
             method = "keyword"
         else:
             method = "citation"
-            # P1 fix (flowkit review): extrahierte DOI wird erst hier persistiert, nachdem
-            # Semantic Scholar sie verifiziert hat (mindestens eine Relation != failed).
-            # Zusätzlich wird der S2-Titel gegen den extrahierten Titel abgeglichen,
-            # um fremde DOIs (Erratum-Header, Deckblatt) auszuschließen.
+            # Extrahierte DOI wird erst hier persistiert -- die Titel-
+            # Verifikation ist zu diesem Zeitpunkt bereits erfolgreich
+            # durchlaufen (sonst waeren wir im doi_mismatch-Zweig oben
+            # gelandet und run_citation_search() waere gar nicht aufgerufen
+            # worden).
             if anchor.get("doi_source") == "extracted" and anchor.get("doi"):
-                doi_verified = _verify_extracted_doi_title_match(
-                    f"DOI:{anchor['doi']}", anchor["title"]
+                authors = anchor.get("authors", [])
+                csl_with_doi: dict = {
+                    "type": "article-journal",
+                    "title": anchor["title"],
+                    "author": authors,
+                    "DOI": anchor["doi"],
+                }
+                vault_add_paper(
+                    db_path=db_path,
+                    paper_id=anchor["paper_id"],
+                    csl_json=json.dumps(csl_with_doi, ensure_ascii=False),
+                    doi=anchor["doi"],
+                    pdf_path=anchor.get("pdf_path"),  # Vermeidet Datenverlust der PDF-Pfad-Spalte
                 )
-                if doi_verified:
-                    # Vault-Upsert mit der nun verifizierten DOI
-                    authors = anchor.get("authors", [])
-                    csl_with_doi: dict = {
-                        "type": "article-journal",
-                        "title": anchor["title"],
-                        "author": authors,
-                        "DOI": anchor["doi"],
-                    }
-                    vault_add_paper(
-                        db_path=db_path,
-                        paper_id=anchor["paper_id"],
-                        csl_json=json.dumps(csl_with_doi, ensure_ascii=False),
-                        doi=anchor["doi"],
-                        pdf_path=anchor.get(
-                            "pdf_path"
-                        ),  # Vermeidet Datenverlust der PDF-Pfad-Spalte
-                    )
     else:
         modules = list(search_modules) if search_modules else list(DEFAULT_SEARCH_MODULES)
         raw_hits, failed = run_search(anchor["title"], modules, limit=search_limit)

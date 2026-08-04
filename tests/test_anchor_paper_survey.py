@@ -739,6 +739,10 @@ class TestSearchMethodLabel:
             patch.object(aps, "detect_needs_ocr", return_value=False),
             patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
             patch.object(aps, "run_citation_search", return_value=([], [])),
+            # Ohne diesen Patch feuert die (seit Issue #599, Operator-Review
+            # Runde 4) vorgezogene Titel-Verifikation einen echten GET gegen
+            # api.semanticscholar.org -- kein Netzzugriff in Tests (P2-Fund).
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
         ):
             pdf_doi_result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
         assert pdf_doi_result["search"]["method"] == "citation"
@@ -769,6 +773,11 @@ class TestS2UnknownReferenceFallback:
         with (
             patch.object(aps, "detect_needs_ocr", return_value=False),
             patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            # Titel-Verifikation laeuft seit Issue #599 (Operator-Review Runde
+            # 4) VOR run_citation_search() -- muss hier auf True gemockt sein,
+            # damit dieser Test den "S2 kennt die DOI nicht"-Fallback prueft
+            # und nicht den (separat getesteten) Titel-Mismatch-Fallback.
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=True),
             patch.object(
                 aps, "run_citation_search", return_value=([], ["citations", "references"])
             ) as mock_citation,
@@ -803,6 +812,73 @@ class TestS2UnknownReferenceFallback:
 
         mock_keyword.assert_not_called()
         assert result["search"]["method"] == "citation"
+
+
+class TestDoiTitleMismatchFallback:
+    """Operator-Entscheidung (Konvergenz-Regel, Runde 4, 2026-08-04): die
+    Titel-Verifikation einer aus dem PDF extrahierten DOI muss VOR
+    run_citation_search() laufen. Scheitert sie (S2-Titel der DOI passt nicht
+    zum Anker-Titel -- z.B. Verlags-Deckblatt/Erratum-Header), darf der
+    Zitationsgraph des falschen Papers gar nicht erst abgefragt werden --
+    sonst wird er faelschlich als "nachgewiesene Zitationsbeziehung" dieses
+    Ankers gemeldet (der P1-Fund aus Review-Runde 4)."""
+
+    def test_title_mismatch_skips_citation_search_and_falls_back_to_keyword(
+        self, sample_pdf, temp_vault_db
+    ):
+        with (
+            patch.object(aps, "detect_needs_ocr", return_value=False),
+            patch.object(aps, "extract_text_from_pdf", return_value=PDF_TEXT_WITH_DOI),
+            patch.object(aps, "_verify_extracted_doi_title_match", return_value=False),
+            patch.object(aps, "run_citation_search") as mock_citation,
+            patch.object(
+                aps, "run_search", return_value=([{"title": "Fallback Hit"}], [])
+            ) as mock_keyword,
+        ):
+            result = aps.anchor_paper_survey(str(sample_pdf), db_path=temp_vault_db)
+
+        assert result["status"] == "ok"
+        # Beweis fuer den eigentlichen Bug (Runde 4): der Zitationsgraph der
+        # unverifizierten DOI wird gar nicht erst abgefragt.
+        mock_citation.assert_not_called()
+        mock_keyword.assert_called_once()
+        assert result["search"]["method"] == "keyword"
+        assert "doi" not in result
+        assert "nachgewiesenen Zitationsbeziehung" not in result["message"]
+
+        # Die nie verifizierte DOI wird nicht in den Vault geschrieben.
+        paper = vault_get_paper(temp_vault_db, result["paper_id"])
+        assert paper is not None
+        assert paper["doi"] is None
+
+
+class TestS2UrlQuoting:
+    """Operator-Review Runde 4, P2: paper_ref (aus _DOI_RE, erlaubt '/' im
+    DOI-Suffix) wird ungequotet in die S2-URL interpoliert -- ein DOI mit
+    Pfad-Traversal-Anteil duerfte nicht als dekodiertes Pfadsegment in der
+    tatsaechlich abgesetzten Request-URL landen."""
+
+    def test_fetch_s2_relation_quotes_slash_in_paper_ref(self):
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"data": []}
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            aps._fetch_s2_relation("DOI:10.1234/../../etc/passwd", "citations", 5)
+
+        assert mock_get.call_args_list
+        url = mock_get.call_args_list[0].args[0]
+        assert "../" not in url
+        assert "%2F" in url
+
+    def test_verify_extracted_doi_title_match_quotes_slash_in_paper_ref(self):
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {"title": "Some Title"}
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            aps._verify_extracted_doi_title_match("DOI:10.1234/../../etc/passwd", "Some Title")
+
+        assert mock_get.call_args_list
+        url = mock_get.call_args_list[0].args[0]
+        assert "../" not in url
+        assert "%2F" in url
 
 
 class TestSkillMdDocumentsDoiPath:
