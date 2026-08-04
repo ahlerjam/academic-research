@@ -10,6 +10,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Embedding-Modelle jenseits von 384 Dimensionen (#629):** `VAULT_EMBEDDING_MODEL`
+  trug bislang nur Modelle mit exakt 384 Dimensionen — `E5SmallEmbedder.dim` war
+  ein Klassenattribut mit diesem Wert, das geladene Backend wurde nie gefragt. Ein
+  1024d-Modell (`multilingual-e5-large`, `BAAI/bge-m3`) lief deshalb **still**
+  durch: die BLOBs landeten in `chunk_embeddings`, der vec0-Spiegel verwarf sie
+  wortlos, und jede Suche sah danach nur den Teilbestand der zufällig passenden
+  Breite. Jetzt liefert `dim` die Dimension des geladenen Modells
+  (`get_sentence_embedding_dimension()`, sonst Probe-Encode), die neue Tabelle
+  `embedding_meta` hält Modell-ID und Breite des Bestands (Schema-Version 9 —
+  urspruenglich 8, beim Zusammenfuehren mit dem parallel gemergten #604 eine
+  Generation hoehergerueckt, Bestands-DBs migriert
+  `migrate.add_embedding_meta_table()`), und jeder Schreibpfad prüft dagegen:
+  bei Abweichung `EmbeddingDimensionMismatchError` mit
+  Ursache und Ausweg statt Degradation — auch durch die Catch-all-Wrapper von
+  `vault.add_paper`/`vault.add_quote`/`vault.search` hindurch. Ein leerer Vault
+  übernimmt die Dimension des ersten Modells ohne Zwischenschritt. Für befüllte
+  Vaults gibt es `python -m academic_vault.migrate --db <pfad> --reindex-embeddings`:
+  rechnet Chunk- und Zitat-Vektoren mit dem aktuellen Modell neu, legt die
+  vec0-Tabellen in der neuen Breite an und ersetzt dabei den **gesamten** Bestand
+  (anders als die Backfills — nur so verschwindet ein Mischbestand aus zwei
+  Modellen). `vault.stats()` weist `embedding_model` und `embedding_dim` aus, ohne
+  dafür ein Modell zu laden. Das Default-Modell bleibt unverändert; welches Modell
+  am Ende gewinnt, ist eine eigene Entscheidung.
+
 - **mDeBERTa-XNLI als lokaler NLI-Vorfilter vor dem Zitat-Richter (#592):**
   `academic_vault/nli_prefilter.py` bewertet Kapitelbehauptung gegen
   Quote-Kontext lokal (keine API, kein Netz nach dem einmaligen

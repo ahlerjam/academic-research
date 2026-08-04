@@ -293,8 +293,9 @@ class TestAc3SchemaMigration:
     """AC3-Randbedingung: Bestands-DBs (Schema v6) werden ohne Datenverlust migriert."""
 
     def test_current_schema_version_is_at_least_7(self):
-        """Drift-Anker: #520 fuehrte Version 7 ein; spaetere Issues (#604: 8)
-        duerfen die Version weiter erhoehen, aber nicht wieder absenken."""
+        """Drift-Anker: #520 fuehrte Version 7 ein; spaetere Issues (#604: 8,
+        #629: 9) duerfen die Version weiter erhoehen, aber nicht wieder
+        absenken."""
         assert db_module.CURRENT_SCHEMA_VERSION >= 7
 
     def test_fresh_db_has_context_source_column(self, tmp_path):
