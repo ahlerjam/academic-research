@@ -50,6 +50,9 @@ TROUBLESHOOTING_DOC = GUIDE_DIR / "troubleshooting.md"
 #: nicht darf und nicht prueft, herausgeloest aus best-practices.md.
 LIMITS_DOC = GUIDE_DIR / "limits.md"
 
+#: Einstieg nach Vorhaben statt nach Komponenten (Issue #611).
+PROJECT_PATHS_DOC = GUIDE_DIR / "project-paths.md"
+
 #: Die Seiten des Praxis-Leitfadens (Issue #461) — untereinander verlinkt.
 PRACTICE_GUIDE_DOCS = (
     GETTING_STARTED_DOC,
@@ -96,6 +99,7 @@ LINKED_DOCS = (
     BEST_PRACTICES_DOC,
     LIMITS_DOC,
     TROUBLESHOOTING_DOC,
+    PROJECT_PATHS_DOC,
     DEVELOPMENT_DOC,
     QUICKSTART_PROTOCOL_DOC,
 )

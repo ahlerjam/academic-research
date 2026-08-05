@@ -162,14 +162,14 @@ def test_best_practices_no_longer_duplicates_limits() -> None:
 
 
 def test_limits_link_is_not_buried_in_best_practices_list() -> None:
-    """README verlinkt limits.md vor der 'Besser arbeiten'-Liste (Loslegen-Rubrik),
+    """README verlinkt limits.md vor best-practices.md (Loslegen-Rubrik),
     nicht erst dort, wo nur ankommt, wer schon ueberzeugt ist."""
     readme = _read(D.README)
     limits_idx = readme.find("guide/limits.md")
-    besser_idx = readme.find("Besser arbeiten")
+    best_practices_idx = readme.find("guide/best-practices.md")
     assert limits_idx != -1, f"{_rel(D.README)}: verlinkt guide/limits.md nicht."
-    assert besser_idx != -1, f"{_rel(D.README)}: Abschnitt 'Besser arbeiten' fehlt."
-    assert limits_idx < besser_idx, (
-        f"{_rel(D.README)}: guide/limits.md steht erst nach 'Besser arbeiten' — "
+    assert best_practices_idx != -1, f"{_rel(D.README)}: verlinkt guide/best-practices.md nicht."
+    assert limits_idx < best_practices_idx, (
+        f"{_rel(D.README)}: guide/limits.md steht erst nach guide/best-practices.md — "
         "nicht sichtbar genug."
     )
