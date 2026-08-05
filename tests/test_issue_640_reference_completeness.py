@@ -246,11 +246,38 @@ def test_component_count_claims_match_the_code(label: str) -> None:
     assert not wrong, f"{label}: Doku-Zahlen weichen vom Code-Stand ({actual}) ab: {wrong}"
 
 
+#: Die README nennt dieselbe Menge in zwei Schreibweisen: als Prosa
+#: ("28 Subagents") und im Architekturdiagramm ("28 Agents<br/>Subagents",
+#: die Zahl haengt dort am Wort "Agents"). Der Guard darf keine der beiden
+#: Formulierungen vorschreiben — er prueft die Zahl, nicht den Wortlaut.
+#: PR #690 hat die Prosa-Variante mit der annotierten Linkliste entfernt; ein
+#: nur auf "Subagents" gestellter Guard riss daraufhin, obwohl die README die
+#: Zahl weiterhin korrekt nennt. Dieselbe Lesart nutzt der aeltere Guard in
+#: ``test_issue_612_fetcher_inventory.py``.
+README_AGENT_COUNT_RE = re.compile(r"\b(\d+)\s+(?:Agents|Subagents)\b")
+
+
+def readme_agent_claims(text: str) -> list[int]:
+    """Alle Subagenten-Zahlen, die ein README-Text behauptet."""
+    return [int(m) for m in README_AGENT_COUNT_RE.findall(text)]
+
+
+def test_readme_agent_claims_read_both_spellings() -> None:
+    """Der Guard liest die Zahl aus Prosa UND aus dem Architekturdiagramm.
+
+    Meta-Test zum Guard darunter: er haelt fest, dass AC4 an der Zahl haengt
+    und nicht an einer Formulierung, die ein README-Umbau jederzeit ersetzt.
+    """
+    assert readme_agent_claims("alle 28 Subagents") == [28]
+    assert readme_agent_claims("C --> A[28 Agents<br/>Subagents]") == [28]
+    assert readme_agent_claims("28 Agents und 45 Skills") == [28]
+    assert readme_agent_claims("Agents sind Subagents ohne Zahl") == []
+
+
 def test_readme_agent_count_matches_agents_dir() -> None:
     """Die README nennt die Subagenten-Zahl aus ``agents/`` (AC4)."""
     actual = len(D.component_inventory()["agents"])
-    text = _read(D.README)
-    claims = [int(m) for m in re.findall(r"(\d+)\s+Subagents\b", text)]
+    claims = readme_agent_claims(_read(D.README))
     assert claims, "README nennt gar keine Subagenten-Zahl mehr."
     assert all(claim == actual for claim in claims), (
         f"README nennt {claims} Subagents, agents/ enthaelt {actual} Dateien."
