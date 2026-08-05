@@ -35,15 +35,21 @@ keinen Tier erreicht. Die 147 API-gateten Skips waren zu dem Zeitpunkt
 unverändert geblieben — dieses Issue hat Transparenz geschaffen, keine
 LLM-Qualität gemessen.
 
-**Heutiger Stand** (Issue #606, reproduzierbar mit `uv run pytest
-tests/evals/ -q` ohne `ANTHROPIC_API_KEY` **und ohne `claude` im PATH**):
-`325 passed, 194 skipped`. Seit
-#390 sind weitere Suiten dazugekommen (u. a. #524, #606, #626, #628, #630); die
-Skip-Zahl ist gegenüber dem #390-Snapshot gestiegen, weil jede neue
-`structural`-Komponente eigene API-gatete Tests mitbringt. Diese Zahl wird
-durch `test_skip_count_matches_real_pytest_run` gegen einen echten
-Subprozesslauf gehalten, statt als Prosa zu veralten (#619 entstand, weil die
-vorherige Fassung dieses Satzes bereits um 34 veraltet war).
+**Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
+tests/evals/ -q` ohne `ANTHROPIC_API_KEY` und ohne installierte `claude`-CLI
+im PATH — `claude_cli_available()` gatet den Guard zusätzlich, Issue #631):
+`274 passed, 194 skipped`. Seit #390 sind weitere Suiten dazugekommen (u. a.
+#524, #626, #628, #630); die Skip-Zahl ist gegenüber dem #390-Snapshot
+gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
+mitbringt. `test_skip_count_matches_real_pytest_run` hält die **Skip-Zahl**
+weiterhin per Gleichheit gegen einen echten Subprozesslauf; die `passed`-Zahl
+prüft der Guard seit #677 nur noch als **Untergrenze** — echte Regressionen
+bleiben rot, ein PR, der irgendwo unter `tests/evals/` einen neuen grünen
+Test ergänzt, färbt diesen Guard nicht mehr rot. Vor #677 war die `passed`-Zahl
+per strikter Gleichheit gekoppelt: jeder Merge aus main, der unter
+`tests/evals/` einen Test hinzufügte, machte diesen und jeden Folge-PR rot,
+ohne dass der PR `STRATEGY.md` je angefasst hätte (Vorfallsreihe allein
+innerhalb von PR #664: `092c9c6`, `a5e656d`, `60527b5`, `17c7ec5`).
 
 Dieses Dokument benennt deshalb für **jede** Komponente unter `evals/` genau
 einen Zustand — und der Guard erzwingt, dass keine Komponente stillschweigend
@@ -204,16 +210,27 @@ Fetcher-Verzeichnisse, statt eine sechste Variante einzuführen.
 Was `structural` in `metric` verwandeln würde, ist ausschließlich Budget für
 reale Modell-Aufrufe. Größenordnung, gerechnet auf dem heutigen Bestand:
 
-| Posten | Aufrufe pro Vollauf |
+| Posten | Aufrufe pro Vollauf (manuell) |
 | --- | --- |
 | Quality-Evals (`prompts[]`, je `with_skill` + `without_skill`) | ca. 120 |
 | Trigger-Evals (45 Skills, 871 Faelle: 428 `should_trigger` + 443 `should_not_trigger`, Haiku-Klassifikation; live nachgezaehlt, Issue #614) | 871 |
 | **Summe** | **ca. 991 Aufrufe** |
 
+Ein Testfall ist keine Budget-Groesse: jeder der 871 Trigger-Testfaelle ist
+selbst ein Klassifikations-*Aufruf* (1:1), waehrend ein Quality-Eval-Testfall
+zwei Aufrufe buendelt (`with_skill` + `without_skill`) -- die Testfallzahl aus
+`pytest --collect-only` und die API-Aufrufzahl fallen also je nach Suite
+unterschiedlich auseinander.
+
 Bei überwiegend kurzen Prompts und Haiku für den Trigger-Block liegt ein
 Vollauf im niedrigen einstelligen USD-Bereich; die Quality-Evals mit einem
 größeren Modell dominieren die Kosten. Ein Baseline-Lauf pro Release wäre der
 sinnvolle Rhythmus, nicht pro Commit.
+
+**Diese Tabelle gilt fuer einen manuellen Vollauf** (`workflow_dispatch` ohne
+Filter). Der woechentliche geplante Lauf zieht seit der Rotation in
+`tests/evals/test_triggers.py` deutlich weniger -- siehe Abschnitt "Geplanter
+woechentlicher Lauf ueber ein Kern-Set" unten fuer die tatsaechliche Zahl.
 
 **Das ist eine Bezifferung, keine Forderung.** Ob und in welcher Höhe ein
 `ANTHROPIC_API_KEY` mit Budget bereitgestellt wird, entscheidet der Operator.
@@ -223,10 +240,14 @@ erzwungen), und die 147 Skips bleiben bis zu einer Operator-Entscheidung
 bestehen.
 
 **Realer Ausführungspfad (Issue #470):** `.github/workflows/eval-behavior.yml`
-ist der einzige Weg, diese ca. 991 Aufrufe tatsächlich abzurufen — ein separat
-per `workflow_dispatch` auslösbarer Job, begrenzt auf `tests/evals/` (nicht
-`tests/`), mit `timeout-minutes: 60` als hartem Deckel (angehoben in #631, da
-der CLI-Pfad pro Aufruf deutlich teurer ist als der SDK-Pfad). Der Job bricht mit
+ist der einzige Weg, diese ca. 991 Aufrufe eines manuellen Vollaufs tatsächlich
+abzurufen — ein separat per `workflow_dispatch` auslösbarer Job, begrenzt auf
+`tests/evals/` (nicht `tests/`), mit `timeout-minutes: 60` als hartem Deckel
+fuer den manuellen Pfad (angehoben in #631, da der CLI-Pfad pro Aufruf
+deutlich teurer ist als der SDK-Pfad; der geplante Pfad hat seit #597 ein
+eigenes, hoeheres Limit — siehe Abschnitt "Geplanter woechentlicher Lauf"
+unten fuer dessen tatsächliches, deutlich kleineres Aufrufvolumen). Der Job
+bricht mit
 `::error::` ab, wenn weder `ANTHROPIC_API_KEY` noch `CLAUDE_CODE_OAUTH_TOKEN`
 als Repo-Secret hinterlegt ist, statt täuschend grün als „0 failed, N
 skipped" durchzulaufen. `ci.yml` bleibt davon unberührt: keine Auth dort,
@@ -288,6 +309,108 @@ Fehlen dagegen sowohl Key als auch CLI, bleibt es beim bisherigen
   eine Aufrufzahl, keine Kostenaussage für den CLI-Pfad.
 - **`stop_reason` bleibt erhalten**, wird aber wie zuvor nicht ausgewertet
   (weder SDK- noch CLI-Pfad extrahieren es aktuell).
+
+## Geplanter woechentlicher Lauf ueber ein Kern-Set (Issue #597)
+
+Ein Vollauf (~991 Aufrufe, siehe API-Budget oben) laeuft nur manuell per
+`workflow_dispatch`. Zusaetzlich fuehrt `.github/workflows/eval-behavior.yml`
+seit Issue #597 einmal **woechentlich** (`schedule`-Trigger, Montag 07:00 UTC —
+zeitversetzt zu `live-fetch-weekly.yml`, Montag 06:00 UTC) ein benanntes
+**Kern-Set** aus: eine Teilmenge der API-gateten Suiten, nicht den Vollauf.
+
+Die **eine Stelle**, an der das Kern-Set steht, ist der pytest-Marker
+`eval_core_set` (registriert in `pyproject.toml`). Er sitzt als module-level
+`pytestmark` an genau neun Dateien unter `tests/evals/`:
+
+1. `test_abstract_generator_evals.py`
+2. `test_chapter_writer_evals.py`
+3. `test_citation_extraction_evals.py`
+4. `test_quote_extractor_evals.py`
+5. `test_quality_reviewer_evals.py`
+6. `test_source_quality_audit_evals.py`
+7. `test_sparring_partner_evals.py`
+8. `test_rest_evals.py` (9 Skills + 1 Agent)
+9. `test_triggers.py` (Trigger-Recall/FPR — der groesste Anteil am
+   API-Budget und genau das Beispiel fuer stille Modell-Drift, das Issue #597
+   im "Why" nennt; laeuft im geplanten Lauf als rotierende Stichprobe, siehe
+   Unterabschnitt unten)
+
+Reproduzierbar mit `uv run pytest tests/evals/ -m eval_core_set`. Der Guard
+`test_eval_core_set_matches_documented_files` haelt diese Liste gegen den
+tatsaechlichen Marker-Treffer (Datei-Ebene, nicht Test-Ebene) — eine neue
+API-gatete Suite, die den Marker vergisst, faellt sonst lautlos aus dem
+geplanten Lauf. Der Guard prueft ausschliesslich Datei-Zugehoerigkeit zum
+Marker, keine Testfall-Zahl — er bleibt darum unveraendert wirksam, auch
+wenn die Rotation unten die Zahl der pro Lauf tatsaechlich ausgefuehrten
+Testfaelle innerhalb von `test_triggers.py` variieren laesst.
+
+**Korrektur zum urspruenglichen Issue-Text:** Der Issue-Body nannte fuenf
+konkrete Dateien plus vage "von `eval_runner` und `test_eval_strategy`
+gegatete Faelle" als "sieben API-gatete Suiten". Codepruefung ergab: vier der
+fuenf genannten Dateien (`test_sparring_partner_criteria.py`,
+`test_sparring_partner_recording.py`, `test_humanizer_pipeline_evals.py`,
+`test_issue_231_temperature.py`) sind **nicht** API-gated — sie laufen CI-fest
+offline oder mocken `anthropic` vollstaendig. `test_eval_strategy.py` ist
+ebenfalls **kein** Kandidat: sein einziger auf CLI/Key reagierender Test
+(`test_skip_count_matches_real_pytest_run`) skippt gerade dann, wenn ein
+Key/die CLI vorhanden ist — invertierte Pruefrichtung, kein Verhaltens-Signal.
+Waere das Kern-Set woertlich aus dem Issue-Text uebernommen worden, fehlten
+`test_triggers.py` und `test_rest_evals.py` — die beiden Suiten mit dem
+groessten Anteil am API-Budget.
+
+`workflow_dispatch` bleibt unveraendert: ein manueller Lauf kann weiterhin
+alle Verhaltens-Evals anfordern (optional gefiltert ueber den bestehenden
+`component`-Input), nur der geplante Lauf ist auf `-m eval_core_set`
+eingeschraenkt. Schlaegt der geplante Lauf fehl, legt
+`scripts/ci/report_eval_behavior_failure.sh` ein Issue mit der gerissenen
+Suite im Titel an (Label `eval-behavior-failure`); ein wiederholter
+Fehlschlag derselben Suite erzeugt kein Duplikat — dieselbe Dedup-Logik wie
+`scripts/ci/report_live_fetch_failure.sh` (Issue #603), ueber eine
+gemeinsame Bibliothek (`scripts/ci/lib/report_pytest_failure.sh`) geteilt statt
+dupliziert. Bei korreliertem Ausfall (Modell-Drift, Quota-Abbruch mitten im
+Lauf) faengt dieselbe Bibliothek eine Issue-Flut ab: hoechstens **5**
+Einzel-Issues pro Lauf, alles Weitere landet gebuendelt in **einem**
+Sammel-Issue, das die betroffene(n) Suite(n) im Titel nennt und ebenfalls
+dedupliziert wird.
+
+### Rotierende Stichprobe fuer `test_triggers.py` (Review-Korrektur nach #682)
+
+Der erste Anlauf zum Kern-Set fuehrte `test_triggers.py` vollstaendig aus
+(45 Skills x should_trigger/should_not_trigger = 871 der ~991 Aufrufe eines
+Vollaufs) — das Kern-Set WAR damit faktisch der Vollauf, nur woechentlich
+statt manuell, und widersprach dem Ziel "guenstiger als ein Vollauf".
+
+Seit der Operator-Entscheidung im Review zu PR #682 laeuft `test_triggers.py`
+im geplanten Lauf nur noch als **rotierende Stichprobe**: die 45 Skills sind
+positionell (alphabetische Reihenfolge, Index modulo 4) in vier feste,
+disjunkte Gruppen zu je 11-12 Skills eingeteilt (`ROTATION_GROUPS` in
+`tests/evals/test_triggers.py`). Welche Gruppe ein geplanter Lauf zieht,
+bestimmt die **ISO-Kalenderwoche** (`date.today().isocalendar().week % 4`) —
+deterministisch und reproduzierbar aus dem Datum, kein Zufall. Ueber vier
+aufeinanderfolgende Wochen kommt so jeder Skill genau einmal dran
+(`test_rotation_full_cycle_hits_every_group_without_skipping` haelt das
+fest, `test_rotation_groups_partition_all_skills` haelt die Vereinigung aller
+Gruppen gegen `ALL_SKILLS`).
+
+Das begrenzt `test_triggers.py` auf **~210-235 Aufrufe pro Woche** (statt
+871). Zusammen mit den restlichen acht Kern-Set-Dateien (Quality-Evals,
+unveraendert ~120 Aufrufe) liegt ein geplanter Lauf damit insgesamt bei
+**~330-355 API-Aufrufen pro Woche** — statt vorher faktisch ~991.
+
+Ueberschreibbar per `EVAL_TRIGGER_ROTATION_GROUP`-Umgebungsvariable
+(vom Workflow gesetzt), fuer manuelle Laeufe zusaetzlich per
+`workflow_dispatch`-Input `trigger_rotation_group`:
+
+| Wert | Bedeutung |
+| --- | --- |
+| leer/unset | Voller Skill-Satz (Verhalten vor Issue #597 -- gilt automatisch fuer jeden manuellen Lauf ohne diesen Input). |
+| `"all"` | Voller Skill-Satz, explizit erzwungen (z.B. manueller Nachvollzug eines Vollaufs). |
+| `"auto"` | Rotationsgruppe der aktuellen ISO-Kalenderwoche -- setzt der geplante Lauf automatisch, sofern kein Override vorliegt. |
+| `"0"`..`"3"` | Genau diese Rotationsgruppe erzwingen (z.B. um eine bestimmte Gruppe ausserhalb ihrer Woche nachzufahren). |
+
+Ein unbekannter Wert bricht die Collection mit `ValueError` ab statt still
+auf "alle Skills" zurueckzufallen -- ein Tippfehler im Input soll auffallen,
+nicht lautlos das Budget sprengen.
 
 ## Alt-Issue #55
 

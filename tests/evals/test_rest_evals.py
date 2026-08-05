@@ -1,4 +1,5 @@
 """Evals fuer die restlichen 8 Skills + 2 Agents (minimale Baseline)."""
+
 import json
 
 import pytest
@@ -10,6 +11,8 @@ from tests.evals.eval_runner import (
     load_agent_content,
     load_skill_content,
 )
+
+pytestmark = pytest.mark.eval_core_set
 
 REST_SKILLS = [
     "academic-context",

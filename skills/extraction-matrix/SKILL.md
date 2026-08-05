@@ -11,10 +11,10 @@ description: >
   `academic_context.md` ab, ergänzt um die Standardmerkmale Methode,
   Stichprobe, Erhebungszeitraum und Kernbefund; befüllt jede Zelle
   ausschließlich aus vorhandenen `vault.find_notes()`/`vault.find_quotes()`-
-  Belegen und markiert Fehlendes explizit statt zu raten. Für Einzel-Exzerpte
-  pro Quelle → `reading-notes`. Für wörtliche Zitate → `citation-extraction`.
-  Statistische Auswertung oder Interpretation der Matrix ist nicht Teil
-  dieses Skills.
+  Belegen und markiert Fehlendes explizit statt zu raten. Statistische
+  Auswertung oder Interpretation der Matrix ist nicht Teil dieses Skills. Für
+  Einzel-Exzerpte pro Quelle → `reading-notes`. Für wörtliche Zitate →
+  `citation-extraction`.
 license: MIT
 allowed-tools: [Read, Skill(document-skills:xlsx)]
 ---

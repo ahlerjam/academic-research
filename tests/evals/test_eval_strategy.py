@@ -250,7 +250,113 @@ def _current_skip_sentence(text: str) -> str:
     return text[idx : idx + 400]
 
 
-def test_skip_count_matches_real_pytest_run(strategy_text):
+# ---------------------------------------------------------------------------
+# Issue #677: Die strikte Gleichheit auf die 'passed'-Zahl kostete einen
+# Zwangs-Commit pro main-Merge, weil jeder neue (gruene) Test unter
+# tests/evals/ diesen Guard rot faerbte, ohne dass STRATEGY.md je angefasst
+# wurde. Die Kern-Vergleichslogik ist deshalb in pure Helper-Funktionen
+# extrahiert, die ohne echten Subprozess-Lauf unit-testbar sind. Die
+# 'passed'-Assertion wird auf eine Untergrenze gelockert (echte Regressionen
+# bleiben rot); die 'skipped'-Gleichheit bleibt scharf.
+# ---------------------------------------------------------------------------
+
+_ENV_KEYS_TO_STRIP_EXACT = {"RUN_LIVE_NLI_PREFILTER"}
+
+
+def _clean_subprocess_env() -> dict[str, str]:
+    """Kopie von ``os.environ`` ohne live-gatete/Coverage-Core-Variablen.
+
+    ``RUN_LIVE_NLI_PREFILTER`` wuerde ~1 GB Modellgewichte in den 120s-Timeout
+    dieses Guards laden (Issue #677); ``COV_CORE_*`` stammt aus einem
+    coverage-Lauf des AEUSSEREN pytest-Prozesses und wuerde den INNEREN Lauf
+    stoeren, wenn es vererbt wird.
+    """
+    env = dict(os.environ)
+    for key in list(env):
+        if key in _ENV_KEYS_TO_STRIP_EXACT or key.startswith("COV_CORE_"):
+            del env[key]
+    return env
+
+
+def _last_summary_line(stdout: str) -> str | None:
+    """Verankert auf die pytest-Abschlusszeile (``N passed[, M skipped] in Ts``).
+
+    Verhindert, dass eine Zahl aus einem Traceback oder einer FAILURES-Sektion
+    als Summary fehlinterpretiert wird (Issue #677, P2-Finding aus PR #664).
+    """
+    candidates = [
+        line
+        for line in stdout.splitlines()
+        if re.search(r"\bin\s[\d.]+s\b", line) and re.search(r"\d+\s+\w+", line)
+    ]
+    return candidates[-1] if candidates else None
+
+
+def _diagnose_or_compare(
+    *, returncode: int, stdout: str, doc_passed: int, doc_skipped: int
+) -> None:
+    """Pure Vergleichslogik, extrahiert fuer Unit-Tests (Issue #677).
+
+    Meldet einen echten Testfehler des inneren Laufs als Testfehler, nicht als
+    Doku-Mismatch. Prueft die ``passed``-Zahl nur noch als Untergrenze, die
+    ``skipped``-Zahl weiterhin per Gleichheit.
+    """
+    summary_line = _last_summary_line(stdout)
+    if returncode != 0:
+        raise AssertionError(
+            f"Innerer pytest-Lauf (tests/evals/) ist fehlgeschlagen (returncode="
+            f"{returncode}): {summary_line or stdout[-500:]!r}. Das ist ein "
+            "Testfehler in tests/evals/, kein veralteter Doku-Wert (Issue #677)."
+        )
+
+    assert summary_line, f"Konnte pytest-Summary-Zeile nicht finden:\n{stdout}"
+    passed_match = re.search(r"(\d+) passed", summary_line)
+    skipped_match = re.search(r"(\d+) skipped", summary_line)
+    assert passed_match, f"Summary-Zeile ohne 'passed': {summary_line!r}"
+    inner_passed = int(passed_match.group(1))
+    inner_skipped = int(skipped_match.group(1)) if skipped_match else 0
+
+    assert inner_passed + 1 >= doc_passed, (
+        f"Dokumentiert: {doc_passed} passed. Realer Lauf (ohne diesen Test): "
+        f"{inner_passed} passed (+1 fuer diesen Test = {inner_passed + 1}) liegt "
+        "darunter — das ist eine echte Regression, nicht nur ein neuer Test "
+        "(Issue #677)."
+    )
+    assert inner_skipped == doc_skipped, (
+        f"Dokumentiert: {doc_skipped} skipped. Realer Lauf: {inner_skipped} skipped (Issue #619)."
+    )
+
+
+def _run_inner_pytest(deselect_nodeid: str) -> subprocess.CompletedProcess[str]:
+    """Fuehrt den inneren ``tests/evals/``-Lauf mit bereinigter Umgebung aus."""
+    env = _clean_subprocess_env()
+    try:
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/evals/",
+                "--deselect",
+                deselect_nodeid,
+                "-p",
+                "no:cacheprovider",
+                "-q",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        pytest.fail(
+            "Innerer pytest-Lauf (tests/evals/) hat das 120s-Timeout ueberschritten "
+            f"(Issue #677), statt mit Roh-Traceback zu sterben: {exc}"
+        )
+
+
+def test_skip_count_matches_real_pytest_run(strategy_text, request):
     """Die dokumentierte Skip-Zahl muss zu einem echten Lauf passen (Issue #619)."""
     if os.environ.get("ANTHROPIC_API_KEY") or claude_cli_available():
         pytest.skip(
@@ -266,32 +372,191 @@ def test_skip_count_matches_real_pytest_run(strategy_text):
     )
     doc_passed, doc_skipped = int(match.group(1)), int(match.group(2))
 
+    result = _run_inner_pytest(request.node.nodeid)
+    _diagnose_or_compare(
+        returncode=result.returncode,
+        stdout=result.stdout,
+        doc_passed=doc_passed,
+        doc_skipped=doc_skipped,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Unit-Tests fuer die extrahierten Helper (Issue #677) — laufen ohne echten
+# Subprozess-Lauf, decken AC1/AC2 der Vergleichslogik direkt ab.
+# ---------------------------------------------------------------------------
+
+
+def test_diagnose_or_compare_accepts_extra_passed_test():
+    """AC1: ein zusaetzlicher gruener Test (mehr passed als dokumentiert) faerbt nicht rot."""
+    _diagnose_or_compare(
+        returncode=0, stdout="100 passed in 1.23s\n", doc_passed=101, doc_skipped=0
+    )  # darf nicht raisen
+
+
+def test_diagnose_or_compare_reports_inner_failure_not_doc_mismatch():
+    """AC2: ein Fehlschlag-Returncode meldet den Testfehler, nicht einen Doku-Mismatch."""
+    with pytest.raises(AssertionError) as exc_info:
+        _diagnose_or_compare(
+            returncode=1,
+            stdout="1 failed, 273 passed in 3.21s\n",
+            doc_passed=274,
+            doc_skipped=194,
+        )
+    message = str(exc_info.value)
+    assert "Testfehler" in message
+    assert "Dokumentiert" not in message
+
+
+def test_diagnose_or_compare_still_fails_on_fewer_passed():
+    """Untergrenze bleibt eine Grenze: weniger passed als dokumentiert ist weiterhin rot."""
+    with pytest.raises(AssertionError):
+        _diagnose_or_compare(
+            returncode=0, stdout="273 passed in 1.00s\n", doc_passed=300, doc_skipped=0
+        )
+
+
+def test_diagnose_or_compare_still_fails_on_skip_mismatch():
+    """Die Skip-Zahl bleibt scharf per Gleichheit geprueft."""
+    with pytest.raises(AssertionError):
+        _diagnose_or_compare(
+            returncode=0,
+            stdout="300 passed, 10 skipped in 1.00s\n",
+            doc_passed=300,
+            doc_skipped=194,
+        )
+
+
+def test_run_inner_pytest_strips_live_gated_and_coverage_env(monkeypatch):
+    """Der Subprozess erbt weder RUN_LIVE_NLI_PREFILTER noch COV_CORE_*-Keys."""
+    captured: dict[str, object] = {}
+
+    def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        captured["cmd"] = cmd
+        captured["env"] = kwargs.get("env")
+        return subprocess.CompletedProcess(cmd, 0, stdout="1 passed in 0.01s\n", stderr="")
+
+    monkeypatch.setenv("RUN_LIVE_NLI_PREFILTER", "1")
+    monkeypatch.setenv("COV_CORE_SOURCE", "tests")
+    monkeypatch.setenv("COV_CORE_CONFIG", ".coveragerc")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    _run_inner_pytest("tests/evals/test_eval_strategy.py::dummy")
+
+    env = captured["env"]
+    assert env is not None
+    assert "RUN_LIVE_NLI_PREFILTER" not in env
+    assert "COV_CORE_SOURCE" not in env
+    assert "COV_CORE_CONFIG" not in env
+    cmd = captured["cmd"]
+    assert "-p" in cmd and "no:cacheprovider" in cmd
+
+
+# ---------------------------------------------------------------------------
+# AC4: Kein neuer Runner verbrennt Budget.
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Issue #597: Das Kern-Set fuer den woechentlichen geplanten Lauf
+# (eval-behavior.yml) ist ausschliesslich ueber den pytest-Marker
+# `eval_core_set` definiert (pyproject.toml registriert ihn, die neun Dateien
+# unten tragen ihn als module-level pytestmark). Dieser Guard haelt die
+# Marker-Treffer gegen eine explizite Liste -- eine neue API-gatete Suite, die
+# den Marker vergisst, faellt sonst stillschweigend aus dem geplanten Lauf
+# (Analogie zu test_every_eval_dir_has_exactly_one_status).
+# ---------------------------------------------------------------------------
+
+EXPECTED_EVAL_CORE_SET_FILES = frozenset(
+    {
+        "tests/evals/test_abstract_generator_evals.py",
+        "tests/evals/test_chapter_writer_evals.py",
+        "tests/evals/test_citation_extraction_evals.py",
+        "tests/evals/test_quote_extractor_evals.py",
+        "tests/evals/test_quality_reviewer_evals.py",
+        "tests/evals/test_source_quality_audit_evals.py",
+        "tests/evals/test_sparring_partner_evals.py",
+        "tests/evals/test_rest_evals.py",
+        "tests/evals/test_triggers.py",
+    }
+)
+
+
+# Review-Korrektur (PR #682): test_triggers.py läuft im geplanten Lauf als
+# rotierende Stichprobe (siehe tests/evals/test_triggers.py, ROTATION_GROUPS).
+# Kleinste dokumentierte Gruppengroesse ist 10 Skills (Operator-Vorgabe
+# 10-15) x 2 Tests (should_trigger_recall + should_not_trigger_fpr) = 20
+# Node-IDs als Untergrenze -- unabhaengig davon, welche Gruppe die jeweils
+# aktuelle ISO-Woche zieht.
+MIN_ROTATION_NODE_IDS = 20
+
+
+def test_eval_core_set_matches_documented_files():
+    """`-m eval_core_set --collect-only` deckt exakt die neun dokumentierten
+    Dateien ab -- weder mehr (versehentlich zu breiter Marker) noch weniger
+    (Suite vergisst den Marker und faellt lautlos aus dem geplanten Lauf,
+    Issue #597 AC2).
+
+    Explizites `env` statt Vererbung des Ambient-Envs: der Subprozess soll
+    unabhaengig davon, ob EVAL_TRIGGER_ROTATION_GROUP in der aufrufenden
+    Shell zufaellig gesetzt ist, ein deterministisches Ergebnis liefern
+    (Rotationsgruppe "0", die kleinste dokumentierte Gruppe).
+
+    Die reine Datei-Zugehoerigkeits-Pruefung unten waere nach Einfuehrung der
+    Rotation (PR #682) unempfindlich gegen eine Regression, die
+    ROTATION_SKILLS versehentlich leerlaufen laesst: die beiden
+    nicht-parametrisierten Tests in test_triggers.py (Kollisions-Checks) und
+    die hermetischen Rotations-Tests selbst wuerden die Datei weiterhin als
+    "collected" ausweisen, auch wenn beide API-gateten Trigger-Tests
+    (should_trigger_recall/should_not_trigger_fpr) keine einzige Node-ID mehr
+    beitragen. Die zusaetzliche Untergrenzen-Pruefung unten haelt genau das
+    fest, damit der Guard bei einer solchen Regression tatsaechlich rot
+    wird statt wirkungslos gruen zu bleiben."""
+    env = dict(os.environ, EVAL_TRIGGER_ROTATION_GROUP="0")
     result = subprocess.run(
         [
             sys.executable,
             "-m",
             "pytest",
             "tests/evals/",
-            "--deselect",
-            "tests/evals/test_eval_strategy.py::test_skip_count_matches_real_pytest_run",
+            "-m",
+            "eval_core_set",
+            "--collect-only",
             "-q",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=60,
+        env=env,
     )
-    summary_match = re.search(r"(\d+) passed(?:, (\d+) skipped)?", result.stdout)
-    assert summary_match, f"Konnte Summary-Zeile nicht parsen:\n{result.stdout}"
-    inner_passed = int(summary_match.group(1))
-    inner_skipped = int(summary_match.group(2) or 0)
+    assert result.returncode == 0, (
+        f"--collect-only fuer eval_core_set schlug fehl:\n{result.stdout}\n{result.stderr}"
+    )
+    collected_lines = [line for line in result.stdout.splitlines() if "::" in line]
+    collected_files = {line.split("::", 1)[0] for line in collected_lines}
+    missing = EXPECTED_EVAL_CORE_SET_FILES - collected_files
+    unexpected = collected_files - EXPECTED_EVAL_CORE_SET_FILES
+    assert not missing, (
+        f"Dateien ohne eval_core_set-Marker, obwohl im Kern-Set erwartet: {sorted(missing)} "
+        f"(Issue #597 AC2)."
+    )
+    assert not unexpected, (
+        f"Dateien mit eval_core_set-Marker, die nicht zum dokumentierten Kern-Set "
+        f"gehoeren: {sorted(unexpected)} (Issue #597 AC2)."
+    )
 
-    assert inner_passed + 1 == doc_passed, (
-        f"Dokumentiert: {doc_passed} passed. Realer Lauf (ohne diesen Test): "
-        f"{inner_passed} passed (+1 fuer diesen Test = {inner_passed + 1}). Issue #619."
-    )
-    assert inner_skipped == doc_skipped, (
-        f"Dokumentiert: {doc_skipped} skipped. Realer Lauf: {inner_skipped} skipped (Issue #619)."
+    trigger_test_ids = [
+        line
+        for line in collected_lines
+        if line.startswith("tests/evals/test_triggers.py::")
+        and ("test_should_trigger_recall" in line or "test_should_not_trigger_fpr" in line)
+    ]
+    assert len(trigger_test_ids) >= MIN_ROTATION_NODE_IDS, (
+        f"test_triggers.py liefert nur {len(trigger_test_ids)} API-gatete Node-IDs fuer "
+        f"Rotationsgruppe '0' -- erwartet mindestens {MIN_ROTATION_NODE_IDS} (Untergrenze aus "
+        "der kleinsten dokumentierten Gruppengroesse). Die Rotation laeuft moeglicherweise leer "
+        "(Issue #597 Review-Korrektur, PR #682)."
     )
 
 
@@ -386,9 +651,17 @@ def test_strategy_documents_deliberate_structural_choice(strategy_text, rows):
     )
 
 
-# ---------------------------------------------------------------------------
-# AC4: Kein neuer Runner verbrennt Budget.
-# ---------------------------------------------------------------------------
+def test_strategy_documents_eval_core_set_schedule():
+    """AC6: STRATEGY.md nennt Rhythmus und Umfang des geplanten Kern-Set-Laufs."""
+    text = _strategy_text()
+    assert "woechentlich" in text.lower() or "wöchentlich" in text.lower(), (
+        "STRATEGY.md muss den Rhythmus des geplanten Laufs (woechentlich) benennen "
+        "(Issue #597 AC6)."
+    )
+    assert "eval_core_set" in text, (
+        "STRATEGY.md muss auf den Marker eval_core_set als Quelle der Wahrheit fuer "
+        "das Kern-Set verweisen (Issue #597 AC6)."
+    )
 
 
 def test_no_eval_runner_requires_api_key():
