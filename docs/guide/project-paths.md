@@ -63,10 +63,11 @@ entfällt hier, anders als beim vorigen Weg.
 Reihenfolge: `academic-context` → `research-question-refiner` → `citation-extraction` →
 `reading-notes` → `literature-gap-analysis` → `extraction-matrix` → `chapter-writer`.
 
-Abhängigkeit: `literature-gap-analysis` braucht einen bestehenden Kapitelentwurf, um
-Coverage pro Kapitel zu berichten — der Skill läuft also erst sinnvoll, nachdem
-`chapter-writer` mindestens einmal geschrieben hat, und die zweite Suchrunde schließt
-sich daran an statt davor.
+Abhängigkeit: `literature-gap-analysis` setzt einen aufgebauten Quellenbestand
+(`literature_state.md` via `/search`) und die Gliederung in `academic_context.md`
+voraus. Damit ist die zweite Suchrunde nach `reading-notes` möglich, ohne erst
+`chapter-writer` aufzurufen — der Skill analysiert Abdeckung pro Kapitelthema, nicht
+pro geschriebenem Entwurf.
 
 ## Zeitschriftenbeitrag
 
