@@ -250,7 +250,113 @@ def _current_skip_sentence(text: str) -> str:
     return text[idx : idx + 400]
 
 
-def test_skip_count_matches_real_pytest_run(strategy_text):
+# ---------------------------------------------------------------------------
+# Issue #677: Die strikte Gleichheit auf die 'passed'-Zahl kostete einen
+# Zwangs-Commit pro main-Merge, weil jeder neue (gruene) Test unter
+# tests/evals/ diesen Guard rot faerbte, ohne dass STRATEGY.md je angefasst
+# wurde. Die Kern-Vergleichslogik ist deshalb in pure Helper-Funktionen
+# extrahiert, die ohne echten Subprozess-Lauf unit-testbar sind. Die
+# 'passed'-Assertion wird auf eine Untergrenze gelockert (echte Regressionen
+# bleiben rot); die 'skipped'-Gleichheit bleibt scharf.
+# ---------------------------------------------------------------------------
+
+_ENV_KEYS_TO_STRIP_EXACT = {"RUN_LIVE_NLI_PREFILTER"}
+
+
+def _clean_subprocess_env() -> dict[str, str]:
+    """Kopie von ``os.environ`` ohne live-gatete/Coverage-Core-Variablen.
+
+    ``RUN_LIVE_NLI_PREFILTER`` wuerde ~1 GB Modellgewichte in den 120s-Timeout
+    dieses Guards laden (Issue #677); ``COV_CORE_*`` stammt aus einem
+    coverage-Lauf des AEUSSEREN pytest-Prozesses und wuerde den INNEREN Lauf
+    stoeren, wenn es vererbt wird.
+    """
+    env = dict(os.environ)
+    for key in list(env):
+        if key in _ENV_KEYS_TO_STRIP_EXACT or key.startswith("COV_CORE_"):
+            del env[key]
+    return env
+
+
+def _last_summary_line(stdout: str) -> str | None:
+    """Verankert auf die pytest-Abschlusszeile (``N passed[, M skipped] in Ts``).
+
+    Verhindert, dass eine Zahl aus einem Traceback oder einer FAILURES-Sektion
+    als Summary fehlinterpretiert wird (Issue #677, P2-Finding aus PR #664).
+    """
+    candidates = [
+        line
+        for line in stdout.splitlines()
+        if re.search(r"\bin\s[\d.]+s\b", line) and re.search(r"\d+\s+\w+", line)
+    ]
+    return candidates[-1] if candidates else None
+
+
+def _diagnose_or_compare(
+    *, returncode: int, stdout: str, doc_passed: int, doc_skipped: int
+) -> None:
+    """Pure Vergleichslogik, extrahiert fuer Unit-Tests (Issue #677).
+
+    Meldet einen echten Testfehler des inneren Laufs als Testfehler, nicht als
+    Doku-Mismatch. Prueft die ``passed``-Zahl nur noch als Untergrenze, die
+    ``skipped``-Zahl weiterhin per Gleichheit.
+    """
+    summary_line = _last_summary_line(stdout)
+    if returncode != 0:
+        raise AssertionError(
+            f"Innerer pytest-Lauf (tests/evals/) ist fehlgeschlagen (returncode="
+            f"{returncode}): {summary_line or stdout[-500:]!r}. Das ist ein "
+            "Testfehler in tests/evals/, kein veralteter Doku-Wert (Issue #677)."
+        )
+
+    assert summary_line, f"Konnte pytest-Summary-Zeile nicht finden:\n{stdout}"
+    passed_match = re.search(r"(\d+) passed", summary_line)
+    skipped_match = re.search(r"(\d+) skipped", summary_line)
+    assert passed_match, f"Summary-Zeile ohne 'passed': {summary_line!r}"
+    inner_passed = int(passed_match.group(1))
+    inner_skipped = int(skipped_match.group(1)) if skipped_match else 0
+
+    assert inner_passed + 1 >= doc_passed, (
+        f"Dokumentiert: {doc_passed} passed. Realer Lauf (ohne diesen Test): "
+        f"{inner_passed} passed (+1 fuer diesen Test = {inner_passed + 1}) liegt "
+        "darunter — das ist eine echte Regression, nicht nur ein neuer Test "
+        "(Issue #677)."
+    )
+    assert inner_skipped == doc_skipped, (
+        f"Dokumentiert: {doc_skipped} skipped. Realer Lauf: {inner_skipped} skipped (Issue #619)."
+    )
+
+
+def _run_inner_pytest(deselect_nodeid: str) -> subprocess.CompletedProcess[str]:
+    """Fuehrt den inneren ``tests/evals/``-Lauf mit bereinigter Umgebung aus."""
+    env = _clean_subprocess_env()
+    try:
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/evals/",
+                "--deselect",
+                deselect_nodeid,
+                "-p",
+                "no:cacheprovider",
+                "-q",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        pytest.fail(
+            "Innerer pytest-Lauf (tests/evals/) hat das 120s-Timeout ueberschritten "
+            f"(Issue #677), statt mit Roh-Traceback zu sterben: {exc}"
+        )
+
+
+def test_skip_count_matches_real_pytest_run(strategy_text, request):
     """Die dokumentierte Skip-Zahl muss zu einem echten Lauf passen (Issue #619)."""
     if os.environ.get("ANTHROPIC_API_KEY") or claude_cli_available():
         pytest.skip(
@@ -266,33 +372,84 @@ def test_skip_count_matches_real_pytest_run(strategy_text):
     )
     doc_passed, doc_skipped = int(match.group(1)), int(match.group(2))
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "tests/evals/",
-            "--deselect",
-            "tests/evals/test_eval_strategy.py::test_skip_count_matches_real_pytest_run",
-            "-q",
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=120,
+    result = _run_inner_pytest(request.node.nodeid)
+    _diagnose_or_compare(
+        returncode=result.returncode,
+        stdout=result.stdout,
+        doc_passed=doc_passed,
+        doc_skipped=doc_skipped,
     )
-    summary_match = re.search(r"(\d+) passed(?:, (\d+) skipped)?", result.stdout)
-    assert summary_match, f"Konnte Summary-Zeile nicht parsen:\n{result.stdout}"
-    inner_passed = int(summary_match.group(1))
-    inner_skipped = int(summary_match.group(2) or 0)
 
-    assert inner_passed + 1 == doc_passed, (
-        f"Dokumentiert: {doc_passed} passed. Realer Lauf (ohne diesen Test): "
-        f"{inner_passed} passed (+1 fuer diesen Test = {inner_passed + 1}). Issue #619."
-    )
-    assert inner_skipped == doc_skipped, (
-        f"Dokumentiert: {doc_skipped} skipped. Realer Lauf: {inner_skipped} skipped (Issue #619)."
-    )
+
+# ---------------------------------------------------------------------------
+# Unit-Tests fuer die extrahierten Helper (Issue #677) — laufen ohne echten
+# Subprozess-Lauf, decken AC1/AC2 der Vergleichslogik direkt ab.
+# ---------------------------------------------------------------------------
+
+
+def test_diagnose_or_compare_accepts_extra_passed_test():
+    """AC1: ein zusaetzlicher gruener Test (mehr passed als dokumentiert) faerbt nicht rot."""
+    _diagnose_or_compare(
+        returncode=0, stdout="100 passed in 1.23s\n", doc_passed=101, doc_skipped=0
+    )  # darf nicht raisen
+
+
+def test_diagnose_or_compare_reports_inner_failure_not_doc_mismatch():
+    """AC2: ein Fehlschlag-Returncode meldet den Testfehler, nicht einen Doku-Mismatch."""
+    with pytest.raises(AssertionError) as exc_info:
+        _diagnose_or_compare(
+            returncode=1,
+            stdout="1 failed, 273 passed in 3.21s\n",
+            doc_passed=274,
+            doc_skipped=194,
+        )
+    message = str(exc_info.value)
+    assert "Testfehler" in message
+    assert "Dokumentiert" not in message
+
+
+def test_diagnose_or_compare_still_fails_on_fewer_passed():
+    """Untergrenze bleibt eine Grenze: weniger passed als dokumentiert ist weiterhin rot."""
+    with pytest.raises(AssertionError):
+        _diagnose_or_compare(
+            returncode=0, stdout="273 passed in 1.00s\n", doc_passed=300, doc_skipped=0
+        )
+
+
+def test_diagnose_or_compare_still_fails_on_skip_mismatch():
+    """Die Skip-Zahl bleibt scharf per Gleichheit geprueft."""
+    with pytest.raises(AssertionError):
+        _diagnose_or_compare(
+            returncode=0,
+            stdout="300 passed, 10 skipped in 1.00s\n",
+            doc_passed=300,
+            doc_skipped=194,
+        )
+
+
+def test_run_inner_pytest_strips_live_gated_and_coverage_env(monkeypatch):
+    """Der Subprozess erbt weder RUN_LIVE_NLI_PREFILTER noch COV_CORE_*-Keys."""
+    captured: dict[str, object] = {}
+
+    def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        captured["cmd"] = cmd
+        captured["env"] = kwargs.get("env")
+        return subprocess.CompletedProcess(cmd, 0, stdout="1 passed in 0.01s\n", stderr="")
+
+    monkeypatch.setenv("RUN_LIVE_NLI_PREFILTER", "1")
+    monkeypatch.setenv("COV_CORE_SOURCE", "tests")
+    monkeypatch.setenv("COV_CORE_CONFIG", ".coveragerc")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    _run_inner_pytest("tests/evals/test_eval_strategy.py::dummy")
+
+    env = captured["env"]
+    assert env is not None
+    assert "RUN_LIVE_NLI_PREFILTER" not in env
+    assert "COV_CORE_SOURCE" not in env
+    assert "COV_CORE_CONFIG" not in env
+    cmd = captured["cmd"]
+    assert "-p" in cmd and "no:cacheprovider" in cmd
 
 
 # ---------------------------------------------------------------------------

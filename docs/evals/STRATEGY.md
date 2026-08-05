@@ -35,14 +35,21 @@ keinen Tier erreicht. Die 147 API-gateten Skips waren zu dem Zeitpunkt
 unverändert geblieben — dieses Issue hat Transparenz geschaffen, keine
 LLM-Qualität gemessen.
 
-**Heutiger Stand** (Issue #619, reproduzierbar mit `uv run pytest
-tests/evals/ -q` ohne `ANTHROPIC_API_KEY`): `274 passed, 194 skipped`. Seit
-#390 sind weitere Suiten dazugekommen (u. a. #524, #626, #628, #630); die
-Skip-Zahl ist gegenüber dem #390-Snapshot gestiegen, weil jede neue
-`structural`-Komponente eigene API-gatete Tests mitbringt. Diese Zahl wird
-durch `test_skip_count_matches_real_pytest_run` gegen einen echten
-Subprozesslauf gehalten, statt als Prosa zu veralten (#619 entstand, weil die
-vorherige Fassung dieses Satzes bereits um 34 veraltet war).
+**Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
+tests/evals/ -q` ohne `ANTHROPIC_API_KEY` und ohne installierte `claude`-CLI
+im PATH — `claude_cli_available()` gatet den Guard zusätzlich, Issue #631):
+`274 passed, 194 skipped`. Seit #390 sind weitere Suiten dazugekommen (u. a.
+#524, #626, #628, #630); die Skip-Zahl ist gegenüber dem #390-Snapshot
+gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
+mitbringt. `test_skip_count_matches_real_pytest_run` hält die **Skip-Zahl**
+weiterhin per Gleichheit gegen einen echten Subprozesslauf; die `passed`-Zahl
+prüft der Guard seit #677 nur noch als **Untergrenze** — echte Regressionen
+bleiben rot, ein PR, der irgendwo unter `tests/evals/` einen neuen grünen
+Test ergänzt, färbt diesen Guard nicht mehr rot. Vor #677 war die `passed`-Zahl
+per strikter Gleichheit gekoppelt: jeder Merge aus main, der unter
+`tests/evals/` einen Test hinzufügte, machte diesen und jeden Folge-PR rot,
+ohne dass der PR `STRATEGY.md` je angefasst hätte (Vorfallsreihe allein
+innerhalb von PR #664: `092c9c6`, `a5e656d`, `60527b5`, `17c7ec5`).
 
 Dieses Dokument benennt deshalb für **jede** Komponente unter `evals/` genau
 einen Zustand — und der Guard erzwingt, dass keine Komponente stillschweigend

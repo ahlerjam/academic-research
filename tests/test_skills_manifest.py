@@ -191,6 +191,68 @@ def test_token_reduction(skill_path: Path) -> None:
     )
 
 
+# --- Issue #621: descriptions truncation-resistent (harte 1.536-Zeichen-Kappung
+# in der Skill-Listing-Anzeige, Abgrenzung strukturell hinter allen Triggern) ------
+
+DESCRIPTION_MAX_CHARS = 1536  # Frontmatter-Referenz: description+when_to_use wird
+# in der Skill-Listing-Anzeige bei 1.536 Zeichen gekappt (von hinten).
+
+# Nicht jeder '→'-Pfeil im description-Feld ist ein Abgrenzungsverweis auf einen
+# anderen Skill/Agent -- Format-Pfeile wie "Markdown → .tex" oder "Markdown-Kapitel
+# → .pptx" zeigen auf ein Ziel-Dateiformat, kein Cross-Reference. Ein echter
+# Abgrenzungsverweis ist am Buchstaben/Backtick direkt nach dem Pfeil erkennbar,
+# ein Format-Pfeil am Punkt (Dateiendung).
+ABGRENZUNG_ARROW_RE = re.compile(r"→\s*(?!\.)\S")
+
+SKILLS_WITH_ABGRENZUNG_ARROW = [
+    p for p in ALL_SKILLS if ABGRENZUNG_ARROW_RE.search(_description(p))
+]
+
+
+def _abgrenzung_tail_violation(desc: str) -> str:
+    """Text NACH dem Satz des letzten Abgrenzungsverweises, oder '' wenn dieser Satz
+    die description abschliesst (bzw. kein Abgrenzungsverweis vorhanden ist).
+
+    Nicht-leer bedeutet: nach der Abgrenzung folgt noch Funktions-/Trigger-Text --
+    genau der Fall, der bei einer Kappung von hinten zuerst uebersteht, waehrend
+    die (wertvollere) Abgrenzung zuerst verschwindet.
+    """
+    arrows = list(ABGRENZUNG_ARROW_RE.finditer(desc))
+    if not arrows:
+        return ""
+    rest = desc[arrows[-1].start() :]
+    dot_idx = rest.find(".")
+    if dot_idx == -1:
+        return ""
+    return rest[dot_idx + 1 :].strip()
+
+
+@pytest.mark.parametrize("skill_path", ALL_SKILLS, ids=lambda p: p.parent.name)
+def test_description_under_1536_chars(skill_path: Path) -> None:
+    """Issue #621: description darf die harte Listing-Kappung nicht ueberschreiten."""
+    desc = _description(skill_path)
+    assert len(desc) <= DESCRIPTION_MAX_CHARS, (
+        f"{skill_path.parent.name}: description hat {len(desc)} Zeichen "
+        f"(> {DESCRIPTION_MAX_CHARS}) -- wird in der Skill-Listing-Anzeige gekappt."
+    )
+
+
+@pytest.mark.parametrize("skill_path", SKILLS_WITH_ABGRENZUNG_ARROW, ids=lambda p: p.parent.name)
+def test_description_abgrenzung_not_before_triggers(skill_path: Path) -> None:
+    """Issue #621: Abgrenzungs-Querverweise (→ `anderer-skill`) muessen strukturell
+    HINTER allen Trigger-Phrasen/Funktionsbeschreibungen stehen -- sonst verschwinden
+    sie zuerst, wenn die description von hinten gekappt wird (der wertvollste Teil
+    laut Issue-Begruendung).
+    """
+    desc = _description(skill_path)
+    trailing = _abgrenzung_tail_violation(desc)
+    assert trailing == "", (
+        f"{skill_path.parent.name}: nach dem letzten Abgrenzungsverweis folgt noch "
+        f"Text ({trailing[:80]!r}) -- Abgrenzung muss die description abschliessen "
+        f"(Issue #621), sonst wird sie bei Kuerzung zuerst gekappt."
+    )
+
+
 def test_token_baseline_not_empty() -> None:
     """tokens.json muss befuellt sein, sonst skippt die Token-Regression still (Issue #200)."""
     assert TOKEN_BASELINE_PATH.exists(), f"Token-Baseline fehlt: {TOKEN_BASELINE_PATH}"
