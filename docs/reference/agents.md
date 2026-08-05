@@ -11,16 +11,21 @@ heißt, ein Command/Skill/anderer Agent löst ihn ohne weiteres Zutun aus (sobal
 Caller läuft); **manuell** heißt, es gibt keinen solchen Auslöser im Code — der Agent
 wird nur gestartet, wenn er direkt per Task-Aufruf adressiert wird.
 
+Wie in der [Skills-Referenz](skills.md) trägt jeder Eintrag dieselben drei Felder:
+**Voraussetzung**, **Rückgabe** und **Fehlschlag erkennbar an**. Die Rückgabe ist bei
+Agents durchweg ein festes Antwortformat — meist ein JSON-Objekt, das der aufrufende
+Command oder Skill weiterverarbeitet.
+
 ## Recherche und Bewertung
 
-| Agent | Model | Genutzt von | Dispatch | Aufgabe |
-|-------|-------|-------------|----------|---------|
-| `query-generator` | Haiku | `/search` | automatisch via `/search` | Expandiert Suchquery auf Modulebene |
-| `relevance-scorer` | Sonnet | `/search`, `/score` | automatisch via `/search`, `/score` | Semantische Relevanz 0–1, 10er-Batches mit Prompt-Caching |
-| `quote-extractor` | Sonnet | `citation-extraction` | automatisch via `citation-extraction` | Verbatim-Zitate via lokalem PDF-Pfad (`Read` + `local-verbatim`), Citations-API nur noch Opt-in |
-| `quality-reviewer` | Sonnet | `chapter-writer`, `abstract-generator` | automatisch via `chapter-writer`, `abstract-generator` | Evaluator-Optimizer-Pattern (PASS/REVISE/ESCALATE) |
-| `screening-judge` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Ein Treffer, ein Urteil: include/exclude/unclear als Ein-Fall-JSON |
-| `sparring-partner` | Opus | direkt, `advisor`/`research-question-refiner`/`methodology-advisor` | manuell | Denk- und Impulsgeber: benennt Schwächen, Gegenpositionen und Anschlussfragen, schreibt keine Kapitel-Prosa |
+| Agent | Model | Genutzt von | Dispatch | Aufgabe | Voraussetzung | Rückgabe | Fehlschlag erkennbar an |
+|-------|-------|-------------|----------|---------|---------------|----------|-------------------------|
+| `query-generator` | Haiku | `/search` | automatisch via `/search` | Expandiert Suchquery auf Modulebene | Suchbegriff des Nutzers; keine Tools nötig | JSON mit `queries` je Modul, `display_title` und `known_works_queries` | Antwort ohne `queries`-Objekt oder mit nur einer Modul-Variante |
+| `relevance-scorer` | Sonnet | `/search`, `/score` | automatisch via `/search`, `/score` | Semantische Relevanz 0–1, 10er-Batches mit Prompt-Caching | Trefferliste mit Titel und Abstract plus die Suchfrage | JSON `scores[]` mit `doi`, `relevance_score` (0.0–1.0), `reasoning`, `confidence` | Weniger Score-Einträge als übergebene Treffer, oder ein Score außerhalb 0.0–1.0 |
+| `quote-extractor` | Sonnet | `citation-extraction` | automatisch via `citation-extraction` | Verbatim-Zitate via lokalem PDF-Pfad (`Read` + `local-verbatim`), Citations-API nur noch Opt-in | Paper im Vault mit lesbarem lokalem `pdf_path` | JSON `quotes[]` mit `text`, `page`, `section`, Kontext und Score; Zitate landen per `vault.add_quote` im Vault | `vault.add_quote` lehnt mit `ValueError` ab (`no-match`/`no-textlayer`), oder `possible_pdf_mismatch` ist gesetzt |
+| `quality-reviewer` | Sonnet | `chapter-writer`, `abstract-generator` | automatisch via `chapter-writer`, `abstract-generator` | Evaluator-Optimizer-Pattern (PASS/REVISE/ESCALATE) | Der zu prüfende Entwurf plus die Kriterien des Aufrufers | Block mit `VERDICT`, `BEGRÜNDUNG` je Kriterium, `EMPFEHLUNGEN` und `BLOCKIERT_VON` | `VERDICT` fehlt, oder `ESCALATE` kommt ohne Empfehlungsliste zurück |
+| `screening-judge` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Ein Treffer, ein Urteil: include/exclude/unclear als Ein-Fall-JSON | Genau ein Treffer mit Titel/Abstract und die Ein-/Ausschlusskriterien | Ein-Fall-JSON mit `paper_id`, `decision`, `reason`, `criterion`, `confidence`, `evidence` | Rahmentext um das JSON, mehrere Fälle in einer Antwort, oder `decision` außerhalb include/exclude/unclear |
+| `sparring-partner` | Opus | direkt, `advisor`/`research-question-refiner`/`methodology-advisor` | manuell | Denk- und Impulsgeber: benennt Schwächen, Gegenpositionen und Anschlussfragen, schreibt keine Kapitel-Prosa | Vorgelegte Frage, These oder Argumentationslinie; Vault und `academic_context.md` optional | Fester Abschnittsblock `SCHWÄCHE` / `ALTERNATIVE` / `GEGENPOSITION` / `ANSCHLUSSFRAGEN` | Freier Fließtext statt der vier Abschnitte, oder erfundene Belege statt des Degradationspfads bei leerem Vault |
 
 ## Buchbeschaffung
 
@@ -42,26 +47,31 @@ Spalte **Live-Test** hält fest, ob ein wöchentlicher Live-Lauf
 - **bewusst ungetestet (Opt-in)** — rechtlich heikler Zugriffsweg, Default OFF;
   ein Live-Test würde den Opt-in-Charakter unterlaufen (Scope-Out Issue #603).
 
-| Agent | Model | Genutzt von | Dispatch | Aufgabe | Live-Test |
-|-------|-------|-------------|----------|---------|-----------|
-| `book-fetcher` | Sonnet | `/fetch` | automatisch via `/fetch` | Master-Orchestrator: entscheidet Fallback-Reihenfolge für Site-Subagenten | n/a — Dispatcher |
-| `tib-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | tib.eu per browser-use | ungeprüft |
-| `springer-book` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | link.springer.com per browser-use + HAN | ungeprüft |
-| `oapen-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | oapen.org per browser-use | ungeprüft |
-| `doabooks-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | directory.doabooks.org per browser-use | ungeprüft |
-| `degruyter` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | degruyter.com per browser-use + Shibboleth | ungeprüft |
-| `nationallizenzen` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | nationallizenzen.de per browser-use | ungeprüft |
-| `ebook-central` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | ebookcentral.proquest.com per browser-use | ungeprüft |
-| `cambridge-core` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | cambridge.org/core per browser-use + Shibboleth | getestet (`test_issue_449_live_fetch.py`) |
-| `oxford-academic` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | academic.oup.com per browser-use + Shibboleth/OpenAthens | getestet (`test_issue_449_live_fetch.py`) — deckt nur den anonymen No-Login-Pfad ab, seit 2026-08-03 durch Cloudflare-Challenge gesperrt (Issue #612); der SSO-Pfad des Agenten selbst ist ungeprüft |
-| `jstor` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | jstor.org per browser-use + Shibboleth (hohes Anti-Scraping) | getestet (`test_issue_449_live_fetch.py`) |
-| `kvk-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | KVK Meta-Suche (80+ Kataloge) | n/a — kein Volltext-Host |
-| `hathitrust-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | catalog.hathitrust.org per browser-use, nur Full-View-Digitalisate | getestet (`test_issue_450_live_fetch.py`) |
-| `internetarchive-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | archive.org/openlibrary.org per browser-use, kein Export von Borrow/CDL-Titeln | getestet (`test_issue_450_live_fetch.py`) |
-| `mdz-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | digitale-sammlungen.de (Münchener Digitalisierungszentrum) per browser-use | getestet (`test_issue_450_live_fetch.py`) |
-| `generic-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | Universeller Plattform-Navigator: 5 Seitenzustände, Viewer-/Embed-Erkennung, Profil-Lizenzroute, hartes Schritt-Budget | ungeprüft |
-| `auth-helper` | Sonnet | `book-fetcher` (bei Login-Wall) | automatisch via `book-fetcher` | HAN / Shibboleth-WAYF / EZproxy Login-Flow | ungeprüft |
-| `scihub-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` (opt-in) | SciHub-Tier — läuft nur bei `scihub_optin: true` | bewusst ungetestet (Opt-in) |
+Alle Site-Agents antworten im selben Schema: ein JSON-Objekt mit `status`, dem eigenen
+Namen unter `source_subagent` und — nur bei `status: "success"` — dem `pdf_path`.
+Deshalb lautet das Fehlschlag-Signal überall gleich: `status` ist etwas anderes als
+`success`, und `reason` nennt den Grund.
+
+| Agent | Model | Genutzt von | Dispatch | Aufgabe | Live-Test | Voraussetzung | Rückgabe | Fehlschlag erkennbar an |
+|-------|-------|-------------|----------|---------|-----------|---------------|----------|-------------------------|
+| `book-fetcher` | Sonnet | `/fetch` | automatisch via `/fetch` | Master-Orchestrator: entscheidet Fallback-Reihenfolge für Site-Subagenten | n/a — Dispatcher | ISBN, DOI, Titel oder URL plus `output_path`; Uni-Profil optional | JSON mit `status` (`success`/`pickup_required`/`captcha`/`no_match`), `source`, `file_path` und der `tries`-Kette | `status` ist nicht `success`; die `tries`-Kette zeigt, welcher Subagent woran gescheitert ist |
+| `tib-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | tib.eu per browser-use | ungeprüft | `browser-use` verfügbar; ISBN, DOI oder Titel plus `output_path` | JSON mit `status` (`success`/`metadata_only`/`no_match`), bei Erfolg `pdf_path` | `status` ist nicht `success` — `reason` nennt fehlenden Treffer oder fehlenden Volltext |
+| `springer-book` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | link.springer.com per browser-use + HAN | ungeprüft | `browser-use`, Uni-Profil mit Springer-Lizenz für den Volltextpfad | JSON mit `status` (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`), bei Erfolg `pdf_path` | `status` ist nicht `success`; `metadata_only` heißt fehlende Lizenz, `captcha` heißt Abbruch vor dem Download |
+| `oapen-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | oapen.org per browser-use | ungeprüft | `browser-use`; ISBN, DOI oder Titel plus `output_path` | JSON mit `status` (`success`/`metadata_only`/`no_match`), bei Erfolg `pdf_path` | `status` ist nicht `success` — `reason` nennt „0 Treffer" oder den fehlenden Download-Link |
+| `doabooks-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | directory.doabooks.org per browser-use | ungeprüft | `browser-use`; ISBN, DOI oder Titel plus `output_path` | JSON mit `status` (`success`/`metadata_only`/`no_match`), bei Erfolg `pdf_path` | `status` ist nicht `success`; der OA-Filter hat keinen freien Volltext gefunden |
+| `degruyter` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | degruyter.com per browser-use + Shibboleth | ungeprüft | `browser-use`, Uni-Profil mit De-Gruyter-Lizenz für den Volltextpfad | JSON mit `status` (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`), bei Erfolg `pdf_path` | `status` ist nicht `success`; bei einer Login-Wall meldet der Agent zurück, statt selbst einzuloggen |
+| `nationallizenzen` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | nationallizenzen.de per browser-use | ungeprüft | `browser-use`, Profil mit Nationallizenz-Zugang | JSON mit `status` (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`), bei Erfolg `pdf_path` | `status` ist nicht `success` — `reason` nennt fehlende Lizenz oder Auth-Wall auf der Verlagsseite |
+| `ebook-central` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | ebookcentral.proquest.com per browser-use | ungeprüft | `browser-use`, Profil mit ProQuest-Zugang (Login ist hier immer nötig) | JSON mit `status` (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`), bei Erfolg `pdf_path` | `status` ist nicht `success`; `pickup_required` steht für DRM, Download-Limit oder fehlenden Download nach dem Login |
+| `cambridge-core` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | cambridge.org/core per browser-use + Shibboleth | getestet (`test_issue_449_live_fetch.py`) | `browser-use`, Uni-Profil mit Cambridge-Lizenz für den Volltextpfad | JSON mit `status` (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`), bei Erfolg `pdf_path` | `status` ist nicht `success` — `metadata_only` heißt fehlende Lizenz |
+| `oxford-academic` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | academic.oup.com per browser-use + Shibboleth/OpenAthens | getestet (`test_issue_449_live_fetch.py`) — deckt nur den anonymen No-Login-Pfad ab, seit 2026-08-03 durch Cloudflare-Challenge gesperrt (Issue #612); der SSO-Pfad des Agenten selbst ist ungeprüft | `browser-use`, Uni-Profil mit Shibboleth/OpenAthens für den Volltextpfad | JSON mit `status` (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`), bei Erfolg `pdf_path` | `status` ist nicht `success`; seit der Cloudflare-Challenge ist `captcha` der Regelfall ohne Login |
+| `jstor` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | jstor.org per browser-use + Shibboleth (hohes Anti-Scraping) | getestet (`test_issue_449_live_fetch.py`) | `browser-use`, Uni-Profil mit JSTOR-Zugang | JSON mit `status` (`success`/`metadata_only`/`no_match`/`pickup_required`/`captcha`), bei Erfolg `pdf_path` | `status` ist nicht `success`; das hohe Anti-Scraping macht `captcha` wahrscheinlich |
+| `kvk-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | KVK Meta-Suche (80+ Kataloge) | n/a — kein Volltext-Host | `browser-use`; ISBN, DOI oder Titel | JSON mit `status`; im Regelfall `metadata_only` mit Standorten (Bibliothek, Signatur, Ausleihtyp) unter `reason` | `status: "no_match"` — „0 Treffer in KVK"; ein `pdf_path` ist hier ohnehin die Ausnahme |
+| `hathitrust-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | catalog.hathitrust.org per browser-use, nur Full-View-Digitalisate | getestet (`test_issue_450_live_fetch.py`) | `browser-use`; Digitalisat muss Full-View sein | JSON mit `status`, bei Erfolg `pdf_path` und `edition` aus dem Katalogeintrag | `status: "metadata_only"` mit `reason` „Zugriffsstufe: search-only" oder „HTTP 429 — Rate-Limit" |
+| `internetarchive-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | archive.org/openlibrary.org per browser-use, kein Export von Borrow/CDL-Titeln | getestet (`test_issue_450_live_fetch.py`) | `browser-use`; Titel muss frei zugänglich sein (kein Borrow/CDL) | JSON mit `status`, bei Erfolg `pdf_path` und `edition` | `status: "metadata_only"` bei Borrow-/CDL-Titeln — der Agent lädt sie bewusst nicht |
+| `mdz-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | digitale-sammlungen.de (Münchener Digitalisierungszentrum) per browser-use | getestet (`test_issue_450_live_fetch.py`) | `browser-use`; Digitalisat muss frei zugänglich sein | JSON mit `status`, bei Erfolg `pdf_path` und `edition` | `status` ist nicht `success` — `reason` nennt die Zugriffsstufe |
+| `generic-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` | Universeller Plattform-Navigator: 5 Seitenzustände, Viewer-/Embed-Erkennung, Profil-Lizenzroute, hartes Schritt-Budget | ungeprüft | `browser-use`; Eingabe-JSON mit `url` (oder auflösbarer `doi`/`isbn`) und `output_path` | JSON mit `status`, `source`, `file_path`, `reason` und dem `tries`-Protokoll je Schritt | `status` ist nicht `success`; das `tries`-Protokoll zeigt das erschöpfte Schritt-Budget |
+| `auth-helper` | Sonnet | `book-fetcher` (bei Login-Wall) | automatisch via `book-fetcher` | HAN / Shibboleth-WAYF / EZproxy Login-Flow | ungeprüft | Profil-YAML mit Zugangsdaten, Dateirechte genau `0600`; `target_url` der Login-Wall | Meldung an `book-fetcher`, ob die Login-Wall überwunden ist; die Sitzung bleibt in browser-use bestehen | Abbruch wegen falscher Dateirechte am Profil, oder die Zielseite zeigt nach dem Flow weiterhin die Login-Wall |
+| `scihub-fetcher` | Sonnet | `book-fetcher` | automatisch via `book-fetcher` (opt-in) | SciHub-Tier — läuft nur bei `scihub_optin: true` | bewusst ungetestet (Opt-in) | `scihub_optin: true` im aktiven Profil; ohne das bricht der Agent sofort ab | JSON mit `status` (`success`/`captcha`/`no_match`/`opted_out`/`error`), `provenance: "scihub"` und dem Provenance-Sidecar | `status: "opted_out"` (Opt-in fehlt) oder ein anderer Status als `success` |
 
 Site-Agents wie `degruyter` oder `ebook-central` können `auth-helper` nicht selbst
 starten (kein `Agent(auth-helper)`-Tool in ihrer Frontmatter) — sie melden nur eine
@@ -70,9 +80,9 @@ Login-Wall zurück; den tatsächlichen Aufruf macht ausschließlich der Master
 
 ## Methodik und Verifikation
 
-| Agent | Model | Genutzt von | Dispatch | Aufgabe |
-|-------|-------|-------------|----------|---------|
-| `risk-of-bias` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Cochrane RoB 2 / ROBINS-I / CASP |
-| `meta-analysis` | Sonnet | direkt | manuell | DerSimonian-Laird Random-Effects + Forest-Plot |
-| `figure-verifier` | Sonnet | direkt | manuell | VLM-basierte Abbildungsverifikation |
-| `quote-fidelity-auditor` | Sonnet | direkt (Empfehlung aus `claim-drift-guard`-Warnung oder aus dem NLI-Batch-Vorfilter `academic_vault/nli_prefilter.py`, #592, Default AUS) | manuell | Urteilt über ein bestehendes Zitat gegen Kapitel-Behauptung, Quote-Kontext und Abstract; persistiert `quotes.stance` |
+| Agent | Model | Genutzt von | Dispatch | Aufgabe | Voraussetzung | Rückgabe | Fehlschlag erkennbar an |
+|-------|-------|-------------|----------|---------|---------------|----------|-------------------------|
+| `risk-of-bias` | Sonnet | `parallel-screening` | automatisch via `parallel-screening` | Cochrane RoB 2 / ROBINS-I / CASP | Paper im Vault mit erreichbarem PDF-Inhalt und bekanntem Studientyp | `assessment_id` aus `vault.add_risk_of_bias`; `domain_scores` je Domain mit `score`, `reasoning` und `quote_id` | Eine Domain ohne `quote_id`, oder `vault.add_risk_of_bias` wird nie aufgerufen |
+| `meta-analysis` | Sonnet | direkt | manuell | DerSimonian-Laird Random-Effects + Forest-Plot | Effektgrößen und Varianzen je Studie, ausdrücklich bestätigt (`yi`/`vi`) | `kapitel/meta-analyse.md` mit Statistik-Tabelle, Mermaid-Forest-Plot, I², τ², gepooltem Effekt und 95 %-KI | Eine der vier Prüfpositionen fehlt in der Datei — etwa Forest-Plot ohne Pool-Node |
+| `figure-verifier` | Sonnet | direkt | manuell | VLM-basierte Abbildungsverifikation | Paper im Vault mit lesbarem `pdf_path` | JSON je Figure (`figure_id`, `caption`, `vlm_description`) plus Zusammenfassung mit `unverifiable_pages` | Seiten landen in `unverifiable_pages`, mit `reason` wie „pdf_path fehlt" oder „OCR fehlgeschlagen" |
+| `quote-fidelity-auditor` | Sonnet | direkt (Empfehlung aus `claim-drift-guard`-Warnung oder aus dem NLI-Batch-Vorfilter `academic_vault/nli_prefilter.py`, #592, Default AUS) | manuell | Urteilt über ein bestehendes Zitat gegen Kapitel-Behauptung, Quote-Kontext und Abstract; persistiert `quotes.stance` | Bestehende `quote_id` im Vault und die Kapitel-Behauptung, auf die sie sich stützt | JSON mit `verdict`, `stance_persisted`, `abstract_check`, `reasoning` und `recommendation` | `vault.set_quote_stance` wirft `ValueError` (unbekannte `quote_id` oder ungültiger Wert), oder `stance_persisted` fehlt |

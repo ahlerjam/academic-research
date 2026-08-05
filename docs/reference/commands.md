@@ -19,8 +19,12 @@ Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin 
 | `/academic-research:word` | Word-Export (`*.docx`, optional PDF) mit echten Formatvorlagen |
 | `/academic-research:slides` | Foliensatz (`*.pptx`) aus Kapiteln, eine Kernaussage pro Folie |
 
-Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispiel(e)** und
-**Skills/Agents** (was unter der Haube läuft).
+Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispiel(e)**,
+**Skills/Agents** (was unter der Haube läuft), **Voraussetzungen**, **Rückgabe** und
+**Fehlschlag**. Die letzten drei Felder sind dieselbe Feldmenge, die auch die
+[Skills-](skills.md) und die [Agent-Referenz](agents.md) je Eintrag führen — hier als
+Marker-Zeilen statt als Tabellenspalten, weil ein Command mehr Platz braucht als eine
+Tabellenzeile hergibt.
 
 ## Command-Referenz
 
@@ -38,6 +42,16 @@ Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispie
 **Skills/Agents:** Ruft `scripts/setup.sh` auf — kein Agent. Prüft u.a. den globalen
 `browser-use`-Skill und den vendorierten `humanizer-de`-Skill und schreibt
 Claude-Code-Permissions.
+
+**Voraussetzungen:** Python 3.11+, Node.js und Git auf dem Rechner; Schreibrecht in
+`~/.academic-research/`. Der Lauf ist idempotent — ein zweiter Aufruf zerstört nichts.
+
+**Rückgabe:** Eingerichtete Umgebung: virtuelle Umgebung, geprüfter `browser-use`-Skill,
+registrierte Hooks und ein ausgewähltes Per-Uni-Profil.
+
+**Fehlschlag:** `scripts/setup.sh` bricht mit einer Meldung ab, die den fehlenden
+Bestandteil nennt (etwa Python-Version oder `browser-use`). Danach fehlen die
+Claude-Code-Permissions, und die übrigen Commands melden fehlende Werkzeuge.
 
 ### `/academic-research:search`
 
@@ -67,6 +81,15 @@ Läufe bleiben gate-frei.
 **Skills/Agents:** Startet die Agents `query-generator` (Query-Expansion),
 `relevance-scorer` (5D-Relevanz) und `quote-extractor` (Verbatim-Zitate).
 
+**Voraussetzungen:** Netzzugang zu den API-Quellen; für `--mode deep` zusätzlich ein
+eingerichteter `browser-use`-Skill.
+
+**Rückgabe:** Trefferliste mit Score je Dimension, dazu die Session-Datei mit den
+Treffern und die Papers im Vault.
+
+**Fehlschlag:** Die Ausgabe meldet `Found 0 papers`, oder ein Modul läuft in einen
+Timeout und taucht in der Quellenliste des Berichts nicht auf.
+
 ### `/academic-research:score`
 
 **Syntax:** `/academic-research:score [papers.json] [--query "..."] [--mode standard]`
@@ -85,6 +108,15 @@ Läufe bleiben gate-frei.
 vier übrigen 5D-Dimensionen (Aktualität, Qualität, Autorität, Zugang) berechnet die
 Command-Logik direkt.
 
+**Voraussetzungen:** Eine Trefferdatei (`papers.json`) oder eine gelaufene Session, deren
+Treffer neu bewertet werden sollen.
+
+**Rückgabe:** Aktualisierte Scores je Dimension und die Cluster-Zuweisung; je Paper ein
+Score-Snapshot, der über `vault.get_score_history()` abrufbar bleibt.
+
+**Fehlschlag:** Der Command findet weder Datei noch Session und meldet das; die
+bestehenden Scores bleiben dann unverändert.
+
 ### `/academic-research:excel`
 
 **Syntax:** `/academic-research:excel [--papers papers.json] [--output literature.xlsx] [--context]`
@@ -102,6 +134,15 @@ Command-Logik direkt.
 **Skills/Agents:** Nutzt den `document-skills:xlsx`-Skill (Plugin-Dependency, siehe
 [Externe Skills](skills.md#externe-skills-plugin-dependencies)).
 
+**Voraussetzungen:** Das Plugin `document-skills` ist installiert, und es liegen Treffer
+aus einer Session oder Papers im Vault vor. Für `--context` zusätzlich eine Gliederung in
+`academic_context.md`.
+
+**Rückgabe:** Eine `.xlsx`-Datei mit den vier Sheets der Literaturübersicht.
+
+**Fehlschlag:** Statt einer Datei kommt der Nachinstallations-Weg für `document-skills`
+zurück, oder die Kapitel-Spalte bleibt leer, weil keine Gliederung vorliegt.
+
 ### `/academic-research:pickup`
 
 **Syntax:** `/academic-research:pickup`
@@ -117,6 +158,15 @@ Command-Logik direkt.
 [Externe Skills](skills.md#externe-skills-plugin-dependencies)) für die
 4-Sheet-Excel-Datei sowie `scripts/barcode_utils.py` für Code128-Barcodes (optional via
 `python-barcode[images]`).
+
+**Voraussetzungen:** Vault-Einträge ohne frei zugänglichen Volltext (etwa aus einem
+`metadata_only`-Lauf von `/fetch`) und das Plugin `document-skills`.
+
+**Rückgabe:** Eine `.xlsx`-Datei mit der Pickup-Liste, auf Wunsch mit Code128-Barcodes
+für die Ausleihtheke.
+
+**Fehlschlag:** Ohne `python-barcode[images]` entstehen keine Barcodes — die Liste selbst
+bleibt nutzbar. Ohne `document-skills` kommt gar keine Datei.
 
 ### `/academic-research:fetch`
 
@@ -137,6 +187,16 @@ konfigurierbarer Fallback-Kette über die Site-Agents (OAPEN → DOAB → TIB �
 Springer → De Gruyter → Ebook Central → Nationallizenzen) und `auth-helper` für
 HAN/Shibboleth.
 
+**Voraussetzungen:** Eingerichteter `browser-use`-Skill; für lizenzpflichtige Wege ein
+Uni-Profil unter `~/.academic-research/library-profiles/` mit Dateirechten `0600`.
+
+**Rückgabe:** Das JSON des `book-fetcher` mit `status`, bei Erfolg `file_path` und
+immer der `tries`-Kette der versuchten Subagenten.
+
+**Fehlschlag:** `status` ist nicht `success` — `pickup_required` (Ausleihe nötig),
+`captcha` (Zugriff blockiert) oder `no_match` (kein Treffer). Die `tries`-Kette zeigt,
+welcher Subagent woran gescheitert ist.
+
 ### `/academic-research:humanize`
 
 **Syntax:** `/academic-research:humanize <kapitel-pfad> [--mode normal|deep]`
@@ -154,6 +214,15 @@ HAN/Shibboleth.
 **Skills/Agents:** Nutzt den vendorierten `humanizer-de`-Skill (`skills/humanizer-de/`)
 und erzeugt `<basename>.humanized.md` plus ein Severity-gegliedertes
 `<basename>.diff.md`.
+
+**Voraussetzungen:** Eine lesbare deutschsprachige Markdown-Datei; das Zielverzeichnis
+muss beschreibbar sein.
+
+**Rückgabe:** `<basename>.humanized.md` mit dem überarbeiteten Text und
+`<basename>.diff.md` mit den Änderungen nach Severity.
+
+**Fehlschlag:** Eine der beiden Dateien fehlt danach, oder der Diff ist leer, obwohl der
+Audit Muster gemeldet hat.
 
 ### `/academic-research:latex`
 
@@ -180,6 +249,16 @@ Neu in v6.5: exportiert Markdown-Kapitel nach LaTeX.
 Uni-Template-Wrapping und `build_bib.py` (`.bib` aus dem Vault, Pfad
 unabhängig von `--output`). Der `verbatim-guard`-Hook blockiert `.tex`-Writes
 mit nicht-verifizierten Zitaten.
+
+**Voraussetzungen:** Kapitel-Dateien unter `kapitel/`; für die `.bib` ein gefüllter
+Vault. Pandoc ist optional — ohne Pandoc greift der Custom-Renderer.
+
+**Rückgabe:** Die `.tex`-Datei und, bei gesetztem `--bib`, die biblatex-konforme
+`.bib`-Datei.
+
+**Fehlschlag:** Der `verbatim-guard` blockt den `.tex`-Write, weil ein Zitat nicht im
+Vault steht. Weitere Signale: „Template `<uni>` fehlt" oder eine leere `.bib` mit der
+Meldung „Vault leer".
 
 ### `/academic-research:word`
 
@@ -210,6 +289,16 @@ Inhaltsverzeichnis-Feldfunktion, Titelblatt, Literaturverzeichnis,
 eidesstattliche Erklärung) — der externe `document-skills:docx`-Skill bleibt für
 optionale Layout-Verfeinerung auf der erzeugten Datei.
 
+**Voraussetzungen:** Kapitel-Dateien unter `kapitel/` und das Paket `python-docx`. Für
+`--format pdf` zusätzlich LibreOffice (`soffice`) auf dem Rechner.
+
+**Rückgabe:** Die `.docx` mit Titelblatt, Verzeichnissen und eidesstattlicher Erklärung;
+mit `--format pdf` zusätzlich die PDF-Fassung.
+
+**Fehlschlag:** `render_docx.py` meldet `FEHLER:` mit Nachinstallations-Hinweis (etwa
+fehlendes `python-docx`). Fehlt nur `soffice`, entsteht die `.docx` trotzdem und die
+PDF-Konvertierung wird mit Hinweis übersprungen.
+
 ### `/academic-research:slides`
 
 Neu in Issue #446: erzeugt einen Foliensatz (`.pptx`) aus vorhandenen Kapiteln
@@ -232,6 +321,15 @@ Kernsatz als Folien-Zwischenrepräsentation; `render_pptx.py` rendert daraus das
 zusätzlich Deckblatt und Agenda). Der externe `document-skills:pptx`-Skill
 bleibt für optionale Designvorlagen auf dem erzeugten Deck.
 
+**Voraussetzungen:** Kapitel-Dateien unter `kapitel/` und das Paket `python-pptx`.
+
+**Rückgabe:** Die `.pptx` mit einer Folie je Kapitel, bei `--kolloquium`/`--konferenz`
+zusätzlich Deckblatt und Agenda.
+
+**Fehlschlag:** `resolve_chapters()` wirft `ChapterResolutionError` und nennt die
+verfügbaren Kapitel. Findet der Skill in einem Kapitel keine Kernaussage, kommt eine
+Rückfrage statt einer Platzhalter-Folie.
+
 ### `/academic-research:history`
 
 **Syntax:** `/academic-research:history [<query>|<datum>|stats|--snapshots|--restore <ts>]`
@@ -251,3 +349,12 @@ bleibt für optionale Designvorlagen auf dem erzeugten Deck.
 
 **Skills/Agents:** Reine Command-Logik (kein Agent/Skill) — liest den Session-Index
 unter `~/.academic-research/sessions/` und verwaltet `.tgz`-Snapshots.
+
+**Voraussetzungen:** Mindestens eine gelaufene Recherche-Session; für `--restore` ein
+vorhandener Snapshot unter `<slug>/<ts>.tgz`.
+
+**Rückgabe:** Die Session-Liste (oder die Treffer der Suche), die Snapshot-Übersicht
+und bei `--restore` der wiederhergestellte Projektstand.
+
+**Fehlschlag:** Die Liste bleibt leer, obwohl Suchen gelaufen sind — dann fehlt der
+Session-Index. Bei `--restore` meldet der Command den unbekannten Zeitstempel.

@@ -17,6 +17,7 @@ Momentaufnahmen). Beide Listen werden aus ``git ls-files docs`` abgeleitet und
 nicht gepflegt — eine neue Seite faellt automatisch in die passende Klasse.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -247,3 +248,42 @@ def doc_surface() -> list[Path]:
 def read_surface() -> str:
     """Gesamter Text der Doku-Oberflaeche, fuer 'irgendwo dokumentiert'-Guards."""
     return "\n".join(p.read_text(encoding="utf-8") for p in doc_surface() if p.exists())
+
+
+# ---------------------------------------------------------------------------
+# Komponenten-Inventar (Issue #640)
+# ---------------------------------------------------------------------------
+
+SKILLS_DIR = REPO_ROOT / "skills"
+AGENTS_DIR = REPO_ROOT / "agents"
+COMMANDS_DIR = REPO_ROOT / "commands"
+VAULT_PACKAGE = REPO_ROOT / "academic_vault"
+
+#: Kein eigenstaendiger Skill, nur geteilte Markdown-Fragmente.
+_NON_SKILL_DIRS = {"_common"}
+
+#: Registrierte MCP-Tools erkennt man am Dekorator, nicht an einer Liste.
+_MCP_TOOL_RE = re.compile(r'@mcp\.tool\(name="(vault\.[a-z_]+)"\)')
+
+
+def component_inventory() -> dict[str, set[str]]:
+    """Die vier Komponentenmengen des Plugins — aus dem Code, nicht aus Doku.
+
+    Genau eine Stelle im Testbaum zaehlt Skills, Agents, Commands und
+    MCP-Tools aus. Jeder Guard, der Vollstaendigkeit oder eine Zahlenangabe
+    prueft, fragt hier — sonst pruefte eine Doku-Stelle gegen die naechste
+    und beide drifteten gemeinsam ab (Issue #640).
+    """
+    tool_source = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(VAULT_PACKAGE.glob("*.py"))
+    )
+    return {
+        "skills": {
+            p.parent.name
+            for p in SKILLS_DIR.glob("*/SKILL.md")
+            if p.parent.name not in _NON_SKILL_DIRS
+        },
+        "agents": {p.stem for p in AGENTS_DIR.glob("*.md")},
+        "commands": {p.stem for p in COMMANDS_DIR.glob("*.md")},
+        "mcp_tools": set(_MCP_TOOL_RE.findall(tool_source)),
+    }
