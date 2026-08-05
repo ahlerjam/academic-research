@@ -1,20 +1,27 @@
-"""Rendert den Quickstart-Cast zu einem statischen Terminal-SVG (Issue #451).
+"""Rendert einen asciicast-v2-Mitschnitt zu einem statischen Terminal-SVG (Issue #451, #639).
 
-Warum ein eigener Renderer: die README zeigt eine Demonstration des realen
-Durchlaufs aus ``docs/quickstart-protocol.md``. Damit dieses Bild nicht von Hand
-gemalt und damit unpruefbar wird, ist ``docs/assets/quickstart.cast`` die
-einzige Quelle — dieses Skript erzeugt daraus deterministisch
-``docs/assets/quickstart.svg``. Ein Test rendert neu und vergleicht byteweise;
-driftet das Bild vom Mitschnitt ab, wird die Suite rot.
+Warum ein eigener Renderer: README und Doku zeigen Demonstrationen realer Durchlaeufe,
+protokolliert in ``docs/quickstart-protocol.md``. Damit diese Bilder nicht von Hand
+gemalt und damit unpruefbar werden, ist je ein ``docs/assets/*.cast`` die einzige
+Quelle — dieses Skript erzeugt daraus deterministisch das zugehoerige SVG. Ein Test
+rendert jedes Paar neu und vergleicht byteweise; driftet ein Bild vom Mitschnitt ab,
+wird die Suite rot.
+
+Ein Skript fuer alle Paare: der Quickstart (Issue #451) war der erste Cast, die
+Terminal-Aufzeichnungen zu Lesenotizen und Screening (Issue #639) sind derselbe
+Cast→SVG-Weg ueber ``--cast``/``--out``, keine kopierte zweite Fassung. Die
+Default-Pfade bleiben aus Kompatibilitaet auf dem Quickstart-Paar stehen.
 
 Bewusst statisch statt animiert: GitHub reicht eingebettete SVG durch einen
 Sanitizer, dessen Umgang mit SMIL-Animationen nicht zugesichert ist. Ein
 Standbild rendert ueberall; der Cast bleibt als abspielbare Quelle im Repo
-(``asciinema play docs/assets/quickstart.cast``).
+(``asciinema play docs/assets/<name>.cast``).
 
 Aufruf:
 
     uv run python scripts/dev/render_quickstart_svg.py
+    uv run python scripts/dev/render_quickstart_svg.py --cast docs/assets/screening.cast \\
+        --out docs/assets/screening.svg
 """
 
 from __future__ import annotations

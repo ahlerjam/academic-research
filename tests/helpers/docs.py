@@ -33,6 +33,9 @@ COMMANDS_DOC = REFERENCE_DIR / "commands.md"
 VAULT_DOC = REFERENCE_DIR / "vault.md"
 HOOKS_DOC = REFERENCE_DIR / "hooks.md"
 SEARCH_DOC = REFERENCE_DIR / "search.md"
+
+#: Architekturdiagramm: Vault/Hooks/Skills/Agents im Zusammenspiel (Issue #639).
+ARCHITECTURE_DOC = REFERENCE_DIR / "architecture.md"
 UNI_PROFILES_DOC = REFERENCE_DIR / "uni-profiles.md"
 GLOSSARY_DOC = REFERENCE_DIR / "glossary.md"
 
@@ -102,7 +105,30 @@ LINKED_DOCS = (
     PROJECT_PATHS_DOC,
     DEVELOPMENT_DOC,
     QUICKSTART_PROTOCOL_DOC,
+    ARCHITECTURE_DOC,
 )
+
+#: Cast/SVG/Protokoll-Tripel (Issue #639): jedes Paar wird ueber denselben
+#: generalisierten Renderer erzeugt (``scripts/dev/render_quickstart_svg.py``,
+#: ``--cast``/``--out``) und gegen dasselbe Protokoll-Dokument geprueft, in dem
+#: der zugrunde liegende reale Durchlauf dokumentiert ist.
+CAST_SVG_PROTOCOL_TRIPLES = {
+    "quickstart": (
+        DOCS_DIR / "assets" / "quickstart.cast",
+        DOCS_DIR / "assets" / "quickstart.svg",
+        QUICKSTART_PROTOCOL_DOC,
+    ),
+    "reading-notes": (
+        DOCS_DIR / "assets" / "reading-notes.cast",
+        DOCS_DIR / "assets" / "reading-notes.svg",
+        QUICKSTART_PROTOCOL_DOC,
+    ),
+    "screening": (
+        DOCS_DIR / "assets" / "screening.cast",
+        DOCS_DIR / "assets" / "screening.svg",
+        QUICKSTART_PROTOCOL_DOC,
+    ),
+}
 
 
 #: Einstiegsseite der Dokumentation (Issue #452).
