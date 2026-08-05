@@ -9,8 +9,8 @@ rund 20 Minuten, davon das meiste Wartezeit beim einmaligen Modell-Download.
 
 Am Ende jedes Schritts steht, woran du erkennst, dass er geklappt hat. Bricht etwas ab,
 hilft [Troubleshooting](troubleshooting.md); wenn du wissen willst, wofür sich das Plugin
-**nicht** eignet, lies vorher [Grenzen und bewährtes Vorgehen](best-practices.md) — das
-spart dir womöglich die ganze Installation.
+**nicht** eignet, lies vorher [Grenzen](limits.md) — das spart dir womöglich die ganze
+Installation.
 
 ## Schritt 0 — was da sein muss
 
@@ -131,8 +131,10 @@ Unterschied zum Chat-Fenster.
   Aufgabentyp, und wie du umschaltest.
 - **Budget schonen:** [Token-Budget](token-budget.md) — welche Schritte teuer sind und wie
   du sie eingrenzt.
-- **Realistisch bleiben:** [Grenzen und bewährtes Vorgehen](best-practices.md) — was gut
-  funktioniert, was schiefgeht und wofür das Plugin nicht taugt.
+- **Grenzen kennen:** [Grenzen](limits.md) — was das Plugin nicht kann, nicht darf und
+  nicht prüft.
+- **Realistisch bleiben:** [Bewährtes Vorgehen](best-practices.md) — was gut funktioniert
+  und was regelmäßig schiefgeht.
 
 Wenn etwas hakt: [Troubleshooting](troubleshooting.md). Unbekannte Begriffe stehen im
 [Glossar](../reference/glossary.md).
