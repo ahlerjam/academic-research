@@ -665,17 +665,27 @@ def test_walkthrough_links_getting_started() -> None:
 
 
 def _limits_section() -> str:
-    sections = _sections(_read(D.BEST_PRACTICES_DOC))
-    matches = [body for heading, body in sections.items() if "nicht geeignet" in heading.lower()]
+    """Alle drei Grenzarten-Abschnitte von ``limits.md`` zusammen (Issue #637).
+
+    Das Dokument trennt kann-nicht/darf-nicht/prueft-nicht in eigene
+    ##-Abschnitte (siehe ``tests/test_issue_637_limits_doc.py``); dieser Helper
+    bleibt fuer die aelteren, kategorie-uebergreifenden AC6-Guards zustaendig.
+    """
+    sections = _sections(_read(D.LIMITS_DOC))
+    matches = [
+        body
+        for heading, body in sections.items()
+        if heading.lower().startswith("was das plugin nicht")
+    ]
     assert matches, (
-        f"{_rel(D.BEST_PRACTICES_DOC)}: kein ##-Abschnitt zur Nicht-Eignung "
+        f"{_rel(D.LIMITS_DOC)}: keine ##-Abschnitte zu Nicht-Eignung "
         f"(vorhanden: {sorted(sections)})."
     )
-    return matches[0]
+    return "\n".join(matches)
 
 
 def test_best_practices_doc_exists() -> None:
-    """Ohne die Seite gibt es weder bewaehrtes Vorgehen noch Grenzen (AC6)."""
+    """Ohne die Seite gibt es kein bewaehrtes Vorgehen (AC6)."""
     assert D.BEST_PRACTICES_DOC.exists(), f"{_rel(D.BEST_PRACTICES_DOC)} fehlt."
 
 
@@ -683,7 +693,7 @@ def test_limits_section_is_concrete() -> None:
     """Mindestens fuenf benannte Grenzen statt einer Floskel (AC6)."""
     items = [ln for ln in _limits_section().splitlines() if ln.startswith(("- ", "* "))]
     assert len(items) >= 5, (
-        f"{_rel(D.BEST_PRACTICES_DOC)}: nur {len(items)} Grenzen benannt — "
+        f"{_rel(D.LIMITS_DOC)}: nur {len(items)} Grenzen benannt — "
         "eine Nicht-Eignung mit zwei Zeilen ist ein Feigenblatt."
     )
 
@@ -692,15 +702,15 @@ def test_limits_cover_the_known_boundaries() -> None:
     """Die belegbaren Grenzen sind namentlich genannt (AC6)."""
     section = _limits_section()
     missing = [needle for needle in REQUIRED_LIMIT_MARKERS if needle not in section]
-    assert not missing, f"{_rel(D.BEST_PRACTICES_DOC)}: Grenzen ungenannt: {missing}"
+    assert not missing, f"{_rel(D.LIMITS_DOC)}: Grenzen ungenannt: {missing}"
     assert re.search(r"gegenpr(ü|ue)f", section, re.I), (
-        f"{_rel(D.BEST_PRACTICES_DOC)}: die Zitat-Gegenpruefung fehlt als Grenze."
+        f"{_rel(D.LIMITS_DOC)}: die Zitat-Gegenpruefung fehlt als Grenze."
     )
 
 
 def test_limits_are_reachable_from_the_entry_point() -> None:
     """Der Einstieg fuehrt zu den Grenzen — nicht erst die letzte Seite (AC6)."""
-    assert D.BEST_PRACTICES_DOC.resolve() in _internal_targets(D.GETTING_STARTED_DOC), (
-        f"{_rel(D.GETTING_STARTED_DOC)} verlinkt {_rel(D.BEST_PRACTICES_DOC)} nicht — "
+    assert D.LIMITS_DOC.resolve() in _internal_targets(D.GETTING_STARTED_DOC), (
+        f"{_rel(D.GETTING_STARTED_DOC)} verlinkt {_rel(D.LIMITS_DOC)} nicht — "
         "wer die Grenzen erst am Ende findet, hat sie zu spaet gefunden."
     )

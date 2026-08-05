@@ -189,6 +189,7 @@ Von dort ist jede Seite in höchstens zwei Klicks erreichbar. Wer ohne Umweg
 nachschlagen will, findet hier den direkten Link:
 
 [Erste Schritte](docs/guide/getting-started.md) ·
+[Grenzen](docs/guide/limits.md) ·
 [Einstieg nach Vorhaben](docs/guide/project-paths.md) ·
 [Installation und Migration](docs/guide/installation.md) ·
 [Walkthrough](docs/guide/walkthrough.md) ·
@@ -196,7 +197,7 @@ nachschlagen will, findet hier den direkten Link:
 [Quickstart-Protokoll](docs/quickstart-protocol.md) ·
 [Modellwahl](docs/guide/model-choice.md) ·
 [Token-Budget](docs/guide/token-budget.md) ·
-[Bewährtes Vorgehen und ehrliche Grenzen](docs/guide/best-practices.md) ·
+[Bewährtes Vorgehen](docs/guide/best-practices.md) ·
 [Commands](docs/reference/commands.md) ·
 [Skills](docs/reference/skills.md) ·
 [Agents](docs/reference/agents.md) ·
