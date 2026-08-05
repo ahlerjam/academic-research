@@ -293,6 +293,68 @@ Fußnote steht hier, weil das Issue explizit vor stillschweigenden Abkürzungen 
 (vgl. den Befund, der zu #626 führte) — nicht weil der belegte Pfad selbst
 eingeschränkt wäre.
 
+## Lesenotizen anlegen und wiederfinden (2026-08-05)
+
+Zweite Ergänzung für [Issue #639](https://github.com/ahlerjam/academic-research/issues/639):
+ein Terminal-Mitschnitt, der [Schritt 11 im Walkthrough](guide/walkthrough.md#11-lesenotizen-anlegen)
+zeigt — eine Notiz zu einem Paper anlegen und über zwei Wege wiederfinden. Real ausgeführt
+gegen denselben produktiven Vault wie oben, am Fixture-Paper `issue626-demo-verbatim` aus dem
+`local-verbatim`-Lauf, ohne es neu anzulegen.
+
+```console
+$ vault.add_note('issue626-demo-verbatim',
+                  'Die Studie stuetzt sich auf Interviewdaten, keine standardisierte Befragung —
+                  fuer den Methodikvergleich in Kapitel 3 relevant.', tags='methodik')
+-> note_id: 30a9d9ac-fbf5-4d03-a7e0-fc4bb7f934c0
+
+$ vault.find_notes('issue626-demo-verbatim')
+-> Notizen am Paper: 1
+
+$ vault.search_notes('Methodikvergleich')
+-> Treffer: 1
+```
+
+Die Notiz ist über beide Wege auffindbar: `find_notes` listet sie am Paper, `search_notes`
+über die FTS5-Volltextsuche, die `chapter-writer` beim Schreiben nutzt.
+
+**Aufzeichnung:** [`docs/assets/reading-notes.cast`](assets/reading-notes.cast) — derselbe
+asciicast-v2-Mitschnitt-Weg wie beim Quickstart, gerendert zu
+[`docs/assets/reading-notes.svg`](assets/reading-notes.svg) über
+`uv run python scripts/dev/render_quickstart_svg.py --cast docs/assets/reading-notes.cast
+--out docs/assets/reading-notes.svg`.
+
+## Screening: Ausschlussgründe dokumentieren (2026-08-05)
+
+Dritte Ergänzung für [Issue #639](https://github.com/ahlerjam/academic-research/issues/639):
+[Schritt 9 im Walkthrough](guide/walkthrough.md#9-treffermenge-screenen) hält Ausschlüsse
+fest, damit `prisma-flow` sie zählen und ein einmal ausgeschlossenes Paper nicht erneut
+vorgeschlagen wird. Real ausgeführt, neues Fixture-Paper `issue639-demo-excluded`:
+
+```console
+$ vault.add_excluded_source('issue639-demo-excluded',
+                  reason='Kein Volltext zugaenglich (Paywall ohne Institutionszugang) —
+                  Ausschluss im Screening-Schritt')
+-> ok
+
+$ vault.list_excluded_sources()
+-> Ausgeschlossen: 1
+   - issue639-demo-excluded: Kein Volltext zugaenglich (Paywall ohne Institutionszugang) — Ausschluss im Screening-Schritt
+
+$ vault.is_excluded('issue639-demo-excluded')
+-> True
+
+$ vault.is_excluded('issue626-demo-verbatim')
+-> False
+```
+
+`is_excluded` unterscheidet zuverlässig zwischen dem gerade ausgeschlossenen Paper und
+einem regulär im Vault stehenden — genau die Prüfung, die `parallel-screening` vor jedem
+erneuten Vorschlag macht.
+
+**Aufzeichnung:** [`docs/assets/screening.cast`](assets/screening.cast), gerendert zu
+[`docs/assets/screening.svg`](assets/screening.svg) über denselben generalisierten
+Renderer wie die beiden anderen Aufzeichnungen dieses Protokolls.
+
 ## Befunde aus dem Durchlauf
 
 Alles hier Aufgeführte ist in dieser Dokumentation eingearbeitet.

@@ -50,6 +50,8 @@ Neue Begriffe schlägst du unterwegs im [Glossar](reference/glossary.md) nach.
 - [Suchquellen, Scoring, Cluster](reference/search.md) — woher die Literatur kommt und
   wie sie bewertet wird.
 - [Hooks-Stack](reference/hooks.md) — was wann eingreift und was protokolliert wird.
+- [Architektur](reference/architecture.md) — wie Vault, Hooks, Skills und Agents im
+  Zusammenspiel stehen, als Diagramm.
 - [Per-Uni-Profile](reference/uni-profiles.md) — Hochschulzugänge einrichten.
 - [NotebookLM-Bundle](skills/notebook-bundle.md) — Triage-Bundle bauen, und warum es kein
   Zitat-Pfad ist.

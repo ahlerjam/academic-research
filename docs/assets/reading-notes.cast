@@ -1,0 +1,9 @@
+{"version": 2, "width": 100, "height": 20, "timestamp": 1785888000, "title": "academic-research — Lesenotizen (Mitschnitt aus docs/quickstart-protocol.md)", "env": {"SHELL": "/bin/zsh", "TERM": "xterm-256color"}}
+[0.9, "o", "\u001b[32m$ \u001b[97mvault.add_note('issue626-demo-verbatim',\u001b[0m\r\n"]
+[1.35, "o", "\u001b[97m                  'Die Studie stuetzt sich auf Interviewdaten, keine standardisierte Befragung —\u001b[0m\r\n"]
+[1.8, "o", "\u001b[97m                  fuer den Methodikvergleich in Kapitel 3 relevant.', tags='methodik')\u001b[0m\r\n"]
+[2.25, "o", "\u001b[90m-> note_id: 30a9d9ac-fbf5-4d03-a7e0-fc4bb7f934c0\u001b[0m\r\n\r\n"]
+[3.15, "o", "\u001b[32m$ \u001b[97mvault.find_notes('issue626-demo-verbatim')\u001b[0m\r\n"]
+[3.6, "o", "\u001b[90m-> Notizen am Paper: 1\u001b[0m\r\n\r\n"]
+[4.5, "o", "\u001b[32m$ \u001b[97mvault.search_notes('Methodikvergleich')\u001b[0m\r\n"]
+[4.95, "o", "\u001b[90m-> Treffer: 1\u001b[0m\r\n"]

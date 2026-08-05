@@ -29,6 +29,13 @@ haben die folgenden Skills nichts zu lesen.
 Reihenfolge: `academic-context` → `preregistration` → `parallel-screening` →
 `source-quality-audit` → `prisma-flow` → `citation-extraction` → `chapter-writer`.
 
+```mermaid
+graph LR
+    AC[academic-context] --> PR[preregistration] --> PS[parallel-screening]
+    PS --> SQ[source-quality-audit] --> PF[prisma-flow]
+    PF --> CE[citation-extraction] --> CW[chapter-writer]
+```
+
 Abhängigkeit: `preregistration` muss vor der ersten Suche stehen, nicht danach — das
 Protokoll legt Suchstrategie und Ein-/Ausschlusskriterien fest, die `parallel-screening`
 erst danach anwenden kann. `prisma-flow` wiederum liest die Zähler, die das Screening
@@ -47,6 +54,16 @@ Reihenfolge: `academic-context` → `research-question-refiner` → `methodology
 Design) beziehungsweise `quantitative-analysis` (bei quantitativem Design) →
 `chapter-writer`.
 
+```mermaid
+graph LR
+    AC[academic-context] --> RQ[research-question-refiner] --> MA[methodology-advisor]
+    MA --> ID[instrument-design] --> DMP[data-management-plan]
+    DMP --> QC[qualitative-coding]
+    DMP --> QA[quantitative-analysis]
+    QC --> CW[chapter-writer]
+    QA --> CW
+```
+
 Abhängigkeit: `instrument-design` braucht eine gewählte Methodik als Eingabe — ohne
 `methodology-advisor` fehlt die Grundlage, gegen die der Interviewleitfaden oder
 Fragebogen rückverweist. `data-management-plan` gehört vor die Erhebung, nicht danach,
@@ -62,6 +79,13 @@ entfällt hier, anders als beim vorigen Weg.
 
 Reihenfolge: `academic-context` → `research-question-refiner` → `citation-extraction` →
 `reading-notes` → `literature-gap-analysis` → `extraction-matrix` → `chapter-writer`.
+
+```mermaid
+graph LR
+    AC[academic-context] --> RQ[research-question-refiner] --> CE[citation-extraction]
+    CE --> RN[reading-notes] --> LGA[literature-gap-analysis]
+    LGA --> EM[extraction-matrix] --> CW[chapter-writer]
+```
 
 Abhängigkeit: `literature-gap-analysis` setzt einen aufgebauten Quellenbestand
 (`literature_state.md` via `/search`) und die Gliederung in `academic_context.md`
@@ -80,6 +104,12 @@ Sequenz.
 
 Reihenfolge: `academic-context` → `chapter-writer` → `abstract-generator` →
 `reviewer-response`.
+
+```mermaid
+graph LR
+    AC[academic-context] --> CW[chapter-writer] --> AG[abstract-generator]
+    AG --> RR[reviewer-response]
+```
 
 Abhängigkeit: `reviewer-response` setzt eine bereits eingereichte und begutachtete
 Fassung voraus — der Skill schreibt einen Point-by-Point-Response auf vorhandene
