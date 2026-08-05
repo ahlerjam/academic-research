@@ -46,6 +46,10 @@ TOKEN_BUDGET_DOC = GUIDE_DIR / "token-budget.md"
 BEST_PRACTICES_DOC = GUIDE_DIR / "best-practices.md"
 TROUBLESHOOTING_DOC = GUIDE_DIR / "troubleshooting.md"
 
+#: Eigenstaendiges Grenzen-Dokument (Issue #637) — was das Plugin nicht kann,
+#: nicht darf und nicht prueft, herausgeloest aus best-practices.md.
+LIMITS_DOC = GUIDE_DIR / "limits.md"
+
 #: Die Seiten des Praxis-Leitfadens (Issue #461) — untereinander verlinkt.
 PRACTICE_GUIDE_DOCS = (
     GETTING_STARTED_DOC,
@@ -53,6 +57,7 @@ PRACTICE_GUIDE_DOCS = (
     MODEL_CHOICE_DOC,
     TOKEN_BUDGET_DOC,
     BEST_PRACTICES_DOC,
+    LIMITS_DOC,
 )
 
 DEVELOPMENT_DOC = DOCS_DIR / "development.md"
@@ -89,6 +94,7 @@ LINKED_DOCS = (
     MODEL_CHOICE_DOC,
     TOKEN_BUDGET_DOC,
     BEST_PRACTICES_DOC,
+    LIMITS_DOC,
     TROUBLESHOOTING_DOC,
     DEVELOPMENT_DOC,
     QUICKSTART_PROTOCOL_DOC,

@@ -187,6 +187,7 @@ Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
 **Loslegen**
 
 - [Erste Schritte](docs/guide/getting-started.md) — Installation bis erstes verifiziertes Zitat, in einem Zug
+- [Grenzen](docs/guide/limits.md) — was das Plugin nicht kann, nicht darf und nicht prüft; lies das vor der Installation
 - [Installation und Migration](docs/guide/installation.md) — Voraussetzungen, was das Setup tut, Umstieg von v5
 - [Walkthrough](docs/guide/walkthrough.md) — jeder Arbeitsschritt in der realen Reihenfolge
 - [Troubleshooting](docs/guide/troubleshooting.md) — wenn etwas klemmt
@@ -196,7 +197,7 @@ Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
 
 - [Modellwahl](docs/guide/model-choice.md) — welches Modell für welchen Arbeitsschritt
 - [Token-Budget](docs/guide/token-budget.md) — teure Schritte erkennen und eingrenzen
-- [Bewährtes Vorgehen und ehrliche Grenzen](docs/guide/best-practices.md) — auch: wofür das Plugin nicht taugt
+- [Bewährtes Vorgehen](docs/guide/best-practices.md) — was funktioniert und was regelmäßig schiefgeht
 
 **Nachschlagen**
 
