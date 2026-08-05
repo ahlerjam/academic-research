@@ -8,6 +8,8 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+## [6.7.0] — 2026-08-05
+
 ### Changed
 
 - **`disable-model-invocation` mess-basiert geprüft statt vermutet (#622):**
@@ -1632,6 +1634,7 @@ Der akademische Kontext wandert von Claude-Memory (`~/.claude/projects/<hash>/me
 
 Erstes getracktes Release. Monolithische 7-Phasen-Pipeline → 13 modulare Skills. Siehe Git-Historie für frühere Änderungen.
 
+[6.7.0]: https://github.com/ahlerjam/academic-research/compare/v6.5.0...v6.7.0
 [6.5.0]: https://github.com/ahlerjam/academic-research/compare/v6.4.0...v6.5.0
 [6.4.0]: https://github.com/ahlerjam/academic-research/compare/v6.3.0...v6.4.0
 [6.3.0]: https://github.com/ahlerjam/academic-research/compare/v6.2.0...v6.3.0
