@@ -1,0 +1,71 @@
+{
+  "component": "source-quality-audit",
+  "issue": 606,
+  "description": "Vier Audit-Reports zu denselben Bestaenden wie sqa-01/sqa-02, je mit genau EINEM Defekt. Jeder muss vom Runner ueber genau den benannten Pruefpfad als FAIL gemeldet werden — sonst ist nicht belegt, dass die Metrik eine Verschlechterung anzeigt (Issue #606, AC3).",
+  "cases": [
+    {
+      "id": "ce-sqa-01",
+      "label": "Gesamtscore erfunden (85 statt 41)",
+      "inventory_id": "inv-weak",
+      "degraded_check": "overall_score",
+      "report": "## Quellen-Audit: Lernanalytik im Seminarkontext\n\n**Quellen gesamt:** 12 | **Typ:** Masterarbeit | **Ziel:** min. 15 Quellen\n\n### Ergebnis-Übersicht\n\n| Dimension              | Score | Status         |\n|------------------------|-------|----------------|\n| Peer-Review-Anteil     | 53    | WARN           |\n| Aktualität             | 0     | FAIL           |\n| Quellen-Diversität     | 40    | FAIL           |\n| Web-Quellen-Anteil     | 30    | FAIL           |\n| Thematische Abdeckung  | 78    | OK             |\n| **Gesamt**             | **85**| **OK**   |\n\n### Quellenverteilung\n- Peer-reviewed Journals: 4 (33%)\n- Bücher/Monographien: 2 (17%)\n- Konferenzbeiträge: 0 (0%)\n- Berichte/Working Papers: 0 (0%)\n- Web-Quellen: 6 (50%)\n- Sonstige: 0 (0%)\n\n### Identifizierte Lücken\n\n- Keine nennenswerten Lücken.\n\n### Empfehlungen\n\n1. Bestand beibehalten.\n",
+      "why": "Der Bestand gibt 41 her (FAIL). Ein Report, der 85 behauptet, dreht das Ergebnis um — und genau diese Zahl landet ungeprueft im Methodenkapitel.",
+      "expected": {
+        "failed_checks": [
+          "overall_score"
+        ],
+        "reported_overall": 85,
+        "computed_overall": 41,
+        "verdict": "FAIL"
+      }
+    },
+    {
+      "id": "ce-sqa-02",
+      "label": "Scores korrekt, Status geschoent",
+      "inventory_id": "inv-weak",
+      "degraded_check": "status",
+      "report": "## Quellen-Audit: Lernanalytik im Seminarkontext\n\n**Quellen gesamt:** 12 | **Typ:** Masterarbeit | **Ziel:** min. 15 Quellen\n\n### Ergebnis-Übersicht\n\n| Dimension              | Score | Status         |\n|------------------------|-------|----------------|\n| Peer-Review-Anteil     | 53    | WARN           |\n| Aktualität             | 0     | FAIL           |\n| Quellen-Diversität     | 40    | FAIL           |\n| Web-Quellen-Anteil     | 30    | FAIL           |\n| Thematische Abdeckung  | 78    | OK             |\n| **Gesamt**             | **41**| **OK**   |\n\n### Quellenverteilung\n- Peer-reviewed Journals: 4 (33%)\n- Bücher/Monographien: 2 (17%)\n- Konferenzbeiträge: 0 (0%)\n- Berichte/Working Papers: 0 (0%)\n- Web-Quellen: 6 (50%)\n- Sonstige: 0 (0%)\n\n### Identifizierte Lücken\n\n- Datenschutz: nur eine Quelle.\n\n### Empfehlungen\n\n1. Web-Quellen ersetzen.\n",
+      "why": "Alle Zahlen stimmen, aber der Gesamtstatus wird als OK ausgewiesen, obwohl 41 laut Schwellenwerk FAIL ist. Wer nur die Statusspalte liest, haelt einen ungenuegenden Bestand fuer abgenommen.",
+      "expected": {
+        "failed_checks": [
+          "status"
+        ],
+        "reported_overall": 41,
+        "computed_overall": 41,
+        "verdict": "FAIL"
+      }
+    },
+    {
+      "id": "ce-sqa-03",
+      "label": "Quellenzahl aufgeblaeht (40 statt 18)",
+      "inventory_id": "inv-strong",
+      "degraded_check": "source_count",
+      "report": "## Quellen-Audit: Lernanalytik und Studienabbruch an deutschen Hochschulen\n\n**Quellen gesamt:** 40 | **Typ:** Masterarbeit | **Ziel:** min. 15 Quellen\n\n### Ergebnis-Übersicht\n\n| Dimension              | Score | Status         |\n|------------------------|-------|----------------|\n| Peer-Review-Anteil     | 75    | OK             |\n| Aktualität             | 96    | OK             |\n| Quellen-Diversität     | 95    | OK             |\n| Web-Quellen-Anteil     | 94    | OK             |\n| Thematische Abdeckung  | 100   | OK             |\n| **Gesamt**             | **91**| **OK**   |\n\n### Quellenverteilung\n- Peer-reviewed Journals: 8 (44%)\n- Bücher/Monographien: 3 (17%)\n- Konferenzbeiträge: 2 (11%)\n- Berichte/Working Papers: 3 (17%)\n- Web-Quellen: 1 (6%)\n- Sonstige: 1 (6%)\n\n### Identifizierte Lücken\n\n- Keine Lücke.\n\n### Empfehlungen\n\n1. Bestand fortschreiben.\n",
+      "why": "Die Scores stimmen, aber der Report behauptet einen mehr als doppelt so grossen Bestand. Damit ist jede Prozentangabe im Report unbelegt und die Mindestquellenzahl der Hochschule scheinbar erfuellt.",
+      "expected": {
+        "failed_checks": [
+          "source_count"
+        ],
+        "reported_source_count": 40,
+        "verdict": "FAIL"
+      }
+    },
+    {
+      "id": "ce-sqa-04",
+      "label": "Einzeldimension geschoent (Peer-Review 95 statt 75)",
+      "inventory_id": "inv-strong",
+      "degraded_check": "dimension_scores",
+      "report": "## Quellen-Audit: Lernanalytik und Studienabbruch an deutschen Hochschulen\n\n**Quellen gesamt:** 18 | **Typ:** Masterarbeit | **Ziel:** min. 15 Quellen\n\n### Ergebnis-Übersicht\n\n| Dimension              | Score | Status         |\n|------------------------|-------|----------------|\n| Peer-Review-Anteil     | 95    | OK             |\n| Aktualität             | 96    | OK             |\n| Quellen-Diversität     | 95    | OK             |\n| Web-Quellen-Anteil     | 94    | OK             |\n| Thematische Abdeckung  | 100   | OK             |\n| **Gesamt**             | **91**| **OK**   |\n\n### Quellenverteilung\n- Peer-reviewed Journals: 8 (44%)\n- Bücher/Monographien: 3 (17%)\n- Konferenzbeiträge: 2 (11%)\n- Berichte/Working Papers: 3 (17%)\n- Web-Quellen: 1 (6%)\n- Sonstige: 1 (6%)\n\n### Identifizierte Lücken\n\n- Keine Lücke.\n\n### Empfehlungen\n\n1. Bestand fortschreiben.\n",
+      "why": "Gesamtscore und Status bleiben plausibel, nur der Peer-Review-Anteil wird hochgeschrieben. Genau so verschwindet der Befund, dass 44 Prozent des Bestands nicht peer-reviewt sind.",
+      "expected": {
+        "failed_checks": [
+          "dimension_scores"
+        ],
+        "off_dimensions": [
+          "peer_review"
+        ],
+        "verdict": "FAIL"
+      }
+    }
+  ]
+}

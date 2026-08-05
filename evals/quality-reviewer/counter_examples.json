@@ -1,0 +1,35 @@
+{
+  "component": "quality-reviewer",
+  "issue": 606,
+  "description": "Derselbe Ausgangstext wie qr-01, je auf genau EINER Achse verschlechtert. Jede Variante MUSS das Verdict von PASS auf REVISE kippen — und zwar ueber genau das Kriterium, das verschlechtert wurde. Kippt es nicht, unterscheiden die Kriterien nichts; genau der Defekt, den #454 bei sparring-partner freigelegt hat (Formattreue statt Verhalten).",
+  "baseline_case": "qr-01",
+  "cases": [
+    {
+      "id": "ce-qr-01",
+      "label": "Passiv umgeschrieben",
+      "degraded_criterion": "Passiv-Quote",
+      "iteration": 0,
+      "why": "Inhalt, Belege und Satzlaengen bleiben praktisch unveraendert; nur die Vorgangsform wechselt. Bleibt das Verdict PASS, misst das Kriterium die Passivquote nicht.",
+      "text": "Die Nutzungsdaten der Lernplattform werden regelmaessig ausgewertet, und auffaellige Verlaeufe werden an die Studienberatung des Fachbereichs gemeldet (Bauer, 2021). Gespraechsangebote werden den Studierenden gemacht, die ohne Angabe von Gruenden angenommen oder auch abgelehnt werden koennen. Alle Gespraeche werden vom Beratungsdienst in knapper Form dokumentiert und die anschliessend gewaehlte Massnahme wird festgehalten. Die Abbruchquoten beider Gruppen werden in einer zweiten Auswertung miteinander verglichen, wobei die Kontrollgruppe nach Zufall gebildet wurde (Sander, 2022). Die Differenz zwischen beiden Gruppen faellt kleiner aus als erwartet, bleibt aber ueber zwei aufeinanderfolgende Kohorten hinweg stabil. Eine Fortfuehrung des Angebots wird deshalb empfohlen, und es werden deutlich frueher im Semester gefuehrte Gespraeche angeregt.",
+      "expected": {"verdict": "REVISE", "failed_criteria": ["Passiv-Quote"]}
+    },
+    {
+      "id": "ce-qr-02",
+      "label": "Belege entfernt",
+      "degraded_criterion": "Quellen pro 1000 Woerter",
+      "iteration": 0,
+      "why": "Wortlaut identisch bis auf die beiden Klammerbelege. Bleibt das Verdict PASS, misst das Kriterium die Belegdichte nicht.",
+      "text": "Die Hochschule wertet die Nutzungsdaten der Lernplattform regelmaessig aus und meldet auffaellige Verlaeufe an die Studienberatung des Fachbereichs weiter. Studierende erhalten daraufhin ein Gespraechsangebot, das sie ohne Angabe von Gruenden annehmen oder auch ablehnen koennen. Der Beratungsdienst dokumentiert jedes Gespraech in knapper Form und haelt fest, welche Massnahme die Studierenden anschliessend selbst waehlen. Eine zweite Auswertung vergleicht die Abbruchquote der beratenen Gruppe mit der Quote einer nach Zufall gebildeten Kontrollgruppe. Die Differenz zwischen beiden Gruppen faellt kleiner aus als erwartet, bleibt aber ueber zwei aufeinanderfolgende Kohorten hinweg stabil. Der Bericht empfiehlt deshalb, das Angebot fortzufuehren und die Ansprache deutlich frueher im Semester zu beginnen.",
+      "expected": {"verdict": "REVISE", "failed_criteria": ["Quellen pro 1000 Woerter"]}
+    },
+    {
+      "id": "ce-qr-03",
+      "label": "Saetze zu Bandwurmsaetzen verkettet",
+      "degraded_criterion": "Satzlaenge Median",
+      "iteration": 0,
+      "why": "Derselbe Wortbestand, nur mit Kommata statt Punkten verbunden. Bleibt das Verdict PASS, misst das Kriterium die Satzlaenge nicht.",
+      "text": "Die Hochschule wertet die Nutzungsdaten der Lernplattform regelmaessig aus und meldet auffaellige Verlaeufe an die Studienberatung des Fachbereichs weiter (Bauer, 2021), woraufhin Studierende ein Gespraechsangebot erhalten, das sie ohne Angabe von Gruenden annehmen oder auch ablehnen koennen, wobei der Beratungsdienst jedes Gespraech in knapper Form dokumentiert und festhaelt, welche Massnahme die Studierenden anschliessend selbst waehlen. Eine zweite Auswertung vergleicht die Abbruchquote der beratenen Gruppe mit der Quote einer nach Zufall gebildeten Kontrollgruppe (Sander, 2022), wobei die Differenz zwischen beiden Gruppen kleiner ausfaellt als erwartet, ueber zwei aufeinanderfolgende Kohorten hinweg aber stabil bleibt, weshalb der Bericht empfiehlt, das Angebot fortzufuehren und die Ansprache deutlich frueher im Semester zu beginnen.",
+      "expected": {"verdict": "REVISE", "failed_criteria": ["Satzlaenge Median"]}
+    }
+  ]
+}

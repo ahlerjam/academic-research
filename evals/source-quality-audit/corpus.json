@@ -1,0 +1,551 @@
+{
+  "component": "source-quality-audit",
+  "issue": 606,
+  "description": "Referenzbestand fuer die Report-Treue. 'inventories' sind Quellenbestaende mit vollstaendigen Metadaten, 'cases' die zugehoerigen Audit-Reports im Output-Format des Skills. Der Runner rechnet die fuenf gewichteten Dimensionen aus dem Inventar nach und prueft, ob der Report dieselben Zahlen und denselben Status nennt. Bestaende und Reports sind hand-autoriert und synthetisch.",
+  "checks_source": "skills/source-quality-audit/SKILL.md — Abschnitte 'Scoring-Dimensionen', 'Evaluations-Workflow', 'Output-Format'",
+  "spec": {
+    "score_tolerance": 1,
+    "weights": {
+      "peer_review": 0.25,
+      "recency": 0.2,
+      "diversity": 0.2,
+      "web_ratio": 0.15,
+      "coverage": 0.2
+    },
+    "status_ok_min": 70,
+    "status_warn_min": 50
+  },
+  "inventories": [
+    {
+      "id": "inv-strong",
+      "label": "Solider Bestand einer Masterarbeit zur Lernanalytik",
+      "current_year": 2026,
+      "key_concepts": [
+        "Lernanalytik",
+        "Datenschutz",
+        "Studienabbruch",
+        "Interventionsdesign"
+      ],
+      "sources": [
+        {
+          "id": "s01",
+          "authors": [
+            "Ahrens"
+          ],
+          "year": 2024,
+          "venue": "Computers & Education",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik",
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "s02",
+          "authors": [
+            "Baier"
+          ],
+          "year": 2023,
+          "venue": "British Journal of Educational Technology",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "UK",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik",
+            "Interventionsdesign"
+          ]
+        },
+        {
+          "id": "s03",
+          "authors": [
+            "Cordes"
+          ],
+          "year": 2025,
+          "venue": "Journal of Learning Analytics",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "US",
+          "stance": "challenge",
+          "concepts": [
+            "Lernanalytik",
+            "Datenschutz"
+          ]
+        },
+        {
+          "id": "s04",
+          "authors": [
+            "Dorn"
+          ],
+          "year": 2022,
+          "venue": "LAK Proceedings",
+          "type": "conference",
+          "peer_reviewed": true,
+          "country": "NL",
+          "stance": "support",
+          "concepts": [
+            "Interventionsdesign",
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "s05",
+          "authors": [
+            "Engel"
+          ],
+          "year": 2024,
+          "venue": "Studies in Higher Education",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "UK",
+          "stance": "challenge",
+          "concepts": [
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "s06",
+          "authors": [
+            "Falk"
+          ],
+          "year": 2023,
+          "venue": "Journal of Learning Analytics",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "AT",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "s07",
+          "authors": [
+            "Grothe"
+          ],
+          "year": 2021,
+          "venue": "EC-TEL Proceedings",
+          "type": "conference",
+          "peer_reviewed": true,
+          "country": "DE",
+          "stance": "neutral",
+          "concepts": [
+            "Interventionsdesign"
+          ]
+        },
+        {
+          "id": "s08",
+          "authors": [
+            "Hansen"
+          ],
+          "year": 2025,
+          "venue": "Computers & Education",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "DK",
+          "stance": "support",
+          "concepts": [
+            "Datenschutz",
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "s09",
+          "authors": [
+            "Iversen"
+          ],
+          "year": 2024,
+          "venue": "AI & Society",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "NO",
+          "stance": "challenge",
+          "concepts": [
+            "Datenschutz"
+          ]
+        },
+        {
+          "id": "s10",
+          "authors": [
+            "Jung"
+          ],
+          "year": 2022,
+          "venue": "IEEE TLT",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "KR",
+          "stance": "support",
+          "concepts": [
+            "Studienabbruch",
+            "Interventionsdesign"
+          ]
+        },
+        {
+          "id": "s11",
+          "authors": [
+            "Klein"
+          ],
+          "year": 2020,
+          "venue": "Springer",
+          "type": "book",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "neutral",
+          "concepts": [
+            "Lernanalytik",
+            "Datenschutz"
+          ]
+        },
+        {
+          "id": "s12",
+          "authors": [
+            "Lorenz"
+          ],
+          "year": 2019,
+          "venue": "Beltz",
+          "type": "book",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "neutral",
+          "concepts": [
+            "Interventionsdesign"
+          ]
+        },
+        {
+          "id": "s13",
+          "authors": [
+            "Meyer"
+          ],
+          "year": 2003,
+          "venue": "Routledge",
+          "type": "book",
+          "peer_reviewed": false,
+          "country": "US",
+          "stance": "neutral",
+          "concepts": [
+            "Studienabbruch"
+          ],
+          "foundational": true
+        },
+        {
+          "id": "s14",
+          "authors": [
+            "Novak"
+          ],
+          "year": 2024,
+          "venue": "OECD",
+          "type": "report",
+          "peer_reviewed": false,
+          "country": "FR",
+          "stance": "neutral",
+          "concepts": [
+            "Studienabbruch",
+            "Datenschutz"
+          ]
+        },
+        {
+          "id": "s15",
+          "authors": [
+            "Ortmann"
+          ],
+          "year": 2023,
+          "venue": "HRK",
+          "type": "report",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Interventionsdesign"
+          ]
+        },
+        {
+          "id": "s16",
+          "authors": [
+            "Pfeiffer"
+          ],
+          "year": 2025,
+          "venue": "destatis.de",
+          "type": "web",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "neutral",
+          "concepts": [
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "s17",
+          "authors": [
+            "Quast"
+          ],
+          "year": 2018,
+          "venue": "TU Dresden",
+          "type": "thesis",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "s18",
+          "authors": [
+            "Reuter"
+          ],
+          "year": 2021,
+          "venue": "arXiv",
+          "type": "preprint",
+          "peer_reviewed": false,
+          "country": "CH",
+          "stance": "challenge",
+          "concepts": [
+            "Datenschutz"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inv-weak",
+      "label": "Duenner Bestand einer Seminararbeit, stark webgestuetzt",
+      "current_year": 2026,
+      "key_concepts": [
+        "Lernanalytik",
+        "Datenschutz",
+        "Studienabbruch"
+      ],
+      "sources": [
+        {
+          "id": "w01",
+          "authors": [
+            "Sommer"
+          ],
+          "year": 2017,
+          "venue": "Journal of Learning Analytics",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "w02",
+          "authors": [
+            "Sommer"
+          ],
+          "year": 2016,
+          "venue": "Journal of Learning Analytics",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "w03",
+          "authors": [
+            "Sommer"
+          ],
+          "year": 2015,
+          "venue": "Journal of Learning Analytics",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik",
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "w04",
+          "authors": [
+            "Sommer"
+          ],
+          "year": 2018,
+          "venue": "Journal of Learning Analytics",
+          "type": "journal",
+          "peer_reviewed": true,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "w05",
+          "authors": [
+            "Traut"
+          ],
+          "year": 2014,
+          "venue": "edutech-blog.example",
+          "type": "web",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "w06",
+          "authors": [
+            "Ulrich"
+          ],
+          "year": 2015,
+          "venue": "lernblog.example",
+          "type": "web",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Datenschutz"
+          ]
+        },
+        {
+          "id": "w07",
+          "authors": [
+            "Voss"
+          ],
+          "year": 2016,
+          "venue": "campus-news.example",
+          "type": "web",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "w08",
+          "authors": [
+            "Wagner"
+          ],
+          "year": 2013,
+          "venue": "hochschulblog.example",
+          "type": "web",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "w09",
+          "authors": [
+            "Xander"
+          ],
+          "year": 2017,
+          "venue": "bildungsportal.example",
+          "type": "web",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "w10",
+          "authors": [
+            "Yilmaz"
+          ],
+          "year": 2018,
+          "venue": "seminarwiki.example",
+          "type": "web",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Studienabbruch"
+          ]
+        },
+        {
+          "id": "w11",
+          "authors": [
+            "Zeller"
+          ],
+          "year": 2019,
+          "venue": "Springer",
+          "type": "book",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Lernanalytik"
+          ]
+        },
+        {
+          "id": "w12",
+          "authors": [
+            "Adam"
+          ],
+          "year": 2016,
+          "venue": "Beltz",
+          "type": "book",
+          "peer_reviewed": false,
+          "country": "DE",
+          "stance": "support",
+          "concepts": [
+            "Studienabbruch"
+          ]
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "sqa-01",
+      "label": "Report deckt sich mit einem soliden Bestand",
+      "inventory_id": "inv-strong",
+      "report": "## Quellen-Audit: Lernanalytik und Studienabbruch an deutschen Hochschulen\n\n**Quellen gesamt:** 18 | **Typ:** Masterarbeit | **Ziel:** min. 15 Quellen\n\n### Ergebnis-Übersicht\n\n| Dimension              | Score | Status         |\n|------------------------|-------|----------------|\n| Peer-Review-Anteil     | 75    | OK             |\n| Aktualität             | 96    | OK             |\n| Quellen-Diversität     | 95    | OK             |\n| Web-Quellen-Anteil     | 94    | OK             |\n| Thematische Abdeckung  | 100   | OK             |\n| **Gesamt**             | **91**| **OK**   |\n\n### Quellenverteilung\n- Peer-reviewed Journals: 8 (44%)\n- Bücher/Monographien: 3 (17%)\n- Konferenzbeiträge: 2 (11%)\n- Berichte/Working Papers: 3 (17%)\n- Web-Quellen: 1 (6%)\n- Sonstige: 1 (6%)\n\n### Identifizierte Lücken\n\n- Keine Lücke: alle vier Schlüsselkonzepte durch mindestens sechs Quellen belegt.\n\n### Empfehlungen\n\n1. Peer-Review-Anteil von 56 % auf über 70 % heben: die drei Berichte zu Interventionsdesign durch peer-reviewte Wirksamkeitsstudien ergänzen.\n2. Preprint Reuter (2021) auf eine erschienene Fassung prüfen.\n",
+      "expected": {
+        "computed_dimensions": {
+          "peer_review": 75,
+          "recency": 96,
+          "diversity": 95,
+          "web_ratio": 94,
+          "coverage": 100
+        },
+        "computed_overall": 91,
+        "computed_status": "OK",
+        "diversity_flags": [],
+        "failed_checks": [],
+        "verdict": "PASS"
+      }
+    },
+    {
+      "id": "sqa-02",
+      "label": "Report deckt sich mit einem schwachen Bestand (FAIL ehrlich ausgewiesen)",
+      "inventory_id": "inv-weak",
+      "report": "## Quellen-Audit: Lernanalytik im Seminarkontext\n\n**Quellen gesamt:** 12 | **Typ:** Masterarbeit | **Ziel:** min. 15 Quellen\n\n### Ergebnis-Übersicht\n\n| Dimension              | Score | Status         |\n|------------------------|-------|----------------|\n| Peer-Review-Anteil     | 53    | WARN           |\n| Aktualität             | 0     | FAIL           |\n| Quellen-Diversität     | 40    | FAIL           |\n| Web-Quellen-Anteil     | 30    | FAIL           |\n| Thematische Abdeckung  | 78    | OK             |\n| **Gesamt**             | **41**| **FAIL**   |\n\n### Quellenverteilung\n- Peer-reviewed Journals: 4 (33%)\n- Bücher/Monographien: 2 (17%)\n- Konferenzbeiträge: 0 (0%)\n- Berichte/Working Papers: 0 (0%)\n- Web-Quellen: 6 (50%)\n- Sonstige: 0 (0%)\n\n### Identifizierte Lücken\n\n- Datenschutz: nur eine Quelle — laut Rubrik unterversorgt (< 2 Quellen).\n- Keine Quelle jünger als 2019; die Debatte nach der DSGVO-Anwendung fehlt vollständig.\n\n### Empfehlungen\n\n1. Sechs Web-Quellen ohne institutionellen Träger durch peer-reviewte Literatur ersetzen.\n2. Mindestens vier Quellen ab 2021 zu Lernanalytik und Datenschutz ergänzen.\n3. Autorenkonzentration auflösen: vier der zwölf Quellen stammen von Sommer.\n",
+      "expected": {
+        "computed_dimensions": {
+          "peer_review": 53,
+          "recency": 0,
+          "diversity": 40,
+          "web_ratio": 30,
+          "coverage": 78
+        },
+        "computed_overall": 41,
+        "computed_status": "FAIL",
+        "diversity_flags": [
+          "author_concentration",
+          "single_country",
+          "single_stance"
+        ],
+        "failed_checks": [],
+        "verdict": "PASS"
+      }
+    }
+  ]
+}

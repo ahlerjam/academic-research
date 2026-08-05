@@ -1,0 +1,105 @@
+{
+  "component": "abstract-generator",
+  "issue": 606,
+  "description": "Vier Abstracts zum selben Quelltext wie ag-01, je mit genau EINEM Defekt. Jedes muss vom Runner als FAIL ueber genau den benannten Pruefpfad gemeldet werden — sonst ist nicht belegt, dass die Metrik eine Verschlechterung anzeigt (Issue #606, AC3).",
+  "baseline_case": "ag-01",
+  "cases": [
+    {
+      "id": "ce-ag-01",
+      "label": "Erfundene Kennzahl",
+      "degraded_check": "no_fabricated_numbers",
+      "source_id": "src-lernanalytik",
+      "why": "Der Quelltext nennt 14 und 18 Prozent; das Abstract behauptet 27 Prozent. Genau diese Sorte Fabrikation ist im Fliesstext unsichtbar und wandert in die Arbeit — der Grund, warum SKILL.md 'keine Informationen, die nicht in der Arbeit stehen' als erste Qualitaetspruefung fuehrt.",
+      "abstract_de": "Die vorliegende Arbeit untersucht, ob ein datengestuetztes Fruehwarnsystem den Studienabbruch im ersten Studienjahr senken kann. Ausgangspunkt ist die Beobachtung, dass ein Grossteil der Abbrueche frueh faellt und sich in den Nutzungsdaten der Lernplattform ankuendigt. Grundlage der Untersuchung ist ein Datensatz von 1248 Studierenden an 12 Hochschulen aus den Jahrgaengen 2021 bis 2023. Erhoben wurden Aktivitaetsdaten der Lernplattform, Pruefungsergebnisse sowie Angaben aus einer Befragung zur Studienzufriedenheit. Ein Vorhersagemodell weist je Studierendem einen Risikowert aus; oberhalb der Schwelle erhielten Studierende ein freiwilliges Beratungsangebot. In der beratenen Gruppe lag die Abbruchquote bei 14 Prozent, in der Kontrollgruppe bei 27 Prozent. Der Unterschied von 4 Prozentpunkten blieb ueber beide Kohorten stabil, faellt jedoch geringer aus als in vergleichbaren Untersuchungen berichtet. Einschraenkend ist festzuhalten, dass die Teilnahme freiwillig war und ein Selbstselektionseffekt nicht auszuschliessen ist. Fuer die Praxis folgt daraus, dass die Ansprache frueher im Semester beginnen und die Prognose ihre Unsicherheit ausweisen sollte. Ergaenzend wurden Gespraechsprotokolle der Studienberatung gesichtet, um die Entscheidungswege der Beratenen nachzuvollziehen und die quantitativen Befunde besser einzuordnen.",
+      "abstract_en": "This thesis examines whether a data driven early warning system can reduce dropout during the first year of study. The starting point is the observation that most dropouts occur early and are foreshadowed by usage data from the learning platform. The analysis draws on a dataset covering students at twelve universities from the cohorts of the years under review. Learning platform activity, examination results and survey responses on study satisfaction were collected for each student. A prediction model assigns a risk score to every student; those above the threshold received a voluntary counselling offer. In the counselled group the dropout rate was lower than in the control group by four percentage points. This difference remained stable across both cohorts, yet it is smaller than the effect reported in comparable studies. A limitation is that participation was voluntary, so a self selection effect cannot be ruled out. In practice, outreach should start earlier in the term and the forecast should report its uncertainty.",
+      "keywords_de": [
+        "Studienabbruch",
+        "Fruehwarnsystem",
+        "Learning Analytics",
+        "Hochschule",
+        "Studienberatung",
+        "Vorhersagemodell"
+      ],
+      "expected": {
+        "verdict": "FAIL",
+        "failed_checks": [
+          "no_fabricated_numbers"
+        ],
+        "fabricated_numbers": [
+          "27"
+        ]
+      }
+    },
+    {
+      "id": "ce-ag-02",
+      "label": "Kapitelverweis im Abstract",
+      "degraded_check": "no_cross_references",
+      "source_id": "src-lernanalytik",
+      "why": "Ein Abstract wird getrennt von der Arbeit gelesen — in Datenbanken, Programmheften, Verlagsseiten. Der Verweis auf 'Kapitel 5' laeuft dort ins Leere, faellt beim Korrekturlesen im Zusammenhang aber nicht auf.",
+      "abstract_de": "Die vorliegende Arbeit untersucht, ob ein datengestuetztes Fruehwarnsystem den Studienabbruch im ersten Studienjahr senken kann. Ausgangspunkt ist die Beobachtung, dass ein Grossteil der Abbrueche frueh faellt und sich in den Nutzungsdaten der Lernplattform ankuendigt. Grundlage der Untersuchung ist ein Datensatz von 1248 Studierenden an 12 Hochschulen aus den Jahrgaengen 2021 bis 2023. Erhoben wurden Aktivitaetsdaten der Lernplattform, Pruefungsergebnisse sowie Angaben aus einer Befragung zur Studienzufriedenheit. Ein Vorhersagemodell weist je Studierendem einen Risikowert aus; oberhalb der Schwelle erhielten Studierende ein freiwilliges Beratungsangebot. In der beratenen Gruppe lag die Abbruchquote bei 14 Prozent, in der Kontrollgruppe bei 18 Prozent. Wie in Kapitel 5 gezeigt wird, blieb der Unterschied von 4 Prozentpunkten ueber beide Kohorten stabil. Einschraenkend ist festzuhalten, dass die Teilnahme freiwillig war und ein Selbstselektionseffekt nicht auszuschliessen ist. Fuer die Praxis folgt daraus, dass die Ansprache frueher im Semester beginnen und die Prognose ihre Unsicherheit ausweisen sollte. Ergaenzend wurden Gespraechsprotokolle der Studienberatung gesichtet, um die Entscheidungswege der Beratenen nachzuvollziehen und die quantitativen Befunde besser einzuordnen.",
+      "abstract_en": "This thesis examines whether a data driven early warning system can reduce dropout during the first year of study. The starting point is the observation that most dropouts occur early and are foreshadowed by usage data from the learning platform. The analysis draws on a dataset covering students at twelve universities from the cohorts of the years under review. Learning platform activity, examination results and survey responses on study satisfaction were collected for each student. A prediction model assigns a risk score to every student; those above the threshold received a voluntary counselling offer. In the counselled group the dropout rate was lower than in the control group by four percentage points. This difference remained stable across both cohorts, yet it is smaller than the effect reported in comparable studies. A limitation is that participation was voluntary, so a self selection effect cannot be ruled out. In practice, outreach should start earlier in the term and the forecast should report its uncertainty.",
+      "keywords_de": [
+        "Studienabbruch",
+        "Fruehwarnsystem",
+        "Learning Analytics",
+        "Hochschule",
+        "Studienberatung",
+        "Vorhersagemodell"
+      ],
+      "expected": {
+        "verdict": "FAIL",
+        "failed_checks": [
+          "no_cross_references"
+        ],
+        "fabricated_numbers": []
+      }
+    },
+    {
+      "id": "ce-ag-03",
+      "label": "Methoden-Zug fehlt",
+      "degraded_check": "imrad_moves",
+      "source_id": "src-lernanalytik",
+      "why": "Ohne Angabe zu Datengrundlage und Erhebung laesst sich ein Ergebnis nicht einordnen. Der Abschnitt liest sich fluessig und faellt ohne Pruefung der vier Zuege nicht auf.",
+      "abstract_de": "Die vorliegende Arbeit untersucht, ob ein datengestuetztes Fruehwarnsystem den Studienabbruch im ersten Studienjahr senken kann. Ausgangspunkt ist die Beobachtung, dass ein Grossteil der Abbrueche frueh faellt und sich fruehzeitig ankuendigt. Ein Vorhersagemodell weist je Studierendem einen Risikowert aus; oberhalb der Schwelle erhielten Studierende ein freiwilliges Beratungsangebot der Hochschule. In der beratenen Gruppe lag die Abbruchquote bei 14 Prozent, in der Kontrollgruppe bei 18 Prozent. Der Unterschied von 4 Prozentpunkten blieb ueber beide Kohorten stabil, faellt jedoch geringer aus als in vergleichbaren Untersuchungen berichtet. Auch die Verteilung der Risikowerte innerhalb der beiden Gruppen weist auf einen stabilen Zusammenhang hin, der sich ueber die Jahrgaenge 2021 bis 2023 fortsetzt. Einschraenkend ist festzuhalten, dass die Teilnahme freiwillig war und ein Selbstselektionseffekt nicht auszuschliessen ist. Fuer die Praxis folgt daraus, dass die Ansprache frueher im Semester beginnen und die Prognose ihre Unsicherheit ausweisen sollte. Ergaenzend wurden Gespraechsprotokolle der Studienberatung gesichtet, um die Entscheidungswege der Beratenen nachzuvollziehen und die quantitativen Befunde besser einzuordnen.",
+      "abstract_en": "This thesis examines whether a data driven early warning system can reduce dropout during the first year of study. The starting point is the observation that most dropouts occur early and announce themselves well in advance. A prediction model assigns a risk score to every student; those above the threshold received a voluntary counselling offer from their university. In the counselled group the dropout rate was lower than in the control group by four percentage points. This difference remained stable across both cohorts, yet it is smaller than the effect reported in comparable studies. The distribution of risk scores within the two groups also points to a stable relationship that persists across the cohorts under review. A limitation is that participation was voluntary, so a self selection effect cannot be ruled out. In practice, outreach should start earlier in the term and the forecast should report its uncertainty.",
+      "keywords_de": [
+        "Studienabbruch",
+        "Fruehwarnsystem",
+        "Learning Analytics",
+        "Hochschule",
+        "Studienberatung",
+        "Vorhersagemodell"
+      ],
+      "expected": {
+        "verdict": "FAIL",
+        "failed_checks": [
+          "imrad_moves"
+        ],
+        "imrad_missing": [
+          "methode"
+        ]
+      }
+    },
+    {
+      "id": "ce-ag-04",
+      "label": "Zu wenige Keywords",
+      "degraded_check": "keyword_count",
+      "source_id": "src-lernanalytik",
+      "why": "Drei Keywords machen die Arbeit in Datenbanken schlecht auffindbar; SKILL.md verlangt 5-8. Der Mangel ist am Fliesstext nicht zu sehen, weil er ausserhalb des Abstracts liegt.",
+      "abstract_de": "Die vorliegende Arbeit untersucht, ob ein datengestuetztes Fruehwarnsystem den Studienabbruch im ersten Studienjahr senken kann. Ausgangspunkt ist die Beobachtung, dass ein Grossteil der Abbrueche frueh faellt und sich in den Nutzungsdaten der Lernplattform ankuendigt. Grundlage der Untersuchung ist ein Datensatz von 1248 Studierenden an 12 Hochschulen aus den Jahrgaengen 2021 bis 2023. Erhoben wurden Aktivitaetsdaten der Lernplattform, Pruefungsergebnisse sowie Angaben aus einer Befragung zur Studienzufriedenheit. Ein Vorhersagemodell weist je Studierendem einen Risikowert aus; oberhalb der Schwelle erhielten Studierende ein freiwilliges Beratungsangebot. In der beratenen Gruppe lag die Abbruchquote bei 14 Prozent, in der Kontrollgruppe bei 18 Prozent. Der Unterschied von 4 Prozentpunkten blieb ueber beide Kohorten stabil, faellt jedoch geringer aus als in vergleichbaren Untersuchungen berichtet. Einschraenkend ist festzuhalten, dass die Teilnahme freiwillig war und ein Selbstselektionseffekt nicht auszuschliessen ist. Fuer die Praxis folgt daraus, dass die Ansprache frueher im Semester beginnen und die Prognose ihre Unsicherheit ausweisen sollte. Ergaenzend wurden Gespraechsprotokolle der Studienberatung gesichtet, um die Entscheidungswege der Beratenen nachzuvollziehen und die quantitativen Befunde besser einzuordnen.",
+      "abstract_en": "This thesis examines whether a data driven early warning system can reduce dropout during the first year of study. The starting point is the observation that most dropouts occur early and are foreshadowed by usage data from the learning platform. The analysis draws on a dataset covering students at twelve universities from the cohorts of the years under review. Learning platform activity, examination results and survey responses on study satisfaction were collected for each student. A prediction model assigns a risk score to every student; those above the threshold received a voluntary counselling offer. In the counselled group the dropout rate was lower than in the control group by four percentage points. This difference remained stable across both cohorts, yet it is smaller than the effect reported in comparable studies. A limitation is that participation was voluntary, so a self selection effect cannot be ruled out. In practice, outreach should start earlier in the term and the forecast should report its uncertainty.",
+      "keywords_de": [
+        "Studienabbruch",
+        "Fruehwarnsystem",
+        "Hochschule"
+      ],
+      "expected": {
+        "verdict": "FAIL",
+        "failed_checks": [
+          "keyword_count"
+        ],
+        "keyword_count": 3
+      }
+    }
+  ]
+}

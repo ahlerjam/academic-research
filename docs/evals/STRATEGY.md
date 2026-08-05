@@ -35,9 +35,10 @@ keinen Tier erreicht. Die 147 API-gateten Skips waren zu dem Zeitpunkt
 unverändert geblieben — dieses Issue hat Transparenz geschaffen, keine
 LLM-Qualität gemessen.
 
-**Heutiger Stand** (Issue #619, reproduzierbar mit `uv run pytest
-tests/evals/ -q` ohne `ANTHROPIC_API_KEY`): `274 passed, 194 skipped`. Seit
-#390 sind weitere Suiten dazugekommen (u. a. #524, #626, #628, #630); die
+**Heutiger Stand** (Issue #606, reproduzierbar mit `uv run pytest
+tests/evals/ -q` ohne `ANTHROPIC_API_KEY` **und ohne `claude` im PATH**):
+`325 passed, 194 skipped`. Seit
+#390 sind weitere Suiten dazugekommen (u. a. #524, #606, #626, #628, #630); die
 Skip-Zahl ist gegenüber dem #390-Snapshot gestiegen, weil jede neue
 `structural`-Komponente eigene API-gatete Tests mitbringt. Diese Zahl wird
 durch `test_skip_count_matches_real_pytest_run` gegen einen echten
@@ -69,14 +70,14 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `humanizer-de-pipeline` | metric | `evals/humanizer-de-pipeline/runner.py`, `tests/evals/test_humanizer_pipeline_evals.py` | Tell-Dichte (Marker/100 Wörter) je Vorher/Nachher-Draft, inkl. Detection-Floor und Substanz-Quotient als Negativkontrollen. |
 | `verbatim-guard` | metric | `evals/verbatim-guard/runner.py`, `tests/evals/test_verbatim_guard_evals.py` | 10 Vault-Lookup-Cases gegen `search_quote_text()`; echte vs. erfundene Zitate, FPR 0 %. |
 | `524-nli-prefilter` | structural | `evals/524-nli-prefilter/runner.py`, `tests/evals/test_nli_prefilter_evals.py` | Investigation (Issue #524): prueft, ob HHEM-2.1-Open (Apache-2.0) oder mDeBERTa-v3-XNLI (MIT) als lokaler NLI-Vorfilter fuer DE-Kapitelbehauptung/EN-Quellkontext taugt. Struktur-Checks (>= 30 Cases, beide Labels, Sprachkennzeichnung) laufen immer ohne Netz; der Inferenzlauf braucht ~1 GB Modellgewichte-Download (HHEM 418 MB + mDeBERTa 552 MB) und ist darum nicht hermetisch, `structural` statt `metric`. Nachfahrbar mit `RUN_LIVE_NLI_PREFILTER=1 uv run pytest tests/evals/test_nli_prefilter_evals.py`. Zielsystem `quote-fidelity-auditor` (#523) liegt auf main (PR #582); der Revert-PR #584 beruhte auf einer Fehlmessung (Post-Merge-Lauf war `cancelled`, nicht `failure`) und wurde geschlossen — ein Produktiv-Anschlusspunkt fuer einen Vorfilter existiert also, siehe `evals/524-nli-prefilter/README.md`. |
-| `abstract-generator` | structural | `tests/evals/test_abstract_generator_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Quality-Prompts bewerten generierten Fließtext; ohne LLM-Aufruf gibt es dafür kein deterministisches Surrogat. Läuft nur mit `ANTHROPIC_API_KEY`, sonst Skip. |
+| `abstract-generator` | metric | `evals/abstract-generator/runner.py`, `tests/evals/test_abstract_generator_metrics.py` | Abstract-Treue gegen den Quelltext (Issue #606): Wortzahl, Verbot von Zitaten und Kapitelverweisen, vier IMRaD-Züge, Keyword-Zahl, DE/EN-Längenparität — und als inhaltlicher Kern der Fabrikations-Check, der jede Zahl im Abstract im Quelltext nachweist. Korpus hand-autoriert; vier Gegenproben, je genau ein Defekt. Die Bewertung des generierten Fließtexts selbst bleibt API-gated (`tests/evals/test_abstract_generator_evals.py`). |
 | `academic-context` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Konversationsverhalten beim Kontext-Setup — nicht ohne Modell messbar; ohne Key Skip. |
 | `advisor` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Beratungsqualität ist ein Urteil über freien Text, kein prüfbares Artefakt; ohne Key Skip. |
 | `ai-disclosure` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ob eine Vault-Spur korrekt als Vorschlag statt Behauptung formuliert und jede Zeile mit der richtigen Herkunftsmarkierung ausgegeben wird, ist ein Modellurteil über Fließtext; die Vertragsseite — vier Belegkategorien, Marker-Pflicht, DE/EN-Abschnitte, Fundstelle mit Locator — prüft `tests/test_ai_disclosure_skill.py` deterministisch. Ohne Key Skip. |
 | `anchor-paper-survey` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | arXiv-Resolution, PDF-Titel-Heuristik und die Vault-/Suchintegration sind in `tests/test_anchor_paper_survey.py` deterministisch getestet; die Evals prüfen nur Trigger und Dialogführung. Ohne Key Skip. |
 | `bibliography-auditor` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die Differenzmengenbildung (`missing_in_bibliography`, `orphaned_entries`) gegen `\cite{key}`-Marker und Vault-Paper ist in `tests/test_bibliography_auditor.py` deterministisch getestet; die Evals prüfen nur Trigger und die Abgrenzung zu `submission-checker`. Ohne Key Skip. |
 | `book-handler` | structural | `tests/evals/test_book_handler_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die deterministischen Anteile (PDF-Seitenversatz, OCR-Erkennung) sind bereits in `tests/test_book_handler*.py` abgedeckt; die Evals messen den LLM-Anteil. Ohne Key Skip. |
-| `chapter-writer` | structural | `tests/evals/test_chapter_writer_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Kapitelqualität ist der Kern-LLM-Output; ein Offline-Proxy wäre eine Scheinmetrik. Ohne Key Skip. |
+| `chapter-writer` | metric | `evals/chapter-writer/runner.py`, `tests/evals/test_chapter_writer_metrics.py` | Zitatintegrität am Kapitelentwurf (Issue #606): jeder Beleg löst über `verify_citations()` gegen einen aus dem Korpus gebauten Vault auf, jedes Direktzitat ist über `search_quote_text()` wörtlich auffindbar, Zitatdichte ≥ 5/1000 Wörter nach `skills/chapter-writer/references/quality-review-config.md`. Drei Gegenproben, je genau ein Defekt. Kapitel*qualität* — Argumentation, Stil — bleibt ausdrücklich ungemessen und API-gated (`tests/evals/test_chapter_writer_evals.py`). |
 | `citation-extraction` | structural | `tests/evals/test_citation_extraction_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Extraktion aus Freitext-PDFs; die Parser-Anteile sind separat in `tests/test_citation*.py` getestet. Ohne Key Skip. |
 | `citation-style-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Nur Trigger- und Schema-Ebene; der CSL-Import selbst hat kein projekteigenes Skript, das offline bewertbar wäre. Ohne Key Skip. |
 | `cluster-visualizer` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Bewertet Diagramm-Interpretation; die Clustering-Mathematik ist in `tests/test_cluster*.py` abgedeckt. Ohne Key Skip. |
@@ -102,7 +103,7 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `methodology-advisor` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Methodenberatung ist ein fachliches Urteil ohne eindeutige Referenzlösung. Ohne Key Skip. |
 | `notebook-bundle` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Bündel-Erzeugung ist in `tests/test_notebook_bundle.py` abgedeckt; die Evals bewerten die Erläuterungstexte. Ohne Key Skip. |
 | `oa-fetchers` | structural | `tests/test_oa_fetchers.py` (Schema-Assertions) | Cases erwarten Live-Downloads von TIB/OAPEN/DOAB; jeder Lauf wäre netzabhängig und würde CI bei fremden Ausfällen rot färben. |
-| `parallel-screening` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Wellen-Planung, Ledger, Resume und PRISMA-Summe sind in `tests/test_issue_460_parallel_screening.py` deterministisch getestet; die Evals prüfen nur Trigger und den Umgang mit uneindeutigen Fällen. Ohne Key Skip. |
+| `parallel-screening` | metric | `evals/parallel-screening/runner.py`, `tests/evals/test_parallel_screening_metrics.py` | Ausbeute des Rankings (Issue #606): `validate_ranking()` aus `skills/parallel-screening/scripts/active_learning.py` (reine Stdlib, kein Modell-Download) fährt ein Gold-Screening-Set; gemessen wird der Recall nach 30 % der Liste gegen die Zufallsdiagonale (73,3 % vs. 30,0 %). Zwei Gegenproben — Label-Rotation und Text-Entleerung — müssen die Kurve auf die Diagonale bzw. die Ausgangsreihenfolge zurückfallen lassen. Trigger und Umgang mit uneindeutigen Fällen bleiben API-gated (`tests/evals/test_triggers.py`). |
 | `peer-review` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ob Bereichsbewertung, Redaktions-/Autoren-Trennung und Empfehlung tatsächlich aus dem eingefügten Manuskripttext folgen, ist ein Modellurteil über Fließtext; die strukturellen Vorgaben (5-Bereichs-Liste, getrennte Blöcke, Empfehlungs-Skala, Fundstelle-Pflicht) prüft `tests/test_issue_608_peer_review.py` deterministisch. Ohne Key Skip. |
 | `plagiarism-check` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Bewertet Textähnlichkeits-Urteile im Fließtext; die Vault-Seite deckt `verbatim-guard` ab. Ohne Key Skip. |
 | `preregistration` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die Vorhaben-Klassifikation und das Rendern der PROSPERO-Pflichtfelder sind in `tests/test_issue_607_preregistration.py` deterministisch getestet; die Evals prüfen nur Trigger und die Abgrenzung zu `methodology-advisor`/`parallel-screening`. Ohne Key Skip. |
@@ -110,14 +111,14 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `publisher-fetchers` | structural | `tests/test_publisher_fetchers.py` (Schema-Assertions) | Cases erwarten Verlagsseiten inkl. Captcha-/Auth-Pfaden; im CI nicht hermetisch reproduzierbar, darum `structural`. Fuer `pf-06`/`pf-07`/`pf-08` (#449, PR #500) liegt der AC1-Beleg als **nachfahrbares Artefakt** in `evals/publisher-fetchers/live-verification.json` (URL-Kette, HTTP-Status, Bytes, SHA-256, Seitenzahl je Lauf) statt als Prosa: `pf-06` und `pf-07` laden real ein vollstaendiges Buch-PDF ohne Login (228 bzw. 225 Seiten, mit `pypdf` geoeffnet; `pf-07`s urspruengliche DOI zeigte auf ein kostenpflichtiges Buch und wurde korrigiert), `pf-08` erhaelt am Volltext-Endpunkt HTTP 403 mit JSTORs Bot-Challenge. Nachfahrbar mit `RUN_LIVE_PUBLISHER_FETCH=1 uv run pytest tests/test_issue_449_live_fetch.py` (opt-in, nicht im CI — ein Ausfall der Verlage darf die Pipeline nicht rot faerben). Hermetisch laeuft zusaetzlich `tests/test_issue_449_fetcher_evidence.py`: es fuehrt die real aufgezeichnete JSTOR-Challenge (`tests/fixtures/publisher_fetchers/jstor_access_check.html`) gegen die Captcha-Erkennung des Repos und verbietet einmalige Bezeichner (Block-Referenz, IP, Uhrzeit) als Beleg — sie sind pro Request neu und darum unpruefbar. |
 | `qualitative-coding` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die Kategorienbildung selbst ist Modellurteil; der deterministische Anteil (Segmentierung, Idempotenz des Re-Imports, Herkunfts-Validierung, Rendering von Übersicht und Kodierleitfaden) liegt in `tests/test_qualitative_coding.py`, die Belegpflicht für Interviewzitate in `tests/test_qualitative_coding_guard.py`. Ohne Key Skip. |
 | `quantitative-analysis` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die Verfahrenswahl im Dialog und die Weigerung, ein Ergebnis zu deuten, sind Modellurteile über Fließtext. Der Rechenkern dagegen ist vollständig deterministisch geprüft: `tests/test_issue_610_quantitative_analysis.py` erzwingt byte-identische Wiederholläufe, Effektstärke plus Konfidenzintervall je Test (Renderer wirft sonst), berichtete Voraussetzungsprüfungen inklusive benannter Alternative bei Verletzung und die Abgrenzung gegen `methodology-advisor`/`qualitative-coding`/`meta-analysis`. Ohne Key Skip. |
-| `quality-reviewer` | structural | `tests/evals/test_quality_reviewer_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Agent ist selbst ein LLM-Judge; ihn offline zu bewerten hieße, einen Judge durch einen Regex zu ersetzen. Ohne Key Skip. |
+| `quality-reviewer` | metric | `evals/quality-reviewer/runner.py`, `tests/evals/test_quality_reviewer_metrics.py` | Trennschärfe der Kriterien, gegen die der Agent urteilt (Issue #606): Satzlängen-Median, Passiv-Quote, Nominalstil und Quellen/1000 werden nach den `Metrik-Hinweise`n aus `agents/quality-reviewer.md` nachgerechnet und gegen von Hand ausgezählte Sollwerte gehalten, inkl. `iteration >= 2`-Fall für ESCALATE und einem committeten blinden Fleck der Passiv-Regel. Drei Gegenproben kippen das Verdict über je genau eine Achse. Ob das Modell die Regel im Betrieb anwendet, bleibt API-gated (`tests/evals/test_quality_reviewer_evals.py`). |
 | `query-generator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Suchstring-Qualität hängt von Recherchekontext ab; kein deterministischer Sollwert. Ohne Key Skip. |
 | `quote-extractor` | structural | `tests/evals/test_quote_extractor_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Extraktionsqualität ist LLM-Leistung; die Verbatim-Absicherung danach ist als `verbatim-guard` bereits `metric`. Ohne Key Skip. |
 | `reading-list-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Import-Parsing ist in `tests/test_reading_list*.py` abgedeckt; die Evals prüfen die Dialogführung. Ohne Key Skip. |
 | `reading-notes` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | CRUD und FTS5-Suche sind in `tests/test_issue_462_vault_notes.py` deterministisch getestet; die Evals prüfen nur, ob das Modell die Kernbefund/Methode/Verwendbarkeit-Struktur ohne Nutzervorgabe einhält. Ohne Key Skip. |
 | `research-question-refiner` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Schärfung einer Forschungsfrage hat keine eindeutige Musterlösung. Ohne Key Skip. |
 | `reviewer-response` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Antwortschreiben an Gutachter sind Fließtext-Urteile. Ohne Key Skip. |
-| `source-quality-audit` | structural | `tests/evals/test_source_quality_audit_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die harten Kriterien (DOI, Peer-Review-Flag) prüft der Vault; die Evals bewerten die Einordnung. Ohne Key Skip. |
+| `source-quality-audit` | metric | `evals/source-quality-audit/runner.py`, `tests/evals/test_source_quality_audit_metrics.py` | Der Audit-Report gegen den Quellenbestand (Issue #606): die fünf gewichteten Dimensionen aus `skills/source-quality-audit/SKILL.md` werden aus dem Inventar nachgerechnet; ein Report, dessen Zahlen, Status oder Quellenzahl der Bestand nicht hergibt, fällt durch. Bezugspunkt ist der Bestand, nicht der Report — belegt dadurch, dass derselbe Report gegen ein fremdes Inventar kippt. Vier Gegenproben (Gesamtscore erfunden, Status geschönt, Quellenzahl aufgebläht, Einzeldimension hochgeschrieben). Die Einordnung im Fließtext bleibt API-gated (`tests/evals/test_source_quality_audit_evals.py`). |
 | `sparring-partner` | structural | `tests/evals/test_sparring_partner_criteria.py` (Negativkontrollen, CI-fest), `tests/evals/test_sparring_partner_recording.py` (Snapshot, CI-fest), `tests/evals/test_sparring_partner_evals.py` (API-gated) | `recordings.json` hält fünf Transkripte aus **echten, blinden Modellaufrufen** (`evals/sparring-partner/record.py`, Claude-Code-CLI headless): die Kriterien waren vor der Aufnahme committed, der Aufnahme-Subprozess sah sie nicht. Dass der Abgleich scheitern kann, ist belegt — der erste Lauf gegen die vorab festgelegten Kriterien ergab 1/5. Zusätzlich prüfen neun format-konforme Negativkontrollen (`counter_examples.json`), dass die Kriterien überhaupt unterscheiden: vor Issue #454 bestand eine rein bestätigende Antwort sp-01/02/05 und Kapitel-Prosa bestand sp-04 — die Kriterien maßen Formattreue statt Verhalten, auf **beiden** Pfaden. Status bleibt `structural`, weil pro pytest-Lauf kein Modell befragt wird: die Transkripte sind eine eingefrorene Stichprobe aus fünf Prompts, und das im Frontmatter deklarierte Read-/Vault-Tooling war im Aufnahmelauf abgeschaltet (Material inline im Prompt). Der Nachweis für den Anthropic-API-Aufrufweg bleibt `tests/evals/test_sparring_partner_evals.py` — ohne Key Skip. |
 | `style-evaluator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Stilurteil über Fließtext; der einzige offline messbare Teilaspekt ist als `humanizer-de-pipeline` abgedeckt. Ohne Key Skip. |
 | `submission-checker` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Einreichungsrichtlinien in natürlicher Sprache, die je Journal variieren. Ohne Key Skip. |
@@ -125,7 +126,10 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 3 × `metric`, 56 × `structural`, 0 × `removed` (Stand Issue #446:
+**Bilanz:** 8 × `metric`, 51 × `structural`, 0 × `removed` (Stand Issue #606:
+`abstract-generator`, `chapter-writer`, `parallel-screening`, `quality-reviewer`
+und `source-quality-audit` von `structural` auf `metric` gehoben — vorher waren
+es 3 × `metric` und 56 × `structural`; Stand Issue #446:
 `word-export`/`slide-export` neu, beide `structural`; Stand Issue #454:
 `sparring-partner` neu, `structural` — die Transkripte stammen aus echten,
 blinden Modellaufrufen gegen vorab committete Kriterien, aber pro pytest-Lauf
@@ -139,6 +143,37 @@ jedem neuen `structural`-Eintrag mitgepflegt werden).
 
 Vor Issue #390 war der Stand 1 × `metric` (`verbatim-guard`) und 2 tote
 Definitionen ohne jeden Code-Bezug (`auto-download`, `humanizer-de-pipeline`).
+
+## Auswahl der Kern-Skills und bewusst `structural` (Issue #606)
+
+Issue #606 hebt fünf Komponenten von `structural` auf `metric`. Das Auswahlkriterium
+war **nicht** „was lässt sich leicht messen", sondern: *wessen Fehlverhalten landet
+unbemerkt in der abgegebenen Arbeit?* Ein erfundener Beleg, eine erfundene Kennzahl,
+ein geschönter Audit-Score — das sind Defekte, die beim Lesen nicht auffallen.
+
+| Komponente | Gemessene Größe |
+| --- | --- |
+| `chapter-writer` | Zitatintegrität (Beleg löst auf, Direktzitat wörtlich, Zitatdichte) |
+| `abstract-generator` | Abstract-Treue gegen den Quelltext, inkl. Fabrikations-Check auf Zahlen |
+| `quality-reviewer` | Trennschärfe der vier Kriterien, gegen die der Agent urteilt |
+| `parallel-screening` | Recall des Rankings gegen ein Gold-Set, gemessen an der Zufallsdiagonalen |
+| `source-quality-audit` | Deckung des Audit-Reports mit dem Quellenbestand |
+
+**Diese Komponenten bleiben ausdrücklich `structural` — und das ist kein Rückstand:**
+`advisor`, `methodology-advisor`, `research-question-refiner`, `title-generator`,
+`topic-brainstorm`, `literature-gap-analysis` und `peer-review`. Alle sieben lösen
+offene Aufgaben ohne Referenzlösung: Es gibt keinen einen richtigen Titel, keine eine
+richtige Methodenempfehlung, keine vollständige Liste der Forschungslücken. Eine
+Offline-Schwelle würde dort Formattreue statt Verhalten messen — genau der Defekt,
+den Issue #454 bei `sparring-partner` freigelegt hat, wo eine rein bestätigende
+Antwort die Kriterien bestand. Für sie ist `structural` der ehrliche Zustand; ihr
+Ausführungspfad bleibt der API-gatete Lauf.
+
+**Was auch die fünf neuen `metric`-Zeilen nicht sind:** ein Urteil über Live-Qualität.
+Die Korpora sind hand-autoriert und synthetisch. Gemessen wird die Trennschärfe gegen
+bekannte, absichtlich eingebaute Defekte — belegt dadurch, dass jede Metrik eine
+committete Gegenprobe hat, die ausschlagen **muss**. Was das Modell heute schreibt,
+misst weiterhin nur der API-gatete Lauf.
 
 ## Korrektur zur Issue-Beschreibung
 
