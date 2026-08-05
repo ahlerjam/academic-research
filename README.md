@@ -189,6 +189,7 @@ Von dort ist jede Seite in höchstens zwei Klicks erreichbar. Wer ohne Umweg
 nachschlagen will, findet hier den direkten Link:
 
 [Erste Schritte](docs/guide/getting-started.md) ·
+[Einstieg nach Vorhaben](docs/guide/project-paths.md) ·
 [Installation und Migration](docs/guide/installation.md) ·
 [Walkthrough](docs/guide/walkthrough.md) ·
 [Troubleshooting](docs/guide/troubleshooting.md) ·
