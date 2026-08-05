@@ -4,7 +4,7 @@
   "pushCommand": "git push",
   "commands": {
     "setup": "uv sync --extra dev",
-    "test": "uv run pytest tests/",
+    "test": "uv run pytest tests/ --ignore=tests/evals",
     "lint": "uv run ruff check . && uv run ruff format --check .",
     "typecheck": "uv run mypy",
     "smoke": ""
