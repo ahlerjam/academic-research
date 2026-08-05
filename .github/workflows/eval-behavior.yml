@@ -1,26 +1,68 @@
-name: Eval-Behavior (manuell, real)
+name: Eval-Behavior (manuell + woechentliches Kern-Set)
 
 # Separat auslösbarer Lauf fuer die Verhaltens-Evals unter tests/evals/ (Issue #470,
 # Aufrufweg erweitert in #631). Bewusst NICHT auf push/pull_request verdrahtet: die
 # real gerufenen Evals kosten Budget -- entweder ein separates ANTHROPIC_API_KEY-
-# Kontingent oder Abo-Kontingent ueber CLAUDE_CODE_OAUTH_TOKEN (~991 Aufrufe pro
-# Vollauf, vgl. docs/evals/STRATEGY.md Abschnitt "API-Budget") -- und sollen nicht
-# bei jedem Commit laufen (Issue-Scope "Out"). ci.yml bleibt unangetastet -- der
-# reguläre `pytest tests/`-Lauf dort ruft tests/evals/ weiterhin ohne jede Auth auf
-# und skippt die real gerufenen Faelle wie bisher (AC7).
+# Kontingent oder Abo-Kontingent ueber CLAUDE_CODE_OAUTH_TOKEN (~991 Aufrufe fuer
+# einen manuellen Vollauf, vgl. docs/evals/STRATEGY.md Abschnitt "API-Budget") --
+# und sollen nicht bei jedem Commit laufen (Issue-Scope "Out"). ci.yml bleibt
+# unangetastet -- der reguläre `pytest tests/`-Lauf dort ruft tests/evals/
+# weiterhin ohne jede Auth auf und skippt die real gerufenen Faelle wie bisher (AC7).
+#
+# Issue #597: zusaetzlich zum manuellen workflow_dispatch (weiterhin voller Satz
+# bzw. component-Filter) fuehrt ein woechentlicher `schedule`-Trigger NUR das
+# Kern-Set aus (`-m eval_core_set`, Marker registriert in pyproject.toml, sitzt
+# an neun Dateien unter tests/evals/ -- siehe docs/evals/STRATEGY.md Abschnitt
+# "Geplanter woechentlicher Lauf ueber ein Kern-Set" fuer die vollstaendige
+# Liste und die Korrektur zum urspruenglichen Issue-Text).
+#
+# Korrektur nach Review: das Kern-Set WAR faktisch der Vollauf, weil eine der
+# neun Dateien (tests/evals/test_triggers.py) allein ~871 der ~991 Aufrufe
+# eines Vollaufs ausmacht (45 Skills x should_trigger/should_not_trigger).
+# Seither laeuft test_triggers.py im geplanten Lauf nur noch als deterministisch
+# rotierende Stichprobe von 11-12 Skills pro Woche (ISO-Kalenderwoche waehlt
+# eine von vier festen Gruppen, siehe ROTATION_GROUPS in test_triggers.py) --
+# ueber vier Wochen kommt jeder Skill einmal dran. Das begrenzt test_triggers.py
+# auf ~210-235 Aufrufe pro Woche statt ~871; zusammen mit den restlichen acht
+# Kern-Set-Dateien (Quality-Evals, unveraendert ~120 Aufrufe) liegt ein
+# geplanter Lauf damit bei ~330-355 Aufrufen pro Woche statt vorher ~991 --
+# das Kern-Set deckt weiterhin die Suiten mit dem groessten
+# Trigger-Recall/FPR-Anteil ab, wo Modell-Drift am ehesten still auffaellt,
+# aber eben als Stichprobe statt als Vollauf. Ein Fehlschlag des geplanten
+# Laufs erzeugt ein Issue (Report-Step unten) statt in einem ungesehenen
+# Actions-Tab zu verpuffen.
 on:
+  schedule:
+    # Montag 07:00 UTC -- eine Stunde nach live-fetch-weekly.yml (Montag
+    # 06:00 UTC), um Runner-Kontention zu vermeiden (Plan-Kommentar zu #597).
+    - cron: "0 7 * * 1"
   workflow_dispatch:
     inputs:
       component:
         description: >-
           Optional: nur Tests filtern, deren Name dieses Muster enthaelt
           (pytest -k), z.B. ein einzelner evals/-Komponentenname. Leer = alle
-          Verhaltens-Evals unter tests/evals/.
+          Verhaltens-Evals unter tests/evals/. Gilt nur fuer den manuellen
+          Lauf -- der geplante Lauf (schedule) ignoriert diesen Input und
+          nutzt immer das Kern-Set (-m eval_core_set).
+        required: false
+        default: ""
+      trigger_rotation_group:
+        description: >-
+          Optional: fuer tests/evals/test_triggers.py (der API-teuerste Teil
+          des Kern-Sets) eine feste Rotationsgruppe erzwingen -- "0".."3" fuer
+          genau diese Gruppe, "all" fuer den vollen 45-Skill-Satz. Leer =
+          automatisches Verhalten: der geplante Lauf waehlt die Gruppe ueber
+          die ISO-Kalenderwoche, ein manueller Lauf ohne diesen Input bekommt
+          weiterhin alle Skills (wie vor Issue #597). Wirkt nur auf
+          test_triggers.py -- die restlichen acht Kern-Set-Dateien filtert
+          dieser Input nicht.
         required: false
         default: ""
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: eval-behavior-${{ github.ref }}
@@ -31,14 +73,32 @@ jobs:
     name: Verhaltens-Evals real ausfuehren
     runs-on: ubuntu-latest
     # Harter Budget-Deckel (Issue #470 AC2): auf dem SDK-Pfad braucht ein
-    # Vollauf (~991 API-Aufrufe, ueberwiegend Haiku-Trigger-Klassifikation, live
-    # nachgezaehlt in Issue #614) in der Praxis wenige Minuten. Der CLI-Pfad
-    # (Issue #631) ist pro Aufruf deutlich teurer -- der reale Probelauf im PR
-    # maß ~6s/Aufruf inkl. Agenten-Scaffold-Cache-Erstellung, macht 991 Aufrufe
-    # ~99min statt wenigen Minuten. 60 Minuten decken einen SDK-Vollauf
-    # grosszuegig ab, reichen fuer den CLI-Pfad bei diesem Volumen aber knapp
-    # nicht mehr aus -- der `component`-Filter-Input existiert genau dafuer.
-    timeout-minutes: 60
+    # manueller Vollauf (~991 API-Aufrufe, ueberwiegend Haiku-Trigger-
+    # Klassifikation, live nachgezaehlt in Issue #614) in der Praxis wenige
+    # Minuten. Der CLI-Pfad (Issue #631) ist pro Aufruf deutlich teurer -- der
+    # reale Probelauf im PR maß ~6s/Aufruf inkl. Agenten-Scaffold-Cache-
+    # Erstellung, macht 991 Aufrufe ~99min statt wenigen Minuten. 60 Minuten
+    # decken einen SDK-Vollauf grosszuegig ab, reichen fuer den CLI-Pfad bei
+    # diesem Volumen aber knapp nicht mehr aus -- der `component`-Filter-Input
+    # existiert genau dafuer.
+    #
+    # Issue #597: der geplante Lauf (schedule) fuehrt nur das Kern-Set aus
+    # (s. eval_core_set-Marker). Review-Korrektur: das Kern-Set war anfangs
+    # de facto der Vollauf, weil test_triggers.py allein alle 871 Trigger-
+    # Faelle zog. Seither rotiert test_triggers.py woechentlich durch eine von
+    # vier festen 11-12-Skill-Gruppen (ISO-Kalenderwoche waehlt die Gruppe,
+    # s. Kopfkommentar oben) -- ein geplanter Lauf zieht dadurch nur noch
+    # ~330-355 API-Aufrufe (~210-235 aus der Rotationsgruppe + ~120 aus den
+    # restlichen acht Kern-Set-Dateien) statt ~991. Auf dem CLI-Pfad
+    # (Issue #631, ~6s/Aufruf) sind das ~35min, nicht ~99min -- die 120
+    # Minuten unten sind seit der Rotation grosszuegiger Puffer, kein knapper
+    # Deckel mehr, aber unveraendert belassen, um bei einem manuell
+    # erzwungenen "all"-Override (trigger_rotation_group) weiterhin Raum fuer
+    # einen vollen CLI-Pfad-Lauf zu haben. Der manuelle Lauf (workflow_dispatch,
+    # ggf. component-Filter) behaelt die bestehenden 60 Minuten.
+    # `timeout-minutes` akzeptiert Ausdruecke nur ueber github/inputs/vars-
+    # Kontexte -- reicht hier, weil nur github.event_name gebraucht wird.
+    timeout-minutes: ${{ github.event_name == 'schedule' && 120 || 60 }}
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -86,9 +146,33 @@ jobs:
           # Direkte ${{ }}-Interpolation im Skripttext waere Shell-Injection mit
           # Zugriff auf ANTHROPIC_API_KEY im selben Step.
           FILTER: ${{ inputs.component }}
+          # Issue #597: nur der geplante Lauf ist auf das Kern-Set eingeschraenkt.
+          # inputs.component bleibt fuer workflow_dispatch unveraendert nutzbar --
+          # beide Filter (-m/-k) sind pytest-seitig unabhaengig kombinierbar,
+          # hier aber bewusst exklusiv (schedule ignoriert inputs.component,
+          # s. Beschreibung des Inputs oben).
+          IS_SCHEDULED: ${{ github.event_name == 'schedule' }}
+          # Wie FILTER oben: ueber env: binden statt direkt zu templaten --
+          # inputs.trigger_rotation_group ist derselbe untrusted Input-Typ.
+          ROTATION_GROUP_INPUT: ${{ inputs.trigger_rotation_group }}
         run: |
           set -o pipefail
-          if [ -n "${FILTER}" ]; then
+          # EVAL_TRIGGER_ROTATION_GROUP steuert die Skill-Auswahl in
+          # tests/evals/test_triggers.py (s. Modul-Kommentar dort). Der
+          # geplante Lauf waehlt ohne expliziten Override automatisch die
+          # ISO-Kalenderwoche-Gruppe ("auto"); jeder andere Lauf (manuell,
+          # oder geplant MIT explizitem Override) reicht den Input unveraendert
+          # durch -- leer bedeutet dort weiterhin "alle Skills" (Verhalten vor
+          # Issue #597).
+          if [ "${IS_SCHEDULED}" = "true" ] && [ -z "${ROTATION_GROUP_INPUT}" ]; then
+            export EVAL_TRIGGER_ROTATION_GROUP="auto"
+          else
+            export EVAL_TRIGGER_ROTATION_GROUP="${ROTATION_GROUP_INPUT}"
+          fi
+          if [ "${IS_SCHEDULED}" = "true" ]; then
+            uv run pytest tests/evals/ -m eval_core_set -v \
+              --junitxml=eval-results.xml 2>&1 | tee eval-output.log
+          elif [ -n "${FILTER}" ]; then
             uv run pytest tests/evals/ -k "${FILTER}" -v \
               --junitxml=eval-results.xml 2>&1 | tee eval-output.log
           else
@@ -107,6 +191,19 @@ jobs:
           else
             echo "**eval-results.xml wurde nicht erzeugt -- Lauf ist vorzeitig abgebrochen.**" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Fehlschlaege als Issue melden (nur geplanter Lauf, dedupliziert)
+        # Nur der geplante Lauf meldet automatisch -- ein manueller
+        # workflow_dispatch-Lauf (z.B. gezielter Nachvollzug eines bekannten
+        # Fehlschlags) soll nicht bei jedem Fehlschlag ein weiteres Issue
+        # aufmachen (Issue #597, AC4 spricht explizit vom "geplanten Lauf").
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          bash scripts/ci/report_eval_behavior_failure.sh eval-results.xml "$RUN_URL"
 
       - name: Ergebnis-Artefakte hochladen
         if: always()

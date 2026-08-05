@@ -457,6 +457,122 @@ def test_run_inner_pytest_strips_live_gated_and_coverage_env(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Issue #597: Das Kern-Set fuer den woechentlichen geplanten Lauf
+# (eval-behavior.yml) ist ausschliesslich ueber den pytest-Marker
+# `eval_core_set` definiert (pyproject.toml registriert ihn, die neun Dateien
+# unten tragen ihn als module-level pytestmark). Dieser Guard haelt die
+# Marker-Treffer gegen eine explizite Liste -- eine neue API-gatete Suite, die
+# den Marker vergisst, faellt sonst stillschweigend aus dem geplanten Lauf
+# (Analogie zu test_every_eval_dir_has_exactly_one_status).
+# ---------------------------------------------------------------------------
+
+EXPECTED_EVAL_CORE_SET_FILES = frozenset(
+    {
+        "tests/evals/test_abstract_generator_evals.py",
+        "tests/evals/test_chapter_writer_evals.py",
+        "tests/evals/test_citation_extraction_evals.py",
+        "tests/evals/test_quote_extractor_evals.py",
+        "tests/evals/test_quality_reviewer_evals.py",
+        "tests/evals/test_source_quality_audit_evals.py",
+        "tests/evals/test_sparring_partner_evals.py",
+        "tests/evals/test_rest_evals.py",
+        "tests/evals/test_triggers.py",
+    }
+)
+
+
+# Review-Korrektur (PR #682): test_triggers.py läuft im geplanten Lauf als
+# rotierende Stichprobe (siehe tests/evals/test_triggers.py, ROTATION_GROUPS).
+# Kleinste dokumentierte Gruppengroesse ist 10 Skills (Operator-Vorgabe
+# 10-15) x 2 Tests (should_trigger_recall + should_not_trigger_fpr) = 20
+# Node-IDs als Untergrenze -- unabhaengig davon, welche Gruppe die jeweils
+# aktuelle ISO-Woche zieht.
+MIN_ROTATION_NODE_IDS = 20
+
+
+def test_eval_core_set_matches_documented_files():
+    """`-m eval_core_set --collect-only` deckt exakt die neun dokumentierten
+    Dateien ab -- weder mehr (versehentlich zu breiter Marker) noch weniger
+    (Suite vergisst den Marker und faellt lautlos aus dem geplanten Lauf,
+    Issue #597 AC2).
+
+    Explizites `env` statt Vererbung des Ambient-Envs: der Subprozess soll
+    unabhaengig davon, ob EVAL_TRIGGER_ROTATION_GROUP in der aufrufenden
+    Shell zufaellig gesetzt ist, ein deterministisches Ergebnis liefern
+    (Rotationsgruppe "0", die kleinste dokumentierte Gruppe).
+
+    Die reine Datei-Zugehoerigkeits-Pruefung unten waere nach Einfuehrung der
+    Rotation (PR #682) unempfindlich gegen eine Regression, die
+    ROTATION_SKILLS versehentlich leerlaufen laesst: die beiden
+    nicht-parametrisierten Tests in test_triggers.py (Kollisions-Checks) und
+    die hermetischen Rotations-Tests selbst wuerden die Datei weiterhin als
+    "collected" ausweisen, auch wenn beide API-gateten Trigger-Tests
+    (should_trigger_recall/should_not_trigger_fpr) keine einzige Node-ID mehr
+    beitragen. Die zusaetzliche Untergrenzen-Pruefung unten haelt genau das
+    fest, damit der Guard bei einer solchen Regression tatsaechlich rot
+    wird statt wirkungslos gruen zu bleiben."""
+    env = dict(os.environ, EVAL_TRIGGER_ROTATION_GROUP="0")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/evals/",
+            "-m",
+            "eval_core_set",
+            "--collect-only",
+            "-q",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=env,
+    )
+    assert result.returncode == 0, (
+        f"--collect-only fuer eval_core_set schlug fehl:\n{result.stdout}\n{result.stderr}"
+    )
+    collected_lines = [line for line in result.stdout.splitlines() if "::" in line]
+    collected_files = {line.split("::", 1)[0] for line in collected_lines}
+    missing = EXPECTED_EVAL_CORE_SET_FILES - collected_files
+    unexpected = collected_files - EXPECTED_EVAL_CORE_SET_FILES
+    assert not missing, (
+        f"Dateien ohne eval_core_set-Marker, obwohl im Kern-Set erwartet: {sorted(missing)} "
+        f"(Issue #597 AC2)."
+    )
+    assert not unexpected, (
+        f"Dateien mit eval_core_set-Marker, die nicht zum dokumentierten Kern-Set "
+        f"gehoeren: {sorted(unexpected)} (Issue #597 AC2)."
+    )
+
+    trigger_test_ids = [
+        line
+        for line in collected_lines
+        if line.startswith("tests/evals/test_triggers.py::")
+        and ("test_should_trigger_recall" in line or "test_should_not_trigger_fpr" in line)
+    ]
+    assert len(trigger_test_ids) >= MIN_ROTATION_NODE_IDS, (
+        f"test_triggers.py liefert nur {len(trigger_test_ids)} API-gatete Node-IDs fuer "
+        f"Rotationsgruppe '0' -- erwartet mindestens {MIN_ROTATION_NODE_IDS} (Untergrenze aus "
+        "der kleinsten dokumentierten Gruppengroesse). Die Rotation laeuft moeglicherweise leer "
+        "(Issue #597 Review-Korrektur, PR #682)."
+    )
+
+
+def test_strategy_documents_eval_core_set_schedule():
+    """AC6: STRATEGY.md nennt Rhythmus und Umfang des geplanten Kern-Set-Laufs."""
+    text = _strategy_text()
+    assert "woechentlich" in text.lower() or "wöchentlich" in text.lower(), (
+        "STRATEGY.md muss den Rhythmus des geplanten Laufs (woechentlich) benennen "
+        "(Issue #597 AC6)."
+    )
+    assert "eval_core_set" in text, (
+        "STRATEGY.md muss auf den Marker eval_core_set als Quelle der Wahrheit fuer "
+        "das Kern-Set verweisen (Issue #597 AC6)."
+    )
+
+
 def test_no_eval_runner_requires_api_key():
     """Alle Runner unter evals/ laufen offline — kein anthropic-Client, kein API-Key."""
     for runner in sorted(EVALS_ROOT.glob("*/runner.py")):

@@ -18,6 +18,11 @@ Details: README.md (lang!), CHANGELOG.md.
 - Live-Fetch-Report-Harness: `bash scripts/dev/test-report-live-fetch-failure.sh`
   (Stub-gh, prueft Issue-Anlage/Dedup fuer `scripts/ci/report_live_fetch_failure.sh`,
   aufgerufen aus `.github/workflows/live-fetch-weekly.yml`; Issue #603)
+- Eval-Behavior-Report-Harness: `bash scripts/dev/test-report-eval-behavior-failure.sh`
+  (dieselbe Stub-gh-Pruefung wie oben, gegen `scripts/ci/report_eval_behavior_failure.sh`,
+  aufgerufen aus `.github/workflows/eval-behavior.yml` bei einem gerissenen geplanten
+  Kern-Set-Lauf; Issue #597 — beide Report-Skripte teilen sich
+  `scripts/ci/lib/report_pytest_failure.sh`)
 - Push: `git push` (kein lokales CI-Gate konfiguriert)
 
 ## Verzeichnisgrenzen (wichtig)

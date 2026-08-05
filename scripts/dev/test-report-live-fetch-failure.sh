@@ -14,6 +14,15 @@
 #   (e) `gh label create` schlaegt fehl (Label existiert schon) -> Skript
 #       laeuft trotzdem durch (kein harter Fehler).
 #   (f) keine Fehlschlaege im Report -> KEIN `gh issue create`-Aufruf.
+#   (g) 7 korrelierte Fehlschlaege (> MAX_INDIVIDUAL_ISSUES=5) -> genau 5
+#       Einzel-Issues fuer die ersten 5 Faelle PLUS 1 Sammel-Issue fuer die
+#       restlichen 2, das die betroffene Suite im Titel nennt (Issue-Flut-
+#       Deckel, Issue #597 Review P1).
+#   (h) wiederholter Sammelfehler in derselben Suite -> Dedup fuer das
+#       Sammel-Issue greift genauso wie fuer Einzel-Issues (kein Duplikat).
+#   (i) `gh issue list` wird mit `--limit 200` aufgerufen (P2-Fund: der
+#       gh-Default liefert nur 30 Eintraege, Dedup wuerde sonst bei vielen
+#       offenen Issues brechen).
 # Usage: test-report-live-fetch-failure.sh [path-to-script]
 set -u
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -160,6 +169,48 @@ OUT="$(run_script "$EMPTY" "$JUNIT_F")"; RC=$?
 CREATE_CALLS="$(grep -c '^issue create' "$CALLS" || true)"
 if [ "$RC" -eq 0 ] && [ "$CREATE_CALLS" = "0" ]; then ok
 else ko "(f) keine Fehlschlaege: erwartet 0x 'issue create', bekam rc=$RC calls='$(cat "$CALLS")' out='$OUT'"; fi
+
+# --- (g) 7 korrelierte Fehlschlaege -> 5 Einzel-Issues + 1 Sammel-Issue -----
+JUNIT_G="$WORK/g.xml"
+make_junit "$JUNIT_G" \
+  "tests.evals.test_triggers|test_should_trigger_recall_case_01|failure" \
+  "tests.evals.test_triggers|test_should_trigger_recall_case_02|failure" \
+  "tests.evals.test_triggers|test_should_trigger_recall_case_03|failure" \
+  "tests.evals.test_triggers|test_should_trigger_recall_case_04|failure" \
+  "tests.evals.test_triggers|test_should_trigger_recall_case_05|failure" \
+  "tests.evals.test_triggers|test_should_trigger_recall_case_06|failure" \
+  "tests.evals.test_triggers|test_should_trigger_recall_case_07|error"
+OUT="$(run_script "$EMPTY" "$JUNIT_G")"; RC=$?
+CREATE_CALLS="$(grep -c '^issue create' "$CALLS" || true)"
+if [ "$RC" -eq 0 ] && [ "$CREATE_CALLS" = "6" ] \
+  && grep -q "test_should_trigger_recall_case_01" "$CALLS" \
+  && grep -q "test_should_trigger_recall_case_05" "$CALLS" \
+  && ! grep -q "test_should_trigger_recall_case_06 schlaegt fehl" "$CALLS" \
+  && grep -q "weitere Faelle" "$CALLS" \
+  && grep -q "tests/evals/test_triggers.py" "$CALLS"; then ok
+else ko "(g) erwartet 5 Einzel- + 1 Sammel-Issue (6x 'issue create'), Sammel-Titel mit Suite, bekam rc=$RC calls='$(cat "$CALLS")' out='$OUT'"; fi
+
+# --- (h) wiederholter Sammelfehler in derselben Suite -> Dedup -------------
+BUNDLE_DEDUP="$WORK/bundle_dedup.json"
+cat > "$BUNDLE_DEDUP" <<'EOF'
+[
+  {"number": 101, "title": "live-fetch: test_should_trigger_recall_case_01 schlaegt fehl"},
+  {"number": 102, "title": "live-fetch: test_should_trigger_recall_case_02 schlaegt fehl"},
+  {"number": 103, "title": "live-fetch: test_should_trigger_recall_case_03 schlaegt fehl"},
+  {"number": 104, "title": "live-fetch: test_should_trigger_recall_case_04 schlaegt fehl"},
+  {"number": 105, "title": "live-fetch: test_should_trigger_recall_case_05 schlaegt fehl"},
+  {"number": 106, "title": "live-fetch: Sammelfehler in tests/evals/test_triggers.py -- 2 weitere Faelle"}
+]
+EOF
+OUT="$(run_script "$BUNDLE_DEDUP" "$JUNIT_G")"; RC=$?
+CREATE_CALLS="$(grep -c '^issue create' "$CALLS" || true)"
+if [ "$RC" -eq 0 ] && [ "$CREATE_CALLS" = "0" ] && printf '%s' "$OUT" | grep -q "#106"; then ok
+else ko "(h) erwartet vollen Dedup (0x 'issue create', Hinweis auf #106), bekam rc=$RC calls='$(cat "$CALLS")' out='$OUT'"; fi
+
+# --- (i) gh issue list wird mit --limit 200 aufgerufen ---------------------
+OUT="$(run_script "$EMPTY" "$JUNIT_A")"; RC=$?
+if [ "$RC" -eq 0 ] && grep -q '^issue list.*--limit 200' "$CALLS"; then ok
+else ko "(i) 'gh issue list' muss --limit 200 setzen (gh-Default liefert nur 30), bekam calls='$(cat "$CALLS")' out='$OUT'"; fi
 
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
