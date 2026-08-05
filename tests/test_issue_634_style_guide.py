@@ -136,16 +136,24 @@ def _style_guide_text() -> str:
     return _read(D.STYLE_GUIDE_DOC)
 
 
-def _non_exhibit_lines(text: str) -> list[str]:
-    """Zeilen des Regeldokuments ohne die zitierten Vorher/Nachher-Beispiele.
+def _non_exhibit_lines(text: str) -> str:
+    """Prosa des Regeldokuments ohne die zitierten Vorher/Nachher-Beispiele.
 
     Die Beispiele duerfen (muessen teils) gegen die eigenen Regeln verstossen
     — genau das macht sie zu Belegen. Die Selbstanwendungs-Guards (AC1)
     pruefen deshalb nur die eigene Prosa des Dokuments, nicht die Exhibits.
+
+    Exhibit-Bloecke sind mehrzeilig: von '**Vorher**'/'**Nachher**' bis zur
+    naechsten Leerzeile (Absatz-Grenze). Diese absatzweise entfernen statt
+    zeilenweise, damit Folgezeilen mit 'nahtlos' oder 'Sie' nicht fuer die
+    Selbstanwendungs-Tests zaehlen.
     """
-    return [
-        ln for ln in text.splitlines() if not ln.strip().startswith(("**Vorher**", "**Nachher**"))
-    ]
+    # Absaetze spletten (doppelte Zeilenumbrueche in der Markdown)
+    paragraphs = re.split(r"\n\n+", text)
+    # Exhibit-Bloecke herausfiltern: Absaetze, die mit **Vorher** oder **Nachher** beginnen
+    filtered = [p for p in paragraphs if not re.match(r"^\s*\*\*(Vorher|Nachher)\*\*", p)]
+    # Wieder zusammenfuegen mit Leerzeilen
+    return "\n\n".join(filtered)
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +175,7 @@ def test_style_guide_within_line_budget() -> None:
 
 def test_style_guide_never_addresses_reader_formally() -> None:
     """Selbstanwendung Regel 1: kein 'Sie' als foermliche Anrede."""
-    prose = "\n".join(_non_exhibit_lines(_style_guide_text()))
+    prose = _non_exhibit_lines(_style_guide_text())
     assert not re.search(r"\bSie\b", prose), (
         "style-guide.md verwendet 'Sie' statt durchgehend 'du' (Regel 1) "
         "ausserhalb der zitierten Beispiele."
@@ -176,7 +184,7 @@ def test_style_guide_never_addresses_reader_formally() -> None:
 
 def test_style_guide_prose_has_no_marketing_words() -> None:
     """Selbstanwendung Regel 5: keine Werbevokabeln ausserhalb der Exhibits."""
-    prose = "\n".join(_non_exhibit_lines(_style_guide_text())).lower()
+    prose = _non_exhibit_lines(_style_guide_text()).lower()
     hits = [stem for stem in BANNED_MARKETING_STEMS if stem in prose]
     assert not hits, f"style-guide.md verwendet Werbevokabeln (Regel 5): {hits}"
 
@@ -187,14 +195,17 @@ def _sentences(text: str) -> list[str]:
 
 def test_style_guide_prose_sentences_stay_short() -> None:
     """Selbstanwendung Regel 2: kein Satz ausserhalb der Exhibits ist zu lang."""
-    prose_lines = [
-        ln
-        for ln in _non_exhibit_lines(_style_guide_text())
-        if ln.strip() and not ln.startswith(("#", "["))
-    ]
+    prose_text = _non_exhibit_lines(_style_guide_text())
+    # Absaetze extrahieren (Leerzeilen als Grenze)
+    paragraphs = re.split(r"\n\n+", prose_text)
     too_long = []
-    for line in prose_lines:
-        for sentence in _sentences(line):
+    for para in paragraphs:
+        # Zeilen innerhalb des Absatzes ignorieren, die Markdown-Kopfzeilen oder Referenzen sind
+        lines = [ln for ln in para.splitlines() if ln.strip() and not ln.startswith(("#", "["))]
+        # Absatz wieder zusammenfuegen (Zeilenumbrueche im Fliesstext sind keine Satzgrenzen)
+        paragraph_text = " ".join(lines)
+        # Saetze im zusammengefassten Absatz extrahieren
+        for sentence in _sentences(paragraph_text):
             words = sentence.split()
             if len(words) > MAX_SENTENCE_WORDS:
                 too_long.append((len(words), sentence))

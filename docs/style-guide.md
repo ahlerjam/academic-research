@@ -10,9 +10,9 @@ wörtlich, mit Fundstelle. Unbekannte Begriffe klärst du im
 
 ## Zielgruppe
 
-Die Regeln gelten für Texte, die **Studierende und Promovierende** lesen, die mit
-dem Plugin ihre Arbeit schreiben — von der ersten Suche bis zur Abgabe. Diese
-Zielgruppe bringt ihr Fachgebiet und ihre Forschungsfrage mit, keine
+Die Regeln gelten für Texte, die **Studierende und Promovierende** lesen.
+Du nutzt das Plugin für deine Arbeit — von der ersten Suche bis zur Abgabe.
+Diese Zielgruppe bringt ihr Fachgebiet und ihre Forschungsfrage mit, keine
 Programmiererfahrung.
 
 Was sie **nicht mitbringen**: Vorwissen über Retrieval-Verfahren (BM25, Vektor-Suche,
@@ -52,8 +52,7 @@ zweiter Aufruf zerstört nichts.“
 
 Ein neuer Begriff bekommt beim ersten Auftreten eine Erklärung im Fließtext oder
 einen Link ins Glossar. Das gilt besonders für den **Einstiegspfad** — die fünf
-Seiten unter „Ich fange gerade an“ in der Doku-Übersicht, wo Erstleser ohne
-Vorwissen ankommen.
+Seiten unter „Ich fange gerade an” in der Doku-Übersicht.
 
 **Vorher** (`docs/evals/recall-at-k-model-ab-375.md:25`): „FTS5 + vec0-KNN via
 RRF fusioniert“ — drei Fachbegriffe hintereinander, keiner erklärt.

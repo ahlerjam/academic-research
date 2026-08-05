@@ -32,8 +32,6 @@ import pytest
 
 from tests.helpers import docs as D
 
-REPO_ROOT = D.REPO_ROOT
-
 #: Fachbegriff-Kandidaten, die im Einstiegspfad tatsächlich vorkommen
 #: (Stand Issue #634 — manuell durch Lesen der fünf Seiten ermittelt).
 #: Jeder Eintrag wird unten sowohl gegen den Einstiegspfad-Text als auch
