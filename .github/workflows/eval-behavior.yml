@@ -58,13 +58,16 @@ jobs:
     # nicht mehr aus -- der `component`-Filter-Input existiert genau dafuer.
     #
     # Issue #597: der geplante Lauf (schedule) fuehrt nur das Kern-Set aus
-    # (202 von 468 evals/-Testfaellen, s. eval_core_set-Marker) -- deutlich
-    # weniger als der volle CLI-Pfad-Fall oben. 20 Minuten sind grosszuegig
-    # fuer dieses kleinere Volumen; der manuelle Lauf (workflow_dispatch,
-    # ggf. Vollmenge) behaelt die bestehenden 60 Minuten. `timeout-minutes`
-    # akzeptiert Ausdruecke nur ueber github/inputs/vars-Kontexte -- reicht
-    # hier, weil nur github.event_name gebraucht wird.
-    timeout-minutes: ${{ github.event_name == 'schedule' && 20 || 60 }}
+    # (202 von 470 evals/-Testfaellen, s. eval_core_set-Marker). Aber: das
+    # Kern-Set enthaelt test_triggers.py mit allen 90 Faellen (45 Skills x recall/fpr),
+    # die zusammen mit den acht Quality-Eval-Dateien etwa 871+120=~991 API-Aufrufe
+    # ausmachen -- praktisch der komplette Vollauf. Auf dem CLI-Pfad (Issue #631,
+    # ~6s/Aufruf) braucht das ~99min, nicht 20min. 120 Minuten decken das ab.
+    # Der manuelle Lauf (workflow_dispatch, ggf. component-Filter) behaelt die
+    # bestehenden 60 Minuten. `timeout-minutes` akzeptiert Ausdruecke nur ueber
+    # github/inputs/vars-Kontexte -- reicht hier, weil nur github.event_name
+    # gebraucht wird.
+    timeout-minutes: ${{ github.event_name == 'schedule' && 120 || 60 }}
     steps:
       - uses: actions/checkout@v7.0.1
 
