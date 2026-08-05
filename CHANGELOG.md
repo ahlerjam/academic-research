@@ -8,6 +8,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Changed
+
+- **Technische Referenz vollständig und gegen den Code geprüft (#640):** Jeder
+  der 45 Skills, 28 Agents, 11 Slash-Commands und 47 MCP-Tools trägt jetzt
+  dieselben drei Felder — *Voraussetzung*, *Rückgabe* und *Fehlschlag erkennbar
+  an*. In `docs/reference/skills.md`, `agents.md` und `vault.md` sind das drei
+  zusätzliche Tabellenspalten, in `commands.md` drei Marker-Zeilen je Sektion;
+  die bestehenden Spalten (`Dispatch` aus #453, `Live-Test` aus #612) bleiben
+  an ihrer Position. Die Fehlschlag-Angaben stammen aus den realen Fehlerpfaden
+  des Codes (`ValueError`-Meldungen in `academic_vault/`, `status`-Werte der
+  Fetcher-Agents, `FEHLER:`-Ausgaben der Skill-Skripte), nicht aus Vermutungen.
+  Nebenbei entfernt: ein verwaister Code-Fence am Ende von `skills.md`.
+
+### Added
+
+- **Kopplungs-Guard für die Referenz (#640):** `tests/helpers/docs.py` zählt die
+  vier Komponentenmengen an genau einer Stelle aus dem Code aus
+  (`component_inventory()`); `tests/test_issue_640_reference_completeness.py`
+  prüft damit Vollständigkeit, die Pflichtfelder je Eintrag, die Zahlenangaben
+  über die gesamte Doku-Oberfläche und die Trennung zwischen Anleitung und
+  Referenz. Eine neue Skill-, Agent- oder Command-Datei ohne Referenzeintrag
+  lässt die Suite ab sofort rot werden; für Agents und Commands gab es eine
+  solche Kopplung bisher nicht.
+
 ## [6.7.0] — 2026-08-05
 
 ### Changed

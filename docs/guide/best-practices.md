@@ -7,7 +7,9 @@ und — der wichtigste Teil — wofür dieses Plugin nicht taugt. Wer die letzte
 Installation liest, spart sich unter Umständen den ganzen Aufwand.
 
 Der Ablauf selbst steht im [Walkthrough](walkthrough.md), der Einstieg in
-[Erste Schritte](getting-started.md).
+[Erste Schritte](getting-started.md). Was ein einzelner Skill voraussetzt, zurückgibt und
+woran du seinen Fehlschlag erkennst, steht nicht hier, sondern in der
+[Skills-Referenz](../reference/skills.md).
 
 ## Wofür das Plugin gut geeignet ist
 
