@@ -110,3 +110,59 @@ statt einen Tool-Fehler durchzureichen:
 claude plugin marketplace add anthropics/skills
 claude plugin install document-skills@anthropic-agent-skills
 ```
+
+## Skill-Listing-Budget: wenn viele Plugins installiert sind
+
+Claude Code lädt bei jeder Runde eine Liste aller installierten Skill-Namen und
+-Beschreibungen ins Kontextfenster, damit das Modell weiß, was es aufrufen kann. Das
+Budget dafür ist standardmäßig **1 % des Kontextfensters** (`skillListingBudgetFraction`,
+Default `0.01`). Reicht das nicht, kürzt Claude Code zuerst die Beschreibungen der am
+seltensten aufgerufenen Skills auf den bloßen Namen — die Skills bleiben aufrufbar, aber
+ihr Trigger-Text fehlt. Das trifft am ehesten Einmal-pro-Projekt-Skills wie
+`defense-prep`, `grant-proposal` oder `conference-poster`, bei denen die Trigger-Phrase
+in der Beschreibung sitzen muss, damit der Skill überhaupt von selbst anspringt.
+
+**Gemessen am 04./05.08.2026** auf einer Operator-Maschine mit mehreren installierten
+Plugins:
+
+| Größe | Wert |
+|---|---|
+| Aktives Listing über **alle** installierten Plugins | 91 Einträge, 43.343 Zeichen, ≈10.836 Token (Schätzung: Zeichen/4) |
+| Anteil dieses Plugins daran | 28.253 Zeichen, ≈7.063 Token = 65,2 % des Gesamtlistings |
+| Default-Budget bei 200k-Kontextfenster | ≈2.000 Token → Listing zu ≈542 % ausgelastet |
+| Default-Budget bei 1M-Kontextfenster | ≈10.000 Token → Listing zu ≈108 % ausgelastet |
+
+Bei 200k überschreitet allein dieses Plugin das Default-Budget um mehr als das Dreifache.
+Bei 1M bleibt es für sich genommen darunter (≈7.063 von ≈10.000 Token), zusammen mit den
+übrigen installierten Plugins wird das Budget aber auch dort überschritten.
+
+**Gegenmittel — Einstellung, nicht Repo-Konfiguration.** Das Budget ist eine
+Nutzerpräferenz, die für alle Projekte auf der jeweiligen Maschine gilt, nicht eine
+Eigenschaft dieses Plugins. Sie gehört deshalb in die **globale** `settings.json` des
+Nutzers (`~/.claude/settings.json`), nicht in eine Datei dieses Repos:
+
+```json
+{ "skillListingBudgetFraction": 0.02 }
+```
+
+`0.02` = 2 % statt 1 % des Kontextfensters. Alternativ setzt die Umgebungsvariable
+`SLASH_COMMAND_TOOL_CHAR_BUDGET` eine feste Zeichenzahl statt eines Anteils.
+
+Nachmessen lässt sich das über die Zeile „Skills" in `/context` — sie zeigt das Listing
+**nach** Anwendung des Budgets, also das, was beim Modell wirklich ankommt. Die Änderung
+greift erst in einer **neuen Sitzung**: das Listing wird beim Sitzungsstart gebaut.
+(Ein Nachher-Wert ist für die oben genannte Messung bewusst nicht angegeben — er lag zum
+Zeitpunkt der Dokumentation nicht vor.)
+
+**`skillOverrides` hilft hier nicht.** Die Einstellung erlaubt zwar, einzelne Skills auf
+`"name-only"` zu setzen und so Budget freizugeben — sie wirkt aber laut Doku
+ausdrücklich nicht auf Plugin-Skills: „Plugin skills are not affected by
+`skillOverrides`. Manage those through `/plugin` instead." Für Skills aus einem
+installierten Plugin (wie diesem hier) bleibt also nur, das Budget selbst zu erhöhen
+oder das Plugin über `/plugin` zu deaktivieren.
+
+**Kein Nachher-Wert.** Die obige Messung ist der Zustand *vor* der Änderung. Ob und wie
+stark `skillListingBudgetFraction: 0.02` die Kürzung tatsächlich behebt, ist nicht
+gemessen — die Einstellung wirkt erst in einer neuen Sitzung, und ein Nachher-Lauf mit
+denselben Kennzahlen steht noch aus.
+```

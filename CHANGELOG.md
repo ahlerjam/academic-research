@@ -28,6 +28,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Skill-Listing-Budget dokumentiert (#620):** Bei vielen installierten Plugins
+  kürzt Claude Code die Skill-Beschreibungen im Kontextfenster zuerst bei den am
+  seltensten aufgerufenen Skills — genau bei Einmal-pro-Projekt-Skills wie
+  `defense-prep`, `grant-proposal` oder `conference-poster` sitzt aber die
+  Trigger-Phrase in der Beschreibung. Gemessen am 04./05.08.2026 auf einer
+  Operator-Maschine: das aktive Gesamtlisting über alle Plugins umfasst 91 Skills
+  / 43.343 Zeichen / ≈10.836 Token, allein dieses Plugin trägt 45 Skills /
+  28.253 Zeichen / ≈7.063 Token bei (65,2 %) — das überschreitet das
+  Default-Budget von 1 % des Kontextfensters bereits allein (≈542 % Auslastung
+  bei 200k, ≈108 % bei 1M). Neuer Abschnitt „Skill-Listing-Budget: wenn viele
+  Plugins installiert sind" in `docs/reference/skills.md` erklärt
+  `skillListingBudgetFraction` (Default `0.01`) und die feste
+  `SLASH_COMMAND_TOOL_CHAR_BUDGET`-Alternative, beide als Nutzereinstellung in
+  der globalen `~/.claude/settings.json` (nicht im Repo, gilt maschinenweit für
+  alle Projekte), sowie warum `skillOverrides` bei Plugin-Skills laut Doku
+  ausdrücklich nicht greift (`/plugin` ist der einzige Hebel dort).
+  `docs/guide/troubleshooting.md` verlinkt aus der Skills-Tabelle dorthin. Kein
+  Nachher-Wert gemessen — die Einstellung wirkt erst in einer neuen Sitzung.
+
 - **Präregistrierung: Studienprotokoll und PROSPERO-Anmeldung (#607):** Zwischen
   Methodenwahl (`methodology-advisor`) und Datenerhebung fehlte der Schritt,
   Fragestellung, Ein-/Ausschlusskriterien, Suchstrategie und Auswertungsplan
