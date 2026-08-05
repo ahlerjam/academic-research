@@ -44,4 +44,5 @@ die [Installationsanleitung](installation.md) oder ein Issue im Repository.
 | Problem | Lösung |
 |---------|--------|
 | Skill triggert nicht | Ein Keyword aus der Trigger-Liste verwenden ([skills.md](../reference/skills.md)) oder den Skill explizit ansprechen |
+| Seltene Skills (z. B. `defense-prep`, `grant-proposal`, `conference-poster`) triggern trotz passendem Stichwort nicht mehr, obwohl sie es früher taten | Bei vielen installierten Plugins wird das Skill-Listing im Kontext gekürzt — Ursache, Messung und Gegenmittel: [Skill-Listing-Budget](../reference/skills.md#skill-listing-budget-wenn-viele-plugins-installiert-sind) |
 | Output-Skill (Poster, Antrag, Response) läuft nicht | Diese Skills sind Default-Off. `output_targets` im Projekt-State setzen — siehe [Glossar](../reference/glossary.md) |
