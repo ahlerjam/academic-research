@@ -59,29 +59,6 @@ woran du seinen Fehlschlag erkennst, steht nicht hier, sondern in der
 Läuft etwas technisch schief, steht die Diagnose in
 [Troubleshooting](troubleshooting.md) — hier stehen nur die Fehler, die kein Bug sind.
 
-## Wofür das Plugin nicht geeignet ist
-
-- **Keine Zitat-Garantie ohne Gegenprüfung.** Der `verbatim-guard`-Hook belegt, dass ein
-  Zitat aus deinem Vault stammt — nicht, dass Wortlaut, Seitenzahl, Autorenname und Jahr
-  korrekt aus dem Original übernommen wurden. Jedes Zitat gegenprüfen, bevor es in die
-  Arbeit wandert.
-- **Kein Ersatz für einen Plagiatsdienst.** Der `plagiarism-check`-Skill misst
-  N-Gramm-Überlappung gegen die Quellen *in deinem Vault*. Gegen alles, was nicht im Vault
-  liegt, prüft er nichts. Die offizielle Prüfung deiner Hochschule ersetzt er nicht.
-- **Keine eigene Datenerhebung und keine Statistik-Suite.** Interviews, Fragebögen,
-  Laborwerte, Signifikanztests und Regressionsmodelle liegen außerhalb. Der
-  `meta-analysis`-Agent rechnet auf bereits publizierten Effektstärken, er erhebt nichts.
-- **Kein Zugang, den du nicht hast.** Paywalls werden nicht umgangen. Ohne
-  Open-Access-Quelle, Hochschullizenz oder Fernleihe gibt es kein PDF. Der SciHub-Tier ist
-  per Default aus, rechtlich umstritten und liegt vollständig in deiner Verantwortung.
-- **Office-Formate nur mit externem Plugin.** Excel, Word und PowerPoint hängen am
-  Marketplace-Plugin `document-skills`. Fehlt es, melden die betroffenen Commands den
-  Nachinstallations-Weg, statt ein Dokument zu erzeugen.
-- **Auf deutschsprachige Hochschulen ausgelegt.** Zitierstile, Formalia-Prüfung und der
-  Anti-KI-Pass folgen den Konventionen deutschsprachiger Prüfungsordnungen. Für andere
-  Systeme sind sie Ausgangspunkt, nicht Maßstab.
-- **Kein Ersatz für Fachurteil.** Was relevant, methodisch tragfähig und begründet ist,
-  entscheidest du. Scores sind Sortierhilfen, keine Wahrheit.
-- **Kein Werkzeug für Prüfungsbetrug.** Eine vollständig generierte und unverstandene
-  Arbeit einzureichen, ist an praktisch jeder Hochschule ein Täuschungsversuch — mit oder
-  ohne Anti-KI-Pass.
+Wofür das Plugin **nicht** geeignet ist — technisch, rechtlich und bei der Kontrolle
+eigener Ergebnisse — steht gesondert und mit Beleg unter
+[Grenzen](limits.md).

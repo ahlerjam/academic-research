@@ -226,7 +226,7 @@ Plagiat prüfen: Ist Kapitel 3 zu nah am Original meiner Hauptquelle?
 
 **Ergebnis:** Ein N-Gramm-Overlap gegen die Vault-Quellen mit den kritischen Stellen.
 Das ersetzt keinen Plagiatsdienst deiner Hochschule — siehe
-[Grenzen](best-practices.md#wofür-das-plugin-nicht-geeignet-ist).
+[Grenzen](limits.md#was-das-plugin-nicht-darf).
 
 ## 20. PRISMA-Flow (nur systematische Reviews)
 
