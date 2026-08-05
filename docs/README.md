@@ -51,6 +51,8 @@ Neue Begriffe schlägst du unterwegs im [Glossar](reference/glossary.md) nach.
 
 ## Ich will beitragen
 
+- [Schreibregeln und Glossar-Pflicht](style-guide.md) — Ton, Zielgruppe und der
+  Fachbegriffs-Guard für den Einstiegspfad, bevor du neue Doku schreibst.
 - [Entwicklung, Tests und Evals](development.md) — Setup, lokale Gates, Konventionen und
   die versionierten `.claude/`-Dateien.
 - [Skip-Reasons](SKIP_REASONS.md) — welche Tests bewusst übersprungen werden und warum.

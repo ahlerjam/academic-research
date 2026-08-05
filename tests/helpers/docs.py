@@ -58,6 +58,21 @@ PRACTICE_GUIDE_DOCS = (
 DEVELOPMENT_DOC = DOCS_DIR / "development.md"
 QUICKSTART_PROTOCOL_DOC = DOCS_DIR / "quickstart-protocol.md"
 
+#: Regeldokument fuer Ton und Glossar-Pflicht (Issue #634).
+STYLE_GUIDE_DOC = DOCS_DIR / "style-guide.md"
+
+#: Der "Einstiegspfad" (Issue #634): die Seiten unter "Ich fange gerade an" in
+#: der Doku-Uebersicht, in genau der dort vorgegebenen Lesereihenfolge. Neue
+#: Fachbegriffe muessen hier beim ersten Gebrauch erklaert sein oder im
+#: Glossar stehen.
+ENTRY_PATH_DOCS = (
+    GETTING_STARTED_DOC,
+    INSTALLATION_DOC,
+    WALKTHROUGH_DOC,
+    TROUBLESHOOTING_DOC,
+    QUICKSTART_PROTOCOL_DOC,
+)
+
 #: Alle Referenz-/Guide-Dokumente, die die README verlinken muss.
 LINKED_DOCS = (
     SKILLS_DOC,

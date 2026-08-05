@@ -33,3 +33,4 @@ ohne den Rest der Seite verständlich bleibt.
 | **BibTeX** | Textbasiertes Literatur-Format für LaTeX. Andere Formate: APA7, IEEE, Harvard, Chicago, DIN 1505, MLA, Vancouver, Springer Author-Date. |
 | **CSL** | Citation Style Language — XML-basiertes Format für Zitierstile. 10.000+ Stile im CSL-Repository. |
 | **humanizer-de** | Globaler Skill für Anti-KI-Audit deutschsprachiger Texte. Schützt vor Turnitin/GPTZero/OriginalityAI. |
+| **Einstiegspfad** | Die für Neueinsteiger vorgesehene Lesereihenfolge der Doku: Erste Schritte, Installation, Walkthrough, Troubleshooting, Quickstart-Protokoll (Abschnitt „Ich fange gerade an" in der [Doku-Übersicht](../README.md)). Hier greift der Fachbegriffs-Guard aus dem [Styleguide](../style-guide.md). |
