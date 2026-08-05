@@ -7,10 +7,6 @@ Details: README.md (lang!), CHANGELOG.md.
 ## Commands
 - Setup (frischer Worktree, vor dem ersten Gate): `uv sync --extra dev`
   (Pins in pyproject.toml + uv.lock; Endnutzer-Weg bleibt scripts/setup.sh + pip)
-- Tests: `uv run pytest tests/` (Matrix-CI: Ubuntu+macOS, py3.11-3.13)
-- Lint: `uv run ruff check .` und `uv run ruff format --check .` (beide
-  CI-blockierend seit #340)
-- Types: `uv run mypy` (Konfig in pyproject.toml; blockierend nach #341)
 - Hooks-Syntax: `bash scripts/dev/check-mjs-syntax.sh` (`node --check` ueber
   alle getrackten `*.mjs`, also auch `hooks/lib/`; CI-blockierend seit #542 —
   der fruehere Glob `hooks/*.mjs` rekursierte nicht)
@@ -30,9 +26,6 @@ Details: README.md (lang!), CHANGELOG.md.
 - Push: `git push` (kein lokales CI-Gate konfiguriert)
 
 ## Verzeichnisgrenzen (wichtig)
-- `tests/` = klassisches pytest; `evals/` = LLM-Verhaltens-Evals (KEIN normales pytest).
-- Vendored / von Lint+Typecheck ausgeschlossen: Referenzdateien unter
-  `skills/humanizer-de/references/`.
 - Excel-Backend ist das externe Plugin `document-skills` (Marketplace
   `anthropic-agent-skills`), deklariert als Dependency in
   `.claude-plugin/plugin.json` — nicht im Repo mitgeliefert (#445).
