@@ -638,7 +638,7 @@ def check_plugin_marketplace_consistency() -> None:
     )
 
     p_ver = plugin.get("version", "")
-    assert re.match(r"^6\.5\.\d+$", p_ver), f"plugin.json Version nicht 6.5.x: {p_ver}"
+    assert re.match(r"^6\.7\.\d+$", p_ver), f"plugin.json Version nicht 6.7.x: {p_ver}"
 
     plugins = market.get("plugins", [])
     assert plugins, "marketplace.json hat keine plugins-Liste"
