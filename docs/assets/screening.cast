@@ -1,0 +1,12 @@
+{"version": 2, "width": 100, "height": 22, "timestamp": 1785888300, "title": "academic-research — Screening: Ausschlussgruende dokumentieren (Mitschnitt aus docs/quickstart-protocol.md)", "env": {"SHELL": "/bin/zsh", "TERM": "xterm-256color"}}
+[0.9, "o", "\u001b[32m$ \u001b[97mvault.add_excluded_source('issue639-demo-excluded',\u001b[0m\r\n"]
+[1.35, "o", "\u001b[97m                  reason='Kein Volltext zugaenglich (Paywall ohne Institutionszugang) —\u001b[0m\r\n"]
+[1.8, "o", "\u001b[97m                  Ausschluss im Screening-Schritt')\u001b[0m\r\n"]
+[2.25, "o", "\u001b[90m-> ok\u001b[0m\r\n\r\n"]
+[3.15, "o", "\u001b[32m$ \u001b[97mvault.list_excluded_sources()\u001b[0m\r\n"]
+[3.6, "o", "\u001b[90m-> Ausgeschlossen: 1\u001b[0m\r\n"]
+[3.9, "o", "\u001b[90m   - issue639-demo-excluded: Kein Volltext zugaenglich (Paywall ohne Institutionszugang)\u001b[0m\r\n\r\n"]
+[4.8, "o", "\u001b[32m$ \u001b[97mvault.is_excluded('issue639-demo-excluded')\u001b[0m\r\n"]
+[5.25, "o", "\u001b[32m-> True\u001b[0m\r\n\r\n"]
+[6.15, "o", "\u001b[32m$ \u001b[97mvault.is_excluded('issue626-demo-verbatim')\u001b[0m\r\n"]
+[6.6, "o", "\u001b[90m-> False\u001b[0m\r\n"]

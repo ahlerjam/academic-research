@@ -8,6 +8,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Added
+
+- **Architekturdiagramm, Vorhaben-Ablaufbilder, zwei neue Terminal-Aufzeichnungen
+  (#639):** `docs/reference/architecture.md` zeigt Vault, Hooks (`verbatim-guard.mjs`,
+  `claim-drift-guard.mjs`, `context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`,
+  `mid-session-reinforcement.mjs`), Skills und Agents im Zusammenspiel — eine Ebene
+  detaillierter als das bestehende README-Diagramm. Jeder der vier Vorhaben-Abschnitte
+  in `docs/guide/project-paths.md` (systematische Übersichtsarbeit, empirische
+  Qualifikationsarbeit, Literaturarbeit, Zeitschriftenbeitrag) bekommt ein
+  Mermaid-Ablaufbild, dessen Knotenreihenfolge mit der dort stehenden
+  "Reihenfolge:"-Prosa mechanisch abgeglichen wird. Zwei neue, real durchgespielte
+  Terminal-Aufzeichnungen (Lesenotizen anlegen/wiederfinden, Ausschlussgründe im
+  Screening dokumentieren) ergänzen den Quickstart-Cast; `docs/quickstart-protocol.md`
+  belegt jeden getippten Befehl. `scripts/dev/render_quickstart_svg.py` rendert jetzt
+  alle drei Cast/SVG-Paare über dieselben `--cast`/`--out`-Parameter, keine kopierte
+  zweite Fassung. Guards in `tests/test_issue_639_diagrams_and_recordings.py`: jeder
+  eingebettete Mermaid-Block ist strukturell gültig, jedes SVG ist byteweise die
+  Ausgabe seines Casts, jeder getippte Befehl ist im Protokoll belegt, und kein
+  `docs/assets/`-Verweis zeigt ins Leere.
+
 ## [6.7.0] — 2026-08-05
 
 ### Changed
