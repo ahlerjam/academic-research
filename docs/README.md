@@ -12,6 +12,11 @@ ganz oben einen Hinweis und stehen unten im eigenen Abschnitt.
 
 ## Ich fange gerade an
 
+Weißt du schon, was du schreibst — systematische Übersichtsarbeit, empirische
+Qualifikationsarbeit mit eigener Erhebung, Literaturarbeit, Zeitschriftenbeitrag?
+[Einstieg nach Vorhaben](guide/project-paths.md) zeigt dir direkt die passende
+Skill-Reihenfolge dafür. Weißt du es noch nicht, geht es unten Schritt für Schritt.
+
 1. [Erste Schritte](guide/getting-started.md) — von der Installation bis zum ersten
    verifizierten Zitat, in einem Zug und ohne Sprung auf andere Seiten.
 2. [Installation und Migration](guide/installation.md) — Voraussetzungen im Detail, was
