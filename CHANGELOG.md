@@ -8,6 +8,24 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Changed
+
+- **`disable-model-invocation` mess-basiert geprüft statt vermutet (#622):**
+  Die drei im Issue genannten Kandidaten (`citation-style-import`,
+  `notebook-bundle`, `cluster-visualizer`) zeigen in der `#614`-Trigger-
+  Baseline bereits hohe Recall-Werte (90 %/80 %/100 %) über natürlichsprachige
+  Formulierungen ohne Skill-Namen — die Fehlklassifikationen dahinter sind
+  CLI-Parsing-Rauschen (stray Wörter statt Skill-Namen), keine echten
+  Verwechslungen. Laut AC5 ("kein Skill markiert, für den die Messung eine
+  relevante Auslöserate zeigt") bleibt es bei **0 markierten Skills** —
+  ein zulässiger, mess-basierter Ausgang, dokumentiert in
+  `docs/evals/2026-08-05-disable-model-invocation-622.md`. Regressions-Guards
+  in `tests/test_issue_622_disable_model_invocation.py` verhindern künftig,
+  dass ein Skill mit relevanter Auslöserate ohne dokumentierten Beleg markiert
+  wird, und halten die Listing-Größe (Summe aller `description`-Zeichen ohne
+  `disable-model-invocation: true`) gegen eine gepflegte Baseline
+  (`tests/baselines/description_chars_622.json`) fest.
+
 ### Added
 
 - **Präregistrierung: Studienprotokoll und PROSPERO-Anmeldung (#607):** Zwischen
