@@ -181,39 +181,32 @@ allen Ausgaben und den dabei gefundenen Stolperstellen steht in
 
 ## Dokumentation
 
-Einstieg mit Lesepfaden für Erstnutzer, Fortgeschrittene und Beitragende:
-[docs/README.md](docs/README.md).
+> [!TIP]
+> **Nächster Schritt:** [docs/README.md](docs/README.md) — die Doku-Übersicht mit drei
+> Lesepfaden: *Ich fange gerade an*, *Ich arbeite schon damit*, *Ich will beitragen*.
 
-**Loslegen**
+Von dort ist jede Seite in höchstens zwei Klicks erreichbar. Wer ohne Umweg
+nachschlagen will, findet hier den direkten Link:
 
-- [Erste Schritte](docs/guide/getting-started.md) — Installation bis erstes verifiziertes Zitat, in einem Zug
-- [Installation und Migration](docs/guide/installation.md) — Voraussetzungen, was das Setup tut, Umstieg von v5
-- [Walkthrough](docs/guide/walkthrough.md) — jeder Arbeitsschritt in der realen Reihenfolge
-- [Troubleshooting](docs/guide/troubleshooting.md) — wenn etwas klemmt
-- [Quickstart-Protokoll](docs/quickstart-protocol.md) — der abgenommene Durchlauf
-
-**Besser arbeiten**
-
-- [Modellwahl](docs/guide/model-choice.md) — welches Modell für welchen Arbeitsschritt
-- [Token-Budget](docs/guide/token-budget.md) — teure Schritte erkennen und eingrenzen
-- [Bewährtes Vorgehen und ehrliche Grenzen](docs/guide/best-practices.md) — auch: wofür das Plugin nicht taugt
-
-**Nachschlagen**
-
-- [Commands](docs/reference/commands.md) — alle 11 Slash-Commands mit Syntax und Beispielen
-- [Skills](docs/reference/skills.md) — alle 45 Skills und ihre Trigger
-- [Agents](docs/reference/agents.md) — alle 28 Subagents
-- [Vault-MCP-Server](docs/reference/vault.md) — alle 47 MCP-Tools, Volltext- und Vektor-Index
-- [Suchquellen, Scoring, Cluster](docs/reference/search.md) — woher die Literatur kommt
-- [Hooks-Stack](docs/reference/hooks.md) — was wann eingreift, und was geloggt wird
-- [Per-Uni-Profile](docs/reference/uni-profiles.md) — Hochschulzugänge einrichten
-- [Glossar](docs/reference/glossary.md) — Vault, Repro-Lock, RRF und der Rest
-
-**Mitwirken**
-
-- [Entwicklung, Tests und Evals](docs/development.md) — Setup, Gates, Konventionen
-- [AGENTS.md](AGENTS.md) — verbindliche Konventionen und rote Linien
-- [CHANGELOG.md](CHANGELOG.md) — Versionshistorie
+[Erste Schritte](docs/guide/getting-started.md) ·
+[Installation und Migration](docs/guide/installation.md) ·
+[Walkthrough](docs/guide/walkthrough.md) ·
+[Troubleshooting](docs/guide/troubleshooting.md) ·
+[Quickstart-Protokoll](docs/quickstart-protocol.md) ·
+[Modellwahl](docs/guide/model-choice.md) ·
+[Token-Budget](docs/guide/token-budget.md) ·
+[Bewährtes Vorgehen und ehrliche Grenzen](docs/guide/best-practices.md) ·
+[Commands](docs/reference/commands.md) ·
+[Skills](docs/reference/skills.md) ·
+[Agents](docs/reference/agents.md) ·
+[Vault-MCP-Server](docs/reference/vault.md) ·
+[Suchquellen, Scoring, Cluster](docs/reference/search.md) ·
+[Hooks-Stack](docs/reference/hooks.md) ·
+[Per-Uni-Profile](docs/reference/uni-profiles.md) ·
+[Glossar](docs/reference/glossary.md) ·
+[Entwicklung, Tests und Evals](docs/development.md) ·
+[AGENTS.md](AGENTS.md) ·
+[CHANGELOG.md](CHANGELOG.md)
 
 ## Lizenz und Kontakt
 
