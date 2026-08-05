@@ -560,6 +560,97 @@ def test_eval_core_set_matches_documented_files():
     )
 
 
+# ---------------------------------------------------------------------------
+# Issue #606: ``metric`` war bisher nur in eine Richtung geschuetzt — der Guard
+# prueft, DASS ein Pfad existiert, nicht, dass er ohne API-Key laeuft. Ohne die
+# folgenden drei Tests koennte eine API-gatete Suite als ``metric`` gefuehrt
+# werden und der Bestand still zurueckrutschen.
+# ---------------------------------------------------------------------------
+
+MIN_METRIC_COMPONENTS = 8
+
+DELIBERATE_STRUCTURAL_SECTION = "## Auswahl der Kern-Skills und bewusst `structural` (Issue #606)"
+
+DELIBERATELY_STRUCTURAL = [
+    "advisor",
+    "methodology-advisor",
+    "research-question-refiner",
+    "title-generator",
+    "topic-brainstorm",
+    "literature-gap-analysis",
+    "peer-review",
+]
+
+
+def test_metric_rows_are_not_api_gated(rows):
+    """Ein ``metric``-Pfad, der ohne Key skippt, misst bei keinem CI-Lauf etwas."""
+    for name, row in rows.items():
+        if row["status"] != "metric":
+            continue
+        for rel in re.findall(r"`([^`]+)`", row["path"]):
+            path = REPO_ROOT / rel
+            if not path.suffix == ".py" or not path.exists():
+                continue
+            source = path.read_text(encoding="utf-8")
+            # Auf den AUFRUF pruefen, nicht auf den blossen Namen: eine Testdatei
+            # darf die Key-Freiheit ihres Runners selbst asserten, ohne dadurch
+            # als API-gatet zu gelten.
+            assert not re.search(r"require_api_key\s*\(", source), (
+                f"{name}: '{rel}' ist als 'metric'-Ausfuehrungspfad genannt, haengt "
+                f"aber an require_api_key() und skippt ohne Schluessel (Issue #606)."
+            )
+
+
+def test_metric_count_does_not_regress(rows):
+    """Ratchet: der in #606 erreichte Stand darf nicht stillschweigend zurueckfallen."""
+    metric_rows = sorted(name for name, row in rows.items() if row["status"] == "metric")
+    assert len(metric_rows) >= MIN_METRIC_COMPONENTS, (
+        f"Nur {len(metric_rows)} × metric ({metric_rows}), erwartet mindestens "
+        f"{MIN_METRIC_COMPONENTS} (Issue #606). Eine Komponente auf 'structural' "
+        f"zurueckzustufen ist eine bewusste Entscheidung — dann diese Schwelle "
+        f"mit Begruendung senken, statt sie zu umgehen."
+    )
+
+
+def test_the_five_core_skills_are_metric(rows):
+    """Die in #606 ausgewaehlten Kern-Skills sind namentlich geschuetzt."""
+    for name in (
+        "chapter-writer",
+        "abstract-generator",
+        "quality-reviewer",
+        "parallel-screening",
+        "source-quality-audit",
+    ):
+        assert rows[name]["status"] == "metric", (
+            f"{name}: Status {rows[name]['status']!r} — Issue #606 hat diese "
+            f"Komponente auf 'metric' gehoben."
+        )
+
+
+def test_strategy_documents_deliberate_structural_choice(strategy_text, rows):
+    """Bewusst ``structural`` gebliebene Skills sind mit Begruendung ausgewiesen.
+
+    Scope-Cut auf den Abschnitt statt Volltext-Suche: sonst bliebe der Test
+    gruen, wenn der Abschnitt geloescht und die Namen anderswo stehen (#626).
+    """
+    assert DELIBERATE_STRUCTURAL_SECTION in strategy_text, (
+        f"STRATEGY.md braucht den Abschnitt '{DELIBERATE_STRUCTURAL_SECTION}' (Issue #606, AC6)."
+    )
+    section = strategy_text.split(DELIBERATE_STRUCTURAL_SECTION, 1)[1].split("\n## ", 1)[0]
+    for name in DELIBERATELY_STRUCTURAL:
+        assert f"`{name}`" in section, (
+            f"'{name}' bleibt bewusst 'structural', wird im Begruendungsabschnitt "
+            f"aber nicht genannt (Issue #606, AC6)."
+        )
+        assert rows[name]["status"] == "structural", (
+            f"{name}: als bewusst 'structural' ausgewiesen, Tabelle sagt "
+            f"{rows[name]['status']!r} — eine der beiden Stellen ist falsch."
+        )
+    assert "Referenzlösung" in section or "Referenzloesung" in section, (
+        "Der Abschnitt muss begruenden, WARUM diese Komponenten structural bleiben."
+    )
+
+
 def test_strategy_documents_eval_core_set_schedule():
     """AC6: STRATEGY.md nennt Rhythmus und Umfang des geplanten Kern-Set-Laufs."""
     text = _strategy_text()

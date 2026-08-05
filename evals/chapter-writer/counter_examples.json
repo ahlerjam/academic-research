@@ -1,0 +1,45 @@
+{
+  "component": "chapter-writer",
+  "issue": 606,
+  "description": "Drei Kapitelentwuerfe mit je genau EINEM Defekt. Jeder muss vom Runner als FAIL mit dem benannten Grund gemeldet werden — sonst zeigt die Metrik eine Verschlechterung nicht an (Issue #606, AC3). Bewusst je nur ein Defekt: so ist belegt, welcher Pruefpfad ausschlaegt, statt dass ein einziger scharfer Check alle drei faengt.",
+  "cases": [
+    {
+      "id": "ce-cw-01",
+      "draft": "counter-drafts/ce-cw-01-erfundene-quelle.md",
+      "label": "Erfundene Quelle",
+      "defect": "citations_unresolved",
+      "why": "Der Beleg (Lindner, 2017) loest gegen keinen Vault-Eintrag auf. Genau das ist der Fehler, der als Falschzitat in der fertigen Arbeit landet; er ist im Fliesstext nicht sichtbar.",
+      "expected": {
+        "citations_unresolved": 1,
+        "unresolved_examples": ["Lindner 2017"],
+        "quotes_not_verbatim": 0,
+        "verdict": "FAIL"
+      }
+    },
+    {
+      "id": "ce-cw-02",
+      "draft": "counter-drafts/ce-cw-02-verfaelschtes-zitat.md",
+      "label": "Verfaelschtes Direktzitat",
+      "defect": "quotes_not_verbatim",
+      "why": "Ein einziges Wort im Direktzitat ist getauscht ('Nachteile' -> 'Vorteile') und kehrt die Aussage um. Der Beleg loest weiterhin sauber auf — nur der Wortlaut stimmt nicht mehr.",
+      "expected": {
+        "citations_unresolved": 0,
+        "quotes_not_verbatim": 1,
+        "verdict": "FAIL"
+      }
+    },
+    {
+      "id": "ce-cw-03",
+      "draft": "counter-drafts/ce-cw-03-zitatdichte.md",
+      "label": "Zitatdichte unter der Schwelle",
+      "defect": "citation_density_per_1000",
+      "why": "Ein langer Abschnitt mit genau einem Beleg. Alles Zitierte ist korrekt — es wird nur zu wenig belegt, und das faellt ohne Messung nicht auf.",
+      "expected": {
+        "citations_unresolved": 0,
+        "quotes_not_verbatim": 0,
+        "citation_density_per_1000": 3.9,
+        "verdict": "FAIL"
+      }
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "component": "quality-reviewer",
+  "issue": 606,
+  "description": "Referenzbestand fuer die Urteils-Trennschaerfe des quality-reviewer-Agents. Der Runner rechnet die vier Kriterien exakt nach den Metrik-Hinweisen in agents/quality-reviewer.md nach und leitet daraus das Verdict nach der dort dokumentierten Regel ab. Gemessen wird, ob die Kriterien PASS von REVISE unterscheiden — nicht, ob ein Modell sie richtig anwendet. Die Texte sind hand-autoriert und synthetisch; alle Satzlaengen sind von Hand ausgezaehlt.",
+  "criteria_source": "agents/quality-reviewer.md — Abschnitt 'Metrik-Hinweise' und Strategie-Regel 5 (iteration >= 2 mit offenem FAIL -> ESCALATE, ohne FAIL bleibt PASS)",
+  "thresholds_source": "skills/chapter-writer/references/quality-review-config.md — criteria[] im Agent-Aufruf",
+  "thresholds": {
+    "median_sentence_words_min": 15,
+    "median_sentence_words_max": 25,
+    "passive_share_pct_max": 30.0,
+    "nominal_share_pct_max": 40.0,
+    "sources_per_1000_min": 5.0
+  },
+  "cases": [
+    {
+      "id": "qr-01",
+      "label": "Sauberer Entwurf, erste Runde",
+      "iteration": 0,
+      "text": "Die Hochschule wertet die Nutzungsdaten der Lernplattform regelmaessig aus und meldet auffaellige Verlaeufe an die Studienberatung des Fachbereichs weiter (Bauer, 2021). Studierende erhalten daraufhin ein Gespraechsangebot, das sie ohne Angabe von Gruenden annehmen oder auch ablehnen koennen. Der Beratungsdienst dokumentiert jedes Gespraech in knapper Form und haelt fest, welche Massnahme die Studierenden anschliessend selbst waehlen. Eine zweite Auswertung vergleicht die Abbruchquote der beratenen Gruppe mit der Quote einer nach Zufall gebildeten Kontrollgruppe (Sander, 2022). Die Differenz zwischen beiden Gruppen faellt kleiner aus als erwartet, bleibt aber ueber zwei aufeinanderfolgende Kohorten hinweg stabil. Der Bericht empfiehlt deshalb, das Angebot fortzufuehren und die Ansprache deutlich frueher im Semester zu beginnen.",
+      "expected": {
+        "n_sentences": 6,
+        "median_sentence_words": 17.5,
+        "passive_share_pct": 0.0,
+        "nominal_share_pct": 0.0,
+        "sources_per_1000": 19.2,
+        "failed_criteria": [],
+        "verdict": "PASS",
+        "blocked_by": "none"
+      }
+    },
+    {
+      "id": "qr-02",
+      "label": "Passivlastiger Entwurf, erste Runde",
+      "iteration": 0,
+      "text": "Die Nutzungsdaten der Lernplattform werden regelmaessig ausgewertet, und auffaellige Verlaeufe werden an die Studienberatung des Fachbereichs gemeldet (Bauer, 2021). Gespraechsangebote werden den Studierenden gemacht, die ohne Angabe von Gruenden angenommen oder auch abgelehnt werden koennen. Alle Gespraeche werden vom Beratungsdienst in knapper Form dokumentiert und die anschliessend gewaehlte Massnahme wird festgehalten. Die Abbruchquoten beider Gruppen werden in einer zweiten Auswertung miteinander verglichen, wobei die Kontrollgruppe nach Zufall gebildet wurde (Sander, 2022). Die Differenz zwischen beiden Gruppen faellt kleiner aus als erwartet, bleibt aber ueber zwei aufeinanderfolgende Kohorten hinweg stabil. Eine Fortfuehrung des Angebots wird deshalb empfohlen, und es werden deutlich frueher im Semester gefuehrte Gespraeche angeregt.",
+      "expected": {
+        "n_sentences": 6,
+        "median_sentence_words": 17.0,
+        "passive_share_pct": 83.3,
+        "nominal_share_pct": 0.0,
+        "sources_per_1000": 19.6,
+        "failed_criteria": ["Passiv-Quote"],
+        "verdict": "REVISE",
+        "blocked_by": "none"
+      }
+    },
+    {
+      "id": "qr-03",
+      "label": "Derselbe Mangel in Runde 2 — muss eskalieren statt durchzuwinken",
+      "iteration": 2,
+      "text": "Die Nutzungsdaten der Lernplattform werden regelmaessig ausgewertet, und auffaellige Verlaeufe werden an die Studienberatung des Fachbereichs gemeldet (Bauer, 2021). Gespraechsangebote werden den Studierenden gemacht, die ohne Angabe von Gruenden angenommen oder auch abgelehnt werden koennen. Alle Gespraeche werden vom Beratungsdienst in knapper Form dokumentiert und die anschliessend gewaehlte Massnahme wird festgehalten. Die Abbruchquoten beider Gruppen werden in einer zweiten Auswertung miteinander verglichen, wobei die Kontrollgruppe nach Zufall gebildet wurde (Sander, 2022). Die Differenz zwischen beiden Gruppen faellt kleiner aus als erwartet, bleibt aber ueber zwei aufeinanderfolgende Kohorten hinweg stabil. Eine Fortfuehrung des Angebots wird deshalb empfohlen, und es werden deutlich frueher im Semester gefuehrte Gespraeche angeregt.",
+      "expected": {
+        "n_sentences": 6,
+        "median_sentence_words": 17.0,
+        "passive_share_pct": 83.3,
+        "nominal_share_pct": 0.0,
+        "sources_per_1000": 19.6,
+        "failed_criteria": ["Passiv-Quote"],
+        "verdict": "ESCALATE",
+        "blocked_by": "iteration-limit"
+      }
+    },
+    {
+      "id": "qr-04",
+      "label": "Runde 2 ohne offenen Mangel — bleibt PASS, kein Automatik-ESCALATE",
+      "iteration": 2,
+      "text": "Die Hochschule wertet die Nutzungsdaten der Lernplattform regelmaessig aus und meldet auffaellige Verlaeufe an die Studienberatung des Fachbereichs weiter (Bauer, 2021). Studierende erhalten daraufhin ein Gespraechsangebot, das sie ohne Angabe von Gruenden annehmen oder auch ablehnen koennen. Der Beratungsdienst dokumentiert jedes Gespraech in knapper Form und haelt fest, welche Massnahme die Studierenden anschliessend selbst waehlen. Eine zweite Auswertung vergleicht die Abbruchquote der beratenen Gruppe mit der Quote einer nach Zufall gebildeten Kontrollgruppe (Sander, 2022). Die Differenz zwischen beiden Gruppen faellt kleiner aus als erwartet, bleibt aber ueber zwei aufeinanderfolgende Kohorten hinweg stabil. Der Bericht empfiehlt deshalb, das Angebot fortzufuehren und die Ansprache deutlich frueher im Semester zu beginnen.",
+      "expected": {
+        "n_sentences": 6,
+        "median_sentence_words": 17.5,
+        "passive_share_pct": 0.0,
+        "nominal_share_pct": 0.0,
+        "sources_per_1000": 19.2,
+        "failed_criteria": [],
+        "verdict": "PASS",
+        "blocked_by": "none"
+      }
+    },
+    {
+      "id": "qr-05",
+      "label": "Belegter blinder Fleck der dokumentierten Passiv-Regel",
+      "iteration": 0,
+      "blind_spot": true,
+      "note": "Alle sechs Saetze stehen im Passiv, gebildet mit 'wird' und mit Praefixverben ('ausgewertet', 'uebermittelt'). Die in agents/quality-reviewer.md dokumentierte Regex deckt nur 'werd(en|est|et)' plus ein Partizip auf 'ge...'/'...iert' ab und erkennt hier NICHTS. Der Fall ist bewusst mit passive_share_pct = 0.0 committed: die Luecke wird ausgewiesen statt geglaettet. Wer die Regel im Agent erweitert, muss diesen Sollwert bewusst aendern — der Test macht die Aenderung sichtbar.",
+      "text": "Der Datenbestand der Lernplattform wird von der Hochschule ausgewertet und anschliessend an die Studienberatung des Fachbereichs uebermittelt (Bauer, 2021). Ein Gespraechsangebot wird den Studierenden unterbreitet, das ohne Angabe von Gruenden angenommen oder auch abgelehnt werden kann. Jedes Gespraech wird vom Beratungsdienst in knapper Form dokumentiert und die anschliessend ausgewaehlte Massnahme wird notiert. Die Abbruchquote der beratenen Gruppe wird in einer zweiten Auswertung mit der Quote einer Kontrollgruppe verglichen (Sander, 2022). Die Differenz zwischen beiden Gruppen faellt kleiner aus als erwartet, bleibt aber ueber zwei aufeinanderfolgende Kohorten hinweg stabil. Eine Fortfuehrung des Angebots wird deshalb empfohlen und eine deutlich fruehere Ansprache im Semester wird angeregt.",
+      "expected": {
+        "n_sentences": 6,
+        "median_sentence_words": 16.5,
+        "passive_share_pct": 0.0,
+        "nominal_share_pct": 0.0,
+        "sources_per_1000": 20.0,
+        "failed_criteria": [],
+        "verdict": "PASS",
+        "blocked_by": "none"
+      }
+    }
+  ]
+}

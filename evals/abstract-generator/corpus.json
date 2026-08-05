@@ -1,0 +1,104 @@
+{
+  "component": "abstract-generator",
+  "issue": 606,
+  "description": "Referenzbestand fuer die Abstract-Treue. 'sources' sind die Kurzfassungen der zugrundeliegenden Arbeiten, 'cases' die zugehoerigen Abstracts mit committetem Sollergebnis. Die Pruefpfade sind die Qualitaetspruefungen aus skills/abstract-generator/SKILL.md, hier deterministisch nachgerechnet. Texte sind hand-autoriert und synthetisch.",
+  "checks_source": "skills/abstract-generator/SKILL.md — Abschnitt 'Qualitaetspruefungen'",
+  "spec": {
+    "word_min": 150,
+    "word_max": 250,
+    "keywords_min": 5,
+    "keywords_max": 8,
+    "language_parity_max": 0.1,
+    "imrad_markers": {
+      "hintergrund": [
+        "untersucht",
+        "Ziel der Arbeit",
+        "Forschungsfrage",
+        "Hintergrund",
+        "Ausgangspunkt"
+      ],
+      "methode": [
+        "Stichprobe",
+        "erhoben",
+        "Befragung",
+        "Datensatz",
+        "Verfahren",
+        "Design",
+        "Interviews"
+      ],
+      "ergebnis": [
+        "Ergebnisse",
+        "Befund",
+        "zeigt",
+        "ergab",
+        "Anteil",
+        "Unterschied"
+      ],
+      "einordnung": [
+        "Implikation",
+        "Limitation",
+        "Schlussfolgerung",
+        "diskutiert",
+        "fuer die Praxis",
+        "einschraenkend"
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "src-lernanalytik",
+      "text": "Die Arbeit untersucht, ob ein datengestuetztes Fruehwarnsystem den Studienabbruch im ersten Studienjahr senkt. Grundlage ist ein Datensatz von 1248 Studierenden an 12 Hochschulen aus den Jahrgaengen 2021 bis 2023. Erhoben wurden Aktivitaetsdaten der Lernplattform, Pruefungsergebnisse und Angaben aus einer Befragung zur Studienzufriedenheit. Ein Vorhersagemodell weist je Studierendem einen Risikowert aus; Studierende oberhalb der Schwelle erhielten ein Beratungsangebot. In der beratenen Gruppe lag die Abbruchquote bei 14 Prozent, in der Kontrollgruppe bei 18 Prozent. Der Unterschied von 4 Prozentpunkten war ueber beide Kohorten hinweg stabil, faellt aber kleiner aus als in vergleichbaren Untersuchungen berichtet. Einschraenkend ist festzuhalten, dass die Teilnahme am Beratungsgespraech freiwillig war und ein Selbstselektionseffekt nicht auszuschliessen ist. Fuer die Praxis folgt daraus, dass die Ansprache frueher im Semester beginnen sollte und die Prognose ihre Unsicherheit mit ausweisen muss."
+    },
+    {
+      "id": "src-pflege",
+      "text": "Die Arbeit untersucht, wie sich Pflegepersonaluntergrenzen auf die Dienstplanung in Krankenhaeusern auswirken. Der Datensatz umfasst Dienstplaene aus 5 Kliniken ueber 24 Monate sowie 32 leitfadengestuetzte Interviews mit Stationsleitungen. Die Auswertung zeigt, dass der Anteil kurzfristig geaenderter Dienste von 9 Prozent auf 15 Prozent stieg, waehrend die Zahl der Ueberstunden je Vollkraft nahezu unveraendert blieb. Stationsleitungen berichten, dass sie Untergrenzen vor allem durch Verschiebung planbarer Aufnahmen einhalten. Limitationen ergeben sich aus der Auswahl der Kliniken, die alle in staedtischer Traegerschaft stehen. Fuer die Praxis folgt daraus, dass Untergrenzen ohne begleitende Steuerung der Aufnahmeplanung ihre Wirkung teilweise verfehlen."
+    }
+  ],
+  "cases": [
+    {
+      "id": "ag-01",
+      "label": "Sauberes Abstract mit vollstaendigem IMRaD-Bogen",
+      "source_id": "src-lernanalytik",
+      "abstract_de": "Die vorliegende Arbeit untersucht, ob ein datengestuetztes Fruehwarnsystem den Studienabbruch im ersten Studienjahr senken kann. Ausgangspunkt ist die Beobachtung, dass ein Grossteil der Abbrueche frueh faellt und sich in den Nutzungsdaten der Lernplattform ankuendigt. Grundlage der Untersuchung ist ein Datensatz von 1248 Studierenden an 12 Hochschulen aus den Jahrgaengen 2021 bis 2023. Erhoben wurden Aktivitaetsdaten der Lernplattform, Pruefungsergebnisse sowie Angaben aus einer Befragung zur Studienzufriedenheit. Ein Vorhersagemodell weist je Studierendem einen Risikowert aus; oberhalb der Schwelle erhielten Studierende ein freiwilliges Beratungsangebot. In der beratenen Gruppe lag die Abbruchquote bei 14 Prozent, in der Kontrollgruppe bei 18 Prozent. Der Unterschied von 4 Prozentpunkten blieb ueber beide Kohorten stabil, faellt jedoch geringer aus als in vergleichbaren Untersuchungen berichtet. Einschraenkend ist festzuhalten, dass die Teilnahme freiwillig war und ein Selbstselektionseffekt nicht auszuschliessen ist. Fuer die Praxis folgt daraus, dass die Ansprache frueher im Semester beginnen und die Prognose ihre Unsicherheit ausweisen sollte. Ergaenzend wurden Gespraechsprotokolle der Studienberatung gesichtet, um die Entscheidungswege der Beratenen nachzuvollziehen und die quantitativen Befunde besser einzuordnen.",
+      "abstract_en": "This thesis examines whether a data driven early warning system can reduce dropout during the first year of study. The starting point is the observation that most dropouts occur early and are foreshadowed by usage data from the learning platform. The analysis draws on a dataset covering students at twelve universities from the cohorts of the years under review. Learning platform activity, examination results and survey responses on study satisfaction were collected for each student. A prediction model assigns a risk score to every student; those above the threshold received a voluntary counselling offer. In the counselled group the dropout rate was lower than in the control group by four percentage points. This difference remained stable across both cohorts, yet it is smaller than the effect reported in comparable studies. A limitation is that participation was voluntary, so a self selection effect cannot be ruled out. In practice, outreach should start earlier in the term and the forecast should report its uncertainty.",
+      "keywords_de": [
+        "Studienabbruch",
+        "Fruehwarnsystem",
+        "Learning Analytics",
+        "Hochschule",
+        "Studienberatung",
+        "Vorhersagemodell"
+      ],
+      "expected": {
+        "verdict": "PASS",
+        "failed_checks": [],
+        "fabricated_numbers": [],
+        "cross_references": [],
+        "imrad_missing": [],
+        "keyword_count": 6
+      }
+    },
+    {
+      "id": "ag-02",
+      "label": "Sauberes Abstract, zweites Fachgebiet",
+      "source_id": "src-pflege",
+      "abstract_de": "Die vorliegende Arbeit untersucht, wie sich Pflegepersonaluntergrenzen auf die Dienstplanung in Krankenhaeusern auswirken. Ausgangspunkt ist die Frage, ob eine Vorgabe zur Besetzung die Planung entlastet oder lediglich verlagert. Der Datensatz umfasst Dienstplaene aus 5 Kliniken ueber 24 Monate sowie 32 leitfadengestuetzte Interviews mit Stationsleitungen. Ausgewertet wurden Planaenderungen, Ueberstunden je Vollkraft und die von den Leitungen geschilderten Steuerungsentscheidungen. Die Ergebnisse zeigen, dass der Anteil kurzfristig geaenderter Dienste von 9 Prozent auf 15 Prozent stieg, waehrend die Zahl der Ueberstunden je Vollkraft nahezu unveraendert blieb. Stationsleitungen berichten, dass sie die Untergrenzen vor allem durch die Verschiebung planbarer Aufnahmen einhalten. Limitationen ergeben sich aus der Auswahl der Kliniken, die saemtlich in staedtischer Traegerschaft stehen und damit keine flaechendeckende Aussage erlauben. Fuer die Praxis folgt daraus, dass Untergrenzen ohne eine begleitende Steuerung der Aufnahmeplanung ihre Wirkung teilweise verfehlen. Ergaenzend wurden die Protokolle der monatlichen Stationsbesprechungen gesichtet, um die berichteten Steuerungsentscheidungen mit den dokumentierten Planaenderungen abzugleichen.",
+      "abstract_en": "This thesis examines how minimum nurse staffing requirements affect shift planning in hospitals. The starting point is the question whether a staffing rule relieves planning or merely shifts the burden elsewhere. The dataset covers shift plans from five hospitals over two years as well as guided interviews with ward managers. Plan changes, overtime per full time equivalent and the steering decisions described by ward managers were analysed. The results show that the share of shifts changed at short notice rose markedly, while overtime per full time equivalent remained almost unchanged. Ward managers report that they meet the staffing requirements mainly by postponing admissions that can be scheduled. Limitations arise from the selection of hospitals, all of which are municipally owned and therefore do not permit a nationwide claim. In practice it follows that staffing requirements without accompanying control of admission planning partly miss their intended effect.",
+      "keywords_de": [
+        "Pflegepersonaluntergrenzen",
+        "Dienstplanung",
+        "Krankenhaus",
+        "Aufnahmeplanung",
+        "Stationsleitung"
+      ],
+      "expected": {
+        "verdict": "PASS",
+        "failed_checks": [],
+        "fabricated_numbers": [],
+        "cross_references": [],
+        "imrad_missing": [],
+        "keyword_count": 5
+      }
+    }
+  ]
+}

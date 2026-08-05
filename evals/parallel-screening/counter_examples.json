@@ -1,0 +1,21 @@
+{
+  "component": "parallel-screening",
+  "issue": 606,
+  "description": "Absichtlich verschlechterte Varianten des Gold-Sets. Jede MUSS die Recall-Schwelle reissen — sonst waere nicht belegt, dass die Metrik ueberhaupt ausschlagen kann (Issue #606, AC3).",
+  "cases": [
+    {
+      "id": "ce-ps-01",
+      "label": "Labels rotiert (Text bleibt, Wahrheit passt nicht mehr dazu)",
+      "mutation": "permute_labels",
+      "shift": 7,
+      "why": "Der Klassifikator lernt Vokabular, das mit den Urteilen nichts mehr zu tun hat. Bleibt der Recall trotzdem ueber der Schwelle, misst der Runner die Reihenfolge des Korpus statt die Leistung des Rankings."
+    },
+    {
+      "id": "ce-ps-02",
+      "label": "Titel und Abstract entleert (Labels bleiben korrekt)",
+      "mutation": "blank_text",
+      "filler": "Beitrag ohne inhaltliche Angaben.",
+      "why": "Ohne unterscheidbaren Text kann kein Ranking entstehen; die Kurve muss auf die Ausgangsreihenfolge zurueckfallen. Bleibt sie oben, kommt der gemessene Recall nicht aus dem Text."
+    }
+  ]
+}

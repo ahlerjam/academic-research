@@ -1,0 +1,68 @@
+{
+  "component": "chapter-writer",
+  "issue": 606,
+  "description": "Referenzbestand fuer die Zitatintegritaets-Metrik. 'vault' ist der Bestand, aus dem der Runner eine temporaere SQLite-Datenbank baut; 'cases' sind Kapitelentwuerfe mit hand-ausgezaehltem Sollergebnis. Die Entwuerfe sind hand-autoriert und synthetisch — gemessen wird die Trennschaerfe gegen bekannte Defekte, nicht Live-Modellqualitaet.",
+  "thresholds": {
+    "citation_density_per_1000_min": 5.0,
+    "source": "skills/chapter-writer/references/quality-review-config.md — Kriterium 'Quellen pro 1000 Woerter', Schwelle '>= 5'"
+  },
+  "vault": {
+    "papers": [
+      {"paper_id": "cw-bauer-2021", "family": "Bauer", "given": "Nina", "year": 2021, "title": "Fruehwarnindikatoren im ersten Studienjahr"},
+      {"paper_id": "cw-kern-2019", "family": "Kern", "given": "Jonas", "year": 2019, "title": "Risikowerte und ihre Grenzen"},
+      {"paper_id": "cw-sander-2022", "family": "Sander", "given": "Ruth", "year": 2022, "title": "Wirksamkeit von Beratungsinterventionen"},
+      {"paper_id": "cw-weiss-2018", "family": "Weiss", "given": "Peter", "year": 2018, "title": "Unsicherheit in der Beratungsansicht"},
+      {"paper_id": "cw-hofmann-2020", "family": "Hofmann", "given": "Claudia", "year": 2020, "title": "Einwilligung im Machtgefaelle"},
+      {"paper_id": "cw-ritter-2023", "family": "Ritter", "given": "Ali", "year": 2023, "title": "Zweckbindung bei Lernanalytik"}
+    ],
+    "quotes": [
+      {"paper_id": "cw-kern-2019", "verbatim": "Ein Risikowert beschreibt eine Wahrscheinlichkeit, keine Person."},
+      {"paper_id": "cw-hofmann-2020", "verbatim": "Eine Einwilligung, deren Verweigerung Nachteile nach sich zieht, ist keine."},
+      {"paper_id": "cw-ritter-2023", "verbatim": "Der Zweck bindet die Erhebung, nicht umgekehrt."}
+    ]
+  },
+  "cases": [
+    {
+      "id": "cw-01",
+      "draft": "drafts/cw-01-lernanalytik.md",
+      "note": "Vier Belege — drei narrativ (Bauer (2021)), einer klammernd ((Weiss, 2018)) —, ein Direktzitat, alles im Vault gedeckt.",
+      "expected": {
+        "words": 184,
+        "citations_total": 4,
+        "citations_unresolved": 0,
+        "direct_quotes_total": 1,
+        "quotes_not_verbatim": 0,
+        "citation_density_per_1000": 21.7,
+        "verdict": "PASS"
+      }
+    },
+    {
+      "id": "cw-02",
+      "draft": "drafts/cw-02-datenschutz.md",
+      "note": "Drei Belege, zwei Direktzitate aus zwei verschiedenen Papers.",
+      "expected": {
+        "words": 152,
+        "citations_total": 3,
+        "citations_unresolved": 0,
+        "direct_quotes_total": 2,
+        "quotes_not_verbatim": 0,
+        "citation_density_per_1000": 19.7,
+        "verdict": "PASS"
+      }
+    },
+    {
+      "id": "cw-03",
+      "draft": "drafts/cw-03-methodik.md",
+      "note": "Fuenf Belege ohne Direktzitat — deckt den Fall 'nur Paraphrase' ab.",
+      "expected": {
+        "words": 161,
+        "citations_total": 5,
+        "citations_unresolved": 0,
+        "direct_quotes_total": 0,
+        "quotes_not_verbatim": 0,
+        "citation_density_per_1000": 31.1,
+        "verdict": "PASS"
+      }
+    }
+  ]
+}
