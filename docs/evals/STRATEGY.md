@@ -35,8 +35,8 @@ keinen Tier erreicht. Die 147 API-gateten Skips waren zu dem Zeitpunkt
 unverändert geblieben — dieses Issue hat Transparenz geschaffen, keine
 LLM-Qualität gemessen.
 
-**Heutiger Stand** (Issue #619, reproduzierbar mit `uv run pytest
-tests/evals/ -q` ohne `ANTHROPIC_API_KEY`): `274 passed, 194 skipped`. Seit
+**Heutiger Stand** (Issue #597, reproduzierbar mit `uv run pytest
+tests/evals/ -q` ohne `ANTHROPIC_API_KEY`): `276 passed, 194 skipped`. Seit
 #390 sind weitere Suiten dazugekommen (u. a. #524, #626, #628, #630); die
 Skip-Zahl ist gegenüber dem #390-Snapshot gestiegen, weil jede neue
 `structural`-Komponente eigene API-gatete Tests mitbringt. Diese Zahl wird
