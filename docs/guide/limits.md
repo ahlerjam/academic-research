@@ -77,5 +77,5 @@ Vault-Spuren, nie als unterstellte Tatsache. Die eidesstattliche Erklärung selb
 Hochschule, nicht dieses Plugin.
 
 Was gut funktioniert und was regelmäßig schiefgeht, steht in
-[Bewährtes Vorgehen](best-practices.md); der ganze Ablauf im
+[Claude Code bedienen](working-with-claude-code.md); der ganze Ablauf im
 [Walkthrough](walkthrough.md).

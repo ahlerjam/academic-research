@@ -432,17 +432,30 @@ def test_named_skills_and_agents_exist(doc: Path) -> None:
 
 
 def _model_table_rows() -> list[list[str]]:
-    """Datenzeilen der Modelltabelle: Aufgabentyp | Alias | Begruendung."""
+    """Datenzeilen der Modelltabelle: Aufgabentyp | Alias | Begruendung.
+
+    Seit Issue #638 steht die Modelltabelle nicht mehr allein auf einer eigenen
+    Seite, sondern neben anderen dreispaltigen Tabellen im selben Dokument (etwa
+    der Kostentabelle 'Schritt | Warum teuer | Gegenmittel'). Ausgewaehlt wird
+    darum ueber die Kopfzeile: Nur Zeilen unter einem Header, dessen erste Spalte
+    mit 'Aufgabe' beginnt, sind Modellempfehlungen. Ohne diese Einschraenkung
+    verlangte der Guard einen Modell-Alias in Tabellen, die keine Modelle
+    empfehlen.
+    """
     rows = []
+    in_model_table = False
     for line in _read(D.MODEL_CHOICE_DOC).splitlines():
         if not line.startswith("|"):
+            in_model_table = False
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
         if len(cells) < 3 or set("".join(cells)) <= set("-: "):
             continue
         if cells[0].lower().startswith("aufgabe"):
+            in_model_table = True
             continue
-        rows.append(cells)
+        if in_model_table:
+            rows.append(cells)
     return rows
 
 

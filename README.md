@@ -195,9 +195,7 @@ nachschlagen will, findet hier den direkten Link:
 [Walkthrough](docs/guide/walkthrough.md) ·
 [Troubleshooting](docs/guide/troubleshooting.md) ·
 [Quickstart-Protokoll](docs/quickstart-protocol.md) ·
-[Modellwahl](docs/guide/model-choice.md) ·
-[Token-Budget](docs/guide/token-budget.md) ·
-[Bewährtes Vorgehen](docs/guide/best-practices.md) ·
+[Claude Code bedienen](docs/guide/working-with-claude-code.md) ·
 [Commands](docs/reference/commands.md) ·
 [Skills](docs/reference/skills.md) ·
 [Agents](docs/reference/agents.md) ·

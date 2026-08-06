@@ -9,8 +9,8 @@ anderes passiert als erwartet.
 
 Du musst nicht bei 1 anfangen: Spring dahin, wo du gerade stehst. Voraussetzung ist nur,
 dass Setup und Kontext stehen — das erledigt [Erste Schritte](getting-started.md).
-Welches Modell sich je Schritt lohnt, steht in [Modellwahl](model-choice.md); wo die
-teuren Stellen liegen, in [Token-Budget](token-budget.md).
+Welches Modell sich je Schritt lohnt und wo die teuren Stellen liegen, steht in
+[Claude Code bedienen](working-with-claude-code.md).
 
 Skills aktivieren sich selbst, sobald die passende Formulierung fällt — die Beispiele
 unten enthalten deshalb bewusst die realen Trigger-Phrasen aus der
@@ -275,4 +275,4 @@ weiterarbeiten, brauchst du eine neue Vault-Kopie.
 Eine frühere Recherche-Session holst du dir mit
 `/academic-research:history --restore-session <id>` zurück; Snapshots listet
 `/academic-research:history --snapshots`. Wie du Zwischenstände gezielt sicherst, steht in
-[Token-Budget](token-budget.md).
+[Claude Code bedienen](working-with-claude-code.md).
