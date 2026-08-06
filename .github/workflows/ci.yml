@@ -145,16 +145,25 @@ jobs:
       - name: bash -n ueber alle *.sh-Dateien
         run: bash scripts/dev/check-shell-syntax.sh
 
-  # 5. Vollstaendige Test-Suite auf macOS + Ubuntu, Python-Matrix 3.11/3.12/3.13
+  # 5. Vollstaendige Test-Suite auf Ubuntu, Python-Matrix 3.11/3.12/3.13.
   #    Mindestversion 3.11 ist konsistent mit README.md und pyproject.toml (#201).
   #    3.14 folgt, sobald actions/setup-python es als stable fuehrt.
+  #    macOS bewusst nicht mehr in der PR-Matrix (vormals 6 statt 3 Jobs):
+  #    macOS-Runner kosten in GitHub Actions ~10x das Linux-Minutenkontingent,
+  #    und eine Durchsicht des Codes fand keinen einzigen sys.platform/darwin-
+  #    Branch in scripts/, academic_vault/ oder hooks/ sowie keine BSD/GNU-
+  #    Coreutils-Fallen (sed -i, date -d etc.) in den Shell-/mjs-Skripten. Der
+  #    einzige real aufgetretene macOS-Sonderfall (sqlite-vec/enable_load_extension
+  #    auf manchem System-Python, #371) ist testseitig bereits per Skip-Guard
+  #    abgefangen, nicht hart geprueft -- ein macOS-Job haette eine Regression
+  #    dort ohnehin uebersprungen statt sie zu fangen. Operator-Entscheidung.
   python-tests:
     name: pytest (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7.0.1
