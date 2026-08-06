@@ -29,7 +29,6 @@ Details: README.md (lang!), CHANGELOG.md.
 - Excel-Backend ist das externe Plugin `document-skills` (Marketplace
   `anthropic-agent-skills`), deklariert als Dependency in
   `.claude-plugin/plugin.json` — nicht im Repo mitgeliefert (#445).
-- `docs/superpowers/` = HISTORISCHE Planungsdokumente, nicht aktueller Sollzustand.
 - `scripts/bootstrap/CLAUDE.md` ist eine Endnutzer-Vorlage, keine Repo-Anleitung.
 
 ## Konventionen

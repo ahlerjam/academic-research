@@ -5,9 +5,25 @@ __pycache__/
 *.egg-info/
 venv/
 .venv/
+build/
+dist/
+
+# Werkzeug-Caches und Testberichte — reine Laufzeit-Artefakte
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.log
 
 # Plugin local config (user-specific)
 *.local.md
+
+# Harness-Anweisungen der Wurzel bleiben lokal — verbindlich fuer alle ist
+# AGENTS.md. `evals/CLAUDE.md` und `scripts/bootstrap/CLAUDE.md` sind
+# funktionale Repo-Dateien und darum ausdruecklich nicht gemeint.
+/CLAUDE.md
 
 # OS
 .DS_Store
@@ -36,13 +52,11 @@ pdfs/
 *.db
 vault.db
 
-# Debug logs
-firebase-debug.log
-
 # Secrets
 .env
 .env.local
 
-# Brainstorming-Artefakte (persönliche Arbeitsprodukte, nicht Release-Inhalt)
-docs/superpowers/specs/
-docs/superpowers/plans/
+# Brainstorming-Artefakte (persoenliche Arbeitsprodukte, nicht Release-Inhalt).
+# Das Verzeichnis ist mit #641 vollstaendig aus der Versionierung genommen; was
+# noch darin liegt, ist lokal und bleibt lokal.
+docs/superpowers/
