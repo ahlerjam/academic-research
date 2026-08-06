@@ -10,6 +10,17 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Technische Referenz vollständig und gegen den Code geprüft (#640):** Jeder
+  der 45 Skills, 28 Agents, 11 Slash-Commands und 47 MCP-Tools trägt jetzt
+  dieselben drei Felder — *Voraussetzung*, *Rückgabe* und *Fehlschlag erkennbar
+  an*. In `docs/reference/skills.md`, `agents.md` und `vault.md` sind das drei
+  zusätzliche Tabellenspalten, in `commands.md` drei Marker-Zeilen je Sektion;
+  die bestehenden Spalten (`Dispatch` aus #453, `Live-Test` aus #612) bleiben
+  an ihrer Position. Die Fehlschlag-Angaben stammen aus den realen Fehlerpfaden
+  des Codes (`ValueError`-Meldungen in `academic_vault/`, `status`-Werte der
+  Fetcher-Agents, `FEHLER:`-Ausgaben der Skill-Skripte), nicht aus Vermutungen.
+  Nebenbei entfernt: ein verwaister Code-Fence am Ende von `skills.md`.
+
 - **Bedienung des Plugins steht an einer Stelle (#638):** `docs/guide/model-choice.md`,
   `docs/guide/token-budget.md` und `docs/guide/best-practices.md` sind in
   `docs/guide/working-with-claude-code.md` aufgegangen. Drei Seiten beantworteten
@@ -38,6 +49,33 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Repo-Dateien und weiterhin versioniert.
 
 ### Added
+
+- **Kopplungs-Guard für die Referenz (#640):** `tests/helpers/docs.py` zählt die
+  vier Komponentenmengen an genau einer Stelle aus dem Code aus
+  (`component_inventory()`); `tests/test_issue_640_reference_completeness.py`
+  prüft damit Vollständigkeit, die Pflichtfelder je Eintrag, die Zahlenangaben
+  über die gesamte Doku-Oberfläche und die Trennung zwischen Anleitung und
+  Referenz. Eine neue Skill-, Agent- oder Command-Datei ohne Referenzeintrag
+  lässt die Suite ab sofort rot werden; für Agents und Commands gab es eine
+  solche Kopplung bisher nicht.
+
+- **Architekturdiagramm, Vorhaben-Ablaufbilder, zwei neue Terminal-Aufzeichnungen
+  (#639):** `docs/reference/architecture.md` zeigt Vault, Hooks (`verbatim-guard.mjs`,
+  `claim-drift-guard.mjs`, `context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`,
+  `mid-session-reinforcement.mjs`), Skills und Agents im Zusammenspiel — eine Ebene
+  detaillierter als das bestehende README-Diagramm. Jeder der vier Vorhaben-Abschnitte
+  in `docs/guide/project-paths.md` (systematische Übersichtsarbeit, empirische
+  Qualifikationsarbeit, Literaturarbeit, Zeitschriftenbeitrag) bekommt ein
+  Mermaid-Ablaufbild, dessen Knotenreihenfolge mit der dort stehenden
+  "Reihenfolge:"-Prosa mechanisch abgeglichen wird. Zwei neue, real durchgespielte
+  Terminal-Aufzeichnungen (Lesenotizen anlegen/wiederfinden, Ausschlussgründe im
+  Screening dokumentieren) ergänzen den Quickstart-Cast; `docs/quickstart-protocol.md`
+  belegt jeden getippten Befehl. `scripts/dev/render_quickstart_svg.py` rendert jetzt
+  alle drei Cast/SVG-Paare über dieselben `--cast`/`--out`-Parameter, keine kopierte
+  zweite Fassung. Guards in `tests/test_issue_639_diagrams_and_recordings.py`: jeder
+  eingebettete Mermaid-Block ist strukturell gültig, jedes SVG ist byteweise die
+  Ausgabe seines Casts, jeder getippte Befehl ist im Protokoll belegt, und kein
+  `docs/assets/`-Verweis zeigt ins Leere.
 
 - **Link-Guard gegen tote Verweise (#641):** `tests/test_issue_641_link_integrity.py`
   hält jeden relativen Markdown-Link in `README.md`, `AGENTS.md` und `docs/` gegen das

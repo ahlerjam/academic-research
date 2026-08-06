@@ -10,7 +10,9 @@ an einer Stelle: wer die Arbeit macht, welches Modell wohin gehört, wie du eine
 Sitzung führst und was du tust, wenn eine Angabe erfunden aussieht.
 
 Welcher Schritt wann dran ist, steht im [Walkthrough](walkthrough.md); wo das Plugin an
-seine Grenzen stößt, in [Grenzen](limits.md).
+seine Grenzen stößt, in [Grenzen](limits.md). Was ein einzelner Skill voraussetzt,
+zurückgibt und woran du seinen Fehlschlag erkennst, steht nicht hier, sondern in der
+[Skills-Referenz](../reference/skills.md).
 
 ## Command, Skill, Agent — wer arbeitet hier eigentlich
 

@@ -202,6 +202,7 @@ nachschlagen will, findet hier den direkten Link:
 [Vault-MCP-Server](docs/reference/vault.md) ·
 [Suchquellen, Scoring, Cluster](docs/reference/search.md) ·
 [Hooks-Stack](docs/reference/hooks.md) ·
+[Architektur](docs/reference/architecture.md) ·
 [Per-Uni-Profile](docs/reference/uni-profiles.md) ·
 [Glossar](docs/reference/glossary.md) ·
 [Entwicklung, Tests und Evals](docs/development.md) ·
