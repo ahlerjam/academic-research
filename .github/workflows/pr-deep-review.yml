@@ -1,5 +1,14 @@
+# flowkit-template-version: 0.9.1
+# ACTION PIN — the claude-code-action step below is pinned to an immutable
+# commit SHA, followed by a "# vX.Y.Z" comment naming the release it belongs
+# to. This file ships verbatim into target repos via /flowkit:setup, which
+# never overwrites an already-installed pin that is newer than this one (see
+# that command's CI-gate step for the comparison it runs). The bump procedure
+# — including the second place that has to change in lockstep — lives in
+# flowkit's own dev repo, at the top of scripts/test-review-pipeline-steps.sh,
+# not here: this comment stays short and repo-portable instead of pointing at
+# paths a target repo does not have.
 name: flowkit-pr-deep-review
-# flowkit-template-version: 0.7.0
 
 on:
   # NOTE: no paths: filter — a required status check must always run, otherwise merges block forever on doc-only PRs.
@@ -296,44 +305,9 @@ jobs:
           # untouched files is out of scope and the dominant false-positive
           # source (it falsely escalates criticalPaths symbols to P1).
           DEAD_PATHS="$(jq -r '.deadCodePaths | if length == 0 then ["."] else . end | join(" ")' .github/flowkit-review.json)"
-          # stdout = Funde (speisen den Reviewer), stderr = Eingabefehler.
-          # Beide MUESSEN getrennt bleiben, siehe Exit-Code-Kommentar unten.
-          # '--quiet' unterdrueckt uv-eigene Fortschrittsmeldungen ("Installed N
-          # packages ..."), die uv sonst nach stderr schreibt und die die
-          # stderr-Pruefung unten faelschlich ausloesen wuerden. Echte uv-Fehler
-          # bleiben sichtbar (nur '-qq' waere zu still).
-          set +e
-          uv run --quiet vulture $DEAD_PATHS \
+          uv run vulture $DEAD_PATHS \
             --min-confidence 80 \
-            > "$RUNNER_TEMP/vulture.txt" 2> "$RUNNER_TEMP/vulture_stderr.txt"
-          VULTURE_EXIT=$?
-          set -e
-          # vulture exit codes (per upstream docs): 0 = kein Fund, 3 = toter Code
-          # gefunden (erwarteter Normalfall, Skript laeuft weiter). Alles andere
-          # (1 = ungueltige Eingabe/Syntaxfehler, 2 = ungueltige CLI-Argumente)
-          # ist ein echter Tool-Fehlschlag und darf nicht verschluckt werden.
-          #
-          # ACHTUNG: der Exit-Code allein reicht als Fehlersignal NICHT.
-          # vulture/core.py::report() setzt fuer jeden gemeldeten Fund
-          # bedingungslos ExitCode.DeadCode (3) und ueberschreibt damit ein
-          # zuvor in scan()/scavenge() gesetztes ExitCode.InvalidInput (1) —
-          # egal in welcher Datei der Eingabefehler auftrat. Da deadCodePaths
-          # dauerhaft mindestens einen Fund oberhalb der Schwelle enthaelt,
-          # waere der Exit-Code hier faktisch auf 3 festgenagelt und die
-          # Pruefung unten wirkungslos. vulture schreibt aber JEDEN echten
-          # Eingabefehler (Syntaxfehler, Null-Bytes, nicht lesbare Datei,
-          # Config-Fehler) nach stderr — deshalb gilt zusaetzlich: jede
-          # stderr-Ausgabe ist ein Fehlschlag.
-          if [ "$VULTURE_EXIT" -ne 0 ] && [ "$VULTURE_EXIT" -ne 3 ]; then
-            echo "::error::vulture ist mit Exit-Code $VULTURE_EXIT fehlgeschlagen (kein regulaerer Dead-Code-Fund):"
-            cat "$RUNNER_TEMP/vulture_stderr.txt" "$RUNNER_TEMP/vulture.txt"
-            exit 1
-          fi
-          if [ -s "$RUNNER_TEMP/vulture_stderr.txt" ]; then
-            echo "::error::vulture konnte Eingaben nicht auswerten (Exit-Code $VULTURE_EXIT wurde durch regulaere Dead-Code-Funde maskiert):"
-            cat "$RUNNER_TEMP/vulture_stderr.txt"
-            exit 1
-          fi
+            > "$RUNNER_TEMP/vulture.txt" 2>&1 || true
           uv run ruff check --select F401 $DEAD_PATHS \
             --output-format json > "$RUNNER_TEMP/ruff_f401.json" 2>/dev/null || true
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"

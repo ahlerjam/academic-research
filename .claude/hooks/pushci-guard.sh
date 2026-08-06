@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flowkit-template-version: 0.8.0
+# flowkit-template-version: 0.9.1
 # flowkit pushci guard: if the repo has a local-CI push alias configured, insist on it.
 set -u
 PREFIX='[flowkit-hook]'
