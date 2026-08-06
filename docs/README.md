@@ -31,12 +31,9 @@ Skill-Reihenfolge dafür. Weißt du es noch nicht, geht es unten Schritt für Sc
 
 Der Praxis-Leitfaden geht darüber hinaus:
 
-- [Modellwahl](guide/model-choice.md) — welches Modell für welchen Arbeitsschritt, und wie
-  du umschaltest.
-- [Token-Budget](guide/token-budget.md) — welche Schritte teuer sind, wie du sie
-  eingrenzt, wie du Zwischenstände sicherst.
-- [Bewährtes Vorgehen](guide/best-practices.md) — was funktioniert und was regelmäßig
-  schiefgeht.
+- [Claude Code bedienen](guide/working-with-claude-code.md) — wer die Arbeit macht
+  (Command, Skill, Agent), welches Modell für welchen Arbeitsschritt, wie du lange
+  Sitzungen führst, wo es teuer wird und was du tust, wenn eine Angabe erfunden aussieht.
 
 Neue Begriffe schlägst du unterwegs im [Glossar](reference/glossary.md) nach.
 
@@ -76,8 +73,6 @@ Neue Begriffe schlägst du unterwegs im [Glossar](reference/glossary.md) nach.
 Diese Seiten halten einen vergangenen Stand fest. Sie werden nicht nachgepflegt und sind
 kein Sollzustand — sie stehen hier, damit alte Entscheidungen nachvollziehbar bleiben.
 
-- [Planungs- und Spec-Archiv](superpowers/README.md) — Planungsdokumente früherer
-  Entwicklungswellen.
 - [Issue-Board-Audit 2026-06-03](audit/2026-06-03-board-audit.md) — Momentaufnahme des
   Boards.
 - [AC3+AC4 Live-Verifikationsbeleg (Issue #389)](audit/2026-07-27-issue-389-ac3-vulture-live-verification.md)

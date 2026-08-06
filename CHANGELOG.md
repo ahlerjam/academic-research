@@ -21,6 +21,33 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Fetcher-Agents, `FEHLER:`-Ausgaben der Skill-Skripte), nicht aus Vermutungen.
   Nebenbei entfernt: ein verwaister Code-Fence am Ende von `skills.md`.
 
+- **Bedienung des Plugins steht an einer Stelle (#638):** `docs/guide/model-choice.md`,
+  `docs/guide/token-budget.md` und `docs/guide/best-practices.md` sind in
+  `docs/guide/working-with-claude-code.md` aufgegangen. Drei Seiten beantworteten
+  dieselbe Frage — „wie arbeite ich damit gut" — aus drei Perspektiven, und keine ganz.
+  Neu darin, weil es überall fehlte: der Unterschied zwischen Slash-Command (du rufst),
+  Skill (springt an) und Agent (arbeitet im Hintergrund) an Beispielen aus diesem Repo;
+  wann eine neue Sitzung sinnvoll ist und was das Verdichten kostet; und der konkrete
+  Ablauf bei erfundenen Angaben über `hooks/verbatim-guard.mjs` und
+  `vault.verify_verbatim` statt einer allgemeinen Warnung. Die Guards aus #461 und #637
+  sind mitgezogen, nicht gelöscht: `tests/helpers/docs.py` führt
+  `WORKING_WITH_CLAUDE_CODE_DOC` und behält die drei alten Namen als Alias darauf.
+
+### Removed
+
+- **`docs/superpowers/` entfernt (#641):** Das Verzeichnis enthielt zuletzt nur noch eine
+  Archiv-Notiz (12 Zeilen); die Unterordner `plans/` und `specs/` waren nie versioniert.
+  Der Hinweis in `AGENTS.md`, der Eintrag in `docs/README.md` und die Konstante
+  `SUPERPOWERS_INDEX_DOC` entfallen mit. Nachlesbar bleibt der Stand in der
+  Git-Historie: `git log --all -- docs/superpowers/` führt zu den Commits — zuletzt
+  geändert in `221a6f5` (#452), angelegt in `d321958` (#57).
+- **Laufzeit-Artefakte aus der Versionierung genommen:** `.coverage` und `pytest646b.log`
+  waren versehentlich eingecheckt; `.gitignore` deckt jetzt Werkzeug-Caches
+  (`.mypy_cache/`, `.ruff_cache/`), Coverage-Berichte und `*.log` ab. Die
+  Harness-Anweisungen der Wurzel (`CLAUDE.md`) bleiben lokal — verbindlich für alle ist
+  `AGENTS.md`; `evals/CLAUDE.md` und `scripts/bootstrap/CLAUDE.md` sind funktionale
+  Repo-Dateien und weiterhin versioniert.
+
 ### Added
 
 - **Kopplungs-Guard für die Referenz (#640):** `tests/helpers/docs.py` zählt die
@@ -49,6 +76,13 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   eingebettete Mermaid-Block ist strukturell gültig, jedes SVG ist byteweise die
   Ausgabe seines Casts, jeder getippte Befehl ist im Protokoll belegt, und kein
   `docs/assets/`-Verweis zeigt ins Leere.
+
+- **Link-Guard gegen tote Verweise (#641):** `tests/test_issue_641_link_integrity.py`
+  hält jeden relativen Markdown-Link in `README.md`, `AGENTS.md` und `docs/` gegen das
+  Dateisystem. Bis dahin prüfte kein Test ein Linkziel — `tests/test_cross_references.py`
+  sieht ausschließlich Title-Case-Skillnamen in Prosa. Der Guard ist gegen einen
+  künstlich eingefügten toten Link gegengeprüft (`test_dead_link_is_detected`), damit
+  belegt ist, dass er fängt und nicht nur grün leuchtet.
 
 ## [6.7.0] — 2026-08-05
 

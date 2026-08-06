@@ -7,10 +7,15 @@ AC1  Das Dokument trennt technische, rechtliche und Pruef-Grenzen erkennbar
 AC2  Jede genannte Grenze hat einen Beleg im Repo (Code-Pfad, Issue-Nummer
      oder Doku-Link).
 AC3  README und Einstiegsanleitung verlinken das Dokument an sichtbarer
-     Stelle, nicht im Anhang (Positions-Guard gegen ``best-practices.md``).
+     Stelle, nicht im Anhang (Positions-Guard gegen die Bedien-Anleitung).
 AC4  Die Pflicht zur Offenlegung der KI-Nutzung ist benannt.
-AC5  Der Grenzen-Teil steht nach der Migration nicht mehr doppelt in
-     ``best-practices.md`` — dort nur noch ein Verweis.
+AC5  Der Grenzen-Teil steht nach der Migration nicht mehr doppelt in der
+     Bedien-Anleitung — dort nur noch ein Verweis.
+
+Seit Issue #638 ist ``best-practices.md`` in
+``docs/guide/working-with-claude-code.md`` aufgegangen. Beide Zusicherungen
+gelten unveraendert weiter, nur gegen die neue Datei: Der Guard zieht mit dem
+Inhalt um, statt mit der Datei zu verschwinden.
 """
 
 import re
@@ -140,13 +145,13 @@ def test_ai_disclosure_duty_is_named() -> None:
 
 
 # ---------------------------------------------------------------------------
-# AC5 — kein Doppelinhalt in best-practices.md
+# AC5 — kein Doppelinhalt in der Bedien-Anleitung
 # ---------------------------------------------------------------------------
 
 
-def test_best_practices_no_longer_duplicates_limits() -> None:
-    """Die alte Nicht-Eignungs-Ueberschrift ist aus best-practices.md verschwunden
-    und wird stattdessen auf limits.md verwiesen."""
+def test_practice_guide_no_longer_duplicates_limits() -> None:
+    """Die alte Nicht-Eignungs-Ueberschrift ist aus der Bedien-Anleitung
+    verschwunden und wird stattdessen auf limits.md verwiesen."""
     text = _read(D.BEST_PRACTICES_DOC)
     headings = re.findall(r"^##\s+(.*?)\s*$", text, re.M)
     assert _OLD_HEADING not in headings, (
@@ -161,15 +166,15 @@ def test_best_practices_no_longer_duplicates_limits() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_limits_link_is_not_buried_in_best_practices_list() -> None:
-    """README verlinkt limits.md vor best-practices.md (Loslegen-Rubrik),
+def test_limits_link_is_not_buried_behind_the_practice_guide() -> None:
+    """README verlinkt limits.md vor der Bedien-Anleitung (Loslegen-Rubrik),
     nicht erst dort, wo nur ankommt, wer schon ueberzeugt ist."""
     readme = _read(D.README)
+    practice_rel = D.BEST_PRACTICES_DOC.relative_to(REPO_ROOT).as_posix().removeprefix("docs/")
     limits_idx = readme.find("guide/limits.md")
-    best_practices_idx = readme.find("guide/best-practices.md")
+    practice_idx = readme.find(practice_rel)
     assert limits_idx != -1, f"{_rel(D.README)}: verlinkt guide/limits.md nicht."
-    assert best_practices_idx != -1, f"{_rel(D.README)}: verlinkt guide/best-practices.md nicht."
-    assert limits_idx < best_practices_idx, (
-        f"{_rel(D.README)}: guide/limits.md steht erst nach guide/best-practices.md — "
-        "nicht sichtbar genug."
+    assert practice_idx != -1, f"{_rel(D.README)}: verlinkt {practice_rel} nicht."
+    assert limits_idx < practice_idx, (
+        f"{_rel(D.README)}: guide/limits.md steht erst nach {practice_rel} — nicht sichtbar genug."
     )

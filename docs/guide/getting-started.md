@@ -103,7 +103,7 @@ Fortschritt. Danach laufen Volltext- und Vektorsuche offline.
 
 Ist dir das für den ersten Versuch zu viel, nimm `--mode quick` — weniger Module, weniger
 Wartezeit, weniger Tokens. Welche Modi es gibt und was sie kosten, steht in
-[Token-Budget](token-budget.md).
+[Claude Code bedienen](working-with-claude-code.md).
 
 ## Schritt 6 — erstes verifiziertes Zitat
 
@@ -127,14 +127,11 @@ Unterschied zum Chat-Fenster.
 
 - **Die ganze Arbeit durchziehen:** [Walkthrough](walkthrough.md) — jeder Arbeitsschritt
   von der Themenfindung bis zur Abgabe, mit Beispielformulierung und erwartetem Ergebnis.
-- **Modell passend wählen:** [Modellwahl](model-choice.md) — welches Modell für welchen
-  Aufgabentyp, und wie du umschaltest.
-- **Budget schonen:** [Token-Budget](token-budget.md) — welche Schritte teuer sind und wie
-  du sie eingrenzt.
+- **Gut damit arbeiten:** [Claude Code bedienen](working-with-claude-code.md) — wer welche
+  Arbeit macht, welches Modell wohin gehört, wie du lange Sitzungen führst und was du
+  tust, wenn eine Angabe erfunden aussieht.
 - **Grenzen kennen:** [Grenzen](limits.md) — was das Plugin nicht kann, nicht darf und
   nicht prüft.
-- **Realistisch bleiben:** [Bewährtes Vorgehen](best-practices.md) — was gut funktioniert
-  und was regelmäßig schiefgeht.
 
 Wenn etwas hakt: [Troubleshooting](troubleshooting.md). Unbekannte Begriffe stehen im
 [Glossar](../reference/glossary.md).

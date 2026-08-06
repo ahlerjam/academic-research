@@ -45,10 +45,18 @@ GUIDE_DIR = DOCS_DIR / "guide"
 INSTALLATION_DOC = GUIDE_DIR / "installation.md"
 GETTING_STARTED_DOC = GUIDE_DIR / "getting-started.md"
 WALKTHROUGH_DOC = GUIDE_DIR / "walkthrough.md"
-MODEL_CHOICE_DOC = GUIDE_DIR / "model-choice.md"
-TOKEN_BUDGET_DOC = GUIDE_DIR / "token-budget.md"
-BEST_PRACTICES_DOC = GUIDE_DIR / "best-practices.md"
 TROUBLESHOOTING_DOC = GUIDE_DIR / "troubleshooting.md"
+
+#: Bedienung des Plugins an einer Stelle (Issue #638): Command/Skill/Agent,
+#: Modellwahl, Sitzungsfuehrung, Kostenhebel, Umgang mit erfundenen Angaben.
+#: Loest ``model-choice.md``, ``token-budget.md`` und ``best-practices.md`` ab —
+#: deren Zusicherungen gelten unveraendert weiter, nur gegen diese Datei. Die
+#: drei alten Namen bleiben als Alias bestehen, damit kein Guard, der eine
+#: bestimmte Aussage gepachtet hat, beim Umzug still verschwindet.
+WORKING_WITH_CLAUDE_CODE_DOC = GUIDE_DIR / "working-with-claude-code.md"
+MODEL_CHOICE_DOC = WORKING_WITH_CLAUDE_CODE_DOC
+TOKEN_BUDGET_DOC = WORKING_WITH_CLAUDE_CODE_DOC
+BEST_PRACTICES_DOC = WORKING_WITH_CLAUDE_CODE_DOC
 
 #: Eigenstaendiges Grenzen-Dokument (Issue #637) — was das Plugin nicht kann,
 #: nicht darf und nicht prueft, herausgeloest aus best-practices.md.
@@ -58,12 +66,12 @@ LIMITS_DOC = GUIDE_DIR / "limits.md"
 PROJECT_PATHS_DOC = GUIDE_DIR / "project-paths.md"
 
 #: Die Seiten des Praxis-Leitfadens (Issue #461) — untereinander verlinkt.
+#: Seit #638 sind es vier statt sechs: Modellwahl, Token-Budget und bewaehrtes
+#: Vorgehen stehen zusammen in ``working-with-claude-code.md``.
 PRACTICE_GUIDE_DOCS = (
     GETTING_STARTED_DOC,
     WALKTHROUGH_DOC,
-    MODEL_CHOICE_DOC,
-    TOKEN_BUDGET_DOC,
-    BEST_PRACTICES_DOC,
+    WORKING_WITH_CLAUDE_CODE_DOC,
     LIMITS_DOC,
 )
 
@@ -98,9 +106,7 @@ LINKED_DOCS = (
     INSTALLATION_DOC,
     GETTING_STARTED_DOC,
     WALKTHROUGH_DOC,
-    MODEL_CHOICE_DOC,
-    TOKEN_BUDGET_DOC,
-    BEST_PRACTICES_DOC,
+    WORKING_WITH_CLAUDE_CODE_DOC,
     LIMITS_DOC,
     TROUBLESHOOTING_DOC,
     PROJECT_PATHS_DOC,
@@ -142,7 +148,6 @@ NOTEBOOK_BUNDLE_DOC = DOCS_DIR / "skills" / "notebook-bundle.md"
 EVALS_INDEX_DOC = DOCS_DIR / "evals" / "README.md"
 EVAL_STRATEGY_DOC = DOCS_DIR / "evals" / "STRATEGY.md"
 EVAL_TEMPLATE_DOC = DOCS_DIR / "evals" / "TEMPLATE.md"
-SUPERPOWERS_INDEX_DOC = DOCS_DIR / "superpowers" / "README.md"
 
 #: Linktext des Breadcrumbs, der jede Seite zur Einstiegsseite zurueckfuehrt.
 BREADCRUMB_TEXT = "← Doku-Übersicht"
@@ -168,9 +173,8 @@ def _git_ls_files(*patterns: str) -> list[Path]:
 
     ``--others --exclude-standard`` nimmt neue, noch nicht committete Dateien mit
     — sonst pruefte kein Guard eine gerade angelegte Seite, und der Fehler faende
-    sich erst in CI. Ignorierte Pfade bleiben aussen vor: ``docs/superpowers/plans/``
-    und ``docs/superpowers/specs/`` liegen lokal, gehoeren aber nicht zur
-    ausgelieferten Doku.
+    sich erst in CI. Ignorierte Pfade bleiben aussen vor: was ``.gitignore``
+    ausschliesst, gehoert nicht zur ausgelieferten Doku.
     """
     out = subprocess.run(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", *patterns],
@@ -210,7 +214,7 @@ def is_historical(path: Path) -> bool:
     if not rel.parts:
         return False
     top = rel.parts[0]
-    if top in {"superpowers", "audit"}:
+    if top == "audit":
         return True
     return top == "evals" and rel.name not in _CURRENT_EVAL_DOCS
 
@@ -234,10 +238,19 @@ def structured_pages() -> list[Path]:
 
 
 def doc_surface() -> list[Path]:
-    """README + alle Markdown-Dateien unter docs/ (ohne historische Ordner)."""
-    excluded = {"superpowers", "audit", "evals"}
+    """README + alle Markdown-Dateien unter docs/ (ohne historische Ordner).
+
+    Quelle ist ``repo_docs()`` und damit ``git ls-files``, nicht ``rglob``: Was
+    ``.gitignore`` ausschliesst, gehoert nicht zur ausgelieferten Doku und darf
+    keinen Guard ueber die Doku-Oberflaeche ausloesen. Ein lokal liegender
+    Ordner mit fremden Markdown-Dateien haette sonst die Zahlen- und
+    Pfad-Guards rot gefaerbt, ohne dass eine ausgelieferte Seite falsch ist.
+    """
+    excluded = {"audit", "evals"}
     files = [README]
-    for path in sorted(DOCS_DIR.rglob("*.md")):
+    for path in repo_docs():
+        if path.suffix != ".md":
+            continue
         rel = path.relative_to(DOCS_DIR)
         if rel.parts and rel.parts[0] in excluded:
             continue
