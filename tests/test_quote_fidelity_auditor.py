@@ -1,4 +1,4 @@
-"""Tests fuer den quote-fidelity-auditor-Agenten (Issue #523).
+"""Tests fuer den quote-fidelity-auditor-Agenten (Issue #523, #736).
 
 Der Agent urteilt ueber ein bestehendes Zitat (Kapitel-Behauptung vs.
 Quote-Kontext vs. Paper-Abstract) und persistiert das gemappte Urteil ueber
@@ -10,6 +10,11 @@ das neue Vault-Tool ``vault.set_quote_stance``. Diese Datei deckt:
        Negativ-Urteil (Textassertion auf den Agenten-Body).
   AC3  Kein Auto-Rewrite: kein Write/Edit/MultiEdit im Frontmatter, Output
        enthaelt ein Begruendungsfeld.
+  AC4  Schweregrad (Issue #736): jedes Urteil traegt eine feste
+       Verdict->Severity-Stufe, `polarity-flip` wiegt schwerer als
+       `overstated`/`context-stripped`, `faithful` bekommt keine Stufe.
+  AC5  Mehrere Urteile zusammen vorgelegt werden nach Schwere sortiert
+       (schwerste zuerst); die hoechste Stufe ist fuer den Nutzer erklaert.
 """
 
 import json
@@ -233,4 +238,118 @@ def test_quote_fidelity_auditor_documents_verdict_to_stance_mapping():
     # persistiert wird.
     assert re.search(r"unsupported[\s\S]{0,200}kein", content), (
         "Body muss dokumentieren, dass 'unsupported' NICHT via set_quote_stance persistiert wird"
+    )
+
+
+# ---------------------------------------------------------------------------
+# AC4 — Schweregrad je Urteil (Issue #736)
+# ---------------------------------------------------------------------------
+
+
+def _severity_table_rows() -> list[list[str]]:
+    """Zellen der Verdict->Schweregrad-Tabelle im Agent-Body.
+
+    Sucht die Markdown-Tabelle, die auf die Ueberschrift der Mapping-Sektion
+    folgt (analog `_prerequisite_rows()` in test_issue_451_readme_showcase.py).
+    """
+    content = AGENT_PATH.read_text(encoding="utf-8")
+    heading_match = re.search(r"## Verdict -> Schweregrad\b", content)
+    assert heading_match is not None, (
+        "Body muss eine Ueberschrift 'Verdict -> Schweregrad' fuer die feste Mapping-Tabelle enthalten"
+    )
+    rest = content[heading_match.end() :]
+    next_heading = re.search(r"\n## ", rest)
+    block = rest[: next_heading.start()] if next_heading else rest
+
+    rows = []
+    for line in block.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def test_severity_table_exists_with_all_five_verdicts():
+    """Jeder der fuenf Verdicts hat eine Zeile in der festen Mapping-Tabelle."""
+    rows = _severity_table_rows()
+    assert len(rows) >= 6, f"Severity-Tabelle hat nur {len(rows)} Zeilen (inkl. Kopf) -- zu duenn."
+    joined = "\n".join(" | ".join(row) for row in rows)
+    for verdict in ("faithful", "overstated", "context-stripped", "polarity-flip", "unsupported"):
+        assert f"`{verdict}`" in joined, f"Verdict '{verdict}' fehlt in der Severity-Tabelle"
+
+
+def _rank_of(verdict: str, rows: list[list[str]]) -> int:
+    """Zeilenindex (0-basiert, ohne Kopfzeile) des gegebenen Verdicts."""
+    for idx, row in enumerate(rows[1:]):
+        if f"`{verdict}`" in row[0]:
+            return idx
+    raise AssertionError(f"Verdict '{verdict}' nicht in Tabellenzeilen gefunden")
+
+
+def test_severity_table_ranks_polarity_flip_above_overstated_and_context_stripped():
+    """polarity-flip steht in der festen Tabelle vor (schwerer als) overstated
+    und context-stripped -- feste Zuordnung, keine Einschaetzung je Fall."""
+    rows = _severity_table_rows()
+    flip_rank = _rank_of("polarity-flip", rows)
+    overstated_rank = _rank_of("overstated", rows)
+    stripped_rank = _rank_of("context-stripped", rows)
+    assert flip_rank < overstated_rank, "polarity-flip muss vor overstated stehen (schwerere Stufe)"
+    assert flip_rank < stripped_rank, (
+        "polarity-flip muss vor context-stripped stehen (schwerere Stufe)"
+    )
+
+
+def test_severity_table_is_a_fixed_table_not_prose():
+    """Die Zuordnung ist eine Tabelle (Pipe-Zeilen), kein Fliesstext-Ermessen."""
+    rows = _severity_table_rows()
+    assert all("|" not in "".join(row) for row in rows)  # Zellen selbst enthalten kein Pipe
+    assert len(rows) >= 2
+
+
+def test_output_json_schema_declares_mandatory_severity_field():
+    """Das Output-JSON-Beispiel deklariert 'severity' als Pflichtfeld, nie optional."""
+    content = AGENT_PATH.read_text(encoding="utf-8")
+    assert '"severity"' in content, "Output-JSON-Schema muss ein severity-Feld deklarieren"
+    lowered = content.lower()
+    assert re.search(r"severity[\s\S]{0,300}(pflicht|nie fehlt|nie leer)", lowered) or re.search(
+        r"(pflicht|nie fehlt)[\s\S]{0,300}severity", lowered
+    ), "Body muss severity explizit als Pflichtfeld beschreiben (nie fehlend)"
+
+
+def test_faithful_gets_no_severity_tier_not_lowest():
+    """faithful bekommt keine Schweregrad-Stufe -- explizit kein Befund,
+    nicht die niedrigste Stufe (Negativ-Formulierung Pflicht)."""
+    content = AGENT_PATH.read_text(encoding="utf-8").lower()
+    assert re.search(r"faithful[\s\S]{0,300}kein befund", content), (
+        "Body muss 'faithful' explizit als 'kein Befund' beschreiben, nicht als niedrigste Stufe"
+    )
+    assert "niedrigste stufe" in content, (
+        "Body muss explizit ausschliessen, dass faithful eine niedrigste Stufe ist"
+    )
+
+
+# ---------------------------------------------------------------------------
+# AC5 — Sortierung bei mehreren Urteilen, Bedeutung der hoechsten Stufe (#736)
+# ---------------------------------------------------------------------------
+
+
+def test_documents_sort_rule_for_multiple_verdicts_shown_together():
+    """Werden mehrere Urteile gemeinsam vorgelegt, stehen die schwersten oben --
+    als eigener Abschnitt dokumentiert (Vorbild: risk-of-bias.md Batch-Betrieb)."""
+    content = AGENT_PATH.read_text(encoding="utf-8").lower()
+    assert "mehrere urteile" in content
+    assert "schwerste zuerst" in content or "nach schwere" in content
+
+
+def test_documents_meaning_of_highest_severity_tier_for_the_user():
+    """Die Doku erklaert, was die hoechste Stufe (kritisch) fuer den Nutzer
+    konkret bedeutet -- Bezug auf Abgabe-/Entscheidungsrelevanz."""
+    content = AGENT_PATH.read_text(encoding="utf-8").lower()
+    assert "kritisch" in content
+    assert re.search(r"kritisch[\s\S]{0,400}(abgabe|zwingend)", content), (
+        "Body muss erklaeren, was 'kritisch' fuer den Nutzer vor der Abgabe konkret bedeutet"
     )
