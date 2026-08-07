@@ -157,7 +157,12 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #      (Issue #737): Audit-Historie fuer die Kapitel-Pruefbilanz
 #      (`vault.chapter_quote_balance`), additiv zu `stance` und unabhaengig
 #      davon persistiert -- siehe Kommentar bei `quotes.stance` in schema.sql.
-CURRENT_SCHEMA_VERSION = 10
+# 11 = table_values (Issue #741): belegte Kennzahlen aus Tabellenzellen, der
+#      Weg von einer Zahl in `paper_tables` in den Kapiteltext, analog zu
+#      quotes fuer Wortlaut. Wie schon bei Version 9 (embedding_meta) eine
+#      ganze TABELLE statt einer Spalte -- verifiziert ueber
+#      `_REQUIRED_MIGRATION_TABLES`, nicht ueber `_LEGACY_MIGRATION_COLUMNS`.
+CURRENT_SCHEMA_VERSION = 11
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -194,7 +199,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
 # Tabelle waere ueber `PRAGMA table_info()` unsichtbar, und der
 # `user_version`-Stempel wuerde sich irrtuemlich schliessen -- exakt der
 # Review-Fund aus PR #427, nur eine Ebene hoeher.
-_REQUIRED_MIGRATION_TABLES = frozenset({"embedding_meta"})
+_REQUIRED_MIGRATION_TABLES = frozenset({"embedding_meta", "table_values"})
 
 
 class _Unset:
@@ -1879,6 +1884,76 @@ class VaultDB:
             }
         return None
 
+    def add_table_value(
+        self,
+        table_value_id: str,
+        paper_id: str,
+        page: int,
+        table_index: int,
+        row: int,
+        col: int,
+        claimed_value: str,
+        cell_value: str,
+        evidence: str,
+    ) -> None:
+        """INSERT einer belegten Kennzahl (Issue #741).
+
+        Reiner Schreibpfad OHNE eigene Pruefung -- die Verifikation gegen die
+        tatsaechliche Zelle (:func:`academic_vault.numbers.numbers_equivalent`
+        gegen :meth:`get_table_cell`) liegt beim Aufrufer
+        (:func:`academic_vault.server.add_table_value`), analog zu
+        ``_verify_local_verbatim`` vor ``VaultDB.add_quote``. ``INSERT OR
+        REPLACE`` macht das erneute Erfassen derselben Zelle idempotent
+        (``UNIQUE(paper_id, page, table_index, row, col)``, schema.sql).
+
+        Raises:
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+        """
+        now = int(time.time())
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO table_values
+                  (table_value_id, paper_id, page, table_index, row, col,
+                   claimed_value, cell_value, evidence, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    table_value_id,
+                    paper_id,
+                    page,
+                    table_index,
+                    row,
+                    col,
+                    claimed_value,
+                    cell_value,
+                    evidence,
+                    now,
+                ),
+            )
+
+    def list_table_values(self, paper_id: str | None = None) -> list[dict]:
+        """Gibt erfasste Kennzahlen zurueck, optional nach Paper gefiltert (#741).
+
+        Auf einer Bestands-DB ohne ``table_values`` ist das Ergebnis eine
+        leere Liste statt eines ``sqlite3.OperationalError`` -- ein Vault, in
+        dem nie eine Kennzahl erfasst wurde, hat schlicht keine (Muster
+        analog ``list_paper_tables``).
+        """
+        sql = "SELECT * FROM table_values"
+        params: list = []
+        if paper_id is not None:
+            sql += " WHERE paper_id = ?"
+            params.append(paper_id)
+        sql += " ORDER BY created_at"
+        with self._connection() as conn:
+            try:
+                rows = conn.execute(sql, params).fetchall()
+            except sqlite3.OperationalError:
+                return []
+        return [dict(row) for row in rows]
+
     # ------------------------------------------------------------------
     # Figures CRUD
     # ------------------------------------------------------------------
@@ -2386,6 +2461,20 @@ class VaultDB:
                 (paper_id,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_first_chunk_text(self, paper_id: str) -> str | None:
+        """Gibt den chunk_text des ersten Chunks eines Papers zurueck (nach created_at, chunk_id).
+
+        Laengst viel effizienter als get_chunk_embeddings, wenn nur der Text
+        des ersten Chunks benoetigt wird — vermeidet das Laden von Vektor-BLOBs
+        und anderen Spalten.
+        """
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT chunk_text FROM chunk_embeddings WHERE paper_id = ? ORDER BY created_at, chunk_id LIMIT 1",
+                (paper_id,),
+            ).fetchone()
+        return row["chunk_text"] if row else None
 
     def delete_chunk_embeddings(self, paper_id: str) -> int:
         """Loescht alle Chunks eines Papers (inkl. vec0-Spiegel). Gibt die Anzahl zurueck.

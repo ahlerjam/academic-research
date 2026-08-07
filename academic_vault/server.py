@@ -709,14 +709,26 @@ def chapter_quote_balance(db_path: str, chapter_path: str) -> dict:
     nicht "mit letzter Sicherheit korrekt verwendet". Sie priorisiert die
     Prüfkette, ersetzt sie nicht.
 
+    Zusaetzlich zu den Zitat-Zaehlern (Issue #741, additiv): ``erfasste_kennzahlen``
+    zaehlt, wie viele belegte Kennzahlen (:func:`add_table_value`) zu den im
+    Kapitel referenzierten Papers im Vault stehen -- gesammelt ueber dieselben
+    Paper-IDs, die ``scan_chapter_quotes`` aus den Zitat-Belegen des Kapitels
+    ermittelt hat (KEIN eigener Zahlen-Scan im Kapiteltext, das waere die
+    bewusst ausgeschlossene automatische Zahlenerkennung, siehe Issue #741
+    Scope-Out). ``erfasste_kennzahlen`` fliesst NICHT in ``total_quotes`` ein
+    -- eigene, unabhaengige Kategorie, die Summeninvariante der drei
+    Zitat-Zaehler bleibt unberuehrt.
+
     Args:
         db_path: Pfad zur Vault-SQLite-Datei.
         chapter_path: Pfad zur Kapiteldatei (Markdown) auf der Platte.
 
     Returns:
-        Dict mit ``chapter_path``, ``total_quotes``, den drei Zählern,
-        ``not_audited`` (je Eintrag mit ``reason``) und ``findings``
-        (offene Befunde, schwerste zuerst).
+        Dict mit ``chapter_path``, ``total_quotes``, den drei Zitat-Zählern,
+        ``not_audited`` (je Eintrag mit ``reason``), ``findings`` (offene
+        Befunde, schwerste zuerst), ``erfasste_kennzahlen`` (Anzahl belegter
+        Kennzahlen zu den referenzierten Papers) und ``table_values`` (die
+        zugehörigen Datensätze).
 
     Raises:
         FileNotFoundError: ``chapter_path`` existiert nicht.
@@ -766,6 +778,11 @@ def chapter_quote_balance(db_path: str, chapter_path: str) -> dict:
 
     findings.sort(key=lambda f: _SEVERITY_ORDER.get(f["severity"], len(_SEVERITY_ORDER)))
 
+    referenced_paper_ids = {item["paper_id"] for item in items}
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    table_values = [tv for tv in db.list_table_values() if tv["paper_id"] in referenced_paper_ids]
+
     return {
         "chapter_path": chapter_path,
         "total_quotes": len(items),
@@ -774,6 +791,8 @@ def chapter_quote_balance(db_path: str, chapter_path: str) -> dict:
         "nicht_geprueft": len(not_audited),
         "not_audited": not_audited,
         "findings": findings,
+        "erfasste_kennzahlen": len(table_values),
+        "table_values": table_values,
     }
 
 
@@ -865,6 +884,7 @@ def search_papers(
     fused = reciprocal_rank_fusion(
         _vec0_search(db_path, raw_query, k=k), fts_results, k=60, top_n=k
     )
+    _fill_missing_reranker_text(db_path, fused)
 
     voyage_key = os.environ.get("VOYAGE_API_KEY") or None
     cohere_key = os.environ.get("COHERE_API_KEY") or None
@@ -873,12 +893,60 @@ def search_papers(
     # wird immer aufgerufen, damit auch ohne Cloud-Keys der kostenfreie lokale
     # bge-reranker-v2-m3-Fallback greifen kann. Ohne diesen Aufruf bliebe der
     # lokale Fallback in retrieval.py toter Code.
+    #
+    # query=raw_query statt der FTS5-sanitisierten Variante (#702): das
+    # Sanitizing entfernt Bindestriche und Operator-Keywords und verfaelscht
+    # damit die Semantik, gegen die ein Cross-Encoder bewertet -- derselbe
+    # Grund, aus dem _vec0_search oben bereits raw_query bekommt.
     return apply_reranker(
-        query=query,
+        query=raw_query,
         candidates=fused,
         voyage_api_key=voyage_key,
         cohere_api_key=cohere_key,
     )
+
+
+def _fill_missing_reranker_text(db_path: str, fused: list[dict]) -> None:
+    """Ergaenzt fehlenden Reranker-Text fuer rein per FTS5 gefundene Kandidaten (#702).
+
+    vec0-Treffer bringen ueber ``_vec0_search`` bereits den vollen Chunk-Text
+    als ``text`` mit. FTS5-only-Treffer haben das Feld nie -- ohne diese
+    Ergaenzung faellt ``apply_reranker`` auf sein eigenes 10-Token-Snippet mit
+    '<b>'-Markup zurueck (der gemeldete Bug). Prioritaet: Abstract > erster
+    gespeicherter Chunk-Text > Snippet (mit Log, AC5). Mutiert die
+    uebergebenen Dicts in-place.
+
+    Ein zusaetzlicher DB-Zugriff pro FTS5-only-Treffer ist bewusst in Kauf
+    genommen: ``k`` ist klein (Standard 5), ein Batch-Lookup wuerde hier keinen
+    messbaren Unterschied machen.
+    """
+    missing = [entry for entry in fused if not entry.get("text")]
+    if not missing:
+        return
+    db = VaultDB(db_path)
+    for entry in missing:
+        paper_id = entry["paper_id"]
+        paper = db.get_paper(paper_id)
+        abstract = ""
+        if paper is not None:
+            try:
+                csl = json.loads(paper.get("csl_json") or "{}")
+            except json.JSONDecodeError:
+                csl = {}
+            abstract = csl.get("abstract") or ""
+        if abstract.strip():
+            entry["text"] = abstract
+            continue
+        chunk_text = db.get_first_chunk_text(paper_id)
+        if chunk_text:
+            entry["text"] = chunk_text
+            continue
+        logger.warning(
+            "Kein Abstract und kein Chunk-Text fuer Reranker-Kandidat %s "
+            "gefunden -- Fallback auf das FTS5-Snippet (moeglicherweise "
+            "gekuerzt und mit Markup, apply_reranker haertet das ab).",
+            paper_id,
+        )
 
 
 def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
@@ -2168,6 +2236,112 @@ def extract_tables_for_paper(
     }
 
 
+def add_table_value(
+    db_path: str,
+    paper_id: str,
+    page: int,
+    table_index: int,
+    row: int,
+    col: int,
+    claimed_value: str,
+) -> str | dict:
+    """Erfasst eine Kennzahl aus einer Tabellenzelle belegfaehig (Issue #741).
+
+    Der Weg von einer Zahl in einer Studientabelle in den Kapiteltext, analog
+    zu ``add_quote`` fuer Wortlaut: FAIL-CLOSED, vor jedem Schreibzugriff wird
+    ``claimed_value`` gegen die tatsaechliche Zelle
+    (:func:`get_table_cell`/``VaultDB.get_table_cell``) geprueft
+    (:func:`academic_vault.numbers.numbers_equivalent`, toleriert
+    Dezimalkomma/-punkt, Tausendertrennzeichen, fuehrende Nullen und ein
+    Prozentzeichen -- keine echte Werteabweichung).
+
+    Ist die Tabelle fuer diese ``page``/``table_index``-Kombination noch nicht
+    extrahiert, wird :func:`extract_tables_for_paper` einmalig automatisch
+    versucht (AC5). Meldet sie ``status="backend-missing"``, gibt dieser
+    Aufruf denselben Statusreport als ``dict`` zurueck (Praezedenzfall
+    :func:`extract_tables_for_paper` -- ein fehlendes optionales Backend ist
+    ein sichtbarer Zustand, keine Ausnahme) und speichert NICHTS. Bleibt die
+    Zelle danach unauffindbar (z. B. falsche ``row``/``col``, oder die
+    Tabelle enthaelt tatsaechlich keine Tabelle an dieser Stelle), ist das
+    weiterhin ein ``ValueError`` OHNE dass etwas gespeichert wird -- das ist
+    ein echter Auffindbarkeitsfehler, kein Backend-Zustand.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        paper_id: Bekanntes Paper mit extrahierbarem PDF.
+        page: PDF-Seite (1-basiert, wie bei ``vault.get_table_cell``).
+        table_index: Tabellenindex auf der Seite (0-basiert).
+        row: Zeile in der Tabelle (0-basiert).
+        col: Spalte in der Tabelle (0-basiert).
+        claimed_value: Die behauptete Kennzahl, so wie sie im Kapiteltext
+            stehen soll (roh, vor jeder Normalisierung).
+
+    Returns:
+        ``table_value_id`` (``str``) des gespeicherten Datensatzes im
+        Erfolgsfall, oder der Statusreport (``dict`` mit ``status``,
+        ``message``, ``backend``) von :func:`extract_tables_for_paper`, falls
+        das Tabellen-Backend fehlt -- dann wurde NICHTS gespeichert.
+
+    Raises:
+        ValueError: Paper unbekannt, die Zelle ist trotz vorhandenem Backend
+            nicht auffindbar, oder ``claimed_value`` stimmt nicht mit der
+            Zelle ueberein (Meldung nennt gefundenen UND behaupteten Wert).
+        VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+    """
+    from .numbers import numbers_equivalent
+    from .tables import STATUS_BACKEND_MISSING
+
+    db = VaultDB(db_path)
+    db.init_schema()
+    paper = db.get_paper(paper_id)
+    if paper is None:
+        raise ValueError(f"vault.add_table_value: Paper unbekannt: {paper_id}")
+
+    cell = db.get_table_cell(paper_id, page, table_index, row, col)
+    if cell is None:
+        table_known = any(
+            t["table_index"] == table_index for t in db.list_paper_tables(paper_id, page=page)
+        )
+        if not table_known:
+            extraction = extract_tables_for_paper(db_path, paper_id)
+            if extraction["status"] == STATUS_BACKEND_MISSING:
+                return extraction
+            cell = db.get_table_cell(paper_id, page, table_index, row, col)
+        if cell is None:
+            raise ValueError(
+                f"vault.add_table_value: Zelle (page={page}, table_index={table_index}, "
+                f"row={row}, col={col}) nicht gefunden fuer Paper '{paper_id}' -- "
+                "es wurde NICHTS gespeichert."
+            )
+
+    if not numbers_equivalent(claimed_value, cell["value"]):
+        raise ValueError(
+            f"vault.add_table_value: Kennzahl stimmt nicht mit der Zelle ueberein "
+            f"(gefunden='{cell['value']}', behauptet='{claimed_value}') fuer "
+            f"{cell['evidence']} -- es wurde NICHTS gespeichert."
+        )
+
+    table_value_id = str(uuid4())
+    db.add_table_value(
+        table_value_id=table_value_id,
+        paper_id=paper_id,
+        page=cell["page"],
+        table_index=cell["table_index"],
+        row=row,
+        col=col,
+        claimed_value=claimed_value,
+        cell_value=str(cell["value"]),
+        evidence=cell["evidence"],
+    )
+    return table_value_id
+
+
+def list_table_values(db_path: str, paper_id: str | None = None) -> list[dict]:
+    """Gibt erfasste Kennzahlen zurueck, optional nach Paper gefiltert (#741)."""
+    _ensure_schema_for_read(db_path)
+    return VaultDB(db_path).list_table_values(paper_id=paper_id)
+
+
 def list_paper_tables(db_path: str, paper_id: str, page: int | None = None) -> list[dict]:
     """Gibt die gespeicherten Tabellenstrukturen eines Papers zurueck (Issue #630)."""
     _ensure_schema_for_read(db_path)
@@ -2523,6 +2697,37 @@ def _build_mcp_server():
         None bei unbekannter Zelle -- kein Naeherungstreffer.
         """
         return get_table_cell(db_path, paper_id, page, table_index, row, col)
+
+    @mcp.tool(name="vault.add_table_value")
+    def _vault_add_table_value(
+        paper_id: str,
+        page: int,
+        table_index: int,
+        row: int,
+        col: int,
+        claimed_value: str,
+    ) -> str | dict:
+        """Erfasst eine Kennzahl aus einer Tabellenzelle belegfaehig (#741).
+
+        Fail-closed wie `vault.add_quote`: `claimed_value` wird VOR jedem
+        Schreibzugriff gegen die tatsaechliche Zelle geprueft (toleriert
+        Dezimalkomma/-punkt, Tausendertrennzeichen, fuehrende Nullen,
+        Prozentzeichen -- keine echte Werteabweichung). Stimmt der Wert nicht
+        ueberein, wirft der Aufruf ValueError mit gefundenem UND behauptetem
+        Wert und es wird NICHTS gespeichert. Fehlt das Tabellen-Backend, wird
+        das als "backend-missing" gemeldet statt eine Exception zu werfen.
+        Zahlen im Fließtext OHNE diesen Weg bleiben ungeprueft -- es gibt
+        keinen Automatismus, der sie einfaengt.
+        """
+        return add_table_value(
+            db_path,
+            paper_id=paper_id,
+            page=page,
+            table_index=table_index,
+            row=row,
+            col=col,
+            claimed_value=claimed_value,
+        )
 
     @mcp.tool(name="vault.add_figure")
     def _vault_add_figure(

@@ -233,6 +233,31 @@ CREATE TABLE IF NOT EXISTS paper_tables (
 
 CREATE INDEX IF NOT EXISTS idx_paper_tables_paper ON paper_tables(paper_id);
 
+-- Belegte Kennzahlen aus Tabellenzellen (Issue #741) -- der Weg fuer eine
+-- Zahl von einer Tabellenzelle in den Kapiteltext, analog zu quotes fuer
+-- Wortlaut. Jede Zeile ist NUR nach erfolgreicher Pruefung gegen die
+-- tatsaechliche Zelle (paper_tables.cells_json ueber get_table_cell)
+-- entstanden -- claimed_value haelt die vom Aufrufer uebergebene, cell_value
+-- die tatsaechliche Zellschreibweise fest (koennen sich in der Schreibweise
+-- unterscheiden, siehe academic_vault/numbers.py, niemals im Wert).
+-- UNIQUE(paper_id, page, table_index, row, col) macht das erneute Erfassen
+-- derselben Zelle idempotent (INSERT OR REPLACE), analog paper_tables.
+CREATE TABLE IF NOT EXISTS table_values (
+  table_value_id TEXT PRIMARY KEY,
+  paper_id       TEXT NOT NULL REFERENCES papers(paper_id) ON DELETE CASCADE,
+  page           INTEGER NOT NULL,
+  table_index    INTEGER NOT NULL,
+  row            INTEGER NOT NULL,
+  col            INTEGER NOT NULL,
+  claimed_value  TEXT NOT NULL,
+  cell_value     TEXT NOT NULL,
+  evidence       TEXT NOT NULL,
+  created_at     INTEGER NOT NULL,
+  UNIQUE(paper_id, page, table_index, row, col)
+);
+
+CREATE INDEX IF NOT EXISTS idx_table_values_paper ON table_values(paper_id);
+
 -- FTS5-Trigger: befuellen papers_fts manuell via json_extract.
 -- Bewusst DROP + CREATE statt CREATE TRIGGER IF NOT EXISTS: init_schema() fuehrt
 -- dieses Skript auch auf Bestands-DBs aus; mit IF NOT EXISTS behielten die
