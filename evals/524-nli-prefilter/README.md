@@ -27,8 +27,17 @@ zitiert englische Quellen).
 > **Update #592 (04.08.2026):** Die Validierung an echtem Zitatmaterial liegt
 > vor — siehe [„Validierung an echtem Zitatmaterial (#592)"](#validierung-an-echtem-zitatmaterial-592)
 > unten. Der Vorfilter (`academic_vault/nli_prefilter.py`) ist implementiert,
-> per Konfiguration abschaltbar und im Auslieferungsstand weiterhin AUS
-> (`config/parallel_agents.json` → `nli_prefilter_enabled: false`).
+> per Konfiguration abschaltbar und im Auslieferungsstand zunächst AUS.
+>
+> **Update #717 (07.08.2026):** Der Scan ist produktiv angebunden
+> (`hooks/nli-quote-scan.mjs`, `PostToolUse`) und läuft als **Detektor statt
+> Filter**: Er entfernt kein Zitat mehr aus dem Prüfpfad, sondern meldet
+> verdächtige zusätzlich. Damit fällt das Hauptargument gegen Default-an weg
+> (siehe [„Einschalt-Empfehlung"](#einschalt-empfehlung-ac6-erledigt-mit-717)),
+> und der Auslieferungsstand ist **AN**
+> (`config/parallel_agents.json` → `nli_prefilter_enabled: true`).
+> Bedienung und gemessene Laufzeit: `docs/reference/hooks.md`, Abschnitt
+> „NLI-Zitatscan".
 
 ## Ergebnis auf einen Blick
 
@@ -200,10 +209,10 @@ kein Nullbeleg. Recall sinkt leicht gegenueber den 32 konstruierten Faellen
 damit ausschliesslich auf dem kurzen Verbatim-Ausschnitt beruht, waehrend
 `cases.json` zusaetzlichen synthetischen Kontext liefert.
 
-### Einschalt-Empfehlung (AC6)
+### Einschalt-Empfehlung (AC6) — erledigt mit #717
 
-Der Default bleibt bewusst AUS (`config/parallel_agents.json` →
-`nli_prefilter_enabled: false`), obwohl FP = 0 gemessen wurde:
+**Stand #592 (Default AUS).** Die Empfehlung lautete: nicht scharfschalten,
+obwohl FP = 0 gemessen wurde.
 
 1. **FP = 0 ist ein Signal, kein Beweis** — die Rule-of-Three-Grenze (~10 %)
    ist real. Ein durchgewunkenes verzerrtes Zitat bleibt unbemerkt in der
@@ -213,16 +222,27 @@ Der Default bleibt bewusst AUS (`config/parallel_agents.json` →
    englischsprachig). Reale Kapitel zitieren breiter gestreute Quellen
    (Methodik-, Sozial-, Geisteswissenschaften) — die Uebertragbarkeit auf
    diese Bandbreite ist mit diesem Set nicht geprueft.
-3. Wer den Vorfilter dennoch **opt-in** nutzen will: `nli_prefilter_enabled:
-   true` in `config/parallel_agents.json` oder
-   `ACADEMIC_RESEARCH_NLI_PREFILTER=1` — bei aktivem Vorfilter bleibt jedes
-   Item, das der Vorfilter als „verdaechtig" einstuft, unveraendert im
-   Pruefpfad; nur als „treu" eingestufte Items werden uebersprungen und im
-   Report explizit als „vorgefiltert, nicht inhaltlich geprueft" markiert
-   (nie stillschweigend, nie als „geprueft" ausgewiesen).
-4. Empfehlung fuer eine kuenftige Scharfschaltung: den Default erst nach
-   einem zweiten Validierungslauf gegen ein breiter gestreutes, groesseres
-   Set (Zielgroesse dreistellig, mehrere Fachdomaenen) auf `true` setzen.
+
+**Stand #717 (Default AN).** Punkt 1 war kein Argument gegen den Scan an sich,
+sondern gegen die damalige **Filter**-Semantik: ein Fehlurteil entfernte ein
+Zitat dauerhaft aus dem Pruefpfad. Seit #717 laeuft der Scan als **Detektor** —
+er ueberspringt nichts, sondern meldet zusaetzlich. Ein Fehlurteil kostet
+seither hoechstens eine ausgebliebene Meldung und stellt damit exakt den
+Zustand her, der ohne Scan ohnehin gilt. Die Rule-of-Three-Grenze bleibt als
+Aussage ueber die Erkennungsguete richtig, taugt aber nicht mehr als Argument
+gegen Default-an.
+
+Punkt 2 gilt unveraendert weiter: die Uebertragbarkeit auf andere Fachdomaenen
+ist ungeprueft. Er begruendet nicht mehr Default-aus, sondern die Einordnung
+jeder Meldung als **Verdacht, nicht als Urteil** — die inhaltliche Entscheidung
+bleibt beim `quote-fidelity-auditor`.
+
+Abschalten (Vorrang: Env > Configdatei > Default an):
+`ACADEMIC_RESEARCH_NLI_PREFILTER=0` oder `nli_prefilter_enabled: false` in
+`config/parallel_agents.json`.
+
+Offen als Folgearbeit: ein zweiter Validierungslauf gegen ein breiter
+gestreutes, groesseres Set (Zielgroesse dreistellig, mehrere Fachdomaenen).
 
 ### Dateien (Validierung)
 

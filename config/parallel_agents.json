@@ -9,6 +9,6 @@
   "active_learning_retrain_interval": 10,
   "_comment_active_learning_block_size": "Abschnittsgroesse der Fortschrittsanzeige (Issue #602). Vorrang: Argument > ACADEMIC_RESEARCH_ACTIVE_LEARNING_BLOCK > diese Datei > Default 25.",
   "active_learning_block_size": 25,
-  "_comment_nli_prefilter": "Schalter fuer den lokalen NLI-Batch-Vorfilter vor quote-fidelity-auditor (Issue #592). Vorrang: Argument > ACADEMIC_RESEARCH_NLI_PREFILTER > diese Datei > Default false (AUS, bis die Validierung an echtem Zitatmaterial vorliegt -- evals/524-nli-prefilter/README.md). Bei false erreichen alle Kapitel-Zitate ungefiltert den bestehenden Pruefpfad, exakt wie ohne Vorfilter.",
-  "nli_prefilter_enabled": false
+  "_comment_nli_prefilter": "Schalter fuer den NLI-Zitatscan (Issue #592, produktiv angebunden mit #717). Vorrang: Argument > ACADEMIC_RESEARCH_NLI_PREFILTER > diese Datei > Default true (AN). Der Scan laeuft als Detektor, nicht als Filter: nach einem Kapitel-Write bewertet er alle im Vault belegten Zitate des Kapitels und MELDET die verdaechtigen -- entfernt aber keines aus dem bestehenden Pruefpfad. Ein Fehlurteil kostet damit hoechstens eine Meldung. Bei false unterbleibt der Scan vollstaendig; alles Uebrige verhaelt sich wie ohne Scan. Dokumentation: docs/reference/hooks.md, Abschnitt 'NLI-Zitatscan'.",
+  "nli_prefilter_enabled": true
 }

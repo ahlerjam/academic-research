@@ -10,6 +10,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **NLI-Zitatscan produktiv angebunden (#717):** Nach jedem Kapitel-Write
+  (`PostToolUse` auf `Write|Edit|MultiEdit`) prüft der neue Hook
+  `hooks/nli-quote-scan.mjs` **alle im Vault belegten Zitate des Kapitels**
+  gegen ihren Quellkontext und meldet die, deren Quelle die Behauptung
+  möglicherweise nicht trägt — mit Zitat, Kurzbeleg und betroffenem
+  Kapitelsatz in der Meldung selbst. `scan_chapter_quotes()` und
+  `run_batch_prefilter()` existierten seit #592, hatten aber keinen einzigen
+  produktiven Aufrufer; der Schalter `nli_prefilter_enabled` lief ins Leere.
+  Der Hook lädt selbst nie ein Modell: er startet den neuen Worker
+  `academic_vault/nli_scan_worker.py` **abgekoppelt** (`detached` + `unref`)
+  und holt dessen Befunde beim nächsten Aufruf aus einem Spool-Verzeichnis ab
+  (`~/.academic-research/nli-scan-spool`, Verzeichnis `0700`, Dateien `0600`).
+  Der Write wird dadurch weder verzögert noch blockiert. Damit ein Befund
+  nicht bis zum nächsten Kapitel-Write liegen bleibt, hängt derselbe Hook
+  zusätzlich am `UserPromptSubmit`-Event — dort ausschließlich als Abholung.
+  Gemessen (warmer Modell-Cache, CPU): **50 Zitate in 6,3 s**, 0,127 s je
+  Zitat, plus 1,6 s Modell-Laden je Worker-Start. Fehlt das Modell oder
+  scheitert das Laden, schreibt der Worker einen `error`-Datensatz, der Hook
+  meldet ihn **einmal** (Dedup über den Fehler-Hash) und die Sitzung läuft
+  normal weiter. Neuer Regression-Harness
+  `scripts/dev/test-nli-quote-scan-hook.sh` (CI-blockierend, analog
+  `test-pretooluse-blocker.sh`). Dokumentation: `docs/reference/hooks.md`,
+  Abschnitt „NLI-Zitatscan".
+
 - **Schweregrad für Zitat-Urteile (#736):** `quote-fidelity-auditor` gibt zu
   jedem Urteil ein Pflichtfeld `severity` zurück — eine feste Tabelle ordnet
   `polarity-flip` der Stufe `kritisch` zu (kehrt die Aussagerichtung aktiv
@@ -29,6 +53,29 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   stillschweigend übersprungen.
 
 ### Changed
+
+- **NLI-Zitatscan: Detektor statt Filter, Default AN (#717, Verhaltensänderung
+  gegenüber #592).** `run_batch_prefilter()` übersprang bisher als „treu"
+  eingestufte Zitate und markierte sie im Report als „vorgefiltert, nicht
+  inhaltlich geprueft" — ein Fehlurteil nahm ein verzerrtes Zitat damit
+  **dauerhaft** aus dem Prüfpfad. Das kehrt sich um: Es wird **nichts** mehr
+  übersprungen (`skipped` ist immer leer und bleibt nur der
+  Aufruferkompatibilität wegen erhalten), stattdessen tragen verdächtige
+  Zitate den neuen Schlüssel `suspicious` und werden **zusätzlich** gemeldet.
+  Ein Fehlurteil entspricht seither dem Zustand ohne Scan. Weil damit das
+  Hauptargument gegen Default-an entfällt — die Rule-of-Three-Grenze von ~10 %
+  aus `evals/524-nli-prefilter/README.md` —, steht
+  `config/parallel_agents.json` → `nli_prefilter_enabled` jetzt auf `true`.
+  Abschalten unverändert über `ACADEMIC_RESEARCH_NLI_PREFILTER=0` oder die
+  Configdatei (Vorrang: Argument > Env > Config > Default). `SKIP_MARKER` und
+  der `report`-Schlüssel entfallen ersatzlos.
+- **Entailment-Index aus `model.config.id2label` (#717):**
+  `MDebertaScorer.predict()` verdrahtete den Entailment-Index hart als
+  `probs[0]` („Label-Reihenfolge lt. Modellkarte"). Solange nur die Eval
+  darauf zugriff, war das folgenlos; ab Default-an wäre es ein stiller
+  Fehlurteils-Pfad, sobald ein Modell die Klassen anders sortiert. Der Index
+  wird jetzt aus `model.config.id2label` gelesen — ohne lautlosen Fallback:
+  fehlt ein `entail`-Label, ist das ein `ValueError`.
 
 - **`pdfplumber` ist Kern-Dependency (#723):** Strukturerhaltende Tabellenextraktion
   (`vault.extract_tables`) läuft nach einer normalen Installation (`uv sync --extra dev`
