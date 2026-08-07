@@ -541,3 +541,87 @@ def test_dedup_merges_pubmed_url_without_doi_into_doi_record():
     assert result[0]["doi"] == "10.1234/pubmed.test"
     assert "Alice" in result[0]["authors"]
     assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_cluster_level_conflict_prevents_transitive_merge():
+    """Ein ID-loser Brücken-Record C darf nicht zwei Records A und B mit
+    widersprechenden DOIs transitiv zusammenführen (#707 P1). Paar (A,B)
+    ist blockiert, aber (A,C) und (B,C) würden einzeln grün sein — die
+    Cluster-Level-Prüfung must dies verhindern."""
+    papers = [
+        {
+            "doi": "10.1234/original",
+            "title": "Deep Learning for Medical Image Segmentation",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": "10.5555/erratum",
+            "title": "Deep Learning for Medical Image Segmentation.",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+        {
+            "doi": None,
+            "title": "Deep Learning for Medical Image Segmentation",
+            "authors": ["Carol"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    # A und B sollten NICHT über C transitiv mergen (2 Ergebnisse)
+    assert len(result) == 2
+    dois = {r.get("doi") for r in result}
+    # Beide DOIs sollen noch da sein, nicht gemergt
+    assert "10.1234/original" in dois
+    assert "10.5555/erratum" in dois
+
+
+def test_dedup_merges_openalex_url_form_direct_key_matches_bare_id():
+    """Wenn openalex_id-Direkt-Key die vollständige URL trägt, wird sie auf
+    die Bare-ID normalisiert und mergt mit URL-basierten Records (#707 P2)."""
+    papers = [
+        {
+            "doi": None,
+            "openalex_id": "https://openalex.org/W2741809807",
+            "title": "Test Paper",
+            "authors": ["Alice"],
+            "citations": 2,
+        },
+        {
+            "doi": None,
+            "url": "https://openalex.org/W2741809807",
+            "title": "Test Paper",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_pmid_url_form_direct_key_matches_bare_id():
+    """Wenn pmid-Direkt-Key die vollständige pubmed-URL trägt, wird sie auf
+    die Bare-ID normalisiert und mergt mit URL-basierten Records (#707 P2)."""
+    papers = [
+        {
+            "doi": None,
+            "pmid": "https://pubmed.ncbi.nlm.nih.gov/12345678",
+            "title": "Clinical Test Paper",
+            "authors": ["Alice"],
+            "citations": 2,
+        },
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/12345678",
+            "title": "Clinical Test Paper",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]

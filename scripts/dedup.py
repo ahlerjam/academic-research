@@ -46,10 +46,15 @@ def _normalize_arxiv_id(paper: dict[str, Any]) -> str | None:
 
 def _normalize_pmid(paper: dict[str, Any]) -> str | None:
     """PMID aus optionalem Direkt-Feld, sonst aus einer
-    pubmed.ncbi.nlm.nih.gov-URL (#707 AC2). Kein Producer im Repo befuellt
+    pubmed.ncbi.nlm.nih.gov-URL (#707 AC2, P2). Kein Producer im Repo befuellt
     aktuell `pmid` direkt — die URL-Konvention ist die praxisnahe Quelle."""
     direct = paper.get("pmid")
     if direct:
+        # Prüfe zunächst, ob der Direkt-Wert selbst eine URL ist
+        url_match = _PMID_URL_RE.search(str(direct))
+        if url_match:
+            return url_match.group(1)
+        # Sonst: Rohwert
         value = str(direct).strip()
         return value or None
     url = paper.get("url") or ""
@@ -59,9 +64,14 @@ def _normalize_pmid(paper: dict[str, Any]) -> str | None:
 
 def _normalize_openalex_id(paper: dict[str, Any]) -> str | None:
     """OpenAlex-ID aus optionalem Direkt-Feld, sonst aus einer
-    openalex.org/W<digits>-URL (#707 AC2)."""
+    openalex.org/W<digits>-URL (#707 AC2, P2)."""
     direct = paper.get("openalex_id")
     if direct:
+        # Prüfe zunächst, ob der Direkt-Wert selbst eine URL ist
+        url_match = _OPENALEX_URL_RE.search(str(direct))
+        if url_match:
+            return url_match.group(1).upper()
+        # Sonst: Rohwert normalisieren
         value = str(direct).strip().upper()
         return value or None
     url = paper.get("url") or ""
@@ -164,16 +174,46 @@ def merge_group(group: list[dict[str, Any]]) -> dict[str, Any]:
     return merged
 
 
+def _get_cluster_ids(
+    cluster_indices: list[int], ids_per_paper: list[dict[str, str | None]]
+) -> dict[str, set[str]]:
+    """Sammle alle nicht-leeren ID-Werte eines Clusters nach Typ."""
+    cluster_ids: dict[str, set[str]] = {
+        "doi": set(),
+        "arxiv_id": set(),
+        "pmid": set(),
+        "openalex_id": set(),
+    }
+    for idx in cluster_indices:
+        for id_type in cluster_ids:
+            val = ids_per_paper[idx].get(id_type)
+            if val:
+                cluster_ids[id_type].add(val)
+    return cluster_ids
+
+
 def _conflicting_ids(ids_a: dict[str, str | None], ids_b: dict[str, str | None]) -> bool:
     """Prüfe, ob zwei ID-Dictionaries echte Konflikte haben: beide Seiten tragen
-    IDs desselben Typs mit unterschiedlichem Wert (#707 P1). Verhindert
-    Cross-Typ-Merges (z.B. DOI + OpenAlex-URL ohne DOI), wo nur eine Seite
-    einen bestimmten ID-Typ hat."""
+    IDs desselben Typs mit unterschiedlichem Wert. Dies ist eine PAARWEISE Prüfung
+    und erzeugt nicht die Transitivitäts-Garantie für Cluster (#707)."""
     for id_type in ("doi", "arxiv_id", "pmid", "openalex_id"):
         val_a = ids_a.get(id_type)
         val_b = ids_b.get(id_type)
-        # Beide Seiten tragen denselben ID-Typ UND ihre Werte unterscheiden sich
         if val_a and val_b and val_a != val_b:
+            return True
+    return False
+
+
+def _cluster_has_conflicting_ids(
+    cluster_a: dict[str, set[str]], cluster_b: dict[str, set[str]]
+) -> bool:
+    """Prüfe, ob zwei ID-Cluster auf Ebene widersprechende IDs tragen: beide
+    Cluster haben nicht-leere Werte desselben ID-Typs, die sich unterscheiden (#707 P1)."""
+    for id_type in ("doi", "arxiv_id", "pmid", "openalex_id"):
+        ids_a = cluster_a.get(id_type, set())
+        ids_b = cluster_b.get(id_type, set())
+        # Beide Cluster tragen denselben ID-Typ UND die Wert-Sets sind disjunkt
+        if ids_a and ids_b and not ids_a.intersection(ids_b):
             return True
     return False
 
@@ -210,10 +250,12 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
     title similarity (`SequenceMatcher`, `threshold`) and unioned pairwise
     (not just against a single representative), so a transitive chain
     A~B, B~C lands in one group even when A and C themselves fall below
-    the threshold (#707 AC1). Cross-type rule: two papers that EACH carry
-    at least one non-null ID (any of the four types) are never merged by
-    title alone — only exact ID equality merges them (#707 AC2/AC3). Papers
-    with no ID at all keep today's pure title-similarity behavior (#707 AC4).
+    the threshold (#707 AC1). Cross-type rule (cluster-level, #707 P1): the
+    clusters of i and j are not unioned if they carry non-empty IDs of the
+    same type with different values — preventing transitive merges that lose
+    contradictory IDs (e.g., two papers with different DOIs bridged by an
+    ID-less record). Papers with no ID at all keep today's pure title-similarity
+    behavior (#707 AC4).
 
     Returns deduplicated list.
     """
@@ -227,7 +269,6 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
     uf = _UnionFind(count)
 
     ids_per_paper: list[dict[str, str | None]] = []
-    has_id: list[bool] = []
     for paper in working:
         ids: dict[str, str | None] = {
             "doi": paper.get("doi"),
@@ -236,7 +277,6 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
             "openalex_id": _normalize_openalex_id(paper),
         }
         ids_per_paper.append(ids)
-        has_id.append(any(ids.values()))
 
     for id_type in ("doi", "arxiv_id", "pmid", "openalex_id"):
         buckets: dict[str, list[int]] = {}
@@ -256,11 +296,14 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
         for j in range(i + 1, count):
             if not titles[j] or uf.find(i) == uf.find(j):
                 continue
-            if has_id[i] and has_id[j] and _conflicting_ids(ids_per_paper[i], ids_per_paper[j]):
-                # Cross-type rule: both sides carry IDs of the same type with
-                # different values — only exact ID equality (handled above) may merge them.
-                # This allows OpenAlex-URLs to merge with DOI records if one side
-                # lacks the other's ID type (#707 P1).
+            # Cluster-level conflict check: gather all IDs already in each cluster
+            cluster_i_members = [idx for idx in range(count) if uf.find(idx) == uf.find(i)]
+            cluster_j_members = [idx for idx in range(count) if uf.find(idx) == uf.find(j)]
+            cluster_i_ids = _get_cluster_ids(cluster_i_members, ids_per_paper)
+            cluster_j_ids = _get_cluster_ids(cluster_j_members, ids_per_paper)
+            if _cluster_has_conflicting_ids(cluster_i_ids, cluster_j_ids):
+                # The clusters have contradictory IDs of the same type —
+                # do not merge (#707 P1).
                 continue
             if _title_similarity(titles[i], titles[j]) >= threshold:
                 uf.union(i, j)
