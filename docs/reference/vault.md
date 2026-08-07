@@ -236,8 +236,11 @@ geprüft (`VaultDB.get_table_cell`). Stimmt der Wert nicht überein, wirft der A
 `ValueError` mit dem gefundenen UND dem behaupteten Wert — es wird nichts gespeichert.
 Ist die Tabelle für die angegebene Seite/Position noch nicht extrahiert, versucht der
 Aufruf `vault.extract_tables` einmalig automatisch; meldet das `status="backend-missing"`,
-erscheint das als `ValueError` mit demselben Statuswort und der Installationsanweisung —
-keine rohe `ImportError`.
+gibt `vault.add_table_value` denselben Statusreport (`dict` mit `status` und
+Installationsanweisung) zurück statt eine Ausnahme zu werfen — Präzedenzfall
+`vault.extract_tables` selbst, ein fehlendes optionales Backend ist ein sichtbarer
+Zustand, keine Ausnahme. Es wird nichts gespeichert. Bleibt die Zelle trotz vorhandenem
+Backend unauffindbar (falsche `row`/`col`), ist das weiterhin ein `ValueError`.
 
 Übliche Schreibweisenunterschiede blockieren nicht (`academic_vault/numbers.py`):
 Dezimalkomma gegen -punkt, Tausendertrennzeichen, führende Nullen, ein angehängtes
@@ -444,7 +447,7 @@ greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbati
 | `vault.extract_tables(paper_id, backend="auto")` | Extrahiert Tabellen strukturerhaltend nach `paper_tables`; `papers_fts` bleibt unverändert (#630). `status` ∈ `ok`/`no-tables`/`no-textlayer`/`backend-missing` | `vault.extract_tables("smith2020")` | pdfplumber installiert (Pflicht-Dependency seit #723), Paper mit `pdf_path` | `dict` mit `status` und den erkannten Tabellen in `paper_tables` | `status` ist nicht `ok`; `backend-missing` nennt im `message` die Nachinstallation |
 | `vault.list_tables(paper_id, page=None)` | Gespeicherte Tabellenstrukturen eines Papers (`rows` = Textmatrix, `cells` = Zellen mit Bounding-Box) (#630) | `vault.list_tables("smith2020")` | Vorher gelaufene Tabellenextraktion | `list[dict]` mit `rows` (Textmatrix) und `cells` (Bounding-Boxen) | Leere Liste — für dieses Paper wurde keine Tabelle gespeichert |
 | `vault.get_table_cell(paper_id, page, table_index, row, col)` | Eine Zelle mit `value`, `bbox` und fertigem `evidence`-Beleg; `None` statt Näherungstreffer (#630). `table_index`/`row`/`col` 0-basiert | `vault.get_table_cell("smith2020", 1, 0, 1, 1)` | Extrahierte Tabelle; `table_index`, `row` und `col` sind 0-basiert | `dict` mit `value`, `bbox` und fertigem `evidence`-Beleg | Rückgabe `None` — die Zelle gibt es nicht, ein Näherungstreffer kommt bewusst nicht |
-| `vault.add_table_value(paper_id, page, table_index, row, col, claimed_value)` | Erfasst eine Kennzahl belegfähig; **fail-closed** gegen `vault.get_table_cell` geprüft, toleriert Schreibweisenunterschiede (#741) | `vault.add_table_value("smith2020", 1, 0, 1, 1, "120")` | Paper mit `pdf_path`; die Zelle muss den behaupteten Wert tragen | `table_value_id` des gespeicherten Belegs | `ValueError` mit gefundenem UND behauptetem Wert — nichts gespeichert; `status="backend-missing"` im Meldungstext bei fehlendem pdfplumber |
+| `vault.add_table_value(paper_id, page, table_index, row, col, claimed_value)` | Erfasst eine Kennzahl belegfähig; **fail-closed** gegen `vault.get_table_cell` geprüft, toleriert Schreibweisenunterschiede (#741) | `vault.add_table_value("smith2020", 1, 0, 1, 1, "120")` | Paper mit `pdf_path`; die Zelle muss den behaupteten Wert tragen | `table_value_id` (`str`) des gespeicherten Belegs im Erfolgsfall; fehlt das Tabellen-Backend, stattdessen der Statusreport (`dict`, `status="backend-missing"`) von `vault.extract_tables` — dann wurde nichts gespeichert | `ValueError` mit gefundenem UND behauptetem Wert — nichts gespeichert; ebenso bei unbekanntem Paper oder unauffindbarer Zelle trotz vorhandenem Backend |
 
 **Decision-Log & Ausschlüsse**
 

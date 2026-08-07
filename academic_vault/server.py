@@ -2195,7 +2195,7 @@ def add_table_value(
     row: int,
     col: int,
     claimed_value: str,
-) -> str:
+) -> str | dict:
     """Erfasst eine Kennzahl aus einer Tabellenzelle belegfaehig (Issue #741).
 
     Der Weg von einer Zahl in einer Studientabelle in den Kapiteltext, analog
@@ -2208,12 +2208,14 @@ def add_table_value(
 
     Ist die Tabelle fuer diese ``page``/``table_index``-Kombination noch nicht
     extrahiert, wird :func:`extract_tables_for_paper` einmalig automatisch
-    versucht (AC5): meldet sie ``status="backend-missing"``, wird das als
-    ``ValueError`` mit dem Statuswort und der Installationsanweisung sichtbar
-    -- keine rohe ``ImportError``. Bleibt die Zelle danach unauffindbar (z. B.
-    falsche ``row``/``col``, oder die Tabelle enthaelt tatsaechlich keine
-    Tabelle an dieser Stelle), ist das ebenfalls ein ``ValueError`` OHNE dass
-    etwas gespeichert wird.
+    versucht (AC5). Meldet sie ``status="backend-missing"``, gibt dieser
+    Aufruf denselben Statusreport als ``dict`` zurueck (Praezedenzfall
+    :func:`extract_tables_for_paper` -- ein fehlendes optionales Backend ist
+    ein sichtbarer Zustand, keine Ausnahme) und speichert NICHTS. Bleibt die
+    Zelle danach unauffindbar (z. B. falsche ``row``/``col``, oder die
+    Tabelle enthaelt tatsaechlich keine Tabelle an dieser Stelle), ist das
+    weiterhin ein ``ValueError`` OHNE dass etwas gespeichert wird -- das ist
+    ein echter Auffindbarkeitsfehler, kein Backend-Zustand.
 
     Args:
         db_path: Pfad zur Vault-DB.
@@ -2226,10 +2228,13 @@ def add_table_value(
             stehen soll (roh, vor jeder Normalisierung).
 
     Returns:
-        ``table_value_id`` des gespeicherten Datensatzes.
+        ``table_value_id`` (``str``) des gespeicherten Datensatzes im
+        Erfolgsfall, oder der Statusreport (``dict`` mit ``status``,
+        ``message``, ``backend``) von :func:`extract_tables_for_paper`, falls
+        das Tabellen-Backend fehlt -- dann wurde NICHTS gespeichert.
 
     Raises:
-        ValueError: Paper unbekannt, Tabellen-Backend fehlt, die Zelle ist
+        ValueError: Paper unbekannt, die Zelle ist trotz vorhandenem Backend
             nicht auffindbar, oder ``claimed_value`` stimmt nicht mit der
             Zelle ueberein (Meldung nennt gefundenen UND behaupteten Wert).
         VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
@@ -2251,11 +2256,7 @@ def add_table_value(
         if not table_known:
             extraction = extract_tables_for_paper(db_path, paper_id)
             if extraction["status"] == STATUS_BACKEND_MISSING:
-                raise ValueError(
-                    f"vault.add_table_value: Tabellen-Backend fehlt (status="
-                    f"'{STATUS_BACKEND_MISSING}') -- {extraction['message']} Es wurde "
-                    "NICHTS gespeichert."
-                )
+                return extraction
             cell = db.get_table_cell(paper_id, page, table_index, row, col)
         if cell is None:
             raise ValueError(
@@ -2656,7 +2657,7 @@ def _build_mcp_server():
         row: int,
         col: int,
         claimed_value: str,
-    ) -> str:
+    ) -> str | dict:
         """Erfasst eine Kennzahl aus einer Tabellenzelle belegfaehig (#741).
 
         Fail-closed wie `vault.add_quote`: `claimed_value` wird VOR jedem

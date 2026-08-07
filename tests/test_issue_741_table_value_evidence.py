@@ -313,23 +313,24 @@ def _raise_import_error():
 
 
 def test_add_table_value_backend_missing_reports_status(tmp_path, monkeypatch):
+    """Praezedenzfall extract_tables_for_paper: fehlendes Backend ist ein
+    sichtbarer Statusreport, keine Ausnahme (AC5-Wortlaut)."""
     monkeypatch.setattr(tables_mod, "_import_pdfplumber", _raise_import_error)
     db_path = _make_paper(tmp_path)
 
-    with pytest.raises(ValueError) as excinfo:
-        add_table_value(
-            db_path,
-            paper_id="smith2020",
-            page=1,
-            table_index=0,
-            row=1,
-            col=1,
-            claimed_value="120",
-        )
+    result = add_table_value(
+        db_path,
+        paper_id="smith2020",
+        page=1,
+        table_index=0,
+        row=1,
+        col=1,
+        claimed_value="120",
+    )
 
-    message = str(excinfo.value)
-    assert "backend-missing" in message
-    assert "pdfplumber" in message
+    assert isinstance(result, dict)
+    assert result["status"] == tables_mod.STATUS_BACKEND_MISSING
+    assert "pdfplumber" in result["message"]
     assert list_table_values(db_path) == []
 
 
