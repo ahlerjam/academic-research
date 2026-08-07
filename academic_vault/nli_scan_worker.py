@@ -132,7 +132,12 @@ def _write_record(spool_dir: Path, chapter_path: Path, record: dict[str, Any]) -
     spool_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(spool_dir, 0o700)
     target = spool_dir / _spool_name(chapter_path)
-    tmp = target.with_suffix(".json.tmp")
+    # Prozess-eindeutiger Temp-Name: der Hook startet je Kapitel-Write einen
+    # neuen, detachten Worker ohne Lock -- ein deterministischer Temp-Pfad
+    # wuerde zwei gleichzeitigen Workern fuer dasselbe Kapitel denselben
+    # Puffer unterschieben und den zweiten replace() mit FileNotFoundError
+    # scheitern lassen (Befunde gehen still verloren).
+    tmp = target.with_suffix(f".json.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     os.chmod(tmp, 0o600)
     tmp.replace(target)

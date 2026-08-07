@@ -356,6 +356,31 @@ def test_spool_files_are_owner_only(temp_vault_db, tmp_path):
     assert spool.stat().st_mode & 0o077 == 0
 
 
+def test_concurrent_workers_for_same_chapter_do_not_clobber_each_other(tmp_path, monkeypatch):
+    """Regression: der Hook startet je Kapitel-Write einen neuen, detachten
+    Worker ohne Lock -- ein deterministischer Temp-Pfad liesse den zweiten
+    Worker denselben ``.tmp``-Puffer wie der erste treffen und dessen
+    ``replace()`` mit FileNotFoundError scheitern (Befunde gehen still
+    verloren, siehe Code-Review PR #754). Der Temp-Name muss deshalb je
+    Prozess eindeutig sein."""
+    from academic_vault.nli_scan_worker import _write_record
+
+    chapter = tmp_path / "kapitel" / "03.md"
+    spool_dir = tmp_path / "spool"
+
+    pids = iter([111, 222])
+    monkeypatch.setattr("os.getpid", lambda: next(pids))
+
+    target_a = _write_record(spool_dir, chapter, {"schema": 1, "scanned": 1, "findings": []})
+    target_b = _write_record(spool_dir, chapter, {"schema": 1, "scanned": 2, "findings": []})
+
+    assert target_a == target_b, "beide Worker schreiben dasselbe Kapitel-Ziel"
+    assert json.loads(target_b.read_text())["scanned"] == 2, (
+        "juengerer Lauf gewinnt, ohne zu scheitern"
+    )
+    assert not list(spool_dir.glob("*.tmp")), "keine liegen gebliebenen Temp-Dateien"
+
+
 # ---------------------------------------------------------------------------
 # AC6 -- Laufzeit
 # ---------------------------------------------------------------------------
