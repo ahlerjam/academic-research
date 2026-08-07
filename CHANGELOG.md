@@ -10,6 +10,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Modelle beim Setup vorab laden, Hardware-Anforderungen dokumentiert (#718):**
+  Neuer Schritt 9 in `scripts/setup.sh` (`scripts/model_prefetch.py`) fragt
+  einmal, ob alle drei lokalen Modelle (Embedding `multilingual-e5-small`,
+  Reranker `bge-reranker-v2-m3`, NLI-Zitatscan `bge-m3-zeroshot-v2.0`; ~3,9 GB
+  gesamt) jetzt vollständig geladen werden sollen, statt den ersten Download
+  unangekündigt mitten in einer Suche oder einem Kapitel-Write auszulösen.
+  Bei Ablehnung oder nicht-interaktivem stdin (CI) bleibt der Lazy-Load-Pfad
+  unverändert, meldet aber jetzt vor jedem impliziten Download die erwartete
+  Größe (`academic_vault/_model_prefetchable.py`). Nebenbei behoben: der
+  lokale Reranker bekam bisher keinen `cache_dir` und landete im
+  HF-Standard-Cache statt in `~/.academic-research/models` wie die anderen
+  beiden Modelle — ein Vorab-Download hätte ihn beim nächsten Ladeversuch
+  nicht gefunden. `README.md`/`docs/guide/installation.md` nennen jetzt
+  8 GB RAM / 4 GB Plattenplatz als Untergrenze, keine GPU-Pflicht, und eine
+  Platte/RAM/Laufzeit-Tabelle je Modell.
+
 - **Chunking an GROBID-Sektionsgrenzen statt am Title-Case-Regex (#709):** Ist
   `GROBID_URL` gesetzt, schneidet `chunk_pdf()` jetzt an den echten Sektions-
   und Absatzgrenzen des TEI. Bisher lief auch der GROBID-Fall über die
