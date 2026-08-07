@@ -370,27 +370,15 @@ class TestChunkVectorStorage:
 
 
 class TestIngest:
-    def test_split_text_returns_single_chunk_for_short_text(self):
-        from academic_vault.ingest import split_text
+    """Textquelle und Schreiben.
 
-        assert split_text("Kurzer Text.") == ["Kurzer Text."]
-
-    def test_split_text_respects_max_chars_and_overlaps(self):
-        from academic_vault.ingest import split_text
-
-        text = " ".join(f"wort{i}" for i in range(400))
-        chunks = split_text(text, max_chars=200, overlap=50)
-
-        assert len(chunks) > 1
-        assert all(len(c) <= 200 for c in chunks)
-        # Overlap: das Ende von Chunk n taucht am Anfang von Chunk n+1 wieder auf
-        tail = chunks[0].split()[-1]
-        assert tail in chunks[1].split()
-
-    def test_split_text_empty_returns_empty_list(self):
-        from academic_vault.ingest import split_text
-
-        assert split_text("   ") == []
+    Die Chunk-Zerlegung selbst gehoert nicht mehr hierher: seit #708 zerlegt
+    ``ingest_paper_embeddings`` ueber ``chunking.chunk_pages`` statt ueber den
+    Zeichenfenster-Platzhalter ``split_text`` aus #372. Die frueheren
+    ``split_text``-Tests sind mit der Funktion entfallen; das Fenster-Verhalten
+    testet ``tests/test_chunking.py``, die Verdrahtung
+    ``tests/test_issue_708_ingest_uses_chunk_pages.py``.
+    """
 
     def test_ingest_uses_title_and_abstract_when_no_fulltext(
         self, temp_vault_db, fake_embedder, monkeypatch

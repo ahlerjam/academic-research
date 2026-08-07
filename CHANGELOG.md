@@ -34,6 +34,28 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `tests/fixtures/chunking/grobid_tei_sample.xml` deckt den GROBID-Pfad ab,
   ohne dass ein Server laufen muss.
 
+- **Retrieval-Goldset auf Chunk-Ebene, hermetisch in CI (#708):** Neues Goldset
+  (`tests/fixtures/retrieval_goldset_chunks_708/`) aus 30 Chunks und 26 Queries,
+  das die Strecke misst, die tatsächlich läuft: 448-Token-Chunks aus
+  seitenweisem Volltext über `chunking.chunk_pages()`, mit Kontextsatz und
+  `passage: `-Präfix eingebettet, gerankt über den echten
+  `VaultDB.knn_chunks()`-Pfad. Neue rangbewusste Metriken in
+  `academic_vault/retrieval.py`: `compute_ndcg_at_k()`,
+  `compute_reciprocal_rank_at_k()` und `mean_reciprocal_rank()` neben dem
+  bestehenden `compute_recall_at_k()` — jede gegen von Hand nachgerechnete Fälle
+  geprüft. Die Vektoren liegen vorberechnet als Fixture im Repo, der Lauf
+  braucht weder Netz noch Modell-Download (ein Test belegt das mit hart
+  blockiertem Socket); ein `manifest_sha256` über alle Embedding- und
+  Query-Texte macht Fixture-Drift zum harten Abbruch. Neuer CI-Job
+  `retrieval-goldset` fährt `scripts/eval/run_retrieval_chunk_goldset.py
+  --check-thresholds` bei jedem PR und wird rot, sobald eine der drei Metriken
+  ihre Schwelle unterschreitet. Erzeugt wird das Set von
+  `scripts/eval/build_retrieval_chunk_goldset.py` (nicht hermetisch, Gate
+  `VAULT_E5_LIVE_TEST=1`). Befund des Referenzlaufs: innerhalb einer Sprache ist
+  Recall@10 gesättigt (1,0), die Sprachlücke DE→EN dagegen groß (Recall@10 0,33,
+  nDCG@10 0,13) und EN→DE liefert überhaupt keine Treffer — dokumentiert samt
+  Grenzen in [`docs/evals/retrieval-chunk-goldset-708.md`](docs/evals/retrieval-chunk-goldset-708.md).
+
 - **Prüfbilanz je Kapitel (#737):** Neues MCP-Tool
   `vault.chapter_quote_balance(chapter_path)` (plus Slash-Command
   `/academic-research:pruefbilanz`) liefert eine Bilanz über alle im Kapitel
@@ -104,6 +126,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   stillschweigend übersprungen.
 
 ### Changed
+
+- **Der Ingest chunkt über `chunk_pages()` statt über ein Zeichenfenster (#708,
+  Verhaltensänderung).** `ingest_paper_embeddings()` zerlegte seit #372 über den
+  Platzhalter `split_text()` — 1600-Zeichen-Fenster, `context_sentence=""` — und
+  bekam den Ersatz aus #374 nie eingehängt. Damit lag zwischen Eval und Betrieb
+  eine stille Zweiteilung: Das Retrieval-Goldset aus #708 misst
+  `chunking.chunk_pages()`-Chunks, gespeichert wurden andere. Jetzt läuft der
+  produktive Auto-Ingest (`vault.add_paper` → `_maybe_ingest_embeddings`) über
+  `chunk_pages()` mit dessen Defaults (`TARGET_TOKENS`, `OVERLAP_RATIO`,
+  `default_context_sentence`); `chunk_embeddings.context_sentence` ist damit
+  erstmals befüllt und der eingebettete Text ist Kontextsatz + Chunk.
+  `split_text()` und der `chunker`-Parameter sind entfallen — genau dessen
+  Nichtbenutzung hatte die Lücke erzeugt. **Bestehende Vaults behalten ihre alten
+  Chunks, bis das jeweilige Paper erneut über `vault.add_paper` läuft**; die
+  Vektoren bleiben vergleichbar (gleiches Modell, gleicher `passage: `-Präfix),
+  nur die Chunkgrenzen unterscheiden sich dann je nach Ingest-Zeitpunkt. Einzige
+  verbliebene Abweichung zum Goldset: Der Ingest-Text stammt aus
+  `papers_fts.fulltext` und trägt seit #373 keine Seitengrenzen mehr, geht also
+  als eine Seite hinein („Seite 1-1" im Kontextsatz) — vermessen in
+  `tests/test_issue_708_ingest_uses_chunk_pages.py`.
 
 - **NLI-Zitatscan: Detektor statt Filter, Default AN (#717, Verhaltensänderung
   gegenüber #592).** `run_batch_prefilter()` übersprang bisher als „treu"
