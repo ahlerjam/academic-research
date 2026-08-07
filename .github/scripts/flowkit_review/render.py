@@ -120,7 +120,11 @@ def render_sticky_comment(
         file_rounds = prev_rounds
     else:
         blocking_files = sorted(
-            {f["file"] for f in findings if f["severity"] in ("P0", "P1") and f.get("file")}
+            {
+                f["file"]
+                for f in findings
+                if f["severity"] in ("P0", "P1") and f.get("file")
+            }
         )
         file_rounds = {name: prev_rounds.get(name, 0) + 1 for name in blocking_files}
     payload = dict(payload)
@@ -178,7 +182,9 @@ def render_sticky_comment(
                 lines.append("")
         if by_sev["P2"]:
             lines.append("<details>")
-            lines.append(f"<summary>P2 ({len(by_sev['P2'])} findings) — click to expand</summary>")
+            lines.append(
+                f"<summary>P2 ({len(by_sev['P2'])} findings) — click to expand</summary>"
+            )
             lines.append("")
             for f in by_sev["P2"]:
                 lines.append(_format_finding(f))
@@ -192,7 +198,9 @@ def render_sticky_comment(
 
 
 def _cli() -> int:
-    parser = argparse.ArgumentParser(description="Render findings.json to PR-comment Markdown.")
+    parser = argparse.ArgumentParser(
+        description="Render findings.json to PR-comment Markdown."
+    )
     parser.add_argument("findings", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
