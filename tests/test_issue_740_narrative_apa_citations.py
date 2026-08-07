@@ -252,6 +252,40 @@ def test_narrative_form_respects_non_author_tokens(content):
 
 
 # ---------------------------------------------------------------------------
+# Regression — Review-Fund P1 (PR #749): NARRATIVE_PAREN_YEAR blockte
+# gewoehnliche deutsche Prosa ueber den Co-Autoren-Bypass bzw. ueber
+# Berichtsverben nach nicht-personalen Substantiven.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        # Szenario (a): COAUTHORS matcht "und Frankreich" wie einen
+        # Co-Autoren-Marker; ohne Berichtsverb-Gate wurde daraus ein
+        # 'strong'-Beleg und damit ein Falsch-Block.
+        "Deutschland und Frankreich (2016) unterzeichneten das Abkommen.",
+        # Szenario (b): gaengige deutsche Rechts-/Institutionsbegriffe treffen
+        # zufaellig auf ein REPORTING_VERBS-Wort.
+        "Das Gesetz (2019) sieht Ausnahmen vor.",
+        "Der Bericht (2020) beschreibt die Lage.",
+    ],
+)
+def test_narrative_paren_year_does_not_false_positive_on_prose(content):
+    """Review-Fund P1: Prosa ohne echten narrativen Beleg erzeugt keinen
+    Treffer — weder ueber den Co-Autoren-Bypass noch ueber ein
+    Berichtsverb nach einem nicht-personalen Substantiv.
+    """
+    source = f"""
+    import {{ extractCitations }} from './hooks/lib/citation-parse.mjs';
+    console.log(JSON.stringify(extractCitations({content!r})));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    assert json.loads(result.stdout) == [], f"Falschtreffer fuer {content!r}"
+
+
+# ---------------------------------------------------------------------------
 # AC4 — Sekundärbeleg
 # ---------------------------------------------------------------------------
 
@@ -262,6 +296,28 @@ def test_secondary_citation_extracts_both_works():
     source = """
     import { extractCitations } from './hooks/lib/citation-parse.mjs';
     const content = '(Schmidt, 2015, zitiert nach Müller, 2021, S. 45)';
+    console.log(JSON.stringify(extractCitations(content).map((c) => ({
+      family: c.family, year: c.year, page: c.page, via: !!c.viaSecondary,
+      ok: content.slice(c.start, c.end) === c.raw,
+    }))));
+    """
+    result = run_node(source)
+    assert result.returncode == 0, f"Node-Fehler: {result.stderr}"
+    data = json.loads(result.stdout)
+    assert len(data) == 2, f"Erwartet zwei Belege, got {data}"
+    schmidt = next(c for c in data if c["family"] == "Schmidt")
+    mueller = next(c for c in data if c["family"] == "Müller")
+    assert schmidt["year"] == 2015 and not schmidt["via"]
+    assert mueller["year"] == 2021 and mueller["page"] == 45 and mueller["via"]
+    assert schmidt["ok"] and mueller["ok"]
+
+
+def test_secondary_citation_short_form_extracts_both_works():
+    """Review-Fund P2 (PR #749): die Kurzform 'zit. nach' (statt 'zitiert
+    nach') wird ebenfalls als Sekundärbeleg mit zwei Werken erkannt."""
+    source = """
+    import { extractCitations } from './hooks/lib/citation-parse.mjs';
+    const content = '(Schmidt, 2015, zit. nach Müller, 2021, S. 45)';
     console.log(JSON.stringify(extractCitations(content).map((c) => ({
       family: c.family, year: c.year, page: c.page, via: !!c.viaSecondary,
       ok: content.slice(c.start, c.end) === c.raw,

@@ -216,9 +216,12 @@ function followedByReportingVerb(text, end) {
   return REPORTING_VERBS.has(reportingVerbToken(m[1]));
 }
 
-// Trennstueck des Sekundaerbelegs "X, Jahr, zitiert nach Y, Jahr[, S. X]" —
-// case-insensitiv nur fuer "zitiert", nicht fuer die Namen (Risiko 1).
-const SECONDARY_SEPARATOR = /,\s*[Zz]itiert\s+nach\s+/u;
+// Trennstueck des Sekundaerbelegs "X, Jahr, zitiert nach Y, Jahr[, S. X]" bzw.
+// der Kurzform "X, Jahr, zit. nach Y, Jahr[, S. X]" (Review-Fund P2, Issue
+// #740: die Kurzform steht bereits im Modulkopf-Kommentar und in SIGNAL, war
+// hier aber nicht als Trenner erfasst) — case-insensitiv nur fuer das
+// Signalwort, nicht fuer die Namen (Risiko 1).
+const SECONDARY_SEPARATOR = /,\s*(?:[Zz]itiert\s+nach|[Zz]it\.\s*nach)\s+/u;
 
 /**
  * Sekundaerbeleg-Erkennung innerhalb eines Klammerinhalts: "Schmidt, 2015,
@@ -272,6 +275,14 @@ const NON_AUTHOR_TOKENS = new Set([
   // Stand-/Ausgabe-Angaben: "(Stand 2021)", "(Fassung 2019)"
   'stand', 'fassung', 'version', 'ausgabe', 'auflage', 'jahrgang', 'band',
   'heft', 'nr', 'hrsg', 'zugriff', 'abgerufen',
+  // Gaengige deutsche Rechts-/Institutionsbegriffe, die als grossgeschriebenes
+  // Substantiv vor "(Jahr) <Berichtsverb>" auftreten koennen ("Das Gesetz
+  // (2019) sieht Ausnahmen vor.") und dann wie ein narrativer Beleg aussehen
+  // (Review-Fund P1, Issue #740, Szenario b). Nicht erschoepfend — dieselbe
+  // Grenze wie bei den Struktur-Verweisen oben.
+  'gesetz', 'verordnung', 'richtlinie', 'verfassung', 'vertrag', 'abkommen',
+  'beschluss', 'bericht', 'studie', 'umfrage', 'erhebung', 'analyse',
+  'strategie', 'reform', 'novelle', 'regelung', 'vorschrift', 'dsgvo',
 ]);
 
 /** Vergleichsform eines Tokens fuer NON_AUTHOR_TOKENS (klein, umlautgefaltet). */
@@ -450,8 +461,13 @@ export function extractCitations(content) {
       continue;
     }
     const page = parsePage(match);
-    const coauthorText = (match[2] || '').trim();
-    if (page === null && coauthorText.length === 0 && !followedByReportingVerb(content, end)) {
+    // Fehlt die Seitenangabe, ist ein Berichtsverb Pflicht — UNABHAENGIG von
+    // Co-Autoren/et-al. (Review-Fund P1, Issue #740): COAUTHORS matcht auch
+    // gewoehnliche Aufzaehlungen ("Deutschland und Frankreich (2016)
+    // unterzeichneten …"), ein Bypass allein über coauthorText.length > 0
+    // blockte damit reguläre deutsche Prosa. Das REPORTING_VERBS-Gate ist der
+    // einzige verlaessliche Filter, sobald keine Seite vorliegt.
+    if (page === null && !followedByReportingVerb(content, end)) {
       continue;
     }
     push(buildCitation(match, content.slice(start, end), start));
