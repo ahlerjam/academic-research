@@ -74,9 +74,7 @@ def check(diff_path: Path, previous_path: Path) -> tuple[bool, str, dict[str, An
 
 
 def _cli() -> int:
-    parser = argparse.ArgumentParser(
-        description="Review-cache check on the bounded diff."
-    )
+    parser = argparse.ArgumentParser(description="Review-cache check on the bounded diff.")
     parser.add_argument("--diff", type=Path, required=True)
     parser.add_argument("--previous", type=Path, required=True)
     parser.add_argument(
