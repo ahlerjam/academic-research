@@ -1,5 +1,7 @@
 """Tests for dedup.py — paper deduplication."""
 
+import itertools
+
 from dedup import deduplicate, merge_group
 from text_utils import normalize_doi
 
@@ -295,3 +297,196 @@ def test_dedup_real_world_multi_source_duplicate():
     assert merged["citations"] == 20
     assert {"A. Author", "B. Author", "C. Author", "D. Author"} <= set(merged["authors"])
     assert set(merged["source_modules"]) == {"crossref", "openalex", "semantic_scholar", "base"}
+
+
+def test_dedup_order_independent_with_transitive_title_chain():
+    """Drei Papers A~B, B~C, aber A!~C (unter der Schwelle) ergeben in jeder
+    Permutation der Eingabeliste dieselbe Gruppierung (AC1)."""
+    paper_a = {
+        "doi": None,
+        "title": "Refactoring Legacy Monolithic Codebases into Modular Services",
+        "authors": ["Alice"],
+        "citations": 1,
+    }
+    paper_b = {
+        "doi": None,
+        "title": "Refactoring Legacy Monolithic Codebases into Modular Microservices",
+        "authors": ["Bob"],
+        "citations": 2,
+    }
+    paper_c = {
+        "doi": None,
+        "title": "Refactoring Legacy Monolithic Codebases into Distributed Microservices",
+        "authors": ["Carol"],
+        "citations": 3,
+    }
+    papers = [paper_a, paper_b, paper_c]
+
+    results = [deduplicate(list(perm)) for perm in itertools.permutations(papers)]
+
+    # A~B und B~C liegen über der Schwelle, A~C darunter — trotzdem landen
+    # A, B und C dank der transitiven Kette (Union-Find) in EINER Gruppe.
+    for result in results:
+        assert len(result) == 1
+        assert {"Alice", "Bob", "Carol"} <= set(result[0]["authors"])
+
+    # Alle Permutationen liefern identische Autor:innen-Mengen im Ergebnis.
+    author_sets = [frozenset(r[0]["authors"]) for r in results]
+    assert len(set(author_sets)) == 1
+
+
+def test_dedup_merges_by_arxiv_id_despite_different_doi_and_title():
+    """Gleiche arXiv-ID trotz abweichender DOI und abweichendem Titel wird
+    gemergt (AC2)."""
+    papers = [
+        {
+            "doi": "10.1109/completely-different-doi",
+            "arxiv_id": "2301.12345",
+            "title": "First Title Variant",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": "10.9999/another-doi",
+            "arxiv_id": "2301.12345",
+            "title": "Second Totally Unrelated Title",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_by_pmid_despite_different_doi_and_title():
+    """Gleiche PMID trotz abweichender DOI und abweichendem Titel wird
+    gemergt (AC2)."""
+    papers = [
+        {
+            "doi": "10.1109/completely-different-doi",
+            "pmid": "12345678",
+            "title": "First Title Variant",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": "10.9999/another-doi",
+            "pmid": "12345678",
+            "title": "Second Totally Unrelated Title",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_by_openalex_id_despite_different_doi_and_title():
+    """Gleiche OpenAlex-ID trotz abweichender DOI und abweichendem Titel wird
+    gemergt (AC2)."""
+    papers = [
+        {
+            "doi": "10.1109/completely-different-doi",
+            "openalex_id": "W123456789",
+            "title": "First Title Variant",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": "10.9999/another-doi",
+            "openalex_id": "w123456789",
+            "title": "Second Totally Unrelated Title",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_id_match_wins_even_below_title_threshold():
+    """Ein ID-Treffer mergt zwei Papers, deren Titel-Similarity klar unter der
+    Schwelle liegt — die ID-Ebenen greifen vor dem Fuzzy-Titelvergleich (AC3)."""
+    papers = [
+        {
+            "doi": None,
+            "arxiv_id": "1999.00001",
+            "title": "Alpha",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": None,
+            "arxiv_id": "1999.00001",
+            "title": "Zzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_no_ids_falls_back_to_title_similarity_only():
+    """Fehlen alle vier ID-Typen, bleibt es beim bisherigen Verhalten über den
+    Fuzzy-Titelvergleich (AC4, Regressionsschutz für die bestehende
+    Titel-Similarity-Logik)."""
+    papers = [
+        {
+            "doi": None,
+            "title": "DevOps Governance in Large Organizations",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "title": "DevOps Governance in Large Organisations",
+            "authors": ["Bob"],
+            "citations": 3,
+        },
+        {
+            "doi": None,
+            "title": "A Completely Unrelated Paper About Gardening",
+            "authors": ["Carol"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 2
+    titles = {p["title"] for p in result}
+    assert "A Completely Unrelated Paper About Gardening" in titles
+
+
+def test_dedup_representative_deterministic_regardless_of_input_order():
+    """Bei einem Tie in (_non_none_count, citations) ist der überlebende
+    Repräsentant deterministisch — nicht von der Eingabereihenfolge abhängig
+    (AC5)."""
+    paper_x = {
+        "doi": "10.1109/tie-test",
+        "title": "Tie Test Paper",
+        "authors": ["Alice"],
+        "abstract": "Abstract from X",
+        "citations": 5,
+    }
+    paper_y = {
+        "doi": "10.1109/tie-test",
+        "title": "Tie Test Paper",
+        "authors": ["Bob"],
+        "abstract": "Abstract from Y",
+        "citations": 5,
+    }
+
+    result_forward = deduplicate([paper_x, paper_y])
+    result_reversed = deduplicate([paper_y, paper_x])
+
+    assert len(result_forward) == 1
+    assert len(result_reversed) == 1
+    assert result_forward[0]["abstract"] == result_reversed[0]["abstract"]
