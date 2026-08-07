@@ -4,61 +4,34 @@ Buendelt den Weg vom Paper-Text zum durchsuchbaren Vektor an einer Stelle:
 
     Textquelle -> Chunking -> Embedding -> DB
 
-Chunker und Textquelle sind injizierbar. Die hier enthaltene Chunk-Zerlegung
-ist bewusst ein einfacher Platzhalter: sobald die dedizierte Chunking-Logik
-(#374) und die PDF-Volltext-Extraktion (#373) stehen, werden sie ueber die
-Parameter ``chunker`` bzw. ``text`` eingehaengt, ohne dass diese Datei sich
-aendern muss.
+Zerlegt wird seit #708 ueber ``chunking.chunk_pages`` (#374): tokenbasierte
+Fenster, deterministischer Kontextsatz, ``embedding_text`` aus Kontextsatz +
+Chunk. Bis dahin lief hier der Zeichenfenster-Platzhalter ``split_text`` aus
+#372 mit ``context_sentence=""`` -- #374 hatte den Ersatz gebaut, aber niemand
+haengte ihn ein. Folge war eine stille Zweiteilung: das Retrieval-Goldset aus
+#708 mass ``chunk_pages``-Chunks, der Betrieb speicherte andere. Ein Eval, das
+etwas anderes misst als das, was laeuft, ist keine Messung.
+
+Der Text stammt aus ``resolve_paper_text`` und damit aus ``papers_fts.fulltext``,
+das seit #373 bewusst KEINE Seitengrenzen mehr traegt. Er geht deshalb als
+genau eine Seite in ``chunk_pages``; die Seitenangabe im Kontextsatz lautet auf
+diesem Weg immer "Seite 1-1". Das ist die einzige verbleibende Abweichung zum
+Goldset (dessen Quelldokumente mehrseitig sind) und beruehrt weder Chunkgrenzen
+noch Section-Titel -- vermessen in
+``tests/test_issue_708_ingest_uses_chunk_pages.py``. ``page_start``/``page_end``
+haben ohnehin keine Spalte in ``chunk_embeddings``.
 """
 
 import json
 import os
-from collections.abc import Callable
 
 from .db import VaultDB
 from .embedding_model import get_embedder
 
-# ~512 Tokens entsprechen grob 1600 Zeichen deutschem/englischem Fliesstext.
-DEFAULT_CHUNK_CHARS = 1600
-DEFAULT_CHUNK_OVERLAP = 200
 # Obergrenze pro Ingest: haelt die Latenz von add_paper beschraenkt (#372, Risiko 5).
 DEFAULT_MAX_CHUNKS = 64
 
 ENV_MAX_CHUNKS = "VAULT_MAX_CHUNKS"
-
-
-def split_text(
-    text: str,
-    max_chars: int = DEFAULT_CHUNK_CHARS,
-    overlap: int = DEFAULT_CHUNK_OVERLAP,
-) -> list[str]:
-    """Zerlegt Text in ueberlappende Chunks entlang von Wortgrenzen.
-
-    Platzhalter-Chunker bis #374; bewusst simpel und deterministisch.
-    """
-    normalized = " ".join(text.split())
-    if not normalized:
-        return []
-    if len(normalized) <= max_chars:
-        return [normalized]
-
-    overlap = max(0, min(overlap, max_chars // 2))
-    chunks: list[str] = []
-    start = 0
-    while start < len(normalized):
-        end = min(start + max_chars, len(normalized))
-        if end < len(normalized):
-            # Auf der letzten Wortgrenze der hinteren Chunk-Haelfte schneiden.
-            boundary = normalized.rfind(" ", start + max_chars // 2, end)
-            if boundary != -1:
-                end = boundary
-        chunk = normalized[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(normalized):
-            break
-        start = max(end - overlap, start + 1)
-    return chunks
 
 
 def resolve_paper_text(db_path: str, paper_id: str) -> str:
@@ -109,7 +82,6 @@ def ingest_paper_embeddings(
     paper_id: str,
     text: str | None = None,
     embedder: object | None = None,
-    chunker: Callable[[str], list[str]] | None = None,
     max_chunks: int | None = None,
 ) -> int:
     """Erzeugt Chunk-Embeddings fuer ein Paper und schreibt sie in den Vault.
@@ -117,12 +89,19 @@ def ingest_paper_embeddings(
     Ersetzt vorhandene Chunks desselben Papers (``add_paper`` ist ein Upsert und
     darf die Tabelle nicht aufblaehen).
 
+    Zerlegt wird ueber :func:`academic_vault.chunking.chunk_pages` mit dessen
+    Produktionsdefaults (``TARGET_TOKENS``, ``OVERLAP_RATIO``,
+    ``default_context_sentence``) -- derselbe Weg, den das Retrieval-Goldset aus
+    #708 misst. Der frueher hier eingebaute Zeichenfenster-Platzhalter
+    ``split_text`` ist mit #708 entfallen; ein Chunker-Parameter existiert
+    bewusst nicht mehr, weil genau seine Nicht-Nutzung die Zweiteilung zwischen
+    Eval und Betrieb erzeugt hat.
+
     Args:
         db_path: Pfad zur Vault-DB.
         paper_id: Paper, dessen Chunks eingebettet werden.
         text: Expliziter Text. ``None`` = Kaskade aus :func:`resolve_paper_text`.
         embedder: Embedder-Instanz. ``None`` = ``get_embedder()``.
-        chunker: Chunk-Funktion. ``None`` = :func:`split_text`.
         max_chunks: Obergrenze. ``None`` = ``VAULT_MAX_CHUNKS`` bzw. Default.
 
     Returns:
@@ -155,20 +134,24 @@ def ingest_paper_embeddings(
     if not source or not source.strip():
         return 0
 
-    split = chunker if chunker is not None else split_text
-    chunks = [c for c in split(source) if c.strip()]
+    # Import erst hier: ``chunking`` zieht ``transformers`` nach, und der
+    # Modulimport von ``ingest`` soll das nicht bezahlen. Ausserdem greift so
+    # ein Monkeypatch auf ``academic_vault.chunking.chunk_pages``.
+    from . import chunking
+
+    # Eine Seite: der Volltext aus #373 traegt keine Seitengrenzen mehr (siehe
+    # Modul-Docstring). Die Seitenangabe im Kontextsatz lautet damit "Seite 1-1".
+    chunks = [c for c in chunking.chunk_pages([(1, source)]) if c.chunk_text.strip()]
     if not chunks:
         return 0
     limit = max_chunks if max_chunks is not None else _max_chunks_from_env()
     if limit > 0:
         chunks = chunks[:limit]
 
-    # Kein Kontextsatz auf diesem Weg: der ``split_text``-Platzhalter kennt
-    # weder Abschnitt noch Seitenzahlen. Kontextualisierte Embedding-Texte
-    # entstehen im seitenbewussten Pfad (``chunking.chunk_pages``, #374) ueber
-    # ``default_context_sentence`` -- seit #632 der einzige Kontextsatz-Weg,
-    # weil keine Plugin-Funktion einen ANTHROPIC_API_KEY voraussetzen darf.
-    embedding_texts = list(chunks)
+    # Der Kontextsatz kommt aus ``chunking.default_context_sentence`` -- seit
+    # #632 der einzige Kontextsatz-Weg, weil keine Plugin-Funktion einen
+    # ANTHROPIC_API_KEY voraussetzen darf.
+    embedding_texts = [c.embedding_text for c in chunks]
     # Embeddings VOR der Schreib-Transaktion berechnen: Modell-Inferenz kann
     # Sekunden dauern und darf keinen SQLite-Write-Lock halten.
     vectors = active_embedder.embed_documents(embedding_texts)  # type: ignore[attr-defined]
@@ -179,12 +162,12 @@ def ingest_paper_embeddings(
     # darf kein Paper mit halb geloeschten Chunks hinterlassen.
     with VaultDB(db_path) as writer:
         writer.delete_chunk_embeddings(paper_id)
-        for chunk, embedding_text, vector in zip(chunks, embedding_texts, vectors, strict=True):
+        for chunk, vector in zip(chunks, vectors, strict=True):
             writer.add_chunk_embedding(
                 paper_id=paper_id,
-                chunk_text=chunk,
-                context_sentence="",
-                embedding_text=embedding_text,
+                chunk_text=chunk.chunk_text,
+                context_sentence=chunk.context_sentence,
+                embedding_text=chunk.embedding_text,
                 embedding_vector=serialize_f32(vector),
             )
     return len(chunks)

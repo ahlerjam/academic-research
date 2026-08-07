@@ -103,6 +103,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Der Ingest chunkt über `chunk_pages()` statt über ein Zeichenfenster (#708,
+  Verhaltensänderung).** `ingest_paper_embeddings()` zerlegte seit #372 über den
+  Platzhalter `split_text()` — 1600-Zeichen-Fenster, `context_sentence=""` — und
+  bekam den Ersatz aus #374 nie eingehängt. Damit lag zwischen Eval und Betrieb
+  eine stille Zweiteilung: Das Retrieval-Goldset aus #708 misst
+  `chunking.chunk_pages()`-Chunks, gespeichert wurden andere. Jetzt läuft der
+  produktive Auto-Ingest (`vault.add_paper` → `_maybe_ingest_embeddings`) über
+  `chunk_pages()` mit dessen Defaults (`TARGET_TOKENS`, `OVERLAP_RATIO`,
+  `default_context_sentence`); `chunk_embeddings.context_sentence` ist damit
+  erstmals befüllt und der eingebettete Text ist Kontextsatz + Chunk.
+  `split_text()` und der `chunker`-Parameter sind entfallen — genau dessen
+  Nichtbenutzung hatte die Lücke erzeugt. **Bestehende Vaults behalten ihre alten
+  Chunks, bis das jeweilige Paper erneut über `vault.add_paper` läuft**; die
+  Vektoren bleiben vergleichbar (gleiches Modell, gleicher `passage: `-Präfix),
+  nur die Chunkgrenzen unterscheiden sich dann je nach Ingest-Zeitpunkt. Einzige
+  verbliebene Abweichung zum Goldset: Der Ingest-Text stammt aus
+  `papers_fts.fulltext` und trägt seit #373 keine Seitengrenzen mehr, geht also
+  als eine Seite hinein („Seite 1-1" im Kontextsatz) — vermessen in
+  `tests/test_issue_708_ingest_uses_chunk_pages.py`.
+
 - **NLI-Zitatscan: Detektor statt Filter, Default AN (#717, Verhaltensänderung
   gegenüber #592).** `run_batch_prefilter()` übersprang bisher als „treu"
   eingestufte Zitate und markierte sie im Report als „vorgefiltert, nicht

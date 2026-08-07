@@ -151,12 +151,19 @@ müssen die Anker weiter im Text vorkommen, sonst bricht der Generator ab.
 
 ## Grenzen
 
-- **`chunk_pages()` hängt nicht im Ingest.** `ingest_paper_embeddings()` chunkt
-  bis heute über `split_text()` (Zeichenfenster, kein Kontextsatz, siehe
-  `academic_vault/ingest.py`). Produktiv gemeinsam sind also der
-  `passage: `-Präfix und der KNN-Pfad, nicht die Chunkgrenzen. Dieses Set misst
-  den Weg, den das Chunking-Modul aus #374 vorsieht — die Verdrahtung selbst ist
-  nicht Teil von #708 und gehört in ein Folge-Issue.
+- **Der Ingest sieht genau eine Seite.** `ingest_paper_embeddings()` chunkt seit
+  #708 über dasselbe `chunking.chunk_pages()` mit denselben Defaults wie dieses
+  Set — vorher lief dort `split_text()` (Zeichenfenster, `context_sentence=""`),
+  und das Set hätte etwas gemessen, das nirgends läuft. Der Ingest-Text kommt
+  aus `papers_fts.fulltext`, und der trägt seit #373 bewusst keine Seitengrenzen
+  mehr; er geht deshalb als **eine** Seite hinein, die Seitenangabe im
+  Kontextsatz lautet dort immer „Seite 1-1". Die Quelldokumente hier sind
+  mehrseitig, also steht in ihren Kontextsätzen ein echter Seitenbereich. Das
+  ist die einzige verbliebene Abweichung, und sie ist vermessen statt behauptet:
+  `test_flat_text_changes_only_the_page_range_in_the_context_sentence`
+  (in `tests/test_issue_708_ingest_uses_chunk_pages.py`) belegt, dass
+  Chunkgrenzen, Section-Titel und Chunk-Index dabei identisch bleiben.
+  `page_start`/`page_end` haben ohnehin keine Spalte in `chunk_embeddings`.
 - **Die Chunks sind Datenlage, nicht hermetisch reproduzierbar.** Hermetisch
   fällt `chunk_pages()` auf `approximate_token_count` zurück und setzt die
   Grenzen anders als der echte e5-Tokenizer. Die Identität beweist der
