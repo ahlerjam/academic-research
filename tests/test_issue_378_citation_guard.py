@@ -358,30 +358,37 @@ def test_page_coverage_states(vault_with_mueller, empty_vault):
     assert VaultDB(empty_vault).page_coverage("ohne-seiten", 45) == "unknown"
 
 
-def test_page_coverage_quote_pages_never_refute(vault_with_quote_page_only):
-    """``quotes.printed_page`` bestaetigt eine Seite, widerlegt sie aber nie.
-
-    Die Quote-Seiten sind eine Stichprobe der bereits erfassten Stellen, kein
-    Seitenumfang: dass S. 47 nicht darunter ist, sagt nichts darueber aus, ob
-    das Buch eine S. 47 hat. Nur ein vollstaendiges ``[page_first, page_last]``
-    darf ``"outside"`` ergeben.
+def test_page_coverage_quote_pages_refute_without_full_range(vault_with_quote_page_only):
+    """Issue #724 kehrt die Regel aus #378 fuer den Fall OHNE ``page_first``/
+    ``page_last`` um: die ``printed_page``-Stichprobe ist dann die einzige
+    verfuegbare Evidenz und widerlegt eine abweichende Seite. Vorher (#378)
+    galt hier "Stichprobe widerlegt nie" -- das liess die Seite fuer den
+    Regelfall des PDF-Ingests (Buch ohne CSL-Seitenumfang) komplett ungeprueft,
+    genau das Problem, das #724 behebt. Nur wenn zum Paper GAR KEINE
+    Seitendaten vorliegen, bleibt der Soft-Pass ``"unknown"`` (siehe
+    ``test_page_coverage_states``, Fall "ohne-seiten").
     """
     from academic_vault.db import VaultDB
 
     db = VaultDB(vault_with_quote_page_only)
     # Erfasste Stichprobe bestaetigt weiterhin.
     assert db.page_coverage("schmidt-2020", 45) == "covered"
-    # Jede andere Seite ist mangels Seitenumfang schlicht unbekannt.
-    assert db.page_coverage("schmidt-2020", 47) == "unknown"
-    assert db.page_coverage("schmidt-2020", 3) == "unknown"
+    # Jede andere Seite widerlegt jetzt, mangels vollstaendigem Seitenumfang
+    # ist die Stichprobe die einzige Evidenz.
+    assert db.page_coverage("schmidt-2020", 47) == "outside"
+    assert db.page_coverage("schmidt-2020", 3) == "outside"
 
 
-def test_verify_citation_unsampled_page_is_verified(vault_with_quote_page_only):
-    """Kein ``page-mismatch``, solange nur Quote-Seiten bekannt sind."""
+def test_verify_citation_unsampled_page_is_page_mismatch_without_range(vault_with_quote_page_only):
+    """Issue #724: ohne ``page_first``/``page_last`` ist die Quote-Stichprobe
+    autoritativ -- eine abweichende Seite wird jetzt als ``page-mismatch``
+    erkannt (vorher #378: Soft-Pass ``"verified"``)."""
     from academic_vault.server import verify_citation
 
     assert verify_citation(vault_with_quote_page_only, "Schmidt", 2020, 45)["status"] == "verified"
-    assert verify_citation(vault_with_quote_page_only, "Schmidt", 2020, 47)["status"] == "verified"
+    result = verify_citation(vault_with_quote_page_only, "Schmidt", 2020, 47)
+    assert result["status"] == "page-mismatch"
+    assert result["vault_pages"] == [45]
 
 
 def test_verify_citation_statuses(vault_with_mueller):
@@ -531,14 +538,110 @@ def test_citation_wrong_page_blocks(vault_with_mueller):
     assert "999" in result.stderr
 
 
-def test_citation_page_beyond_quote_sample_allows(vault_with_quote_page_only):
-    """Gegenstueck zu ``wrong_page_blocks``: ohne page_first/page_last darf eine
-    nicht abgetastete Seite NICHT blocken.
+def test_citation_wrong_page_names_both_values(vault_with_mueller):
+    """AC1: die Meldung nennt sowohl die zitierte als auch die im Vault
+    hinterlegte Seite -- nicht nur die zitierte."""
+    content = "Wie (Müller 2021, S. 999) belegt, ist der Effekt gross."
+    result = run_hook(
+        write_payload(content),
+        env_overrides={"VAULT_DB_PATH": vault_with_mueller, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert result.returncode == 2, f"Erwartet 2 (Block), got {result.returncode}. {result.stderr}"
+    assert "999" in result.stderr  # zitierte Seite
+    assert "40" in result.stderr  # im Vault hinterlegter Seitenumfang (page_first)
+    assert "60" in result.stderr  # im Vault hinterlegter Seitenumfang (page_last)
+
+
+def test_citation_page_range_matches_stored_page(vault_with_quote_page_only):
+    """AC4: ein Seitenbereich im Beleg gilt als stimmig, wenn die hinterlegte
+    Seite darin liegt -- die Gegenprobe (Bereich ohne Treffer) blockiert."""
+    ok = run_hook(
+        write_payload("Wie (Schmidt 2020, S. 44–46) zeigt, ist der Effekt stabil."),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote_page_only,
+            "ACADEMIC_CITATION_CASCADE": "off",
+        },
+    )
+    assert ok.returncode == 0, f"Erwartet 0 (allow), got {ok.returncode}. {ok.stderr}"
+    assert "BLOCKIERT" not in ok.stderr
+
+    mismatch = run_hook(
+        write_payload("Wie (Schmidt 2020, S. 50–52) zeigt, ist der Effekt stabil."),
+        env_overrides={
+            "VAULT_DB_PATH": vault_with_quote_page_only,
+            "ACADEMIC_CITATION_CASCADE": "off",
+        },
+    )
+    assert mismatch.returncode == 2, (
+        f"Erwartet 2 (Block), got {mismatch.returncode}. {mismatch.stderr}"
+    )
+    assert "50" in mismatch.stderr
+    assert "45" in mismatch.stderr
+
+
+def test_page_mismatch_compares_printed_not_pdf_page(tmp_path):
+    """AC5: der Vergleich laeuft ueber ``printed_page``, nicht ``pdf_page`` --
+    beweisbar an einem Paper mit ``page_offset``, dessen Quote unterschiedliche
+    ``pdf_page``/``printed_page``-Werte traegt.
+
+    Ein Beleg mit dem ``pdf_page``-Wert (50) muss als Mismatch gegen die
+    tatsaechliche ``printed_page`` (45) erkannt werden.
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.server import add_paper, add_quote, set_page_offset
+
+    db_path = str(tmp_path / "offset_724.db")
+    VaultDB(db_path).init_schema()
+    add_paper(
+        db_path=db_path,
+        paper_id="offset-2022",
+        csl_json=json.dumps(
+            {
+                "title": "Buch mit Vorspann",
+                "type": "book",
+                "author": [{"family": "Offsetmann", "given": "Otto"}],
+                "issued": {"date-parts": [[2022]]},
+            }
+        ),
+    )
+    # page_offset=5: gedruckte Seite = pdf_page - offset. Die Quote traegt
+    # beide Werte, damit ein Vergleich ueber die FALSCHE Spalte auffiele.
+    set_page_offset(db_path, "offset-2022", 5)
+    add_quote(
+        db_path=db_path,
+        paper_id="offset-2022",
+        verbatim="Ein woertliches Zitat mit Seitenversatz",
+        extraction_method="manual",
+        pdf_page=50,
+        printed_page=45,
+    )
+
+    # Beleg mit der GEDRUCKTEN Seite (45) muss verifizieren.
+    printed = run_hook(
+        write_payload("Wie (Offsetmann 2022, S. 45) zeigt, ist der Effekt stabil."),
+        env_overrides={"VAULT_DB_PATH": db_path, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert printed.returncode == 0, (
+        f"Erwartet 0 (allow), got {printed.returncode}. {printed.stderr}"
+    )
+
+    # Beleg mit der PDF-Seite (50) darf NICHT ueber die pdf_page-Spalte
+    # verifizieren -- printed_page (45) != 50, also Mismatch.
+    pdf = run_hook(
+        write_payload("Wie (Offsetmann 2022, S. 50) zeigt, ist der Effekt stabil."),
+        env_overrides={"VAULT_DB_PATH": db_path, "ACADEMIC_CITATION_CASCADE": "off"},
+    )
+    assert pdf.returncode == 2, f"Erwartet 2 (Block), got {pdf.returncode}. {pdf.stderr}"
+    assert "50" in pdf.stderr
+    assert "45" in pdf.stderr
+
+
+def test_citation_page_beyond_quote_sample_blocks(vault_with_quote_page_only):
+    """Issue #724: ohne page_first/page_last widerlegt die Quote-Stichprobe jetzt.
 
     Der Vault kennt von diesem Buch nur ein Zitat auf S. 45. Ein Beleg auf S. 47
-    ist damit weder bestaetigt noch widerlegt — blocken hiesse, korrekte Belege
-    allein deshalb abzulehnen, weil aus derselben Seite noch nichts extrahiert
-    wurde.
+    wird jetzt blockiert (vorher #378: Soft-Pass) -- die Meldung nennt beide
+    Werte: die zitierte Seite (47) UND die im Vault hinterlegte (45), AC1.
     """
     content = "Wie (Schmidt 2020, S. 47) zeigt, ist der Effekt stabil."
     result = run_hook(
@@ -548,8 +651,10 @@ def test_citation_page_beyond_quote_sample_allows(vault_with_quote_page_only):
             "ACADEMIC_CITATION_CASCADE": "off",
         },
     )
-    assert result.returncode == 0, f"Erwartet 0 (allow), got {result.returncode}. {result.stderr}"
-    assert "BLOCKIERT" not in result.stderr
+    assert result.returncode == 2, f"Erwartet 2 (Block), got {result.returncode}. {result.stderr}"
+    assert "BLOCKIERT" in result.stderr
+    assert "47" in result.stderr
+    assert "45" in result.stderr
 
 
 def test_cascade_off_without_vault_hit_blocks(empty_vault):

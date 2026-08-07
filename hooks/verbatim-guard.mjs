@@ -443,8 +443,12 @@ function uniqueByKey(citations) {
  * `server.verify_citations()`, das sich innerhalb des Subprozesses zusätzlich
  * einen einzigen Papers-Tabellen-Scan für alle Belege teilt statt einen je
  * Beleg (Issue #501).
- * Gibt Map key -> "verified" | "page-mismatch" | "no-match" | "unavailable"
- * zurück; "unavailable" bedeutet Python/Vault-Fehler (fail-open).
+ * Gibt Map key -> Ergebnis-Objekt ``{status, paper_ids, vault_pages?,
+ * vault_ranges?}`` zurück (``status`` eine von "verified" | "page-mismatch" |
+ * "no-match" | "unavailable"; ``vault_pages``/``vault_ranges`` nur bei
+ * "page-mismatch" gesetzt — die im Vault hinterlegten Seiten für die
+ * Blockmeldung, Issue #724). "unavailable" bedeutet Python/Vault-Fehler
+ * (fail-open).
  */
 function verifyCitationsInVault(citations) {
   const statuses = new Map();
@@ -454,11 +458,13 @@ function verifyCitationsInVault(citations) {
     'from academic_vault.server import verify_citations',
     'items = json.loads(sys.argv[2])',
     'results = verify_citations(sys.argv[1], items)',
-    'print(json.dumps([r["status"] for r in results]))',
+    'print(json.dumps(results))',
   ].join('; ');
 
   const payload = JSON.stringify(
-    citations.map((c) => ({ family: c.family, year: c.year, page: c.page })),
+    citations.map((c) => ({
+      family: c.family, year: c.year, page: c.page, page_end: c.pageEnd ?? null,
+    })),
   );
 
   try {
@@ -468,15 +474,36 @@ function verifyCitationsInVault(citations) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const parsed = JSON.parse(output.trim());
-    citations.forEach((c, i) => statuses.set(c.key, parsed[i] || 'unavailable'));
+    citations.forEach((c, i) => statuses.set(c.key, parsed[i] || { status: 'unavailable' }));
   } catch (err) {
     warnFailOpen('Citation-Guard', 'lookup-error', err.message);
-    for (const c of citations) statuses.set(c.key, 'unavailable');
+    for (const c of citations) statuses.set(c.key, { status: 'unavailable' });
   }
   return statuses;
 }
 
 const UNVERIFIED_MARKER = ' [UNVERIFIED]';
+
+/** Beleg-Seite als Text: "45" oder bei Bereich "45–47". */
+function pageInfoText(citation) {
+  return citation.pageEnd != null ? `${citation.page}–${citation.pageEnd}` : `${citation.page}`;
+}
+
+/**
+ * Die im Vault hinterlegten Seiten als lesbarer Text für die Blockmeldung
+ * (Issue #724, AC1: "nennt beide Werte"). ``entry`` ist das Ergebnis-Objekt
+ * aus :func:`verifyCitationsInVault` für den Status "page-mismatch".
+ */
+function formatVaultPagesText(entry) {
+  const parts = [];
+  for (const range of entry?.vault_ranges || []) {
+    const [first, last] = range;
+    parts.push(first === last ? `S. ${first}` : `S. ${first}–${last}`);
+  }
+  const samples = entry?.vault_pages || [];
+  if (samples.length > 0) parts.push(`Zitat-Fundstelle(n) S. ${samples.join(', ')}`);
+  return parts.length > 0 ? parts.join('; ') : 'keine bekannten Seiten';
+}
 
 /**
  * Baut das vollständige updatedInput-Objekt für den Soft-Fail — je nach Tool
@@ -517,7 +544,7 @@ function buildUpdatedInput(toolName, toolInput, citations) {
 }
 
 function blockCitation(citation, reasonLine) {
-  const pageInfo = citation.page == null ? '' : `, S. ${citation.page}`;
+  const pageInfo = citation.page == null ? '' : `, S. ${pageInfoText(citation)}`;
   const msg = [
     '[Citation-Guard] BLOCKIERT: Klammer-Beleg nicht verifiziert.',
     `Beleg: ${citation.raw}`,
@@ -640,14 +667,16 @@ async function runCitationCheck(toolName, toolInput, content) {
   const vaultStatus = verifyCitationsInVault(checked);
   const unresolved = [];
   for (const citation of checked) {
-    const status = vaultStatus.get(citation.key);
+    const entry = vaultStatus.get(citation.key);
+    const status = entry?.status;
     // "unavailable" = Python/Vault-Fehler → fail-open wie beim Quote-Check.
     if (status === 'verified' || status === 'unavailable') continue;
     if (status === 'page-mismatch') {
       if (mayBlock(citation)) {
         blockCitation(
           citation,
-          `Seite ${citation.page} liegt außerhalb der im Vault hinterlegten Seiten.`,
+          `Seite ${pageInfoText(citation)} liegt außerhalb der im Vault hinterlegten `
+          + `Seite(n) (${formatVaultPagesText(entry)}).`,
         );
       }
       reasons.set(citation.key, 'Seite außerhalb der Vault-Seiten (mehrdeutige Form)');

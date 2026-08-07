@@ -59,9 +59,12 @@ Schritt 1.
 ## Was das Plugin nicht prüft
 
 - **Zitate ohne Gegenprüfung.** Der `verbatim-guard`-Hook (`hooks/verbatim-guard.mjs`)
-  belegt, dass ein Zitat aus deinem Vault stammt — nicht, dass Wortlaut, Seitenzahl,
-  Autorenname und Jahr korrekt aus dem Original übernommen wurden. Jedes Zitat vor der
-  Abgabe im Original gegenprüfen.
+  belegt, dass ein Zitat aus deinem Vault stammt — nicht, dass der Wortlaut korrekt aus
+  dem Original übernommen wurde. Autorenname, Jahr und (seit Issue #724) auch die
+  Seitenzahl von Klammer-Belegen werden gegen den Vault geprüft (`papers.csl_json`
+  bzw. `quotes.printed_page`/`papers.page_first`/`page_last`); der Wortlaut selbst
+  bleibt ungeprüft — dafür `vault.verify_verbatim` auf Anforderung nutzen. Jedes
+  Zitat vor der Abgabe trotzdem im Original gegenprüfen.
   **Geprüft** werden ausschließlich APA-artige Belege: die klammer­förmige Form
   (`(Müller 2021, S. 45)`, Co-Autoren, `vgl.`/`zit. nach`), die narrative Form
   außerhalb von Klammern (`Müller (2021, S. 45) zeigt …`, `Müller et al. (2021)

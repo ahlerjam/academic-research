@@ -935,9 +935,15 @@ def verify_citations(db_path: str, items: list[dict]) -> list[dict]:
     ``normalize_family_name()`` liefert ein Set aus Schreibvarianten, das sich
     nicht per Dict-Key exakt cachen laesst).
 
-    ``items``: Liste von ``{"family": str, "year": int, "page": int | None}``.
-    Rueckgabe: Liste von ``{"status": ..., "paper_ids": [...]}`` in derselben
-    Reihenfolge wie ``items`` -- Status-Bedeutung siehe :func:`verify_citation`.
+    ``items``: Liste von ``{"family": str, "year": int, "page": int | None,
+    "page_end": int | None}`` — ``page_end`` beschreibt einen Seitenbereich
+    (z. B. "S. 45-47", Issue #724) und ist optional/fehlend gleichbedeutend mit
+    einer Einzelseite.
+    Rueckgabe: Liste von ``{"status": ..., "paper_ids": [...]}``, bei
+    ``"page-mismatch"`` zusaetzlich ``{"vault_pages": [...], "vault_ranges":
+    [[first, last], ...]}`` mit den im Vault hinterlegten Seiten fuer die
+    Blockmeldung (Issue #724, AC1) -- in derselben Reihenfolge wie ``items``.
+    Status-Bedeutung siehe :func:`verify_citation`.
     """
     db = VaultDB(db_path)
     snapshot = db._papers_snapshot()
@@ -954,11 +960,29 @@ def verify_citations(db_path: str, items: list[dict]) -> list[dict]:
             results.append({"status": "verified", "paper_ids": paper_ids})
             continue
 
-        coverages = [db.page_coverage(pid, int(page)) for pid in paper_ids]
+        page_end = item.get("page_end")
+        coverages = [
+            db.page_coverage(pid, int(page), None if page_end is None else int(page_end))
+            for pid in paper_ids
+        ]
         if any(c in ("covered", "unknown") for c in coverages):
             results.append({"status": "verified", "paper_ids": paper_ids})
         else:
-            results.append({"status": "page-mismatch", "paper_ids": paper_ids})
+            vault_pages: set[int] = set()
+            vault_ranges: list[list[int]] = []
+            for pid in paper_ids:
+                samples, first, last = db.known_page_markers(pid)
+                vault_pages.update(samples)
+                if first is not None and last is not None:
+                    vault_ranges.append([first, last])
+            results.append(
+                {
+                    "status": "page-mismatch",
+                    "paper_ids": paper_ids,
+                    "vault_pages": sorted(vault_pages),
+                    "vault_ranges": vault_ranges,
+                }
+            )
     return results
 
 
@@ -967,6 +991,7 @@ def verify_citation(
     family: str,
     year: int,
     page: int | None = None,
+    page_end: int | None = None,
 ) -> dict:
     """Prueft einen Klammer-Beleg (Autor/Jahr/Seite) gegen den Vault (Issue #378).
 
@@ -975,16 +1000,23 @@ def verify_citation(
     (analog zu :func:`search_quote_text` und :func:`find_figure_by_caption`).
     Duenner Ein-Item-Wrapper ueber :func:`verify_citations` (Issue #501).
 
-    Rueckgabe ``{"status": ..., "paper_ids": [...]}`` mit Status:
+    ``page_end`` beschreibt einen Seitenbereich ("S. 45-47", Issue #724);
+    ``None`` bedeutet eine Einzelseite.
+
+    Rueckgabe ``{"status": ..., "paper_ids": [...]}`` (bei "page-mismatch"
+    zusaetzlich ``vault_pages``/``vault_ranges``, siehe :func:`verify_citations`)
+    mit Status:
       ``"verified"``      — Autor/Jahr im Vault und (falls angegeben) Seite gedeckt
                             bzw. mangels Seitendaten nicht widerlegbar.
       ``"page-mismatch"`` — Autor/Jahr im Vault, Seite liegt nachweislich
-                            ausserhalb aller bekannten Seitenbereiche. Der Vault
-                            ist hier autoritativ; die externe Kaskade kann
-                            Seitenzahlen nicht pruefen und wird uebersprungen.
+                            ausserhalb aller bekannten Seitenbereiche/-stichproben.
+                            Der Vault ist hier autoritativ; die externe Kaskade
+                            kann Seitenzahlen nicht pruefen und wird uebersprungen.
       ``"no-match"``      — kein Paper mit dieser Autor/Jahr-Kombination.
     """
-    return verify_citations(db_path, [{"family": family, "year": year, "page": page}])[0]
+    return verify_citations(
+        db_path, [{"family": family, "year": year, "page": page, "page_end": page_end}]
+    )[0]
 
 
 # ---------------------------------------------------------------------------
