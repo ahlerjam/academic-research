@@ -659,6 +659,124 @@ def set_quote_stance(db_path: str, quote_id: str, stance: str) -> None:
     db.set_quote_stance(quote_id, stance)
 
 
+def record_quote_audit(
+    db_path: str,
+    quote_id: str,
+    verdict: str,
+    severity: str | None = None,
+) -> None:
+    """Protokolliert ein Audit-Urteil eines bestehenden Zitats (Issue #737).
+
+    Additiver Schreibpfad neben ``set_quote_stance``: der
+    `quote-fidelity-auditor`-Agent ruft nach jedem Urteil BEIDE Tools auf
+    (Ausnahme keine -- auch bei ``verdict='unsupported'``, wo `set_quote_stance`
+    bewusst NICHT aufgerufen wird). ``verdict`` muss einer der Werte aus
+    ``VALID_AUDIT_VERDICTS`` sein, ``severity`` einer der Werte aus
+    ``VALID_AUDIT_SEVERITIES`` -- ausser bei ``verdict='faithful'``, dort MUSS
+    ``severity`` ``None`` bleiben (kein Befund). ``ValueError`` bei ungueltiger
+    Kombination oder unbekannter ``quote_id``.
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    db.record_quote_audit(quote_id, verdict, severity)
+
+
+def chapter_quote_balance(db_path: str, chapter_path: str) -> dict:
+    """Prüfbilanz für ein Kapitel: geprüft, Befund offen, nicht geprüft (Issue #737).
+
+    Liest die Kapiteldatei von der Platte, findet ALLE darin belegten
+    Vault-Zitate über ``nli_prefilter.scan_chapter_quotes`` (Wiederverwendung
+    des Issue #592-Mechanismus -- deckt das GESAMTE Kapitel ab, nicht nur die
+    letzte Schreib-Sitzung, AC5) und bucketet jedes Zitat anhand seiner
+    Audit-Historie (``quotes.audited_at``/``audit_verdict``/``audit_severity``,
+    additiv zu ``stance``, siehe :func:`record_quote_audit`):
+
+      - ``geprueft_unauffaellig``: ``audited_at`` gesetzt, Verdict ``faithful``.
+      - ``befund_offen``: ``audited_at`` gesetzt, Verdict != ``faithful``.
+      - ``nicht_geprueft``: ``audited_at`` ist NULL -- kein Audit-Datensatz
+        vorhanden. Das ist die einzige Kategorie, die dieser Vault-Stand
+        unterscheiden kann; Altbestand (vor Issue #737 auditiert) landet
+        unvermeidlich hier, auch wenn ``stance`` bereits gesetzt ist (siehe
+        Kommentar bei ``quotes.audited_at`` in schema.sql).
+
+    Die drei Zähler ergeben zusammen ``total_quotes`` (Summe-Invariante, AC1).
+    Ein Kapitel ohne ein einziges belegtes Zitat liefert alle Zähler als 0,
+    kein Fehler (AC4). ``findings`` enthält die offenen Befunde, nach Schwere
+    sortiert (kritisch -> hoch -> mittel, AC3).
+
+    WICHTIG (Nicht-Beweis, AC6): Die Bilanz stellt fest, sie beweist nicht --
+    ein Verdikt ``faithful`` heißt "vom Auditor als unauffällig eingestuft",
+    nicht "mit letzter Sicherheit korrekt verwendet". Sie priorisiert die
+    Prüfkette, ersetzt sie nicht.
+
+    Args:
+        db_path: Pfad zur Vault-SQLite-Datei.
+        chapter_path: Pfad zur Kapiteldatei (Markdown) auf der Platte.
+
+    Returns:
+        Dict mit ``chapter_path``, ``total_quotes``, den drei Zählern,
+        ``not_audited`` (je Eintrag mit ``reason``) und ``findings``
+        (offene Befunde, schwerste zuerst).
+
+    Raises:
+        FileNotFoundError: ``chapter_path`` existiert nicht.
+    """
+    from .nli_prefilter import scan_chapter_quotes
+
+    content = Path(chapter_path).read_text(encoding="utf-8")
+    items = scan_chapter_quotes(content, db_path)
+
+    audited_ok = 0
+    findings: list[dict] = []
+    not_audited: list[dict] = []
+
+    _SEVERITY_ORDER = {"kritisch": 0, "hoch": 1, "mittel": 2}
+
+    for item in items:
+        quote_id = item["quote_id"]
+        record = get_quote(db_path, quote_id)
+        if record is None:
+            continue  # Zwischen Scan und Lookup geloescht -- nicht bilanzierbar
+        audited_at = record.get("audited_at")
+        if audited_at is None:
+            not_audited.append(
+                {
+                    "quote_id": quote_id,
+                    "paper_id": item["paper_id"],
+                    "verbatim": item["verbatim"],
+                    "chapter_claim": item["chapter_claim"],
+                    "reason": "kein Audit-Datensatz vorhanden",
+                }
+            )
+            continue
+        verdict = record.get("audit_verdict")
+        if verdict == "faithful":
+            audited_ok += 1
+            continue
+        findings.append(
+            {
+                "quote_id": quote_id,
+                "paper_id": item["paper_id"],
+                "verbatim": item["verbatim"],
+                "chapter_claim": item["chapter_claim"],
+                "verdict": verdict,
+                "severity": record.get("audit_severity"),
+            }
+        )
+
+    findings.sort(key=lambda f: _SEVERITY_ORDER.get(f["severity"], len(_SEVERITY_ORDER)))
+
+    return {
+        "chapter_path": chapter_path,
+        "total_quotes": len(items),
+        "geprueft_unauffaellig": audited_ok,
+        "befund_offen": len(findings),
+        "nicht_geprueft": len(not_audited),
+        "not_audited": not_audited,
+        "findings": findings,
+    }
+
+
 def search_papers(
     db_path: str,
     query: str,
@@ -2250,6 +2368,28 @@ def _build_mcp_server():
         stance-Wert oder unbekannter quote_id.
         """
         set_quote_stance(db_path=db_path, quote_id=quote_id, stance=stance)
+
+    @mcp.tool(name="vault.record_quote_audit")
+    def _vault_record_quote_audit(quote_id: str, verdict: str, severity: str | None = None) -> None:
+        """Protokolliert ein Audit-Urteil eines bestehenden Zitats (Issue #737).
+
+        Additiv zu vault.set_quote_stance -- IMMER zusaetzlich aufrufen,
+        auch bei verdict='unsupported' (dort bleibt set_quote_stance aus).
+        severity ist Pflicht ausser bei verdict='faithful' (dann None).
+        Wirft ValueError bei ungueltiger Kombination oder unbekannter
+        quote_id.
+        """
+        record_quote_audit(db_path=db_path, quote_id=quote_id, verdict=verdict, severity=severity)
+
+    @mcp.tool(name="vault.chapter_quote_balance")
+    def _vault_chapter_quote_balance(chapter_path: str) -> dict:
+        """Pruefbilanz fuer ein Kapitel: geprueft/Befund offen/nicht geprueft (Issue #737).
+
+        Deckt das GESAMTE Kapitel ab, nicht nur die letzte Schreib-Sitzung.
+        Belegt keine korrekte Verwendung geprueften Zitate -- priorisiert die
+        Pruefkette, ersetzt sie nicht.
+        """
+        return chapter_quote_balance(db_path=db_path, chapter_path=chapter_path)
 
     @mcp.tool(name="vault.add_note")
     def _vault_add_note(

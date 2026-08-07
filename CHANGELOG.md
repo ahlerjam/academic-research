@@ -10,6 +10,33 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Prüfbilanz je Kapitel (#737):** Neues MCP-Tool
+  `vault.chapter_quote_balance(chapter_path)` (plus Slash-Command
+  `/academic-research:pruefbilanz`) liefert eine Bilanz über alle im Kapitel
+  belegten Vault-Zitate: „geprüft & unauffällig", „Befund offen" (nach
+  Schwere sortiert, mit Zitat/Paper/Kapitelstelle) und „nicht geprüft" (mit
+  Grund je Eintrag) — die drei Zähler ergeben zusammen `total_quotes`.
+  Deckt das gesamte Kapitel ab (Wiederverwendung von
+  `nli_prefilter.scan_chapter_quotes`, #592), nicht nur die letzte
+  Schreib-Sitzung, und ist ohne vorherigen Write abrufbar. Grundlage ist
+  eine neue, additive Audit-Historie auf `quotes` (`audited_at`,
+  `audit_verdict`, `audit_severity`, Schema-Version 10) — bewusst getrennt
+  von `quotes.stance` (#400/#523), weil `stance` lossy ist: bei
+  `verdict="unsupported"` wird dort laut Mapping-Tabelle des
+  `quote-fidelity-auditor`-Agenten gar nichts persistiert, und
+  `add_quote(stance=...)` kann `stance` schon ohne jedes Audit setzen —
+  beides macht `stance` allein untauglich, um „geprüft & unauffällig" von
+  „nie geprüft" zu unterscheiden. Neues Tool `vault.record_quote_audit(
+  quote_id, verdict, severity=None)` (additiv zu `vault.set_quote_stance`,
+  respektiert denselben Material-Passport-Lock-Guard); der
+  `quote-fidelity-auditor` ruft es nach jedem Urteil zusätzlich auf, auch
+  bei `unsupported`. **Bewusst außerhalb des Scopes:** kein Gate/keine
+  Blockade auf Basis der Bilanz, kein automatisches Nachprüfen ungeprüfter
+  Zitate — sie stellt fest, sie handelt nicht. Und: ein Verdikt `faithful`
+  belegt nicht, dass das Zitat korrekt verwendet ist, nur dass der Auditor
+  es als unauffällig eingestuft hat (Doku macht das explizit, Abschnitt
+  „Prüfbilanz je Kapitel" in `docs/reference/vault.md`).
+
 - **NLI-Zitatscan produktiv angebunden (#717):** Nach jedem Kapitel-Write
   (`PostToolUse` auf `Write|Edit|MultiEdit`) prüft der neue Hook
   `hooks/nli-quote-scan.mjs` **alle im Vault belegten Zitate des Kapitels**

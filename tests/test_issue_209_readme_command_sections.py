@@ -67,6 +67,7 @@ def test_all_commands_present_in_commands_dir() -> None:
         "humanize",
         "latex",
         "pickup",
+        "pruefbilanz",
         "score",
         "search",
         "setup",
