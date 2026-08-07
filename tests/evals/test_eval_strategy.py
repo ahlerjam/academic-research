@@ -192,9 +192,10 @@ def test_strategy_names_api_budget_as_operator_decision(strategy_text):
     assert re.search(r"\d", section), (
         "Der API-Budget-Abschnitt muss eine Groessenordnung beziffern (Calls/Kosten)."
     )
-    assert "CLAUDE_CODE_OAUTH_TOKEN" in section or "claude" in section.lower(), (
+    assert "CLAUDE_CODE_OAUTH_TOKEN" in section, (
         "Der API-Budget-Abschnitt muss benennen, woran die realen Laeufe haengen "
-        "(seit Issue #716: OAuth-Session/claude-CLI, kein ANTHROPIC_API_KEY mehr)."
+        "(seit Issue #716: OAuth-Session/claude-CLI via CLAUDE_CODE_OAUTH_TOKEN, "
+        "kein ANTHROPIC_API_KEY mehr)."
     )
 
 
