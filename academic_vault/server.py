@@ -713,18 +713,30 @@ def chapter_quote_balance(db_path: str, chapter_path: str) -> dict:
         db_path: Pfad zur Vault-SQLite-Datei.
         chapter_path: Pfad zur Kapiteldatei (Markdown) auf der Platte.
 
+    Seit Issue #739 zusätzlich (additiv, ändert keinen bestehenden Key):
+    Belegdichte über ALLE Aussagesätze des Kapitels, nicht nur die mit
+    Zitat — siehe ``nli_prefilter.compute_citation_density``. Kein Gate,
+    keine Meldung, kein Schwellwert: die Zahlen stehen in der Bilanz und
+    sonst nirgends. Eine hohe Belegdichte ist KEIN Qualitätsmerkmal — ein
+    Kapitel aus lauter Zitaten ist keine eigene Leistung.
+
     Returns:
         Dict mit ``chapter_path``, ``total_quotes``, den drei Zählern,
-        ``not_audited`` (je Eintrag mit ``reason``) und ``findings``
-        (offene Befunde, schwerste zuerst).
+        ``not_audited`` (je Eintrag mit ``reason``), ``findings``
+        (offene Befunde, schwerste zuerst), sowie
+        ``statement_sentences_total``, ``statement_sentences_covered``,
+        ``citation_density`` (Anteil oder ``None`` bei 0 Aussagesätzen) und
+        ``longest_uncovered_run`` (``None`` oder Dict mit
+        ``sentence_count``/``line``/``excerpt``).
 
     Raises:
         FileNotFoundError: ``chapter_path`` existiert nicht.
     """
-    from .nli_prefilter import scan_chapter_quotes
+    from .nli_prefilter import compute_citation_density, scan_chapter_quotes
 
     content = Path(chapter_path).read_text(encoding="utf-8")
     items = scan_chapter_quotes(content, db_path)
+    density = compute_citation_density(content, db_path)
 
     audited_ok = 0
     findings: list[dict] = []
@@ -774,6 +786,10 @@ def chapter_quote_balance(db_path: str, chapter_path: str) -> dict:
         "nicht_geprueft": len(not_audited),
         "not_audited": not_audited,
         "findings": findings,
+        "statement_sentences_total": density["statement_sentences_total"],
+        "statement_sentences_covered": density["statement_sentences_covered"],
+        "citation_density": density["citation_density"],
+        "longest_uncovered_run": density["longest_uncovered_run"],
     }
 
 

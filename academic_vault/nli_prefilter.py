@@ -467,33 +467,53 @@ def claim_sentence_for_span(content: str, span: dict) -> str:
     return fallback.strip()
 
 
-def scan_chapter_quotes(content: str, db_path: str, min_len: int = MIN_QUOTE_LEN) -> list[dict]:
-    """Findet ALLE im Vault belegten Zitate eines Kapitels -- nicht nur die
-    mit Claim-Drift-Warnung (Issue-AC2).
+def _find_matched_quote_spans(
+    content: str, db_path: str, min_len: int = MIN_QUOTE_LEN
+) -> list[dict]:
+    """Findet alle Zitat-Spannen mit tatsaechlichem Vault-Treffer (Issue #739).
 
-    Fuer jede erkannte Zitat-Spanne wird per ``search_quote_text`` nach dem
-    passenden Vault-Eintrag gesucht. Spans ohne Treffer sind kein
-    Vault-Zitat und werden uebersprungen (kein Erfindungsrisiko -- nur
-    tatsaechlich im Vault belegte Zitate werden bewertet). Jede ``quote_id``
-    erscheint hoechstens einmal im Ergebnis, auch wenn dieselbe Passage
-    mehrfach im Kapitel zitiert wird.
+    Basis fuer :func:`scan_chapter_quotes` (dort dedupliziert nach
+    ``quote_id``) und fuer :func:`compute_citation_density` (dort zaehlt
+    JEDE Fundstelle, auch Mehrfachzitate derselben Passage, weil es um
+    Belegabdeckung im Kapiteltext geht, nicht um eindeutige Zitate). Spans
+    ohne Treffer sind kein Vault-Zitat und werden uebersprungen (kein
+    Erfindungsrisiko -- nur tatsaechlich im Vault belegte Zitate zaehlen als
+    Beleg).
     """
     from .server import get_quote, search_quote_text
 
     spans = extract_quote_spans(content, min_len)
-    items: list[dict] = []
-    seen_quote_ids: set[str] = set()
+    results: list[dict] = []
     for span in spans:
         hits = search_quote_text(db_path, span["text"], 1)
         if not hits:
             continue
         quote_id = hits[0]["quote_id"]
-        if quote_id in seen_quote_ids:
-            continue
-        seen_quote_ids.add(quote_id)
         record = get_quote(db_path, quote_id)
         if record is None:
             continue
+        results.append(
+            {"start": span["start"], "end": span["end"], "quote_id": quote_id, "record": record}
+        )
+    return results
+
+
+def scan_chapter_quotes(content: str, db_path: str, min_len: int = MIN_QUOTE_LEN) -> list[dict]:
+    """Findet ALLE im Vault belegten Zitate eines Kapitels -- nicht nur die
+    mit Claim-Drift-Warnung (Issue-AC2).
+
+    Jede ``quote_id`` erscheint hoechstens einmal im Ergebnis, auch wenn
+    dieselbe Passage mehrfach im Kapitel zitiert wird.
+    """
+    items: list[dict] = []
+    seen_quote_ids: set[str] = set()
+    for match in _find_matched_quote_spans(content, db_path, min_len):
+        quote_id = match["quote_id"]
+        if quote_id in seen_quote_ids:
+            continue
+        seen_quote_ids.add(quote_id)
+        record = match["record"]
+        span = {"start": match["start"], "end": match["end"]}
         items.append(
             {
                 "quote_id": quote_id,
@@ -505,3 +525,193 @@ def scan_chapter_quotes(content: str, db_path: str, min_len: int = MIN_QUOTE_LEN
             }
         )
     return items
+
+
+# ---------------------------------------------------------------------------
+# Belegdichte: welcher Anteil der Aussagesaetze eines Kapitels traegt einen
+# Vault-Beleg (Issue #739). Kein Gate, keine Meldung -- reine Kennzahl.
+# ---------------------------------------------------------------------------
+
+#: Markdown-Strukturzeilen zaehlen nie als Aussagesatz: Ueberschriften
+#: (``## Titel``) und Listenpunkte (``- Punkt`` / ``1. Punkt`` / ``2) Punkt``).
+_HEADING_LINE = re.compile(r"^#{1,6}\s")
+_LIST_LINE = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s)")
+
+#: Kuratierte, dokumentierte Liste reiner Ueberleitungsfloskeln (Issue #739).
+#: Bewusst klein und explizit -- keine geschlossene Menge, sondern ein
+#: nachvollziehbarer Ausschnitt, der in ``docs/reference/vault.md`` gespiegelt
+#: wird. Ein Satz zaehlt nur dann als Ueberleitung, wenn er (getrimmt,
+#: kleingeschrieben) mit einer dieser Phrasen BEGINNT -- z. B. "Im Folgenden
+#: wird die Methodik erlaeutert." oder "Zusammenfassend laesst sich sagen,
+#: dass..." transportieren selbst keine Aussage, sie kuendigen nur an, was
+#: als naechstes kommt bzw. fasst zusammen, was schon gesagt wurde.
+TRANSITION_PREFIXES = (
+    "im folgenden",
+    "im naechsten abschnitt",
+    "im nächsten abschnitt",
+    "im vorigen abschnitt",
+    "wie oben gezeigt",
+    "wie im vorigen abschnitt gezeigt",
+    "kommen wir nun zu",
+    "zusammenfassend laesst sich sagen",
+    "zusammenfassend lässt sich sagen",
+    "abschliessend laesst sich festhalten",
+    "abschließend lässt sich festhalten",
+    "im weiteren verlauf dieser arbeit",
+)
+
+
+def _non_structural_runs(content: str) -> list[tuple[int, int]]:
+    """Zeichenspannen der Textbloecke ZWISCHEN Ueberschrift-/Listenpunkt-
+    Zeilen (Plan: Filterung VOR dem Satzsplit, nicht danach). Eine
+    Strukturzeile ist eine harte Blockgrenze -- ein Satz wird nie ueber sie
+    hinweg mit dem folgenden Absatz verschmolzen."""
+    runs: list[tuple[int, int]] = []
+    pos = 0
+    run_start: int | None = None
+    for line in content.splitlines(keepends=True):
+        stripped_line = line.rstrip("\n")
+        is_structural = bool(_HEADING_LINE.match(stripped_line) or _LIST_LINE.match(stripped_line))
+        if is_structural:
+            if run_start is not None:
+                runs.append((run_start, pos))
+                run_start = None
+        elif run_start is None:
+            run_start = pos
+        pos += len(line)
+    if run_start is not None:
+        runs.append((run_start, pos))
+    return runs
+
+
+def _is_transition_sentence(text: str) -> bool:
+    return text.strip().lower().startswith(TRANSITION_PREFIXES)
+
+
+def extract_statement_sentences(content: str) -> list[dict]:
+    """Findet alle Aussagesaetze eines Kapiteltexts (Issue #739).
+
+    Ein Aussagesatz ist ein Satz (Split ueber :data:`_SENTENCE_SPLIT`, wie
+    :func:`claim_sentence_for_span`) innerhalb eines Textblocks zwischen
+    Ueberschrift-/Listenpunkt-Zeilen (:func:`_non_structural_runs` --
+    solche Zeilen sind harte Blockgrenzen, ein Satz verschmilzt nie mit dem
+    Absatz vor/nach ihnen), der NICHT auf ``?`` endet (Fragesatz) und NICHT
+    mit einer der :data:`TRANSITION_PREFIXES` beginnt (reine Ueberleitung).
+
+    Beispiele:
+      - ``"## Methodik"`` -- Ueberschrift, zaehlt nicht.
+      - ``"- Erstens dies."`` -- Listenpunkt, zaehlt nicht.
+      - ``"Ist das plausibel?"`` -- Frage, zaehlt nicht.
+      - ``"Im Folgenden wird die Methodik erlaeutert."`` -- Ueberleitung,
+        zaehlt nicht.
+      - ``"DevOps-Governance hat sich seit 2015 in der Praxis durchgesetzt."``
+        -- Aussagesatz, zaehlt.
+
+    Rueckgabe: Liste von ``{text, start, end}`` (Zeichenoffsets im
+    ``content``, fuehrende/nachgestellte Whitespace bereits entfernt).
+    """
+    sentences: list[dict] = []
+    for run_start, run_end in _non_structural_runs(content):
+        block = content[run_start:run_end]
+        bounds: list[tuple[int, int]] = []
+        pos = 0
+        for m in _SENTENCE_SPLIT.finditer(block):
+            bounds.append((pos, m.start()))
+            pos = m.end()
+        bounds.append((pos, len(block)))
+
+        for start, end in bounds:
+            raw = block[start:end]
+            stripped = raw.strip()
+            if not stripped:
+                continue
+            if stripped.endswith("?"):
+                continue
+            if _is_transition_sentence(stripped):
+                continue
+            leading_ws = len(raw) - len(raw.lstrip())
+            real_start = run_start + start + leading_ws
+            real_end = real_start + len(stripped)
+            sentences.append({"text": stripped, "start": real_start, "end": real_end})
+    return sentences
+
+
+def _longest_uncovered_run(
+    sentences: list[dict], covered_flags: list[bool], content: str
+) -> dict | None:
+    """Laengste zusammenhaengende Strecke von Aussagesaetzen ohne Beleg, mit
+    Fundstelle (1-indexierte Zeilennummer + Textausschnitt des ersten Satzes
+    der Strecke). ``None``, wenn jeder Satz belegt ist oder es keine gibt."""
+    best_start_idx: int | None = None
+    best_len = 0
+    cur_start_idx: int | None = None
+    cur_len = 0
+    for i, covered in enumerate(covered_flags):
+        if covered:
+            cur_start_idx = None
+            cur_len = 0
+            continue
+        if cur_start_idx is None:
+            cur_start_idx = i
+        cur_len += 1
+        if cur_len > best_len:
+            best_len = cur_len
+            best_start_idx = cur_start_idx
+
+    if best_start_idx is None:
+        return None
+
+    first_sentence = sentences[best_start_idx]
+    line_no = content.count("\n", 0, first_sentence["start"]) + 1
+    return {
+        "sentence_count": best_len,
+        "line": line_no,
+        "excerpt": first_sentence["text"],
+    }
+
+
+def compute_citation_density(content: str, db_path: str) -> dict:
+    """Belegdichte eines Kapitels (Issue #739): welcher Anteil der
+    Aussagesaetze durch ein tatsaechlich im Vault gematchtes Zitat gedeckt
+    ist -- reine Kennzahl, kein Gate, keine Meldung, kein Schwellwert.
+
+    Ein Aussagesatz gilt als "belegt", wenn seine Zeichenspanne eine
+    Vault-gematchte Zitat-Spanne (:func:`_find_matched_quote_spans`)
+    ueberlappt. Massgeblich ist der tatsaechliche Vault-Treffer, nicht das
+    blosse Vorhandensein von Anfuehrungszeichen -- sonst zaehlte ein
+    erfundenes Zitat faelschlich als Beleg.
+
+    WICHTIG: eine hohe Belegdichte ist kein Qualitaetsmerkmal. Ein Kapitel
+    aus lauter Zitaten ist keine eigene Leistung -- die Zahl macht nur
+    sichtbar, wo eine Aussage auf einer Quelle statt auf einem selbst steht.
+
+    Args:
+        content: Kapiteltext (Markdown).
+        db_path: Pfad zur Vault-SQLite-Datei.
+
+    Returns:
+        Dict mit ``statement_sentences_total``, ``statement_sentences_covered``,
+        ``citation_density`` (Anteil 0.0-1.0, ``None`` bei 0 Aussagesaetzen --
+        ein Anteil von nichts ist keine 0, sondern nicht definiert) und
+        ``longest_uncovered_run`` (``None`` oder Dict mit ``sentence_count``,
+        ``line``, ``excerpt``).
+    """
+    sentences = extract_statement_sentences(content)
+    matched_spans = [(m["start"], m["end"]) for m in _find_matched_quote_spans(content, db_path)]
+
+    def _is_covered(sentence: dict) -> bool:
+        return any(
+            span_start < sentence["end"] and span_end > sentence["start"]
+            for span_start, span_end in matched_spans
+        )
+
+    covered_flags = [_is_covered(s) for s in sentences]
+    total = len(sentences)
+    covered = sum(covered_flags)
+
+    return {
+        "statement_sentences_total": total,
+        "statement_sentences_covered": covered,
+        "citation_density": (covered / total) if total else None,
+        "longest_uncovered_run": _longest_uncovered_run(sentences, covered_flags, content),
+    }

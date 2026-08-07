@@ -249,7 +249,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.verify_verbatim(paper_id, candidate)` | Read-only-Vorschau des Verbatim-Prüfpfads: liefert **immer** `{status, verbatim, pdf_page, ratio}` zurück (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`, kein `ValueError` bei Nicht-Treffer). Paper unbekannt oder kein/kein lesbarer `pdf_path` wirft weiterhin `ValueError`. Schreibt nichts (s. u.) | `vault.verify_verbatim("vaswani2017", "Attention is all you need")` | Paper im Vault mit lesbarem `pdf_path` | Immer `{status, verbatim, pdf_page, ratio}` — auch bei Nicht-Treffer | `status` ist `no-match` oder `no-textlayer`; `ValueError` nur bei unbekanntem Paper oder fehlendem PDF |
 | `vault.set_quote_stance(quote_id, stance)` | Setzt `stance` eines **bestehenden** Zitats nachträglich (Audit-Schreibpfad, u. a. für `quote-fidelity-auditor`). `stance` ist Pflicht (`"supports"`/`"contrasts"`/`"mentions"`, kein `None`); `ValueError` bei ungültigem Wert oder unbekannter `quote_id` | `vault.set_quote_stance("q_42", "contrasts")` | Bestehende `quote_id` und ein gültiger `stance` | Kein Rückgabewert; `quotes.stance` ist danach gesetzt | `ValueError` „Ungueltiger stance" oder „Quote '<id>' nicht gefunden" |
 | `vault.record_quote_audit(quote_id, verdict, severity=None)` | Protokolliert ein Audit-Urteil eines **bestehenden** Zitats (Issue #737), additiv zu `vault.set_quote_stance` — beide werden vom `quote-fidelity-auditor` nach jedem Urteil aufgerufen, auch bei `verdict="unsupported"` (dort bleibt `set_quote_stance` aus). `verdict` ∈ `"faithful"`/`"overstated"`/`"context-stripped"`/`"polarity-flip"`/`"unsupported"`; `severity` ∈ `"kritisch"`/`"hoch"`/`"mittel"` ist Pflicht außer bei `verdict="faithful"` (dort zwingend `None`, kein Befund) | `vault.record_quote_audit("q_42", "polarity-flip", "kritisch")` | Bestehende `quote_id`, gültige Verdict/Severity-Kombination | Kein Rückgabewert; `quotes.audited_at`/`audit_verdict`/`audit_severity` sind danach gesetzt | `ValueError` bei ungültiger Kombination oder unbekannter `quote_id` |
-| `vault.chapter_quote_balance(chapter_path)` | Prüfbilanz für ein Kapitel: bucketet alle im Kapiteltext belegten Vault-Zitate nach Audit-Historie (siehe Abschnitt „Prüfbilanz je Kapitel" unten) | `vault.chapter_quote_balance("kapitel/03-methodik.md")` | Lesbare Kapiteldatei; Zitate müssen im Vault stehen, um erfasst zu werden | `dict` mit `total_quotes`, den drei Zählern (`geprueft_unauffaellig`/`befund_offen`/`nicht_geprueft`), `not_audited` (je Eintrag mit `reason`) und `findings` (offene Befunde, schwerste zuerst) | `FileNotFoundError`, wenn `chapter_path` nicht existiert |
+| `vault.chapter_quote_balance(chapter_path)` | Prüfbilanz für ein Kapitel: bucketet alle im Kapiteltext belegten Vault-Zitate nach Audit-Historie UND weist die Belegdichte über alle Aussagesätze aus (siehe Abschnitte „Prüfbilanz je Kapitel" und „Belegdichte" unten) | `vault.chapter_quote_balance("kapitel/03-methodik.md")` | Lesbare Kapiteldatei; Zitate müssen im Vault stehen, um erfasst zu werden | `dict` mit `total_quotes`, den drei Zählern (`geprueft_unauffaellig`/`befund_offen`/`nicht_geprueft`), `not_audited` (je Eintrag mit `reason`), `findings` (offene Befunde, schwerste zuerst), sowie `statement_sentences_total`, `statement_sentences_covered`, `citation_density` (Anteil oder `None` bei 0 Aussagesätzen) und `longest_uncovered_run` (`None` oder Dict mit `sentence_count`/`line`/`excerpt`) | `FileNotFoundError`, wenn `chapter_path` nicht existiert |
 
 **`extraction_method="local-verbatim"` — fail-closed** (Issue #512)
 
@@ -333,6 +333,79 @@ Bilanz **priorisiert** die Prüfkette vor der Abgabe, sie **beweist nicht**, das
 geprüfte Zitate korrekt verwendet sind. Ebenfalls außerhalb ihres Umfangs: kein
 automatisches Nachprüfen ungeprüfter Zitate, keine Blockade auf Basis der Zahlen
 — sie stellt fest, sie handelt nicht.
+
+**Belegdichte — welcher Anteil überhaupt zitiert** (Issue #739)
+
+Die Bilanz oben beantwortet „sind meine Zitate in Ordnung?" — dieser Teil
+beantwortet die Frage davor: „habe ich überhaupt zitiert, wo ich es hätte tun
+müssen?" Jeder Satz ohne Anführungszeichen bleibt für die gesamte Prüfkette
+unsichtbar (der NLI-Vorfilter und der `context-fidelity-guard`-Hook steigen bei
+`candidates.length === 0` sofort aus) — die Belegdichte macht diesen blinden
+Fleck als Zahl sichtbar, ohne ihn zu bewerten.
+
+`vault.chapter_quote_balance` zählt dafür zusätzlich die **Aussagesätze** des
+Kapiteltexts und ermittelt, wie viele davon eine tatsächlich im Vault
+gematchte Zitat-Spanne überlappen (`_find_matched_quote_spans`, derselbe
+Vault-Abgleich wie bei der Bilanz oben — bloße Anführungszeichen ohne
+Vault-Treffer zählen NICHT als Beleg, sonst zählte ein erfundenes Zitat
+fälschlich mit).
+
+**Was als Aussagesatz zählt** — ein Satz (Split an `. `/`! `/`? ` vor einem
+Großbuchstaben), der:
+
+- **nicht** auf einer Überschrift- oder Listenpunkt-Zeile steht — Überschriften-
+  und Listenzeilen bilden harte Blockgrenzen, ein Satz verschmilzt nie mit dem
+  Absatz davor oder danach;
+- **nicht** auf `?` endet (Frage);
+- **nicht** mit einer der kuratierten Überleitungsfloskeln beginnt (z. B. „Im
+  Folgenden", „Zusammenfassend lässt sich sagen", „Kommen wir nun zu" — die
+  vollständige, dokumentierte Liste steht als `TRANSITION_PREFIXES` in
+  `academic_vault/nli_prefilter.py`).
+
+Beispiele (identisch mit den Testfällen in
+`tests/test_issue_739_citation_density.py`):
+
+| Text | Zählt als Aussagesatz? |
+|---|---|
+| `## Methodik` | Nein — Überschrift |
+| `- Erstens dies.` | Nein — Listenpunkt |
+| `Ist das plausibel?` | Nein — Frage |
+| `Im Folgenden wird die Methodik erläutert.` | Nein — reine Überleitung |
+| `DevOps-Governance hat sich seit 2015 in der Praxis durchgesetzt.` | Ja — Aussagesatz |
+
+Die Abgrenzung ist bewusst einfach gehalten und keine geschlossene Menge —
+insbesondere die Überleitungsfloskel-Liste ist eine kuratierte Auswahl, kein
+vollständiges Regelwerk. Grenzfälle (z. B. rhetorische Fragen mit
+Aussagegehalt, unübliche Überleitungsformulierungen) werden hier benannt, nicht
+wegdefiniert.
+
+**Rückgabefelder:**
+
+- `statement_sentences_total` / `statement_sentences_covered` — Gesamtzahl der
+  Aussagesätze und die Zahl der davon durch ein Vault-Zitat gedeckten.
+- `citation_density` — Anteil (`statement_sentences_covered /
+  statement_sentences_total`); `None` bei einem Kapitel ohne Aussagesätze (ein
+  Anteil von nichts ist keine `0`, sondern nicht definiert).
+- `longest_uncovered_run` — die längste zusammenhängende Strecke von
+  Aussagesätzen ohne Beleg, `None` wenn jeder Aussagesatz belegt ist oder es
+  keinen gibt. Ausgewiesen statt eines bloßen Mittelwerts, weil eine lange
+  unbelegte Passage aussagekräftiger ist als eine gleichmäßig niedrige Quote.
+  Enthält `sentence_count` (Länge der Strecke), `line` (1-indexierte
+  Zeilennummer der Fundstelle) und `excerpt` (Text des ersten Satzes der
+  Strecke).
+
+**Kein Gate, keine Meldung, kein Schwellwert.** Die Zahlen stehen in der
+Bilanz und sonst nirgends — kein Warnhinweis, keine Blockade, keine Empfehlung,
+wo ein Beleg zu setzen wäre (das ist eine inhaltliche Entscheidung des
+Schreibenden). Ein Kapitel mit 0 % Belegdichte liefert die Bilanz normal
+zurück, ohne Fehler und ohne Log-Ausgabe.
+
+**Eine hohe Belegdichte ist kein Qualitätsmerkmal.** Ein Kapitel aus lauter
+Zitaten ist keine eigene Leistung — die Zahl macht nur sichtbar, wo eine
+Aussage auf einer Quelle statt auf einem selbst steht. Sie sagt nichts darüber,
+ob die vorhandenen Zitate korrekt verwendet sind (dafür bleibt die Bilanz oben
+zuständig) und nichts darüber, ob eine niedrige Dichte an der richtigen oder
+falschen Stelle liegt.
 
 **Zitat-Embeddings — `embed_quote`** (Issue #521)
 
