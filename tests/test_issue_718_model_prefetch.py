@@ -5,6 +5,7 @@ Akzeptanzkriterium -> Testklasse:
 AC1  Genau einmal fragen, Gesamtgroesse genannt        -> TestPromptOnce
 AC2  Zustimmung -> alle drei im Cache, kein Re-Download -> TestDownloadAndCache
 AC3  Ablehnung -> Lazy-Load mit vorheriger Groessen-Meldung -> TestLazyLoadNotice
+     (Kanaltreue am echten MCP-Serverprozess: tests/test_issue_718_mcp_stdio_stream.py)
 AC4  Abgebrochener Download wird fortgesetzt            -> TestResume
 AC5  Doku nennt 8 GB RAM / 4 GB Platte / keine GPU-Pflicht / CPU-Hinweis -> TestHardwareDocs
 AC6  Tabelle mit Platte/RAM/Laufzeit je Modell in der Doku -> TestHardwareTable
@@ -187,9 +188,13 @@ class TestLazyLoadNotice:
             repo_id="intfloat/multilingual-e5-small",
             cache_dir="/tmp/does-not-matter",
         )
-        out = capsys.readouterr().out
-        assert "Embedding-Modell" in out
-        assert format_gb(APPROX_BYTES["intfloat/multilingual-e5-small"]) in out
+        captured = capsys.readouterr()
+        assert "Embedding-Modell" in captured.err
+        assert format_gb(APPROX_BYTES["intfloat/multilingual-e5-small"]) in captured.err
+        # stdout ist im MCP-Server der JSON-RPC-Kanal (``mcp.run()`` -> stdio),
+        # dort darf keine Klartextzeile landen. Protokollnachweis am echten
+        # Serverprozess: tests/test_issue_718_mcp_stdio_stream.py
+        assert captured.out == ""
 
     def test_notify_stays_silent_when_already_cached(self, monkeypatch, capsys):
         monkeypatch.setattr(
@@ -200,7 +205,9 @@ class TestLazyLoadNotice:
             repo_id="intfloat/multilingual-e5-small",
             cache_dir="/tmp/does-not-matter",
         )
-        assert capsys.readouterr().out == ""
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
 
     def test_embedding_backend_load_notifies_before_download(self, monkeypatch):
         """embedding_model._load_backend_model ruft notify_lazy_download auf, bevor das
@@ -219,14 +226,18 @@ class TestLazyLoadNotice:
         fake_st_module.SentenceTransformer = fake_sentence_transformer
         monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st_module)
 
-        printed = io.StringIO()
-        monkeypatch.setattr(sys, "stdout", printed)
+        on_stderr = io.StringIO()
+        on_stdout = io.StringIO()
+        monkeypatch.setattr(sys, "stderr", on_stderr)
+        monkeypatch.setattr(sys, "stdout", on_stdout)
         _ORIGINAL_EMBEDDING_LOAD_BACKEND("intfloat/multilingual-e5-small", "/tmp/cache")
         monkeypatch.undo()
 
-        assert "Embedding-Modell" in printed.getvalue()
-        assert printed.getvalue().index("Embedding-Modell") < len(printed.getvalue())
-        assert "model-loaded" not in printed.getvalue()  # Meldung, nicht das Mock-Ergebnis
+        assert "Embedding-Modell" in on_stderr.getvalue()
+        assert "model-loaded" not in on_stderr.getvalue()  # Meldung, nicht das Mock-Ergebnis
+        # stdout bleibt unberuehrt: im MCP-Server laeuft dieser Ladepfad
+        # in-process, und stdout traegt dort JSON-RPC.
+        assert on_stdout.getvalue() == ""
 
     def test_local_reranker_backend_passes_cache_dir_to_flagreranker(self, monkeypatch):
         """Reranker-Cache-Mismatch-Fix (#718): cache_dir wird durchgereicht."""

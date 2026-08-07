@@ -17,6 +17,7 @@ unterzubringen: keines der drei darf von einem der anderen beiden abhaengen
 from __future__ import annotations
 
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,17 @@ def notify_lazy_download(*, label: str, repo_id: str, cache_dir: str) -> None:
     liegt -- ein bereits gecachtes Modell laedt ohne Meldung (kein
     Netzzugriff mehr noetig). Schreibt sowohl einen Log-Eintrag (fuer
     Tests/Diagnose) als auch eine Konsolenzeile (fuer interaktive Laeufe).
+
+    Die Konsolenzeile geht auf **stderr**, nicht auf stdout. Alle drei
+    Aufrufer (``embedding_model``, ``nli_prefilter``, ``retrieval``) laufen
+    in-process im MCP-Server, und dessen stdout IST der JSON-RPC-Kanal:
+    ``mcp.run()`` nutzt den Default-Transport ``stdio``, ``stdio_server()``
+    legt dafuer einen ``TextIOWrapper(sys.stdout.buffer)`` an und schreibt
+    jede Antwort als eine Zeile JSON hinein. Eine Klartextzeile dazwischen
+    bricht das Protokoll beim ersten Lazy-Load. stderr ist der dafuer
+    vorgesehene Kanal und bleibt fuer interaktive Laeufe genauso sichtbar.
+    Regressionstest: ``tests/test_issue_718_mcp_stdio_stream.py`` (echter
+    Serverprozess, echter Tool-Aufruf).
     """
     if is_cached(repo_id, cache_dir):
         return
@@ -78,4 +90,4 @@ def notify_lazy_download(*, label: str, repo_id: str, cache_dir: str) -> None:
         f"~{size_str} beginnt jetzt (einmalig, danach aus {cache_dir})."
     )
     logger.info(message)
-    print(f"⬇️  {message}")
+    print(f"⬇️  {message}", file=sys.stderr, flush=True)
