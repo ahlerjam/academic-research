@@ -88,6 +88,46 @@ wird vor der ersten Änderung abgewiesen. Nicht im Scope des Wechsels: die Chunk
 `chunking.py` bleiben unverändert, ein Modell mit anderem Kontextfenster braucht dafür
 eine eigene Entscheidung.
 
+## Teilwortsuche für deutsche Komposita
+
+`papers_fts` läuft mit dem FTS5-Standardtokenizer `unicode61`: er zerlegt an Wortgrenzen,
+kennt weder Stemming noch Kompositazerlegung. Eine Suche nach `Mittelstand` fand deshalb
+kein Paper, dessen Titel `Mittelstandsdigitalisierung` lautet — in einem deutschsprachigen
+Plugin verfehlte die lexikalische Hälfte des Hybrid-Retrievals damit genau den Normalfall.
+
+Seit #703 gibt es dafür eine **zweite** virtuelle Tabelle `papers_trgm`
+(`tokenize='trigram'`) über Titel und Abstract. `vault.search()` fragt zuerst wie bisher
+`papers_fts` ab und hängt die Teilwort-Treffer als eigenen Block dahinter, bis `k` voll
+ist. Die exakten Wort-Treffer bleiben damit Präfix des Ergebnisses, in unveränderter
+Reihenfolge; die `bm25`-Werte beider Tabellen sind verschiedene Größen und werden bewusst
+nicht gemeinsam sortiert.
+
+Warum keine Umstellung von `papers_fts` selbst: FTS5 kennt keinen Tokenizer je Spalte,
+`tokenize` ist eine Tabellenoption. Eine „Trigram-Spalte" ist technisch nicht baubar, und
+ein Umbau der bestehenden Tabelle würde Ranking, Prefix-Suche und jedes Token unter drei
+Zeichen zerstören.
+
+Der Preis, bewusst getragen und hier nachlesbar statt im Commit vergraben:
+
+- **Indexgröße.** Der Trigram-Tokenizer legt je Zeichenposition einen Term ab; der Index
+  wächst auf ein Mehrfaches des indizierten Textes. Genau deshalb steht `fulltext` **nicht**
+  in `papers_trgm`: Titel und Abstract sind rund 1–2 KB je Paper, PDF-Volltexte 50–200 KB.
+- **Dokumentierte Grenze.** Folge davon: `Mittelstand` findet `Mittelstandsdigitalisierung`
+  in Titel und Abstract, **nicht** im PDF-Volltext. Dort greift weiterhin nur die
+  Wortsuche über `papers_fts.fulltext`. Ein Trigram-Index über den Volltext und über
+  `notes_fts` bleibt ein eigenes Vorhaben — er braucht zuerst eine Größenmessung als
+  Entscheidungsgrundlage.
+- **Trefferrauschen bei Kurzsuchen.** Ein Token aus drei Zeichen *ist* genau ein Trigram
+  und träfe jede Wortmitte (`KMU` in `Werkmuseum`). Der Teilwort-Zweig schaltet sich
+  deshalb erst ab vier Zeichen je Token frei (`server._TRIGRAM_MIN_TOKEN_LEN`); darunter
+  läuft jede Suche bitgleich auf dem alten Pfad. In `KMU Digitalisierung` trägt nur das
+  lange Token zur Teilwortsuche bei.
+
+Bestands-Vaults hebt `migrate.add_papers_trgm_table()` auf Schema-Version 12 und füllt den
+Index für bereits vorhandene Paper nach (die Trigger allein erfassen nur, was danach
+geschrieben wird). Fehlt die Tabelle dennoch, fällt die Suche auf den reinen Exaktpfad
+zurück statt abzustürzen.
+
 ## PDF-Volltext-Index
 
 `papers_fts.fulltext` wird seit v6.6 real befüllt (zuvor schrieben die FTS5-Trigger die

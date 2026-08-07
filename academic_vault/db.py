@@ -162,7 +162,12 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #      quotes fuer Wortlaut. Wie schon bei Version 9 (embedding_meta) eine
 #      ganze TABELLE statt einer Spalte -- verifiziert ueber
 #      `_REQUIRED_MIGRATION_TABLES`, nicht ueber `_LEGACY_MIGRATION_COLUMNS`.
-CURRENT_SCHEMA_VERSION = 11
+# 12 = papers_trgm (Issue #703): Teilwort-Index (tokenize='trigram') ueber
+#      Titel+Abstract, damit `Mittelstand` auch
+#      `Mittelstandsdigitalisierung` findet. Ebenfalls eine ganze TABELLE
+#      (Verifikation ueber `_REQUIRED_MIGRATION_TABLES`); der Backfill fuer
+#      Bestandspaper steckt in `migrate.add_papers_trgm_table()`.
+CURRENT_SCHEMA_VERSION = 12
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -199,7 +204,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
 # Tabelle waere ueber `PRAGMA table_info()` unsichtbar, und der
 # `user_version`-Stempel wuerde sich irrtuemlich schliessen -- exakt der
 # Review-Fund aus PR #427, nur eine Ebene hoeher.
-_REQUIRED_MIGRATION_TABLES = frozenset({"embedding_meta", "table_values"})
+_REQUIRED_MIGRATION_TABLES = frozenset({"embedding_meta", "table_values", "papers_trgm"})
 
 
 class _Unset:

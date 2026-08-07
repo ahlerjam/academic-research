@@ -10,6 +10,7 @@ Start via: python -m academic_vault.server
 import json
 import logging
 import os
+import sqlite3
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -97,7 +98,7 @@ def validate_csl_json(csl_json: str) -> dict:
 # Fehlt eine davon, zieht _ensure_schema_for_read() die Migration einmalig
 # nach. Jede kuenftige Tabelle mit eigenem Lesepfad gehoert hier hinein.
 _READ_REQUIRED_TABLES = frozenset(
-    {"papers", "notes_fts", "transcript_segments", "codings", "paper_tables"}
+    {"papers", "notes_fts", "transcript_segments", "codings", "paper_tables", "papers_trgm"}
 )
 
 
@@ -811,6 +812,130 @@ def chapter_quote_balance(db_path: str, chapter_path: str) -> dict:
     }
 
 
+# Ab dieser Tokenlaenge darf der Teilwort-Zweig (papers_trgm) mitsuchen
+# (Issue #703). Der FTS5-Trigram-Tokenizer indiziert Zeichenfolgen ab drei
+# Zeichen -- ein 3-Zeichen-Token IST damit genau ein Trigram und traefe jede
+# Wortmitte ("KMU" in "Werkmuseum", "IoT" in "Biotechnologie"). Vier ist die
+# erste Laenge, ab der ein Token mehr als ein Trigram erzwingt; darunter
+# bleibt jede Suche bitgleich auf dem alten, exakten Pfad. Als Konstante und
+# nicht als Literal, damit die Schwelle testbar ist und nicht still
+# verrutscht (tests/test_issue_703_fts_komposita.py).
+_TRIGRAM_MIN_TOKEN_LEN = 4
+
+
+def _trigram_match_expression(sanitized_query: str) -> str:
+    """Reduziert eine bereits sanitisierte Query auf ihre trigram-tauglichen Tokens.
+
+    Gibt einen MATCH-Ausdruck fuer ``papers_trgm`` zurueck (implizites AND
+    ueber die verbleibenden Tokens) oder ``""``, wenn kein Token die
+    Mindestlaenge erreicht -- dann bleibt der Teilwort-Zweig aus.
+    """
+    tokens = [t for t in sanitized_query.split() if len(t) >= _TRIGRAM_MIN_TOKEN_LEN]
+    return " ".join(tokens)
+
+
+def _fts_exact_hits(
+    conn: sqlite3.Connection,
+    query: str,
+    type_filter: str | None,
+    k: int,
+) -> list[dict]:
+    """Der unveraenderte unicode61-Zweig ueber ``papers_fts`` (Wort-Treffer).
+
+    Bewusst als eigene Funktion herausgezogen (Issue #703): so laesst sich
+    beweisen, dass der Teilwort-Zweig die bestehenden Treffer weder verdraengt
+    noch umsortiert.
+    """
+    if type_filter:
+        rows = conn.execute(
+            """
+            SELECT f.paper_id,
+                   snippet(papers_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
+                   rank AS score
+            FROM papers_fts f
+            JOIN papers p ON p.paper_id = f.paper_id
+            WHERE papers_fts MATCH ?
+              AND p.type = ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (query, type_filter, k),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT paper_id,
+                   snippet(papers_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
+                   rank AS score
+            FROM papers_fts
+            WHERE papers_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (query, k),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _fts_trigram_hits(
+    conn: sqlite3.Connection,
+    query: str,
+    type_filter: str | None,
+    k: int,
+) -> list[dict]:
+    """Der Teilwort-Zweig ueber ``papers_trgm`` (Issue #703).
+
+    Findet deutsche Komposita, von denen nur ein Bestandteil gesucht wurde
+    (``Mittelstand`` -> ``Mittelstandsdigitalisierung``). Liefert ``[]``,
+    wenn kein Token die Mindestlaenge erreicht oder ``papers_trgm`` auf einem
+    Bestands-Vault noch fehlt -- ein fehlender Teilwort-Index darf eine Suche
+    nie zum Absturz bringen, nur um ihre Zusatztreffer bringen.
+
+    Die ``score``-Werte stammen aus dem bm25 EINER ANDEREN Tabelle und sind
+    mit denen aus :func:`_fts_exact_hits` nicht vergleichbar. Deshalb werden
+    die beiden Mengen in :func:`search_papers` blockweise aneinandergehaengt
+    statt gemeinsam sortiert.
+    """
+    match = _trigram_match_expression(query)
+    if not match:
+        return []
+    try:
+        if type_filter:
+            rows = conn.execute(
+                """
+                SELECT t.paper_id,
+                       snippet(papers_trgm, -1, '<b>', '</b>', '...', 10) AS snippet,
+                       rank AS score
+                FROM papers_trgm t
+                JOIN papers p ON p.paper_id = t.paper_id
+                WHERE papers_trgm MATCH ?
+                  AND p.type = ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (match, type_filter, k),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT paper_id,
+                       snippet(papers_trgm, -1, '<b>', '</b>', '...', 10) AS snippet,
+                       rank AS score
+                FROM papers_trgm
+                WHERE papers_trgm MATCH ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (match, k),
+            ).fetchall()
+    except sqlite3.OperationalError:
+        # Bestands-Vault ohne papers_trgm (Migration noch nicht gelaufen) oder
+        # SQLite-Build ohne Trigram-Tokenizer: exakte Suche allein ist ein
+        # gueltiges Ergebnis, ein roher OperationalError waere keins.
+        return []
+    return [dict(r) for r in rows]
+
+
 def search_papers(
     db_path: str,
     query: str,
@@ -819,6 +944,13 @@ def search_papers(
     rerank: bool = False,
 ) -> list[dict]:
     """FTS5/Hybrid-Suche in papers_fts. Gibt [{paper_id, snippet, score}] zurueck.
+
+    Seit Issue #703 haengt die Funktion hinter die exakten Wort-Treffer aus
+    ``papers_fts`` einen zweiten Block: Teilwort-Treffer aus ``papers_trgm``,
+    damit `Mittelstand` auch `Mittelstandsdigitalisierung` findet. Der zweite
+    Block fuellt nur auf, was der erste an ``k`` uebrig laesst -- die exakten
+    Treffer bleiben damit Praefix des Ergebnisses, in unveraenderter
+    Reihenfolge.
 
     Mit ``rerank=True`` bleiben diese Felder erhalten (fuer jeden per FTS5
     gefundenen Treffer inklusive '<b>'-Highlighting im Snippet) und werden um
@@ -855,38 +987,22 @@ def search_papers(
     _ensure_schema_for_read(db_path)
     conn = VaultDB._open(db_path)
     try:
-        if type_filter:
-            rows = conn.execute(
-                """
-                SELECT f.paper_id,
-                       snippet(papers_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
-                       rank AS score
-                FROM papers_fts f
-                JOIN papers p ON p.paper_id = f.paper_id
-                WHERE papers_fts MATCH ?
-                  AND p.type = ?
-                ORDER BY rank
-                LIMIT ?
-                """,
-                (query, type_filter, k),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT paper_id,
-                       snippet(papers_fts, -1, '<b>', '</b>', '...', 10) AS snippet,
-                       rank AS score
-                FROM papers_fts
-                WHERE papers_fts MATCH ?
-                ORDER BY rank
-                LIMIT ?
-                """,
-                (query, k),
-            ).fetchall()
+        fts_results = _fts_exact_hits(conn, query, type_filter, k)
+        # Teilwort-Zweig nur, solange `k` noch nicht ausgeschoepft ist
+        # (Issue #703): so kann er einen exakten Treffer weder verdraengen
+        # noch umsortieren, und eine Suche, die schon vorher `k` volle
+        # Treffer hatte, bleibt bitgleich.
+        if len(fts_results) < k:
+            seen = {r["paper_id"] for r in fts_results}
+            for row in _fts_trigram_hits(conn, query, type_filter, k):
+                if row["paper_id"] in seen:
+                    continue
+                fts_results.append(row)
+                seen.add(row["paper_id"])
+                if len(fts_results) >= k:
+                    break
     finally:
         conn.close()
-
-    fts_results = [dict(r) for r in rows]
 
     if not rerank:
         return fts_results
