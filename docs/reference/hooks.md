@@ -12,20 +12,24 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `claim-drift-guard.mjs` | Warnt, wenn eine Überarbeitung die Aussage um ein belegtes Zitat ändert, ohne den Beleg anzupassen |
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `context-fidelity-guard.mjs` | Markiert Zitate, deren echter Quellkontext der Kapitelverwendung widerspricht (Quote-Mining) |
 | `PostToolUse` (`Write\|Edit\|MultiEdit`) | `post-tool-use-decisions.mjs` | Decision-Log: jede `.md`-Änderung wird im Vault protokolliert |
+| `PostToolUse` (`Write\|Edit\|MultiEdit`) | `nli-quote-scan.mjs` | NLI-Zitatscan: stößt nach einem Kapitel-Write den Scan aller belegten Zitate an und meldet Fundstellen |
 | `PreCompact` | `pre-compact.mjs` | Snapshot-Backup vor Claude-Compaction |
 | `UserPromptSubmit` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
+| `UserPromptSubmit` | `nli-quote-scan.mjs` | Nachreichen offener Zitatscan-Befunde (nur Abholung, kein neuer Scan) |
 | `SessionStart` (kein Matcher) | *(Inline-Bash)* | Prüft, ob `~/.academic-research/venv` existiert und die Kernpakete importierbar sind |
 | `SessionStart` (kein Matcher) | `bypass-log-report.mjs` | Meldet neue Nutzungen des `vault-guard`-Bypass-Markers seit der letzten Session |
 | `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
 | `Stop` | `session-snapshot.mjs` | Vault-Snapshot pro Sitzung (#625, PR #650) — zusätzlich zum `PreCompact`-Snapshot, unabhängig davon; pro Sitzung maximal einmal exportiert (Drosselung nach session_id) |
 
-Das sind **8 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
-`context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`, `pre-compact.mjs`,
-`mid-session-reinforcement.mjs`, `bypass-log-report.mjs`, `session-snapshot.mjs`)
-plus **2 Inline-Bash-Kommandos**; `mid-session-reinforcement.mjs` hängt an zwei
-Event-Konfigurationen (`UserPromptSubmit` und `SessionStart`/`compact`), und
-`PreToolUse` ruft drei Skripte nacheinander auf.
+Das sind **9 Skript-Dateien** (`verbatim-guard.mjs`, `claim-drift-guard.mjs`,
+`context-fidelity-guard.mjs`, `post-tool-use-decisions.mjs`, `nli-quote-scan.mjs`,
+`pre-compact.mjs`, `mid-session-reinforcement.mjs`, `bypass-log-report.mjs`,
+`session-snapshot.mjs`) plus **2 Inline-Bash-Kommandos**;
+`mid-session-reinforcement.mjs` hängt an zwei Event-Konfigurationen
+(`UserPromptSubmit` und `SessionStart`/`compact`), `nli-quote-scan.mjs` ebenfalls
+(`PostToolUse` und `UserPromptSubmit`), und `PreToolUse` ruft drei Skripte
+nacheinander auf.
 
 ### Session-Ende-Snapshot (`session-snapshot.mjs`, #625, PR #650)
 
@@ -137,20 +141,25 @@ Führende **Namenspartikel** werden dabei zusätzlich weggefaltet: im Text steht
 `(von Neumann 1945)`, CSL-JSON führt das Partikel dagegen separat in
 `non-dropping-particle` und `family` bleibt `Neumann` — ohne diese Variante
 blockte der Guard Belege, deren Paper längst im Vault liegt.
-Die beiden Seitenquellen wiegen unterschiedlich: nur der vollständige
-Seitenumfang aus `page_first`/`page_last` kann eine Seite **widerlegen**.
-`quotes.printed_page` ist eine punktuelle Stichprobe der bereits extrahierten
-Stellen und kann eine Seite nur bestätigen — dass aus S. 47 noch nichts
-extrahiert wurde, sagt nichts darüber aus, ob das Werk eine S. 47 hat.
+Die beiden Seitenquellen wiegen unterschiedlich, seit Issue #724 aber nicht
+mehr so, dass eine der beiden nie widerlegen könnte: der vollständige
+Seitenumfang aus `page_first`/`page_last` ist immer autoritativ. Liegt er
+NICHT vor, wird `quotes.printed_page` — die punktuelle Stichprobe der bereits
+extrahierten Stellen — selbst zum widerlegenden Signal: deckt keine bekannte
+Stichprobe die Beleg-Seite (bzw. bei einem Seitenbereich keine davon eine
+Seite im Bereich), gilt die Seite als `page-mismatch`. Nur wenn zum Paper
+**gar keine** Seitendaten hinterlegt sind (weder Umfang noch Stichprobe),
+bleibt der dokumentierte Soft-Pass (`unknown`). Ein Seitenbereich im Beleg
+(`S. 45–47`) gilt als gedeckt, sobald irgendeine bekannte Seite darin liegt —
+`page_offset` (`vault.set_page_offset`) wirkt bereits auf `printed_page`
+selbst, verglichen wird also stets die gedruckte, nie die PDF-Seite.
 
 **Nicht geprüft** (bewusst, gegen False Positives): Code-Fences und
 Inline-Code, LaTeX-Makros (`\cite{…}`, `\ref{…}`), nackte Jahresklammern
 (`(2021)`), Struktur-Verweise (`(siehe Kapitel 2)`, `(vgl. Abb. 3)`),
 Datums- und Standangaben (`(Januar 2021)`, `(März 2020)`, `(Stand 2021)`,
 `(Fassung 2019)`), `ebd.`/`a.a.O.` sowie alles ab der Überschrift des
-Literaturverzeichnisses. Hat der Vault zu einem Paper **keinen vollständigen
-Seitenumfang**, gilt die Seitenzahl als nicht widerlegbar (dokumentierter
-Soft-Pass).
+Literaturverzeichnisses.
 
 **Geprüft wird jede erkannte Form, und ein sauberes Negativ blockiert sie
 auch.** Ob Vault und Kaskade nichts finden, hängt nicht daran, wie der Beleg
@@ -242,8 +251,7 @@ Vault geprüft.
 
 Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
 Falschtreffer produziert: Körperschaftsautoren (`(Statistisches Bundesamt
-2021)`). Bei Belegen mit Seitenbereich (`S. 45–47`) wird die erste Seite
-geprüft. Ein Signalwort, das über eine nicht geprüfte Region hinweg auf einen
+2021)`). Ein Signalwort, das über eine nicht geprüfte Region hinweg auf einen
 Namen zeigt (`vgl. (Müller 2021, S. 45) Schmidt 2019`, `vgl. \cite{…} Schmidt
 2019`), zählt ebenfalls nicht: der Beleg hinter der Klammer bzw. dem Makro
 steht dort nicht als Ziel des Signalworts, und die Klammer selbst hat der
@@ -282,7 +290,7 @@ selbst). Erst ein wirklich gelesener Co-Autor liefert hier Punkte.
 | `unavailable` | Timeout / `ECONNREFUSED` / abgebrochener Body / **jeder** Nicht-2xx-Status (5xx, 429, aber auch 403-Drosselung und 404) / HTTP 200 mit unlesbarem Body | allow + `[UNVERIFIED]` |
 | `no-match`, eindeutige Form | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer; Beleg trägt Seite, Signalwort, echten Co-Autor oder ist im Dokument korroboriert | **Block** (exit 2) |
 | `no-match`, nackte Form | dasselbe, aber `(Wort Jahr)` ohne Korroboration | **Block** (exit 2) — mit `ACADEMIC_CITATION_AMBIGUOUS=mark`: allow + `[UNVERIFIED]` |
-| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2) |
+| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des vollständigen Seitenumfangs bzw. — mangels Umfang — außerhalb aller bekannten `printed_page`-Stichproben | **Block** (exit 2) |
 | ungeprüft (Kontingent) | mehr Belege als `ACADEMIC_CITATION_MAX_PER_WRITE` (eindeutige zuerst) | allow + `[UNVERIFIED]` (stderr-Warnung) |
 
 Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein
@@ -531,6 +539,93 @@ Lookups, entfällt die Erinnerung dieser Runde — die nächste kommt regulär n
 > **kein** Hook. Es ist ein eigenständiges Helferskript zur Profilauswahl, das manuell
 > aufgerufen wird (`./hooks/lib/onboard-project-uni-prompt.sh --profile tum`). Frühere
 > Fassungen dieser Dokumentation führten es fälschlich als `SessionStart`-Hook.
+
+### NLI-Zitatscan (`nli-quote-scan.mjs`, #717)
+
+Nach jedem Kapitel-Write werden **alle im Vault belegten Zitate des Kapitels**
+gegen ihre Quelle geprüft: trägt der Quellkontext die Behauptung, die das
+Kapitel an dieser Stelle aufstellt? Bewertet wird lokal mit
+`MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7` (MIT-Lizenz, kein
+API-Key, kein Netz nach dem ersten Download).
+
+Damit schließt sich die Lücke, die die drei `PreToolUse`-Guards offen lassen:
+`verbatim-guard` prüft, ob ein Zitat *existiert*, `claim-drift-guard` und
+`context-fidelity-guard` reagieren auf *Änderungen*. Ein Zitat, das von Anfang
+an falsch verwendet und danach nie wieder angerührt wurde, fiel durch alle drei
+Raster.
+
+**Detektor, kein Filter.** Der Scan entfernt **kein** Zitat aus dem
+Prüfpfad. Als „treu" eingestufte Zitate werden lediglich nicht gemeldet — sie
+bleiben für jede spätere Prüfung (`quote-fidelity-auditor`) vollständig
+verfügbar. Ein Fehlurteil des Modells kostet damit höchstens eine ausgebliebene
+Meldung und stellt nie den Zustand her, in dem ein verzerrtes Zitat als
+„geprüft" gilt. Genau deshalb ist der Scan **per Default an**: Im früheren
+Filter-Modus (#592) hätte ein Fehlurteil ein Zitat dauerhaft aus der Prüfung
+genommen, was den Default-aus rechtfertigte.
+
+**Zweiphasig, damit der Write nicht wartet.** Der Hook lädt selbst nie ein
+Modell:
+
+1. **Anstoß** (`PostToolUse`, nur Kapitelpfade): startet den Python-Worker
+   `academic_vault.nli_scan_worker` **abgekoppelt** (`detached` + `unref`) und
+   kehrt sofort zurück. Der Write wird weder verzögert noch blockiert; der Hook
+   setzt bewusst kein `permissionDecision`.
+2. **Abholung** (jeder Aufruf): liest das Spool-Verzeichnis des Workers leer und
+   meldet die Fundstellen als `systemMessage` + `additionalContext`.
+
+Weil die Abholung erst beim *nächsten* Hook-Aufruf greift, ist derselbe Hook
+zusätzlich unter `UserPromptSubmit` verdrahtet — dort ausschließlich als
+Abholung. Ohne diese zweite Stelle bliebe ein Befund des letzten Kapitel-Writes
+einer Sitzung bis zum nächsten Write liegen.
+
+**Was eine Meldung enthält** (nachvollziehbar ohne Nachschlagen im Vault): das
+wörtliche Zitat, den Kurzbeleg (`Nachname (Jahr): Titel` plus `paper_id` und
+`quote_id`), den betroffenen Kapitelsatz und den Entailment-Score. Pro Meldung
+werden höchstens 10 Fundstellen ausgeschrieben, der Rest gezählt.
+
+**Spool:** `~/.academic-research/nli-scan-spool/` (Verzeichnis `0700`, Dateien
+`0600`, Override `ACADEMIC_NLI_SCAN_SPOOL`) — eine JSON-Datei je Kapitelpfad,
+der letzte Lauf überschreibt den vorherigen. Geschrieben wird nur, wenn es etwas
+zu melden gibt: ein Kapitel ohne Auffälligkeiten hinterlässt keine Datei.
+
+**Fehlerfall (fehlendes oder kaputtes Modell):** Der Worker schreibt einen
+`error`-Datensatz statt zu crashen, der Hook meldet ihn **einmal** (Dedup über
+den Fehler-Hash in `<spool>/.reported-errors.json`) und die Sitzung läuft
+normal weiter. Kein Retry-Sturm, kein Traceback, kein Block.
+
+**Gemessene Laufzeit** (Apple M-Serie, CPU, warmer Modell-Cache):
+**50 Zitate in 6,3 s** bei 0,127 s je Zitat, zuzüglich 1,6 s einmaligem
+Modell-Laden je Worker-Start. Beim allerersten Lauf kommt der Download der Modellgewichte
+(~1,1 GB nach `~/.academic-research/models`, Override
+`NLI_PREFILTER_MODEL_CACHE`) hinzu — er läuft im abgekoppelten Worker und
+berührt die Sitzung nicht.
+
+**Schalter** (Vorrang: Env > Configdatei > Default **an**):
+
+| Weg | Wirkung |
+|-----|---------|
+| `ACADEMIC_RESEARCH_NLI_PREFILTER=0` | Hook tut nichts — weder Anstoß noch Abholung |
+| `"nli_prefilter_enabled": false` in `config/parallel_agents.json` | dasselbe, dauerhaft für das Projekt |
+| `<!-- vault-guard: skip -->` im geschriebenen Inhalt | nur dieser eine Write wird nicht gescannt (identisch zu den drei Kapitel-Guards) |
+
+**Grenzen (bewusst akzeptiert):**
+
+- Ein Befund erscheint frühestens beim nächsten Hook-Aufruf (nächster Write oder
+  nächster Prompt) — der Scan läuft asynchron, das ist der Preis dafür, dass der
+  Write nicht wartet.
+- Der Hook startet den Worker nur, wenn eine Vault-DB existiert. Er legt selbst
+  keine an.
+- Erkannt werden Zitate in typografischen Anführungszeichen (`"…"`, `„…"`,
+  `«…»`) ab 20 Zeichen, die per Volltextsuche im Vault wiederzufinden sind. Ein
+  paraphrasierter Beleg ohne wörtliche Spanne ist für diesen Scan unsichtbar.
+- `verzerrend` ist ein **Verdacht, kein Urteil**. Die Eval (#524, #720) misst
+  auf konstruierten Fällen Precision 1.00 / Recall 0.812 bei einer
+  Rule-of-Three-Obergrenze von ~10 % für unentdeckte Fehlerraten — die
+  abschließende inhaltliche Prüfung bleibt beim `quote-fidelity-auditor`.
+
+**Regression-Harness:** `bash scripts/dev/test-nli-quote-scan-hook.sh` (fährt
+den Hook als echten Prozess mit Stub-Interpreter; CI-blockierend, analog
+`test-pretooluse-blocker.sh`).
 
 ### Decision-Log: eine Senke, zwei Hooks
 

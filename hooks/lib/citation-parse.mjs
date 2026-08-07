@@ -154,8 +154,14 @@ const COAUTHORS = String.raw`(?:\s*(?:(?:\/|&|,|und)\s*(?:${NAME})|${ET_AL}))*`;
 // Signalwoerter, die einem Beleg vorangehen duerfen.
 const SIGNAL = String.raw`(?:vgl\.|vergleiche|siehe|s\.|cf\.|zit\.\s*nach|nach)`;
 
-// Seitenangabe: ", S. 45" | ": 45" | ", pp. 12-14" | " S. 45"
-const PAGE = String.raw`(?:\s*[,:]?\s*(?:S\.|Seite|p\.|pp\.)\s*(\d{1,4})|\s*:\s*(\d{1,4}))?`;
+// Seitenangabe: ", S. 45" | ": 45" | ", pp. 12-14" | " S. 45" | ", S. 45-47"
+// (Bindestrich/En-Dash/Em-Dash) fuer einen Seitenbereich (Issue #724).
+// Gruppen 4/5 = Start/Ende der "S."/"Seite"/"p."/"pp."-Form, 6/7 dieselben
+// fuer die knappe ":"-Form. parsePage() liest match[4]??match[6] (Start) und
+// match[5]/match[7] (Ende) -- die Gruppenzahl ist in allen drei Verwendungen
+// von PAGE (PAREN_CITATION, NARRATIVE_CITATION, NARRATIVE_PAREN_YEAR) gleich,
+// weil davor jeweils genau drei Capture-Gruppen (Name, Co-Autoren, Jahr) stehen.
+const PAGE = String.raw`(?:\s*[,:]?\s*(?:S\.|Seite|p\.|pp\.)\s*(\d{1,4})(?:\s*[-–—]\s*(\d{1,4}))?|\s*:\s*(\d{1,4})(?:\s*[-–—]\s*(\d{1,4}))?)?`;
 
 const PAREN_CITATION = new RegExp(
   String.raw`^(?:${SIGNAL}\s*)?(${NAME})(${COAUTHORS})\s*,?\s*(\d{4})[a-z]?${PAGE}`,
@@ -301,15 +307,28 @@ const SIGNAL_PREFIX = new RegExp(String.raw`^\(?\s*(?:${SIGNAL})`, 'iu');
 // "u. a."/"et al." im Co-Autoren-Teil — eindeutiger Marker auch ohne Namen.
 const ET_AL_TEST = new RegExp(ET_AL, 'u');
 
+/**
+ * Liest Start- und optionale Ende-Seite aus einem PAGE-Match (siehe PAGE oben).
+ * Gibt ``null`` zurueck, wenn keine Seite angegeben ist oder die Startseite
+ * verworfen wird (Jahreszahl-Verwechslung); ``pageEnd`` ist ``null``, wenn kein
+ * Bereich angegeben wurde oder das Ende nicht als Zahl geparst werden konnte.
+ */
 function parsePage(match) {
-  const raw = match[4] ?? match[5];
+  const usesLongForm = match[4] !== undefined;
+  const raw = usesLongForm ? match[4] : match[6];
   if (raw === undefined) return null;
   const page = Number.parseInt(raw, 10);
   if (!Number.isFinite(page) || page <= 0) return null;
   // Vierstellige "Seiten" im Jahresbereich sind fast immer ein zweites Jahr
   // ("(Müller 2021, 2022)"), keine Seitenzahl — lieber ignorieren als blocken.
   if (page >= 1400 && page <= 2100) return null;
-  return page;
+  const rawEnd = usesLongForm ? match[5] : match[7];
+  let pageEnd = null;
+  if (rawEnd !== undefined) {
+    const parsedEnd = Number.parseInt(rawEnd, 10);
+    if (Number.isFinite(parsedEnd) && parsedEnd > 0) pageEnd = parsedEnd;
+  }
+  return { page, pageEnd };
 }
 
 function buildCitation(match, raw, start) {
@@ -322,7 +341,9 @@ function buildCitation(match, raw, start) {
     .split(/\/|&|,|\bund\b|u\.\s?a\.|et\s+al\./u)
     .map((part) => part.trim())
     .filter(Boolean);
-  const page = parsePage(match);
+  const pageInfo = parsePage(match);
+  const page = pageInfo ? pageInfo.page : null;
+  const pageEnd = pageInfo ? pageInfo.pageEnd : null;
   // Belegstaerke: Seitenangabe, Signalwort, ein wirklich gelesener Zweitautor
   // oder ein "u. a."/"et al."-Marker kommen in Fliesstext nicht versehentlich
   // vor — dort ist die Zitierabsicht eindeutig. Bewusst NICHT aus dem rohen
@@ -344,11 +365,14 @@ function buildCitation(match, raw, start) {
     // Vorkommen desselben Belegs teilen ihn, damit Vault-Lookup und Kaskade
     // je Beleg einmal laufen — waehrend start/end jede Fundstelle einzeln
     // adressierbar halten. ``raw`` taugt dafuer nicht mehr als Schluessel.
-    key: `${family.toLowerCase()}|${year}|${page}`,
+    // Nimmt ``pageEnd`` mit auf (Issue #724), damit "S. 45" und "S. 45-47"
+    // nicht denselben Schluessel teilen.
+    key: `${family.toLowerCase()}|${year}|${page}${pageEnd != null ? `-${pageEnd}` : ''}`,
     family,
     authors: [family, ...coauthors],
     year,
     page,
+    pageEnd,
     confidence: strong ? 'strong' : 'weak',
   };
 }

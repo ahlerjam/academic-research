@@ -1,10 +1,15 @@
-"""NLI-Batch-Vorfilter vor dem Zitat-Richter (Issue #592, Vorarbeit #524).
+"""NLI-Batch-Vorfilter vor dem Zitat-Richter (Issue #592, Vorarbeit #524,
+Modellwechsel #720).
 
-Der Vorfilter laedt ``MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7``
-(MIT) lokal und bewertet, ob eine deutsche Kapitelbehauptung durch den
-englischen Quote-Kontext (``context_before`` + ``verbatim`` + ``context_after``)
-gedeckt ist (Eval-Ergebnis #524: Precision 1.00, Recall 0.812 auf 32
-konstruierten Faellen -- siehe ``evals/524-nli-prefilter/README.md``).
+Der Vorfilter laedt ``MoritzLaurer/bge-m3-zeroshot-v2.0`` (MIT) lokal und
+bewertet, ob eine deutsche Kapitelbehauptung durch den englischen
+Quote-Kontext (``context_before`` + ``verbatim`` + ``context_after``) gedeckt
+ist. A/B gegen ``MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7``
+auf 278 Faellen (Issue #720): bei Schwelle 0.95 laesst bge-m3-zeroshot nur 1
+Verzerrung durchrutschen, mDeBERTa saettigt bei 10 durchgerutschten Faellen
+auch bei dieser Schwelle -- ausschlaggebend ist die Kalibrierbarkeit ueber die
+Schwelle, nicht ein einzelner Precision/Recall-Wert. Details, Schwellenkurve
+und die verworfenen Zusatzansaetze: ``docs/evals/2026-08-07-bge-m3-nli-scorer-720.md``.
 
 **Zweck ist Abdeckung, nicht Kostenersparnis.** Ohne diesen Vorfilter wird ein
 Zitat nur dann inhaltlich geprueft (``agents/quote-fidelity-auditor.md``), wenn
@@ -15,16 +20,33 @@ wurde, faellt durch dieses Raster. :func:`scan_chapter_quotes` +
 :func:`run_batch_prefilter` schliessen genau diese Luecke, indem sie ALLE im
 Vault belegten Zitate eines Kapitels in einem Durchgang bewerten.
 
-**Default ist AUS** (:data:`DEFAULT_PREFILTER_ENABLED`), bis eine Validierung
-gegen echtes Zitatmaterial vorliegt (AC in Issue #592). Bei ``enabled=False``
-verhaelt sich :func:`run_batch_prefilter` bytegleich zum Zustand ohne
-Vorfilter: alle Items werden unveraendert weitergereicht, keines wird
-uebersprungen.
+**Detektor, kein Filter (Issue #717).** Bis #717 uebersprang
+:func:`run_batch_prefilter` als "treu" eingestufte Zitate und entfernte sie
+damit dauerhaft aus dem Pruefpfad -- ein Fehlurteil des Modells kostete die
+Pruefung. Seither wird NICHTS uebersprungen: alle Items erreichen den
+bestehenden Pruefpfad wie ohne Scan, verdaechtige Items werden ZUSAETZLICH
+gemeldet (Schluessel ``suspicious``). Ein Fehlurteil entspricht damit im
+schlimmsten Fall dem Zustand ohne Scan.
 
-Konservative Schwelle: im Zweifel wird weitergeleitet (``verzerrend``). Ein zu
-viel geprueftes Zitat kostet Tokens im nachgelagerten Sonnet-Lauf, ein
-durchgewunkenes bleibt unbemerkt in der Arbeit stehen -- die teurere Richtung
-ist die falsche.
+**Default ist AN** (:data:`DEFAULT_PREFILTER_ENABLED`, seit #717). Das Risiko
+aus der Rule-of-Three-Grenze der Eval (~10 %,
+``evals/524-nli-prefilter/README.md``) entfaellt als Argument gegen Default-an,
+weil im Detektor-Modus kein Zitat verloren geht. Bei ``enabled=False``
+verhaelt sich der Pruefpfad bytegleich zum Zustand ohne Scan: alle Items
+werden unveraendert weitergereicht, nichts wird gemeldet.
+
+Konservative Schwelle: im Zweifel gilt ein Item als verdaechtig
+(``verzerrend``). Eine zu viel gemeldete Fundstelle kostet einen Blick, eine
+uebersehene bleibt unbemerkt in der Arbeit stehen -- die teurere Richtung ist
+die falsche.
+
+**Priorisierer, nicht Torwaechter.** Der Scan entscheidet, welches Zitat
+ZUERST inhaltlich vom ``quote-fidelity-auditor`` geprueft wird -- er
+entscheidet nicht, was durchgeht. Ein Zitat ohne Meldung ist nicht
+"geprueft", nur nicht priorisiert. Bekannte strukturelle Schwaeche:
+weggelassene Randbedingungen (``condition-stripped``) werden nur zur Haelfte
+erkannt, siehe Eval-Report #720 -- das ist eine Eigenschaft von NLI ("folgt
+daraus?"), nicht durch Modellwahl behebbar.
 """
 
 from __future__ import annotations
@@ -43,13 +65,24 @@ DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "parallel_agents.json"
 # ---------------------------------------------------------------------------
 
 ENV_CACHE_DIR = "NLI_PREFILTER_MODEL_CACHE"
-MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+
+#: Produktivmodell seit Issue #720 (zuvor mDeBERTa-XNLI, weiterhin als
+#: Eval-Kandidat verfuegbar ueber :class:`MDebertaScorer`).
+MODEL_ID = "MoritzLaurer/bge-m3-zeroshot-v2.0"
+MDEBERTA_MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
 
 # Konservative Entailment-Schwelle: "faithful" nur bei eindeutigem
 # Entailment-Ausschlag UND einer Score-Mindesthoehe -- ein knapper Ausschlag
 # gilt als Zweifelsfall und wird weitergeleitet (Issue-AC "im Zweifel
-# weiterleiten").
-DEFAULT_THRESHOLD = 0.5
+# weiterleiten"). 0.95 seit #720: bge-m3-zeroshot laesst sich ueber die
+# Schwelle kalibrieren (22->1 Durchrutscher zwischen 0.50 und 0.95),
+# mDeBERTa saettigt bei 10 Durchrutschern -- siehe Eval-Report.
+DEFAULT_THRESHOLD = 0.95
+
+#: Eigener, niedrigerer Default fuer den mDeBERTa-Eval-Kandidaten (dessen
+#: Kalibrierung wurde in #720 nicht neu bewertet -- 0.5 reproduziert
+#: weiterhin die #524-Zahlen, siehe ``evals/524-nli-prefilter/README.md``).
+MDEBERTA_DEFAULT_THRESHOLD = 0.5
 
 
 def default_cache_dir() -> str:
@@ -76,7 +109,7 @@ def build_premise(context_before: str | None, verbatim: str, context_after: str 
 
 ENV_PREFILTER_ENABLED = "ACADEMIC_RESEARCH_NLI_PREFILTER"
 CONFIG_KEY = "nli_prefilter_enabled"
-DEFAULT_PREFILTER_ENABLED = False
+DEFAULT_PREFILTER_ENABLED = True
 
 _TRUTHY = {"1", "true", "yes", "on"}
 _FALSY = {"0", "false", "no", "off"}
@@ -86,12 +119,14 @@ def resolve_nli_prefilter_enabled(
     explicit: bool | None = None,
     config_path: str | Path | None = None,
 ) -> bool:
-    """Schalter fuer den NLI-Batch-Vorfilter (#592).
+    """Schalter fuer den NLI-Zitatscan (#592, Default-Umkehr #717).
 
     Vorrang: Argument > Env ``ACADEMIC_RESEARCH_NLI_PREFILTER`` >
     ``config/parallel_agents.json`` (Schluessel ``nli_prefilter_enabled``) >
-    Default ``False``. Der Default bleibt AUS, bis eine Validierung gegen
-    echtes Zitatmaterial vorliegt -- siehe ``evals/524-nli-prefilter/README.md``.
+    Default ``True``. Der Default ist seit #717 AN, weil der Scan im
+    Detektor-Modus laeuft und kein Zitat aus dem Pruefpfad entfernen kann.
+    Abschalten: ``ACADEMIC_RESEARCH_NLI_PREFILTER=0`` oder
+    ``"nli_prefilter_enabled": false`` in ``config/parallel_agents.json``.
     """
     if explicit is not None:
         return bool(explicit)
@@ -132,66 +167,145 @@ class NliScorer(Protocol):
     def predict(self, premise: str, hypothesis: str) -> tuple[str, float]: ...
 
 
-class MDebertaScorer:
-    """mDeBERTa-v3-XNLI ueber klassische NLI-Logits (entailment/neutral/contradiction).
+class NliModelScorer:
+    """Generischer NLI-Scorer ueber ``AutoModelForSequenceClassification``.
 
-    Kanonische Implementierung (Issue #592) -- ``evals/524-nli-prefilter/runner.py``
-    importiert diese Klasse fuer den Modellvergleich, statt sie zu duplizieren.
+    Kanonische Implementierung (Issue #592, generalisiert in #720) --
+    ``evals/524-nli-prefilter/runner.py`` und
+    ``tests/evals/test_nli_prefilter_evals.py`` importieren die Subklassen
+    (:class:`BgeM3ZeroshotScorer`, :class:`MDebertaScorer`) statt sie zu
+    duplizieren.
+
+    Der Entailment-Index wird aus ``model.config.id2label`` abgeleitet --
+    NICHT fest auf Index 0 verdrahtet. Das ist notwendig, weil verschiedene
+    Modelle unterschiedliche Label-Schemata tragen: bge-m3-zeroshot ist
+    binaer (``{0: entailment, 1: not_entailment}``), die mDeBERTa-Familie
+    dreiklassig (``{0: entailment, 1: neutral, 2: contradiction}``). Ein
+    Modell mit abweichender Reihenfolge wuerde bei fest verdrahtetem Index 0
+    stillschweigend falsche Urteile liefern.
     """
-
-    name = "mdeberta-xnli"
 
     def __init__(
         self,
+        model_id: str,
+        name: str | None = None,
         cache_dir: str | None = None,
         model: Any | None = None,
+        tokenizer: Any | None = None,
         threshold: float = DEFAULT_THRESHOLD,
     ) -> None:
+        self.model_id = model_id
+        self.name = name if name is not None else model_id.rsplit("/", 1)[-1]
         self.cache_dir = cache_dir if cache_dir is not None else default_cache_dir()
         self._model = model
-        self._tokenizer = None
+        self._tokenizer = tokenizer
         self.threshold = threshold
 
     def load(self) -> tuple[Any, Any]:
-        if self._model is None:
+        if self._model is None or self._tokenizer is None:
             # Lazy Import: zieht transformers/torch nach, nicht beim Modul-Import.
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-            self._tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, cache_dir=self.cache_dir)
-            self._model = AutoModelForSequenceClassification.from_pretrained(
-                MODEL_ID, cache_dir=self.cache_dir
-            )
+            if self._tokenizer is None:
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_id, cache_dir=self.cache_dir
+                )
+            if self._model is None:
+                self._model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_id, cache_dir=self.cache_dir
+                )
         return self._model, self._tokenizer
+
+    def entailment_index(self) -> int:
+        """Index der Entailment-Klasse, gelesen aus ``model.config.id2label``.
+
+        Bis #717 stand hier eine harte ``probs[0]``-Annahme ("Label-Reihenfolge
+        lt. Modellkarte"). Solange nur die Eval darauf zugriff, war das
+        folgenlos; ab Default-an (#717) waere es ein stiller Fehlurteils-Pfad,
+        sobald ein Modell die Klassen anders sortiert (Learning #720:
+        ``id2label``-Reihenfolge unterscheidet sich zwischen Modellen).
+        Kein lautloser Fallback -- fehlt das Label, ist das ein ``ValueError``.
+        """
+        model, _ = self.load()
+        id2label = getattr(getattr(model, "config", None), "id2label", None) or {}
+        for idx, label in id2label.items():
+            if "entail" in str(label).strip().lower():
+                return int(idx)
+        raise ValueError(
+            f"Kein 'entailment'-Label in model.config.id2label ({id2label!r}) — "
+            "der Entailment-Index laesst sich nicht bestimmen."
+        )
 
     def predict(self, premise: str, hypothesis: str) -> tuple[str, float]:
         import torch
 
         model, tokenizer = self.load()
-        inputs = tokenizer(premise, hypothesis, truncation=True, return_tensors="pt")
+        entail_idx = self.entailment_index()
+        inputs = tokenizer(
+            premise, hypothesis, truncation=True, max_length=512, return_tensors="pt"
+        )
         with torch.no_grad():
             logits = model(**inputs).logits[0]
         probs = torch.softmax(logits, dim=-1).tolist()
-        # Label-Reihenfolge lt. Modellkarte: entailment, neutral, contradiction.
-        entailment_prob = float(probs[0])
+        entailment_prob = float(probs[entail_idx])
         predicted_idx = max(range(len(probs)), key=lambda i: probs[i])
         # Konservativ: "faithful" nur bei eindeutigem Entailment-Ausschlag UND
         # einer Mindest-Score-Hoehe -- alles andere (auch ein knapper
         # Entailment-Ausschlag unter der Schwelle) gilt als Zweifelsfall und
-        # wird weitergeleitet.
+        # wird gemeldet.
         verdict = (
-            "faithful" if predicted_idx == 0 and entailment_prob >= self.threshold else "verzerrend"
+            "faithful"
+            if predicted_idx == entail_idx and entailment_prob >= self.threshold
+            else "verzerrend"
         )
         return verdict, entailment_prob
 
 
-# ---------------------------------------------------------------------------
-# Batch-Vorfilter (AC: alle Zitate eines Kapitels in einem Durchgang)
-# ---------------------------------------------------------------------------
+class BgeM3ZeroshotScorer(NliModelScorer):
+    """Produktivscorer seit Issue #720: bge-m3-zeroshot-v2.0, Schwelle 0.95."""
 
-#: Report-Marker fuer vorgefilterte, NICHT inhaltlich geprüfte Zitate. Muss
-#: im Report sichtbar sein -- weder stillschweigend fehlend noch als
-#: "geprueft" ausgewiesen (Issue-AC).
-SKIP_MARKER = "vorgefiltert, nicht inhaltlich geprueft"
+    def __init__(
+        self,
+        cache_dir: str | None = None,
+        model: Any | None = None,
+        tokenizer: Any | None = None,
+        threshold: float = DEFAULT_THRESHOLD,
+    ) -> None:
+        super().__init__(
+            model_id=MODEL_ID,
+            name="bge-m3-zeroshot",
+            cache_dir=cache_dir,
+            model=model,
+            tokenizer=tokenizer,
+            threshold=threshold,
+        )
+
+
+class MDebertaScorer(NliModelScorer):
+    """mDeBERTa-v3-XNLI -- seit #720 nur noch Eval-Kandidat (Praezedenzfall
+    #524), nicht mehr Produktivmodell. Name/Import bleiben stabil fuer
+    ``evals/524-nli-prefilter/runner.py`` und ``run_real_validation.py``."""
+
+    def __init__(
+        self,
+        cache_dir: str | None = None,
+        model: Any | None = None,
+        tokenizer: Any | None = None,
+        threshold: float = MDEBERTA_DEFAULT_THRESHOLD,
+    ) -> None:
+        super().__init__(
+            model_id=MDEBERTA_MODEL_ID,
+            name="mdeberta-xnli",
+            cache_dir=cache_dir,
+            model=model,
+            tokenizer=tokenizer,
+            threshold=threshold,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Batch-Detektor (AC: alle Zitate eines Kapitels in einem Durchgang)
+# ---------------------------------------------------------------------------
 
 
 def prefilter_quote(
@@ -203,21 +317,21 @@ def prefilter_quote(
     verbatim: str,
     context_after: str | None,
 ) -> dict:
-    """Bewertet EIN Zitat-Kapitel-Paar. Reine Funktion, kein Vault-Zugriff."""
+    """Bewertet EIN Zitat-Kapitel-Paar. Reine Funktion, kein Vault-Zugriff.
+
+    ``suspicious`` ist das einzige Urteilsfeld: True bedeutet "melden", nicht
+    "aus dem Pruefpfad nehmen" (Detektor-Semantik seit #717).
+    """
     premise = build_premise(context_before, verbatim, context_after)
     verdict, raw_score = scorer.predict(premise, chapter_claim)
-    forwarded = verdict != "faithful"
-    result: dict[str, Any] = {
+    return {
         "quote_id": quote_id,
         "chapter_claim": chapter_claim,
         "paper_id": paper_id,
         "verdict": verdict,
         "raw_score": raw_score,
-        "forwarded": forwarded,
+        "suspicious": verdict != "faithful",
     }
-    if not forwarded:
-        result["report"] = SKIP_MARKER
-    return result
 
 
 def run_batch_prefilter(
@@ -226,34 +340,51 @@ def run_batch_prefilter(
     enabled: bool | None = None,
     config_path: str | Path | None = None,
 ) -> dict:
-    """Vorfilter fuer ALLE Zitate eines Kapitels/einer Arbeit in einem Durchgang.
+    """Detektor ueber ALLE Zitate eines Kapitels in einem Durchgang.
 
     ``items``: Liste von ``{"quote_id", "chapter_claim", "paper_id",
     "context_before", "verbatim", "context_after"}`` -- z. B. aus
     :func:`scan_chapter_quotes`.
 
-    Verdaechtige Items (Verdict ``"verzerrend"``) werden UNVERAENDERT als
-    ``{quote_id, chapter_claim, paper_id}`` weitergereicht (Input-Format von
-    ``agents/quote-fidelity-auditor.md`` bleibt unangetastet). Treue Items
-    werden uebersprungen und tragen den Report-Marker :data:`SKIP_MARKER`.
+    Rueckgabe:
 
-    Bei ``enabled=False`` (Default, solange keine Validierung an echtem
-    Material vorliegt) verhaelt sich der Pruefpfad EXAKT wie ohne Vorfilter:
-    alle Items werden unveraendert weitergereicht, keines wird uebersprungen.
+    ``forwarded``
+        IMMER alle Items als ``{quote_id, chapter_claim, paper_id}``
+        (Input-Format von ``agents/quote-fidelity-auditor.md``). Seit #717
+        wird hier nichts mehr aussortiert -- der Pruefpfad ist mit und ohne
+        Scan derselbe.
+    ``suspicious``
+        Teilmenge mit Verdict ``"verzerrend"``, inklusive ``raw_score`` --
+        das, was gemeldet wird.
+    ``skipped``
+        Bleibt aus Aufruferkompatibilitaet erhalten und ist IMMER leer:
+        im Detektor-Modus wird nichts uebersprungen.
+    ``results``
+        Rohurteile je Item (leer, wenn abgeschaltet).
+
+    Bei ``enabled=False`` verhaelt sich der Pfad bytegleich zum Zustand ohne
+    Scan: alle Items werden weitergereicht, nichts wird bewertet oder
+    gemeldet.
     """
-    prefilter_on = resolve_nli_prefilter_enabled(enabled, config_path)
-    if not prefilter_on:
-        forwarded_off = [
-            {
-                "quote_id": item["quote_id"],
-                "chapter_claim": item["chapter_claim"],
-                "paper_id": item["paper_id"],
-            }
-            for item in items
-        ]
-        return {"enabled": False, "forwarded": forwarded_off, "skipped": [], "results": []}
+    detector_on = resolve_nli_prefilter_enabled(enabled, config_path)
+    forwarded = [
+        {
+            "quote_id": item["quote_id"],
+            "chapter_claim": item["chapter_claim"],
+            "paper_id": item["paper_id"],
+        }
+        for item in items
+    ]
+    if not detector_on:
+        return {
+            "enabled": False,
+            "forwarded": forwarded,
+            "suspicious": [],
+            "skipped": [],
+            "results": [],
+        }
 
-    active_scorer = scorer if scorer is not None else MDebertaScorer()
+    active_scorer = scorer if scorer is not None else BgeM3ZeroshotScorer()
 
     results = [
         prefilter_quote(
@@ -267,13 +398,14 @@ def run_batch_prefilter(
         )
         for item in items
     ]
-    forwarded = [
-        {"quote_id": r["quote_id"], "chapter_claim": r["chapter_claim"], "paper_id": r["paper_id"]}
-        for r in results
-        if r["forwarded"]
-    ]
-    skipped = [r for r in results if not r["forwarded"]]
-    return {"enabled": True, "forwarded": forwarded, "skipped": skipped, "results": results}
+    suspicious = [r for r in results if r["suspicious"]]
+    return {
+        "enabled": True,
+        "forwarded": forwarded,
+        "suspicious": suspicious,
+        "skipped": [],
+        "results": results,
+    }
 
 
 # ---------------------------------------------------------------------------
