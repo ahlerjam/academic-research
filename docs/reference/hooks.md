@@ -124,8 +124,12 @@ Kontexttreue-Prüfung.
 ### Klammer-Zitat-Validierung
 
 Klammer- und Paraphrase-Belege wie `(Müller 2021, S. 45)`,
-`(Müller/Schmidt 2019)`, `(Müller u. a. 2021, S. 45–47)`, `(vgl. Müller 2021: 45)`
-oder `vgl. Schmidt 2019` werden extrahiert und gegen den Vault geprüft:
+`(Müller/Schmidt 2019)`, `(Müller u. a. 2021, S. 45–47)`, `(vgl. Müller 2021: 45)`,
+`vgl. Schmidt 2019` — seit Issue #740 auch die **narrative Form außerhalb von
+Klammern**, bei der nur die Jahreszahl geklammert ist: `Müller (2021, S. 45)
+zeigt …`, `Müller und Schmidt (2019) belegen …`, `Müller et al. (2021)
+belegen …`, `Wie Müller (2021, S. 45) zeigt …`, `Müller (2021, S. 45)
+schreibt: „…"` — werden extrahiert und gegen den Vault geprüft:
 Familienname und Jahr gegen `papers.csl_json` (Umlaut-Faltung und
 Diakritika-Strip, `Müller`/`Mueller`/`Muller` treffen denselben Eintrag), die
 Seitenzahl gegen `papers.page_first`/`page_last` bzw. `quotes.printed_page`.
@@ -208,16 +212,42 @@ Das Prüfkontingent (`ACADEMIC_CITATION_MAX_PER_WRITE`) vergibt eindeutige
 Belege zuerst — sonst genügte unter `mark` genug harmlose `(Wort Jahr)`-Prosa
 vor einem erfundenen Beleg, um den Hard-Block zu verdrängen.
 
+**Die narrative Form ohne Seitenangabe** (`Müller (2021) belegt …`,
+`Müller et al. (2021) belegen …`) ist von reiner Prosa mit Jahresklammer wie
+`Die DSGVO (2016) trat in Kraft` oder `Deutschland und Frankreich (2016)
+unterzeichneten das Abkommen` lexikalisch nicht zu trennen — das gilt AUCH
+dann, wenn ein Co-Autoren-Muster wie „und Frankreich" matcht, denn dieselbe
+Struktur trifft auf gewöhnliche Aufzählungen zu. Ohne Seite zählt die Form
+deshalb ausnahmslos nur, wenn direkt hinter der Klammer eines von einer
+festen Liste einwortiger Berichtsverben steht (`REPORTING_VERBS` in
+`citation-parse.mjs`: `zeigt`, `belegt`, `schreibt`, `argumentiert`, `betont`,
+`konstatiert`, `erklärt`, `folgert`, `meint`, `kritisiert`, `resümiert`,
+`sieht`, `beschreibt`, `analysiert`, `untersucht`, `formuliert` — jeweils
+inkl. Pluralform) — sonst bleibt sie unerkannt und damit auch ungeprüft,
+exakt wie eine nackte Jahresklammer. Mehrwortige Wendungen wie „stellt fest"
+oder „weist hin" erkennt der Detektor bewusst nicht (nur ein Wort nach der
+Klammer wird geprüft). Ein vorangestelltes `vgl.`/`siehe` allein ersetzt das
+Berichtsverb nicht (`NARRATIVE_CITATION`, Pass 2a, verlangt das Jahr direkt
+nach dem Signalwort, ohne Klammer). Eine feste Liste gängiger
+Rechts-/Institutionsbegriffe (`Gesetz`, `Verordnung`, `Bericht`, `Studie` u. a.
+in `NON_AUTHOR_TOKENS`) schließt zusätzlich die häufigsten Substantive aus,
+die zufällig auf ein Berichtsverb treffen — nicht erschöpfend, dieselbe
+Grenze wie bei den übrigen Ausschlusslisten.
+
+**Sekundärbelege** (`(Schmidt, 2015, zitiert nach Müller, 2021, S. 45)`)
+werden als **zwei** Belege erfasst: das nicht gelesene Original (`Schmidt
+2015`) und das tatsächlich vorliegende Werk (`Müller 2021, S. 45`, intern mit
+`viaSecondary: true` markiert). Beide werden unabhängig voneinander gegen den
+Vault geprüft.
+
 Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
-Falschtreffer produziert: die narrative Form ohne Signalwort
-(`Müller (2021) zeigt …`, kollidiert mit `Die DSGVO (2016) trat in Kraft`)
-und Körperschaftsautoren (`(Statistisches Bundesamt 2021)`). Bei Belegen mit
-Seitenbereich (`S. 45–47`) wird die erste Seite geprüft. Ein Signalwort, das
-über eine nicht geprüfte Region hinweg auf einen Namen zeigt
-(`vgl. (Müller 2021, S. 45) Schmidt 2019`, `vgl. \cite{…} Schmidt 2019`),
-zählt ebenfalls nicht: der Beleg hinter der Klammer bzw. dem Makro steht dort
-nicht als Ziel des Signalworts, und die Klammer selbst hat der Klammer-Pass
-bereits erfasst. False Positives blockieren den Schreibfluss und sind hier
+Falschtreffer produziert: Körperschaftsautoren (`(Statistisches Bundesamt
+2021)`). Bei Belegen mit Seitenbereich (`S. 45–47`) wird die erste Seite
+geprüft. Ein Signalwort, das über eine nicht geprüfte Region hinweg auf einen
+Namen zeigt (`vgl. (Müller 2021, S. 45) Schmidt 2019`, `vgl. \cite{…} Schmidt
+2019`), zählt ebenfalls nicht: der Beleg hinter der Klammer bzw. dem Makro
+steht dort nicht als Ziel des Signalworts, und die Klammer selbst hat der
+Klammer-Pass bereits erfasst. False Positives blockieren den Schreibfluss und sind hier
 teurer als False Negatives — der Guard ist die letzte, nicht die einzige
 Verteidigungslinie.
 
@@ -229,9 +259,19 @@ Belege) → CrossRef → Semantic Scholar (Fuzzy, Gate: Autoren-Überlapp
 | Komponente | Punkte |
 |---|---|
 | Familienname trifft | 40 |
-| Jahr exakt | 40 |
-| Jahr um genau 1 daneben | 20 |
-| Autoren-Überlapp (Jaccard) | 0–20 |
+| Jahr exakt | 30 |
+| Jahr um genau 1 daneben | 15 |
+| Autoren-Überlapp (Jaccard), nur jenseits des bereits über `familyHit` gematchten Namens | 0–30 |
+
+Issue #740 (AC5): Familienname + Jahr **allein** erreichen ohne echte
+Zusatz-Evidenz höchstens 70 Punkte — das liegt im `probable`-Band
+(`[UNVERIFIED]`), nicht mehr in `confirmed` (Default 80). Vorher genügten
+40+40=80 Punkte, sobald irgendein Paper mit passendem Nachnamen und Jahr
+gefunden wurde, unabhängig davon, ob es das zitierte Werk war. Die
+Überlapp-Komponente zählt deshalb **nicht** den Autor, der bereits
+`familyHit` ausgelöst hat — sonst bestätigt sich ein Einzelautoren-Beleg wie
+`(Müller, 2021)` über den Überlapp-Umweg selbst (Jaccard 1.0 gegen sich
+selbst). Erst ein wirklich gelesener Co-Autor liefert hier Punkte.
 
 **Entscheidungsmatrix.**
 
@@ -268,6 +308,20 @@ und `unavailable` schreibt der Hook den Tool-Input per
 | `ACADEMIC_CITATION_S2_URL` | Semantic-Scholar-API | Base-URL, überschreibbar (Tests/Proxy) |
 | `ACADEMIC_CITATION_UNAVAILABLE_RATE_THRESHOLD` | `0.5` | Anteil `unavailable`/Gesamtanfragen, ab dem eine Warnung ausgegeben wird (Issue #601) |
 | `ACADEMIC_CITATION_UNAVAILABLE_RATE_MIN_REQUESTS` | `5` | Mindestzahl Kaskaden-Anfragen im Lauf, unterhalb derer keine Warnung ausgelöst wird (Issue #601) |
+| `ACADEMIC_CITATION_UNCHECKED_NOTICE` | `on` | `off` unterdrückt den Ungeprüft-Hinweis (siehe unten, Issue #740) |
+
+**Ungeprüfte Belegformen (Hinweis, kein Block).** `detectUncheckedCitationForms()`
+(`hooks/lib/citation-parse.mjs`) erkennt — grob, ohne Vault-Prüfung — drei
+Formen, die oben **nicht** geprüft werden: LaTeX-Fußnoten mit Autor/Jahr-Payload
+(`\footnote{Vgl. Müller 2021, S. 45.}`), Markdown-Fußnotenmarker/-Definitionen
+(`[^1]`, `[^1]: Vgl. Müller 2021.`) und numerische Klammerverweise im
+IEEE-Stil (`[12]`). Wer in einer dieser Formen zitiert, bekam bisher **keine**
+Rückmeldung und hielt den Schutz für aktiv, obwohl er für diese Form nie
+gegriffen hat. `verbatim-guard.mjs` meldet daher — unabhängig davon, ob
+`extractCitations()` überhaupt etwas findet — höchstens einmal je Write auf
+stderr, dass ungeprüfte Formen im Content stehen; der Write bleibt erlaubt
+(exit 0), es ist kein Block. Abschaltbar über
+`ACADEMIC_CITATION_UNCHECKED_NOTICE=off`.
 
 **Beobachtung: dauerhaft blockierter Egress.** Eine einzelne `unavailable`-
 Antwort ist Betriebsrauschen (Drosselung, kurzer Ausfall). Läuft der Egress

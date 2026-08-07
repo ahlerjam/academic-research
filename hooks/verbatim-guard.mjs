@@ -37,7 +37,7 @@ import { existsSync, appendFileSync, mkdirSync, chmodSync, readFileSync } from '
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
-import { extractCitations, markSpans } from './lib/citation-parse.mjs';
+import { extractCitations, markSpans, detectUncheckedCitationForms } from './lib/citation-parse.mjs';
 import { loadConfig, resolveCitations } from './lib/citation-cascade.mjs';
 import { isProtectedPath, isMarkdownOrTexFile, chapterDirLabel } from './lib/protected-path.mjs';
 
@@ -71,6 +71,7 @@ const ENV_SWITCH_NAMES = [
   'ACADEMIC_CITATION_AMBIGUOUS',
   'ACADEMIC_CITATION_CASCADE',
   'ACADEMIC_CITATION_MAX_PER_WRITE',
+  'ACADEMIC_CITATION_UNCHECKED_NOTICE',
 ];
 // Mindestlänge eines Zitat-Spans (in Zeichen). Muss mit den Regex-Quantifizierern übereinstimmen.
 const MIN_QUOTE_LEN = 10;
@@ -546,12 +547,42 @@ function blockCitation(citation, reasonLine) {
   process.exit(2);
 }
 
+/** Schalter fuer den Ungeprueft-Hinweis (Issue #740, AC7); Default "on". */
+function uncheckedNoticeEnabled(env = process.env) {
+  return (env.ACADEMIC_CITATION_UNCHECKED_NOTICE || 'on').toLowerCase() !== 'off';
+}
+
+/**
+ * Meldet Belege in nicht geprüften Formen (LaTeX-/Markdown-Fußnote,
+ * numerischer Verweis) einmal je Write auf stderr — nicht blockierend,
+ * unabhängig davon, ob ``extractCitations()`` überhaupt etwas findet
+ * (Issue #740, AC6/AC7: „nicht unterstützt heißt nicht stillschweigend").
+ */
+function reportUncheckedCitationForms(content, filePath, env = process.env) {
+  if (!uncheckedNoticeEnabled(env)) return;
+  const findings = detectUncheckedCitationForms(content);
+  if (findings.length === 0) return;
+  const kinds = [...new Set(findings.map((f) => f.kind))].join(', ');
+  process.stderr.write(
+    `[Citation-Guard] Hinweis: ${findings.length} Beleg(e) in ungeprüfter Form `
+    + `(${kinds}) in ${filePath || '(unbekannter Pfad)'} — werden NICHT gegen den Vault `
+    + `geprüft. Beispiel: ${findings[0].raw}. Abstellen: `
+    + 'ACADEMIC_CITATION_UNCHECKED_NOTICE=off.\n'
+  );
+}
+
 /**
  * Führt den Klammer-Beleg-Check aus. Blockiert (exit 2) bei sauberem Negativ,
  * markiert bei probable/unavailable mit [UNVERIFIED] (exit 0) und gibt sonst
  * die Kontrolle zurück.
  */
 async function runCitationCheck(toolName, toolInput, content) {
+  // Unabhaengig vom occurrences.length === 0-Early-Return unten (Issue #740,
+  // Plan Task 7): sonst bliebe ausgerechnet der Fall aus dem Issue-Text —
+  // ein woertliches Zitat mit AUSSCHLIESSLICH einer ungeprueften Beleg-Form —
+  // ohne jede Rueckmeldung.
+  reportUncheckedCitationForms(content, toolInput.file_path);
+
   const occurrences = extractCitations(content);
   if (occurrences.length === 0) return;
 
