@@ -192,8 +192,9 @@ def test_strategy_names_api_budget_as_operator_decision(strategy_text):
     assert re.search(r"\d", section), (
         "Der API-Budget-Abschnitt muss eine Groessenordnung beziffern (Calls/Kosten)."
     )
-    assert "ANTHROPIC_API_KEY" in section, (
-        "Der API-Budget-Abschnitt muss benennen, woran die realen Laeufe haengen."
+    assert "CLAUDE_CODE_OAUTH_TOKEN" in section or "claude" in section.lower(), (
+        "Der API-Budget-Abschnitt muss benennen, woran die realen Laeufe haengen "
+        "(seit Issue #716: OAuth-Session/claude-CLI, kein ANTHROPIC_API_KEY mehr)."
     )
 
 
@@ -358,12 +359,12 @@ def _run_inner_pytest(deselect_nodeid: str) -> subprocess.CompletedProcess[str]:
 
 def test_skip_count_matches_real_pytest_run(strategy_text, request):
     """Die dokumentierte Skip-Zahl muss zu einem echten Lauf passen (Issue #619)."""
-    if os.environ.get("ANTHROPIC_API_KEY") or claude_cli_available():
+    if claude_cli_available():
         pytest.skip(
-            "Mit gesetztem ANTHROPIC_API_KEY oder installierter claude-CLI (Issue "
-            "#631, CLI-Rueckfallpfad in eval_runner.call_claude) laufen deutlich "
+            "Mit installierter claude-CLI (Issue #631, CLI-Aufrufweg in "
+            "eval_runner.call_claude, seit #716 der einzige Weg) laufen deutlich "
             "weniger Tests still durch/echt statt zu skippen; die dokumentierte "
-            "Zahl gilt nur fuer den Lauf ohne beides."
+            "Zahl gilt nur fuer den Lauf ohne CLI."
         )
     sentence = _current_skip_sentence(strategy_text)
     match = re.search(r"(\d+)\s*passed,\s*(\d+)\s*skipped", sentence)

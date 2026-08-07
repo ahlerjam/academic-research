@@ -26,8 +26,8 @@ evals/sparring-partner/evals.json, geprueft durch:
   die Kriterien waren vor der Aufnahme committed und dem Aufnahme-Subprozess
   nicht bekannt (siehe recordings.json::provenance).
 - tests/evals/test_sparring_partner_evals.py (API-gated, Live-Aufruf gegen
-  `model="claude-opus-4-6"`, skippt ohne ANTHROPIC_API_KEY) -- Nachweis fuer
-  den Anthropic-API-Aufrufweg.
+  `model="claude-opus-4-6"`, skippt ohne verfuegbare claude-CLI-Session) --
+  Nachweis fuer den claude-CLI-Aufrufweg (OAuth-Session, Issue #716).
 
 Siehe docs/evals/STRATEGY.md (Status `structural`: pro pytest-Lauf wird kein
 Modell befragt).

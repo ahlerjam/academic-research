@@ -77,9 +77,9 @@ Tell-Dichte oben nutzt dieselben Draft-Paare.
 
 ### Voraussetzungen
 
-- `ANTHROPIC_API_KEY` in der Shell gesetzt
 - Zugang zu GPTZero (https://gptzero.me) oder OriginalityAI
-- Claude Code mit dem `academic-research`-Plugin geladen
+- Claude Code mit dem `academic-research`-Plugin geladen (eingeloggte Session,
+  kein separater `ANTHROPIC_API_KEY` nötig)
 
 ### Schritte
 

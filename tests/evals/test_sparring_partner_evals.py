@@ -3,9 +3,9 @@
 Deckt AC2 (substanzielle Schwaeche + konkrete Alternative statt Bestaetigung),
 AC3b (Argumentation am konkreten Material aus academic_context.md/Vault) und
 AC5 (Widerspruch bei bewusst schwacher Forschungsfrage) inhaltlich ab.
-API-gated: ohne ANTHROPIC_API_KEY skippt die gesamte Suite (Muster
-tests/evals/test_quality_reviewer_evals.py, kein API-Key/Budget in diesem
-Runner-Kontext, vgl. Issue #55).
+API-gated: ohne verfuegbare claude-CLI-Session skippt die gesamte Suite
+(Muster tests/evals/test_quality_reviewer_evals.py, kein API-Key/Budget in
+diesem Runner-Kontext, vgl. Issue #55; SDK-Pfad entfallen seit #716).
 
 ``model`` wird explizit auf die Frontmatter (``model: opus`` in
 agents/sparring-partner.md) abgestimmt uebergeben, statt den Default von

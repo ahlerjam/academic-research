@@ -37,7 +37,7 @@ danach höchstens den passenden Report.
 ## Ausfuehrung
 
 ```
-export ANTHROPIC_API_KEY=sk-ant-...
+claude auth login   # einmalig, falls noch keine eingeloggte Session existiert
 pytest tests/evals/ -v
 ```
 
