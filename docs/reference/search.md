@@ -72,16 +72,57 @@ unverändert weiter.
 
 Jedes Paper wird nach 5 Dimensionen bewertet (0–1):
 
-| Dimension | Gewicht | Berechnung |
+| Dimension | Gewicht (Default) | Berechnung |
 |-----------|---------|------------|
 | **Relevanz** | 35 % | Keyword-Match Titel (70 %) + Abstract (30 %) + Phrasen-Bonus |
-| **Aktualität** | 20 % | Exponentieller Verfall, 5-Jahre-Halbwertzeit |
-| **Qualität** | 15 % | Zitationen/Jahr, Log-Skalierung |
+| **Aktualität** | 20 % | Exponentieller Verfall, Halbwertszeit profilabhängig (Default 5 Jahre) |
+| **Qualität** | 15 % | OpenAlex `fwci` (feldnormalisierter Zitationsimpact, Weltdurchschnitt = 1.0), sonst Rückfall auf Zitationen/Jahr mit Log-Skalierung |
 | **Autorität** | 15 % | Venue-Reputation (IEEE = 1.0, Mid = 0.7, Other = 0.4) |
 | **Zugang** | 15 % | Open Access = 1.0, Institutional = 0.8, DOI = 0.5, URL = 0.2 |
 
 Nur die Relevanz-Dimension nutzt einen LLM-Agent (`relevance-scorer`); die übrigen vier
-berechnet die Command-Logik deterministisch.
+berechnet `scripts/scoring.py` deterministisch (`tests/test_scoring.py`).
+
+### Feldnormalisierte Qualität (fwci)
+
+Rohe Zitationszahlen vergleichen Felder mit sehr unterschiedlichen
+Zitiergewohnheiten (Medizin vs. Germanistik) auf einer Skala. OpenAlex liefert
+dafür `fwci` (Field-Weighted Citation Impact) bereits im Work-Objekt — ein
+Wert von 1.0 entspricht dem Weltdurchschnitt für Feld/Jahr/Typ. `scripts/scoring.py`
+verwendet `fwci`, wenn die Suche es geliefert hat (`min(fwci / 2, 1.0)`,
+nach oben geklemmt, da `fwci` unbeschränkt ist), sonst den bisherigen
+Rohwert. Die Herkunft steht im Ergebnis (`quality_source: "fwci"|"raw"`).
+
+### Profilabhängige Halbwertszeit und Gewichte (#705)
+
+Der pauschale 5-Jahre-Verfall bestraft Grundlagenliteratur systematisch — bei
+einer Literaturarbeit ist das rückwärts. Halbwertszeit und alle fünf Gewichte
+lassen sich daher pro Bibliotheksprofil überschreiben
+(`~/.academic-research/library-profiles/active.yaml`, Abschnitt `scoring:`);
+fehlt der Abschnitt oder ein einzelnes Feld darin, gelten die Default-Werte
+aus der Tabelle oben (`scripts/scoring.py`, `load_profile()`).
+
+Zwei Presets liegen unter `library-profiles/profiles/` bereit und lassen sich
+in die eigene `active.yaml` übernehmen:
+
+| Preset | Halbwertszeit | Schwerpunkt |
+|--------|---------------|-------------|
+| `systematic-review.yaml` | 15 Jahre | Grundlagenliteratur bleibt sichtbar (mehr Gewicht auf Qualität/Autorität, weniger auf Aktualität) |
+| `fachhausarbeit.yaml` | 3 Jahre | Aktueller Forschungsstand (mehr Gewicht auf Aktualität) |
+
+**Beispiel** — ein hoch zitiertes 1998er-Grundlagenwerk
+(`fwci: 3.0`, Journal-Venue, Open Access, Relevanz 0.8, aktuelles Jahr 2026):
+
+| Profil | Halbwertszeit | Gesamtscore | Cluster |
+|--------|---------------|-------------|---------|
+| Default (5 Jahre) | 5 Jahre | ≈ 0.69 | Ergänzungsliteratur (< 0.75) |
+| `systematic-review` | 15 Jahre | ≈ 0.81 | **Kernliteratur** (≥ 0.75) |
+
+Unter dem heutigen Default fällt das Paper allein durch sein Alter aus der
+Kernliteratur; unter dem Review-Profil bleibt es dank geringerem
+Aktualitätsgewicht und längerer Halbwertszeit oben (siehe
+`tests/test_scoring.py::test_review_profile_keeps_landmark_1998_paper_in_top_cluster`
+für die exakte Rechnung).
 
 ## Cluster
 

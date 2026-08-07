@@ -1,0 +1,20 @@
+# systematic-review.yaml — Preset fuer Systematic Reviews (#705)
+#
+# Systematic Reviews suchen bewusst nach Grundlagenliteratur; ein Klassiker
+# von vor 20+ Jahren soll nicht allein wegen seines Alters aus den Top-Raengen
+# fallen, solange er inhaltlich (Relevanz) und nach Zitationsimpact (fwci)
+# trägt. Halbwertszeit daher deutlich laenger als der 5-Jahre-Default,
+# Qualitaets-/Autoritaetsgewicht hoeher, Aktualitaetsgewicht entsprechend
+# niedriger. Gewichte summieren sich auf 1.0.
+#
+# Einbinden: den `scoring:`-Block in die aktive `active.yaml` uebernehmen
+# oder per Setup-Skript referenzieren.
+
+scoring:
+  half_life_years: 15
+  weights:
+    relevance: 0.30
+    recency: 0.10
+    quality: 0.25
+    authority: 0.20
+    access: 0.15

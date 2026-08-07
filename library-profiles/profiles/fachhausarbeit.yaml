@@ -1,0 +1,18 @@
+# fachhausarbeit.yaml — Preset fuer Fachhausarbeiten/Seminararbeiten (#705)
+#
+# Fachhausarbeiten verlangen typischerweise aktuellen Forschungsstand;
+# Halbwertszeit kuerzer als der 5-Jahre-Default, Aktualitaetsgewicht hoeher,
+# Qualitaets-/Autoritaetsgewicht entsprechend niedriger als beim
+# Systematic-Review-Profil. Gewichte summieren sich auf 1.0.
+#
+# Einbinden: den `scoring:`-Block in die aktive `active.yaml` uebernehmen
+# oder per Setup-Skript referenzieren.
+
+scoring:
+  half_life_years: 3
+  weights:
+    relevance: 0.35
+    recency: 0.30
+    quality: 0.10
+    authority: 0.10
+    access: 0.15
