@@ -10,6 +10,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Chunking an GROBID-Sektionsgrenzen statt am Title-Case-Regex (#709):** Ist
+  `GROBID_URL` gesetzt, schneidet `chunk_pdf()` jetzt an den echten Sektions-
+  und Absatzgrenzen des TEI. Bisher lief auch der GROBID-Fall über die
+  Heuristik `_HEADING_RE`, die laut eigenem Kommentar „Smith" oder „However"
+  für Überschriften hält — das ergab falsche `section_title`-Labels und
+  Chunkgrenzen mitten im Argument. Neu in `academic_vault/fulltext.py`:
+  `parse_tei_sections()` (liefert `TeiSection`/`TeiParagraph` aus
+  `<div>`/`<head>`/`<p>` des `<body>`, gleicher gehärteter XML-Parser wie der
+  Fließtext-Pfad, gleiche `MAX_FULLTEXT_CHARS`-Deckelung) und
+  `extract_grobid_sections()`, das zusätzlich `teiCoordinates=head|p`
+  anfordert — nur über `@coords` (`page,x,y,w,h`) trägt das TEI eine
+  Seitenzahl. Neu in `academic_vault/chunking.py`: `chunk_sections()`. Das
+  Tokenbudget bleibt der harte Deckel; innerhalb des Fensters wird auf die
+  letzte Absatz-/Sektionsgrenze zurückgeschnappt, sofern der Chunk dabei
+  mindestens `MIN_BOUNDARY_FILL_RATIO` (0,6) des Fensters füllt. Overlap
+  entsteht nur noch bei einem budgetgetriebenen Schnitt — endet ein Chunk an
+  einer Absatzgrenze, beginnt der nächste genau dort. Eine Sektion über dem
+  Budget wird weiterhin in mehrere überlappende Chunks zerlegt.
+  Ohne `GROBID_URL` ist der Pfad unverändert und es findet kein HTTP-Versuch
+  statt; jeder Fehler und jedes leere TEI-Ergebnis fallen mit Warnung auf den
+  pypdf-Seitenpfad zurück. GROBID bleibt Opt-in. Die neue Repo-Fixture
+  `tests/fixtures/chunking/grobid_tei_sample.xml` deckt den GROBID-Pfad ab,
+  ohne dass ein Server laufen muss.
+
 - **Retrieval-Goldset auf Chunk-Ebene, hermetisch in CI (#708):** Neues Goldset
   (`tests/fixtures/retrieval_goldset_chunks_708/`) aus 30 Chunks und 26 Queries,
   das die Strecke misst, die tatsächlich läuft: 448-Token-Chunks aus
