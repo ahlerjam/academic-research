@@ -192,18 +192,6 @@ def _get_cluster_ids(
     return cluster_ids
 
 
-def _conflicting_ids(ids_a: dict[str, str | None], ids_b: dict[str, str | None]) -> bool:
-    """Prüfe, ob zwei ID-Dictionaries echte Konflikte haben: beide Seiten tragen
-    IDs desselben Typs mit unterschiedlichem Wert. Dies ist eine PAARWEISE Prüfung
-    und erzeugt nicht die Transitivitäts-Garantie für Cluster (#707)."""
-    for id_type in ("doi", "arxiv_id", "pmid", "openalex_id"):
-        val_a = ids_a.get(id_type)
-        val_b = ids_b.get(id_type)
-        if val_a and val_b and val_a != val_b:
-            return True
-    return False
-
-
 def _cluster_has_conflicting_ids(
     cluster_a: dict[str, set[str]], cluster_b: dict[str, set[str]]
 ) -> bool:
@@ -254,8 +242,11 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
     clusters of i and j are not unioned if they carry non-empty IDs of the
     same type with different values — preventing transitive merges that lose
     contradictory IDs (e.g., two papers with different DOIs bridged by an
-    ID-less record). Papers with no ID at all keep today's pure title-similarity
-    behavior (#707 AC4).
+    ID-less record). NOTE: this cluster-level check is applied in the order
+    of similarity-passing pairs, not permutation-invariant; order-independence
+    guarantee holds only for Level 1 (#707 AC1, until P1 reihenfolge-fix).
+    Papers with no ID at all keep today's pure title-similarity behavior
+    (#707 AC4).
 
     Returns deduplicated list.
     """
@@ -290,23 +281,56 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
                 uf.union(first, other)
 
     titles = [(paper.get("title") or "").strip() for paper in working]
+    # Collect candidate pairs (i, j) where titles are similar
+    # BEFORE cluster conflict checks (optimization: #707 P1 performance).
+    candidate_pairs: list[tuple[int, int]] = []
     for i in range(count):
         if not titles[i]:
             continue
         for j in range(i + 1, count):
             if not titles[j] or uf.find(i) == uf.find(j):
                 continue
-            # Cluster-level conflict check: gather all IDs already in each cluster
-            cluster_i_members = [idx for idx in range(count) if uf.find(idx) == uf.find(i)]
-            cluster_j_members = [idx for idx in range(count) if uf.find(idx) == uf.find(j)]
-            cluster_i_ids = _get_cluster_ids(cluster_i_members, ids_per_paper)
-            cluster_j_ids = _get_cluster_ids(cluster_j_members, ids_per_paper)
-            if _cluster_has_conflicting_ids(cluster_i_ids, cluster_j_ids):
-                # The clusters have contradictory IDs of the same type —
-                # do not merge (#707 P1).
-                continue
             if _title_similarity(titles[i], titles[j]) >= threshold:
-                uf.union(i, j)
+                candidate_pairs.append((i, j))
+
+    # Process candidates with cluster-level conflict checking.
+    # Cache cluster IDs per root to avoid O(n^3) re-scans.
+    cluster_id_cache: dict[int, dict[str, set[str]]] = {}
+
+    for i, j in candidate_pairs:
+        # Skip if they've been merged by a previous pair
+        root_i, root_j = uf.find(i), uf.find(j)
+        if root_i == root_j:
+            continue
+
+        # Get or compute cluster IDs
+        if root_i not in cluster_id_cache:
+            cluster_i_members = [idx for idx in range(count) if uf.find(idx) == root_i]
+            cluster_id_cache[root_i] = _get_cluster_ids(cluster_i_members, ids_per_paper)
+        if root_j not in cluster_id_cache:
+            cluster_j_members = [idx for idx in range(count) if uf.find(idx) == root_j]
+            cluster_id_cache[root_j] = _get_cluster_ids(cluster_j_members, ids_per_paper)
+
+        if _cluster_has_conflicting_ids(cluster_id_cache[root_i], cluster_id_cache[root_j]):
+            # The clusters have contradictory IDs — do not merge (#707 P1).
+            continue
+
+        # Merge and update cache: combine cluster IDs, invalidate old roots
+        uf.union(i, j)
+        new_root = uf.find(i)
+        merged_ids: dict[str, set[str]] = {
+            "doi": set(),
+            "arxiv_id": set(),
+            "pmid": set(),
+            "openalex_id": set(),
+        }
+        for id_type in merged_ids:
+            merged_ids[id_type].update(cluster_id_cache[root_i].get(id_type, set()))
+            merged_ids[id_type].update(cluster_id_cache[root_j].get(id_type, set()))
+        cluster_id_cache[new_root] = merged_ids
+        # Invalidate old roots
+        cluster_id_cache.pop(root_i, None)
+        cluster_id_cache.pop(root_j, None)
 
     clusters: dict[int, list[dict[str, Any]]] = {}
     for index, paper in enumerate(working):
