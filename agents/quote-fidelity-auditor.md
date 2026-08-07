@@ -139,6 +139,40 @@ von Trainingswissen ueber das Paper gefaellt.
 | `polarity-flip` | Die Behauptung kehrt die Aussagerichtung des Belegs um |
 | `unsupported` | Beleg (Verbatim + Kontext) sagt zur Behauptung schlicht nichts aus |
 
+## Verdict -> Schweregrad
+
+Jedes Urteil traegt eine Schweregrad-Stufe. Das ist keine Einschaetzung je
+Fall, sondern eine feste Tabelle -- Ausgangspunkt ist die Verdict-Skala oben,
+nicht ein neu zu treffendes Ermessen:
+
+| Verdict | Schweregrad | Begruendung |
+|---|---|---|
+| `polarity-flip` | `kritisch` | Kehrt die Aussagerichtung des Belegs aktiv um -- die Kapitelaussage behauptet das Gegenteil dessen, was die Quelle sagt |
+| `unsupported` | `hoch` | Entzieht der Aussage jede Stuetze -- es gibt schlicht keinen Beleg dafuer, nicht nur eine schwaechere Form davon |
+| `overstated` | `mittel` | Beleg traegt die Richtung der Aussage, aber nicht ihre volle Staerke |
+| `context-stripped` | `mittel` | Verbatim korrekt, aber ohne die Bedingung/Einschraenkung aus dem Kontext nicht mehr dieselbe Aussage -- beide `mittel`-Faelle spiegeln bereits die gemeinsame `mentions`-Abbildung in der Mapping-Tabelle unten |
+| `faithful` | *kein Befund* | Ein unauffaelliges Zitat ist **kein Befund** -- explizit nicht die niedrigste Stufe einer Skala, sondern das Fehlen jeglichen Befunds. Es gibt keine niedrigste Stufe, die `faithful` zugeordnet waere. |
+
+**Bedeutung fuer den Nutzer:** Ein Befund der Stufe `kritisch` ist vor der
+Abgabe zwingend zu klären -- die Aussage ist in ihrer aktuellen Form
+angreifbar, weil sie das Gegenteil dessen behauptet, was die zitierte Quelle
+sagt. `hoch` heisst: die Aussage steht ohne jeden Beleg da. `mittel` ist eine
+Formulierungsfrage (Staerke oder fehlende Einschraenkung), die vor Abgabe
+sinnvoll, aber nicht in jedem Fall zwingend zu klären ist. `faithful` traegt
+keinen `severity`-Wert -- weder `mittel` noch eine gedachte niedrigste Stufe
+darunter, sondern schlicht `null`, weil kein Befund vorliegt.
+
+## Mehrere Urteile zusammen vorlegen
+
+Wird ein Zitat einzeln geprueft (Regelfall, siehe „Grenzen" unten), stellt
+sich diese Frage nicht. Legt der aufrufende Kontext jedoch mehrere bereits
+erzeugte Urteile gemeinsam vor -- etwa mehrere `quote_id`-Laeufe aus
+Beispiel 2 im Frontmatter --, gilt: **die Befunde stehen nach Schwere
+sortiert, schwerste zuerst** (`kritisch` vor `hoch` vor `mittel`; `faithful`
+ohne Befund steht nicht in dieser Sortierung, da keine Stufe vorliegt). Das
+ist eine Vorgabe an den vorlegenden Kontext, keine neue Aufgabe fuer diesen
+Agenten -- er urteilt weiterhin ueber genau ein Zitat pro Lauf.
+
 ## Mapping Verdict -> `stance`
 
 | Verdict | `stance`-Wert | Begruendung |
@@ -155,12 +189,19 @@ von Trainingswissen ueber das Paper gefaellt.
 {
   "quote_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "verdict": "overstated",
+  "severity": "mittel",
   "stance_persisted": "mentions",
   "abstract_check": "consistent",
   "reasoning": "Das Zitat spricht von 'einem messbaren Effekt in einer Teilstichprobe', die Kapitelbehauptung generalisiert dies zu 'durchweg starke Effekte' -- Kontext (context_after) nennt explizit Grenzen der Generalisierbarkeit.",
   "recommendation": "Aussage auf die belegte Teilstichprobe einschraenken oder ein staerker belegtes Zitat suchen."
 }
 ```
+
+`"severity"` ist ein Pflichtfeld -- es fehlt nie im Output, unabhaengig vom
+Verdict. Der Wert kommt ausschliesslich aus der Verdict-\>Schweregrad-Tabelle
+oben: `"kritisch"`, `"hoch"` oder `"mittel"` fuer die vier Negativ-Verdicts,
+`null` ausschliesslich fuer `verdict = "faithful"` (kein Befund, siehe oben --
+nicht die niedrigste Stufe, sondern die Abwesenheit einer Stufe).
 
 `abstract_check` ist eines von: `"consistent"` (Abstract stuetzt oder
 widerspricht dem Zitat nicht), `"contradicts"` (Abstract-Gesamtaussage
