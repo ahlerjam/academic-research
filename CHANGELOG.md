@@ -8,6 +8,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Added
+
+- **Schweregrad für Zitat-Urteile (#736):** `quote-fidelity-auditor` gibt zu
+  jedem Urteil ein Pflichtfeld `severity` zurück — eine feste Tabelle ordnet
+  `polarity-flip` der Stufe `kritisch` zu (kehrt die Aussagerichtung aktiv
+  um), `unsupported` der Stufe `hoch` (entzieht jede Stütze) und
+  `overstated`/`context-stripped` gemeinsam der Stufe `mittel`
+  (Formulierungsfrage). `faithful` erhält `null` — kein Befund, ausdrücklich
+  nicht die niedrigste Stufe einer Skala. Werden mehrere Urteile gemeinsam
+  vorgelegt (mehrere `quote_id`-Läufe), stehen sie nach Schwere sortiert,
+  schwerste zuerst. Rein additive Spezifikationsänderung an
+  `agents/quote-fidelity-auditor.md`: kein Vault-Schema-Change (Severity wird
+  nicht persistiert, nur dokumentiert), keine Änderung an den fünf Verdicts,
+  der Verdict→`stance`-Tabelle oder den drei Prüfebenen.
+  `academic_vault/nli_prefilter.py` (der NLI-Zitatscan) bewertet weiterhin
+  mit seiner eigenen binären Skala und reicht Kandidaten unverändert an den
+  Auditor weiter — er ist an die neue Severity-Stufe aktuell nicht
+  angebunden, das ist an dieser Stelle explizit dokumentiert statt
+  stillschweigend übersprungen.
+
 ### Changed
 
 - **`pdfplumber` ist Kern-Dependency (#723):** Strukturerhaltende Tabellenextraktion
