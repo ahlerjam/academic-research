@@ -141,20 +141,25 @@ Führende **Namenspartikel** werden dabei zusätzlich weggefaltet: im Text steht
 `(von Neumann 1945)`, CSL-JSON führt das Partikel dagegen separat in
 `non-dropping-particle` und `family` bleibt `Neumann` — ohne diese Variante
 blockte der Guard Belege, deren Paper längst im Vault liegt.
-Die beiden Seitenquellen wiegen unterschiedlich: nur der vollständige
-Seitenumfang aus `page_first`/`page_last` kann eine Seite **widerlegen**.
-`quotes.printed_page` ist eine punktuelle Stichprobe der bereits extrahierten
-Stellen und kann eine Seite nur bestätigen — dass aus S. 47 noch nichts
-extrahiert wurde, sagt nichts darüber aus, ob das Werk eine S. 47 hat.
+Die beiden Seitenquellen wiegen unterschiedlich, seit Issue #724 aber nicht
+mehr so, dass eine der beiden nie widerlegen könnte: der vollständige
+Seitenumfang aus `page_first`/`page_last` ist immer autoritativ. Liegt er
+NICHT vor, wird `quotes.printed_page` — die punktuelle Stichprobe der bereits
+extrahierten Stellen — selbst zum widerlegenden Signal: deckt keine bekannte
+Stichprobe die Beleg-Seite (bzw. bei einem Seitenbereich keine davon eine
+Seite im Bereich), gilt die Seite als `page-mismatch`. Nur wenn zum Paper
+**gar keine** Seitendaten hinterlegt sind (weder Umfang noch Stichprobe),
+bleibt der dokumentierte Soft-Pass (`unknown`). Ein Seitenbereich im Beleg
+(`S. 45–47`) gilt als gedeckt, sobald irgendeine bekannte Seite darin liegt —
+`page_offset` (`vault.set_page_offset`) wirkt bereits auf `printed_page`
+selbst, verglichen wird also stets die gedruckte, nie die PDF-Seite.
 
 **Nicht geprüft** (bewusst, gegen False Positives): Code-Fences und
 Inline-Code, LaTeX-Makros (`\cite{…}`, `\ref{…}`), nackte Jahresklammern
 (`(2021)`), Struktur-Verweise (`(siehe Kapitel 2)`, `(vgl. Abb. 3)`),
 Datums- und Standangaben (`(Januar 2021)`, `(März 2020)`, `(Stand 2021)`,
 `(Fassung 2019)`), `ebd.`/`a.a.O.` sowie alles ab der Überschrift des
-Literaturverzeichnisses. Hat der Vault zu einem Paper **keinen vollständigen
-Seitenumfang**, gilt die Seitenzahl als nicht widerlegbar (dokumentierter
-Soft-Pass).
+Literaturverzeichnisses.
 
 **Geprüft wird jede erkannte Form, und ein sauberes Negativ blockiert sie
 auch.** Ob Vault und Kaskade nichts finden, hängt nicht daran, wie der Beleg
@@ -246,8 +251,7 @@ Vault geprüft.
 
 Ebenfalls **nicht** erfasst — bewusst, weil der Regex sonst zu viele
 Falschtreffer produziert: Körperschaftsautoren (`(Statistisches Bundesamt
-2021)`). Bei Belegen mit Seitenbereich (`S. 45–47`) wird die erste Seite
-geprüft. Ein Signalwort, das über eine nicht geprüfte Region hinweg auf einen
+2021)`). Ein Signalwort, das über eine nicht geprüfte Region hinweg auf einen
 Namen zeigt (`vgl. (Müller 2021, S. 45) Schmidt 2019`, `vgl. \cite{…} Schmidt
 2019`), zählt ebenfalls nicht: der Beleg hinter der Klammer bzw. dem Makro
 steht dort nicht als Ziel des Signalworts, und die Klammer selbst hat der
@@ -286,7 +290,7 @@ selbst). Erst ein wirklich gelesener Co-Autor liefert hier Punkte.
 | `unavailable` | Timeout / `ECONNREFUSED` / abgebrochener Body / **jeder** Nicht-2xx-Status (5xx, 429, aber auch 403-Drosselung und 404) / HTTP 200 mit unlesbarem Body | allow + `[UNVERIFIED]` |
 | `no-match`, eindeutige Form | alle Stufen haben sauber geantwortet (2xx + parsbarer Body im erwarteten Format), kein Treffer; Beleg trägt Seite, Signalwort, echten Co-Autor oder ist im Dokument korroboriert | **Block** (exit 2) |
 | `no-match`, nackte Form | dasselbe, aber `(Wort Jahr)` ohne Korroboration | **Block** (exit 2) — mit `ACADEMIC_CITATION_AMBIGUOUS=mark`: allow + `[UNVERIFIED]` |
-| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des **vollständigen** Seitenumfangs | **Block** (exit 2) |
+| `page-mismatch` | Autor/Jahr im Vault, Seite außerhalb des vollständigen Seitenumfangs bzw. — mangels Umfang — außerhalb aller bekannten `printed_page`-Stichproben | **Block** (exit 2) |
 | ungeprüft (Kontingent) | mehr Belege als `ACADEMIC_CITATION_MAX_PER_WRITE` (eindeutige zuerst) | allow + `[UNVERIFIED]` (stderr-Warnung) |
 
 Der Unterschied zwischen `no-match` und `unavailable` ist tragend: ein

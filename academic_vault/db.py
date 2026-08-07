@@ -1494,49 +1494,87 @@ class VaultDB:
         """
         return self._match_papers_in_snapshot(self._papers_snapshot(), family, year)
 
-    def page_coverage(self, paper_id: str, page: int) -> str:
-        """Prueft, ob ``page`` von den im Vault bekannten Seitendaten gedeckt ist.
+    def known_page_markers(self, paper_id: str) -> tuple[list[int], int | None, int | None]:
+        """Bekannte Seitendaten eines Papers: Stichproben-Set und ggf. voller Bereich.
 
-        Die beiden Quellen sind bewusst NICHT gleichwertig:
-
-        * ``papers.page_first``/``page_last`` beschreiben den vollstaendigen
-          Seitenumfang und koennen eine Seite deshalb auch widerlegen.
-        * ``quotes.printed_page`` ist eine punktuelle Stichprobe der bereits
-          extrahierten Stellen. Sie kann eine Seite nur BESTAETIGEN, niemals
-          widerlegen: dass aus S. 47 noch nichts extrahiert wurde, sagt nichts
-          darueber aus, ob das Werk eine S. 47 hat.
-
-        Rueckgabe:
-          ``"covered"``  — Seite liegt in ``[page_first, page_last]`` oder
-                            entspricht einer ``quotes.printed_page``.
-          ``"outside"``  — vollstaendiger Seitenumfang bekannt und Seite liegt
-                            ausserhalb. Nur dieser Fall ist blockierbar.
-          ``"unknown"``  — kein vollstaendiger Seitenumfang hinterlegt
-                            (dokumentierter Soft-Pass; sonst waeren
-                            Massen-False-Positives die Folge).
+        Rueckgabe ``(samples, page_first, page_last)`` — ``samples`` ist die
+        sortierte, deduplizierte Menge aller ``quotes.printed_page``-Werte;
+        ``page_first``/``page_last`` sind ``None``, wenn kein vollstaendiger
+        Seitenumfang hinterlegt ist (oder das Paper unbekannt ist).
         """
         with self._connection() as conn:
             row = conn.execute(
                 "SELECT page_first, page_last FROM papers WHERE paper_id = ?",
                 (paper_id,),
             ).fetchone()
-            pages = [
-                r["printed_page"]
-                for r in conn.execute(
-                    "SELECT printed_page FROM quotes WHERE paper_id = ? AND printed_page IS NOT NULL",
-                    (paper_id,),
-                ).fetchall()
-            ]
+            samples = sorted(
+                {
+                    r["printed_page"]
+                    for r in conn.execute(
+                        "SELECT printed_page FROM quotes "
+                        "WHERE paper_id = ? AND printed_page IS NOT NULL",
+                        (paper_id,),
+                    ).fetchall()
+                }
+            )
         if row is None:
-            return "unknown"
+            return samples, None, None
+        return samples, row["page_first"], row["page_last"]
+
+    def page_coverage(self, paper_id: str, page: int, page_end: int | None = None) -> str:
+        """Prueft, ob ``[page, page_end]`` von den im Vault bekannten Seitendaten
+        gedeckt ist. Ohne ``page_end`` (oder mit ``page_end == page``) wird eine
+        Einzelseite geprueft.
+
+        Die beiden Quellen sind bewusst NICHT gleichwertig (Issue #724 kehrt die
+        urspruengliche Regel aus #378 fuer den Faellen ohne vollstaendigen
+        Seitenumfang um):
+
+        * ``papers.page_first``/``page_last`` beschreiben den vollstaendigen
+          Seitenumfang und koennen eine Seite deshalb auch widerlegen.
+        * ``quotes.printed_page`` ist eine punktuelle Stichprobe der bereits
+          extrahierten Stellen. Liegt ZUSAETZLICH ein vollstaendiger
+          Seitenumfang vor, bestaetigt eine Stichprobe weiterhin auch dann,
+          wenn sie (fehlerhaft) ausserhalb dieses Umfangs liegt. Ist dagegen
+          KEIN vollstaendiger Seitenumfang bekannt, ist die Stichproben-Menge
+          die einzige verfuegbare Evidenz und wird selbst zum widerlegenden
+          Signal: liegt der Beleg nicht in dieser Menge, gilt er als
+          ``"outside"`` statt als unentscheidbar ``"unknown"``. Das senkt die
+          Trennschaerfe bei Buechern mit vielen, aber nur teilweise erfassten
+          Zitaten (Buecher/Kapitel mit mehreren Stichproben auf verschiedenen
+          Seiten) — akzeptierter Trade-off aus Issue #724, weil die
+          Seitenzahl sonst fuer den Regelfall des PDF-Ingests (kein CSL-
+          Seitenumfang) komplett ungeprueft bliebe.
+
+        Ein Seitenbereich (``page_end`` gesetzt) gilt als ``"covered"``, wenn
+        IRGENDEINE bekannte Einzelseite oder der vollstaendige Seitenumfang mit
+        dem Bereich ueberlappt.
+
+        Rueckgabe:
+          ``"covered"``  — Bereich ueberlappt ``[page_first, page_last]`` oder
+                            enthaelt eine bekannte ``quotes.printed_page``.
+          ``"outside"``  — vollstaendiger Seitenumfang bekannt und der Bereich
+                            liegt vollstaendig ausserhalb, ODER kein
+                            vollstaendiger Seitenumfang bekannt, aber
+                            mindestens eine Stichprobe vorhanden und keine
+                            davon im Bereich.
+          ``"unknown"``  — ueberhaupt keine Seitendaten zum Paper hinterlegt
+                            (dokumentierter Soft-Pass; sonst waeren
+                            Massen-False-Positives die Folge).
+        """
+        samples, first, last = self.known_page_markers(paper_id)
+        lo, hi = page, page if page_end is None else page_end
+        if hi < lo:
+            lo, hi = hi, lo
         # Stichprobe zuerst: eine belegte Quote-Seite bestaetigt auch dann,
         # wenn sie ausserhalb eines (ggf. fehlerhaften) Seitenumfangs liegt.
-        if page in pages:
+        if any(lo <= p <= hi for p in samples):
             return "covered"
-        first, last = row["page_first"], row["page_last"]
-        if first is None or last is None:
-            return "unknown"
-        return "covered" if first <= page <= last else "outside"
+        if first is not None and last is not None:
+            return "covered" if hi >= first and lo <= last else "outside"
+        if samples:
+            return "outside"
+        return "unknown"
 
     def set_ocr_done(self, paper_id: str, value: int = 1) -> None:
         """Setzt ocr_done-Flag fuer ein Paper."""
