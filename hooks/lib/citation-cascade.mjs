@@ -7,10 +7,19 @@
  *   2. CrossRef     — DOI-Metadaten, je offenem Beleg eine Anfrage
  *   3. Semantic Scholar — Fuzzy-Match, Gate: Autoren-Ueberlapp >= S2_MIN_OVERLAP
  *
- * Score-Modell (0-100, siehe README "Klammer-Zitat-Validierung"):
+ * Score-Modell (0-100, siehe docs/reference/hooks.md "Klammer-Zitat-Validierung"):
  *   Familienname trifft            40
- *   Jahr exakt                     40   (Abweichung von genau 1 Jahr: 20)
- *   Autoren-Ueberlapp (Jaccard)  0-20
+ *   Jahr exakt                     30   (Abweichung von genau 1 Jahr: 15)
+ *   Autoren-Ueberlapp (Jaccard)  0-30   (NUR ueber Autoren jenseits des
+ *                                        bereits durch familyHit gematchten
+ *                                        Familiennamens — siehe scoreCandidate)
+ *
+ * Issue #740 (AC5): Familienname + Jahr allein erreichen ohne echte
+ * Zusatz-Evidenz maximal 70 Punkte — das liegt im "probable"-Band
+ * ([UNVERIFIED]), nicht mehr in "confirmed" (Default 80). Vorher genuegten
+ * 40+40=80 Punkte, sobald Crossref/arXiv/S2 IRGENDEIN Paper eines Autors
+ * gleichen Nachnamens im richtigen Jahr kennt — unabhaengig davon, ob es
+ * tatsaechlich das zitierte Werk ist.
  *
  * Ergebnis-Status je Beleg:
  *   confirmed   Score >= ACADEMIC_CITATION_CONFIRMED_MIN (Default 80) -> allow
@@ -97,16 +106,29 @@ export function authorOverlap(citationAuthors, candidateAuthors) {
   return union === 0 ? 0 : intersection / union;
 }
 
-/** Score eines Kandidaten fuer einen Beleg, 0-100. */
+/**
+ * Score eines Kandidaten fuer einen Beleg, 0-100.
+ *
+ * Issue #740 (AC5): die Autoren-Ueberlapp-Komponente zaehlt bewusst nur
+ * Autoren JENSEITS von ``citation.authors[0]`` (dem Familiennamen, der schon
+ * ``familyHit`` ausgeloest hat). Ohne diesen Ausschluss bestaetigt sich ein
+ * Einzelautoren-Beleg wie "(Müller, 2021)" ueber den Ueberlapp-Umweg selbst:
+ * ``citation.authors`` enthaelt dann nur ["Müller"], der Kandidat ebenfalls
+ * nur ["Müller"] — Jaccard-Ueberlapp 1.0, obwohl das keine zusaetzliche
+ * Evidenz ist. Erst ein WIRKLICH gelesener Co-Autor (oder "et al.") liefert
+ * hier Punkte, und genau das ist die Zusatz-Evidenz, die "confirmed"
+ * rechtfertigt.
+ */
 export function scoreCandidate(citation, candidate) {
   const families = candidate.authors || [];
   const familyHit = families.some((name) => familiesMatch(citation.family, name));
   if (!familyHit) return 0;
   let score = 40;
   const diff = Number.isFinite(candidate.year) ? Math.abs(candidate.year - citation.year) : null;
-  if (diff === 0) score += 40;
-  else if (diff === 1) score += 20;
-  score += Math.round(20 * authorOverlap(citation.authors, families));
+  if (diff === 0) score += 30;
+  else if (diff === 1) score += 15;
+  const extraAuthors = (citation.authors || []).slice(1);
+  score += Math.round(30 * authorOverlap(extraAuthors, families));
   return score;
 }
 

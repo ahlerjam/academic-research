@@ -162,12 +162,94 @@ const PAREN_CITATION = new RegExp(
   'u',
 );
 
-// Narrativ (ausserhalb von Klammern) — hier ist ein Signalwort Pflicht, sonst
-// wuerde jeder Satz mit "Name Jahreszahl" als Beleg gelten.
+// Signalwoerter fuer den Narrativ-Pass, case-insensitiv OHNE pauschales
+// 'i'-Flag auf dem Gesamtmuster (Issue #740, Plan-Risiko 1): ein 'i'-Flag
+// wuerde ``\p{Lu}`` im NAME-Baustein auch fuer Kleinbuchstaben wahr werden
+// lassen (verifiziert: ``/\p{Lu}/iu.test('a')`` -> true) und damit die
+// Grossschreibungs-Heuristik fuer Familiennamen aufweichen. Deshalb hier eine
+// explizite Gross/Klein-Alternation je Signalwort statt des Flags.
+const NARRATIVE_SIGNAL_CI = String.raw`(?:[Vv]gl\.|[Ss]iehe|[Zz]it\.\s*nach)`;
+
+// Narrativ mit Signalwort (ausserhalb von Klammern) — "vgl. Schmidt 2019".
 const NARRATIVE_CITATION = new RegExp(
-  String.raw`\b(?:vgl\.|siehe|zit\.\s*nach)\s+(${NAME})(${COAUTHORS})\s*,?\s*(\d{4})[a-z]?${PAGE}`,
+  String.raw`\b${NARRATIVE_SIGNAL_CI}\s+(${NAME})(${COAUTHORS})\s*,?\s*(\d{4})[a-z]?${PAGE}`,
   'gu',
 );
+
+// Narrativ mit Jahresklammer (ausserhalb von Klammern, Jahr selbst in
+// Klammern) — "Müller (2021, S. 45) zeigt", "Müller et al. (2021) belegen".
+// Ohne Seite/Co-Autor/Signalwort ist die Form von Prosa wie
+// "Die DSGVO (2016) trat in Kraft" nicht zu unterscheiden — dafuer
+// REPORTING_VERBS unten (Gate in extractCitations).
+const NARRATIVE_PAREN_YEAR = new RegExp(
+  String.raw`\b(${NAME})(${COAUTHORS})\s*\(\s*(\d{4})[a-z]?${PAGE}\s*\)`,
+  'gu',
+);
+
+// Berichtsverben, die eine Autoren-Zuschreibung anzeigen, wenn sie direkt
+// hinter "Name (Jahr)" folgen — noetig, um die bare Form ohne Seite/Co-Autor
+// ("Müller (2021) belegt …") von einer blossen Datums-/Struktur-Klammer wie
+// "Die DSGVO (2016) trat in Kraft" zu unterscheiden (siehe docs/reference/hooks.md).
+const REPORTING_VERBS = new Set([
+  'zeigt', 'zeigen', 'belegt', 'belegen', 'schreibt', 'schreiben',
+  'argumentiert', 'argumentieren', 'betont', 'betonen', 'konstatiert',
+  'konstatieren', 'erklaert', 'erklaeren', 'folgert', 'folgern', 'meint',
+  'meinen', 'kritisiert', 'kritisieren', 'resuemiert', 'resuemieren',
+  'sieht', 'sehen', 'beschreibt', 'beschreiben', 'analysiert', 'analysieren',
+  'untersucht', 'untersuchen', 'formuliert', 'formulieren',
+]);
+
+/** Vergleichsform fuer REPORTING_VERBS (klein, umlautgefaltet wie UMLAUT_FOLD). */
+function reportingVerbToken(token) {
+  return [...token.toLowerCase()].map((ch) => UMLAUT_FOLD[ch] ?? ch).join('');
+}
+
+/**
+ * True, wenn direkt nach [end] (ueberspringt optionales ":"/"," und
+ * Leerraum) ein Berichtsverb steht. Nur fuer die bare Narrativ-Form ohne
+ * Seite/Co-Autor relevant (siehe NARRATIVE_PAREN_YEAR-Docstring).
+ */
+function followedByReportingVerb(text, end) {
+  const rest = text.slice(end, end + 40);
+  const m = /^\s*[:,]?\s*(\p{L}+)/u.exec(rest);
+  if (!m) return false;
+  return REPORTING_VERBS.has(reportingVerbToken(m[1]));
+}
+
+// Trennstueck des Sekundaerbelegs "X, Jahr, zitiert nach Y, Jahr[, S. X]" —
+// case-insensitiv nur fuer "zitiert", nicht fuer die Namen (Risiko 1).
+const SECONDARY_SEPARATOR = /,\s*[Zz]itiert\s+nach\s+/u;
+
+/**
+ * Sekundaerbeleg-Erkennung innerhalb eines Klammerinhalts: "Schmidt, 2015,
+ * zitiert nach Müller, 2021, S. 45" wird zu ZWEI Citation-Objekten — dem
+ * nicht gelesenen Original (Schmidt) und dem tatsaechlich vorliegenden Werk
+ * (Müller, ``viaSecondary: true``). Gibt ``null`` zurueck, wenn keine der
+ * beiden Haelften ein gueltiger Beleg ist.
+ *
+ * @param {string} innerRaw  Klammerinhalt, UNGETRIMMT (fuer Offset-Treue)
+ * @param {number} innerAbsStart  Position von innerRaw[0] im Originaltext
+ * @param {string} content  Originaltext (fuer content.slice in buildCitation)
+ */
+function trySecondaryCitation(innerRaw, innerAbsStart, content) {
+  const sep = SECONDARY_SEPARATOR.exec(innerRaw);
+  if (!sep) return null;
+  const leftRaw = innerRaw.slice(0, sep.index);
+  const rightRaw = innerRaw.slice(sep.index + sep[0].length);
+  const leftMatch = PAREN_CITATION.exec(leftRaw);
+  const rightMatch = PAREN_CITATION.exec(rightRaw);
+  if (!leftMatch || !rightMatch) return null;
+  const leftStart = innerAbsStart + leftMatch.index;
+  const rightStart = innerAbsStart + sep.index + sep[0].length + rightMatch.index;
+  const first = buildCitation(
+    leftMatch, content.slice(leftStart, leftStart + leftMatch[0].length), leftStart,
+  );
+  const second = buildCitation(
+    rightMatch, content.slice(rightStart, rightStart + rightMatch[0].length), rightStart,
+  );
+  if (second) second.viaSecondary = true;
+  return { first, second };
+}
 
 // Woerter, die zwar gross geschrieben sind, aber nie ein Autorname eines
 // Belegs sind. Der Vergleich laeuft ueber die umlautgefaltete Kleinschreibung
@@ -200,7 +282,10 @@ function nonAuthorToken(token) {
 }
 
 // Ein Signalwort am Anfang des Belegs (mit oder ohne oeffnende Klammer).
-const SIGNAL_PREFIX = new RegExp(String.raw`^\(?\s*(?:${SIGNAL})`, 'u');
+// 'i'-Flag hier unbedenklich (anders als bei NARRATIVE_CITATION): SIGNAL
+// enthaelt kein \p{Lu} aus NAME, also keine Kollision mit Risiko 1. Deckt
+// u. a. "Vgl." am Satzanfang ab (Issue #740).
+const SIGNAL_PREFIX = new RegExp(String.raw`^\(?\s*(?:${SIGNAL})`, 'iu');
 
 // "u. a."/"et al." im Co-Autoren-Teil — eindeutiger Marker auch ohne Namen.
 const ET_AL_TEST = new RegExp(ET_AL, 'u');
@@ -300,33 +385,73 @@ export function extractCitations(content) {
     if (citation) citations.push(citation);
   };
 
-  // 1) Klammer-Belege
+  // 1) Klammer-Belege (inkl. Sekundaerbeleg "X, Jahr, zitiert nach Y, Jahr").
+  //    Nur ERFOLGREICH geparste Klammer-Spans werden fuer Pass 2 maskiert
+  //    (Issue #740, Plan-Risiko 2) — eine Struktur-Klammer wie
+  //    "(siehe Kapitel 2)" oder eine blosse Jahresklammer "(2021)" bleibt
+  //    sichtbar, weil NARRATIVE_PAREN_YEAR (Pass 2) genau diese Klammerform
+  //    hinter einem vorangehenden Namen braucht.
   const parens = /\(([^()\n]{1,200})\)/g;
   let match;
+  const parsedSpans = [];
   while ((match = parens.exec(masked)) !== null) {
-    const inner = match[1].trim();
-    const parsed = PAREN_CITATION.exec(inner);
+    const start = match.index;
+    const end = start + match[0].length;
+    const innerRaw = match[1];
+    const secondary = trySecondaryCitation(innerRaw, start + 1, content);
+    if (secondary) {
+      if (secondary.first || secondary.second) {
+        push(secondary.first);
+        push(secondary.second);
+        parsedSpans.push({ start, end });
+      }
+      continue;
+    }
+    const parsed = PAREN_CITATION.exec(innerRaw.trim());
     if (parsed) {
-      const start = match.index;
-      push(buildCitation(parsed, content.slice(start, start + match[0].length), start));
+      push(buildCitation(parsed, content.slice(start, end), start));
+      parsedSpans.push({ start, end });
     }
   }
 
-  // 2) Narrative Belege — Klammerinhalte vorher ausblenden, damit sie nicht
-  //    doppelt (und mit falschem raw-Text) erfasst werden.
-  const withoutParens = masked.replace(parens, (m) => ' '.repeat(m.length));
+  // 2) Narrative Belege — nur die von Pass 1 erfolgreich geparsten Klammern
+  //    werden ausgeblendet (laengenerhaltend), alle anderen Klammern bleiben
+  //    fuer NARRATIVE_PAREN_YEAR sichtbar.
+  let narrativeSource = masked;
+  for (const span of [...parsedSpans].sort((a, b) => b.start - a.start)) {
+    narrativeSource =
+      narrativeSource.slice(0, span.start)
+      + ' '.repeat(span.end - span.start)
+      + narrativeSource.slice(span.end);
+  }
+
+  // 2a) Narrativ mit Signalwort ("vgl. Schmidt 2019").
   NARRATIVE_CITATION.lastIndex = 0;
-  while ((match = NARRATIVE_CITATION.exec(withoutParens)) !== null) {
+  while ((match = NARRATIVE_CITATION.exec(narrativeSource)) !== null) {
     const start = match.index;
     const end = start + match[0].length;
-    // Maskierte Regionen sind Leerzeichen — das ``\s+`` hinter dem Signalwort
-    // springt sonst ueber eine ganze Klammer, ein ``\cite{...}`` oder einen
-    // Code-Fence hinweg und zieht Fremdtext in ``raw``. Ein solcher Treffer ist
-    // kein Beleg: er nennt einen Autor, der im Original gar nicht hinter dem
-    // Signalwort steht, und er UMSCHLIESST die echte Fundstelle. Verworfen,
-    // Suche eine Position weiter — die echte Klammer hat Pass 1 bereits.
-    if (spansMaskedRegion(content, withoutParens, start, end)) {
+    if (spansMaskedRegion(content, narrativeSource, start, end)) {
       NARRATIVE_CITATION.lastIndex = start + 1;
+      continue;
+    }
+    push(buildCitation(match, content.slice(start, end), start));
+  }
+
+  // 2b) Narrativ mit Jahresklammer ("Müller (2021, S. 45) zeigt",
+  //     "Müller et al. (2021) belegen"). Ohne Seite/Co-Autor/et-al. ist ein
+  //     REPORTING_VERB direkt nach der Klammer Pflicht (Gate gegen
+  //     "Die DSGVO (2016) trat in Kraft").
+  NARRATIVE_PAREN_YEAR.lastIndex = 0;
+  while ((match = NARRATIVE_PAREN_YEAR.exec(narrativeSource)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (spansMaskedRegion(content, narrativeSource, start, end)) {
+      NARRATIVE_PAREN_YEAR.lastIndex = start + 1;
+      continue;
+    }
+    const page = parsePage(match);
+    const coauthorText = (match[2] || '').trim();
+    if (page === null && coauthorText.length === 0 && !followedByReportingVerb(content, end)) {
       continue;
     }
     push(buildCitation(match, content.slice(start, end), start));
@@ -418,4 +543,99 @@ function upgradeCorroborated(citations) {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Ungeprüfte Belegformen (Issue #740, AC6/AC7) — grobe Erkennung ohne
+// Vault-Prüfung
+// ---------------------------------------------------------------------------
+
+// Nur Code/Kommentare ausblenden — bewusst NICHT die generelle
+// LaTeX-Makro-Maskierung aus MASKED_REGIONS: die verschluckt \footnote{...}
+// vollständig, bevor irgendein Zitat-Regex läuft (Plan-Risiko 6), und genau
+// das \footnote{...} mit Autor/Jahr-Payload ist der Fall, den dieser
+// Detektor sichtbar machen soll.
+const CODE_ONLY_SKIP_REGIONS = [
+  /```[\s\S]*?```/g,
+  /~~~[\s\S]*?~~~/g,
+  /`[^`\n]*`/g,
+  /<!--[\s\S]*?-->/g,
+];
+
+function maskCodeOnly(text) {
+  let masked = text;
+  for (const pattern of CODE_ONLY_SKIP_REGIONS) {
+    masked = masked.replace(pattern, (m) => ' '.repeat(m.length));
+  }
+  return masked;
+}
+
+const UNCHECKED_YEAR = String.raw`(?:1[4-9]\d{2}|2[0-2]\d{2})`;
+
+// \footnote{...} mit Autor+Jahr-Payload — grob (kein PAREN_CITATION-Parse,
+// nur "steht dort ein Name UND eine Jahreszahl").
+const LATEX_FOOTNOTE_CITE = new RegExp(
+  String.raw`\\footnote\{[^{}]*\p{Lu}[\p{L}'’-]+[^{}]*\b${UNCHECKED_YEAR}\b[^{}]*\}`,
+  'gu',
+);
+
+// Markdown-Fussnotendefinition am Zeilenanfang: "[^1]: Vgl. Müller 2021."
+const MARKDOWN_FOOTNOTE_DEF = /^[ \t]*\[\^[^\]\s]+\]:.*$/gmu;
+
+// Markdown-Fussnotenmarker im Fliesstext: "[^1]" (nicht die Definitionszeile
+// selbst — die hat MARKDOWN_FOOTNOTE_DEF bereits erfasst).
+const MARKDOWN_FOOTNOTE_REF = /\[\^[^\]\s]+\]/gu;
+
+// Numerischer Verweis IEEE-Stil: "[12]". Bewusst grob (AC6) — Aufzählungen
+// und Schrittnummern sind lexikalisch nicht auszuschliessen; der Detektor
+// meldet nur eine Fundstelle, prüft nichts.
+const NUMERIC_REFERENCE = /\[(\d{1,3})\]/gu;
+
+/**
+ * Grobe, VAULT-UNGEPRÜFTE Erkennung von Belegformen, die
+ * :func:`extractCitations` bewusst nicht abdeckt: LaTeX-Fussnoten mit
+ * Autor/Jahr-Payload, Markdown-Fussnotenmarker/-Definitionen, numerische
+ * Klammerverweise. Löst KEINE Vault-Prüfung aus — liefert nur Fundstellen,
+ * damit der Aufrufer (verbatim-guard.mjs) einmal je Write auf stderr
+ * hinweisen kann, dass diese Form ungeprüft bleibt (Issue #740, AC6/AC7).
+ *
+ * @param {string} content
+ * @returns {Array<{kind: string, raw: string, start: number, end: number}>}
+ */
+export function detectUncheckedCitationForms(content) {
+  if (!content) return [];
+  const masked = maskCodeOnly(content);
+  const findings = [];
+  let m;
+
+  LATEX_FOOTNOTE_CITE.lastIndex = 0;
+  while ((m = LATEX_FOOTNOTE_CITE.exec(masked)) !== null) {
+    findings.push({ kind: 'latex-footnote', raw: m[0], start: m.index, end: m.index + m[0].length });
+  }
+
+  MARKDOWN_FOOTNOTE_DEF.lastIndex = 0;
+  while ((m = MARKDOWN_FOOTNOTE_DEF.exec(masked)) !== null) {
+    const raw = m[0].trim();
+    const start = m.index + (m[0].length - m[0].trimStart().length);
+    findings.push({ kind: 'markdown-footnote', raw, start, end: start + raw.length });
+  }
+
+  MARKDOWN_FOOTNOTE_REF.lastIndex = 0;
+  while ((m = MARKDOWN_FOOTNOTE_REF.exec(masked)) !== null) {
+    // Definitionszeilen ("[^1]: ...") wurden oben bereits erfasst.
+    if (masked[m.index + m[0].length] === ':') continue;
+    findings.push({
+      kind: 'markdown-footnote', raw: m[0], start: m.index, end: m.index + m[0].length,
+    });
+  }
+
+  NUMERIC_REFERENCE.lastIndex = 0;
+  while ((m = NUMERIC_REFERENCE.exec(masked)) !== null) {
+    findings.push({
+      kind: 'numeric-reference', raw: m[0], start: m.index, end: m.index + m[0].length,
+    });
+  }
+
+  findings.sort((a, b) => a.start - b.start);
+  return findings;
 }
