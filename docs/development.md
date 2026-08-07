@@ -14,8 +14,8 @@ uv run pytest tests/
 
 Die Kern-Suite ist **offline-hermetisch** und läuft ohne Netzwerk. Übersprungen werden nur
 Tests mit externen Abhängigkeiten: die API-basierten Evals unter `tests/evals/` brauchen
-einen `ANTHROPIC_API_KEY`, einige Integrations-Tests werden ohne optionale Pakete (z. B.
-`requests`, `sqlite-vec`) automatisch geskippt. Die Gründe stehen in
+eine eingeloggte `claude`-CLI-Session (OAuth), einige Integrations-Tests werden ohne
+optionale Pakete (z. B. `requests`, `sqlite-vec`) automatisch geskippt. Die Gründe stehen in
 [SKIP_REASONS.md](SKIP_REASONS.md).
 
 **Wie viele Tests?** Die Zahl ändert sich mit fast jedem PR, und sie hängt von Plattform
@@ -120,7 +120,7 @@ bleibt lokal und gehört nicht ins Repository.
 LLM-Verhaltens-Evals. Sie kosten API-Budget und laufen nicht in CI.
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+claude auth login   # einmalig, falls noch keine eingeloggte Session existiert
 uv run pytest tests/evals/ -v
 ```
 
@@ -131,16 +131,16 @@ uv run pytest tests/evals/ -v
 
 Kein CI-Trigger — Evals laufen lokal vor jedem Release. Reports unter `docs/evals/`.
 
-**Was ohne API-Key wirklich läuft.** Ohne `ANTHROPIC_API_KEY` **und** ohne
-verfügbare `claude`-CLI ergibt `uv run pytest tests/evals/` überwiegend
-übersprungene Tests (Skip kommt aus `eval_runner.call_claude()` /
-`call_claude_with_tokens()`) — hier wird dann keine LLM-Qualität gemessen.
-Seit Issue #631 reicht dafür aber schon eine `claude`-CLI im PATH mit einer
-eingeloggten Session: `call_claude()` fällt ohne `ANTHROPIC_API_KEY` auf
-einen `claude --print`-Subprozess über die OAuth-Session zurück, statt zu
-skippen. Auf einem Entwicklerrechner mit eingeloggter Session laufen
-`pytest tests/evals/`-Läufe also inzwischen real (und verbrauchen
-Abo-Kontingent) — nur ganz ohne Auth **und** ohne CLI bleibt es beim Skip. Von den
+**Was ohne CLI-Session wirklich läuft.** Ohne verfügbare `claude`-CLI ergibt
+`uv run pytest tests/evals/` überwiegend übersprungene Tests (Skip kommt aus
+`eval_runner.call_claude()` / `call_claude_with_tokens()`) — hier wird dann
+keine LLM-Qualität gemessen. Seit Issue #631 (Umstellung auf die
+OAuth-Session, seit #716 der einzige Aufrufweg) reicht dafür eine
+`claude`-CLI im PATH mit einer eingeloggten Session: `call_claude()` ruft
+einen `claude --print`-Subprozess über die OAuth-Session auf. Auf einem
+Entwicklerrechner mit eingeloggter Session laufen `pytest tests/evals/`-Läufe
+also real (und verbrauchen Abo-Kontingent) — nur ganz ohne CLI bleibt es beim
+Skip. Von den
 40 Komponenten unter `evals/` haben genau **3** einen Runner, der offline
 Inhalt bewertet (`verbatim-guard`, `humanizer-de-pipeline`, `auto-download`);
 die übrigen 37 werden nur strukturell geprüft. Welche Komponente in welchem

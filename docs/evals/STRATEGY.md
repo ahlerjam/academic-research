@@ -36,9 +36,10 @@ unverändert geblieben — dieses Issue hat Transparenz geschaffen, keine
 LLM-Qualität gemessen.
 
 **Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
-tests/evals/ -q` ohne `ANTHROPIC_API_KEY` und ohne installierte `claude`-CLI
-im PATH — `claude_cli_available()` gatet den Guard zusätzlich, Issue #631):
-`274 passed, 195 skipped`. Seit #390 sind weitere Suiten dazugekommen (u. a.
+tests/evals/ -q` ohne installierte `claude`-CLI im PATH — `claude_cli_available()`
+gatet den Guard zusätzlich, Issue #631; der frühere parallele
+`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `346 passed, 195 skipped`.
+Seit #390 sind weitere Suiten dazugekommen (u. a.
 #524, #626, #628, #630, #721); die Skip-Zahl ist gegenüber dem #390-Snapshot
 gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
 mitbringt. `test_skip_count_matches_real_pytest_run` hält die **Skip-Zahl**
@@ -232,8 +233,9 @@ Filter). Der woechentliche geplante Lauf zieht seit der Rotation in
 `tests/evals/test_triggers.py` deutlich weniger -- siehe Abschnitt "Geplanter
 woechentlicher Lauf ueber ein Kern-Set" unten fuer die tatsaechliche Zahl.
 
-**Das ist eine Bezifferung, keine Forderung.** Ob und in welcher Höhe ein
-`ANTHROPIC_API_KEY` mit Budget bereitgestellt wird, entscheidet der Operator.
+**Das ist eine Bezifferung, keine Forderung.** Ob und in welcher Höhe
+Abo-Kontingent über eine eingeloggte `claude`-CLI-Session (lokal) bzw.
+`CLAUDE_CODE_OAUTH_TOKEN` (CI) bereitgestellt wird, entscheidet der Operator.
 Issue #390 verbraucht selbst kein Budget: alle in seinem Rahmen entstandenen
 Runner laufen offline (per Guard `test_no_eval_runner_requires_api_key`
 erzwungen), und die 147 Skips bleiben bis zu einer Operator-Entscheidung
@@ -243,38 +245,39 @@ bestehen.
 ist der einzige Weg, diese ca. 991 Aufrufe eines manuellen Vollaufs tatsächlich
 abzurufen — ein separat per `workflow_dispatch` auslösbarer Job, begrenzt auf
 `tests/evals/` (nicht `tests/`), mit `timeout-minutes: 60` als hartem Deckel
-fuer den manuellen Pfad (angehoben in #631, da der CLI-Pfad pro Aufruf
-deutlich teurer ist als der SDK-Pfad; der geplante Pfad hat seit #597 ein
-eigenes, hoeheres Limit — siehe Abschnitt "Geplanter woechentlicher Lauf"
-unten fuer dessen tatsächliches, deutlich kleineres Aufrufvolumen). Der Job
-bricht mit
-`::error::` ab, wenn weder `ANTHROPIC_API_KEY` noch `CLAUDE_CODE_OAUTH_TOKEN`
-als Repo-Secret hinterlegt ist, statt täuschend grün als „0 failed, N
-skipped" durchzulaufen. `ci.yml` bleibt davon unberührt: keine Auth dort,
-weiterhin nur `push`/`pull_request`, die API-gateten Skips bestehen im
-regulären Lauf unverändert fort. Ob eines der beiden Secrets hinterlegt wird,
-bleibt — wie oben beschrieben — Operator-Entscheidung.
+fuer den manuellen Pfad (angehoben in #631, da der CLI-Pfad pro Aufruf teuer
+ist; der geplante Pfad hat seit #597 ein eigenes, hoeheres Limit — siehe
+Abschnitt "Geplanter woechentlicher Lauf" unten fuer dessen tatsächliches,
+deutlich kleineres Aufrufvolumen). Der Job bricht mit `::error::` ab, wenn
+`CLAUDE_CODE_OAUTH_TOKEN` nicht als Repo-Secret hinterlegt ist, statt
+täuschend grün als „0 failed, N skipped" durchzulaufen. `ci.yml` bleibt davon
+unberührt: keine Auth dort, weiterhin nur `push`/`pull_request`, die
+API-gateten Skips bestehen im regulären Lauf unverändert fort. Ob das Secret
+hinterlegt wird, bleibt — wie oben beschrieben — Operator-Entscheidung.
 
-**Zwei Aufrufwege (Issue #631).** `tests/evals/eval_runner.py` probiert bei
-jedem Aufruf zwei Wege statt einem:
+**Ein Aufrufweg (Issue #631, SDK-Pfad entfallen mit #716).**
+`tests/evals/eval_runner.py` probiert bei jedem Aufruf:
 
-1. **SDK-Pfad** (unverändert seit vor #631): `ANTHROPIC_API_KEY` gesetzt →
-   `anthropic.Anthropic(...)`. Separates, eigens abgerechnetes API-Budget.
-2. **CLI-Pfad** (neu): kein `ANTHROPIC_API_KEY`, aber die `claude`-CLI im
-   PATH gefunden → `claude --print --output-format json` als Subprozess,
-   Vorbild `evals/sparring-partner/record.py`. Läuft über die
-   OAuth-Session — lokal die bereits eingeloggte Session, in CI
-   `CLAUDE_CODE_OAUTH_TOKEN` (dasselbe Secret, das `pr-deep-review.yml`
-   bereits fünffach nutzt), ohne zweites Abrechnungsverhältnis.
-3. Weder Key noch CLI gefunden → `pytest.skip()`, exakt wie zuvor.
+1. **CLI-Pfad:** die `claude`-CLI im PATH gefunden →
+   `claude --print --output-format json` als Subprozess, Vorbild
+   `evals/sparring-partner/record.py`. Läuft über die OAuth-Session — lokal
+   die bereits eingeloggte Session, in CI `CLAUDE_CODE_OAUTH_TOKEN` (dasselbe
+   Secret, das `pr-deep-review.yml` bereits fünffach nutzt).
+2. Keine CLI gefunden → `pytest.skip()`.
 
-Ist die CLI vorhanden (**geändertes Verhalten, AC1**): Ein Rechner mit
-einer bereits eingeloggten `claude`-Session löst künftig bei jedem
+Bis Issue #631 existierte hier zusätzlich ein paralleler, `ANTHROPIC_API_KEY`-
+gesteuerter SDK-Pfad (`anthropic.Anthropic(...)`, separates, eigens
+abgerechnetes API-Budget); Issue #716 hat ihn entfernt, weil er seit #631
+redundant war und weiterhin einen eigenen API-Schlüssel voraussetzte —
+genau das, was #632 für das Plugin bereits ausgeschlossen hatte.
+
+Ist die CLI vorhanden (**Verhalten seit AC1 aus #631**): Ein Rechner mit
+einer bereits eingeloggten `claude`-Session löst bei jedem
 `pytest tests/`-Lauf reale (Abo-)Aufrufe aus, wo vorher lautlos geskippt
 wurde. Das ist der beabsichtigte Kern von #631, keine Nebenwirkung —
 wer offline entwickeln will, muss die CLI vom PATH nehmen oder sich ausloggen.
-Fehlen dagegen sowohl Key als auch CLI, bleibt es beim bisherigen
-`pytest.skip()` (**unverändertes Skip-Verhalten, AC7**).
+Fehlt die CLI, bleibt es beim bisherigen `pytest.skip()` (**unverändertes
+Skip-Verhalten, AC7**).
 
 **Was auf dem CLI-Pfad entfällt oder anders aussieht (AC6):**
 

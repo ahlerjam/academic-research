@@ -114,6 +114,27 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Removed
 
+- **SDK-Pfad im Eval-Runner entfernt (#716):** `tests/evals/eval_runner.py` ruft
+  Claude nur noch über die `claude`-CLI mit der eingeloggten OAuth-Session auf
+  (`claude --print`) — der parallele, `ANTHROPIC_API_KEY`-gesteuerte SDK-Pfad
+  (`_call_claude_sdk`, `require_api_key`, `import anthropic`) ist entfallen, seit
+  #631 dieselbe Funktionalität über OAuth abdeckt. Fehlt die CLI, skippen die
+  Evals weiterhin mit klarer Begründung statt zu scheitern. Damit ist `anthropic`
+  aus `pyproject.toml` verschwunden und `import anthropic` kommt repoweit nicht
+  mehr vor (verschärfter Guard `tests/test_issue_632_no_anthropic_sdk.py`, jetzt
+  ohne Ausnahme für `tests/evals/eval_runner.py`) — genau die letzte Lücke, die
+  Issue 632 für Endnutzer-Pfade bereits geschlossen hatte. `tests/evals/test_issue_231_temperature.py`
+  entfällt (deckte ausschließlich den entfernten SDK-Determinismus-Pfad ab; die
+  CLI kennt laut `claude --help` weiterhin kein `--temperature`-Flag, dokumentiert
+  in `docs/evals/STRATEGY.md`). `.github/workflows/eval-behavior.yml` setzt nur
+  noch `CLAUDE_CODE_OAUTH_TOKEN`, kein `ANTHROPIC_API_KEY` mehr. Doku
+  (`docs/development.md`, `docs/evals/STRATEGY.md`, `docs/evals/README.md`,
+  `docs/SKIP_REASONS.md`) nennt den API-Key nirgends mehr als Voraussetzung für
+  einen Eval-Lauf. Nachgezogen: der End-Nutzer-Smoke-Test in `scripts/setup.sh`
+  prüfte weiterhin `import anthropic`, obwohl `scripts/requirements.txt` das
+  Paket nie installiert hat (Rest eines seither überholten Checks) — jede
+  frische Installation wäre daran gescheitert, geprüft hat es niemand, weil
+  `scripts/setup.sh` in keiner CI läuft.
 - **`docs/superpowers/` entfernt (#641):** Das Verzeichnis enthielt zuletzt nur noch eine
   Archiv-Notiz (12 Zeilen); die Unterordner `plans/` und `specs/` waren nie versioniert.
   Der Hinweis in `AGENTS.md`, der Eintrag in `docs/README.md` und die Konstante

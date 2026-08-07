@@ -1,13 +1,13 @@
-"""Regression-Tests fuer Issue #631: Auth-Weiche SDK/CLI/Skip in eval_runner.py.
+"""Regression-Tests fuer Issue #631: CLI/Skip-Pfad in eval_runner.py.
 
-Deckt die Akzeptanzkriterien, die sich ohne echten Modellaufruf pruefen
-lassen (gemockter Subprozess): AC2 (SDK-Pfad bleibt bei gesetztem Key
-unveraendert, CLI wird NICHT gestartet), AC4 (Modellkennung sichtbar), AC5
-(Auth-/Rate-Limit-Fehler der CLI ist von einer regulaeren Antwort
-unterscheidbar), AC7 (ohne Key und ohne CLI: unveraendertes Skip-Verhalten).
-Der reale Probelauf ohne ANTHROPIC_API_KEY (AC1) ist kein Unit-Test -- er
-braucht eine echte, eingeloggte claude-CLI-Session und wird separat als
-Evidenz im PR dokumentiert.
+Der frueher parallele SDK-Pfad (``ANTHROPIC_API_KEY``) ist mit Issue #716
+entfallen -- ``call_claude``/``call_claude_with_tokens`` kennen seither nur
+noch zwei Zustaende: claude-CLI verfuegbar (Subprozess ueber die
+OAuth-Session) oder ``pytest.skip()``. Deckt weiterhin: AC4 (Modellkennung
+sichtbar), AC5 (Auth-/Rate-Limit-Fehler der CLI ist von einer regulaeren
+Antwort unterscheidbar), AC7 (ohne CLI: Skip-Verhalten). Der reale Probelauf
+mit einer eingeloggten claude-CLI-Session (AC1/AC4 aus #631, jetzt AC4 aus
+#716) ist kein Unit-Test -- er wird separat als Evidenz im PR dokumentiert.
 """
 
 from __future__ import annotations
@@ -18,34 +18,6 @@ from types import SimpleNamespace
 import pytest
 
 from tests.evals import eval_runner
-
-
-class _CaptureClient:
-    """Anthropic-Client-Stub wie in test_issue_231_temperature.py."""
-
-    def __init__(self, *args, **kwargs) -> None:  # noqa: D401 - Stub
-        self.captured: dict | None = None
-        self.messages = SimpleNamespace(create=self._create)
-
-    def _create(self, **kwargs):
-        self.captured = kwargs
-        return SimpleNamespace(
-            content=[SimpleNamespace(text="ok")],
-            usage=SimpleNamespace(input_tokens=7, output_tokens=3),
-        )
-
-
-@pytest.fixture
-def fake_anthropic(monkeypatch):
-    holder: dict[str, _CaptureClient] = {}
-
-    def _client_factory(*args, **kwargs):
-        client = _CaptureClient(*args, **kwargs)
-        holder["client"] = client
-        return client
-
-    monkeypatch.setattr(eval_runner, "anthropic", SimpleNamespace(Anthropic=_client_factory))
-    return holder
 
 
 def _fake_subprocess_run_ok(model: str):
@@ -81,45 +53,12 @@ def _fake_subprocess_run_error(*, api_error_status: int = 429):
 
 
 # ---------------------------------------------------------------------------
-# AC2: SDK-Pfad bei gesetztem ANTHROPIC_API_KEY bleibt unveraendert -- CLI
-# wird nicht gestartet.
+# AC1 / AC4: CLI-Pfad, wenn die CLI verfuegbar ist -- Modellkennung geht ins
+# Kommando ein und wird geloggt.
 # ---------------------------------------------------------------------------
 
 
-def test_call_claude_uses_sdk_when_api_key_set_and_does_not_spawn_cli(fake_anthropic, monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-
-    def _fail_if_called(*args, **kwargs):
-        raise AssertionError(
-            "subprocess.run wurde aufgerufen, obwohl ANTHROPIC_API_KEY gesetzt ist"
-        )
-
-    monkeypatch.setattr(eval_runner.subprocess, "run", _fail_if_called)
-
-    output = eval_runner.call_claude("sys", "user")
-    assert output == "ok"
-    assert fake_anthropic["client"].captured is not None
-
-
-def test_call_claude_with_tokens_uses_sdk_when_api_key_set(fake_anthropic, monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr(
-        eval_runner.subprocess,
-        "run",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("CLI haette nicht laufen duerfen")),
-    )
-    text, tokens_in, tokens_out = eval_runner.call_claude_with_tokens("sys", "user")
-    assert (text, tokens_in, tokens_out) == ("ok", 7, 3)
-
-
-# ---------------------------------------------------------------------------
-# AC1 / AC4: CLI-Pfad ohne Key, wenn die CLI verfuegbar ist -- Modellkennung
-# geht ins Kommando ein und wird geloggt.
-# ---------------------------------------------------------------------------
-
-
-def test_call_claude_uses_cli_when_no_api_key_and_cli_available(monkeypatch, capsys):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_call_claude_uses_cli_when_available(monkeypatch, capsys):
     monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: True)
     monkeypatch.setattr(eval_runner.subprocess, "run", _fake_subprocess_run_ok("claude-sonnet-4-6"))
 
@@ -131,7 +70,6 @@ def test_call_claude_uses_cli_when_no_api_key_and_cli_available(monkeypatch, cap
 
 
 def test_call_claude_with_tokens_uses_cli_and_reads_usage(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: True)
     monkeypatch.setattr(
         eval_runner.subprocess, "run", _fake_subprocess_run_ok("claude-haiku-4-5-20251001")
@@ -151,7 +89,6 @@ def test_call_claude_with_tokens_uses_cli_and_reads_usage(monkeypatch):
 
 
 def test_call_claude_raises_claude_cli_error_on_is_error_response(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: True)
     monkeypatch.setattr(
         eval_runner.subprocess, "run", _fake_subprocess_run_error(api_error_status=429)
@@ -167,7 +104,6 @@ def test_call_claude_does_not_raise_on_normal_wrong_answer(monkeypatch):
     """Gegenprobe: eine inhaltlich falsche, aber technisch saubere Antwort
     (is_error: false) loest KEINE ClaudeCliError aus -- sie bleibt eine
     regulaere (falsche) Modellantwort, die in Recall/FPR eingeht."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: True)
     monkeypatch.setattr(eval_runner.subprocess, "run", _fake_subprocess_run_ok("claude-sonnet-4-6"))
 
@@ -184,7 +120,6 @@ def test_claude_cli_error_from_nonzero_exit_without_is_error_flag(monkeypatch):
             returncode=1, stdout=json.dumps({"result": "irgendwas"}), stderr="boom"
         )
 
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: True)
     monkeypatch.setattr(eval_runner.subprocess, "run", _run)
 
@@ -194,19 +129,17 @@ def test_claude_cli_error_from_nonzero_exit_without_is_error_flag(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# AC7: Weder Key noch CLI verfuegbar -- unveraendertes Skip-Verhalten.
+# AC7: CLI nicht verfuegbar -- unveraendertes Skip-Verhalten.
 # ---------------------------------------------------------------------------
 
 
-def test_call_claude_skips_when_no_key_and_no_cli(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_call_claude_skips_when_no_cli(monkeypatch):
     monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: False)
     with pytest.raises(pytest.skip.Exception):
         eval_runner.call_claude("sys", "user")
 
 
-def test_call_claude_with_tokens_skips_when_no_key_and_no_cli(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+def test_call_claude_with_tokens_skips_when_no_cli(monkeypatch):
     monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: False)
     with pytest.raises(pytest.skip.Exception):
         eval_runner.call_claude_with_tokens("sys", "user")
