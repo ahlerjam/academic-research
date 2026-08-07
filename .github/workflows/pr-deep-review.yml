@@ -1,5 +1,14 @@
+# flowkit-template-version: 0.9.1
+# ACTION PIN — the claude-code-action step below is pinned to an immutable
+# commit SHA, followed by a "# vX.Y.Z" comment naming the release it belongs
+# to. This file ships verbatim into target repos via /flowkit:setup, which
+# never overwrites an already-installed pin that is newer than this one (see
+# that command's CI-gate step for the comparison it runs). The bump procedure
+# — including the second place that has to change in lockstep — lives in
+# flowkit's own dev repo, at the top of scripts/test-review-pipeline-steps.sh,
+# not here: this comment stays short and repo-portable instead of pointing at
+# paths a target repo does not have.
 name: flowkit-pr-deep-review
-# flowkit-template-version: 0.7.0
 
 on:
   # NOTE: no paths: filter — a required status check must always run, otherwise merges block forever on doc-only PRs.
