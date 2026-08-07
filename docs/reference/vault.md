@@ -60,6 +60,30 @@ rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
 Bestands-Datenbanken bekommen den vec0-Spiegel per
 `python -c "from academic_vault.migrate import add_chunk_vectors_table; add_chunk_vectors_table('<pfad>/vault.db')"`.
 
+### Kontextsatz mit Paper-Metadaten
+
+Jedem Chunk wird vor dem Embedding ein Kontextsatz vorangestellt
+(`chunking.default_context_sentence()`, Anthropic-Contextual-Retrieval-Pattern).
+Seit #701 nennt er zusätzlich zu Sektion und Seitenbereich auch Titel,
+Erstautor (bzw. „et al." ab drei Autoren) und Erscheinungsjahr des Papers —
+rein deterministisch aus dem CSL-JSON, das beim Ingest ohnehin vorliegt, ohne
+Modellaufruf. Fehlende Angaben (kein Titel, kein Jahr) lässt der Satz einfach
+aus, statt abzubrechen; Sektion und Seitenbereich bleiben in jedem Fall
+erhalten.
+
+**Bestands-Vaults zeigen den Effekt erst nach einem Re-Index**: Chunks, die vor
+#701 eingebettet wurden, tragen den alten, metadatenfreien Kontextsatz fest in
+ihrem gespeicherten Vektor — ein Re-Index berechnet `chunk_embeddings` (und
+damit auch die Kontextsätze) mit dem aktuellen Ingest-Pfad neu:
+
+```bash
+python -m academic_vault.migrate --db ~/.academic-research/projects/<slug>/vault.db --reindex-embeddings
+```
+
+Derselbe Befehl wie beim Modellwechsel unten — er ersetzt den gesamten
+Chunk-Bestand, unabhängig davon, ob sich Modell oder nur der Kontextsatz
+geändert hat.
+
 ### Modellwechsel und Re-Index
 
 Welches Modell einen Vault gefüllt hat und in welcher Breite, steht in der Tabelle

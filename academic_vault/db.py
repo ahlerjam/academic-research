@@ -380,6 +380,14 @@ def csl_families(csl: dict) -> list[str]:
     return families
 
 
+def csl_title(csl: dict) -> str | None:
+    """Extrahiert den Titel aus einem CSL-JSON-Objekt (#701, Kontextsatz-Metadaten)."""
+    title = csl.get("title")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    return None
+
+
 def csl_year(csl: dict) -> int | None:
     """Extrahiert das Erscheinungsjahr aus ``issued`` (date-parts, literal, raw)."""
     issued = csl.get("issued")
