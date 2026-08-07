@@ -625,3 +625,121 @@ def test_dedup_merges_pmid_url_form_direct_key_matches_bare_id():
     assert len(result) == 1
     assert "Alice" in result[0]["authors"]
     assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_two_doi_less_openalex_records_by_title():
+    """Zwei DOI-lose OpenAlex-Treffer (unterschiedliche openalex_id, wie sie
+    scripts/search.py::search_openalex() fuer JEDEN Treffer liefert) mergen
+    weiterhin per Titel-Similarity — eine OpenAlex-Work-ID ist eine
+    Record-ID, kein Beleg fuer Werk-Verschiedenheit wie eine DOI-Differenz
+    (#707 P1 Regression-Fix). Vor dem Fix blockierte die disjunkte
+    openalex_id-Menge den Titel-Merge fuer genau den Preprint/Journal-Fall,
+    den #707 beheben soll."""
+    papers = [
+        {
+            "doi": None,
+            "url": "https://openalex.org/W111",
+            "title": "Machine Learning for Climate Modeling",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "url": "https://openalex.org/W222",
+            "title": "Machine Learning for Climate Modelling",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_two_pmid_less_doi_but_different_pmid_by_title():
+    """Analog fuer PMID: zwei DOI-lose PubMed-Treffer mit unterschiedlicher
+    PMID mergen weiterhin per Titel-Similarity, da PMID (aus der URL
+    abgeleitet) kein kanonischer Beleg fuer Werk-Verschiedenheit ist (#707
+    P1)."""
+    papers = [
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/11111111",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/22222222",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_doi_conflict_still_blocks_merge_despite_distinct_openalex_ids():
+    """Gegenprobe: eine DOI-Differenz bleibt ein echter Konflikt und blockiert
+    den Titel-Merge weiterhin — nur DOI/arXiv-ID sind kanonisch genug, um
+    einen Merge zu verhindern; die abgeleitete OpenAlex-ID beider Records
+    (unterschiedliche W-IDs, wie es zwei tatsaechlich verschiedene Werke
+    haetten) hebt die Sperre nicht auf (#707 P1, Abgrenzung der
+    Fix-Reichweite)."""
+    papers = [
+        {
+            "doi": "10.1234/original",
+            "url": "https://openalex.org/W111",
+            "title": "Deep Learning for Medical Image Segmentation",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": "10.5555/erratum",
+            "url": "https://openalex.org/W222",
+            "title": "Deep Learning for Medical Image Segmentation.",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 2
+    dois = {r.get("doi") for r in result}
+    assert "10.1234/original" in dois
+    assert "10.5555/erratum" in dois
+
+
+def test_dedup_cluster_conflict_permutation_invariant_with_bridge_record():
+    """AC1 (#707): der Bruecken-Fall aus
+    test_dedup_cluster_level_conflict_prevents_transitive_merge bleibt in
+    ALLEN 6 Permutationen der Eingabe bei genau 2 Gruppen mit demselben
+    DOI-Paar — die Cluster-Konfliktpruefung darf nicht von der
+    Paar-Verarbeitungsreihenfolge abhaengen (#707 P2 Nachsteuerung)."""
+    a = {
+        "doi": "10.1234/original",
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Alice"],
+        "citations": 5,
+    }
+    b = {
+        "doi": "10.5555/erratum",
+        "title": "Deep Learning for Medical Image Segmentation.",
+        "authors": ["Bob"],
+        "citations": 1,
+    }
+    c = {
+        "doi": None,
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Carol"],
+        "citations": 2,
+    }
+    for perm in itertools.permutations([a, b, c]):
+        result = deduplicate(list(perm))
+        assert len(result) == 2, f"permutation {[p['authors'][0] for p in perm]}"
+        dois = {r.get("doi") for r in result}
+        assert dois == {"10.1234/original", "10.5555/erratum"}

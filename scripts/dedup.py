@@ -195,9 +195,21 @@ def _get_cluster_ids(
 def _cluster_has_conflicting_ids(
     cluster_a: dict[str, set[str]], cluster_b: dict[str, set[str]]
 ) -> bool:
-    """Prüfe, ob zwei ID-Cluster auf Ebene widersprechende IDs tragen: beide
-    Cluster haben nicht-leere Werte desselben ID-Typs, die sich unterscheiden (#707 P1)."""
-    for id_type in ("doi", "arxiv_id", "pmid", "openalex_id"):
+    """Prüfe, ob zwei ID-Cluster auf Ebene widersprechende KANONISCHE IDs
+    tragen: beide Cluster haben nicht-leere Werte desselben ID-Typs, die sich
+    unterscheiden (#707 P1).
+
+    Nur DOI und arXiv-ID zaehlen hier — beide identifizieren das Werk selbst,
+    eine Differenz belegt tatsaechlich zwei unterschiedliche Publikationen.
+    PMID und OpenAlex-ID werden bewusst AUSGENOMMEN: sie sind, wie hier aus
+    Treffer-URLs abgeleitet, Record-IDs der jeweiligen Quelle — OpenAlex
+    vergibt fuer Preprint und Journalversion desselben Werks zwei
+    verschiedene W-IDs, sodass eine disjunkte openalex_id/pmid-Menge KEIN
+    Beleg fuer Werk-Verschiedenheit ist. Sie zaehlen weiterhin fuer den
+    positiven Union-Schritt (gleicher Wert = Merge), nur eben nicht als
+    Konfliktsperre (Regression-Fix nach 4 Review-Runden auf #707, siehe
+    PR #758)."""
+    for id_type in ("doi", "arxiv_id"):
         ids_a = cluster_a.get(id_type, set())
         ids_b = cluster_b.get(id_type, set())
         # Beide Cluster tragen denselben ID-Typ UND die Wert-Sets sind disjunkt
@@ -238,15 +250,19 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
     title similarity (`SequenceMatcher`, `threshold`) and unioned pairwise
     (not just against a single representative), so a transitive chain
     A~B, B~C lands in one group even when A and C themselves fall below
-    the threshold (#707 AC1). Cross-type rule (cluster-level, #707 P1): the
-    clusters of i and j are not unioned if they carry non-empty IDs of the
-    same type with different values — preventing transitive merges that lose
-    contradictory IDs (e.g., two papers with different DOIs bridged by an
-    ID-less record). NOTE: this cluster-level check is applied in the order
-    of similarity-passing pairs, not permutation-invariant; order-independence
-    guarantee holds only for Level 1 (#707 AC1, until P1 reihenfolge-fix).
-    Papers with no ID at all keep today's pure title-similarity behavior
-    (#707 AC4).
+    the threshold (#707 AC1). Cross-type rule (cluster-level, #707 P1),
+    CANONICAL IDs only: the clusters of i and j are not unioned if they
+    carry non-empty DOI or arXiv-ID values that differ — preventing
+    transitive merges that lose contradictory work identity (e.g., two
+    papers with different DOIs bridged by an ID-less record). PMID and
+    OpenAlex-ID are deliberately excluded from this conflict check
+    (`_cluster_has_conflicting_ids`) — as derived from hit URLs they are
+    per-source record IDs, not work IDs, and OpenAlex assigns a distinct
+    W-ID to a preprint and its journal version of the very same work, so a
+    disjoint openalex_id/pmid pair is not evidence of two different works
+    (regression found and fixed after 4 review rounds, PR #758). They still
+    drive the positive Level-1 union when equal. Papers with no ID at all
+    keep today's pure title-similarity behavior (#707 AC4).
 
     Returns deduplicated list.
     """
@@ -327,10 +343,13 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
         for id_type in merged_ids:
             merged_ids[id_type].update(cluster_id_cache[root_i].get(id_type, set()))
             merged_ids[id_type].update(cluster_id_cache[root_j].get(id_type, set()))
-        cluster_id_cache[new_root] = merged_ids
-        # Invalidate old roots
+        # `_UnionFind.union(i, j)` always re-parents root_j under root_i, so
+        # new_root == root_i — pop the stale entries FIRST, then write the
+        # merged cache under new_root, or the write would be discarded by
+        # its own invalidation on the next line (#707 P2, dead-code fix).
         cluster_id_cache.pop(root_i, None)
         cluster_id_cache.pop(root_j, None)
+        cluster_id_cache[new_root] = merged_ids
 
     clusters: dict[int, list[dict[str, Any]]] = {}
     for index, paper in enumerate(working):
