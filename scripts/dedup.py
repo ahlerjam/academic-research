@@ -297,13 +297,31 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
                 uf.union(first, other)
 
     titles = [(paper.get("title") or "").strip() for paper in working]
+
+    # Canonical (content-based, NOT input-position-based) processing order.
+    # The greedy merge loop below is order-sensitive: when a bridge record
+    # (e.g. an ID-less paper C) is title-similar to two mutually conflicting
+    # clusters (A, B with different DOIs), whichever candidate pair is tried
+    # FIRST wins the bridge record, since the second attempt is then blocked
+    # by the cluster-conflict rule. Enumerating/processing pairs in raw list
+    # order made that "first" depend on the caller's input order, breaking
+    # order-independence (#707 AC1 regression). Sorting the working indices
+    # by `_canonical_sort_key` first — the same deterministic, content-only
+    # key already used for representative selection (AC5) — fixes the
+    # processing order to the paper *content*, so any permutation of the
+    # same paper set produces the identical pair order and therefore the
+    # identical final grouping.
+    canonical_order = sorted(range(count), key=lambda idx: _canonical_sort_key(working[idx]))
+
     # Collect candidate pairs (i, j) where titles are similar
     # BEFORE cluster conflict checks (optimization: #707 P1 performance).
     candidate_pairs: list[tuple[int, int]] = []
-    for i in range(count):
+    for a in range(count):
+        i = canonical_order[a]
         if not titles[i]:
             continue
-        for j in range(i + 1, count):
+        for b in range(a + 1, count):
+            j = canonical_order[b]
             if not titles[j] or uf.find(i) == uf.find(j):
                 continue
             if _title_similarity(titles[i], titles[j]) >= threshold:

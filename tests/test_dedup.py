@@ -743,3 +743,45 @@ def test_dedup_cluster_conflict_permutation_invariant_with_bridge_record():
         assert len(result) == 2, f"permutation {[p['authors'][0] for p in perm]}"
         dois = {r.get("doi") for r in result}
         assert dois == {"10.1234/original", "10.5555/erratum"}
+
+
+def test_dedup_bridge_record_group_membership_permutation_invariant():
+    """AC1 (#707): Nicht nur Gruppenzahl und DOI-Menge, sondern auch die
+    tatsaechliche Gruppen-MITGLIEDSCHAFT des ID-losen Bruecken-Records
+    (Carol) muss ueber alle 6 Permutationen identisch sein. Der bisherige
+    Permutationstest (test_dedup_cluster_conflict_permutation_invariant_with_bridge_record)
+    prueft nur len(result) und die DOI-Menge — das bleibt trivial stabil,
+    auch wenn Carol mal bei 'original', mal bei 'erratum' landet, weil beide
+    Gruppen so oder so existieren. Dieser Test faengt genau diese
+    Verletzung."""
+    a = {
+        "doi": "10.1234/original",
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Alice"],
+        "citations": 5,
+    }
+    b = {
+        "doi": "10.5555/erratum",
+        "title": "Deep Learning for Medical Image Segmentation.",
+        "authors": ["Bob"],
+        "citations": 1,
+    }
+    c = {
+        "doi": None,
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Carol"],
+        "citations": 2,
+    }
+    memberships = []
+    for perm in itertools.permutations([a, b, c]):
+        result = deduplicate(list(perm))
+        by_doi = {r.get("doi"): frozenset(r["authors"]) for r in result}
+        memberships.append(by_doi)
+
+    first = memberships[0]
+    for perm, membership in zip(
+        itertools.permutations(["Alice", "Bob", "Carol"]), memberships, strict=True
+    ):
+        assert membership == first, (
+            f"permutation {perm} yields different group membership: {membership} != {first}"
+        )
