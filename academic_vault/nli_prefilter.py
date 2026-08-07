@@ -1,10 +1,15 @@
-"""NLI-Batch-Vorfilter vor dem Zitat-Richter (Issue #592, Vorarbeit #524).
+"""NLI-Batch-Vorfilter vor dem Zitat-Richter (Issue #592, Vorarbeit #524,
+Modellwechsel #720).
 
-Der Vorfilter laedt ``MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7``
-(MIT) lokal und bewertet, ob eine deutsche Kapitelbehauptung durch den
-englischen Quote-Kontext (``context_before`` + ``verbatim`` + ``context_after``)
-gedeckt ist (Eval-Ergebnis #524: Precision 1.00, Recall 0.812 auf 32
-konstruierten Faellen -- siehe ``evals/524-nli-prefilter/README.md``).
+Der Vorfilter laedt ``MoritzLaurer/bge-m3-zeroshot-v2.0`` (MIT) lokal und
+bewertet, ob eine deutsche Kapitelbehauptung durch den englischen
+Quote-Kontext (``context_before`` + ``verbatim`` + ``context_after``) gedeckt
+ist. A/B gegen ``MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7``
+auf 278 Faellen (Issue #720): bei Schwelle 0.95 laesst bge-m3-zeroshot nur 1
+Verzerrung durchrutschen, mDeBERTa saettigt bei 10 durchgerutschten Faellen
+auch bei dieser Schwelle -- ausschlaggebend ist die Kalibrierbarkeit ueber die
+Schwelle, nicht ein einzelner Precision/Recall-Wert. Details, Schwellenkurve
+und die verworfenen Zusatzansaetze: ``docs/evals/2026-08-07-bge-m3-nli-scorer-720.md``.
 
 **Zweck ist Abdeckung, nicht Kostenersparnis.** Ohne diesen Vorfilter wird ein
 Zitat nur dann inhaltlich geprueft (``agents/quote-fidelity-auditor.md``), wenn
@@ -34,6 +39,14 @@ Konservative Schwelle: im Zweifel gilt ein Item als verdaechtig
 (``verzerrend``). Eine zu viel gemeldete Fundstelle kostet einen Blick, eine
 uebersehene bleibt unbemerkt in der Arbeit stehen -- die teurere Richtung ist
 die falsche.
+
+**Priorisierer, nicht Torwaechter.** Der Scan entscheidet, welches Zitat
+ZUERST inhaltlich vom ``quote-fidelity-auditor`` geprueft wird -- er
+entscheidet nicht, was durchgeht. Ein Zitat ohne Meldung ist nicht
+"geprueft", nur nicht priorisiert. Bekannte strukturelle Schwaeche:
+weggelassene Randbedingungen (``condition-stripped``) werden nur zur Haelfte
+erkannt, siehe Eval-Report #720 -- das ist eine Eigenschaft von NLI ("folgt
+daraus?"), nicht durch Modellwahl behebbar.
 """
 
 from __future__ import annotations
@@ -52,13 +65,24 @@ DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "parallel_agents.json"
 # ---------------------------------------------------------------------------
 
 ENV_CACHE_DIR = "NLI_PREFILTER_MODEL_CACHE"
-MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+
+#: Produktivmodell seit Issue #720 (zuvor mDeBERTa-XNLI, weiterhin als
+#: Eval-Kandidat verfuegbar ueber :class:`MDebertaScorer`).
+MODEL_ID = "MoritzLaurer/bge-m3-zeroshot-v2.0"
+MDEBERTA_MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
 
 # Konservative Entailment-Schwelle: "faithful" nur bei eindeutigem
 # Entailment-Ausschlag UND einer Score-Mindesthoehe -- ein knapper Ausschlag
 # gilt als Zweifelsfall und wird weitergeleitet (Issue-AC "im Zweifel
-# weiterleiten").
-DEFAULT_THRESHOLD = 0.5
+# weiterleiten"). 0.95 seit #720: bge-m3-zeroshot laesst sich ueber die
+# Schwelle kalibrieren (22->1 Durchrutscher zwischen 0.50 und 0.95),
+# mDeBERTa saettigt bei 10 Durchrutschern -- siehe Eval-Report.
+DEFAULT_THRESHOLD = 0.95
+
+#: Eigener, niedrigerer Default fuer den mDeBERTa-Eval-Kandidaten (dessen
+#: Kalibrierung wurde in #720 nicht neu bewertet -- 0.5 reproduziert
+#: weiterhin die #524-Zahlen, siehe ``evals/524-nli-prefilter/README.md``).
+MDEBERTA_DEFAULT_THRESHOLD = 0.5
 
 
 def default_cache_dir() -> str:
@@ -143,35 +167,53 @@ class NliScorer(Protocol):
     def predict(self, premise: str, hypothesis: str) -> tuple[str, float]: ...
 
 
-class MDebertaScorer:
-    """mDeBERTa-v3-XNLI ueber klassische NLI-Logits (entailment/neutral/contradiction).
+class NliModelScorer:
+    """Generischer NLI-Scorer ueber ``AutoModelForSequenceClassification``.
 
-    Kanonische Implementierung (Issue #592) -- ``evals/524-nli-prefilter/runner.py``
-    importiert diese Klasse fuer den Modellvergleich, statt sie zu duplizieren.
+    Kanonische Implementierung (Issue #592, generalisiert in #720) --
+    ``evals/524-nli-prefilter/runner.py`` und
+    ``tests/evals/test_nli_prefilter_evals.py`` importieren die Subklassen
+    (:class:`BgeM3ZeroshotScorer`, :class:`MDebertaScorer`) statt sie zu
+    duplizieren.
+
+    Der Entailment-Index wird aus ``model.config.id2label`` abgeleitet --
+    NICHT fest auf Index 0 verdrahtet. Das ist notwendig, weil verschiedene
+    Modelle unterschiedliche Label-Schemata tragen: bge-m3-zeroshot ist
+    binaer (``{0: entailment, 1: not_entailment}``), die mDeBERTa-Familie
+    dreiklassig (``{0: entailment, 1: neutral, 2: contradiction}``). Ein
+    Modell mit abweichender Reihenfolge wuerde bei fest verdrahtetem Index 0
+    stillschweigend falsche Urteile liefern.
     """
-
-    name = "mdeberta-xnli"
 
     def __init__(
         self,
+        model_id: str,
+        name: str | None = None,
         cache_dir: str | None = None,
         model: Any | None = None,
+        tokenizer: Any | None = None,
         threshold: float = DEFAULT_THRESHOLD,
     ) -> None:
+        self.model_id = model_id
+        self.name = name if name is not None else model_id.rsplit("/", 1)[-1]
         self.cache_dir = cache_dir if cache_dir is not None else default_cache_dir()
         self._model = model
-        self._tokenizer = None
+        self._tokenizer = tokenizer
         self.threshold = threshold
 
     def load(self) -> tuple[Any, Any]:
-        if self._model is None:
+        if self._model is None or self._tokenizer is None:
             # Lazy Import: zieht transformers/torch nach, nicht beim Modul-Import.
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-            self._tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, cache_dir=self.cache_dir)
-            self._model = AutoModelForSequenceClassification.from_pretrained(
-                MODEL_ID, cache_dir=self.cache_dir
-            )
+            if self._tokenizer is None:
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_id, cache_dir=self.cache_dir
+                )
+            if self._model is None:
+                self._model = AutoModelForSequenceClassification.from_pretrained(
+                    self.model_id, cache_dir=self.cache_dir
+                )
         return self._model, self._tokenizer
 
     def entailment_index(self) -> int:
@@ -199,7 +241,9 @@ class MDebertaScorer:
 
         model, tokenizer = self.load()
         entail_idx = self.entailment_index()
-        inputs = tokenizer(premise, hypothesis, truncation=True, return_tensors="pt")
+        inputs = tokenizer(
+            premise, hypothesis, truncation=True, max_length=512, return_tensors="pt"
+        )
         with torch.no_grad():
             logits = model(**inputs).logits[0]
         probs = torch.softmax(logits, dim=-1).tolist()
@@ -215,6 +259,48 @@ class MDebertaScorer:
             else "verzerrend"
         )
         return verdict, entailment_prob
+
+
+class BgeM3ZeroshotScorer(NliModelScorer):
+    """Produktivscorer seit Issue #720: bge-m3-zeroshot-v2.0, Schwelle 0.95."""
+
+    def __init__(
+        self,
+        cache_dir: str | None = None,
+        model: Any | None = None,
+        tokenizer: Any | None = None,
+        threshold: float = DEFAULT_THRESHOLD,
+    ) -> None:
+        super().__init__(
+            model_id=MODEL_ID,
+            name="bge-m3-zeroshot",
+            cache_dir=cache_dir,
+            model=model,
+            tokenizer=tokenizer,
+            threshold=threshold,
+        )
+
+
+class MDebertaScorer(NliModelScorer):
+    """mDeBERTa-v3-XNLI -- seit #720 nur noch Eval-Kandidat (Praezedenzfall
+    #524), nicht mehr Produktivmodell. Name/Import bleiben stabil fuer
+    ``evals/524-nli-prefilter/runner.py`` und ``run_real_validation.py``."""
+
+    def __init__(
+        self,
+        cache_dir: str | None = None,
+        model: Any | None = None,
+        tokenizer: Any | None = None,
+        threshold: float = MDEBERTA_DEFAULT_THRESHOLD,
+    ) -> None:
+        super().__init__(
+            model_id=MDEBERTA_MODEL_ID,
+            name="mdeberta-xnli",
+            cache_dir=cache_dir,
+            model=model,
+            tokenizer=tokenizer,
+            threshold=threshold,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +384,7 @@ def run_batch_prefilter(
             "results": [],
         }
 
-    active_scorer = scorer if scorer is not None else MDebertaScorer()
+    active_scorer = scorer if scorer is not None else BgeM3ZeroshotScorer()
 
     results = [
         prefilter_quote(
