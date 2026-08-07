@@ -109,6 +109,25 @@ if [ "$ELAPSED" -lt 5 ]; then ok; else bad "Kapitel-Write: Hook wartete $ELAPSED
 if grep -q 'permissionDecision' "$WORK/out.json"; then bad "Kapitel-Write: Hook setzt permissionDecision (darf nie blockieren)"; else ok; fi
 
 # ---------------------------------------------------------------------------
+# 1b. Kaputter Interpreter: spawn() liefert den Fehler asynchron als
+#     'error'-Event (EACCES bei einer existierenden, aber nicht ausfuehrbaren
+#     Datei) -- ohne Listener wuerde das als uncaughtException enden statt
+#     fail-open Exit 0 (Regression, PR #754 P1).
+# ---------------------------------------------------------------------------
+reset_spawn_log
+BROKEN_PY="$WORK/broken-python.sh"
+: > "$BROKEN_PY"
+chmod -x "$BROKEN_PY"
+run "$WORK/spool1b" "$(write_payload "$CHAPTER" 'Kapiteltext.')" ACADEMIC_PYTHON="$BROKEN_PY" NLI_SCAN_DEBUG=1
+check "$(cat "$WORK/code")" "Kaputter Interpreter: Exit-Code $(cat "$WORK/code") statt 0 (fail-open verletzt)"
+if [ -s "$WORK/out.json" ]; then bad "Kaputter Interpreter: Hook hat trotzdem gemeldet"; else ok; fi
+if grep -q '^\[NLI-Zitatscan-Diagnose\] Worker-Start fehlgeschlagen' "$WORK/err.txt"; then
+  ok
+else
+  bad "Kaputter Interpreter: kein 'error'-Listener griff (stderr: $(cat "$WORK/err.txt"))"
+fi
+
+# ---------------------------------------------------------------------------
 # 2. Nicht-Kapitelpfad: stumm, kein Spawn
 # ---------------------------------------------------------------------------
 reset_spawn_log

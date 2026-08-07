@@ -176,6 +176,14 @@ function spawnWorker(filePath) {
         env: { ...process.env, PYTHONPATH: VAULT_SRC },
       },
     );
+    // spawn() ist asynchron: ENOENT/EACCES/EAGAIN/EMFILE kommen nicht
+    // synchron aus diesem try/catch, sondern per process.nextTick als
+    // 'error'-Event auf dem ChildProcess. Ohne Listener wirft der
+    // EventEmitter das als uncaughtException -- der Hook wuerde entgegen
+    // seiner fail-open-Zusage (Exit-Code IMMER 0) mit Stacktrace sterben.
+    child.on('error', (err) => {
+      debug(`Worker-Start fehlgeschlagen: ${err.message}`);
+    });
     child.unref();
     debug(`Worker gestartet: ${python} fuer ${filePath}`);
     return true;
