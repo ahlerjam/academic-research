@@ -1,5 +1,7 @@
 """Tests for dedup.py — paper deduplication."""
 
+import itertools
+
 from dedup import deduplicate, merge_group
 from text_utils import normalize_doi
 
@@ -295,3 +297,491 @@ def test_dedup_real_world_multi_source_duplicate():
     assert merged["citations"] == 20
     assert {"A. Author", "B. Author", "C. Author", "D. Author"} <= set(merged["authors"])
     assert set(merged["source_modules"]) == {"crossref", "openalex", "semantic_scholar", "base"}
+
+
+def test_dedup_order_independent_with_transitive_title_chain():
+    """Drei Papers A~B, B~C, aber A!~C (unter der Schwelle) ergeben in jeder
+    Permutation der Eingabeliste dieselbe Gruppierung (AC1)."""
+    paper_a = {
+        "doi": None,
+        "title": "Refactoring Legacy Monolithic Codebases into Modular Services",
+        "authors": ["Alice"],
+        "citations": 1,
+    }
+    paper_b = {
+        "doi": None,
+        "title": "Refactoring Legacy Monolithic Codebases into Modular Microservices",
+        "authors": ["Bob"],
+        "citations": 2,
+    }
+    paper_c = {
+        "doi": None,
+        "title": "Refactoring Legacy Monolithic Codebases into Distributed Microservices",
+        "authors": ["Carol"],
+        "citations": 3,
+    }
+    papers = [paper_a, paper_b, paper_c]
+
+    results = [deduplicate(list(perm)) for perm in itertools.permutations(papers)]
+
+    # A~B und B~C liegen über der Schwelle, A~C darunter — trotzdem landen
+    # A, B und C dank der transitiven Kette (Union-Find) in EINER Gruppe.
+    for result in results:
+        assert len(result) == 1
+        assert {"Alice", "Bob", "Carol"} <= set(result[0]["authors"])
+
+    # Alle Permutationen liefern identische Autor:innen-Mengen im Ergebnis.
+    author_sets = [frozenset(r[0]["authors"]) for r in results]
+    assert len(set(author_sets)) == 1
+
+
+def test_dedup_merges_by_arxiv_id_despite_different_doi_and_title():
+    """Gleiche arXiv-ID trotz abweichender DOI und abweichendem Titel wird
+    gemergt (AC2)."""
+    papers = [
+        {
+            "doi": "10.1109/completely-different-doi",
+            "arxiv_id": "2301.12345",
+            "title": "First Title Variant",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": "10.9999/another-doi",
+            "arxiv_id": "2301.12345",
+            "title": "Second Totally Unrelated Title",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_by_pmid_despite_different_doi_and_title():
+    """Gleiche PMID trotz abweichender DOI und abweichendem Titel wird
+    gemergt (AC2)."""
+    papers = [
+        {
+            "doi": "10.1109/completely-different-doi",
+            "pmid": "12345678",
+            "title": "First Title Variant",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": "10.9999/another-doi",
+            "pmid": "12345678",
+            "title": "Second Totally Unrelated Title",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_by_openalex_id_despite_different_doi_and_title():
+    """Gleiche OpenAlex-ID trotz abweichender DOI und abweichendem Titel wird
+    gemergt (AC2)."""
+    papers = [
+        {
+            "doi": "10.1109/completely-different-doi",
+            "openalex_id": "W123456789",
+            "title": "First Title Variant",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": "10.9999/another-doi",
+            "openalex_id": "w123456789",
+            "title": "Second Totally Unrelated Title",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_id_match_wins_even_below_title_threshold():
+    """Ein ID-Treffer mergt zwei Papers, deren Titel-Similarity klar unter der
+    Schwelle liegt — die ID-Ebenen greifen vor dem Fuzzy-Titelvergleich (AC3)."""
+    papers = [
+        {
+            "doi": None,
+            "arxiv_id": "1999.00001",
+            "title": "Alpha",
+            "authors": ["Alice"],
+            "citations": 1,
+        },
+        {
+            "doi": None,
+            "arxiv_id": "1999.00001",
+            "title": "Zzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_no_ids_falls_back_to_title_similarity_only():
+    """Fehlen alle vier ID-Typen, bleibt es beim bisherigen Verhalten über den
+    Fuzzy-Titelvergleich (AC4, Regressionsschutz für die bestehende
+    Titel-Similarity-Logik)."""
+    papers = [
+        {
+            "doi": None,
+            "title": "DevOps Governance in Large Organizations",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "title": "DevOps Governance in Large Organisations",
+            "authors": ["Bob"],
+            "citations": 3,
+        },
+        {
+            "doi": None,
+            "title": "A Completely Unrelated Paper About Gardening",
+            "authors": ["Carol"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 2
+    titles = {p["title"] for p in result}
+    assert "A Completely Unrelated Paper About Gardening" in titles
+
+
+def test_dedup_representative_deterministic_regardless_of_input_order():
+    """Bei einem Tie in (_non_none_count, citations) ist der überlebende
+    Repräsentant deterministisch — nicht von der Eingabereihenfolge abhängig
+    (AC5)."""
+    paper_x = {
+        "doi": "10.1109/tie-test",
+        "title": "Tie Test Paper",
+        "authors": ["Alice"],
+        "abstract": "Abstract from X",
+        "citations": 5,
+    }
+    paper_y = {
+        "doi": "10.1109/tie-test",
+        "title": "Tie Test Paper",
+        "authors": ["Bob"],
+        "abstract": "Abstract from Y",
+        "citations": 5,
+    }
+
+    result_forward = deduplicate([paper_x, paper_y])
+    result_reversed = deduplicate([paper_y, paper_x])
+
+    assert len(result_forward) == 1
+    assert len(result_reversed) == 1
+    assert result_forward[0]["abstract"] == result_reversed[0]["abstract"]
+
+
+def test_dedup_merges_openalex_url_without_doi_into_doi_record():
+    """Ein OpenAlex-Treffer mit URL aber ohne DOI wird per Titel-Similarity in
+    eine DOI-Gruppe gemergt — die Cross-Typ-Regel blockiert nur bei
+    ID-Konflikten desselben Typs, nicht bei unterschiedlichen ID-Typen (#707 P1)."""
+    papers = [
+        {
+            "doi": "10.1234/test.machine.learning",
+            "title": "Machine Learning for Climate Modeling",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "url": "https://openalex.org/W2741809807",
+            "title": "Machine Learning for Climate Modelling",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert result[0]["doi"] == "10.1234/test.machine.learning"
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_pubmed_url_without_doi_into_doi_record():
+    """Analog für PubMed: ein PMID aus URL ohne DOI wird per Titel-Similarity in
+    eine DOI-Gruppe gemergt (#707 P1)."""
+    papers = [
+        {
+            "doi": "10.1234/pubmed.test",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Alice"],
+            "citations": 3,
+        },
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/12345678",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert result[0]["doi"] == "10.1234/pubmed.test"
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_cluster_level_conflict_prevents_transitive_merge():
+    """Ein ID-loser Brücken-Record C darf nicht zwei Records A und B mit
+    widersprechenden DOIs transitiv zusammenführen (#707 P1). Paar (A,B)
+    ist blockiert, aber (A,C) und (B,C) würden einzeln grün sein — die
+    Cluster-Level-Prüfung must dies verhindern."""
+    papers = [
+        {
+            "doi": "10.1234/original",
+            "title": "Deep Learning for Medical Image Segmentation",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": "10.5555/erratum",
+            "title": "Deep Learning for Medical Image Segmentation.",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+        {
+            "doi": None,
+            "title": "Deep Learning for Medical Image Segmentation",
+            "authors": ["Carol"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    # A und B sollten NICHT über C transitiv mergen (2 Ergebnisse)
+    assert len(result) == 2
+    dois = {r.get("doi") for r in result}
+    # Beide DOIs sollen noch da sein, nicht gemergt
+    assert "10.1234/original" in dois
+    assert "10.5555/erratum" in dois
+
+
+def test_dedup_merges_openalex_url_form_direct_key_matches_bare_id():
+    """Wenn openalex_id-Direkt-Key die vollständige URL trägt, wird sie auf
+    die Bare-ID normalisiert und mergt mit URL-basierten Records (#707 P2)."""
+    papers = [
+        {
+            "doi": None,
+            "openalex_id": "https://openalex.org/W2741809807",
+            "title": "Test Paper",
+            "authors": ["Alice"],
+            "citations": 2,
+        },
+        {
+            "doi": None,
+            "url": "https://openalex.org/W2741809807",
+            "title": "Test Paper",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_pmid_url_form_direct_key_matches_bare_id():
+    """Wenn pmid-Direkt-Key die vollständige pubmed-URL trägt, wird sie auf
+    die Bare-ID normalisiert und mergt mit URL-basierten Records (#707 P2)."""
+    papers = [
+        {
+            "doi": None,
+            "pmid": "https://pubmed.ncbi.nlm.nih.gov/12345678",
+            "title": "Clinical Test Paper",
+            "authors": ["Alice"],
+            "citations": 2,
+        },
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/12345678",
+            "title": "Clinical Test Paper",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_two_doi_less_openalex_records_by_title():
+    """Zwei DOI-lose OpenAlex-Treffer (unterschiedliche openalex_id, wie sie
+    scripts/search.py::search_openalex() fuer JEDEN Treffer liefert) mergen
+    weiterhin per Titel-Similarity — eine OpenAlex-Work-ID ist eine
+    Record-ID, kein Beleg fuer Werk-Verschiedenheit wie eine DOI-Differenz
+    (#707 P1 Regression-Fix). Vor dem Fix blockierte die disjunkte
+    openalex_id-Menge den Titel-Merge fuer genau den Preprint/Journal-Fall,
+    den #707 beheben soll."""
+    papers = [
+        {
+            "doi": None,
+            "url": "https://openalex.org/W111",
+            "title": "Machine Learning for Climate Modeling",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "url": "https://openalex.org/W222",
+            "title": "Machine Learning for Climate Modelling",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_two_pmid_less_doi_but_different_pmid_by_title():
+    """Analog fuer PMID: zwei DOI-lose PubMed-Treffer mit unterschiedlicher
+    PMID mergen weiterhin per Titel-Similarity, da PMID (aus der URL
+    abgeleitet) kein kanonischer Beleg fuer Werk-Verschiedenheit ist (#707
+    P1)."""
+    papers = [
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/11111111",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/22222222",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_doi_conflict_still_blocks_merge_despite_distinct_openalex_ids():
+    """Gegenprobe: eine DOI-Differenz bleibt ein echter Konflikt und blockiert
+    den Titel-Merge weiterhin — nur DOI/arXiv-ID sind kanonisch genug, um
+    einen Merge zu verhindern; die abgeleitete OpenAlex-ID beider Records
+    (unterschiedliche W-IDs, wie es zwei tatsaechlich verschiedene Werke
+    haetten) hebt die Sperre nicht auf (#707 P1, Abgrenzung der
+    Fix-Reichweite)."""
+    papers = [
+        {
+            "doi": "10.1234/original",
+            "url": "https://openalex.org/W111",
+            "title": "Deep Learning for Medical Image Segmentation",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": "10.5555/erratum",
+            "url": "https://openalex.org/W222",
+            "title": "Deep Learning for Medical Image Segmentation.",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 2
+    dois = {r.get("doi") for r in result}
+    assert "10.1234/original" in dois
+    assert "10.5555/erratum" in dois
+
+
+def test_dedup_cluster_conflict_permutation_invariant_with_bridge_record():
+    """AC1 (#707): der Bruecken-Fall aus
+    test_dedup_cluster_level_conflict_prevents_transitive_merge bleibt in
+    ALLEN 6 Permutationen der Eingabe bei genau 2 Gruppen mit demselben
+    DOI-Paar — die Cluster-Konfliktpruefung darf nicht von der
+    Paar-Verarbeitungsreihenfolge abhaengen (#707 P2 Nachsteuerung)."""
+    a = {
+        "doi": "10.1234/original",
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Alice"],
+        "citations": 5,
+    }
+    b = {
+        "doi": "10.5555/erratum",
+        "title": "Deep Learning for Medical Image Segmentation.",
+        "authors": ["Bob"],
+        "citations": 1,
+    }
+    c = {
+        "doi": None,
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Carol"],
+        "citations": 2,
+    }
+    for perm in itertools.permutations([a, b, c]):
+        result = deduplicate(list(perm))
+        assert len(result) == 2, f"permutation {[p['authors'][0] for p in perm]}"
+        dois = {r.get("doi") for r in result}
+        assert dois == {"10.1234/original", "10.5555/erratum"}
+
+
+def test_dedup_bridge_record_group_membership_permutation_invariant():
+    """AC1 (#707): Nicht nur Gruppenzahl und DOI-Menge, sondern auch die
+    tatsaechliche Gruppen-MITGLIEDSCHAFT des ID-losen Bruecken-Records
+    (Carol) muss ueber alle 6 Permutationen identisch sein. Der bisherige
+    Permutationstest (test_dedup_cluster_conflict_permutation_invariant_with_bridge_record)
+    prueft nur len(result) und die DOI-Menge — das bleibt trivial stabil,
+    auch wenn Carol mal bei 'original', mal bei 'erratum' landet, weil beide
+    Gruppen so oder so existieren. Dieser Test faengt genau diese
+    Verletzung."""
+    a = {
+        "doi": "10.1234/original",
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Alice"],
+        "citations": 5,
+    }
+    b = {
+        "doi": "10.5555/erratum",
+        "title": "Deep Learning for Medical Image Segmentation.",
+        "authors": ["Bob"],
+        "citations": 1,
+    }
+    c = {
+        "doi": None,
+        "title": "Deep Learning for Medical Image Segmentation",
+        "authors": ["Carol"],
+        "citations": 2,
+    }
+    memberships = []
+    for perm in itertools.permutations([a, b, c]):
+        result = deduplicate(list(perm))
+        by_doi = {r.get("doi"): frozenset(r["authors"]) for r in result}
+        memberships.append(by_doi)
+
+    first = memberships[0]
+    for perm, membership in zip(
+        itertools.permutations(["Alice", "Bob", "Carol"]), memberships, strict=True
+    ):
+        assert membership == first, (
+            f"permutation {perm} yields different group membership: {membership} != {first}"
+        )
