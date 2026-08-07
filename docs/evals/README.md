@@ -28,6 +28,7 @@ danach höchstens den passenden Report.
 | [`2026-08-04-trigger-baseline-614.md`](2026-08-04-trigger-baseline-614.md) | Momentaufnahme: erster echter Lauf der Trigger-Evals, Recall/FPR je Skill (#614) |
 | [`2026-08-04-trigger-baseline-614-live-results.json`](2026-08-04-trigger-baseline-614-live-results.json) | Rohdaten des Trigger-Baseline-Laufs (Per-Skill-Aufschlüsselung, Fehlklassifikationen, Tokens) |
 | [`2026-08-05-disable-model-invocation-622.md`](2026-08-05-disable-model-invocation-622.md) | Prüfung je Kandidat (#622): warum 0 Skills mit `disable-model-invocation` markiert werden, Listing-Größe vorher/nachher |
+| [`embedding-truncatability-730.md`](embedding-truncatability-730.md) | Belegte Truncatierbarkeit der drei #628-Kandidaten auf 384d je Modellkarte — nur Qwen3-Embedding-0.6B ohne Schema-Migration einsetzbar, BGE-M3/e5-large „nicht belegt" (#730) |
 
 ## Konvention
 
