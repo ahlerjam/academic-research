@@ -6,12 +6,16 @@ Expected values pre-computed manually for 5-study example.
 
 from __future__ import annotations
 
+import json
+import math
+
 import pytest
 
 # Ensure scripts/ is importable
 from meta_analysis import (
     MetaAnalysisResult,
     Study,
+    _load_studies,
     build_forest_plot_mermaid,
     dersimonianlaird,
 )
@@ -140,3 +144,128 @@ class TestEdgeCases:
         result = dersimonianlaird(same)
         assert abs(result.pooled_es - 0.5) < 0.001
         assert result.tau2 == pytest.approx(0.0, abs=1e-9)
+
+
+class TestInputValidation:
+    """Issue #706: unplausible values from user-supplied JSON must be rejected
+    before dersimonianlaird() computes with them, with a clear message that
+    names the offending study."""
+
+    def test_zero_variance_rejected_with_study_name(self):
+        studies = [
+            Study(name="Smith 2020", yi=0.5, vi=0.0625),
+            Study(name="ZeroVar Study", yi=0.3, vi=0.0),
+            Study(name="Chen 2019", yi=0.7, vi=0.04),
+        ]
+        with pytest.raises(ValueError, match="ZeroVar Study"):
+            dersimonianlaird(studies)
+
+    def test_negative_variance_rejected_with_study_name_and_value(self):
+        studies = [
+            Study(name="Smith 2020", yi=0.5, vi=0.0625),
+            Study(name="NegVar Study", yi=0.3, vi=-0.05),
+            Study(name="Chen 2019", yi=0.7, vi=0.04),
+        ]
+        with pytest.raises(ValueError, match="NegVar Study"):
+            dersimonianlaird(studies)
+        with pytest.raises(ValueError, match=r"-0\.05"):
+            dersimonianlaird(studies)
+
+    def test_nan_yi_rejected(self):
+        studies = [
+            Study(name="Smith 2020", yi=0.5, vi=0.0625),
+            Study(name="NaN Study", yi=math.nan, vi=0.04),
+            Study(name="Chen 2019", yi=0.7, vi=0.04),
+        ]
+        with pytest.raises(ValueError, match="NaN Study"):
+            dersimonianlaird(studies)
+
+    def test_inf_vi_rejected(self):
+        studies = [
+            Study(name="Smith 2020", yi=0.5, vi=0.0625),
+            Study(name="Inf Study", yi=0.3, vi=math.inf),
+            Study(name="Chen 2019", yi=0.7, vi=0.04),
+        ]
+        with pytest.raises(ValueError, match="Inf Study"):
+            dersimonianlaird(studies)
+
+    def test_inf_yi_rejected(self):
+        studies = [
+            Study(name="Smith 2020", yi=0.5, vi=0.0625),
+            Study(name="Inf Study", yi=math.inf, vi=0.04),
+            Study(name="Chen 2019", yi=0.7, vi=0.04),
+        ]
+        with pytest.raises(ValueError, match="Inf Study"):
+            dersimonianlaird(studies)
+
+    def test_valid_studies_still_produce_same_result_as_before(self):
+        result = dersimonianlaird(STUDIES)
+        assert abs(result.pooled_es - 0.4884) < 0.001
+
+    def test_minimum_three_studies_message_unchanged(self):
+        with pytest.raises(ValueError, match="at least 3"):
+            dersimonianlaird(STUDIES[:2])
+
+
+class TestLoadStudiesValidation:
+    """_load_studies() must reject missing/non-numeric yi/vi with a clear
+    message instead of raw KeyError/ValueError from the cast."""
+
+    def test_missing_yi_key_raises_clear_value_error(self, tmp_path):
+        path = tmp_path / "studies.json"
+        path.write_text(
+            json.dumps(
+                [
+                    {"name": "Smith 2020", "yi": 0.5, "vi": 0.0625},
+                    {"name": "Missing YI", "vi": 0.04},
+                ]
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="Missing YI"):
+            _load_studies(str(path))
+
+    def test_missing_vi_key_raises_clear_value_error(self, tmp_path):
+        path = tmp_path / "studies.json"
+        path.write_text(
+            json.dumps(
+                [
+                    {"name": "Smith 2020", "yi": 0.5, "vi": 0.0625},
+                    {"name": "Missing VI", "yi": 0.3},
+                ]
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="Missing VI"):
+            _load_studies(str(path))
+
+    def test_non_numeric_yi_raises_clear_value_error(self, tmp_path):
+        path = tmp_path / "studies.json"
+        path.write_text(
+            json.dumps(
+                [
+                    {"name": "Smith 2020", "yi": 0.5, "vi": 0.0625},
+                    {"name": "Bad YI", "yi": "not-a-number", "vi": 0.04},
+                ]
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="Bad YI"):
+            _load_studies(str(path))
+
+    def test_valid_json_still_loads_correctly(self, tmp_path):
+        path = tmp_path / "studies.json"
+        path.write_text(
+            json.dumps(
+                [
+                    {"name": "Smith 2020", "yi": 0.5, "vi": 0.0625},
+                    {"name": "Jones 2021", "yi": 0.3, "vi": 0.09},
+                    {"name": "Chen 2019", "yi": 0.7, "vi": 0.04},
+                ]
+            ),
+            encoding="utf-8",
+        )
+        studies = _load_studies(str(path))
+        assert len(studies) == 3
+        assert studies[0].name == "Smith 2020"
+        assert studies[0].yi == pytest.approx(0.5)
