@@ -26,9 +26,16 @@ verschleierten Fallbacks.
 import logging
 import math
 import os
+import re
 from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
+
+# Haertungs-Fallback (#702): FTS5-Snippets tragen '<b>'/'</b>'-Highlighting.
+# Landet ein solches Snippet doch als Reranker-Text (kein Abstract/Chunk
+# verfuegbar), darf ein Cross-Encoder trotzdem nie HTML-Markup statt
+# Fliesstext bewerten.
+_HTML_MARK_RE = re.compile(r"</?b>")
 
 # Lokaler Reranker-Fallback (Apache-2.0, kostenfrei) -- greift nur, wenn weder
 # VOYAGE_API_KEY noch COHERE_API_KEY gesetzt sind (siehe apply_reranker).
@@ -376,6 +383,14 @@ def apply_reranker(
         entry = dict(c)
         if "text" not in entry:
             entry["text"] = entry.get("snippet", entry.get("paper_id", ""))
+        # Haertungs-Fallback (#702): egal woher 'text' stammt, es geht nie
+        # FTS5-Markup an einen Reranker -- der Normalfall ergaenzt echten
+        # Abstract-/Chunk-Text (server._fill_missing_reranker_text), aber
+        # dieser Fallback sichert auch direkte apply_reranker()-Aufrufe ab,
+        # die 'snippet' unveraendert als 'text' durchreichen.
+        text = entry.get("text") or ""
+        if text:
+            entry["text"] = _HTML_MARK_RE.sub("", text)
         enriched.append(entry)
 
     if voyage_api_key:
