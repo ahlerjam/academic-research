@@ -67,9 +67,9 @@ def default_spool_dir() -> Path:
 def build_default_scorer() -> NliScorer:
     """Produktiver Scorer. Eigene Funktion, damit Tests sie ersetzen koennen,
     ohne ein Modell zu laden."""
-    from .nli_prefilter import MDebertaScorer
+    from .nli_prefilter import BgeM3ZeroshotScorer
 
-    return MDebertaScorer()
+    return BgeM3ZeroshotScorer()
 
 
 def _shorten(value: str | None, limit: int = MAX_FIELD_CHARS) -> str:
