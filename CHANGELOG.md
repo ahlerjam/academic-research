@@ -132,7 +132,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `docs/SKIP_REASONS.md`) nennt den API-Key nirgends mehr als Voraussetzung für
   einen Eval-Lauf. Nachgezogen: der End-Nutzer-Smoke-Test in `scripts/setup.sh`
   prüfte weiterhin `import anthropic`, obwohl `scripts/requirements.txt` das
-  Paket nie installiert hat (Rest eines seit #632 überholten Checks) — jede
+  Paket nie installiert hat (Rest eines seither überholten Checks) — jede
   frische Installation wäre daran gescheitert, geprüft hat es niemand, weil
   `scripts/setup.sh` in keiner CI läuft.
 - **`docs/superpowers/` entfernt (#641):** Das Verzeichnis enthielt zuletzt nur noch eine
