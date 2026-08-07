@@ -175,7 +175,7 @@ jobs:
         with:
           node-version: "22"
       - name: Smoke-Test der Kern-Importe
-        run: uv run python -c "import requests, httpx, anthropic, yaml, barcode, lxml, pdfplumber"
+        run: uv run python -c "import requests, httpx, yaml, barcode, lxml, pdfplumber"
       # tests/test_smoke_e2e.py braucht ein eigenstaendiges venv unter
       # ~/.academic-research/venv mit installiertem mcp-SDK (harte Voraussetzung,
       # siehe tests/helpers/smoke_core.py:VENV_PYTHON). Ohne diesen Step skippt
