@@ -248,8 +248,18 @@ jobs:
           python-version: "3.12"
       - name: Goldset gegen die hinterlegten Schwellen fahren
         run: uv run python scripts/eval/run_retrieval_chunk_goldset.py --check-thresholds
+      # HyDE/Multi-Query (#733) ist eine Messung ohne Schwelle: gegattert wird
+      # nicht die Qualitaet der Verfahren, sondern die Deckungsgleichheit von
+      # Lauf und eingecheckten Rohdaten. Sonst altert der Report unbemerkt,
+      # sobald jemand am Suchpfad oder an der Fusion dreht.
+      - name: HyDE/Multi-Query gegen die eingecheckten Rohdaten fahren
+        run: |
+          uv run python scripts/eval/run_hyde_multiquery_eval.py \
+            --check-against docs/evals/2026-08-07-hyde-multiquery-733-live-results.json \
+            > /dev/null
       - name: Metriken, Hermetik und Schwellen-Meta pruefen
         run: |
           uv run pytest -p no:cacheprovider -q \
             tests/test_issue_708_ranking_metrics.py \
-            tests/test_issue_708_retrieval_chunk_goldset.py
+            tests/test_issue_708_retrieval_chunk_goldset.py \
+            tests/test_issue_733_hyde_multiquery.py

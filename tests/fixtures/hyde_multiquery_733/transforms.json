@@ -1,0 +1,561 @@
+{
+  "meta": {
+    "issue": 733,
+    "goldset_manifest_sha256": "05193f994f84a149924b8ab11d2b474b3cb8f0e02fbf6774be2f8605de07417e",
+    "transform_model": "sonnet",
+    "hyde_prompt_id": "hyde-fec5f4bd53db",
+    "multi_query_prompt_id": "mq-ffd7e47cb353",
+    "multi_query_variants": 3,
+    "generator": "scripts/eval/build_hyde_multiquery_fixture.py",
+    "transform_latency_ms": {
+      "hyde": {
+        "method": "Wanduhrzeit je `claude -p`-Aufruf (CLI-Subprozess, eingeloggte OAuth-Sitzung), serieller Lauf, ein Aufruf je Query; bei einer verworfenen Antwort zaehlt der erfolgreiche Versuch (Anzahl Versuche steht je Query unter `attempts`). Obere Schranke: der CLI-Start bringt Prozess- und Sitzungsaufbau mit, den eine Umformung innerhalb einer laufenden Sitzung nicht bezahlt.",
+        "n": 26,
+        "p50": 8022.82,
+        "p95": 11727.32,
+        "mean": 8391.08,
+        "max": 11912.45
+      },
+      "multi_query": {
+        "method": "Wanduhrzeit je `claude -p`-Aufruf (CLI-Subprozess, eingeloggte OAuth-Sitzung), serieller Lauf, ein Aufruf je Query; bei einer verworfenen Antwort zaehlt der erfolgreiche Versuch (Anzahl Versuche steht je Query unter `attempts`). Obere Schranke: der CLI-Start bringt Prozess- und Sitzungsaufbau mit, den eine Umformung innerhalb einer laufenden Sitzung nicht bezahlt.",
+        "n": 26,
+        "p50": 6762.03,
+        "p95": 7906.08,
+        "mean": 7255.06,
+        "max": 19374.09
+      }
+    },
+    "embedding_model_id": "intfloat/multilingual-e5-small",
+    "dim": 384,
+    "embedding_latency_ms": {
+      "method": "Wanduhrzeit je Einzel-Embedding mit dem geladenen e5-Modell (Modellladen nicht eingerechnet), gemessen auf der Maschine des Generatorlaufs.",
+      "n": 129,
+      "p50": 16.9,
+      "p95": 77.32,
+      "mean": 21.76,
+      "max": 221.61
+    },
+    "manifest_sha256": "2cd017558e41f182d2ae655140801bc67cc4b4b1dcb1e2796d634e59ee3d5074"
+  },
+  "transforms": [
+    {
+      "query_id": "q-en-01",
+      "query": "how can a pipeline enforce that the author of a change is not the one who releases it",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Automated pipelines commonly enforce a separation of duties by binding release authorization to identity metadata extracted from the version control system rather than to a static approver list. During the build stage, the pipeline resolves the commit author or the pull request submitter and compares this identity against the account credentials used to trigger the deployment or merge step; if the two identities coincide, the workflow halts and requires an alternate reviewer to re-authorize the action. This check is typically implemented through branch protection rules that mandate a minimum number of approvals from users distinct from the change originator, combined with signed commits or verified tokens that make identity spoofing computationally infeasible. Some continuous delivery platforms extend this control to the release stage itself, requiring that the operator who initiates the production rollout differ from every contributor listed in the associated commit range. Empirical studies of software supply chain security suggest that this four-eyes principle, when enforced programmatically rather than through policy alone, substantially reduces the incidence of unreviewed or malicious code reaching production environments.",
+      "mq_variants": [
+        "How can a CI/CD pipeline enforce separation of duties between code authorship and release execution?",
+        "Wie kann eine Pipeline sicherstellen, dass die Person, die eine Änderung freigibt, nicht mit der Person übereinstimmt, die den Release durchführt?",
+        "Welche technischen und organisatorischen Kontrollen (z. B. Pflicht-Reviews durch Dritte, getrennte Berechtigungsrollen, Vier-Augen-Prinzip bei Approvals) verhindern in einer CI/CD-Pipeline zuverlässig, dass derjenige, der einen Code-Commit oder Pull Request autorisiert hat, gleichzeitig auch den zugehörigen Produktions-Release auslösen oder freigeben kann?"
+      ],
+      "latency_ms": {
+        "hyde": 11912.45,
+        "multi_query": 7906.08
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-02",
+      "query": "why does evidence about a release disappear before an auditor asks for it",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Evidentiary artifacts pertaining to a given release are frequently subject to systematic attrition well in advance of any formal audit request, a phenomenon attributable less to deliberate concealment than to the misalignment between artifact retention policies and audit trigger points. Build logs, deployment manifests, and approval records are commonly governed by default retention windows configured for operational rather than compliance purposes, such that ephemeral CI/CD storage tiers purge evidence within thirty to ninety days irrespective of downstream audit cadence. Furthermore, the absence of a formal chain-of-custody requirement at the point of release means that no actor is incentivized to preserve artifacts beyond their immediate operational utility. Consequently, by the time an auditor initiates a request—often months after the release event—the underlying evidence has already aged out of the systems in which it was originally generated, leaving only secondary attestations or summary metadata, if anything, to substantiate the control's operation.",
+      "mq_variants": [
+        "Why does evidence about a release disappear before an auditor asks for it",
+        "Warum verschwindet Evidenz zu einem Release, bevor ein Prüfer sie anfordert",
+        "Was sind die konkreten Ursachen dafür, dass Nachweise zu einem Release-Vorgang bereits gelöscht, überschrieben oder unauffindbar sind, wenn ein Auditor sie im Rahmen einer Prüfung anfragt"
+      ],
+      "latency_ms": {
+        "hyde": 8036.72,
+        "multi_query": 7574.38
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-03",
+      "query": "what goes wrong when too many changes take the emergency route",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Change failure rate spikes when a disproportionate share of deployments bypass the standard review pipeline; emergency changes routinely skip peer review, automated test gates, and staged rollout, which removes the very controls that catch defects before they reach production. As the proportion of changes routed through the emergency path grows, the correlation between change volume and incident volume strengthens, since expedited changes are, by construction, undertested and under-reviewed relative to changes following the normal change management process. Organizations that overuse the emergency lane also tend to exhibit degraded lead time metrics elsewhere, as teams learn to mislabel routine work as urgent to escape queueing delays in the standard pipeline, further eroding the signal value of the emergency designation itself. This dynamic creates a feedback loop in which the emergency route, rather than remaining an exception mechanism reserved for genuine incidents, becomes a normalized shortcut whose growing share of total deployment volume is itself a leading indicator of instability.",
+      "mq_variants": [
+        "What goes wrong when too many changes take the emergency route",
+        "What causes failures when excessive changes bypass standard deployment procedures through emergency change processes",
+        "Welche Risiken entstehen, wenn zu viele Änderungen den Notfall-Änderungsprozess umgehen und den regulären Freigabeprozess auslassen"
+      ],
+      "latency_ms": {
+        "hyde": 7852.79,
+        "multi_query": 6584.16
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-04",
+      "query": "where should the signing key for build artefacts be kept",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Signing keys for build artefacts should never be stored alongside the build system itself but rather in a dedicated key management service or hardware security module (HSM) that enforces strict access control and audit logging. A common architectural pattern separates the signing operation into an isolated service that receives artefact hashes rather than the artefacts themselves, thereby minimizing the exposure of the private key material to the continuous integration environment. Empirical assessments of software supply chain incidents consistently identify improperly secured signing keys—frequently embedded in repository configuration or environment variables accessible to build workers—as a primary vector for artefact tampering. Consequently, best practice recommends short-lived, ephemeral credentials issued via a trusted certificate authority, combined with mandatory multi-party approval for any operation that accesses the root signing key.",
+      "mq_variants": [
+        "Where should the signing key for build artifacts be kept",
+        "Wo sollte der Signierschlüssel für Build-Artefakte aufbewahrt werden",
+        "Welche Speicherorte, Zugriffskontrollen und Schutzmaßnahmen sind für die sichere Aufbewahrung des privaten Signierschlüssels von Build-Artefakten während des gesamten Build- und Release-Prozesses erforderlich"
+      ],
+      "latency_ms": {
+        "hyde": 7203.36,
+        "multi_query": 6054.85
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-05",
+      "query": "why is a vulnerable component in the inventory not the same as being exposed",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Vulnerability inventories are typically compiled from static software composition analysis and reflect the mere presence of a component with a known CVE, irrespective of whether the affected code path is ever invoked at runtime. Exposure, by contrast, requires that the vulnerable function be reachable from an untrusted input, that the surrounding execution environment satisfy the precondition necessary for exploitation, and that no compensating control—such as a WAF rule, sandboxing mechanism, or configuration flag—neutralize the flaw before it can be triggered. A dependency may therefore appear on an inventory for years without ever constituting an actionable attack surface, for instance when the vulnerable module is bundled but never imported, or when the reachable API is gated behind authentication that the threat model excludes. Consequently, remediation prioritization frameworks increasingly incorporate reachability analysis and runtime telemetry to distinguish theoretical inventory risk from empirically exploitable exposure, since patching effort allocated purely on the basis of inventory presence tends to yield a poor return relative to the residual risk it addresses.",
+      "mq_variants": [
+        "Why is a vulnerable component in the inventory not the same as being exposed on the deployed attack surface?",
+        "Warum unterscheidet sich eine als verwundbar erfasste Komponente im Inventar grundsätzlich von einer tatsächlich exponierten Angriffsfläche?",
+        "Warum reicht der bloße Nachweis einer verwundbaren Komponente im Software-Inventar nicht aus, um daraus abzuleiten, dass diese Komponente auch tatsächlich einem Angreifer zugänglich bzw. ausnutzbar exponiert ist, und welche zusätzlichen Faktoren müssen für diese Einschätzung berücksichtigt werden?"
+      ],
+      "latency_ms": {
+        "hyde": 8066.11,
+        "multi_query": 6721.52
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-06",
+      "query": "how many people should join an incident call and who coordinates",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Effective incident response typically hinges on limiting the size of the response team to those with direct decision-making authority or specialized technical knowledge relevant to the affected systems. Empirical observations from postmortem analyses suggest that calls exceeding eight to ten active participants exhibit diminished coordination efficiency, attributable to increased communication overhead and diffusion of responsibility. A designated incident commander, distinct from the individual performing hands-on remediation, is generally responsible for maintaining situational awareness, managing the communication cadence, and making final calls on escalation or rollback decisions. This separation of coordination and execution roles allows the commander to preserve a holistic view of the incident while technical responders remain focused on diagnostic and remediation tasks. Peripheral stakeholders are commonly relegated to a secondary channel, receiving periodic status updates rather than participating directly in the primary call.",
+      "mq_variants": [
+        "How many staff members are typically expected to participate in an incident response call, and who is responsible for facilitating it?",
+        "Wie viele Mitarbeiter sollten typischerweise an einer Incident-Response-Telefonkonferenz teilnehmen, und wer übernimmt die Koordination des Ablaufs?",
+        "What is the appropriate number of participants for an incident call, and specifically, which role or person is designated to lead and coordinate the discussion during the call?"
+      ],
+      "latency_ms": {
+        "hyde": 8064.59,
+        "multi_query": 19374.09
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-07",
+      "query": "why do reviews that blame an individual fail to change anything",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Individual-blame reviews of adverse events tend to produce recommendations that are structurally incapable of altering the conditions that generated the error in the first place. When the analysis terminates at the identification of a culpable actor, the underlying system defects—ambiguous handover protocols, understaffing, poorly designed interfaces, conflicting production pressures—remain untouched and continue to generate the same failure pattern with different personnel. Attribution of blame further discourages the reporting of near-misses and precursor conditions, since staff reasonably anticipate punitive consequences rather than corrective action, thereby depriving the organization of the very data required for systemic learning. Consequently, the corrective action typically imposed—retraining, disciplinary action, or reassignment of the individual involved—addresses a proximate actor rather than the latent organizational conditions, and is observed empirically to have little effect on recurrence rates. A shift toward systems-based analysis, by contrast, treats the individual error as merely the final, visible node in a longer causal chain of contributory factors, and directs remedial effort toward that chain rather than toward the person who happened to be present at its terminus.",
+      "mq_variants": [
+        "Why do reviews that blame an individual fail to change anything",
+        "Root cause analysis approaches attributing failure to individual error rather than systemic contributing factors",
+        "Warum führen Reviews, die eine einzelne Person verantwortlich machen, nicht zu wirksamen Verbesserungen"
+      ],
+      "latency_ms": {
+        "hyde": 9926.5,
+        "multi_query": 7339.87
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-08",
+      "query": "conditions under which an error budget actually influences a decision",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Error budgets that adjudicate a specific engineering decision — halting a release, reallocating a sprint toward reliability work, or approving a risky migration — depend on the metric being tied to a concrete, monitored service-level objective rather than an aspirational target. In practice, the budget shifts from a passive accounting artifact to an active gate only when burn-rate alerts are wired into the same review cadence as feature prioritization, so that exhaustion of the budget triggers an automatic freeze rather than a post-hoc discussion. Several case studies note that teams which report the remaining budget without attaching a predefined policy consequence tend to treat it as informational, and the metric ceases to constrain behavior at all. The decisive factor, then, is less the existence of the budget itself than the presence of an enforced escalation path that converts budget depletion into a binding organizational commitment, typically codified in an on-call or change-management runbook. Where such a path is absent, engineers report reverting to ad hoc judgment even when the nominal budget has been fully consumed.",
+      "mq_variants": [
+        "Under what conditions does an error budget actually shape a decision, in the context of a scientific full-text collection.",
+        "Under which conditions does an error budget actually influence a decision-making process?",
+        "Unter welchen Bedingungen beeinflusst ein Error Budget tatsächlich eine Entscheidung?"
+      ],
+      "latency_ms": {
+        "hyde": 9507.23,
+        "multi_query": 6840.92
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-09",
+      "query": "risk that an automatic reconciliation undoes an emergency fix",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Automatic reconciliation processes, while designed to restore consistency between distributed system states, pose a nontrivial risk of silently reverting manually applied emergency fixes if the underlying source of truth has not been updated to reflect the intervention. This occurs when the reconciliation loop treats the declared desired state as authoritative and interprets any divergence—including a hotfix applied directly to the live environment—as configuration drift to be corrected rather than as an intentional deviation. Consequently, an operator's emergency patch may be overwritten within a single reconciliation cycle, reintroducing the very fault the fix was intended to remediate. Mitigating this hazard typically requires either a temporary suspension of the reconciliation controller, an explicit annotation marking the resource as exempt from automated correction, or a fast-track update to the canonical configuration that supersedes the previous desired state.",
+      "mq_variants": [
+        "Risk that automatic reconciliation overwrites or reverts an emergency fix applied to production data.",
+        "Warum es zu einem Datenverlust automatischer Abgleichprozesse kommen kann, wenn diese einen manuell vorgenommenen Notfall-Patch rückgängig machen.",
+        "Wie hoch ist das Risiko, dass ein automatischer Abgleichprozess (Reconciliation) eine zuvor manuell vorgenommene Notfallkorrektur unbeabsichtigt wieder rückgängig macht, und unter welchen Bedingungen tritt dies typischerweise auf?"
+      ],
+      "latency_ms": {
+        "hyde": 6799.31,
+        "multi_query": 7820.55
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-10",
+      "query": "why does rotating a credential break a component nobody expected",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "Rotation events frequently invalidate cached credential material held by downstream consumers that were never registered in the service's dependency inventory, particularly sidecar processes or long-lived connection pools that authenticate once at initialization and thereafter rely on an in-memory token rather than re-resolving it from the secrets store. Because these components do not subscribe to rotation notifications and lack a graceful reload path, they continue operating against the stale credential until the next connection attempt fails, at which point the outage manifests as an unrelated service error rather than an authentication failure. This decoupling between the credential's owner and its silent consumers is exacerbated in systems where secret references are propagated through configuration templates or environment variable injection at deploy time, obscuring the transitive dependency from both the credential owner and the operations team performing the rotation. Consequently, incident postmortems for rotation-induced outages routinely surface previously undocumented integrations, underscoring the necessity of maintaining an authoritative, automatically verified registry of credential consumers rather than relying on tribal knowledge or manual documentation.",
+      "mq_variants": [
+        "Why does rotating a credential break a component that nobody expected to be affected",
+        "Warum führt die Rotation eines Credentials zu einem Ausfall in einer Komponente, die niemand erwartet hätte",
+        "Welche versteckten Abhängigkeiten oder impliziten Annahmen führen dazu, dass die Rotation eines Credentials unerwartet eine scheinbar unabhängige Komponente zum Ausfall bringt, und wie lassen sich solche Abhängigkeiten vorab identifizieren"
+      ],
+      "latency_ms": {
+        "hyde": 8008.91,
+        "multi_query": 6150.59
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-en-11",
+      "query": "how does a broker decide whether to hand a short lived token to a job",
+      "lang": "en",
+      "case": "same-language",
+      "hyde_text": "When a client requests a token, the broker first authenticates the caller and resolves the requesting principal against the job's declared scope before any credential material is issued. Rather than granting long-lived access, the broker evaluates a small set of contextual signals—job identity, target resource, and requested capability—against a least-privilege policy and, if the request satisfies it, mints a token scoped narrowly to that operation and bounded by a short expiry window, typically on the order of minutes. This decision is stateless with respect to prior issuances: each request is evaluated independently, so a job cannot accumulate broader access through repeated calls. Should the requested scope exceed what the job's manifest permits, or should the caller's identity fail attestation, the broker denies issuance outright rather than downgrading the request. The resulting token is thus a narrow, time-boxed credential whose validity is enforced both by its embedded expiry and by the broker's revocation list, ensuring that even a leaked token confers only transient and limited capability.",
+      "mq_variants": [
+        "How does a broker decide whether to grant short-lived credentials to a workload before task execution?",
+        "Wie entscheidet ein Broker, ob er einem Job ein kurzlebiges Token ausstellt?",
+        "Nach welchen konkreten Kriterien – etwa Identität des Anfragenden, angeforderter Scope, Zeitpunkt und Kontext der Anfrage – prüft ein Broker vor der Ausstellung eines kurzlebigen Zugriffstokens an einen Job, ob dieser Zugriff gewährt werden soll?"
+      ],
+      "latency_ms": {
+        "hyde": 9977.3,
+        "multi_query": 6802.55
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-de-01",
+      "query": "welche Änderungen machen eine Datenschutz-Folgenabschätzung ungültig",
+      "lang": "de",
+      "case": "same-language",
+      "hyde_text": "Data protection impact assessments require re-evaluation whenever material changes occur in the processing operation's risk profile. Significant modifications to the categories of personal data processed, the volume or scope of data subjects affected, or the introduction of new technologies substantially alter the nature and scope of a DPIA and can render prior assessments invalid. Changes to the purposes of processing, the recipients with whom data are shared, or the retention periods applied likewise necessitate a fresh evaluation, since these factors directly bear on the residual risk to individuals' rights and freedoms. Furthermore, an increase in the likelihood or severity of the identified risks — whether due to a security incident, a shift in the technical and organizational measures in place, or an amendment to the applicable legal basis — obliges the controller to reassess and, where necessary, update the impact assessment prior to continuing the processing activity.",
+      "mq_variants": [
+        "Welche Modifikationen führen dazu, dass eine Datenschutz-Folgenabschätzung ihre Gültigkeit verliert",
+        "Which modifications render a Data Protection Impact Assessment invalid",
+        "Welche Änderungen führen dazu, dass eine Datenschutz-Folgenabschätzung ihre Gültigkeit verliert"
+      ],
+      "latency_ms": {
+        "hyde": 7708.42,
+        "multi_query": 6873.01
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-de-02",
+      "query": "warum reicht eine jährliche Wiederholung der Prüfung nicht aus",
+      "lang": "de",
+      "case": "same-language",
+      "hyde_text": "Fine-grained testing measures alone cannot substantiate a claim of enduring compliance, because they capture organizational conduct only at a single, discrete point in time. Personnel turnover, configuration drift, and the introduction of new system components continuously alter the risk profile of an organization, so a control validated in January offers no assurance about the state of affairs in November. Empirical studies of audit cycles have shown that the majority of control failures detected in subsequent assessments originate from changes implemented after the prior review rather than from undetected pre-existing deficiencies. Consequently, an annual assessment interval structurally underestimates the cumulative probability of undetected non-conformity across the fiscal year, particularly in environments characterized by frequent change management activity. Continuous or at least quarterly monitoring mechanisms are therefore recommended to close the temporal gap that a purely annual audit cadence leaves exposed.",
+      "mq_variants": [
+        "Why does an annual repeat of the audit not suffice to ensure ongoing compliance?",
+        "Warum genügt eine jährliche Wiederholung der Prüfung nicht, um die kontinuierliche Einhaltung sicherzustellen?",
+        "Warum reicht eine einmal jährlich durchgeführte Prüfung nicht aus, um zwischen den Prüfterminen auftretende Abweichungen, Änderungen oder Verstöße rechtzeitig zu erkennen?"
+      ],
+      "latency_ms": {
+        "hyde": 8546.25,
+        "multi_query": 5390.14
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-de-03",
+      "query": "wann ist ein technisches Protokoll trotz Kürzel personenbeziehbar",
+      "lang": "de",
+      "case": "same-language",
+      "hyde_text": "Determining under what conditions a technical protocol counts as personal data despite pseudonymized identifiers—the core legal question here. The classification of a technical log as personal data does not hinge on the presence of directly identifying fields such as name or email address, but rather on whether a data subject remains identifiable, whether by the controller or by any other party, through means reasonably likely to be used. Even where entries are reduced to abbreviated identifiers, session tokens, or hashed values, identifiability persists if an auxiliary dataset—access lists, IP address logs, or internal mapping tables—can be combined with the protocol to single out an individual. This holds irrespective of whether the controller itself possesses the additional information, provided that a third party could plausibly obtain and apply it under reasonable effort and cost, as established by the \"means reasonably likely to be used\" test. Consequently, protocols employing pseudonymous shorthand are to be distinguished from genuinely anonymized records, since the former retain a re-identification risk that the latter, by design, precludes. Only where the linkage between abbreviation and natural person has been irreversibly and permanently severed does the protocol fall outside the scope of personal data within the meaning of the applicable data protection framework.",
+      "mq_variants": [
+        "When a technical/administrative protocol is de-anonymizable via abbreviations, codes, or metadata, does it still count as personal data under GDPR — even without directly naming a person?",
+        "Wann verliert ein Protokoll, das nur Kürzel statt Klarnamen enthält, seinen Anonymitätsschutz im Sinne der DSGVO?",
+        "Unter welchen konkreten Voraussetzungen – etwa Kombinierbarkeit mit Zusatzwissen, Re-Identifizierungsrisiko oder Zugriff Dritter auf Zuordnungslisten – gilt ein technisches Protokoll trotz Verwendung von Kürzeln statt Klarnamen als personenbezogenes Datum im Sinne des Art. 4 Nr. 1 DSGVO?"
+      ],
+      "latency_ms": {
+        "hyde": 10235.04,
+        "multi_query": 6926.23
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-de-04",
+      "query": "was muss eine Betriebsvereinbarung zu Auswertungen mindestens regeln",
+      "lang": "de",
+      "case": "same-language",
+      "hyde_text": "Employee co-determination agreements governing workplace performance and data evaluations must, at minimum, specify the permissible purpose of the evaluation, the categories of personal data to be processed, and the retention period after which such data are to be deleted or anonymized. Furthermore, the agreement should define access rights, designating which persons or organizational units may view individualized results, and stipulate that any use for disciplinary measures against individual employees is either excluded or subject to explicit procedural safeguards. Works councils typically insist on a clause obligating the employer to inform employees, prior to the commencement of monitoring, about the technical means and evaluation criteria applied. Finally, provisions addressing the employees' right to inspect their own data and a dispute-resolution mechanism, such as recourse to a conciliation committee (Einigungsstelle), are regarded as indispensable components of a legally sound works agreement on data evaluations.",
+      "mq_variants": [
+        "Which technical requirements must a works agreement (Betriebsvereinbarung) on data evaluations and analytics minimally specify to comply with co-determination law?",
+        "Welche Mindestinhalte muss eine Betriebsvereinbarung über Auswertungen gemäß den mitbestimmungsrechtlichen Vorgaben zwingend enthalten?",
+        "Welche konkreten Regelungspunkte – etwa Zweckbindung, Datenarten, Zugriffsberechtigungen, Aufbewahrungsfristen und Mitbestimmungsrechte des Betriebsrats – muss eine Betriebsvereinbarung zu Auswertungen mindestens umfassen, um rechtssicher zu sein?"
+      ],
+      "latency_ms": {
+        "hyde": 7221.5,
+        "multi_query": 7497.68
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-de-05",
+      "query": "wie erkennt man früh, dass eine Fremdkomponente nicht mehr gepflegt wird",
+      "lang": "de",
+      "case": "same-language",
+      "hyde_text": "Software components lacking recent commit activity, unresolved security advisories, or timely responses to maintainer issue threads are widely recognized as early indicators of abandonment risk. Empirical studies of open-source dependency ecosystems have operationalized \"maintenance decay\" through metrics such as the interval between successive releases, the ratio of closed to open pull requests, and the responsiveness of core contributors to reported vulnerabilities. A sustained absence of commits exceeding twelve months, combined with a declining bus factor—defined as the number of contributors whose departure would stall the project—has been shown to correlate strongly with subsequent discontinuation. Consequently, dependency governance frameworks increasingly recommend continuous monitoring of these signals rather than relying solely on retrospective vulnerability disclosures, since the latter tend to lag behind the actual onset of neglect by several months.",
+      "mq_variants": [
+        "How does one detect early that a third-party component is no longer maintained?",
+        "Woran erkennt man frühzeitig, dass eine externe Softwarekomponente nicht mehr weiterentwickelt oder gepflegt wird und welche Indikatoren wie ausbleibende Commits, unbeantwortete Issues oder fehlende Sicherheitsupdates lassen sich dafür heranziehen?"
+      ],
+      "latency_ms": {
+        "hyde": 7198.68,
+        "multi_query": 5465.13
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-de-06",
+      "query": "warum genügt eine vom Zulieferer gelieferte Stückliste allein nicht",
+      "lang": "de",
+      "case": "same-language",
+      "hyde_text": "Supplier-provided bills of materials frequently omit critical downstream information required for full traceability and compliance verification, such as conflict-mineral provenance, sub-tier supplier identities, or substance-of-concern declarations beyond the first tier. Manufacturers therefore cannot rely solely on the BOM as delivered, since it typically reflects only the immediate contractual relationship and lacks independent verification of the data's accuracy or completeness. Moreover, self-reported figures are prone to transcription errors, outdated revisions, and inconsistent classification schemes across suppliers, which undermines cross-comparability within an aggregated material passport. Consequently, a robust governance process must supplement the supplier BOM with corroborating evidence—such as certificates of conformity, audit trails, or independent laboratory analyses—before the data can be considered authoritative for regulatory reporting.",
+      "mq_variants": [
+        "Why does a supplier-delivered bill of materials alone fall short as a basis for automated part identification?",
+        "Warum genügt eine vom Zulieferer gelieferte Stückliste allein nicht als verlässliche Grundlage für die automatisierte Teileidentifikation?",
+        "Warum reicht es nicht aus, sich ausschließlich auf eine vom Zulieferer bereitgestellte Stückliste zu verlassen, wenn zusätzlich geprüft werden muss, ob die darin enthaltenen Angaben zu Teilenummern, Revisionsständen und Spezifikationen tatsächlich mit dem gelieferten physischen Bauteil übereinstimmen?"
+      ],
+      "latency_ms": {
+        "hyde": 8091.7,
+        "multi_query": 6629.15
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-de-07",
+      "query": "wer darf nach einem Ausfall personenbezogen auswerten",
+      "lang": "de",
+      "case": "same-language",
+      "hyde_text": "Following the internal guidance not to over-formalize: this is a direct content-generation task, not a coding or research task requiring a skill. Access to personal data following a system outage is restricted to individuals whose roles are explicitly designated within the data protection concept, typically the data protection officer and members of the incident response team acting under documented authorization. Any post-incident forensic analysis involving personally identifiable log data must be conducted under the principle of data minimization and requires a legitimate purpose, such as root-cause investigation or breach notification assessment pursuant to Article 33 GDPR. Ad hoc access by system administrators outside this defined scope constitutes an unauthorized processing activity and must be logged and subsequently reviewed. Organizations are therefore advised to establish a pre-approved escalation matrix that specifies, in advance, which roles may access which categories of personal data under emergency conditions, thereby avoiding discretionary decisions made under time pressure during the incident itself.",
+      "mq_variants": [
+        "Who darf nach einem Ausfall personenbezogene Daten auswerten",
+        "Wer ist nach einem Systemausfall zur Auswertung personenbezogener Daten berechtigt",
+        "Welche Rollen oder Stellen sind nach einem Ausfall dazu befugt, personenbezogene Daten auszuwerten, und auf welcher Rechtsgrundlage bzw. unter welchen Voraussetzungen erfolgt diese Berechtigung?"
+      ],
+      "latency_ms": {
+        "hyde": 7373.9,
+        "multi_query": 6608.65
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-gap-01",
+      "query": "woran merke ich, dass jemand nachts von Hand am laufenden Rechner etwas umgestellt hat und die abgelegte Beschreibung nicht mehr stimmt",
+      "lang": "de",
+      "case": "language-gap",
+      "hyde_text": "Configuration drift typically manifests as a discrepancy between the declared state recorded in version-controlled manifests and the actual runtime state observed on the host, and such divergence is most reliably detected through periodic reconciliation scans that compare live system attributes against the last known-good baseline. Manual interventions performed outside the change-management pipeline—commonly executed during low-traffic maintenance windows—leave characteristic traces in shell history, audit logs, and file modification timestamps that precede the corresponding entry in the configuration repository, if any entry exists at all. A configuration management agent operating in a continuous enforcement loop will flag such drift as soon as it re-applies the desired state and observes an unexpected delta, whereas agents running only in a report-only or \"check\" mode surface the same inconsistency without remediating it, thereby preserving forensic evidence of the unauthorized change. In practice, the most robust indicator is a mismatch between the checksum or hash of the currently deployed artifact and the hash recorded at the time of the last approved deployment, since this signature is largely insensitive to cosmetic alterations and reliably exposes even minor undocumented edits. Consequently, organizations increasingly treat drift-detection alerts as a proxy for out-of-band access, on the assumption that any deviation from the recorded desired state that cannot be attributed to an automated pipeline run originated from direct, unlogged manual intervention.",
+      "mq_variants": [
+        "woran merke ich, dass jemand nachts von Hand am laufenden Rechner etwas umgestellt hat und die abgelegte Beschreibung nicht mehr stimmt",
+        "How can I detect that someone manually altered the configuration of a running system overnight, causing the stored documentation to become inconsistent with the actual state",
+        "Woran erkenne ich, dass nachts manuell eine Konfigurationsänderung am laufenden System vorgenommen wurde und die hinterlegte Dokumentation dadurch nicht mehr mit dem Ist-Zustand übereinstimmt"
+      ],
+      "latency_ms": {
+        "hyde": 11727.32,
+        "multi_query": 7626.03
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-gap-02",
+      "query": "geklautes Kennwort soll möglichst schnell wertlos werden",
+      "lang": "de",
+      "case": "language-gap",
+      "hyde_text": "Compromised credentials retain their exploitability for as long as the associated authentication factor remains valid, making time-to-invalidation a critical determinant of breach impact. Systems that bind session tokens to short-lived, automatically rotating secrets—rather than static passwords—substantially reduce the window during which a leaked credential can be replayed by an adversary. Empirical analyses of credential-stuffing incidents indicate that attackers typically attempt exploitation within minutes to hours of exfiltration, underscoring the necessity of revocation mechanisms that operate on comparably short timescales. Approaches combining continuous authentication, adaptive risk scoring, and immediate token invalidation upon anomaly detection have been shown to render stolen credentials functionally worthless before an attacker can complete lateral movement. Consequently, minimizing credential lifetime is increasingly regarded as a primary design goal in zero-trust architectures, complementing rather than replacing traditional password-strength requirements.",
+      "mq_variants": [
+        "How stolen credential is nullified as quickly as possible after theft",
+        "Wie kann ein gestohlenes Kennwort nach Diebstahl möglichst schnell entwertet werden",
+        "Über welche Mechanismen (z. B. automatische Rotation, kurze Gültigkeitsdauer, sofortige Sperrung nach Kompromittierungserkennung) lässt sich erreichen, dass ein gestohlenes Kennwort in möglichst kurzer Zeit seinen Wert für einen Angreifer verliert?"
+      ],
+      "latency_ms": {
+        "hyde": 7997.06,
+        "multi_query": 6540.58
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-gap-03",
+      "query": "wie finde ich heraus, welche fremden Bausteine wirklich in meinem fertigen Programm stecken",
+      "lang": "de",
+      "case": "language-gap",
+      "hyde_text": "Software composition analysis has emerged as a standard practice for auditing the provenance of third-party components embedded within compiled artifacts. By comparing extracted binary features—such as function hashes, string constants, or embedded version metadata—against a reference database of known open-source packages, analysts can reconstruct a software bill of materials (SBOM) even in the absence of build-time instrumentation. This approach is particularly valuable when source-level dependency manifests are unavailable or have diverged from the actual linked libraries due to vendoring, static linking, or build-time substitution. Empirical studies indicate that binary-level SCA tools frequently surface transitive dependencies omitted from declared manifests, revealing discrepancies of up to 30% between documented and actual third-party code inclusion. Consequently, organizations increasingly mandate binary composition verification as a complement to source-based dependency scanning within their software supply chain governance frameworks.",
+      "mq_variants": [
+        "English-language technical query, one German-language technical query, and a more detailed/precise version follow:",
+        "How can I determine which third-party components are actually incorporated into my compiled software binary?",
+        "Wie lässt sich feststellen, welche fremden Komponenten tatsächlich in meiner kompilierten Software enthalten sind?"
+      ],
+      "latency_ms": {
+        "hyde": 7000.72,
+        "multi_query": 6532.6
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-gap-04",
+      "query": "die Störung fällt viel zu spät auf, obwohl alle Anzeigen grün sind",
+      "lang": "de",
+      "case": "language-gap",
+      "hyde_text": "Despite indicators showing nominal system health across all monitored dashboards, the underlying fault propagated silently through a subsystem whose telemetry channel was decoupled from the aggregate status signal. Because the monitoring layer relies on threshold-based heartbeat checks rather than semantic validation of output correctness, a component can continue emitting well-formed \"alive\" signals long after it has ceased to perform its intended function. This phenomenon, often termed a silent failure or gray failure, arises when the observability instrumentation captures liveness rather than correctness, thereby masking a divergence between perceived and actual system state. Consequently, operators become aware of the disruption only once its downstream effects — degraded output quality, accumulated data inconsistency, or user-facing errors — surpass a perceptibility threshold, at which point substantial remediation delay has already accrued. Prior work has argued that closing this detection gap requires augmenting binary health checks with continuous, outcome-oriented metrics capable of capturing partial or latent degradation.",
+      "mq_variants": [
+        "The disturbance is only noticed far too late, even though all indicators show green.",
+        "Die Störung wird trotz durchweg grüner Statusanzeigen erst mit erheblicher Verzögerung erkannt.",
+        "Woran liegt es, dass eine Störung erst mit deutlicher zeitlicher Verzögerung bemerkt wird, obwohl sämtliche Monitoring-Anzeigen und Statusindikatoren zum Zeitpunkt des Auftretens durchgehend einen unauffälligen (grünen) Zustand signalisieren?"
+      ],
+      "latency_ms": {
+        "hyde": 8517.99,
+        "multi_query": 6707.91
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-gap-05",
+      "query": "der Vieraugengrundsatz lässt sich umgehen, weil mehrere Leute dasselbe Konto benutzen",
+      "lang": "de",
+      "case": "language-gap",
+      "hyde_text": "Access controls in shared enterprise systems frequently mandate dual authorization for sensitive transactions, yet this safeguard presupposes that each credential set is bound to a unique individual. In practice, however, employees often share login credentials for reasons of convenience or operational necessity, particularly under time pressure or in understaffed departments. When a single account is accessed by multiple users, the four-eyes principle degenerates into a formal exercise, since the second approval may originate from the same person who initiated the request, merely under a shared identity. Audit trails in such cases record two distinct process steps but fail to capture the underlying identity collapse, thereby obscuring the actual absence of independent review. Consequently, control frameworks that rely solely on system-level segregation of duties without corroborating evidence of physical or personal separation remain vulnerable to circumvention through credential sharing.",
+      "mq_variants": [
+        "Multiple people share the same account credentials, effectively bypassing the four-eyes review requirement.",
+        "Die Vier-Augen-Kontrolle wird ausgehebelt, wenn mehrere Personen dasselbe Benutzerkonto gemeinsam nutzen.",
+        "Wie lässt sich in den Kontrollen erkennen, dass mehrere Personen unter einer einzigen geteilten Anmeldekennung agieren und damit die vorgesehene Trennung von Erstellung und Freigabe im Vieraugenprinzip faktisch aufgehoben wird?"
+      ],
+      "latency_ms": {
+        "hyde": 7410.86,
+        "multi_query": 6957.46
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-gap-06",
+      "query": "nach einer Panne soll aufgeschrieben werden, welche Möglichkeit man verworfen hat und warum",
+      "lang": "de",
+      "case": "language-gap",
+      "hyde_text": "Incident response systems that rely on retrospective review must capture not only the corrective action taken, but also the alternatives that were considered and subsequently discarded, together with the rationale for their rejection. This documentation practice, often formalized as part of the post-incident report, prevents the recurrence of previously ruled-out fixes and preserves institutional knowledge that would otherwise be lost once the responding engineer moves on. For instance, a proposed rollback may be rejected on the grounds that it would reintroduce a known regression, or a quick patch may be dismissed because it addresses only the symptom rather than the underlying fault condition. Recording these dismissed options alongside the chosen remediation allows subsequent reviewers to distinguish between options that were never evaluated and those that were deliberately excluded. Absent this practice, teams frequently rediscover the same discarded solution during a later incident, incurring redundant analysis effort and delaying time to resolution.",
+      "mq_variants": [
+        "After a mishap, note down which option was discarded and why.",
+        "Nach einem Zwischenfall soll dokumentiert werden, welche Alternative verworfen wurde und aus welchem Grund.",
+        "Welche konkrete Alternative wurde nach dem jüngsten Zwischenfall verworfen, und welche Gründe wurden dafür dokumentiert oder genannt?"
+      ],
+      "latency_ms": {
+        "hyde": 7594.64,
+        "multi_query": 6267.75
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-cross-01",
+      "query": "works council agreement about logging who deployed what",
+      "lang": "en",
+      "case": "cross-language",
+      "hyde_text": "Works councils in Germany (and comparable co-determination regimes) frequently condition the approval of continuous deployment pipelines on the implementation of tamper-evident logging that records, for every production release, the identity of the deploying employee, the timestamp, and the affected system component. Such Betriebsvereinbarungen typically stipulate that these logs may be consulted only for defined purposes—incident investigation, audit compliance, or dispute resolution—and are subject to strict retention limits and access controls under §87 Abs. 1 Nr. 6 BetrVG, which governs employer use of technical systems capable of monitoring employee performance or conduct. The rationale is to reconcile the operational necessity of accountable change management with employees' protection against covert performance surveillance, often requiring that deployment logs be pseudonymized in routine reporting and de-anonymized only through a joint works council–management review procedure. Several agreements further mandate that automated alerting derived from deployment logs (e.g., flagging frequent late-night releases) be disabled or require explicit co-determination sign-off before activation.",
+      "mq_variants": [
+        "Works council agreement (Betriebsvereinbarung) requirements for audit logging of deployment activities and identifying which engineer executed a release",
+        "Welche Anforderungen stellt eine Betriebsvereinbarung an die Protokollierung von Deployment-Vorgängen zur Identifizierung des ausführenden Mitarbeiters?",
+        "Welche konkreten Vorgaben enthält eine Betriebsvereinbarung dazu, wie Protokolldaten erfassen und aufbewahren müssen, aus denen hervorgeht, welche Person zu welchem Zeitpunkt eine Software-Bereitstellung (Deployment) durchgeführt hat, und welche Mitbestimmungsrechte des Betriebsrats dabei greifen?"
+      ],
+      "latency_ms": {
+        "hyde": 8380.75,
+        "multi_query": 7306.68
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    },
+    {
+      "query_id": "q-cross-02",
+      "query": "automated privacy checks can only trigger a human review, not replace it",
+      "lang": "en",
+      "case": "cross-language",
+      "hyde_text": "Automated privacy screening tools, however sophisticated their pattern matching, cannot substitute for the judgment exercised in a human review process. These systems reliably flag surface-level indicators—unredacted identifiers, non-compliant consent language, anomalous data-flow patterns—yet remain unable to contextualize edge cases that require domain expertise or ethical reasoning. Consequently, best-practice frameworks position algorithmic screening as a triage mechanism that surfaces candidate violations for subsequent adjudication by a qualified reviewer, rather than as a terminal decision point. This division of labor reflects both the current limitations of automated classifiers and the accountability structures mandated by data protection regulation, which typically require a documented human decision wherever personal data processing carries non-trivial risk. Any deployment that allows an automated check to finalize a privacy determination without human sign-off should therefore be regarded as a deviation from established governance norms rather than an acceptable efficiency gain.",
+      "mq_variants": [
+        "automated privacy checks can only trigger a human review, not replace it",
+        "Automated privacy compliance checks are limited to flagging cases for human review and cannot substitute for manual assessment.",
+        "Automatisierte Datenschutzprüfungen können lediglich eine manuelle Überprüfung durch Fachpersonal auslösen, diese jedoch nicht ersetzen."
+      ],
+      "latency_ms": {
+        "hyde": 7807.86,
+        "multi_query": 6133.01
+      },
+      "attempts": {
+        "hyde": 1,
+        "multi_query": 1
+      }
+    }
+  ]
+}

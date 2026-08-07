@@ -10,6 +10,31 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **HyDE und Multi-Query prototypisch gemessen (#733):** Beide Query-Umformungen
+  liegen als Prototyp unter `scripts/eval/` und sind auf dem unveränderten
+  Chunk-Goldset aus #708 über denselben Suchpfad gemessen — vier Arme
+  (`baseline`, HyDE mit `query: `- und mit `passage: `-Präfix, `multi_query`),
+  Recall@10/nDCG@10/MRR je Arm, Teilmenge und Query. Der `baseline`-Arm
+  reproduziert die #708-Zahlen bis 1e-9 und ist damit die Kontrolle dafür, dass
+  wirklich dieselbe Strecke gemessen wird. Ergebnis: **Multi-Query** ist
+  empfohlen — es verliert in keiner Teilmenge Recall@10 und hebt die Sprachlücke
+  von 0,1311 auf 0,3927 nDCG@10; HyDE schließt die Sprachlücke deutlich stärker
+  (0,7936), verliert dafür aber bei 18 von 26 Queries Recall@10 von 1,0000 auf
+  0,7500, weil sein Prompt die hypothetische Passage auf Englisch schreibt. Im
+  Gesamtmittel verschlechtern **beide** Verfahren nDCG@10 und MRR; das steht mit
+  Vorzeichen im Report. Latenz ist in drei getrennt gemessenen Posten
+  ausgewiesen (Modellaufruf ≈ 8,0 s bzw. 6,8 s p50 über 26 echte
+  `claude -p`-Aufrufe, Embedding, Suche). Neu: `query_expansion_prototypes.py`
+  (Prompts, Prompt-IDs, N-Listen-RRF `fuse_rankings()`),
+  `build_hyde_multiquery_fixture.py` (zweistufiger Live-Generator, beide Stufen
+  opt-in, kein API-Schlüssel — OAuth-Sitzung der `claude`-CLI),
+  `run_hyde_multiquery_eval.py` (hermetischer Messlauf), Fixture
+  `tests/fixtures/hyde_multiquery_733/` und Report
+  `docs/evals/2026-08-07-hyde-multiquery-733.md` samt Rohdaten-JSON. Der CI-Job
+  `retrieval-goldset` prüft neu, dass Lauf und eingecheckte Rohdaten
+  deckungsgleich bleiben. `academic_vault/**` und `commands/search.md` sind
+  unverändert; die produktive Anbindung folgt im Nachfolge-Issue.
+
 - **Chunking an GROBID-Sektionsgrenzen statt am Title-Case-Regex (#709):** Ist
   `GROBID_URL` gesetzt, schneidet `chunk_pdf()` jetzt an den echten Sektions-
   und Absatzgrenzen des TEI. Bisher lief auch der GROBID-Fall über die
