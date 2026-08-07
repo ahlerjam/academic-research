@@ -101,7 +101,10 @@ Der Command ruft `scripts/setup.sh`. Was dabei passiert (in dieser Reihenfolge):
 1. Legt `~/.academic-research/` als Daten-Verzeichnis an (`sessions/`, `pdfs/`).
 2. Prüft Python ≥ 3.11 und erzeugt ein isoliertes venv unter `~/.academic-research/venv/`.
 3. Installiert die Pakete aus `scripts/requirements.txt` (httpx, pypdf, pyyaml, anthropic,
-   mcp, sqlite-vec, sentence-transformers u. a.) und macht danach einen Import-Smoke-Test.
+   mcp, sqlite-vec, sentence-transformers, pdfplumber u. a.) und macht danach einen
+   Import-Smoke-Test. `pdfplumber` ist seit Issue #723 Pflicht-Dependency — die
+   strukturerhaltende Tabellenextraktion (`vault.extract_tables`) läuft dadurch ohne
+   Zusatzschritt mit.
 4. Installiert die `browser-use`-CLI via `uv tool install` oder `pipx install` — sofern
    eines von beiden vorhanden ist.
 5. Prüft, ob der globale `browser-use`-Claude-Skill unter `~/.claude/skills/browser-use/`

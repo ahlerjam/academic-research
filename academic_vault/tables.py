@@ -9,11 +9,12 @@ Volltextmodul nicht, nutzt dessen Whitespace-Normalisierung nicht und
 schreibt nichts in den FTS5-Index. Der Importguard dazu steht in
 ``tests/test_issue_630_table_extraction.py``.
 
-Backend ist **pdfplumber** — ein optionales Extra (``uv sync --extra tables``),
-keine Pflichtabhaengigkeit. Fehlt es, ist das Ergebnis ein sichtbarer Status
-mit Installationsanweisung; der bestehende Volltextpfad laeuft unveraendert
-weiter. Die Backend-Abwaegung gegen camelot, Docling und Marker steht in
-``docs/reference/vault.md``, Abschnitt „Tabellenextraktion".
+Backend ist **pdfplumber** — seit Issue #723 Pflicht-Dependency, keine
+optionale Installation mehr. Fehlt das Paket in einer realen Installation
+dennoch (z. B. manuell entfernt), ist das Ergebnis ein sichtbarer Status mit
+Installationsanweisung statt einer Exception; der bestehende Volltextpfad
+laeuft unveraendert weiter. Die Backend-Abwaegung gegen camelot, Docling und
+Marker steht in ``docs/reference/vault.md``, Abschnitt „Tabellenextraktion".
 
 Das Statusmodell kennt vier Ausgaenge — „nichts gefunden" ist nie eine leere
 Liste ohne Begruendung:
@@ -45,7 +46,7 @@ BACKENDS = ("auto", BACKEND_PDFPLUMBER)
 INSTALL_HINT = (
     "Tabellen-Backend 'pdfplumber' ist nicht installiert -- es werden keine "
     "Tabellen extrahiert. Der PDF-Volltextpfad laeuft davon unberuehrt weiter. "
-    "Nachinstallation: uv sync --extra tables (bzw. pip install 'pdfplumber>=0.11')."
+    "Nachinstallation: pip install 'pdfplumber>=0.11' (bzw. erneut uv sync)."
 )
 
 #: Obergrenze pro Paper. Ein Anhang mit hunderten Messtabellen wuerde sonst in

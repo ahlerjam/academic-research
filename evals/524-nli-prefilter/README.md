@@ -232,6 +232,60 @@ Der Default bleibt bewusst AUS (`config/parallel_agents.json` →
 | `run_real_validation.py` | Fuehrt `MDebertaScorer` gegen `real-cases.json`, schreibt `real-validation-results.json` |
 | `real-validation-results.json` | Ergebnis des Laufs vom 04.08.2026 (Modell-/`transformers`-Version, TP/FP/FN/TN, `fp_examples`, Case-Details) |
 
+## Erweitertes Goldset (#721): 186 Fälle, 30 echte Paper, acht Fächer
+
+Issue #592 nannte die Lücke selbst: `real-cases.json` deckt „nur 15
+Quell-Paper aus einer einzigen Domäne (ML/NLP-Paper, englischsprachig)" ab.
+Issue #721 schließt sie mit **186 zusätzlichen Fällen aus 30 echten
+Open-Access-Papern über acht Fachrichtungen** (Medizin, Public Health,
+Psychologie, Pädagogik, Soziologie, Wirtschaft, Umwelt, Informatik) —
+zusammen mit den 92 bestehenden Fällen (32 aus #524 + 60 aus #592) die
+Grundlage der 278-Fälle-Modellentscheidung in Issue #720.
+
+**Labels folgen einer Konstruktionsregel, nicht einem Einzelurteil.** Jede
+`verzerrend`-Variante entsteht durch eine feste Transformation der treuen
+Wiedergabe — nicht durch eine gesonderte Einschätzung:
+
+| Verzerrungstyp | Regel |
+| --- | --- |
+| `overgeneralization` | Quantor oder Geltungsbereich ausweiten |
+| `condition-stripped` | Bedingung, Population oder Einschränkung weglassen |
+| `causal-overreach` | Assoziation als Kausalität darstellen |
+| `magnitude-inflation` | Effektgröße über den berichteten Wert hinaus steigern |
+| `significance-flip` | nicht signifikanten Befund als Wirkung darstellen |
+
+Balance: 92 `faithful` / 94 `verzerrend`. Jeder Fall trägt in `source.doi`
+die DOI seines Quellpapers (Rückführbarkeit). Ausführlicher Eval-Report samt
+der reproduzierten #720-Schwellenkurve und der methodischen Grenze
+(konstruierte Verzerrungen ≠ im Feld beobachtete):
+[`docs/evals/2026-08-06-extended-nli-goldset-721.md`](../../docs/evals/2026-08-06-extended-nli-goldset-721.md).
+
+### Dateien (erweitertes Goldset)
+
+| Datei | Inhalt |
+| --- | --- |
+| `set_med.json` / `set_soz.json` | Rohdaten der 186 Fälle (unverändert aus den Issue-#721-Kommentaren) |
+| `picks.json` | 30 Paper mit Quellsätzen, Kontext, Feld, DOI, Titel, Jahr |
+| `fetch_abstracts.py` | Ruft Open-Access-Abstracts über die OpenAlex-API ab |
+| `pick_sentences.py` | Wählt aus jedem Abstract die zitierfähigen Ergebnissätze |
+| `run_big.py` | 278-Fälle-A/B-Vergleich `mDeBERTa-v3-XNLI` vs. `bge-m3-zeroshot-v2.0` (Grundlage von #720) |
+| `bidir.py` | Verworfener bidirektionaler NLI-Ansatz (dokumentarisch aufbewahrt, siehe #720) |
+| `build_extended_cases.py` | Baut `extended-cases.json` aus den drei Rohdateien |
+| `extended-cases.json` | Generiertes Ergebnis: 186 Fälle im `real-cases.json`-Feldformat |
+
+### Ausführen (erweitertes Goldset)
+
+```bash
+# Struktur-Checks (immer, ohne Netz):
+uv run pytest tests/evals/test_nli_prefilter_evals.py -q
+
+# Erweitertes Set neu generieren:
+python3 evals/524-nli-prefilter/build_extended_cases.py
+
+# Live-Reproduktion der #720-Schwellenkurve (Netz + Modell-Download):
+RUN_LIVE_NLI_PREFILTER=1 uv run pytest tests/evals/test_nli_prefilter_evals.py -q -k threshold_curve
+```
+
 ## Dateien
 
 | Datei | Inhalt |

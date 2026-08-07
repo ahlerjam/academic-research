@@ -38,8 +38,8 @@ LLM-Qualität gemessen.
 **Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
 tests/evals/ -q` ohne `ANTHROPIC_API_KEY` und ohne installierte `claude`-CLI
 im PATH — `claude_cli_available()` gatet den Guard zusätzlich, Issue #631):
-`274 passed, 194 skipped`. Seit #390 sind weitere Suiten dazugekommen (u. a.
-#524, #626, #628, #630); die Skip-Zahl ist gegenüber dem #390-Snapshot
+`274 passed, 195 skipped`. Seit #390 sind weitere Suiten dazugekommen (u. a.
+#524, #626, #628, #630, #721); die Skip-Zahl ist gegenüber dem #390-Snapshot
 gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
 mitbringt. `test_skip_count_matches_real_pytest_run` hält die **Skip-Zahl**
 weiterhin per Gleichheit gegen einen echten Subprozesslauf; die `passed`-Zahl
