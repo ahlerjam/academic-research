@@ -563,14 +563,24 @@ def test_cascade_off_without_vault_hit_blocks(empty_vault):
 
 
 def test_cascade_confirmed_hit_allows(empty_vault):
-    """Kaskaden-Treffer >= confirmed (Autor + Jahr exakt) -> allow ohne Markierung."""
-    content = "Der Befund (Müller 2021) ist mehrfach repliziert worden."
+    """Kaskaden-Treffer >= confirmed (Autor + Jahr exakt + echter Co-Autoren-
+    Ueberlapp) -> allow ohne Markierung.
+
+    Seit Issue #740 (AC5) genuegt Familienname+Jahr allein nicht mehr fuer
+    ``confirmed`` (siehe citation-cascade.mjs::scoreCandidate) — hier liefert
+    der wirklich gelesene Co-Autor ``Weber`` die zusaetzliche Evidenz.
+    """
+    content = "Der Befund (Müller & Weber 2021) ist mehrfach repliziert worden."
     with CascadeStub(
         {
             "arxiv": {
                 "status": 200,
                 "entries": [
-                    {"title": "Digitale Transformation", "year": 2021, "authors": ["Anna Müller"]}
+                    {
+                        "title": "Digitale Transformation",
+                        "year": 2021,
+                        "authors": ["Anna Müller", "Peter Weber"],
+                    }
                 ],
             }
         }
@@ -779,7 +789,10 @@ def test_soft_fail_marks_multiedit_edits(empty_vault):
 PROBABLE_STUB = {
     "arxiv": {
         "status": 200,
-        # Autor trifft (40), Jahr um 1 daneben (20), Autor-Ueberlapp 1/2 (10) => Score 70
+        # Familienname trifft (40), Jahr um 1 daneben (15), Autor-Ueberlapp
+        # ueber den WIRKLICH gelesenen Co-Autor "Zweit" 1/2 (round(30*0.5)=15)
+        # => Score 70 (Issue #740, AC5: Gewichte 40/15(30 exakt)/0-30 Ueberlapp
+        # NUR jenseits des familyHit-Autors — siehe citation-cascade.mjs).
         "entries": [
             {
                 "title": "Digitale Transformation",
@@ -795,7 +808,7 @@ PROBABLE_STUB = {
 
 def test_thresholds_default_yields_unverified(empty_vault):
     """AC4: Score 70 liegt bei Defaults (confirmed 80 / probable 65) im probable-Band."""
-    content = "Der Befund (Müller 2021, S. 45) ist umstritten."
+    content = "Der Befund (Müller & Zweit 2021, S. 45) ist umstritten."
     with CascadeStub(PROBABLE_STUB) as stub:
         env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
         env.update(stub.env())
@@ -807,7 +820,7 @@ def test_thresholds_default_yields_unverified(empty_vault):
 def test_thresholds_env_configurable(empty_vault):
     """AC4: Derselbe Input wird mit ACADEMIC_CITATION_CONFIRMED_MIN=65 sauber
     durchgelassen — der Verhaltensunterschied belegt die Konfigurierbarkeit."""
-    content = "Der Befund (Müller 2021, S. 45) ist umstritten."
+    content = "Der Befund (Müller & Zweit 2021, S. 45) ist umstritten."
     with CascadeStub(PROBABLE_STUB) as stub:
         env = {
             "VAULT_DB_PATH": empty_vault,
@@ -823,7 +836,7 @@ def test_thresholds_env_configurable(empty_vault):
 def test_probable_min_env_configurable(empty_vault):
     """AC4: Wird probable_min ueber den Score gehoben, faellt derselbe Kandidat
     unter 'kein Treffer' und wird geblockt."""
-    content = "Der Befund (Müller 2021, S. 45) ist umstritten."
+    content = "Der Befund (Müller & Zweit 2021, S. 45) ist umstritten."
     with CascadeStub(PROBABLE_STUB) as stub:
         env = {
             "VAULT_DB_PATH": empty_vault,
@@ -975,12 +988,18 @@ def test_citation_with_particle_name_in_vault_allows(vault_with_particle_name):
 
 
 def test_cascade_matches_particle_name(empty_vault):
-    """Auch die JS-Seite (Score-Modell der Kaskade) muss das Partikel tolerieren.
+    """Auch die JS-Seite (Score-Modell der Kaskade) muss das Partikel tolerieren —
+    sowohl beim ``familyHit`` als auch bei der Autoren-Ueberlapp-Komponente.
 
     CrossRef/arXiv liefern ``Neumann`` als Familiennamen; der Beleg im Text
     lautet ``von Neumann``. Ohne Partikel-Normalisierung faellt der Score auf 0.
+
+    Der wirklich gelesene Co-Autor ``Wiener`` liefert seit Issue #740 (AC5)
+    die Zusatz-Evidenz, die ueber Familienname+Jahr allein hinausgeht (siehe
+    citation-cascade.mjs::scoreCandidate) — ohne ihn bliebe der Treffer
+    ``probable`` statt ``confirmed``.
     """
-    content = "Der Entwurf (von Neumann 1945) praegte die Rechnerarchitektur."
+    content = "Der Entwurf (von Neumann & Wiener 1945) praegte die Rechnerarchitektur."
     with CascadeStub(
         {
             "arxiv": {
@@ -989,7 +1008,7 @@ def test_cascade_matches_particle_name(empty_vault):
                     {
                         "title": "First Draft of a Report on the EDVAC",
                         "year": 1945,
-                        "authors": ["John Neumann"],
+                        "authors": ["John Neumann", "Norbert Wiener"],
                     }
                 ],
             }
@@ -1082,13 +1101,19 @@ def test_bare_word_year_stays_soft_under_the_mark_policy(empty_vault, content):
         "Der Beschluss (Bologna 1999) reformierte die Studienstruktur.",
     ],
 )
-def test_bare_word_year_with_a_known_author_stays_untouched(empty_vault, content):
-    """Prosa-Schutz im Regelbetrieb: der Treffer haelt den Marker heraus.
+def test_bare_word_year_with_a_known_author_softens_to_unverified(empty_vault, content):
+    """Prosa-Schutz im Regelbetrieb: der Treffer haelt den HARD BLOCK heraus.
 
     ``Fukushima`` und ``Bologna`` sind zugleich Orte UND reale Nachnamen. Steht
-    zur Wort-Jahr-Kombination irgendwo ein Paper, bestaetigt die Kaskade sie und
-    der Guard schweigt — die haeufigen Prosa-Faelle bleiben unberuehrt, ohne dass
-    die Form pauschal von der Pruefung ausgenommen werden muss.
+    zur Wort-Jahr-Kombination irgendwo ein Paper mit demselben Nachnamen im
+    selben Jahr, verhindert die Kaskade den Block — die haeufigen Prosa-Faelle
+    bleiben unberuehrt, ohne dass die Form pauschal von der Pruefung
+    ausgenommen werden muss.
+
+    Seit Issue #740 (AC5) reicht Familienname+Jahr allein aber nicht mehr fuer
+    ``confirmed``: ein Einzelautoren-Treffer ohne echten Co-Autoren-Ueberlapp
+    bleibt ``probable`` und wird mit ``[UNVERIFIED]`` markiert — der Satz
+    bleibt sonst unangetastet (``assert_marker_only``).
     """
     year = int(re.search(r"\d{4}", content).group(0))
     family = re.search(r"\((\w+)", content).group(1)
@@ -1106,9 +1131,11 @@ def test_bare_word_year_with_a_known_author_stays_untouched(empty_vault, content
         env.update(stub.env())
         result = run_hook(write_payload(content), env_overrides=env)
     assert result.returncode == 0, f"Prosa geblockt: exit {result.returncode}. {result.stderr}"
-    assert "[UNVERIFIED]" not in result.stdout, (
-        f"Bestaetigte Wort-Jahr-Form trotzdem markiert: {result.stdout!r}"
+    marked = updated_content(result)
+    assert "[UNVERIFIED]" in marked, (
+        f"Wort-Jahr-Form ohne Zusatz-Evidenz lief still durch: {result.stdout!r}"
     )
+    assert_marker_only(marked, content)
 
 
 def test_bare_citation_is_marked_but_not_rewritten(empty_vault):
@@ -1725,6 +1752,12 @@ def test_bare_form_is_checked_against_the_cascade(empty_vault):
     Vorher filterte ``runCitationCheck`` sie vor jedem Lookup weg — bestehende
     Kaskaden-Tests auf dieser Form liefen dadurch ins Leere. Der Nachweis haengt
     hier an ``stub.hits``, nicht am Exit-Code allein.
+
+    Seit Issue #740 (AC5) reicht ein Einzelautoren-Treffer (Familienname+Jahr,
+    keine weitere Evidenz) nicht mehr fuer ``confirmed`` — der Beleg bleibt
+    ``probable`` und wird mit ``[UNVERIFIED]`` markiert statt stillschweigend
+    durchgewunken (siehe test_cascade_confirmed_hit_allows fuer den
+    Gegenfall MIT echtem Co-Autoren-Ueberlapp).
     """
     content = "Der Befund (Müller 2021) ist mehrfach repliziert worden."
     with CascadeStub(
@@ -1742,8 +1775,8 @@ def test_bare_form_is_checked_against_the_cascade(empty_vault):
         result = run_hook(write_payload(content), env_overrides=env)
     assert "arxiv" in stub.hits, f"Nackte Form nie an die Kaskade gestellt (hits={stub.hits})"
     assert result.returncode == 0, f"Kaskaden-Treffer geblockt: {result.stderr}"
-    assert "[UNVERIFIED]" not in result.stdout, (
-        f"Bestaetigter Beleg trotzdem markiert: {result.stdout!r}"
+    assert "(Müller 2021) [UNVERIFIED]" in updated_content(result), (
+        f"Einzelautoren-Treffer ohne Zusatz-Evidenz lief still durch: {result.stdout!r}"
     )
 
 
