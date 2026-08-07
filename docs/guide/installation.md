@@ -15,12 +15,55 @@ Detail, was das Setup genau tut, und wie eine Migration von v5 abläuft.
 | **Git** | Plugin-Marketplace-Install | auf macOS/Linux meist vorinstalliert |
 | **`uv` oder `pipx`** *(optional)* | Automatische `browser-use`-Installation | `brew install pipx` oder `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 
-**Einmaliger Modell-Download.** Beim ersten Paper mit PDF lädt das Plugin die Gewichte
-des Embedding-Modells `intfloat/multilingual-e5-small` (~470 MB) nach
-`~/.academic-research/models`. Das braucht einmalig Netz und dauert spürbar; danach
-laufen Volltext- und Vektor-Suche offline. Ohne diesen Download bleibt der Vektor-Index
-leer — die Volltextsuche (FTS5) funktioniert trotzdem. Ein anderes Modell lässt sich über
-`VAULT_EMBEDDING_MODEL` setzen, siehe [Vault-Referenz](../reference/vault.md).
+**Modell-Download.** Das Plugin nutzt drei lokale Modelle: das Embedding-Modell
+`intfloat/multilingual-e5-small` (~470 MB) für die Vektor-Suche, einen Reranker für die
+Trefferreihenfolge und einen NLI-Vorfilter für den Zitatscan — alle drei landen nach
+`~/.academic-research/models`. Schritt 9 des Setups (`model_prefetch.py`) fragt genau
+einmal, ob alle drei jetzt vollständig geladen werden sollen, und nennt dabei die
+Gesamtgröße. Bei Ablehnung
+oder nicht-interaktivem stdin (z. B. CI) bleibt der bisherige Lazy-Load-Pfad unverändert:
+jedes Modell lädt einzeln beim ersten Gebrauch nach, mit einer Meldung der jeweiligen
+Downloadgröße direkt davor. Ohne die Modelle bleibt der Vektor-Index leer bzw. Reranking
+und Zitatscan laufen degradiert — die Volltextsuche (FTS5) funktioniert in jedem Fall.
+
+**Nach einem Abbruch** setzt der nächste Lauf fort, statt neu zu beginnen: fertige
+Modelle werden übersprungen, und innerhalb eines angefangenen Modells bleiben die bereits
+vollständigen Dateien im Cache. Nur die eine Datei, die im Moment des Abbruchs übertragen
+wurde, beginnt von vorn — `huggingface_hub` schreibt sie unter einem prozesseigenen
+`.incomplete`-Namen und greift diesen später nicht wieder auf. Im ungünstigsten Fall,
+Abbruch mitten in den Reranker-Gewichten, sind das erneut ~2,3 GB. Wird der Prozess hart
+beendet (SIGKILL, Stromausfall), bleibt dieser angefangene Blob zudem unter
+`~/.academic-research/models/models--*/blobs/*.incomplete` liegen; er wird nie
+wiederverwendet und kann gelöscht werden. Geprüft an einem echten, hart abgebrochenen und
+danach wiederholten Setup-Lauf (`tests/test_issue_718_model_prefetch.py::TestResume`).
+
+### Hardware-Anforderungen
+
+**Untergrenze:** 8 GB RAM, 4 GB freier Plattenplatz. **Keine GPU nötig** — alle drei
+Modelle laufen auch auf reiner CPU, dabei aber spürbar langsamer als mit
+Hardware-Beschleunigung (Apple-GPU/CUDA).
+
+| Modell | Platte | Peak-RSS | CPU | Apple GPU |
+|---|---|---|---|---|
+| `intfloat/multilingual-e5-small` (Embedding) | 470 MB | 1,0 GB | 14 ms/Chunk | 6 ms |
+| `bge-reranker-v2-m3` (Reranker) | 2,3 GB | 2,1 GB | 48 ms/Paar | 26 ms |
+| `bge-m3-zeroshot-v2.0` (NLI-Zitatscan) | 1,1 GB | 1,5 GB | 570 ms/Paar | 38 ms |
+
+Platte gemessen über den `model.safetensors`-Content-Length je HF-Repo (2026-08-07) —
+dieselbe Quelle, aus der der Setup-Prompt seine Gesamtgröße bildet. Peak-RSS/CPU/Apple-GPU
+für Embedding und Reranker gemessen am 2026-08-06 auf Apple M4 Pro (12 Kerne, 24 GB), die
+NLI-Zeile am 2026-08-07 auf derselben Maschine: 30 Läufe nach 3 Warmläufen über
+`nli_prefilter.BgeM3ZeroshotScorer.predict`, Median, Eingabe 210 Token (Quellenabsatz plus
+Behauptungssatz), Peak-RSS als `ru_maxrss` des Messprozesses. Die CPU-Spalte ist der
+Produktionspfad — im Code steht kein `.to("mps")`; die Apple-GPU-Spalte zeigt dieselbe
+Vorhersage nach manuellem Verschieben auf `mps`, also die erreichbare Untergrenze, nicht
+das Standardverhalten. Die Millisekunden hängen an der Eingabelänge und sind zwischen den
+Zeilen nur grob vergleichbar (Embedding je Chunk, Reranker und NLI je Paar).
+`evals/524-nli-prefilter/README.md` zeigt weiterhin die Werte des alten NLI-Modells
+(`mDeBERTa-v3-XNLI`, seit #720 kein Produktivmodell mehr).
+
+Zusammen ~3,9 GB Plattenplatz für alle drei Modellgewichte. Ein anderes Embedding-Modell
+lässt sich über `VAULT_EMBEDDING_MODEL` setzen, siehe [Vault-Referenz](../reference/vault.md).
 
 `uv`/`pipx` sind optional: fehlen sie, überspringt das Setup die `browser-use`-CLI und
 sagt das auch. Die 7 API-Suchmodule und der gesamte Vault-/Schreib-Workflow laufen
