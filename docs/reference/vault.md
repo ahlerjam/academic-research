@@ -220,9 +220,44 @@ Bestands-Datenbanken bekommen `paper_tables` idempotent nachgezogen:
 python -c "from academic_vault.migrate import add_paper_tables_table as m; m('<pfad>/vault.db')"
 ```
 
-## MCP-Tools (alle 49)
+**Kennzahlen belegen statt abtippen — `vault.add_table_value`** (Issue #741)
 
-Der Server registriert **49 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Eine Zahl, die aus einer Studientabelle in den Kapiteltext wandert, löst in der
+gesamten Prüfkette nichts aus: kein `verbatim-guard`, kein `claim-drift-guard`, kein
+NLI-Scan — die prüfen Wortlaut, nicht Zahlenwerte. `vault.add_table_value` ist der Weg,
+der aus einer Kennzahl einen Beleg macht, analog zu `vault.add_quote` für Wortlaut:
+
+```
+vault.add_table_value("smith2020", page=1, table_index=0, row=1, col=1, claimed_value="120")
+```
+
+`claimed_value` wird **fail-closed** VOR jedem Schreibzugriff gegen die tatsächliche Zelle
+geprüft (`VaultDB.get_table_cell`). Stimmt der Wert nicht überein, wirft der Aufruf
+`ValueError` mit dem gefundenen UND dem behaupteten Wert — es wird nichts gespeichert.
+Ist die Tabelle für die angegebene Seite/Position noch nicht extrahiert, versucht der
+Aufruf `vault.extract_tables` einmalig automatisch; meldet das `status="backend-missing"`,
+gibt `vault.add_table_value` denselben Statusreport (`dict` mit `status` und
+Installationsanweisung) zurück statt eine Ausnahme zu werfen — Präzedenzfall
+`vault.extract_tables` selbst, ein fehlendes optionales Backend ist ein sichtbarer
+Zustand, keine Ausnahme. Es wird nichts gespeichert. Bleibt die Zelle trotz vorhandenem
+Backend unauffindbar (falsche `row`/`col`), ist das weiterhin ein `ValueError`.
+
+Übliche Schreibweisenunterschiede blockieren nicht (`academic_vault/numbers.py`):
+Dezimalkomma gegen -punkt, Tausendertrennzeichen, führende Nullen, ein angehängtes
+Prozentzeichen. Eine **echte** Werteabweichung (z. B. Zelle „45.8" gegen behauptet „46",
+eine Rundungsdifferenz) bleibt eine Abweichung und wird abgelehnt.
+
+**Bewusst kein Guard.** Zahlen im Fließtext OHNE diesen Weg bleiben **ungeprüft** — es
+gibt keinen Automatismus, der eine Zahl im Kapiteltext erkennt und gegen eine Tabelle
+prüft. Ein Hook, der jede Zahl im Text gegen alle Tabellen abgleicht, kann nicht wissen,
+welche Zelle gemeint ist (Jahreszahlen, Seitenangaben, eigene Rechnungen sähen aus wie
+Kennzahlen) — der Weg ist derselbe wie bei Zitaten: nicht raten, sondern beim Erfassen
+belegen. Erfasste Kennzahlen erscheinen als eigene Kategorie `erfasste_kennzahlen` in
+`vault.chapter_quote_balance` (Issue #737, siehe Abschnitt „Prüfbilanz je Kapitel" oben).
+
+## MCP-Tools (alle 50)
+
+Der Server registriert **50 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -249,7 +284,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.verify_verbatim(paper_id, candidate)` | Read-only-Vorschau des Verbatim-Prüfpfads: liefert **immer** `{status, verbatim, pdf_page, ratio}` zurück (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`, kein `ValueError` bei Nicht-Treffer). Paper unbekannt oder kein/kein lesbarer `pdf_path` wirft weiterhin `ValueError`. Schreibt nichts (s. u.) | `vault.verify_verbatim("vaswani2017", "Attention is all you need")` | Paper im Vault mit lesbarem `pdf_path` | Immer `{status, verbatim, pdf_page, ratio}` — auch bei Nicht-Treffer | `status` ist `no-match` oder `no-textlayer`; `ValueError` nur bei unbekanntem Paper oder fehlendem PDF |
 | `vault.set_quote_stance(quote_id, stance)` | Setzt `stance` eines **bestehenden** Zitats nachträglich (Audit-Schreibpfad, u. a. für `quote-fidelity-auditor`). `stance` ist Pflicht (`"supports"`/`"contrasts"`/`"mentions"`, kein `None`); `ValueError` bei ungültigem Wert oder unbekannter `quote_id` | `vault.set_quote_stance("q_42", "contrasts")` | Bestehende `quote_id` und ein gültiger `stance` | Kein Rückgabewert; `quotes.stance` ist danach gesetzt | `ValueError` „Ungueltiger stance" oder „Quote '<id>' nicht gefunden" |
 | `vault.record_quote_audit(quote_id, verdict, severity=None)` | Protokolliert ein Audit-Urteil eines **bestehenden** Zitats (Issue #737), additiv zu `vault.set_quote_stance` — beide werden vom `quote-fidelity-auditor` nach jedem Urteil aufgerufen, auch bei `verdict="unsupported"` (dort bleibt `set_quote_stance` aus). `verdict` ∈ `"faithful"`/`"overstated"`/`"context-stripped"`/`"polarity-flip"`/`"unsupported"`; `severity` ∈ `"kritisch"`/`"hoch"`/`"mittel"` ist Pflicht außer bei `verdict="faithful"` (dort zwingend `None`, kein Befund) | `vault.record_quote_audit("q_42", "polarity-flip", "kritisch")` | Bestehende `quote_id`, gültige Verdict/Severity-Kombination | Kein Rückgabewert; `quotes.audited_at`/`audit_verdict`/`audit_severity` sind danach gesetzt | `ValueError` bei ungültiger Kombination oder unbekannter `quote_id` |
-| `vault.chapter_quote_balance(chapter_path)` | Prüfbilanz für ein Kapitel: bucketet alle im Kapiteltext belegten Vault-Zitate nach Audit-Historie (siehe Abschnitt „Prüfbilanz je Kapitel" unten) | `vault.chapter_quote_balance("kapitel/03-methodik.md")` | Lesbare Kapiteldatei; Zitate müssen im Vault stehen, um erfasst zu werden | `dict` mit `total_quotes`, den drei Zählern (`geprueft_unauffaellig`/`befund_offen`/`nicht_geprueft`), `not_audited` (je Eintrag mit `reason`) und `findings` (offene Befunde, schwerste zuerst) | `FileNotFoundError`, wenn `chapter_path` nicht existiert |
+| `vault.chapter_quote_balance(chapter_path)` | Prüfbilanz für ein Kapitel: bucketet alle im Kapiteltext belegten Vault-Zitate nach Audit-Historie, plus erfasste Kennzahlen zu denselben Papers (siehe Abschnitt „Prüfbilanz je Kapitel" unten) | `vault.chapter_quote_balance("kapitel/03-methodik.md")` | Lesbare Kapiteldatei; Zitate müssen im Vault stehen, um erfasst zu werden | `dict` mit `total_quotes`, den drei Zählern (`geprueft_unauffaellig`/`befund_offen`/`nicht_geprueft`), `not_audited` (je Eintrag mit `reason`), `findings` (offene Befunde, schwerste zuerst), `erfasste_kennzahlen` (Anzahl, #741) und `table_values` | `FileNotFoundError`, wenn `chapter_path` nicht existiert |
 
 **`extraction_method="local-verbatim"` — fail-closed** (Issue #512)
 
@@ -314,6 +349,13 @@ Sitzung) und bucketet jedes Zitat anhand seiner Audit-Historie:
 
 Die drei Zähler ergeben zusammen `total_quotes`. Ein Kapitel ohne ein einziges
 belegtes Zitat liefert alle Zähler als `0`, kein Fehler.
+
+Zusätzlich (Issue #741, additiv, fließt NICHT in `total_quotes` ein): `erfasste_kennzahlen`
+zählt die über `vault.add_table_value` belegten Kennzahlen zu denselben Papers, die das
+Kapitel per Zitat referenziert — `table_values` enthält die zugehörigen Datensätze samt
+`evidence`. Kein eigener Zahlen-Scan im Kapiteltext (das wäre die in #741 bewusst
+ausgeschlossene automatische Zahlenerkennung); die Kategorie zeigt nur, welche bereits
+erfassten Kennzahlen zu den zitierten Quellen vorliegen.
 
 Audit-Urteile schreibt der `quote-fidelity-auditor`-Agent über das neue Tool
 `vault.record_quote_audit(quote_id, verdict, severity=None)` — **additiv** zu
@@ -405,6 +447,7 @@ greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbati
 | `vault.extract_tables(paper_id, backend="auto")` | Extrahiert Tabellen strukturerhaltend nach `paper_tables`; `papers_fts` bleibt unverändert (#630). `status` ∈ `ok`/`no-tables`/`no-textlayer`/`backend-missing` | `vault.extract_tables("smith2020")` | pdfplumber installiert (Pflicht-Dependency seit #723), Paper mit `pdf_path` | `dict` mit `status` und den erkannten Tabellen in `paper_tables` | `status` ist nicht `ok`; `backend-missing` nennt im `message` die Nachinstallation |
 | `vault.list_tables(paper_id, page=None)` | Gespeicherte Tabellenstrukturen eines Papers (`rows` = Textmatrix, `cells` = Zellen mit Bounding-Box) (#630) | `vault.list_tables("smith2020")` | Vorher gelaufene Tabellenextraktion | `list[dict]` mit `rows` (Textmatrix) und `cells` (Bounding-Boxen) | Leere Liste — für dieses Paper wurde keine Tabelle gespeichert |
 | `vault.get_table_cell(paper_id, page, table_index, row, col)` | Eine Zelle mit `value`, `bbox` und fertigem `evidence`-Beleg; `None` statt Näherungstreffer (#630). `table_index`/`row`/`col` 0-basiert | `vault.get_table_cell("smith2020", 1, 0, 1, 1)` | Extrahierte Tabelle; `table_index`, `row` und `col` sind 0-basiert | `dict` mit `value`, `bbox` und fertigem `evidence`-Beleg | Rückgabe `None` — die Zelle gibt es nicht, ein Näherungstreffer kommt bewusst nicht |
+| `vault.add_table_value(paper_id, page, table_index, row, col, claimed_value)` | Erfasst eine Kennzahl belegfähig; **fail-closed** gegen `vault.get_table_cell` geprüft, toleriert Schreibweisenunterschiede (#741) | `vault.add_table_value("smith2020", 1, 0, 1, 1, "120")` | Paper mit `pdf_path`; die Zelle muss den behaupteten Wert tragen | `table_value_id` (`str`) des gespeicherten Belegs im Erfolgsfall; fehlt das Tabellen-Backend, stattdessen der Statusreport (`dict`, `status="backend-missing"`) von `vault.extract_tables` — dann wurde nichts gespeichert | `ValueError` mit gefundenem UND behauptetem Wert — nichts gespeichert; ebenso bei unbekanntem Paper oder unauffindbarer Zelle trotz vorhandenem Backend |
 
 **Decision-Log & Ausschlüsse**
 

@@ -10,6 +10,23 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Kennzahlen aus Tabellen belegen statt abtippen (#741):** Neues MCP-Tool
+  `vault.add_table_value(paper_id, page, table_index, row, col, claimed_value)`
+  -- der Weg fuer eine Zahl von einer Tabellenzelle in den Kapiteltext, analog
+  zu `vault.add_quote` fuer Wortlaut. Fail-closed: `claimed_value` wird VOR
+  jedem Schreibzugriff gegen die tatsaechliche Zelle
+  (`VaultDB.get_table_cell`) geprueft; stimmt der Wert nicht ueberein, wirft
+  der Aufruf `ValueError` mit gefundenem UND behauptetem Wert, es wird nichts
+  gespeichert. Neues Modul `academic_vault/numbers.py` toleriert dabei
+  uebliche Schreibweisenunterschiede (Dezimalkomma/-punkt,
+  Tausendertrennzeichen, fuehrende Nullen, Prozentzeichen) -- eine echte
+  Werteabweichung bleibt eine Abweichung. Fehlt das Tabellen-Backend, wird das
+  als `status="backend-missing"` gemeldet statt eine Exception zu werfen. Neue
+  Tabelle `table_values` (Schema-Version 11). `vault.chapter_quote_balance`
+  (#737) bekommt die zusaetzliche, additive Kategorie `erfasste_kennzahlen`.
+  Bewusst KEIN Guard und KEINE automatische Zahlenerkennung im Fließtext --
+  Zahlen ohne diesen Erfassungsweg bleiben ungeprueft (`docs/reference/vault.md`).
+
 - **Chunking an GROBID-Sektionsgrenzen statt am Title-Case-Regex (#709):** Ist
   `GROBID_URL` gesetzt, schneidet `chunk_pdf()` jetzt an den echten Sektions-
   und Absatzgrenzen des TEI. Bisher lief auch der GROBID-Fall über die

@@ -697,6 +697,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_paper_tables_table(db_path)
     add_retraction_checked_at_column(db_path)
     add_quote_audit_columns(db_path)
+    add_table_values_table(db_path)
     drop_dead_v64_tables(db_path)
 
 
@@ -762,6 +763,39 @@ def add_paper_tables_table(db_path: str) -> None:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_tables_paper ON paper_tables(paper_id)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_table_values_table(db_path: str) -> None:
+    """Erstellt ``table_values`` falls nicht vorhanden. Idempotent. (#741)
+
+    Rein additiv, analog ``add_paper_tables_table``: ``schema.sql`` legt die
+    Tabelle ohnehin bei jedem ``init_schema()``-Lauf an; dieser Helfer haelt
+    den Bestands-Pfad (``apply_pending_migrations``) unabhaengig von der
+    Reihenfolge aus DDL und Migration vollstaendig.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS table_values (
+              table_value_id TEXT PRIMARY KEY,
+              paper_id       TEXT NOT NULL REFERENCES papers(paper_id) ON DELETE CASCADE,
+              page           INTEGER NOT NULL,
+              table_index    INTEGER NOT NULL,
+              row            INTEGER NOT NULL,
+              col            INTEGER NOT NULL,
+              claimed_value  TEXT NOT NULL,
+              cell_value     TEXT NOT NULL,
+              evidence       TEXT NOT NULL,
+              created_at     INTEGER NOT NULL,
+              UNIQUE(paper_id, page, table_index, row, col)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_table_values_paper ON table_values(paper_id)")
         conn.commit()
     finally:
         conn.close()
