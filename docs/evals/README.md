@@ -28,6 +28,7 @@ danach höchstens den passenden Report.
 | [`2026-08-04-trigger-baseline-614.md`](2026-08-04-trigger-baseline-614.md) | Momentaufnahme: erster echter Lauf der Trigger-Evals, Recall/FPR je Skill (#614) |
 | [`2026-08-04-trigger-baseline-614-live-results.json`](2026-08-04-trigger-baseline-614-live-results.json) | Rohdaten des Trigger-Baseline-Laufs (Per-Skill-Aufschlüsselung, Fehlklassifikationen, Tokens) |
 | [`2026-08-05-disable-model-invocation-622.md`](2026-08-05-disable-model-invocation-622.md) | Prüfung je Kandidat (#622): warum 0 Skills mit `disable-model-invocation` markiert werden, Listing-Größe vorher/nachher |
+| [`2026-08-06-extended-nli-goldset-721.md`](2026-08-06-extended-nli-goldset-721.md) | Momentaufnahme: erweitertes NLI-Goldset (186 Fälle, 30 echte Paper, acht Fächer) ins Repo aufgenommen, Reproduktion der #720-Schwellenkurve (#721) |
 
 ## Konvention
 
