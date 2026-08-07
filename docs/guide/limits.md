@@ -12,12 +12,15 @@ Schritt 1.
 
 ## Was das Plugin nicht kann
 
-- **Tabellen nicht immer strukturerhaltend extrahieren.** Das Backend `pdfplumber` ist ein
-  optionales Extra (`uv sync --extra tables`, siehe `pyproject.toml`). Fehlt es, liefert
-  `vault.extract_tables` den Status `backend-missing` statt Zahlen —
-  `academic_vault/tables.py`. Die `meta-analysis`-Pipeline übernimmt Effektstärken (`yi`,
-  `vi`) ohnehin nur aus einem vom Nutzer bestätigten Eingabe-JSON, nie automatisch aus
-  einer erkannten Tabelle — `scripts/meta_analysis.py`.
+- **Tabellen nicht bei jedem PDF strukturerhaltend extrahieren.** Das Backend `pdfplumber`
+  ist seit Issue #723 Pflicht-Dependency (`pyproject.toml`), läuft also nach jedem Setup
+  ohne Zusatzschritt mit. Die verbleibende Grenze ist strukturell, nicht paketierungsbedingt:
+  verbundene Kopfzellen, zweispaltiges Layout und Tabellen ohne Gitterlinien lassen sich
+  nicht sicher auflösen — `docs/reference/vault.md`, Abschnitt „Tabellenextraktion". Fehlt
+  das Paket in einer realen Installation dennoch, liefert `vault.extract_tables` den Status
+  `backend-missing` statt Zahlen — `academic_vault/tables.py`. Die `meta-analysis`-Pipeline
+  übernimmt Effektstärken (`yi`, `vi`) ohnehin nur aus einem vom Nutzer bestätigten
+  Eingabe-JSON, nie automatisch aus einer erkannten Tabelle — `scripts/meta_analysis.py`.
 - **Kein unbegrenztes Kontextfenster beim Embedding.** Das Vektor-Modell
   `intfloat/multilingual-e5-small` schneidet Eingaben über seinem harten Limit
   stillschweigend ab. Bei deutscher Fachprosa (≈2,47 Tokens/Wort) liegt die nutzbare
@@ -59,6 +62,19 @@ Schritt 1.
   belegt, dass ein Zitat aus deinem Vault stammt — nicht, dass Wortlaut, Seitenzahl,
   Autorenname und Jahr korrekt aus dem Original übernommen wurden. Jedes Zitat vor der
   Abgabe im Original gegenprüfen.
+  **Geprüft** werden ausschließlich APA-artige Belege: die klammer­förmige Form
+  (`(Müller 2021, S. 45)`, Co-Autoren, `vgl.`/`zit. nach`), die narrative Form
+  außerhalb von Klammern (`Müller (2021, S. 45) zeigt …`, `Müller et al. (2021)
+  belegen …`, `vgl. Schmidt 2019`) und Sekundärbelege (`Schmidt, 2015, zitiert nach
+  Müller, 2021`, beide Werke einzeln). **Nicht geprüft** — und seit Issue #740
+  wenigstens *gemeldet*, statt stillschweigend zu passieren — sind LaTeX-Fußnoten
+  (`\footnote{Vgl. Müller 2021.}`), Markdown-Fußnoten (`[^1]`, `[^1]: Vgl. …`) und
+  numerische Verweise im IEEE-Stil (`[12]`); wer ausschließlich so zitiert, sieht
+  dazu einen nicht-blockierenden Hinweis auf stderr (abstellbar über
+  `ACADEMIC_CITATION_UNCHECKED_NOTICE=off`, siehe
+  [docs/reference/hooks.md](../reference/hooks.md#klammer-zitat-validierung)). Ganz
+  ungeprüft und ungemeldet bleiben die deutsche Zitierweise mit Fußnoten ohne
+  Autor/Jahr im Fließtext sowie Körperschaftsautoren.
 - **Fachliches Urteil.** Die [5D-Bewertung](../reference/search.md#5d-scoring) sortiert
   Treffer, sie entscheidet nicht, was methodisch tragfähig oder für deine Forschungsfrage
   relevant ist. Scores sind Sortierhilfen, keine Wahrheit.
