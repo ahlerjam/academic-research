@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flowkit-template-version: 0.8.0
+# flowkit-template-version: 0.9.1
 # flowkit SessionStart hook: dynamic context only (no doc duplication).
 #
 # Basis-Ausgabe: [repo] branch=X dirty-files=N
