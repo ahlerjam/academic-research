@@ -28,6 +28,7 @@ import math
 import os
 import re
 from collections.abc import Sequence
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,30 @@ _HTML_MARK_RE = re.compile(r"</?b>")
 # VOYAGE_API_KEY noch COHERE_API_KEY gesetzt sind (siehe apply_reranker).
 LOCAL_RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
 ENV_LOCAL_RERANKER_MODEL = "VAULT_RERANK_LOCAL_MODEL"
+
+# Cache-Ziel fuer die Reranker-Gewichte (#718). Zuvor bekam ``FlagReranker``
+# keinen ``cache_dir`` uebergeben und landete im HF-Standard-Cache
+# (``HF_HOME``/``~/.cache/huggingface/hub``) -- ein anderes Verzeichnis als
+# ``embedding_model.default_cache_dir()``/``nli_prefilter.default_cache_dir()``
+# (``~/.academic-research/models``). Ein Vorab-Download nach
+# ``~/.academic-research/models`` haette der Reranker beim naechsten Ladeversuch
+# NICHT gefunden. Eigener Env-Override analog den beiden anderen Modulen.
+ENV_LOCAL_RERANKER_CACHE = "VAULT_RERANK_LOCAL_CACHE"
+
+
+def default_cache_dir() -> str:
+    """Ablageort fuer die Gewichte des lokalen Rerankers (Env-Override moeglich).
+
+    Identisches Muster wie ``embedding_model.default_cache_dir`` (#372) und
+    ``nli_prefilter.default_cache_dir`` (#592) -- eigener Env-Override, gleicher
+    Default-Pfad, damit alle drei Modelle ohne weitere Konfiguration im selben
+    Verzeichnis landen.
+    """
+    env = os.environ.get(ENV_LOCAL_RERANKER_CACHE)
+    if env:
+        return env
+    return str(Path.home() / ".academic-research" / "models")
+
 
 # Spezifische SDK-Fehlerbasisklassen fuer benanntes Exception-Handling statt
 # eines stillen `except Exception: pass` (#376). Beide SDKs sind optionale
@@ -91,17 +116,25 @@ def _get_cohere_client(api_key: str | None = None):
         raise ImportError("cohere SDK nicht installiert. Bitte 'pip install cohere'.") from err
 
 
-def _load_local_reranker_backend(model_id: str):
+def _load_local_reranker_backend(model_id: str, cache_dir: str | None = None):
     """Laedt das FlagEmbedding-Backend fuer den lokalen Reranker.
 
     Separate Funktion, damit Tests das Fehlen bzw. Scheitern des Backends
     deterministisch simulieren koennen, ohne echte Modellgewichte zu laden —
     analog ``embedding_model._load_backend_model``. Die autouse-Fixture in
     tests/conftest.py haengt sich genau hier ein.
+
+    ``cache_dir`` wird seit #718 explizit gesetzt (Default
+    ``default_cache_dir()``) -- vorher landete der Download unbenannt im
+    HF-Standard-Cache, siehe Kommentar bei ``ENV_LOCAL_RERANKER_CACHE`` oben.
     """
     from FlagEmbedding import FlagReranker
 
-    return FlagReranker(model_id, use_fp16=True)
+    from academic_vault._model_prefetchable import notify_lazy_download
+
+    resolved_cache_dir = cache_dir if cache_dir is not None else default_cache_dir()
+    notify_lazy_download(label="Reranker-Modell", repo_id=model_id, cache_dir=resolved_cache_dir)
+    return FlagReranker(model_id, cache_dir=resolved_cache_dir, use_fp16=True)
 
 
 # Cache pro Modell-ID: ``None`` bedeutet "Backend fehlt" und wird bewusst
@@ -114,7 +147,7 @@ def reset_local_reranker_cache() -> None:
     _LOCAL_RERANKER_CACHE.clear()
 
 
-def _get_local_reranker(model_id: str | None = None):
+def _get_local_reranker(model_id: str | None = None, cache_dir: str | None = None):
     """Gibt den lokalen bge-reranker-v2-m3 zurueck oder ``None`` (Degradationspfad).
 
     Analog ``embedding_model.get_embedder()``: ``None`` ist ein Degradations-,
@@ -128,9 +161,10 @@ def _get_local_reranker(model_id: str | None = None):
     if key in _LOCAL_RERANKER_CACHE:
         return _LOCAL_RERANKER_CACHE[key]
 
+    resolved_cache_dir = cache_dir if cache_dir is not None else default_cache_dir()
     reranker: object | None
     try:
-        reranker = _load_local_reranker_backend(key)
+        reranker = _load_local_reranker_backend(key, cache_dir=resolved_cache_dir)
     except Exception as exc:
         logger.warning(
             "Lokaler Reranker '%s' nicht nutzbar (%s: %s) — kein kostenfreies "

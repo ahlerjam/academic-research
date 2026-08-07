@@ -10,6 +10,7 @@
 #   6. Projekt-Bootstrap (Auto-Detect) via project_bootstrap.py
 #   7. Uni-Profil-Setup (F16.5) via uni_profile_setup.py
 #   8. SciHub Opt-in (F18) via scihub_optin.py
+#   9. Modell-Vorab-Download (#718) via model_prefetch.py
 
 set -euo pipefail
 
@@ -211,6 +212,22 @@ echo ""
 # Bei nicht-interaktivem stdin (z.B. CI) gilt der sichere Default (deaktiviert).
 
 "$BASE/venv/bin/python" "$SCRIPT_DIR/scihub_optin.py"
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 9. Modell-Vorab-Download (#718)
+# ---------------------------------------------------------------------------
+# Fragt einmal, ob alle drei lokalen Modelle (Embedding, Reranker,
+# NLI-Zitatscan; zusammen ~3,9 GB) jetzt vollstaendig geladen werden sollen,
+# statt den ersten Download unangekuendigt mitten in einer Suche oder einem
+# Kapitel-Write auszuloesen. Bei Ablehnung oder nicht-interaktivem stdin
+# (z.B. CI) bleibt der bestehende Lazy-Load-Pfad unveraendert -- die Modelle
+# laden dann einzeln beim ersten Gebrauch, jeweils mit vorheriger
+# Groessen-Meldung. Bereits vollstaendig gecachte Modelle fragen nicht erneut
+# (Idempotenz bei wiederholtem Setup-Lauf).
+
+"$BASE/venv/bin/python" "$SCRIPT_DIR/model_prefetch.py"
 
 echo ""
 echo "Setup complete: $BASE"

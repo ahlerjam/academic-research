@@ -30,6 +30,35 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   jede Wortmitte traefe (`KMU` in `Werkmuseum`) -- Suchen unter vier Zeichen
   laufen bitgleich auf dem alten Pfad.
 
+- **Belegdichte in der Kapitel-Prüfbilanz (#739):** `vault.chapter_quote_balance`
+  weist zusätzlich (additiv, ändert keinen bestehenden Key) die Belegdichte über
+  ALLE Aussagesätze des Kapitels aus, nicht nur die mit Zitat --
+  `statement_sentences_total`, `statement_sentences_covered`, `citation_density`
+  (Anteil oder `None` bei 0 Aussagesätzen) und `longest_uncovered_run` (die
+  längste unbelegte Strecke, `None` oder Dict mit `sentence_count`/`line`/
+  `excerpt`). Kein Gate, keine Meldung, kein Schwellwert -- die Zahlen stehen
+  in der Bilanz und sonst nirgends; eine hohe Belegdichte ist KEIN
+  Qualitätsmerkmal. Neu in `academic_vault/nli_prefilter.py`:
+  `extract_statement_sentences()` (Satzsplit innerhalb der Textblöcke
+  zwischen Überschrift-/Listenpunkt-/Leerzeilen, Fragesätze und reine
+  Überleitungssätze zählen nicht mit) und `compute_citation_density()`.
+
+- **Modelle beim Setup vorab laden, Hardware-Anforderungen dokumentiert (#718):**
+  Neuer Schritt 9 in `scripts/setup.sh` (`scripts/model_prefetch.py`) fragt
+  einmal, ob alle drei lokalen Modelle (Embedding `multilingual-e5-small`,
+  Reranker `bge-reranker-v2-m3`, NLI-Zitatscan `bge-m3-zeroshot-v2.0`; ~3,9 GB
+  gesamt) jetzt vollständig geladen werden sollen, statt den ersten Download
+  unangekündigt mitten in einer Suche oder einem Kapitel-Write auszulösen.
+  Bei Ablehnung oder nicht-interaktivem stdin (CI) bleibt der Lazy-Load-Pfad
+  unverändert, meldet aber jetzt vor jedem impliziten Download die erwartete
+  Größe (`academic_vault/_model_prefetchable.py`). Nebenbei behoben: der
+  lokale Reranker bekam bisher keinen `cache_dir` und landete im
+  HF-Standard-Cache statt in `~/.academic-research/models` wie die anderen
+  beiden Modelle — ein Vorab-Download hätte ihn beim nächsten Ladeversuch
+  nicht gefunden. `README.md`/`docs/guide/installation.md` nennen jetzt
+  8 GB RAM / 4 GB Plattenplatz als Untergrenze, keine GPU-Pflicht, und eine
+  Platte/RAM/Laufzeit-Tabelle je Modell.
+
 - **HyDE und Multi-Query prototypisch gemessen (#733):** Beide Query-Umformungen
   liegen als Prototyp unter `scripts/eval/` und sind auf dem unveränderten
   Chunk-Goldset aus #708 über denselben Suchpfad gemessen — vier Arme

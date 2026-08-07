@@ -378,7 +378,11 @@ zu werden (nicht im Vault belegte Passagen tauchen in keiner Bucket-Zahl auf).
 
 **Rückgabe:** `total_quotes`, die drei Zähler (`geprueft_unauffaellig`/`befund_offen`/
 `nicht_geprueft`), `not_audited` (je Eintrag mit `reason`) und `findings` (offene
-Befunde, schwerste zuerst) als formatierte Ausgabe.
+Befunde, schwerste zuerst) als formatierte Ausgabe. Zusätzlich die Belegdichte:
+`statement_sentences_total`/`statement_sentences_covered`, `citation_density`
+(Anteil, `None` bei 0 Aussagesätzen) und `longest_uncovered_run` (längste
+zusammenhängende Strecke ohne Beleg mit Fundstelle, `None` wenn alles belegt
+ist) — reine Kennzahl, kein Gate, keine Meldung.
 
 **Fehlschlag:** `FileNotFoundError`, wenn die Kapiteldatei nicht existiert. Ein Kapitel
 ohne belegte Zitate ist **kein** Fehlschlag — alle Zähler stehen dann auf `0`.
