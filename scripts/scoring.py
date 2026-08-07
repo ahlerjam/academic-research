@@ -3,7 +3,7 @@
 
 Portiert die vier *gerechneten* Dimensionen (Aktualitaet, Qualitaet,
 Autoritaet, Zugaenglichkeit) aus der Prosa-Formel in
-``commands/score.md:67-75`` nach Python, verhaltensgleich. Die
+``commands/score.md`` (Abschnitt "Schritt 3+4: 4 weitere Dimensionen berechnen...") nach Python, verhaltensgleich. Die
 Relevanz-Dimension (Gewicht 0.35) bleibt beim ``relevance-scorer``-Agenten
 und wird hier nur als Parameter entgegengenommen und gewichtet summiert --
 sie erfordert Urteilsvermoegen ueber Titel/Abstract, kein arithmetisches
@@ -14,9 +14,8 @@ Aufruf als Skript (CLI, fuer commands/score.md):
     python3 scripts/scoring.py '<paper-json>' <relevance> [current_year]
 
 ``<paper-json>`` ist ein JSON-Objekt mit den Feldern ``year``,
-``citation_count``, ``venue`` sowie optional ``open_access``, ``doi``,
-``institutional_access``, ``url``. Gibt den Gesamtscore als Float auf
-stdout aus.
+``citations``, ``venue`` sowie optional ``oa_url``, ``open_access_pdf``,
+``doi``, ``url``. Gibt den Gesamtscore als Float auf stdout aus.
 
 Gewichte (unveraendert gegenueber der Prosa-Formel):
     Relevanz 0.35, Aktualitaet 0.20, Qualitaet 0.15, Autoritaet 0.15,
@@ -79,7 +78,7 @@ def quality(citations: int | None, year: int | None, current_year: int | None = 
 
     ``quality = min(log10(citations / max(1, years_since_pub) + 1) / 2, 1.0)``
 
-    Fehlendes/0 ``citation_count`` -> wie ``citations=0`` behandelt (die
+    Fehlendes/0 ``citations`` -> wie ``citations=0`` behandelt (die
     Formel liefert dafuer bereits einen definierten Wert, kein Sonderfall
     noetig).
 
@@ -125,11 +124,9 @@ def access(paper: dict) -> float:
     Liegt keines der Felder vor -> 0.0 (dokumentierter Default: kein
     bekannter Zugangsweg).
     """
-    if paper.get("open_access"):
+    if paper.get("oa_url") or paper.get("open_access_pdf"):
         return 1.0
     doi = paper.get("doi")
-    if doi and paper.get("institutional_access"):
-        return 0.8
     if doi:
         return 0.5
     if paper.get("url"):
@@ -149,7 +146,7 @@ def total_score(relevance: float, paper: dict, current_year: int | None = None) 
     :func:`recency`/:func:`quality`).
     """
     r = recency(paper.get("year"), current_year)
-    q = quality(paper.get("citation_count"), paper.get("year"), current_year)
+    q = quality(paper.get("citations"), paper.get("year"), current_year)
     a = authority(paper.get("venue"))
     ac = access(paper)
     total = (

@@ -21,7 +21,7 @@ Papers mithilfe des `relevance-scorer`-Agents neu scoren und ranken. Der Agent b
 |-----------|---------|--------|
 | Relevanz | 0.35 | `relevance-scorer`-Agent (Titel + Abstract-Match) |
 | Aktualität | 0.20 | 5-Jahre-Halbwertszeit-Decay, berechnet aus `year`-Feld |
-| Qualität | 0.15 | Zitationen pro Jahr mit Log-Skalierung, aus `citation_count` |
+| Qualität | 0.15 | Zitationen pro Jahr mit Log-Skalierung, aus `citations` |
 | Autorität | 0.15 | Venue-Heuristik aus `venue`/`source`-Feld |
 | Zugang | 0.15 | Open Access > Institutional > DOI > URL > Nichts |
 
@@ -69,7 +69,7 @@ Gesamtscore:
 
 ```bash
 ~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/scoring.py \
-  '{"year": 2023, "citation_count": 50, "venue": "IEEE Transactions on Software Engineering", "open_access": true}' \
+  '{"year": 2023, "citations": 50, "venue": "IEEE Transactions on Software Engineering", "oa_url": "https://arxiv.org/..."}' \
   0.9
 ```
 
