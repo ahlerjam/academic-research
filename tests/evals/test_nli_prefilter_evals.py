@@ -34,6 +34,7 @@ NLI_README_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "README.md"
 EXTENDED_CASES_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "extended-cases.json"
 FETCH_ABSTRACTS_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "fetch_abstracts.py"
 EXTENDED_REPORT_PATH = REPO_ROOT / "docs" / "evals" / "2026-08-06-extended-nli-goldset-721.md"
+BGE_M3_REPORT_PATH = REPO_ROOT / "docs" / "evals" / "2026-08-07-bge-m3-nli-scorer-720.md"
 
 RUN_LIVE_ENV = "RUN_LIVE_NLI_PREFILTER"
 
@@ -374,57 +375,74 @@ def test_extended_report_documents_construction_rule_and_boundary():
 # ---------------------------------------------------------------------------
 
 
-class _BgeM3ZeroshotScorer:
-    """bge-m3-zeroshot-v2.0 -- binaeres Label-Schema (0=entailment,
-    1=not_entailment), im Unterschied zu mDeBERTas drei Klassen. Gleiche
-    Entscheidungsregel wie ``run_big.py``/``MDebertaScorer``: faithful nur bei
-    Entailment-Argmax UND Score >= Schwelle."""
+# BgeM3ZeroshotScorer ist seit Issue #720 kanonisch in
+# academic_vault.nli_prefilter (Produktivmodell) -- hier kein zweiter
+# Prototyp mehr (Konsolidierung, Plan-Risiko 1 aus #720).
 
-    name = "bge-m3-zeroshot"
 
-    def __init__(self, threshold: float) -> None:
-        self.threshold = threshold
-        self._model = None
-        self._tokenizer = None
-        self._entailment_idx = 0
+def test_run_eval_all_278_cases_accepts_injected_scorers(runner):
+    """AC3 (hermetischer Teil): der Runner kann Modelle ueber alle 278
+    Faelle aus den drei Goldsets vergleichen. Injizierte Stub-Scorer statt
+    echter Modelle -- kein Netz, prueft nur die Runner-Verdrahtung. Die
+    tatsaechliche Zahlenreproduktion deckt der Live-Test unten ab."""
 
-    def load(self):
-        if self._model is None:
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    class _StubScorer:
+        def __init__(self, name: str) -> None:
+            self.name = name
 
-            model_id = "MoritzLaurer/bge-m3-zeroshot-v2.0"
-            self._tokenizer = AutoTokenizer.from_pretrained(model_id)
-            self._model = AutoModelForSequenceClassification.from_pretrained(model_id)
-            self._model.eval()
-            id2label = {int(k): v for k, v in self._model.config.id2label.items()}
-            self._entailment_idx = next(
-                (i for i, lab in id2label.items() if lab.lower().startswith("entail")), 0
-            )
-        return self._model, self._tokenizer
+        def predict(self, premise: str, hypothesis: str) -> tuple[str, float]:
+            return "verzerrend", 0.1
 
-    def predict(self, premise: str, hypothesis: str) -> tuple[str, float]:
-        import torch
-
-        model, tokenizer = self.load()
-        inputs = tokenizer(
-            premise, hypothesis, truncation=True, max_length=512, return_tensors="pt"
-        )
-        with torch.no_grad():
-            logits = model(**inputs).logits[0]
-        probs = torch.softmax(logits, dim=-1).tolist()
-        entailment_prob = float(probs[self._entailment_idx])
-        argmax_idx = max(range(len(probs)), key=lambda i: probs[i])
-        verdict = (
-            "faithful"
-            if argmax_idx == self._entailment_idx and entailment_prob >= self.threshold
-            else "verzerrend"
-        )
-        return verdict, entailment_prob
+    summary = runner.run_eval_all_278_cases(scorers=[_StubScorer("stub-a"), _StubScorer("stub-b")])
+    assert len(summary["cases"]) == 278
+    assert {m["model"] for m in summary["models"]} == {"stub-a", "stub-b"}
+    for model_result in summary["models"]:
+        assert len(model_result["details"]) == 278
 
 
 @pytest.fixture(scope="module")
 def all_278_cases(cases, real_cases, extended_cases) -> list[dict]:
     return list(cases) + list(real_cases) + list(extended_cases)
+
+
+# ---------------------------------------------------------------------------
+# Eval-Report #720 (Modellwechsel bge-m3-zeroshot-v2.0) -- laeuft IMMER, ohne
+# Netz: prueft nur das committete Report-Artefakt (Vorbild:
+# test_extended_report_documents_construction_rule_and_boundary oben).
+# ---------------------------------------------------------------------------
+
+
+def test_bge_m3_report_documents_model_and_threshold():
+    assert BGE_M3_REPORT_PATH.exists(), f"Eval-Report fehlt: {BGE_M3_REPORT_PATH}"
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "bge-m3-zeroshot-v2.0" in report
+    assert "0,95" in report
+
+
+def test_bge_m3_report_describes_prefilter_as_prioritizer_not_gatekeeper():
+    """AC: Doku beschreibt den Scan als Priorisierer, nicht als Torwaechter."""
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "Priorisierer" in report
+    assert "Torwächter" in report or "Torwaechter" in report
+
+
+def test_bge_m3_report_names_condition_stripped_weakness_with_rate_and_reason():
+    """AC: condition-stripped-Schwaeche mit gemessener Rate + struktureller
+    Begruendung (nicht durch Modellwahl behebbar)."""
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "condition-stripped" in report
+    assert "8/16" in report  # gemessene Rate bei Schwelle 0.80
+    assert "strukturell" in report.lower()
+
+
+def test_bge_m3_report_documents_both_rejected_approaches_with_numbers():
+    """AC: beide verworfenen Ansaetze (lexikalischer Restriktor, bidirektionales
+    NLI) stehen mit ihren Zahlen im Report."""
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "Restriktor" in report
+    assert "3 zusätzlich gefangene" in report or "3 zusaetzlich gefangene" in report
+    assert "bidirektional" in report.lower()
+    assert "14 neue" in report
 
 
 def test_live_threshold_curve_matches_720_report(runner, all_278_cases):
@@ -437,7 +455,7 @@ def test_live_threshold_curve_matches_720_report(runner, all_278_cases):
             f"Mit {RUN_LIVE_ENV}=1 pytest ausfuehren."
         )
 
-    from academic_vault.nli_prefilter import MDebertaScorer
+    from academic_vault.nli_prefilter import BgeM3ZeroshotScorer, MDebertaScorer
 
     assert len(all_278_cases) == 278
 
@@ -450,7 +468,7 @@ def test_live_threshold_curve_matches_720_report(runner, all_278_cases):
                 count += 1
         return count
 
-    bge_m3_slips = slip_throughs(_BgeM3ZeroshotScorer(threshold=0.95))
+    bge_m3_slips = slip_throughs(BgeM3ZeroshotScorer(threshold=0.95))
     mdeberta_slips = slip_throughs(MDebertaScorer(threshold=0.95))
 
     assert bge_m3_slips == 1, (
