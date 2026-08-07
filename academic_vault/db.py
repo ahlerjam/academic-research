@@ -2462,6 +2462,20 @@ class VaultDB:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_first_chunk_text(self, paper_id: str) -> str | None:
+        """Gibt den chunk_text des ersten Chunks eines Papers zurueck (nach created_at, chunk_id).
+
+        Laengst viel effizienter als get_chunk_embeddings, wenn nur der Text
+        des ersten Chunks benoetigt wird — vermeidet das Laden von Vektor-BLOBs
+        und anderen Spalten.
+        """
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT chunk_text FROM chunk_embeddings WHERE paper_id = ? ORDER BY created_at, chunk_id LIMIT 1",
+                (paper_id,),
+            ).fetchone()
+        return row["chunk_text"] if row else None
+
     def delete_chunk_embeddings(self, paper_id: str) -> int:
         """Loescht alle Chunks eines Papers (inkl. vec0-Spiegel). Gibt die Anzahl zurueck.
 

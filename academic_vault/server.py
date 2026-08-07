@@ -884,6 +884,7 @@ def search_papers(
     fused = reciprocal_rank_fusion(
         _vec0_search(db_path, raw_query, k=k), fts_results, k=60, top_n=k
     )
+    _fill_missing_reranker_text(db_path, fused)
 
     voyage_key = os.environ.get("VOYAGE_API_KEY") or None
     cohere_key = os.environ.get("COHERE_API_KEY") or None
@@ -892,12 +893,60 @@ def search_papers(
     # wird immer aufgerufen, damit auch ohne Cloud-Keys der kostenfreie lokale
     # bge-reranker-v2-m3-Fallback greifen kann. Ohne diesen Aufruf bliebe der
     # lokale Fallback in retrieval.py toter Code.
+    #
+    # query=raw_query statt der FTS5-sanitisierten Variante (#702): das
+    # Sanitizing entfernt Bindestriche und Operator-Keywords und verfaelscht
+    # damit die Semantik, gegen die ein Cross-Encoder bewertet -- derselbe
+    # Grund, aus dem _vec0_search oben bereits raw_query bekommt.
     return apply_reranker(
-        query=query,
+        query=raw_query,
         candidates=fused,
         voyage_api_key=voyage_key,
         cohere_api_key=cohere_key,
     )
+
+
+def _fill_missing_reranker_text(db_path: str, fused: list[dict]) -> None:
+    """Ergaenzt fehlenden Reranker-Text fuer rein per FTS5 gefundene Kandidaten (#702).
+
+    vec0-Treffer bringen ueber ``_vec0_search`` bereits den vollen Chunk-Text
+    als ``text`` mit. FTS5-only-Treffer haben das Feld nie -- ohne diese
+    Ergaenzung faellt ``apply_reranker`` auf sein eigenes 10-Token-Snippet mit
+    '<b>'-Markup zurueck (der gemeldete Bug). Prioritaet: Abstract > erster
+    gespeicherter Chunk-Text > Snippet (mit Log, AC5). Mutiert die
+    uebergebenen Dicts in-place.
+
+    Ein zusaetzlicher DB-Zugriff pro FTS5-only-Treffer ist bewusst in Kauf
+    genommen: ``k`` ist klein (Standard 5), ein Batch-Lookup wuerde hier keinen
+    messbaren Unterschied machen.
+    """
+    missing = [entry for entry in fused if not entry.get("text")]
+    if not missing:
+        return
+    db = VaultDB(db_path)
+    for entry in missing:
+        paper_id = entry["paper_id"]
+        paper = db.get_paper(paper_id)
+        abstract = ""
+        if paper is not None:
+            try:
+                csl = json.loads(paper.get("csl_json") or "{}")
+            except json.JSONDecodeError:
+                csl = {}
+            abstract = csl.get("abstract") or ""
+        if abstract.strip():
+            entry["text"] = abstract
+            continue
+        chunk_text = db.get_first_chunk_text(paper_id)
+        if chunk_text:
+            entry["text"] = chunk_text
+            continue
+        logger.warning(
+            "Kein Abstract und kein Chunk-Text fuer Reranker-Kandidat %s "
+            "gefunden -- Fallback auf das FTS5-Snippet (moeglicherweise "
+            "gekuerzt und mit Markup, apply_reranker haertet das ab).",
+            paper_id,
+        )
 
 
 def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
