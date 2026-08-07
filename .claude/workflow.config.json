@@ -104,5 +104,13 @@
   "notify": false,
   "onSmokeFailure": "revert",
   "progressStopAfter": 3,
-  "ciInfraSignatures": []
+  "ciInfraSignatures": [],
+  "autoUpdatePrBranches": {
+    "enabled": true,
+    "skipLabels": [
+      "needs-human",
+      "budget-exceeded"
+    ],
+    "maxPrs": 20
+  }
 }
