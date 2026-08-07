@@ -28,6 +28,9 @@ danach höchstens den passenden Report.
 | [`2026-08-04-trigger-baseline-614.md`](2026-08-04-trigger-baseline-614.md) | Momentaufnahme: erster echter Lauf der Trigger-Evals, Recall/FPR je Skill (#614) |
 | [`2026-08-04-trigger-baseline-614-live-results.json`](2026-08-04-trigger-baseline-614-live-results.json) | Rohdaten des Trigger-Baseline-Laufs (Per-Skill-Aufschlüsselung, Fehlklassifikationen, Tokens) |
 | [`2026-08-05-disable-model-invocation-622.md`](2026-08-05-disable-model-invocation-622.md) | Prüfung je Kandidat (#622): warum 0 Skills mit `disable-model-invocation` markiert werden, Listing-Größe vorher/nachher |
+| [`embedding-truncatability-730.md`](embedding-truncatability-730.md) | Belegte Truncatierbarkeit der drei #628-Kandidaten auf 384d je Modellkarte — nur Qwen3-Embedding-0.6B ohne Schema-Migration einsetzbar, BGE-M3/e5-large „nicht belegt" (#730) |
+| [`2026-08-06-extended-nli-goldset-721.md`](2026-08-06-extended-nli-goldset-721.md) | Momentaufnahme: erweitertes NLI-Goldset (186 Fälle, 30 echte Paper, acht Fächer) ins Repo aufgenommen, Reproduktion der #720-Schwellenkurve (#721) |
+| [`2026-08-07-bge-m3-nli-scorer-720.md`](2026-08-07-bge-m3-nli-scorer-720.md) | Momentaufnahme: NLI-Scorer-Wechsel auf `bge-m3-zeroshot-v2.0` @ Schwelle 0,95, A/B über 278 Fälle, `condition-stripped`-Grenze, zwei verworfene Zusatzansätze (#720) |
 
 ## Konvention
 
