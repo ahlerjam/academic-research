@@ -21,3 +21,20 @@ bib_pickup_url: ""
 # Aktivierung: /academic-research:setup → SciHub-Opt-in-Frage bejahen
 # Rechtlich umstritten — Nutzung auf eigene Verantwortung.
 scihub_optin: false
+
+# Scoring-Profil (#705) — Halbwertszeit + Gewichte fuer /academic-research:score.
+# Fehlt dieser Abschnitt oder einzelne Felder darin, gelten die heutigen
+# Default-Werte (siehe scripts/scoring.py DEFAULT_HALF_LIFE_YEARS/DEFAULT_WEIGHTS).
+# Presets zum Uebernehmen: library-profiles/profiles/systematic-review.yaml
+# (laengere Halbwertszeit, favorisiert Grundlagenliteratur) und
+# library-profiles/profiles/fachhausarbeit.yaml (kuerzere Halbwertszeit,
+# favorisiert aktuelle Literatur). Die fuenf Gewichte muessen sich auf 1.0
+# summieren.
+scoring:
+  half_life_years: 5
+  weights:
+    relevance: 0.35
+    recency: 0.20
+    quality: 0.15
+    authority: 0.15
+    access: 0.15

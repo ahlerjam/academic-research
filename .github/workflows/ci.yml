@@ -223,3 +223,33 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # 6. Retrieval-Goldset auf Chunk-Ebene (#708).
+  #    Misst Recall@10, nDCG@10 und MRR auf Chunks, die denselben Weg genommen
+  #    haben wie im Betrieb (chunk_pages + Kontextsatz + "passage: "-Praefix),
+  #    und schlaegt fehl, sobald eine der drei Metriken die in
+  #    tests/fixtures/retrieval_goldset_chunks_708/thresholds.json hinterlegte
+  #    Schwelle unterschreitet. Eigener Job statt eines Schritts in
+  #    `python-tests`, damit im PR sichtbar ist, ob die Retrieval-Qualitaet
+  #    gefallen ist oder ein gewoehnlicher Test gebrochen ist.
+  #    HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE erzwingen die Hermetik ueber die
+  #    Umgebung statt ueber Konvention: die Vektoren liegen vorberechnet im
+  #    Repo, ein HuggingFace-Zugriff waere hier ein Fehler und kein Fallback.
+  retrieval-goldset:
+    name: Retrieval-Goldset (Recall/nDCG/MRR @10)
+    runs-on: ubuntu-latest
+    env:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          python-version: "3.12"
+      - name: Goldset gegen die hinterlegten Schwellen fahren
+        run: uv run python scripts/eval/run_retrieval_chunk_goldset.py --check-thresholds
+      - name: Metriken, Hermetik und Schwellen-Meta pruefen
+        run: |
+          uv run pytest -p no:cacheprovider -q \
+            tests/test_issue_708_ranking_metrics.py \
+            tests/test_issue_708_retrieval_chunk_goldset.py

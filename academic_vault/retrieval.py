@@ -7,6 +7,9 @@ Implementiert:
 - rerank_with_cohere(query, candidates, api_key)
 - rerank_with_local_bge(query, candidates)
 - compute_recall_at_k(retrieved_ids, relevant_ids, k)
+- compute_ndcg_at_k(retrieved_ids, relevant_ids, k)          (#708)
+- compute_reciprocal_rank_at_k(retrieved_ids, relevant_ids, k) (#708)
+- mean_reciprocal_rank(rankings, k)                          (#708)
 
 RRF-Formel: score(d) = 1/(k + rank_vec(d)) + 1/(k + rank_fts(d))
 Standard-Konstante k=60 nach Cormack et al. 2009.
@@ -21,7 +24,9 @@ verschleierten Fallbacks.
 """
 
 import logging
+import math
 import os
+from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -467,3 +472,122 @@ def compute_recall_at_k(
     top_k = set(retrieved_ids[:k])
     relevant = set(relevant_ids)
     return len(top_k & relevant) / len(relevant)
+
+
+def _dedup_preserving_order(ids: Sequence[str]) -> list[str]:
+    """Entfernt Dubletten und behaelt die ERSTE Position jedes Eintrags.
+
+    Rangbewusste Metriken muessen das tun: zaehlte eine zweite Nennung
+    desselben Treffers erneut, koennte ein Retriever seinen DCG ueber den
+    Idealwert heben (nDCG > 1), indem er einen Treffer wiederholt ausgibt.
+    Recall@k braucht den Schritt nicht, weil es ohnehin ueber Mengen rechnet.
+    """
+    seen: set[str] = set()
+    unique: list[str] = []
+    for item in ids:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
+
+
+def compute_ndcg_at_k(
+    retrieved_ids: Sequence[str],
+    relevant_ids: Sequence[str],
+    k: int = 10,
+) -> float:
+    """Berechnet nDCG@K mit binaerer Relevanz (Issue #708).
+
+    Anders als Recall@K bewertet nDCG die POSITION eines Treffers: ein
+    relevanter Chunk auf Rang 1 zaehlt voll, derselbe auf Rang 10 nur noch
+    ``1/log2(11) ≈ 0.29``. Genau diese Empfindlichkeit fehlt Recall@K, das
+    jede Umsortierung innerhalb der Top-K ignoriert.
+
+        DCG@K  = sum_{i=1..K} rel_i / log2(i + 1)          (rel_i in {0, 1})
+        IDCG@K = sum_{i=1..min(|R|, K)} 1 / log2(i + 1)
+        nDCG@K = DCG@K / IDCG@K
+
+    ``IDCG`` wird bei ``K`` gekappt -- ohne diese Kappung koennte ein
+    perfektes Top-K bei ``|R| > K`` nie 1.0 erreichen.
+
+    Konventionen (bewusst festgelegt, siehe Tests):
+        * Leeres ``relevant_ids`` -> ``1.0`` (identisch zu
+          :func:`compute_recall_at_k`: es gibt nichts zu verfehlen).
+        * Dubletten in ``retrieved_ids`` zaehlen nur an ihrer ersten Position
+          (:func:`_dedup_preserving_order`).
+        * ``k <= 0`` -> ``0.0``.
+
+    Args:
+        retrieved_ids: Abgerufene IDs in Rang-Reihenfolge (bester zuerst).
+        relevant_ids: Ground-Truth-relevante IDs (ungeordnet).
+        k: Cutoff.
+
+    Returns:
+        nDCG@K als float zwischen 0.0 und 1.0.
+    """
+    if not relevant_ids:
+        return 1.0
+    if k <= 0:
+        return 0.0
+
+    relevant = set(relevant_ids)
+    ranked = _dedup_preserving_order(retrieved_ids)[:k]
+    dcg = sum(
+        1.0 / math.log2(rank + 1)
+        for rank, doc_id in enumerate(ranked, start=1)
+        if doc_id in relevant
+    )
+    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, min(len(relevant), k) + 1))
+    if idcg == 0.0:
+        return 0.0
+    return dcg / idcg
+
+
+def compute_reciprocal_rank_at_k(
+    retrieved_ids: Sequence[str],
+    relevant_ids: Sequence[str],
+    k: int = 10,
+) -> float:
+    """Reciprocal Rank@K: ``1 / Rang`` des ERSTEN Treffers, sonst ``0.0`` (#708).
+
+    Beantwortet die Frage, die eine Nutzerin tatsaechlich stellt: wie weit muss
+    ich scrollen, bis etwas Brauchbares kommt? Recall@K und nDCG@K beantworten
+    sie beide nicht.
+
+    Konventionen wie bei :func:`compute_ndcg_at_k`: leeres ``relevant_ids``
+    ergibt ``1.0``, Dubletten zaehlen nur an ihrer ersten Position, ``k <= 0``
+    ergibt ``0.0``.
+    """
+    if not relevant_ids:
+        return 1.0
+    if k <= 0:
+        return 0.0
+
+    relevant = set(relevant_ids)
+    for rank, doc_id in enumerate(_dedup_preserving_order(retrieved_ids)[:k], start=1):
+        if doc_id in relevant:
+            return 1.0 / rank
+    return 0.0
+
+
+def mean_reciprocal_rank(
+    rankings: Sequence[tuple[Sequence[str], Sequence[str]]],
+    k: int = 10,
+) -> float:
+    """Mittelt :func:`compute_reciprocal_rank_at_k` ueber mehrere Queries (#708).
+
+    Args:
+        rankings: Liste aus ``(retrieved_ids, relevant_ids)`` je Query.
+        k: Cutoff, der fuer jede Query gilt.
+
+    Returns:
+        MRR als float zwischen 0.0 und 1.0. ``0.0`` bei leerer Eingabe -- ein
+        Mittelwert ueber null Queries hat keinen sinnvollen Wert, und ``1.0``
+        waere hier die gefaehrlichere Luege (ein leeres Goldset saehe perfekt
+        aus).
+    """
+    if not rankings:
+        return 0.0
+    return sum(
+        compute_reciprocal_rank_at_k(retrieved, relevant, k=k) for retrieved, relevant in rankings
+    ) / len(rankings)
