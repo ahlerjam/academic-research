@@ -121,6 +121,39 @@ def test_ordinary_claim_sentence_is_counted():
     assert [s["text"] for s in sentences] == [content]
 
 
+def test_sentence_before_a_quote_opening_character_is_split_off():
+    from academic_vault.nli_prefilter import extract_statement_sentences
+
+    content = 'Der Effekt war robust. "Ein Zitat beginnt hier" schreibt Mueller.'
+    sentences = extract_statement_sentences(content)
+
+    texts = [s["text"] for s in sentences]
+    assert "Der Effekt war robust." in texts
+    assert '"Ein Zitat beginnt hier" schreibt Mueller.' in texts
+
+
+def test_sentence_before_a_digit_initial_sentence_is_split_off():
+    from academic_vault.nli_prefilter import extract_statement_sentences
+
+    content = "Der Effekt war robust. 2026 wurde er repliziert."
+    sentences = extract_statement_sentences(content)
+
+    texts = [s["text"] for s in sentences]
+    assert "Der Effekt war robust." in texts
+    assert "2026 wurde er repliziert." in texts
+
+
+def test_blank_line_between_paragraphs_is_a_hard_sentence_boundary():
+    from academic_vault.nli_prefilter import extract_statement_sentences
+
+    content = "Absatz eins endet hier.\n\nAbsatz zwei beginnt hier."
+    sentences = extract_statement_sentences(content)
+
+    texts = [s["text"] for s in sentences]
+    assert "Absatz eins endet hier." in texts
+    assert "Absatz zwei beginnt hier." in texts
+
+
 # ---------------------------------------------------------------------------
 # AC1 -- compute_citation_density: Zahl, Anzahl belegt, Anteil
 # ---------------------------------------------------------------------------

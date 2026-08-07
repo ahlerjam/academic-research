@@ -420,7 +420,7 @@ MIN_QUOTE_LEN = 20
 #: erkennbare Satzgrenze liegt (z. B. Zitat am Absatzanfang/-ende).
 _CLAIM_WINDOW = 200
 
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-ZÄÖÜ])")
+_SENTENCE_SPLIT = re.compile(r'(?<=[.!?])\s+(?=[A-ZÄÖÜ"„«\d])')
 
 
 def extract_quote_spans(content: str, min_len: int = MIN_QUOTE_LEN) -> list[dict]:
@@ -563,15 +563,21 @@ TRANSITION_PREFIXES = (
 
 def _non_structural_runs(content: str) -> list[tuple[int, int]]:
     """Zeichenspannen der Textbloecke ZWISCHEN Ueberschrift-/Listenpunkt-
-    Zeilen (Plan: Filterung VOR dem Satzsplit, nicht danach). Eine
-    Strukturzeile ist eine harte Blockgrenze -- ein Satz wird nie ueber sie
-    hinweg mit dem folgenden Absatz verschmolzen."""
+    Zeilen ODER Leerzeilen (Plan: Filterung VOR dem Satzsplit, nicht
+    danach). Eine Struktur- oder Leerzeile ist eine harte Blockgrenze --
+    ein Satz wird nie ueber sie hinweg mit dem folgenden Absatz
+    verschmolzen (sonst faellt ein unbelegter Satz vor einem Absatzwechsel
+    unter den Tisch, Issue #739 Review)."""
     runs: list[tuple[int, int]] = []
     pos = 0
     run_start: int | None = None
     for line in content.splitlines(keepends=True):
         stripped_line = line.rstrip("\n")
-        is_structural = bool(_HEADING_LINE.match(stripped_line) or _LIST_LINE.match(stripped_line))
+        is_structural = bool(
+            _HEADING_LINE.match(stripped_line)
+            or _LIST_LINE.match(stripped_line)
+            or not stripped_line.strip()
+        )
         if is_structural:
             if run_start is not None:
                 runs.append((run_start, pos))
