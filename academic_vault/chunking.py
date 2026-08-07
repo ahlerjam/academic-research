@@ -1,4 +1,4 @@
-"""Seitenbewusstes generisches Chunking-Modul (Issue #374).
+"""Seitenbewusstes generisches Chunking-Modul (Issues #374, #709).
 
 Zerlegt beliebige Paper/PDFs (kein Buch-Anwendungsfall wie ``scripts/chunk_pdf.py``,
 das bewusst unveraendert bleibt) in einheitliche Retrieval-Chunks:
@@ -14,6 +14,13 @@ und direkt an :func:`chunk_pages` weiterreicht -- sie dupliziert NICHT die
 eigentliche Volltext-Extraktion (#373, ``academic_vault/fulltext.py``), die
 Seiten zu einem einzigen Fliesstext zusammenfasst und die Seitengrenzen damit
 absichtlich aufgibt.
+
+ZWEI PFADE (#709): ist ``GROBID_URL`` gesetzt, holt :func:`chunk_pdf` die
+echte Sektionsstruktur als TEI und schneidet ueber :func:`chunk_sections` an
+Absatz- und Sektionsgrenzen. Ohne ``GROBID_URL`` -- und bei jedem Fehler des
+optionalen Servers -- laeuft unveraendert der Seitenpfad mit der
+Title-Case-Heuristik :func:`_detect_heading`, die zwangslaeufig unscharf ist
+(siehe dort). Der Regex bleibt der Fallback, GROBID bleibt Opt-in.
 
 Tokenbudget (WICHTIG): die Zielgroesse ist in **Modell-Tokens** definiert, nicht
 in Woertern. Das Embedding-Backend ``intfloat/multilingual-e5-small`` hat ein
@@ -50,12 +57,15 @@ import math
 import os
 import re
 from bisect import bisect_right
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .embedding_model import DEFAULT_MODEL_ID, ENV_MODEL_ID
 from .embeddings import build_contextual_embedding_text
+
+if TYPE_CHECKING:  # pragma: no cover - nur fuer die Typpruefung
+    from .fulltext import TeiSection
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +112,13 @@ _HEADING_RE = re.compile(
     r"[A-ZÄÖÜ][\w\-]*(?:\s+[A-ZÄÖÜ][\w\-]*){0,6}$"
 )
 _MAX_HEADING_LEN = 80
+
+# Mindestfuellgrad beim Zurueckschnappen auf eine Absatz-/Sektionsgrenze (#709).
+# Ohne Untergrenze wuerde ein Absatzende dicht hinter dem Chunkstart einen
+# Mini-Chunk erzeugen: der Chunk waere semantisch sauber, aber als
+# Retrieval-Einheit unbrauchbar. Liegt die naechste Grenze unter diesem Anteil
+# des Fensters, bleibt der Budget-Schnitt stehen (und damit auch der Overlap).
+MIN_BOUNDARY_FILL_RATIO = 0.6
 
 
 # ``token_counter``-Vertrag: gibt die Tokenanzahl von ``text`` zurueck (ohne
@@ -386,40 +403,203 @@ def chunk_pages(
     chunk_index = 0
     while start < n:
         end = _window_end(words, start, budget, counter)
-        chunk_text = " ".join(words[start:end])
-        page_start = word_pages[start]
-        page_end = word_pages[end - 1]
-        section_title = _section_title_at(headings, start)
-
-        if context_provider is not None:
-            context_sentence = context_provider(
-                chunk_text, section_title, chunk_index, page_start, page_end
-            )
-        else:
-            context_sentence = default_context_sentence(
-                section_title, chunk_index, page_start, page_end
-            )
-        embedding_text = build_contextual_embedding_text(context_sentence, chunk_text)
-        _warn_if_over_context_window(chunk_index, embedding_text, counter)
-
         chunks.append(
-            Chunk(
-                chunk_index=chunk_index,
-                chunk_text=chunk_text,
-                context_sentence=context_sentence,
-                embedding_text=embedding_text,
-                page_start=page_start,
-                page_end=page_end,
-                section_title=section_title,
+            _make_chunk(
+                words,
+                word_pages,
+                start,
+                end,
+                chunk_index,
+                _section_title_at(headings, start),
+                context_provider,
+                counter,
             )
         )
 
         if end >= n:
             break
-        window = end - start
-        # min(window - 1, ...) garantiert Fortschritt auch bei window == 1.
-        overlap_words = min(window - 1, max(1, round(window * overlap_ratio)))
-        start += max(1, window - overlap_words)
+        start = _next_start(start, end, overlap_ratio)
+        chunk_index += 1
+
+    return chunks
+
+
+def _make_chunk(
+    words: list[str],
+    word_pages: list[int],
+    start: int,
+    end: int,
+    chunk_index: int,
+    section_title: str,
+    context_provider: ContextProvider | None,
+    counter: TokenCounter,
+) -> Chunk:
+    """Baut einen :class:`Chunk` aus ``words[start:end]`` samt Kontextsatz."""
+    chunk_text = " ".join(words[start:end])
+    page_start = word_pages[start]
+    page_end = word_pages[end - 1]
+
+    if context_provider is not None:
+        context_sentence = context_provider(
+            chunk_text, section_title, chunk_index, page_start, page_end
+        )
+    else:
+        context_sentence = default_context_sentence(
+            section_title, chunk_index, page_start, page_end
+        )
+    embedding_text = build_contextual_embedding_text(context_sentence, chunk_text)
+    _warn_if_over_context_window(chunk_index, embedding_text, counter)
+
+    return Chunk(
+        chunk_index=chunk_index,
+        chunk_text=chunk_text,
+        context_sentence=context_sentence,
+        embedding_text=embedding_text,
+        page_start=page_start,
+        page_end=page_end,
+        section_title=section_title,
+    )
+
+
+def _next_start(start: int, end: int, overlap_ratio: float) -> int:
+    """Startindex des naechsten Chunks bei einem BUDGETGETRIEBENEN Schnitt.
+
+    Der Schnitt liegt mitten im Argument, deshalb ueberlappt der Folge-Chunk.
+    ``min(window - 1, ...)`` garantiert Fortschritt auch bei ``window == 1``.
+    """
+    window = end - start
+    overlap_words = min(window - 1, max(1, round(window * overlap_ratio)))
+    return start + max(1, window - overlap_words)
+
+
+def _split_sections_with_metadata(
+    sections: Sequence[TeiSection],
+) -> tuple[list[str], list[int], list[tuple[int, str]], list[int]]:
+    """Baut den Wortstrom aus TEI-Sektionen samt Seiten- und Grenzmetadaten.
+
+    Im Unterschied zu :func:`_split_words_with_metadata` wird hier NICHTS
+    geraten: die Sektionstitel kommen aus den ``<head>``-Elementen und die
+    Schnittkandidaten aus den ``<p>``-Grenzen.
+
+    Returns:
+        ``(words, word_pages, section_starts, boundaries)``. ``boundaries`` ist
+        die aufsteigende Liste der Wortindizes, an denen ein Absatz beginnt,
+        plus ``len(words)`` — genau die Indizes also, an denen ein Chunk enden
+        darf, ohne einen Absatz zu zerschneiden.
+    """
+    words: list[str] = []
+    word_pages: list[int] = []
+    section_starts: list[tuple[int, str]] = []
+    boundaries: list[int] = []
+
+    for section in sections:
+        title = section.title.strip() or DEFAULT_SECTION_TITLE
+        section_open = False
+        for paragraph in section.paragraphs:
+            paragraph_words = paragraph.text.split()
+            if not paragraph_words:
+                continue
+            if not section_open:
+                section_starts.append((len(words), title))
+                section_open = True
+            boundaries.append(len(words))
+            words.extend(paragraph_words)
+            word_pages.extend([paragraph.page] * len(paragraph_words))
+
+    if words:
+        boundaries.append(len(words))
+    return words, word_pages, section_starts, boundaries
+
+
+def _snap_to_boundary(
+    boundaries: list[int], start: int, hard_end: int, min_fill_ratio: float
+) -> int | None:
+    """Letzte Absatz-/Sektionsgrenze in ``(start, hard_end]``, oder ``None``.
+
+    ``None`` bedeutet: es gibt im Fenster keine brauchbare Grenze — entweder
+    gar keine, oder nur eine so dicht hinter ``start``, dass der Chunk unter
+    :data:`MIN_BOUNDARY_FILL_RATIO` des Fensters fiele.
+    """
+    pos = bisect_right(boundaries, hard_end) - 1
+    if pos < 0:
+        return None
+    candidate = boundaries[pos]
+    if candidate <= start:
+        return None
+    if (candidate - start) < min_fill_ratio * (hard_end - start):
+        return None
+    return candidate
+
+
+def chunk_sections(
+    sections: Sequence[TeiSection],
+    target_tokens: int = TARGET_TOKENS,
+    overlap_ratio: float = OVERLAP_RATIO,
+    context_provider: ContextProvider | None = None,
+    token_counter: TokenCounter | None = None,
+    min_boundary_fill_ratio: float = MIN_BOUNDARY_FILL_RATIO,
+) -> list[Chunk]:
+    """Zerlegt TEI-Sektionen (#709) an ECHTEN Struktur-, nicht an Regex-Grenzen.
+
+    Das Tokenbudget bleibt der harte Deckel — kein Chunk wird groesser, nur
+    weil ein Absatz laenger ist. Innerhalb des Budgets wird auf die letzte
+    Absatz- oder Sektionsgrenze zurueckgeschnappt.
+
+    Overlap gibt es nur bei einem ERZWUNGENEN Schnitt: endet ein Chunk sauber
+    an einer Absatzgrenze, beginnt der naechste genau dort. Genau an dieser
+    Grenze wechselt der Kontext, ein Wort-Overlap traegt dann nichts bei.
+    Schneidet dagegen das Budget mitten in den Absatz, greift ``overlap_ratio``
+    wie im seitenbasierten Pfad.
+
+    Args:
+        sections: Sektionen in Dokumentreihenfolge
+            (``academic_vault.fulltext.parse_tei_sections``).
+        target_tokens: Tokenbudget je Chunk-Text (ohne Kontextsatz).
+        overlap_ratio: Ueberlappungsanteil bei erzwungenen Schnitten.
+        context_provider: wie bei :func:`chunk_pages`.
+        token_counter: wie bei :func:`chunk_pages`.
+        min_boundary_fill_ratio: Mindestfuellgrad fuer das Zurueckschnappen,
+            siehe :data:`MIN_BOUNDARY_FILL_RATIO`.
+
+    Returns:
+        Liste von :class:`Chunk` in Dokumentreihenfolge. Leer, wenn die
+        Sektionen keinen Text enthalten.
+    """
+    words, word_pages, section_starts, boundaries = _split_sections_with_metadata(sections)
+    if not words:
+        return []
+
+    counter = resolve_token_counter(token_counter)
+    budget = max(1, target_tokens)
+    n = len(words)
+
+    chunks: list[Chunk] = []
+    start = 0
+    chunk_index = 0
+    while start < n:
+        hard_end = _window_end(words, start, budget, counter)
+        if hard_end >= n:
+            end, forced = n, False
+        else:
+            snapped = _snap_to_boundary(boundaries, start, hard_end, min_boundary_fill_ratio)
+            end, forced = (hard_end, True) if snapped is None else (snapped, False)
+
+        chunks.append(
+            _make_chunk(
+                words,
+                word_pages,
+                start,
+                end,
+                chunk_index,
+                _section_title_at(section_starts, start),
+                context_provider,
+                counter,
+            )
+        )
+
+        if end >= n:
+            break
+        start = _next_start(start, end, overlap_ratio) if forced else end
         chunk_index += 1
 
     return chunks
@@ -477,10 +657,48 @@ def chunk_pdf(
     context_provider: ContextProvider | None = None,
     token_counter: TokenCounter | None = None,
 ) -> list[Chunk]:
-    """Liest ein PDF seitenweise ein und zerlegt es in Retrieval-Chunks.
+    """Liest ein PDF ein und zerlegt es in Retrieval-Chunks.
 
-    Kombiniert :func:`extract_pages` und :func:`chunk_pages`.
+    Der Pfad haengt allein an ``GROBID_URL`` (#709):
+
+      * **gesetzt** — :func:`academic_vault.fulltext.extract_grobid_sections`
+        holt die TEI-Struktur, :func:`chunk_sections` schneidet an echten
+        Sektions- und Absatzgrenzen. Jeder Fehler und jedes leere Ergebnis
+        faellt mit Warnung auf den Seitenpfad zurueck — die optionale
+        Infrastruktur darf das Chunking nie kippen.
+      * **nicht gesetzt** — unveraendert :func:`extract_pages` +
+        :func:`chunk_pages` (Title-Case-Heuristik). Ohne ``GROBID_URL`` findet
+        KEIN HTTP-Versuch statt.
     """
+    from .fulltext import ENV_GROBID_URL, extract_grobid_sections
+
+    grobid_url = os.environ.get(ENV_GROBID_URL, "").strip()
+    if grobid_url:
+        sections = None
+        try:
+            sections = extract_grobid_sections(pdf_path, grobid_url)
+        except Exception:
+            logger.warning(
+                "GROBID-Sektionen nicht abrufbar (%s) — Fallback auf den "
+                "seitenbasierten Chunking-Pfad",
+                grobid_url,
+                exc_info=True,
+            )
+        if sections:
+            return chunk_sections(
+                sections,
+                target_tokens=target_tokens,
+                overlap_ratio=overlap_ratio,
+                context_provider=context_provider,
+                token_counter=token_counter,
+            )
+        if sections is not None:
+            logger.warning(
+                "GROBID (%s) lieferte keine Sektionen — Fallback auf den "
+                "seitenbasierten Chunking-Pfad",
+                grobid_url,
+            )
+
     pages = extract_pages(pdf_path)
     return chunk_pages(
         pages,
