@@ -425,7 +425,24 @@ MIN_QUOTE_LEN = 20
 #: erkennbare Satzgrenze liegt (z. B. Zitat am Absatzanfang/-ende).
 _CLAIM_WINDOW = 200
 
-_SENTENCE_SPLIT = re.compile(r'(?<=[.!?])\s+(?=[A-ZÄÖÜ"„«\d])')
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-ZÄÖÜ])")
+
+#: Deutsche Abkuerzungen, nach denen ein folgender Punkt KEINE Satzgrenze
+#: ist ("Abb. 3", "S. 42", "vgl. 2015") -- negativer Lookbehind fuer
+#: :data:`_STATEMENT_SPLIT`.
+_ABBREVIATION_BEFORE = (
+    r"(?<!\bAbb\.)(?<!\bTab\.)(?<!\bKap\.)(?<!\bAbs\.)(?<!\bNr\.)(?<!\bBd\.)(?<!\bvgl\.)(?<!\bS\.)"
+)
+
+#: Wie :data:`_SENTENCE_SPLIT`, aber nur fuer die Belegdichte
+#: (:func:`extract_statement_sentences`, Issue #739): erkennt zusaetzlich
+#: eine Satzgrenze vor einem Zitat-Anfuehrungszeichen oder einer Ziffer,
+#: sofern kein Abkuerzungspunkt davorsteht (sonst spaltet "Abb. 3" oder
+#: "vgl. 2015" mitten in die Abkuerzung). ABSICHTLICH getrennt von
+#: `_SENTENCE_SPLIT`: letzteres treibt auch `claim_sentence_for_span` fuer
+#: die bestehende NLI-Claim-Drift-Pruefung (#717/#737) -- eine gemeinsame
+#: Konstante wuerde deren Produktionsverhalten mitaendern.
+_STATEMENT_SPLIT = re.compile(_ABBREVIATION_BEFORE + r'(?<=[.!?])\s+(?=[A-ZÄÖÜ"„«\d])')
 
 
 def extract_quote_spans(content: str, min_len: int = MIN_QUOTE_LEN) -> list[dict]:
@@ -602,8 +619,10 @@ def _is_transition_sentence(text: str) -> bool:
 def extract_statement_sentences(content: str) -> list[dict]:
     """Findet alle Aussagesaetze eines Kapiteltexts (Issue #739).
 
-    Ein Aussagesatz ist ein Satz (Split ueber :data:`_SENTENCE_SPLIT`, wie
-    :func:`claim_sentence_for_span`) innerhalb eines Textblocks zwischen
+    Ein Aussagesatz ist ein Satz (Split ueber :data:`_STATEMENT_SPLIT` --
+    wie :data:`_SENTENCE_SPLIT` in :func:`claim_sentence_for_span`, plus
+    Satzgrenze vor Zitat-Anfuehrungszeichen/Ziffer, abkuerzungssicher)
+    innerhalb eines Textblocks zwischen
     Ueberschrift-/Listenpunkt-Zeilen (:func:`_non_structural_runs` --
     solche Zeilen sind harte Blockgrenzen, ein Satz verschmilzt nie mit dem
     Absatz vor/nach ihnen), der NICHT auf ``?`` endet (Fragesatz) und NICHT
@@ -626,7 +645,7 @@ def extract_statement_sentences(content: str) -> list[dict]:
         block = content[run_start:run_end]
         bounds: list[tuple[int, int]] = []
         pos = 0
-        for m in _SENTENCE_SPLIT.finditer(block):
+        for m in _STATEMENT_SPLIT.finditer(block):
             bounds.append((pos, m.start()))
             pos = m.end()
         bounds.append((pos, len(block)))

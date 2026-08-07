@@ -154,6 +154,21 @@ def test_blank_line_between_paragraphs_is_a_hard_sentence_boundary():
     assert "Absatz zwei beginnt hier." in texts
 
 
+@pytest.mark.parametrize(
+    "abbreviation",
+    ["Abb.", "Tab.", "Kap.", "Abs.", "Nr.", "Bd.", "vgl.", "S."],
+)
+def test_abbreviation_before_a_number_is_not_a_sentence_boundary(abbreviation):
+    """Regression: der erweiterte Ziffern-Lookahead darf nicht mitten in
+    deutschen Abkuerzungen wie "Abb. 3" oder "vgl. 2015" splitten."""
+    from academic_vault.nli_prefilter import extract_statement_sentences
+
+    content = f"Die Verteilung zeigt {abbreviation} 3 im Anhang."
+    sentences = extract_statement_sentences(content)
+
+    assert [s["text"] for s in sentences] == [content]
+
+
 # ---------------------------------------------------------------------------
 # AC1 -- compute_citation_density: Zahl, Anzahl belegt, Anteil
 # ---------------------------------------------------------------------------
