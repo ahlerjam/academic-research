@@ -721,12 +721,12 @@ def add_chunk_fts(db_path: str) -> None:
         try:
             conn.execute(
                 "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts "
-                "USING fts5(chunk_id, paper_id, chunk_text)"
+                "USING fts5(chunk_id, paper_id, chunk_text, content=chunk_embeddings, content_rowid=rowid)"
             )
             conn.execute(
                 """
-                INSERT INTO chunk_fts (chunk_id, paper_id, chunk_text)
-                SELECT chunk_id, paper_id, chunk_text FROM chunk_embeddings
+                INSERT INTO chunk_fts (rowid, chunk_id, paper_id, chunk_text)
+                SELECT rowid, chunk_id, paper_id, chunk_text FROM chunk_embeddings
                 WHERE chunk_id NOT IN (SELECT chunk_id FROM chunk_fts)
                 """
             )

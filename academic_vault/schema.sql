@@ -444,7 +444,9 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
 CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
   chunk_id,
   paper_id,
-  chunk_text
+  chunk_text,
+  content=chunk_embeddings,
+  content_rowid=rowid
 );
 
 -- FTS5-Trigger: befuellen chunk_fts manuell. Bewusst DROP + CREATE statt
@@ -452,18 +454,20 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
 -- init_schema() fuehrt dieses Skript auch auf Bestands-DBs aus.
 DROP TRIGGER IF EXISTS chunk_ai;
 CREATE TRIGGER chunk_ai AFTER INSERT ON chunk_embeddings BEGIN
-  INSERT INTO chunk_fts(chunk_id, paper_id, chunk_text)
-  VALUES (new.chunk_id, new.paper_id, new.chunk_text);
+  INSERT INTO chunk_fts(rowid, chunk_id, paper_id, chunk_text)
+  VALUES (new.rowid, new.chunk_id, new.paper_id, new.chunk_text);
 END;
 
 DROP TRIGGER IF EXISTS chunk_ad;
 CREATE TRIGGER chunk_ad AFTER DELETE ON chunk_embeddings BEGIN
-  DELETE FROM chunk_fts WHERE chunk_id = old.chunk_id;
+  DELETE FROM chunk_fts WHERE rowid = old.rowid;
 END;
 
 DROP TRIGGER IF EXISTS chunk_au;
-CREATE TRIGGER chunk_au AFTER UPDATE ON chunk_embeddings BEGIN
-  DELETE FROM chunk_fts WHERE chunk_id = old.chunk_id;
-  INSERT INTO chunk_fts(chunk_id, paper_id, chunk_text)
-  VALUES (new.chunk_id, new.paper_id, new.chunk_text);
+CREATE TRIGGER chunk_au AFTER UPDATE OF chunk_text, paper_id ON chunk_embeddings
+  WHEN old.chunk_text IS NOT new.chunk_text OR old.paper_id IS NOT new.paper_id
+BEGIN
+  DELETE FROM chunk_fts WHERE rowid = old.rowid;
+  INSERT INTO chunk_fts(rowid, chunk_id, paper_id, chunk_text)
+  VALUES (new.rowid, new.chunk_id, new.paper_id, new.chunk_text);
 END;
