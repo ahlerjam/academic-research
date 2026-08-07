@@ -1,0 +1,467 @@
+[
+  {
+    "field": "wirtschaft",
+    "doi": "https://doi.org/10.1016/j.giq.2019.06.002",
+    "year": 2019,
+    "title": "Defining digital transformation: Results from expert interviews",
+    "picks": [
+      {
+        "sentence": "In response to the changing expectations and triggered by supranational agreements, governments are changing their mode of operation to improve public service delivery, be more efficient and effective in their designs, and achieve objectives such as increased transparency, interoperability, or citizen satisfaction.",
+        "context_before": "Digital transformation approaches outside the public sector are changing citizens' expectations of governments' ability to deliver high-value, real-time digital services.",
+        "context_after": "However, beyond the availability of consultancy reports, there is little systematic insight into the way that public administrators themselves are currently defining digital transformation in their own day-to-day practices, how they are approaching digital transformation projects, and what their expected outcomes are."
+      }
+    ]
+  },
+  {
+    "field": "wirtschaft",
+    "doi": "https://doi.org/10.1186/s11782-020-00087-1",
+    "year": 2020,
+    "title": "The digitalization and public crisis responses of small and medium enterprises: Implications from a COVID-19 survey",
+    "picks": [
+      {
+        "sentence": "The empirical results show that digitalization has enabled SMEs to respond effectively to the public crisis by making use of their dynamic capabilities.",
+        "context_before": "Using a data set from a survey with 518 Chinese SMEs, the study examines the relationship between SMEs’ digitalization and their public crisis responses.",
+        "context_after": "We propose a theoretical framework of digitalization and crisis responses for SMEs and present three avenues for future research."
+      }
+    ]
+  },
+  {
+    "field": "wirtschaft",
+    "doi": "https://doi.org/10.1016/j.jbusres.2022.03.038",
+    "year": 2022,
+    "title": "Mastering digital transformation: The nexus between leadership, agility, and digital strategy",
+    "picks": [
+      {
+        "sentence": "We found that digital transformational leadership and organizational agility positively influence digital transformation, and digital transformational leadership influences organizational agility.",
+        "context_before": "Drawing upon new institutional theory, we developed and tested a model on how digital transformational leadership and organizational agility influence digital transformation with digital strategy as a moderator.",
+        "context_after": "The finding of our study also indicates organizational agility to mediate the relationship between digital transformational leadership and digital transformation."
+      }
+    ]
+  },
+  {
+    "field": "medizin",
+    "doi": "https://doi.org/10.1056/nejmoa1411587",
+    "year": 2014,
+    "title": "A Randomized Trial of Intraarterial Treatment for Acute Ischemic Stroke",
+    "picks": [
+      {
+        "sentence": "There were no significant differences in mortality or the occurrence of symptomatic intracerebral hemorrhage.",
+        "context_before": "There was an absolute difference of 13.5 percentage points (95% CI, 5.9 to 21.2) in the rate of functional independence (modified Rankin score, 0 to 2) in favor of the intervention (32.6% vs. 19.1%).",
+        "context_after": "CONCLUSIONS: In patients with acute ischemic stroke caused by a proximal intracranial occlusion of the anterior circulation, intraarterial treatment administered within 6 hours after stroke onset was effective and safe."
+      },
+      {
+        "sentence": "There was an absolute difference of 13.5 percentage points (95% CI, 5.9 to 21.2) in the rate of functional independence (modified Rankin score, 0 to 2) in favor of the intervention (32.6% vs. 19.1%).",
+        "context_before": "The adjusted common odds ratio was 1.67 (95% confidence interval [CI], 1.21 to 2.30).",
+        "context_after": "There were no significant differences in mortality or the occurrence of symptomatic intracerebral hemorrhage."
+      }
+    ]
+  },
+  {
+    "field": "medizin",
+    "doi": "https://doi.org/10.1056/nejmoa1511939",
+    "year": 2015,
+    "title": "A Randomized Trial of Intensive versus Standard Blood-Pressure Control",
+    "picks": [
+      {
+        "sentence": "CONCLUSIONS: Among patients at high risk for cardiovascular events but without diabetes, targeting a systolic blood pressure of less than 120 mm Hg, as compared with less than 140 mm Hg, resulted in lower rates of fatal and nonfatal major cardiovascular events and death from any cause, although significantly higher rates of some adverse events were observed in the intensive-treatment group.",
+        "context_before": "Rates of serious adverse events of hypotension, syncope, electrolyte abnormalities, and acute kidney injury or failure, but not of injurious falls, were higher in the intensive-treatment group than in the standard-treatment group.",
+        "context_after": "(Funded by the National Institutes of Health; ClinicalTrials.gov number, NCT01206062.)."
+      },
+      {
+        "sentence": "All-cause mortality was also significantly lower in the intensive-treatment group (hazard ratio, 0.73; 95% CI, 0.60 to 0.90; P=0.003).",
+        "context_before": "The intervention was stopped early after a median follow-up of 3.26 years owing to a significantly lower rate of the primary composite outcome in the intensive-treatment group than in the standard-treatment group (1.65% per year vs. 2.19% per year; hazard ratio with intensive treatment, 0.75; 95% confidence interval [CI], 0.64 to 0.89; P<0.001).",
+        "context_after": "Rates of serious adverse events of hypotension, syncope, electrolyte abnormalities, and acute kidney injury or failure, but not of injurious falls, were higher in the intensive-treatment group than in the standard-treatment group."
+      }
+    ]
+  },
+  {
+    "field": "medizin",
+    "doi": "https://doi.org/10.1056/nejmoa1414905",
+    "year": 2015,
+    "title": "Randomized Assessment of Rapid Endovascular Treatment of Ischemic Stroke",
+    "picks": [
+      {
+        "sentence": "The primary outcome favored the intervention (common odds ratio, 2.6; 95% confidence interval, 1.7 to 3.8; P<0.001), and the intervention was associated with reduced mortality (10.4%, vs. 19.0% in the control group; P=0.04).",
+        "context_before": "The rate of functional independence (90-day modified Rankin score of 0 to 2) was increased with the intervention (53.0%, vs. 29.3% in the control group; P<0.001).",
+        "context_after": "Symptomatic intracerebral hemorrhage occurred in 3.6% of participants in intervention group and 2.7% of participants in control group (P=0.75)."
+      },
+      {
+        "sentence": "CONCLUSIONS: Among patients with acute ischemic stroke with a proximal vessel occlusion, a small infarct core, and moderate-to-good collateral circulation, rapid endovascular treatment improved functional outcomes and reduced mortality.",
+        "context_before": "Symptomatic intracerebral hemorrhage occurred in 3.6% of participants in intervention group and 2.7% of participants in control group (P=0.75).",
+        "context_after": "(Funded by Covidien and others; ESCAPE ClinicalTrials.gov number, NCT01778335.)."
+      }
+    ]
+  },
+  {
+    "field": "medizin",
+    "doi": "https://doi.org/10.1056/nejmoa0802987",
+    "year": 2008,
+    "title": "Intensive Blood Glucose Control and Vascular Outcomes in Patients with Type 2 Diabetes",
+    "picks": [
+      {
+        "sentence": "CONCLUSIONS: A strategy of intensive glucose control, involving gliclazide (modified release) and other drugs as required, that lowered the glycated hemoglobin value to 6.5% yielded a 10% relative reduction in the combined outcome of major macrovascular and microvascular events, primarily as a consequence of a 21% relative reduction in nephropathy.",
+        "context_before": "Severe hypoglycemia, although uncommon, was more common in the intensive-control group (2.7%, vs. 1.5% in the standard-control group; hazard ratio, 1.86; 95% CI, 1.42 to 2.40; P<0.001).",
+        "context_after": ""
+      },
+      {
+        "sentence": "There were no significant effects of the type of glucose control on major macrovascular events (hazard ratio with intensive control, 0.94; 95% CI, 0.84 to 1.06; P=0.32), death from cardiovascular causes (hazard ratio with intensive control, 0.88; 95% CI, 0.74 to 1.04; P=0.12), or death from any cause (hazard ratio with intensive control, 0.93; 95% CI, 0.83 to 1.06; P=0.28).",
+        "context_before": "RESULTS: After a median of 5 years of follow-up, the mean glycated hemoglobin level was lower in the intensive-control group (6.5%) than in the standard-control group (7.3%).",
+        "context_after": "Severe hypoglycemia, although uncommon, was more common in the intensive-control group (2.7%, vs. 1.5% in the standard-control group; hazard ratio, 1.86; 95% CI, 1.42 to 2.40; P<0.001)."
+      }
+    ]
+  },
+  {
+    "field": "medizin",
+    "doi": "https://doi.org/10.1056/nejm199902113400601",
+    "year": 1999,
+    "title": "A Multicenter, Randomized, Controlled Clinical Trial of Transfusion Requirements in Critical Care",
+    "picks": [
+      {
+        "sentence": "The mortality rate during hospitalization was significantly lower in the restrictive-strategy group (22.3 percent vs. 28.1 percent, P=0.05).",
+        "context_before": "RESULTS: Overall, 30-day mortality was similar in the two groups (18.7 percent vs. 23.3 percent, P= 0.11).",
+        "context_after": "CONCLUSIONS: A restrictive strategy of red-cell transfusion is at least as effective as and possibly superior to a liberal transfusion strategy in critically ill patients, with the possible exception of patients with acute myocardial infarction and unstable angina."
+      },
+      {
+        "sentence": "RESULTS: Overall, 30-day mortality was similar in the two groups (18.7 percent vs. 23.3 percent, P= 0.11).",
+        "context_before": "BACKGROUND: To determine whether a restrictive strategy of red-cell transfusion and a liberal strategy produced equivalent results in critically ill patients, we compared the rates of death from all causes at 30 days and the severity of organ dysfunction.",
+        "context_after": "The mortality rate during hospitalization was significantly lower in the restrictive-strategy group (22.3 percent vs. 28.1 percent, P=0.05)."
+      }
+    ]
+  },
+  {
+    "field": "medizin",
+    "doi": "https://doi.org/10.1200/jco.2015.63.0830",
+    "year": 2015,
+    "title": "Symptom Monitoring With Patient-Reported Outcomes During Routine Cancer Treatment: A Randomized Controlled Trial",
+    "picks": [
+      {
+        "sentence": "RESULTS: Among 766 patients allocated, HRQL improved among more participants in the intervention group than usual care (34% v 18%) and worsened among fewer (38% v 53%; P < .001).",
+        "context_before": "Secondary endpoints included emergency room (ER) visits, hospitalizations, and survival.",
+        "context_after": "Overall, mean HRQL declined by less in the intervention group than usual care (1.4- v 7.1-point drop; P < .001)."
+      },
+      {
+        "sentence": "CONCLUSION: Clinical benefits were associated with symptom self-reporting during cancer care.",
+        "context_before": "Most patients receiving intervention (63%) reported severe symptoms during the study.",
+        "context_after": ""
+      }
+    ]
+  },
+  {
+    "field": "psychologie",
+    "doi": "https://doi.org/10.1080/10615806.2020.1800656",
+    "year": 2020,
+    "title": "Cognitive–behavioral intervention for test anxiety in adolescent students: do benefits extend to school-related wellbeing and clinical anxiety",
+    "picks": [
+      {
+        "sentence": "Clinical anxiety showed a small to moderate reduction following intervention compared to control group participants who showed a negligible reduction.",
+        "context_before": "Results: Test anxiety showed a large reduction following intervention compared to control group participants who showed a moderate reduction.",
+        "context_after": "The reduction in clinical anxiety was mediated by concurrent reductions in test anxiety."
+      },
+      {
+        "sentence": "Results: Test anxiety showed a large reduction following intervention compared to control group participants who showed a moderate reduction.",
+        "context_before": "A screening procedure was used to identify highly test anxious persons who were randomly allocated to intervention or wait-list control groups.",
+        "context_after": "Clinical anxiety showed a small to moderate reduction following intervention compared to control group participants who showed a negligible reduction."
+      }
+    ]
+  },
+  {
+    "field": "psychologie",
+    "doi": "https://doi.org/10.1136/bjsports-2011-090185",
+    "year": 2011,
+    "title": "Physical activity and mental health in children and adolescents: a review of reviews",
+    "picks": [
+      {
+        "sentence": "Reviews on physical activity and cognitive functioning have provided evidence that routine physical activity can be associated with improved cognitive performance and academic achievement, but these associations are usually small and inconsistent.",
+        "context_before": "Physical activity can lead to improvements in self-esteem, at least in the short term.",
+        "context_after": "Primary studies showed consistent negative associations between mental health and sedentary behaviour."
+      },
+      {
+        "sentence": "Physical activity interventions have been shown to have a small beneficial effect for reduced anxiety, but the evidence base is limited.",
+        "context_before": "Intervention designs are low in quality, and many reviews include cross-sectional studies.",
+        "context_after": "Physical activity can lead to improvements in self-esteem, at least in the short term."
+      }
+    ]
+  },
+  {
+    "field": "psychologie",
+    "doi": "https://doi.org/10.1146/annurev-clinpsy-032813-153734",
+    "year": 2014,
+    "title": "Advances in Cognitive Theory and Therapy: The Generic Cognitive Model",
+    "picks": [
+      {
+        "sentence": "The updated theoretical model provides a framework for addressing significant questions regarding the phenomenology of disorders not explained in previous iterations of the original model.",
+        "context_before": "The generic cognitive model represents a set of common principles that can be applied across the spectrum of psychological disorders.",
+        "context_after": "New additions to the theory include continuity of adaptive and maladaptive function, dual information processing, energizing of schemas, and attentional focus."
+      }
+    ]
+  },
+  {
+    "field": "soziologie",
+    "doi": "https://doi.org/10.1093/qje/qjx022",
+    "year": 2017,
+    "title": "The Growing Importance of Social Skills in the Labor Market*",
+    "picks": [
+      {
+        "sentence": "Math-intensive but less social jobs—including many STEM occupations—shrank by 3.3 percentage points over the same period.",
+        "context_before": "Between 1980 and 2012, jobs requiring high levels of social interaction grew by nearly 12 percentage points as a share of the U.S. labor force.",
+        "context_after": "Employment and wage growth were particularly strong for jobs requiring high levels of both math skill and social skills."
+      },
+      {
+        "sentence": "Between 1980 and 2012, jobs requiring high levels of social interaction grew by nearly 12 percentage points as a share of the U.S. labor force.",
+        "context_before": "",
+        "context_after": "Math-intensive but less social jobs—including many STEM occupations—shrank by 3.3 percentage points over the same period."
+      }
+    ]
+  },
+  {
+    "field": "soziologie",
+    "doi": "https://doi.org/10.1353/wp.2006.0022",
+    "year": 2005,
+    "title": "All for All: Equality, Corruption, and Social Trust",
+    "picks": [
+      {
+        "sentence": "Social trust will not increase because massive social inequality prevails, but the public policies that could remedy this situation cannot be established precisely because there is a genuine lack of trust.",
+        "context_before": "However, many countries with low levels of social trust and social capital may be stuck in what is known as a social trap .",
+        "context_after": "This lack of trust concerns both “other people” and the government institutions that are needed to implement universal policies."
+      }
+    ]
+  },
+  {
+    "field": "soziologie",
+    "doi": "https://doi.org/10.1057/s41599-017-0001-8",
+    "year": 2017,
+    "title": "Rethinking higher education and its relationship with social inequalities: past knowledge, present state and future potential",
+    "picks": [
+      {
+        "sentence": "The debate on the purpose of higher education is placed under the context of the most recent developments of increasing social inequalities in the western world and its relation to the mass model of higher education and the relevant policy decisions for a continuous increase in participation.",
+        "context_before": "This offers a new insight on how theories can inform policy making, through conceptual “bridging” and reconciliation.",
+        "context_after": "This article suggests that the current policy focus on labor market driven policies in higher education have led to an ever growing competition transforming this social institution to an ordinary market-place, where attainment and degrees are seen as a currency that can be converted to a labour market value."
+      },
+      {
+        "sentence": "Since, higher education cannot be seen as detached from all other lower levels of education appropriate conceptual links are offered throughout this article.",
+        "context_before": "Various pedagogical traditions are critically reviewed and used as examples, which can potentially inform today’s policy making.",
+        "context_after": "Its significance lies on the organic synthesis of literature across social science, suggesting ways of going forward based on the traditions that already exist but seem underutilized so far because of overdependence in market-driven practices."
+      }
+    ]
+  },
+  {
+    "field": "paedagogik",
+    "doi": "https://doi.org/10.1207/s15326985ep3702_4",
+    "year": 2002,
+    "title": "Academic Emotions in Students' Self-Regulated Learning and Achievement: A Program of Qualitative and Quantitative Research",
+    "picks": [
+      {
+        "sentence": "The findings indicate that affective research in educational psychology should acknowledge emotional diversity in academic settings by addressing the full range of emotions experienced by students at school and university.",
+        "context_before": "Results showed that academic emotions are significantly related to students' motivation, learning strategies, cognitive resources, self-regulation, and academic achievement, as well as to personality and classroom antecedents.",
+        "context_after": ""
+      },
+      {
+        "sentence": "Results showed that academic emotions are significantly related to students' motivation, learning strategies, cognitive resources, self-regulation, and academic achievement, as well as to personality and classroom antecedents.",
+        "context_before": "Using the AEQ, assumptions of a cognitive-motivational model of the achievement effects of emotions, and of a control/value theory of their antecedents (Pekrun, 1992b, 2000), were tested in 7 cross-sectional, 3 longitudinal, and 1 diary study using samples of university and school students.",
+        "context_after": "The findings indicate that affective research in educational psychology should acknowledge emotional diversity in academic settings by addressing the full range of emotions experienced by students at school and university."
+      }
+    ]
+  },
+  {
+    "field": "paedagogik",
+    "doi": "https://doi.org/10.1073/pnas.1916903117",
+    "year": 2020,
+    "title": "Active learning narrows achievement gaps for underrepresented students in undergraduate science, technology, engineering, and math",
+    "picks": [
+      {
+        "sentence": "Our results support calls to replace traditional lecturing with evidence-based, active-learning course designs across the STEM disciplines and suggest that innovations in instructional strategies can increase equity in higher education.",
+        "context_before": "To explain the extensive variation in efficacy observed among studies, we propose the heads-and-hearts hypothesis, which holds that meaningful reductions in achievement gaps only occur when course designs combine deliberate practice with inclusive teaching.",
+        "context_after": ""
+      },
+      {
+        "sentence": "To explain the extensive variation in efficacy observed among studies, we propose the heads-and-hearts hypothesis, which holds that meaningful reductions in achievement gaps only occur when course designs combine deliberate practice with inclusive teaching.",
+        "context_before": "Sensitivity analyses showed that the conclusions are robust to sampling bias and other issues.",
+        "context_after": "Our results support calls to replace traditional lecturing with evidence-based, active-learning course designs across the STEM disciplines and suggest that innovations in instructional strategies can increase equity in higher education."
+      }
+    ]
+  },
+  {
+    "field": "paedagogik",
+    "doi": "https://doi.org/10.1111/jcal.12347",
+    "year": 2019,
+    "title": "Effects of game‐based learning on students' mathematics achievement: A meta‐analysis",
+    "picks": [
+      {
+        "sentence": "Using a random effects model, a small but marginally significant overall effect ( ) suggested that mathematics video games contributed to higher learning gains as compared with traditional instructional methods.",
+        "context_before": "Results from the 24 collected studies showed heterogeneity among effect sizes, both in magnitude and direction.",
+        "context_after": "In addition, moderator analyses were mixed in terms of statistical significance and explored effect‐size heterogeneity across effects using grade level, instrument type, length of game‐based intervention, country, publication type, and study year characteristics."
+      },
+      {
+        "sentence": "Overall findings indicate that video games are a slightly effective instructional strategy for teaching mathematics across PreK‐12th‐grade levels.",
+        "context_before": "In addition, moderator analyses were mixed in terms of statistical significance and explored effect‐size heterogeneity across effects using grade level, instrument type, length of game‐based intervention, country, publication type, and study year characteristics.",
+        "context_after": ""
+      }
+    ]
+  },
+  {
+    "field": "umwelt",
+    "doi": "https://doi.org/10.1016/j.gloenvcha.2013.12.002",
+    "year": 2014,
+    "title": "Reconceptualising adaptation to climate change as part of pathways of change and response",
+    "picks": [
+      {
+        "sentence": "We found that the nature and effectiveness of responses was strongly influenced by framing.",
+        "context_before": "Moreover, implemented actions have been mostly incremental and focused on proximate causes; there are far fewer reports of more systemic or transformative actions.",
+        "context_after": "Recent decision-oriented approaches that aim to overcome this situation are framed within a “pathways” metaphor to emphasise the need for robust decision making within adaptive processes in the face of uncertainty and inter-temporal complexity."
+      }
+    ]
+  },
+  {
+    "field": "umwelt",
+    "doi": "https://doi.org/10.1016/j.jclepro.2019.119154",
+    "year": 2019,
+    "title": "Environmental and climate policy integration: Targeted strategies for overcoming barriers to nature-based solutions and climate change adaptation",
+    "picks": [
+      {
+        "sentence": "The results show the numerous constraints municipal staff face and how they use targeted strategies to overcome them and tap into existing drivers.",
+        "context_before": "A city-to-city learning lab was established to systematically analyze selected urban development projects step-by-step, from the initial idea, to comprehensive and detailed planning, procurement, implementation, maintenance and follow-up.",
+        "context_after": "We identify five, complementary strategies: i) targeted stakeholder collaboration; ii) strategic citizen involvement; iii) outsourcing; iv) the alteration of internal working structures; and v) concealed science–policy integration."
+      }
+    ]
+  },
+  {
+    "field": "umwelt",
+    "doi": "https://doi.org/10.1016/j.progress.2013.08.001",
+    "year": 2014,
+    "title": "Climate change and the city: Building capacity for urban adaptation",
+    "picks": [
+      {
+        "sentence": "The significant shifts in climate variables projected for the 21st century, coupled with the observed impacts of ongoing extreme weather and climate events, ensures that adaptation to climate change is set to remain a pressing issue for urban areas over the coming decades.",
+        "context_before": "",
+        "context_after": "This volume of Progress in Planning seeks to contribute to the widening debate about how the transformation of cities to respond to the changing climate is being understood, managed and achieved."
+      }
+    ]
+  },
+  {
+    "field": "umwelt",
+    "doi": "https://doi.org/10.1186/s40066-017-0100-1",
+    "year": 2017,
+    "title": "Smallholder farmers’ adaptation to climate change and determinants of their adaptation decisions in the Central Rift Valley of Ethiopia",
+    "picks": [
+      {
+        "sentence": "The results show that 90% of farmers have already perceived climate variability, and 85% made attempts to adapt using practices like crop diversification, planting date adjustment, soil and water conservation and management, increasing the intensity of input use, integrating crop with livestock, and tree planting.",
+        "context_before": "Both primary and secondary data were used for the study, and a multinomial logit model was employed to identify the factors that shape smallholder farmers’ adaptation strategies.",
+        "context_after": "The econometric model indicated that education, family size, gender, age, livestock ownership, farming experience, frequency of contact with extension agents, farm size, access to market, access to climate information and income were the key factors determining farmers’ choice of adaptation practice."
+      }
+    ]
+  },
+  {
+    "field": "informatik",
+    "doi": "https://doi.org/10.1109/tsg.2017.2720471",
+    "year": 2017,
+    "title": "A Survey of Distributed Optimization and Control Algorithms for Electric Power Systems",
+    "picks": [
+      {
+        "sentence": "With increasing penetrations of distributed energy resources requiring optimization and control of power systems with many controllable devices, distributed algorithms have been the subject of significant research interest.",
+        "context_before": "Historically, centrally computed algorithms have been the primary means of power system optimization and control.",
+        "context_after": "This paper surveys the literature of distributed algorithms with applications to optimization and control of power systems."
+      }
+    ]
+  },
+  {
+    "field": "informatik",
+    "doi": "https://doi.org/10.1145/311531.311532",
+    "year": 1999,
+    "title": "Fundamentals of fault-tolerant distributed computing in asynchronous environments",
+    "picks": [
+      {
+        "sentence": "Fault tolerance in distributed computing is a wide area with a significant body of literature that is vastly diverse in methodology and terminology.",
+        "context_before": "",
+        "context_after": "This paper aims at structuring the area and thus guiding readers into this interesting field."
+      }
+    ]
+  },
+  {
+    "field": "informatik",
+    "doi": "https://doi.org/10.1109/tc.2004.1261838",
+    "year": 2004,
+    "title": "Fault tolerance in collaborative sensor networks for target detection",
+    "picks": [
+      {
+        "sentence": "When comparing their performance and communication overhead, decision fusion is found to become superior to value fusion as the ratio of faulty sensors to fault free sensors increases.",
+        "context_before": "We focus on finding algorithms for collaborative target detection that are efficient in terms of communication cost, precision, accuracy, and number of faulty sensors tolerable in the network.",
+        "context_after": "As robust data fusion requires agreement among nodes in the network, an analysis of fully distributed and hierarchical agreement is also presented."
+      }
+    ]
+  },
+  {
+    "field": "public-health",
+    "doi": "https://doi.org/10.3322/caac.20107",
+    "year": 2011,
+    "title": "Global cancer statistics",
+    "picks": [
+      {
+        "sentence": "The global burden of cancer continues to increase largely because of the aging and growth of the world population alongside an increasing adoption of cancer-causing behaviors, particularly smoking, in economically developing countries.",
+        "context_before": "",
+        "context_after": "Based on the GLOBOCAN 2008 estimates, about 12.7 million cancer cases and 7.6 million cancer deaths are estimated to have occurred in 2008; of these, 56% of the cases and 64% of the deaths occurred in the economically developing world."
+      }
+    ]
+  },
+  {
+    "field": "public-health",
+    "doi": "https://doi.org/10.1016/j.vaccine.2020.12.083",
+    "year": 2021,
+    "title": "Acceptance of the COVID-19 vaccine based on the health belief model: A population-based survey in Hong Kong",
+    "picks": [
+      {
+        "sentence": "CONCLUSIONS: Governmental recommendation is an important driver, whereas perceived susceptibility is not associated with acceptance of COVID-19 vaccine.",
+        "context_before": "Other key obstacles of acceptance included lack of confidence on newer vaccine platforms (43.4%) and manufacturers without track record (52.2%), which are of particular relevance to the current context.",
+        "context_after": "These HBM constructs and independent predictors inform evidence-based formulation and implementation of vaccination strategies."
+      },
+      {
+        "sentence": "Remarkably, perceived susceptibility to infection carried no significant association, whereas recommendation from Government (aOR = 10.2, 95% C.I. 6.54 to 15.9, p < 0.001) was as the strongest driving factor for acceptance.",
+        "context_before": "Multivariable regression analyses revealed that perceived severity, perceived benefits of the vaccine, cues to action, self-reported health outcomes, and trust in healthcare system or vaccine manufacturers were positive correlates of acceptance; whilst perceived access barriers and harm were negative correlates.",
+        "context_after": "Other key obstacles of acceptance included lack of confidence on newer vaccine platforms (43.4%) and manufacturers without track record (52.2%), which are of particular relevance to the current context."
+      }
+    ]
+  },
+  {
+    "field": "public-health",
+    "doi": "https://doi.org/10.1016/j.vaccine.2015.11.065",
+    "year": 2015,
+    "title": "The 5As: A practical taxonomy for the determinants of vaccine uptake",
+    "picks": [
+      {
+        "sentence": "A recent progress review of the Global Vaccine Action Plan stated that \"countries should urgently identify barriers and bottlenecks and implement targeted approaches to increase and sustain coverage\".",
+        "context_before": "Suboptimal vaccine uptake in both childhood and adult immunisation programs limits their full potential impact on global health.",
+        "context_after": "However, vaccination coverage may be determined by a complex mix of demographic, structural, social and behavioral factors."
+      }
+    ]
+  },
+  {
+    "field": "public-health",
+    "doi": "https://doi.org/10.1016/j.eclinm.2020.100495",
+    "year": 2020,
+    "title": "Determinants of COVID-19 vaccine acceptance in the US",
+    "picks": [
+      {
+        "sentence": "Lastly, we identified geographic differences with Department of Health and Human Services (DHHS) regions 2 (New York) and 5 (Chicago) reporting less than 50 percent COVID-19 vaccine acceptance.",
+        "context_before": "Males (72%) compared to females, older adults (≥55 years; 78%) compared to younger adults, Asians (81%) compared to other racial and ethnic groups, and college and/or graduate degree holders (75%) compared to people with less than a college degree were more likely to accept the vaccine.",
+        "context_after": "INTERPRETATION: Although our study found a 67% acceptance of a COVID-19 vaccine, there were noticeable demographic and geographical disparities in vaccine acceptance."
+      }
+    ]
+  },
+  {
+    "field": "public-health",
+    "doi": "https://doi.org/10.1186/s12889-021-10862-1",
+    "year": 2021,
+    "title": "Individual and social determinants of COVID-19 vaccine uptake",
+    "picks": [
+      {
+        "sentence": "Risk perceptions (severity of and susceptibility to COVID-19) were significantly associated with vaccine uptake.",
+        "context_before": "RESULTS: The results indicated that 68 and 65% agreed to get the vaccine for themselves and people under their care, respectively.",
+        "context_after": "People who relied on \"conservative\" news outlets, Republicans, and who had low confidence in scientists are least likely to vaccinate self or children."
+      },
+      {
+        "sentence": "We examined the individual, communication and social determinants associated with vaccines uptake.",
+        "context_before": "The growing problem of vaccine hesitancy may affect the uptake of COVID-19 vaccine.",
+        "context_after": "METHODS: Data come from a nationwide online probability-based panel of 1012 representative adults in the United States and the survey was conducted before the vaccines were available."
+      }
+    ]
+  }
+]

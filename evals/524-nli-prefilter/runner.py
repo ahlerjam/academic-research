@@ -38,7 +38,6 @@ ueberhaupt, oder ist das Ergebnis bloss Zufall?
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -46,12 +45,15 @@ from typing import Any, Protocol
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CASES_PATH = Path(__file__).parent / "cases.json"
+EXTENDED_CASES_PATH = Path(__file__).parent / "extended-cases.json"
 
 sys.path.insert(0, str(REPO_ROOT))
 from academic_vault.nli_prefilter import (  # noqa: E402
     MDebertaScorer,
-    build_premise as _build_premise_ctx,
     default_cache_dir,
+)
+from academic_vault.nli_prefilter import (  # noqa: E402
+    build_premise as _build_premise_ctx,
 )
 
 ENV_CACHE_DIR = "NLI_PREFILTER_MODEL_CACHE"
@@ -121,6 +123,13 @@ class HhemScorer:
 
 def _load_cases() -> list[dict]:
     return json.loads(CASES_PATH.read_text(encoding="utf-8"))["cases"]
+
+
+def load_extended_cases() -> list[dict]:
+    """Laedt das erweiterte Goldset (Issue #721, 186 Faelle, 30 echte Paper
+    ueber acht Fachrichtungen). Wiederverwendbar aus Tests und aus dem
+    A/B-Vergleichsskript (``run_big.py``); kein zweiter Loader noetig."""
+    return json.loads(EXTENDED_CASES_PATH.read_text(encoding="utf-8"))["cases"]
 
 
 def _score_model(scorer: NliScorer, cases: list[dict]) -> dict:
