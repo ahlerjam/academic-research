@@ -1,7 +1,7 @@
 ---
 description: Score and rank literature with 5D scoring system (Relevance, Recency, Quality, Authority, Accessibility)
 disable-model-invocation: true
-allowed-tools: Read, Agent(relevance-scorer)
+allowed-tools: Read, Agent(relevance-scorer), Bash(~/.academic-research/venv/bin/python *)
 argument-hint: [papers.json] [--query "..."] [--mode standard]
 ---
 
@@ -21,11 +21,11 @@ Papers mithilfe des `relevance-scorer`-Agents neu scoren und ranken. Der Agent b
 |-----------|---------|--------|
 | Relevanz | 0.35 | `relevance-scorer`-Agent (Titel + Abstract-Match) |
 | Aktualität | 0.20 | 5-Jahre-Halbwertszeit-Decay, berechnet aus `year`-Feld |
-| Qualität | 0.15 | Zitationen pro Jahr mit Log-Skalierung, aus `citation_count` |
+| Qualität | 0.15 | Zitationen pro Jahr mit Log-Skalierung, aus `citations` |
 | Autorität | 0.15 | Venue-Heuristik aus `venue`/`source`-Feld |
 | Zugang | 0.15 | Open Access > Institutional > DOI > URL > Nichts |
 
-Die vier Nicht-Relevanz-Dimensionen werden direkt in der Command-Logik als arithmetische Funktionen berechnet (siehe Gewichtungen). Keine Python-Pipeline.
+Die vier Nicht-Relevanz-Dimensionen werden von `scripts/scoring.py` berechnet (reproduzierbar, mit Tests in `tests/test_scoring.py`), nicht vom Modell im Kopf ausgerechnet.
 
 ## Cluster
 
@@ -60,20 +60,20 @@ Papers in Batches à 10 an den `relevance-scorer`-Agent schicken. Input pro Batc
 
 Output-Feld `relevance_score` je Paper als 0.0–1.0-Float einsammeln.
 
-### Schritt 3: 4 weitere Dimensionen berechnen
+### Schritt 3+4: 4 weitere Dimensionen berechnen und Gesamtscore bilden
 
-Je Paper:
+Je Paper `scripts/scoring.py` aufrufen — das Skript berechnet Aktualität,
+Qualität, Autorität und Zugang (siehe Tabelle oben für die Formeln) und
+summiert sie gewichtet mit der vom Agenten gelieferten Relevanz zum
+Gesamtscore:
 
-- `recency = exp(-ln(2) * (current_year - year) / 5)` — exponentieller Decay, 5-Jahres-Halbwertszeit
-- `quality = min(log10(citations / max(1, years_since_pub) + 1) / 2, 1.0)` — Log-skalierte Zitationen pro Jahr
-- `authority` = 1.0 für bekannte Top-Venues (IEEE, ACM, Springer, Nature, Elsevier), 0.7 für indexierte Journals, 0.4 für Konferenzen, 0.2 sonst
-- `access` = 1.0 für Open Access, 0.8 für DOI mit Institutional Access, 0.5 für nur DOI, 0.2 für nur URL
-
-### Schritt 4: Gesamtscore und Cluster
-
+```bash
+~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/scoring.py \
+  '{"year": 2023, "citations": 50, "venue": "IEEE Transactions on Software Engineering", "oa_url": "https://arxiv.org/..."}' \
+  0.9
 ```
-total = 0.35 * relevance + 0.20 * recency + 0.15 * quality + 0.15 * authority + 0.15 * access
-```
+
+Ausgabe (stdout): der Gesamtscore als Float, z. B. `0.8404873871933739`.
 
 Cluster gemäß Threshold-Tabelle oben zuordnen.
 
