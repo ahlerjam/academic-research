@@ -29,6 +29,7 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "openpyxl" },
+    { name = "pdfplumber" },
     { name = "pypdf" },
     { name = "python-barcode", extra = ["images"] },
     { name = "python-docx" },
@@ -58,9 +59,6 @@ rerank-cloud = [
     { name = "cohere" },
     { name = "voyageai" },
 ]
-tables = [
-    { name = "pdfplumber" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -73,7 +71,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = "==2.3.0" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openpyxl", specifier = ">=3.1.5" },
-    { name = "pdfplumber", marker = "extra == 'tables'", specifier = ">=0.11" },
+    { name = "pdfplumber", specifier = ">=0.11" },
     { name = "pypdf", specifier = ">=4.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0" },
