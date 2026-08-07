@@ -721,7 +721,7 @@ def add_chunk_fts(db_path: str) -> None:
         try:
             conn.execute(
                 "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts "
-                "USING fts5(chunk_id, paper_id, chunk_text, content=chunk_embeddings, content_rowid=rowid)"
+                "USING fts5(chunk_id, paper_id, chunk_text)"
             )
             conn.execute(
                 """

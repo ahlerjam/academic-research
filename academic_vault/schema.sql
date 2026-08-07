@@ -444,9 +444,7 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
 CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
   chunk_id,
   paper_id,
-  chunk_text,
-  content=chunk_embeddings,
-  content_rowid=rowid
+  chunk_text
 );
 
 -- FTS5-Trigger: befuellen chunk_fts manuell. Bewusst DROP + CREATE statt
