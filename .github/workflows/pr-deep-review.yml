@@ -305,9 +305,44 @@ jobs:
           # untouched files is out of scope and the dominant false-positive
           # source (it falsely escalates criticalPaths symbols to P1).
           DEAD_PATHS="$(jq -r '.deadCodePaths | if length == 0 then ["."] else . end | join(" ")' .github/flowkit-review.json)"
-          uv run vulture $DEAD_PATHS \
+          # stdout = Funde (speisen den Reviewer), stderr = Eingabefehler.
+          # Beide MUESSEN getrennt bleiben, siehe Exit-Code-Kommentar unten.
+          # '--quiet' unterdrueckt uv-eigene Fortschrittsmeldungen ("Installed N
+          # packages ..."), die uv sonst nach stderr schreibt und die die
+          # stderr-Pruefung unten faelschlich ausloesen wuerden. Echte uv-Fehler
+          # bleiben sichtbar (nur '-qq' waere zu still).
+          set +e
+          uv run --quiet vulture $DEAD_PATHS \
             --min-confidence 80 \
-            > "$RUNNER_TEMP/vulture.txt" 2>&1 || true
+            > "$RUNNER_TEMP/vulture.txt" 2> "$RUNNER_TEMP/vulture_stderr.txt"
+          VULTURE_EXIT=$?
+          set -e
+          # vulture exit codes (per upstream docs): 0 = kein Fund, 3 = toter Code
+          # gefunden (erwarteter Normalfall, Skript laeuft weiter). Alles andere
+          # (1 = ungueltige Eingabe/Syntaxfehler, 2 = ungueltige CLI-Argumente)
+          # ist ein echter Tool-Fehlschlag und darf nicht verschluckt werden.
+          #
+          # ACHTUNG: der Exit-Code allein reicht als Fehlersignal NICHT.
+          # vulture/core.py::report() setzt fuer jeden gemeldeten Fund
+          # bedingungslos ExitCode.DeadCode (3) und ueberschreibt damit ein
+          # zuvor in scan()/scavenge() gesetztes ExitCode.InvalidInput (1) —
+          # egal in welcher Datei der Eingabefehler auftrat. Da deadCodePaths
+          # dauerhaft mindestens einen Fund oberhalb der Schwelle enthaelt,
+          # waere der Exit-Code hier faktisch auf 3 festgenagelt und die
+          # Pruefung unten wirkungslos. vulture schreibt aber JEDEN echten
+          # Eingabefehler (Syntaxfehler, Null-Bytes, nicht lesbare Datei,
+          # Config-Fehler) nach stderr — deshalb gilt zusaetzlich: jede
+          # stderr-Ausgabe ist ein Fehlschlag.
+          if [ "$VULTURE_EXIT" -ne 0 ] && [ "$VULTURE_EXIT" -ne 3 ]; then
+            echo "::error::vulture ist mit Exit-Code $VULTURE_EXIT fehlgeschlagen (kein regulaerer Dead-Code-Fund):"
+            cat "$RUNNER_TEMP/vulture_stderr.txt" "$RUNNER_TEMP/vulture.txt"
+            exit 1
+          fi
+          if [ -s "$RUNNER_TEMP/vulture_stderr.txt" ]; then
+            echo "::error::vulture konnte Eingaben nicht auswerten (Exit-Code $VULTURE_EXIT wurde durch regulaere Dead-Code-Funde maskiert):"
+            cat "$RUNNER_TEMP/vulture_stderr.txt"
+            exit 1
+          fi
           uv run ruff check --select F401 $DEAD_PATHS \
             --output-format json > "$RUNNER_TEMP/ruff_f401.json" 2>/dev/null || true
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
