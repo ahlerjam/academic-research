@@ -31,6 +31,10 @@ CASES_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "cases.json"
 REAL_CASES_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "real-cases.json"
 REAL_RESULTS_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "real-validation-results.json"
 NLI_README_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "README.md"
+EXTENDED_CASES_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "extended-cases.json"
+FETCH_ABSTRACTS_PATH = REPO_ROOT / "evals" / "524-nli-prefilter" / "fetch_abstracts.py"
+EXTENDED_REPORT_PATH = REPO_ROOT / "docs" / "evals" / "2026-08-06-extended-nli-goldset-721.md"
+BGE_M3_REPORT_PATH = REPO_ROOT / "docs" / "evals" / "2026-08-07-bge-m3-nli-scorer-720.md"
 
 RUN_LIVE_ENV = "RUN_LIVE_NLI_PREFILTER"
 
@@ -230,3 +234,246 @@ def test_real_validation_documents_threshold_decision_when_fp_is_positive():
     else:
         # FP = 0: trotzdem muss eine (ggf. vorsichtige) Empfehlung stehen.
         assert "Einschalt-Empfehlung" in readme
+
+
+# ---------------------------------------------------------------------------
+# Erweitertes Goldset (Issue #721): 186 Faelle, 30 echte Paper, acht Faecher
+# -- laeuft IMMER, ohne Netz: prueft nur das committete Artefakt.
+# ---------------------------------------------------------------------------
+
+EXTENDED_VERZERREND_TYPES = {
+    "overgeneralization",
+    "condition-stripped",
+    "causal-overreach",
+    "magnitude-inflation",
+    "significance-flip",
+}
+
+
+@pytest.fixture(scope="module")
+def extended_cases() -> list[dict]:
+    return json.loads(EXTENDED_CASES_PATH.read_text(encoding="utf-8"))["cases"]
+
+
+def test_extended_cases_has_exactly_186_entries(extended_cases):
+    assert len(extended_cases) == 186, (
+        f"AC verlangt 186 Faelle (30 Paper, 8 Faecher), gefunden: {len(extended_cases)}."
+    )
+
+
+def test_extended_cases_have_real_cases_field_structure(extended_cases):
+    required = {
+        "id",
+        "claim_lang",
+        "context_lang",
+        "verzerrend_type",
+        "chapter_claim",
+        "context_before",
+        "verbatim",
+        "context_after",
+        "label",
+    }
+    for case in extended_cases:
+        missing = required - set(case)
+        assert not missing, f"{case.get('id')}: fehlende Felder {missing}."
+        assert case["claim_lang"] == "de"
+        assert case["context_lang"] == "en"
+        assert case["chapter_claim"].strip()
+        assert case["verbatim"].strip()
+
+
+def test_extended_cases_are_traceable_via_doi(extended_cases):
+    """AC2: jeder Fall ist ueber DOI auf sein Quellpaper rueckfuehrbar."""
+    for case in extended_cases:
+        source = case.get("source")
+        assert source, f"{case['id']}: source-Feld fehlt."
+        doi = source.get("doi", "")
+        assert doi.startswith("https://doi.org/"), f"{case['id']}: source.doi ungueltig ({doi!r})."
+
+
+def test_extended_cases_ids_are_unique(extended_cases):
+    ids = [c["id"] for c in extended_cases]
+    assert len(ids) == len(set(ids)), "Case-IDs muessen eindeutig sein."
+
+
+def test_extended_cases_label_balance_is_92_faithful_94_verzerrend(extended_cases):
+    faithful = sum(1 for c in extended_cases if c["label"] == "faithful")
+    verzerrend = sum(1 for c in extended_cases if c["label"] == "verzerrend")
+    assert (faithful, verzerrend) == (92, 94), (
+        f"Balance laut Issue #721: 92 faithful / 94 verzerrend, gefunden: "
+        f"{faithful} faithful / {verzerrend} verzerrend."
+    )
+
+
+def test_extended_cases_cover_all_five_verzerrend_types(extended_cases):
+    """AC: hermetischer Strukturtest prueft die Abdeckung aller fuenf
+    Verzerrungstypen (eigenes Vokabular, getrennt vom 4-Typen-Schema aus
+    cases.json/real-cases.json -- Risiko 4 im Plan)."""
+    seen = {c["verzerrend_type"] for c in extended_cases if c["label"] == "verzerrend"}
+    assert seen == EXTENDED_VERZERREND_TYPES, (
+        f"Erwartet alle fuenf Typen, gefunden: {sorted(seen)}."
+    )
+    for vtype in EXTENDED_VERZERREND_TYPES:
+        count = sum(1 for c in extended_cases if c["verzerrend_type"] == vtype)
+        assert count > 0, f"Verzerrungstyp {vtype!r} kommt kein einziges Mal vor."
+    for case in extended_cases:
+        if case["label"] == "faithful":
+            assert case["verzerrend_type"] is None, f"{case['id']}: faithful-Fall traegt einen Typ."
+
+
+def test_fetch_abstracts_script_present_in_repo():
+    """AC: der OpenAlex-Abrufweg ist als Skript im Repo, nicht nur als
+    Issue-Kommentar-Rohtext."""
+    assert FETCH_ABSTRACTS_PATH.exists(), f"Skript fehlt: {FETCH_ABSTRACTS_PATH}"
+    text = FETCH_ABSTRACTS_PATH.read_text(encoding="utf-8")
+    assert "api.openalex.org" in text
+    assert "def reconstruct" in text
+
+
+def test_fetch_abstracts_reconstruct_is_hermetic():
+    """Prueft reconstruct() (OpenAlex-Inverted-Index -> Fliesstext) gegen ein
+    kleines Fixture-Dict -- kein Live-Netzaufruf im Gate."""
+    # fetch_abstracts.py fuehrt beim Modul-Import den eigentlichen
+    # Netzabruf aus (Skriptkoerper, kein `if __name__ == "__main__"`-Gate)
+    # -- ein exec_module() wuerde ihn ausloesen. Stattdessen wird das Modul
+    # textuell nach der reinen Funktion durchsucht und isoliert ausgefuehrt.
+    import ast
+
+    tree = ast.parse(FETCH_ABSTRACTS_PATH.read_text(encoding="utf-8"))
+    func_source = None
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "reconstruct":
+            func_source = ast.get_source_segment(
+                FETCH_ABSTRACTS_PATH.read_text(encoding="utf-8"), node
+            )
+            break
+    assert func_source is not None, "reconstruct() nicht gefunden."
+    namespace: dict = {}
+    exec(func_source, namespace)  # noqa: S102 -- isolierte, hermetische Funktionsdefinition
+    reconstruct = namespace["reconstruct"]
+
+    inv = {"Hello": [0], "world": [1], "again": [2]}
+    assert reconstruct(inv) == "Hello world again"
+    assert reconstruct({}) == ""
+    assert reconstruct(None) == ""
+
+
+def test_extended_report_documents_construction_rule_and_boundary():
+    """AC: Eval-Report haelt fest, dass Labels aus Transformationsregeln
+    stammen (nicht Einzelurteil), und benennt die Grenze: konstruierte
+    Verzerrungen != im Feld beobachtete."""
+    assert EXTENDED_REPORT_PATH.exists(), f"Eval-Report fehlt: {EXTENDED_REPORT_PATH}"
+    report = EXTENDED_REPORT_PATH.read_text(encoding="utf-8")
+    assert "Transformationsregel" in report or "Konstruktionsregel" in report
+    assert "konstruiert" in report.lower()
+    assert "im Feld beobachtet" in report or "im Feld beobachteten" in report
+
+
+# ---------------------------------------------------------------------------
+# Live-Reproduktion der #720-Schwellenkurve (278 Faelle, 32+60+186) -- nur
+# mit RUN_LIVE_NLI_PREFILTER=1 (Netz + Modell-Download).
+# ---------------------------------------------------------------------------
+
+
+# BgeM3ZeroshotScorer ist seit Issue #720 kanonisch in
+# academic_vault.nli_prefilter (Produktivmodell) -- hier kein zweiter
+# Prototyp mehr (Konsolidierung, Plan-Risiko 1 aus #720).
+
+
+def test_run_eval_all_278_cases_accepts_injected_scorers(runner):
+    """AC3 (hermetischer Teil): der Runner kann Modelle ueber alle 278
+    Faelle aus den drei Goldsets vergleichen. Injizierte Stub-Scorer statt
+    echter Modelle -- kein Netz, prueft nur die Runner-Verdrahtung. Die
+    tatsaechliche Zahlenreproduktion deckt der Live-Test unten ab."""
+
+    class _StubScorer:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def predict(self, premise: str, hypothesis: str) -> tuple[str, float]:
+            return "verzerrend", 0.1
+
+    summary = runner.run_eval_all_278_cases(scorers=[_StubScorer("stub-a"), _StubScorer("stub-b")])
+    assert len(summary["cases"]) == 278
+    assert {m["model"] for m in summary["models"]} == {"stub-a", "stub-b"}
+    for model_result in summary["models"]:
+        assert len(model_result["details"]) == 278
+
+
+@pytest.fixture(scope="module")
+def all_278_cases(cases, real_cases, extended_cases) -> list[dict]:
+    return list(cases) + list(real_cases) + list(extended_cases)
+
+
+# ---------------------------------------------------------------------------
+# Eval-Report #720 (Modellwechsel bge-m3-zeroshot-v2.0) -- laeuft IMMER, ohne
+# Netz: prueft nur das committete Report-Artefakt (Vorbild:
+# test_extended_report_documents_construction_rule_and_boundary oben).
+# ---------------------------------------------------------------------------
+
+
+def test_bge_m3_report_documents_model_and_threshold():
+    assert BGE_M3_REPORT_PATH.exists(), f"Eval-Report fehlt: {BGE_M3_REPORT_PATH}"
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "bge-m3-zeroshot-v2.0" in report
+    assert "0,95" in report
+
+
+def test_bge_m3_report_describes_prefilter_as_prioritizer_not_gatekeeper():
+    """AC: Doku beschreibt den Scan als Priorisierer, nicht als Torwaechter."""
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "Priorisierer" in report
+    assert "Torwächter" in report or "Torwaechter" in report
+
+
+def test_bge_m3_report_names_condition_stripped_weakness_with_rate_and_reason():
+    """AC: condition-stripped-Schwaeche mit gemessener Rate + struktureller
+    Begruendung (nicht durch Modellwahl behebbar)."""
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "condition-stripped" in report
+    assert "8/16" in report  # gemessene Rate bei Schwelle 0.80
+    assert "strukturell" in report.lower()
+
+
+def test_bge_m3_report_documents_both_rejected_approaches_with_numbers():
+    """AC: beide verworfenen Ansaetze (lexikalischer Restriktor, bidirektionales
+    NLI) stehen mit ihren Zahlen im Report."""
+    report = BGE_M3_REPORT_PATH.read_text(encoding="utf-8")
+    assert "Restriktor" in report
+    assert "3 zusätzlich gefangene" in report or "3 zusaetzlich gefangene" in report
+    assert "bidirektional" in report.lower()
+    assert "14 neue" in report
+
+
+def test_live_threshold_curve_matches_720_report(runner, all_278_cases):
+    """AC4: der bestehende Runner laeuft gegen das neue Set und reproduziert
+    die in #720 dokumentierten Zahlen -- Schwelle 0,95 ueber alle 278 Faelle:
+    bge-m3-zeroshot 1 Durchrutscher, mDeBERTa-XNLI 10 Durchrutscher."""
+    if os.environ.get(RUN_LIVE_ENV) != "1":
+        pytest.skip(
+            f"Live-Schwellenkurve uebersprungen (Modell-Download braucht Netz). "
+            f"Mit {RUN_LIVE_ENV}=1 pytest ausfuehren."
+        )
+
+    from academic_vault.nli_prefilter import BgeM3ZeroshotScorer, MDebertaScorer
+
+    assert len(all_278_cases) == 278
+
+    def slip_throughs(scorer) -> int:
+        count = 0
+        for case in all_278_cases:
+            premise = runner.build_premise(case)
+            verdict, _ = scorer.predict(premise, case["chapter_claim"])
+            if case["label"] == "verzerrend" and verdict == "faithful":
+                count += 1
+        return count
+
+    bge_m3_slips = slip_throughs(BgeM3ZeroshotScorer(threshold=0.95))
+    mdeberta_slips = slip_throughs(MDebertaScorer(threshold=0.95))
+
+    assert bge_m3_slips == 1, (
+        f"bge-m3-zeroshot @0.95: erwartet 1 Durchrutscher, gefunden {bge_m3_slips}."
+    )
+    assert mdeberta_slips == 10, (
+        f"mDeBERTa-XNLI @0.95: erwartet 10 Durchrutscher, gefunden {mdeberta_slips}."
+    )

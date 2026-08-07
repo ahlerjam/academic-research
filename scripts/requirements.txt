@@ -55,11 +55,11 @@ rapidfuzz>=3.14.5
 # Zweitstelle: pyproject.toml [project.dependencies].
 numpy>=1.26
 scipy>=1.11
-# OPTIONAL (Issue #630) -- strukturerhaltende Tabellenextraktion,
-# academic_vault/tables.py. Bewusst auskommentiert: ohne pdfplumber laeuft der
-# Volltextpfad unveraendert weiter und vault.extract_tables() meldet
-# status="backend-missing" samt Installationsanweisung. Wer Effektstaerken und
-# Stichprobengroessen mit Zellbeleg aus Ergebnistabellen ziehen will,
-# entkommentiert die Zeile (bzw. `uv sync --extra tables` im Dev-Setup).
-# Zweitstelle: pyproject.toml [project.optional-dependencies].tables.
-# pdfplumber>=0.11
+# Strukturerhaltende Tabellenextraktion (Issue #630), academic_vault/tables.py.
+# Seit #723 Pflicht-Dependency statt auskommentiertes Extra: reines Python,
+# kein Versionskonflikt mit dem Bestand. Faellt das Paket in einer realen
+# Installation dennoch weg, laeuft der Volltextpfad unveraendert weiter und
+# vault.extract_tables() meldet status="backend-missing" samt
+# Installationsanweisung statt einer Exception.
+# Zweitstelle: pyproject.toml [project.dependencies].
+pdfplumber>=0.11

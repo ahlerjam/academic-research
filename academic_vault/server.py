@@ -2328,7 +2328,7 @@ def _build_mcp_server():
 
         Laeuft neben dem Volltextpfad -- papers_fts bleibt unveraendert. status:
         "ok" | "no-tables" | "no-textlayer" | "backend-missing" (dann nennt
-        message die Installation `uv sync --extra tables`).
+        message die Installation `pip install 'pdfplumber>=0.11'`).
         """
         return extract_tables_for_paper(db_path, paper_id, backend=backend)
 
