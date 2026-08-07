@@ -12,12 +12,15 @@ Schritt 1.
 
 ## Was das Plugin nicht kann
 
-- **Tabellen nicht immer strukturerhaltend extrahieren.** Das Backend `pdfplumber` ist ein
-  optionales Extra (`uv sync --extra tables`, siehe `pyproject.toml`). Fehlt es, liefert
-  `vault.extract_tables` den Status `backend-missing` statt Zahlen —
-  `academic_vault/tables.py`. Die `meta-analysis`-Pipeline übernimmt Effektstärken (`yi`,
-  `vi`) ohnehin nur aus einem vom Nutzer bestätigten Eingabe-JSON, nie automatisch aus
-  einer erkannten Tabelle — `scripts/meta_analysis.py`.
+- **Tabellen nicht bei jedem PDF strukturerhaltend extrahieren.** Das Backend `pdfplumber`
+  ist seit Issue #723 Pflicht-Dependency (`pyproject.toml`), läuft also nach jedem Setup
+  ohne Zusatzschritt mit. Die verbleibende Grenze ist strukturell, nicht paketierungsbedingt:
+  verbundene Kopfzellen, zweispaltiges Layout und Tabellen ohne Gitterlinien lassen sich
+  nicht sicher auflösen — `docs/reference/vault.md`, Abschnitt „Tabellenextraktion". Fehlt
+  das Paket in einer realen Installation dennoch, liefert `vault.extract_tables` den Status
+  `backend-missing` statt Zahlen — `academic_vault/tables.py`. Die `meta-analysis`-Pipeline
+  übernimmt Effektstärken (`yi`, `vi`) ohnehin nur aus einem vom Nutzer bestätigten
+  Eingabe-JSON, nie automatisch aus einer erkannten Tabelle — `scripts/meta_analysis.py`.
 - **Kein unbegrenztes Kontextfenster beim Embedding.** Das Vektor-Modell
   `intfloat/multilingual-e5-small` schneidet Eingaben über seinem harten Limit
   stillschweigend ab. Bei deutscher Fachprosa (≈2,47 Tokens/Wort) liegt die nutzbare

@@ -114,7 +114,7 @@ Für **Stichprobe**, Effektstärke und CI zuerst die Tabellenquelle prüfen:
    `120 (smith2020, S. 1, Tabelle 1, Zeile 2, Spalte 2)`.
 
 Kein Ergebnis heißt nicht „still leer": `status` nennt den Grund (`no-tables`,
-`no-textlayer` → erst OCR, `backend-missing` → `uv sync --extra tables`). In
+`no-textlayer` → erst OCR, `backend-missing` → `pip install 'pdfplumber>=0.11'`). In
 allen Fällen bleibt die Zelle `— fehlend —`; ein `None` von
 `vault.get_table_cell()` wird nie durch einen Nachbarwert ersetzt.
 

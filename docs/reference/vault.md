@@ -145,12 +145,13 @@ fertigen Beleg der Form `smith2020, S. 1, Tabelle 1, Zeile 2, Spalte 2`. `page` 
 PDF-Seite (1-basiert), `table_index`, `row` und `col` sind 0-basiert; im Beleg stehen sie
 1-basiert, weil ihn ein Mensch gegen das PDF hält.
 
-**Backend: pdfplumber, optionales Extra**
+**Backend: pdfplumber, Pflicht-Dependency**
 
-Installation: `uv sync --extra tables` (Endnutzer: `pip install 'pdfplumber>=0.11'`). Ohne
-das Extra läuft der bestehende Volltextpfad unverändert weiter und `vault.extract_tables()`
-meldet `status="backend-missing"` mit genau dieser Installationsanweisung — keine Exception,
-kein stilles Nichts.
+Seit Issue #723 läuft `pdfplumber` als Teil von `[project.dependencies]` bei jedem `uv sync`
+automatisch mit (Endnutzer-Installation: `scripts/requirements.txt`). Fehlt das Paket in
+einer realen Installation dennoch, läuft der bestehende Volltextpfad unverändert weiter und
+`vault.extract_tables()` meldet `status="backend-missing"` mit Installationsanweisung
+(`pip install 'pdfplumber>=0.11'`) — keine Exception, kein stilles Nichts.
 
 | Kandidat | Bewertung |
 |---|---|
@@ -337,7 +338,7 @@ greift dieselbe Belegkette wie bei Literaturzitaten (`quotes.paper_id`, `verbati
 | `vault.set_page_offset(paper_id, offset)` | Setzt `page_offset` (Bücher mit Vorseiten/Vorwort) | `vault.set_page_offset("book2020", 12)` | Bekannte `paper_id` und der Versatz zwischen PDF- und Druckseite | Kein Rückgabewert; `page_offset` ist danach gesetzt | `vault.get_printed_page()` liefert weiterhin die PDF-Seite |
 | `vault.get_printed_page(paper_id, pdf_page)` | Berechnet gedruckte Seite: `pdf_page - page_offset` | `vault.get_printed_page("book2020", 25)` | Gesetzter `page_offset` am Paper | `int` mit der gedruckten Seite, sonst `None` | Rückgabe `None` — das Paper ist unbekannt |
 | `vault.extract_fulltext(paper_id, backend="auto")` | Extrahiert den PDF-Volltext und indiziert ihn in `papers_fts.fulltext` (#373) | `vault.extract_fulltext("vaswani2017")` | Paper mit `pdf_path`; für `backend="grobid"` zusätzlich `GROBID_URL` | `dict` mit dem Ergebnis; der Text steht danach in `paper_fulltext` und `papers_fts` | `ValueError` „Paper unbekannt" oder „hat keinen pdf_path"; ein Scan ohne Textlayer speichert bewusst nichts |
-| `vault.extract_tables(paper_id, backend="auto")` | Extrahiert Tabellen strukturerhaltend nach `paper_tables`; `papers_fts` bleibt unverändert (#630). `status` ∈ `ok`/`no-tables`/`no-textlayer`/`backend-missing` | `vault.extract_tables("smith2020")` | pdfplumber installiert (`uv sync --extra tables`), Paper mit `pdf_path` | `dict` mit `status` und den erkannten Tabellen in `paper_tables` | `status` ist nicht `ok`; `backend-missing` nennt im `message` die Nachinstallation |
+| `vault.extract_tables(paper_id, backend="auto")` | Extrahiert Tabellen strukturerhaltend nach `paper_tables`; `papers_fts` bleibt unverändert (#630). `status` ∈ `ok`/`no-tables`/`no-textlayer`/`backend-missing` | `vault.extract_tables("smith2020")` | pdfplumber installiert (Pflicht-Dependency seit #723), Paper mit `pdf_path` | `dict` mit `status` und den erkannten Tabellen in `paper_tables` | `status` ist nicht `ok`; `backend-missing` nennt im `message` die Nachinstallation |
 | `vault.list_tables(paper_id, page=None)` | Gespeicherte Tabellenstrukturen eines Papers (`rows` = Textmatrix, `cells` = Zellen mit Bounding-Box) (#630) | `vault.list_tables("smith2020")` | Vorher gelaufene Tabellenextraktion | `list[dict]` mit `rows` (Textmatrix) und `cells` (Bounding-Boxen) | Leere Liste — für dieses Paper wurde keine Tabelle gespeichert |
 | `vault.get_table_cell(paper_id, page, table_index, row, col)` | Eine Zelle mit `value`, `bbox` und fertigem `evidence`-Beleg; `None` statt Näherungstreffer (#630). `table_index`/`row`/`col` 0-basiert | `vault.get_table_cell("smith2020", 1, 0, 1, 1)` | Extrahierte Tabelle; `table_index`, `row` und `col` sind 0-basiert | `dict` mit `value`, `bbox` und fertigem `evidence`-Beleg | Rückgabe `None` — die Zelle gibt es nicht, ein Näherungstreffer kommt bewusst nicht |
 

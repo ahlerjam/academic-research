@@ -54,14 +54,18 @@ VAULT_DOC = REPO_ROOT / "docs" / "reference" / "vault.md"
 MATRIX_SKILL = REPO_ROOT / "skills" / "extraction-matrix" / "SKILL.md"
 META_AGENT = REPO_ROOT / "agents" / "meta-analysis.md"
 
-#: Das Tabellen-Backend ist ein optionales Extra. Bewusst KEIN modulweites
-#: ``importorskip``: die Zusicherung aus AC5 — ohne Backend laeuft der
-#: Volltextpfad weiter und der Grund ist sichtbar — muss gerade auf einer
-#: Maschine ohne das Extra geprueft werden. Uebersprungen wird nur, was echte
+#: pdfplumber ist seit Issue #723 Pflicht-Dependency, kein optionales Extra
+#: mehr (vorher: `uv sync --extra tables`). Dieser Skip bleibt trotzdem als
+#: Sicherheitsnetz bestehen -- er greift nach dem Fix praktisch nie mehr,
+#: schuetzt aber weiterhin gegen eine reale Installation, in der das Paket
+#: dennoch fehlt (Degradationspfad, siehe test_issue_723_...). Bewusst KEIN
+#: modulweites ``importorskip``: die Zusicherung aus AC5 — ohne Backend laeuft
+#: der Volltextpfad weiter und der Grund ist sichtbar — muss gerade auf einer
+#: Maschine ohne das Paket geprueft werden. Uebersprungen wird nur, was echte
 #: Extraktion braucht.
 requires_backend = pytest.mark.skipif(
     importlib.util.find_spec("pdfplumber") is None,
-    reason="Tabellen-Backend ist ein optionales Extra: uv sync --extra tables",
+    reason="pdfplumber fehlt trotz Pflicht-Dependency (#723) im Environment",
 )
 
 CSL = json.dumps(
@@ -314,7 +318,7 @@ def test_missing_backend_returns_visible_status(monkeypatch):
     assert result["status"] == tables_mod.STATUS_BACKEND_MISSING
     assert result["tables"] == []
     assert result["backend"] == ""
-    assert "uv sync --extra tables" in result["message"]
+    assert "pip install" in result["message"]
     assert "pdfplumber" in result["message"]
 
 
