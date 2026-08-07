@@ -23,10 +23,19 @@ einmal, ob alle drei jetzt vollständig geladen werden sollen, und nennt dabei d
 Gesamtgröße. Bei Ablehnung
 oder nicht-interaktivem stdin (z. B. CI) bleibt der bisherige Lazy-Load-Pfad unverändert:
 jedes Modell lädt einzeln beim ersten Gebrauch nach, mit einer Meldung der jeweiligen
-Downloadgröße direkt davor. Ein abgebrochener Download wird beim nächsten Lauf an der
-Abbruchstelle fortgesetzt statt neu begonnen (`huggingface_hub`-eigenes Verhalten über
-`.incomplete`-Blobs). Ohne die Modelle bleibt der Vektor-Index leer bzw. Reranking und
-Zitatscan laufen degradiert — die Volltextsuche (FTS5) funktioniert in jedem Fall.
+Downloadgröße direkt davor. Ohne die Modelle bleibt der Vektor-Index leer bzw. Reranking
+und Zitatscan laufen degradiert — die Volltextsuche (FTS5) funktioniert in jedem Fall.
+
+**Nach einem Abbruch** setzt der nächste Lauf fort, statt neu zu beginnen: fertige
+Modelle werden übersprungen, und innerhalb eines angefangenen Modells bleiben die bereits
+vollständigen Dateien im Cache. Nur die eine Datei, die im Moment des Abbruchs übertragen
+wurde, beginnt von vorn — `huggingface_hub` schreibt sie unter einem prozesseigenen
+`.incomplete`-Namen und greift diesen später nicht wieder auf. Im ungünstigsten Fall,
+Abbruch mitten in den Reranker-Gewichten, sind das erneut ~2,3 GB. Wird der Prozess hart
+beendet (SIGKILL, Stromausfall), bleibt dieser angefangene Blob zudem unter
+`~/.academic-research/models/models--*/blobs/*.incomplete` liegen; er wird nie
+wiederverwendet und kann gelöscht werden. Geprüft an einem echten, hart abgebrochenen und
+danach wiederholten Setup-Lauf (`tests/test_issue_718_model_prefetch.py::TestResume`).
 
 ### Hardware-Anforderungen
 
@@ -37,15 +46,21 @@ Hardware-Beschleunigung (Apple-GPU/CUDA).
 | Modell | Platte | Peak-RSS | CPU | Apple GPU |
 |---|---|---|---|---|
 | `intfloat/multilingual-e5-small` (Embedding) | 470 MB | 1,0 GB | 14 ms/Chunk | 6 ms |
-| `bge-reranker-v2-m3` (Reranker) | 2,1 GB | 2,1 GB | 48 ms/Paar | 26 ms |
-| `bge-m3-zeroshot-v2.0` (NLI-Zitatscan) | 1,1 GB | nicht gemessen† | nicht gemessen† | nicht gemessen† |
+| `bge-reranker-v2-m3` (Reranker) | 2,3 GB | 2,1 GB | 48 ms/Paar | 26 ms |
+| `bge-m3-zeroshot-v2.0` (NLI-Zitatscan) | 1,1 GB | 1,5 GB | 570 ms/Paar | 38 ms |
 
-Platte gemessen über den `model.safetensors`-Content-Length je HF-Repo (2026-08-07).
-Peak-RSS/CPU/Apple-GPU für Embedding und Reranker gemessen am 2026-08-06 auf Apple M4 Pro
-(12 Kerne, 24 GB). † Der NLI-Vorfilter wechselte mit Issue #720 (nach dieser Messung) von
-`mDeBERTa-v3-XNLI` auf `bge-m3-zeroshot-v2.0` — für das neue Modell liegt noch keine
-eigene Laufzeitmessung vor; `evals/524-nli-prefilter/README.md` zeigt weiterhin die
-Werte des alten Modells.
+Platte gemessen über den `model.safetensors`-Content-Length je HF-Repo (2026-08-07) —
+dieselbe Quelle, aus der der Setup-Prompt seine Gesamtgröße bildet. Peak-RSS/CPU/Apple-GPU
+für Embedding und Reranker gemessen am 2026-08-06 auf Apple M4 Pro (12 Kerne, 24 GB), die
+NLI-Zeile am 2026-08-07 auf derselben Maschine: 30 Läufe nach 3 Warmläufen über
+`nli_prefilter.BgeM3ZeroshotScorer.predict`, Median, Eingabe 210 Token (Quellenabsatz plus
+Behauptungssatz), Peak-RSS als `ru_maxrss` des Messprozesses. Die CPU-Spalte ist der
+Produktionspfad — im Code steht kein `.to("mps")`; die Apple-GPU-Spalte zeigt dieselbe
+Vorhersage nach manuellem Verschieben auf `mps`, also die erreichbare Untergrenze, nicht
+das Standardverhalten. Die Millisekunden hängen an der Eingabelänge und sind zwischen den
+Zeilen nur grob vergleichbar (Embedding je Chunk, Reranker und NLI je Paar).
+`evals/524-nli-prefilter/README.md` zeigt weiterhin die Werte des alten NLI-Modells
+(`mDeBERTa-v3-XNLI`, seit #720 kein Produktivmodell mehr).
 
 Zusammen ~3,9 GB Plattenplatz für alle drei Modellgewichte. Ein anderes Embedding-Modell
 lässt sich über `VAULT_EMBEDDING_MODEL` setzen, siehe [Vault-Referenz](../reference/vault.md).

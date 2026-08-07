@@ -14,13 +14,27 @@ instanziieren (``FlagEmbedding`` ist bewusst kein verwaltetes uv-Extra, siehe
 ``academic_vault/retrieval.py``). ``huggingface_hub`` liegt bereits transitiv
 vor (Dependency von ``sentence-transformers``).
 
-Resume nach Abbruch (AC4) kommt aus der Library selbst: ``snapshot_download``
-laedt jede Datei ueber ``.incomplete``-Blobs herunter und setzt einen
-abgebrochenen Transfer beim naechsten Aufruf an der Abbruchstelle fort --
-kein eigener Fortsetzungscode noetig. Ein zweiter Aufruf gegen einen bereits
-VOLLSTAENDIGEN Cache macht KEINEN Netzzugriff (siehe ``is_cached`` unten):
-das ist zugleich die Idempotenz-Grundlage fuer AC1 ("genau einmal fragen") --
-ist bereits alles gecacht, wird gar nicht erst gefragt.
+Fortsetzen nach Abbruch (AC4) braucht keinen eigenen Code, aber es setzt
+NICHT an der Abbruchstelle einer einzelnen Datei an -- die Grenze ist die
+DATEI, nicht das Byte:
+
+* Ein bereits vollstaendiges Modell wird hier per ``is_cached`` uebersprungen.
+* Innerhalb eines angefangenen Modells liegen die fertigen Dateien im
+  Blob-Cache; ``snapshot_download`` laedt sie nicht erneut.
+* Die eine Datei, die beim Abbruch in Uebertragung war, beginnt von vorn:
+  ``huggingface_hub`` schreibt sie seit
+  https://github.com/huggingface/huggingface_hub/pull/4228 in eine
+  PROZESS-EIGENE ``<etag>.<uuid>.incomplete``-Datei (Schutz gegen Dateisysteme,
+  auf denen ``flock`` nicht greift) und kann deren Zwischenstand danach nicht
+  mehr zuordnen.
+
+Belegt an einem echten, hart abgebrochenen und danach wiederholten Lauf:
+``tests/test_issue_718_model_prefetch.py::TestResume``.
+
+Ein zweiter Aufruf gegen einen bereits VOLLSTAENDIGEN Cache macht KEINEN
+Netzzugriff (siehe ``is_cached`` unten): das ist zugleich die
+Idempotenz-Grundlage fuer AC1 ("genau einmal fragen") -- ist bereits alles
+gecacht, wird gar nicht erst gefragt.
 
 Sicherer Default bei nicht-interaktivem stdin (CI, ``/setup``-Aufruf durch
 Claude Code): KEIN Download, analog ``scihub_optin.py``/``uni_profile_setup.py``.
@@ -109,7 +123,7 @@ def _prompt_prefetch(specs: list[ModelSpec]) -> bool:
 
 
 def download_model(spec: ModelSpec) -> str:
-    """Laedt (bzw. setzt einen abgebrochenen Download fort fuer) ein Modell."""
+    """Laedt die noch fehlenden Dateien eines Modells (siehe Modul-Docstring, AC4)."""
     from huggingface_hub import snapshot_download
 
     return snapshot_download(repo_id=spec.repo_id, cache_dir=spec.cache_dir)
