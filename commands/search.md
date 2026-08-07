@@ -151,7 +151,7 @@ Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
 
 ### Schritt 6: Ranking (5D-Scoring + Cluster)
 
-Die Heuristik-Dimensionen (Aktualität, Qualität, Autorität, Zugang) werden direkt in diesem Command berechnet — siehe Formeln in `commands/score.md` → „4 weitere Dimensionen berechnen". Gesamtscore wie dort, Clusterzuweisung ebenfalls. Das Resultat in `$SESSION_DIR/ranked.json` schreiben.
+Die Heuristik-Dimensionen (Aktualität, Qualität, Autorität, Zugang) werden von `scripts/scoring.py` berechnet (siehe `commands/score.md` → „Schritt 3+4: 4 weitere Dimensionen berechnen..."). Gesamtscore wie dort, Clusterzuweisung ebenfalls. Das Resultat in `$SESSION_DIR/ranked.json` schreiben.
 
 ### Schritt 7: Interactive Mode — Phase 1 (Approval-Gate, Default)
 
