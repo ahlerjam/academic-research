@@ -130,7 +130,11 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   noch `CLAUDE_CODE_OAUTH_TOKEN`, kein `ANTHROPIC_API_KEY` mehr. Doku
   (`docs/development.md`, `docs/evals/STRATEGY.md`, `docs/evals/README.md`,
   `docs/SKIP_REASONS.md`) nennt den API-Key nirgends mehr als Voraussetzung für
-  einen Eval-Lauf.
+  einen Eval-Lauf. Nachgezogen: der End-Nutzer-Smoke-Test in `scripts/setup.sh`
+  prüfte weiterhin `import anthropic`, obwohl `scripts/requirements.txt` das
+  Paket nie installiert hat (Rest eines seit #632 überholten Checks) — jede
+  frische Installation wäre daran gescheitert, geprüft hat es niemand, weil
+  `scripts/setup.sh` in keiner CI läuft.
 - **`docs/superpowers/` entfernt (#641):** Das Verzeichnis enthielt zuletzt nur noch eine
   Archiv-Notiz (12 Zeilen); die Unterordner `plans/` und `specs/` waren nie versioniert.
   Der Hinweis in `AGENTS.md`, der Eintrag in `docs/README.md` und die Konstante

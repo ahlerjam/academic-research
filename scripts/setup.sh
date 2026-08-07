@@ -95,7 +95,7 @@ fi
 
 # Smoke-Test: bricht laut ab, wenn der Install still fehlschlug (vgl. #197).
 # Deckt die Kern-Abhaengigkeiten ab, die Scripts/Tests zur Importzeit brauchen.
-if ! "$BASE/venv/bin/python" -c "import requests, httpx, anthropic, yaml, barcode" 2>/dev/null; then
+if ! "$BASE/venv/bin/python" -c "import requests, httpx, yaml, barcode" 2>/dev/null; then
   echo "❌ Smoke-Test fehlgeschlagen: Kern-Module fehlen nach 'pip install'." >&2
   echo "   Bitte erneut ausfuehren oder 'pip install -r $SCRIPT_DIR/requirements.txt' manuell pruefen." >&2
   exit 1
