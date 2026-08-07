@@ -10,6 +10,19 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Belegdichte in der Kapitel-Prüfbilanz (#739):** `vault.chapter_quote_balance`
+  weist zusätzlich (additiv, ändert keinen bestehenden Key) die Belegdichte über
+  ALLE Aussagesätze des Kapitels aus, nicht nur die mit Zitat --
+  `statement_sentences_total`, `statement_sentences_covered`, `citation_density`
+  (Anteil oder `None` bei 0 Aussagesätzen) und `longest_uncovered_run` (die
+  längste unbelegte Strecke, `None` oder Dict mit `sentence_count`/`line`/
+  `excerpt`). Kein Gate, keine Meldung, kein Schwellwert -- die Zahlen stehen
+  in der Bilanz und sonst nirgends; eine hohe Belegdichte ist KEIN
+  Qualitätsmerkmal. Neu in `academic_vault/nli_prefilter.py`:
+  `extract_statement_sentences()` (Satzsplit innerhalb der Textblöcke
+  zwischen Überschrift-/Listenpunkt-/Leerzeilen, Fragesätze und reine
+  Überleitungssätze zählen nicht mit) und `compute_citation_density()`.
+
 - **Modelle beim Setup vorab laden, Hardware-Anforderungen dokumentiert (#718):**
   Neuer Schritt 9 in `scripts/setup.sh` (`scripts/model_prefetch.py`) fragt
   einmal, ob alle drei lokalen Modelle (Embedding `multilingual-e5-small`,

@@ -220,6 +220,18 @@ def test_claim_sentence_for_span_returns_enclosing_sentence():
     assert "Ein weiterer Satz danach" not in claim
 
 
+def test_claim_sentence_for_span_unaffected_by_abbreviation_before_the_quote():
+    """Regression (#739-Review): _STATEMENT_SPLIT ist eine eigene Konstante
+    fuer die Belegdichte -- claim_sentence_for_span nutzt weiterhin
+    _SENTENCE_SPLIT unveraendert und darf hinter "Abb. 4" nicht mitten in
+    der Abkuerzung splitten."""
+    content = 'Wie Abb. 4 zeigt, gilt "ein deutlicher Effekt in den Daten" als belegt.'
+    spans = extract_quote_spans(content, min_len=5)
+    assert len(spans) == 1
+    claim = claim_sentence_for_span(content, spans[0])
+    assert "Wie Abb. 4 zeigt" in claim
+
+
 def test_scan_chapter_quotes_finds_all_vault_quotes_not_just_drifted_one(temp_vault_db):
     """AC2: alle drei im Kapitel zitierten UND im Vault vorhandenen Zitate
     werden gefunden -- nicht nur eines mit simulierter Drift-Warnung."""
