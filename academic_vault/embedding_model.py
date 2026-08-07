@@ -154,6 +154,13 @@ def _load_backend_model(model_id: str, cache_dir: str | None = None) -> Any:
     """
     from sentence_transformers import SentenceTransformer
 
+    from academic_vault._model_prefetchable import notify_lazy_download
+
+    notify_lazy_download(
+        label="Embedding-Modell",
+        repo_id=model_id,
+        cache_dir=cache_dir if cache_dir is not None else default_cache_dir(),
+    )
     return SentenceTransformer(model_id, cache_folder=cache_dir)
 
 

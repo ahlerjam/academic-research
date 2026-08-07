@@ -206,6 +206,11 @@ class NliModelScorer:
             # Lazy Import: zieht transformers/torch nach, nicht beim Modul-Import.
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+            from academic_vault._model_prefetchable import notify_lazy_download
+
+            notify_lazy_download(
+                label="NLI-Zitatscan-Modell", repo_id=self.model_id, cache_dir=self.cache_dir
+            )
             if self._tokenizer is None:
                 self._tokenizer = AutoTokenizer.from_pretrained(
                     self.model_id, cache_dir=self.cache_dir
