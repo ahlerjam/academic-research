@@ -696,6 +696,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_embedding_meta_table(db_path)
     add_paper_tables_table(db_path)
     add_retraction_checked_at_column(db_path)
+    add_quote_audit_columns(db_path)
     drop_dead_v64_tables(db_path)
 
 
@@ -781,6 +782,46 @@ def add_retraction_checked_at_column(db_path: str) -> None:
     try:
         try:
             conn.execute("ALTER TABLE papers ADD COLUMN retraction_checked_at INTEGER DEFAULT NULL")
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_quote_audit_columns(db_path: str) -> None:
+    """Fuegt audited_at/audit_verdict/audit_severity zu quotes hinzu. Idempotent. (#737)
+
+    Audit-Historie, additiv zu ``stance`` (siehe Kommentar in ``schema.sql``):
+    ``audited_at`` ist NULL, solange kein Audit stattgefunden hat -- das ist
+    die einzige verlaessliche Unterscheidung zwischen "nie geprueft" und
+    "geprueft und unauffaellig" (``faithful``, ``audit_severity`` bleibt dann
+    ebenfalls NULL). Die CHECK-Constraints werden mit angelegt, damit eine
+    migrierte Bestands-DB dieselbe zweite Verteidigungslinie hat wie eine
+    frisch aus ``schema.sql`` erzeugte. Aufruf-sicher: kann mehrfach auf
+    derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute("ALTER TABLE quotes ADD COLUMN audited_at INTEGER")
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        try:
+            conn.execute(
+                "ALTER TABLE quotes ADD COLUMN audit_verdict TEXT CHECK(audit_verdict IN "
+                "('faithful','overstated','context-stripped','polarity-flip','unsupported') "
+                "OR audit_verdict IS NULL)"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        try:
+            conn.execute(
+                "ALTER TABLE quotes ADD COLUMN audit_severity TEXT "
+                "CHECK(audit_severity IN ('kritisch','hoch','mittel') OR audit_severity IS NULL)"
+            )
         except _sqlite3.OperationalError:
             pass  # Spalte existiert bereits -- idempotent
         conn.commit()

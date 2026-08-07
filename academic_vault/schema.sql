@@ -89,7 +89,26 @@ CREATE TABLE IF NOT EXISTS quotes (
   -- unbefuellt oder modell-generiert -- geraten wird hier nie). Werteliste
   -- gespiegelt in migrate.add_context_source_column(). Bewusst als LETZTE
   -- Spalte, siehe Kommentar bei `stance`.
-  context_source    TEXT CHECK(context_source IN ('fulltext') OR context_source IS NULL)
+  context_source    TEXT CHECK(context_source IN ('fulltext') OR context_source IS NULL),
+  -- Audit-Historie (Issue #737), additiv zu `stance` und bewusst NICHT
+  -- dasselbe Feld: `stance` ist lossy (bei Verdict 'unsupported' wird laut
+  -- Mapping-Tabelle des quote-fidelity-auditor-Agenten GAR NICHTS
+  -- persistiert, und `add_quote(stance=...)` kann `stance` schon ohne jedes
+  -- Audit gesetzt sein) und kann "geprueft & unauffaellig" nicht von "nie
+  -- geprueft" unterscheiden. `audited_at` ist NULL, solange kein Audit
+  -- stattgefunden hat -- das ist das alleinige Unterscheidungsmerkmal fuer
+  -- `vault.chapter_quote_balance()`. Werteliste gespiegelt in
+  -- db.VALID_AUDIT_VERDICTS/db.VALID_AUDIT_SEVERITIES und
+  -- migrate.add_quote_audit_columns(). Bewusst als LETZTE Spalten, siehe
+  -- Kommentar bei `stance`.
+  audited_at        INTEGER,
+  audit_verdict     TEXT CHECK(audit_verdict IN
+                      ('faithful','overstated','context-stripped','polarity-flip','unsupported')
+                      OR audit_verdict IS NULL),
+  -- NULL fuer `faithful` (kein Befund) UND solange kein Audit stattfand --
+  -- `audited_at IS NULL` ist die einzige verlaessliche Unterscheidung
+  -- zwischen beidem, `audit_severity` allein reicht dafuer nicht.
+  audit_severity    TEXT CHECK(audit_severity IN ('kritisch','hoch','mittel') OR audit_severity IS NULL)
 );
 
 -- vec0 Virtual Tables: optional, nur wenn sqlite-vec Extension geladen ist.
