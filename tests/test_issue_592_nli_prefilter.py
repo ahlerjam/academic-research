@@ -6,10 +6,21 @@ Deckt die Akzeptanzkriterien aus der Issue:
        diesen Tests -- der Scorer wird ausschliesslich gestubbt).
   AC2  Ein Weg, ALLE Zitate eines Kapitels in einem Durchgang zu pruefen --
        nicht nur die mit Drift-Warnung.
-  AC3  Verdaechtig -> unveraendert an den Auditor; treu -> Skip mit
-       Report-Marker "vorgefiltert, nicht inhaltlich geprueft".
-  AC4  Abschaltbar, Default AUS, deaktiviert = exakt heutiges Verhalten
-       (kein Quote wird uebersprungen).
+  AC3  Verdaechtig -> unveraendert an den Auditor.
+  AC4  Abschaltbar, deaktiviert = exakt der Zustand ohne Scan.
+
+Zwei Zusicherungen dieser Datei hat Issue #717 bewusst umgekehrt und deshalb
+sind die betroffenen Tests hier umgeschrieben, nicht geloescht:
+
+  * Der frueher als "treu" eingestufte Teil wurde uebersprungen und trug den
+    Report-Marker ``SKIP_MARKER``. #717 stellt auf Detektor-Semantik um --
+    nichts wird uebersprungen, Verdaechtiges wird zusaetzlich gemeldet
+    (Issue #717, AC "Kein Zitat wird aus dem Pruefpfad entfernt").
+  * Der Default war AUS. #717 dreht ihn auf AN (Issue #717, AC "Der Scan ist
+    per Default aktiv"), weil im Detektor-Modus kein Zitat verloren gehen kann.
+
+Der Detektor-Pfad selbst wird in tests/test_issue_717_nli_quote_scan.py
+geprueft; hier bleibt stehen, was von #592 unveraendert gilt.
 
 Der echte Modell-Download/-Lauf ist NICHT Teil dieser Datei (siehe
 tests/evals/test_nli_prefilter_evals.py fuer die strukturellen Checks und
@@ -23,7 +34,6 @@ import json
 
 import pytest
 from academic_vault.nli_prefilter import (
-    SKIP_MARKER,
     build_premise,
     claim_sentence_for_span,
     extract_quote_spans,
@@ -53,17 +63,18 @@ class StubScorer:
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_prefilter_enabled_default_is_false(tmp_path, monkeypatch):
+def test_resolve_prefilter_enabled_default_is_true(tmp_path, monkeypatch):
+    """Default seit #717 AN (vormals AUS) -- siehe Modul-Docstring."""
     monkeypatch.delenv("ACADEMIC_RESEARCH_NLI_PREFILTER", raising=False)
     missing_config = tmp_path / "does-not-exist.json"
-    assert resolve_nli_prefilter_enabled(config_path=missing_config) is False
+    assert resolve_nli_prefilter_enabled(config_path=missing_config) is True
 
 
 def test_resolve_prefilter_enabled_explicit_wins_over_everything(tmp_path, monkeypatch):
-    monkeypatch.setenv("ACADEMIC_RESEARCH_NLI_PREFILTER", "0")
+    monkeypatch.setenv("ACADEMIC_RESEARCH_NLI_PREFILTER", "1")
     config = tmp_path / "config.json"
-    config.write_text(json.dumps({"nli_prefilter_enabled": False}), encoding="utf-8")
-    assert resolve_nli_prefilter_enabled(True, config_path=config) is True
+    config.write_text(json.dumps({"nli_prefilter_enabled": True}), encoding="utf-8")
+    assert resolve_nli_prefilter_enabled(False, config_path=config) is False
 
 
 def test_resolve_prefilter_enabled_env_wins_over_config(tmp_path, monkeypatch):
@@ -76,16 +87,16 @@ def test_resolve_prefilter_enabled_env_wins_over_config(tmp_path, monkeypatch):
 def test_resolve_prefilter_enabled_reads_config_key(tmp_path, monkeypatch):
     monkeypatch.delenv("ACADEMIC_RESEARCH_NLI_PREFILTER", raising=False)
     config = tmp_path / "config.json"
-    config.write_text(json.dumps({"nli_prefilter_enabled": True}), encoding="utf-8")
-    assert resolve_nli_prefilter_enabled(config_path=config) is True
+    config.write_text(json.dumps({"nli_prefilter_enabled": False}), encoding="utf-8")
+    assert resolve_nli_prefilter_enabled(config_path=config) is False
 
 
-def test_repo_default_config_has_prefilter_disabled():
-    """AC: Auslieferungsstand ist AUS."""
+def test_repo_default_config_has_prefilter_enabled():
+    """Auslieferungsstand ist AN (#717; bis dahin AUS)."""
     from academic_vault.nli_prefilter import DEFAULT_CONFIG_PATH
 
     data = json.loads(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
-    assert data["nli_prefilter_enabled"] is False
+    assert data["nli_prefilter_enabled"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +134,11 @@ def test_batch_prefilter_disabled_forwards_everything_unfiltered():
         assert set(item.keys()) == {"quote_id", "chapter_claim", "paper_id"}
 
 
-def test_batch_prefilter_enabled_forwards_only_suspicious_unchanged():
-    """AC3: verdaechtig -> unveraendertes {quote_id, chapter_claim, paper_id}
-    an den Auditor; treu -> Skip mit Report-Marker."""
+def test_batch_prefilter_enabled_marks_suspicious_and_keeps_everything():
+    """AC3 in der #717-Fassung: verdaechtig -> unveraendertes
+    {quote_id, chapter_claim, paper_id} an den Auditor. Vormals wurden treue
+    Items uebersprungen; seit #717 bleiben sie im Pruefpfad und tauchen nur
+    nicht unter ``suspicious`` auf."""
     items = _items(3)
     scorer = StubScorer(
         {
@@ -137,31 +150,19 @@ def test_batch_prefilter_enabled_forwards_only_suspicious_unchanged():
     result = run_batch_prefilter(items, scorer=scorer, enabled=True)
 
     assert result["enabled"] is True
-    assert len(result["forwarded"]) == 1
-    assert result["forwarded"][0] == {
-        "quote_id": "q1",
-        "chapter_claim": "Behauptung 1",
-        "paper_id": "paper-1",
-    }
-    assert len(result["skipped"]) == 2
-    for skipped in result["skipped"]:
-        assert skipped["report"] == SKIP_MARKER
-        assert skipped["verdict"] == "faithful"
-    skipped_ids = {s["quote_id"] for s in result["skipped"]}
-    assert skipped_ids == {"q0", "q2"}
-
-
-def test_batch_prefilter_report_never_calls_a_skipped_item_geprueft():
-    """Report-Marker darf nicht 'geprueft' suggerieren (Issue-AC-Wortlaut)."""
-    items = _items(1)
-    scorer = StubScorer({"Behauptung 0": "faithful"})
-    result = run_batch_prefilter(items, scorer=scorer, enabled=True)
-    assert result["skipped"][0]["report"] == "vorgefiltert, nicht inhaltlich geprueft"
+    assert len(result["suspicious"]) == 1
+    assert result["forwarded"] == [
+        {"quote_id": "q0", "chapter_claim": "Behauptung 0", "paper_id": "paper-1"},
+        {"quote_id": "q1", "chapter_claim": "Behauptung 1", "paper_id": "paper-1"},
+        {"quote_id": "q2", "chapter_claim": "Behauptung 2", "paper_id": "paper-1"},
+    ]
+    assert result["skipped"] == []
 
 
 def test_batch_prefilter_empty_items_returns_empty_lists():
     result = run_batch_prefilter([], enabled=True, scorer=StubScorer({}))
     assert result["forwarded"] == []
+    assert result["suspicious"] == []
     assert result["skipped"] == []
 
 
@@ -294,8 +295,9 @@ def test_scan_chapter_quotes_then_batch_prefilter_end_to_end(temp_vault_db):
     scorer = StubScorer({items[0]["chapter_claim"]: "verzerrend"})
     result = run_batch_prefilter(items, scorer=scorer, enabled=True)
 
-    assert len(result["forwarded"]) == 1
-    assert result["forwarded"][0]["quote_id"] == quote_id
+    assert len(result["suspicious"]) == 1
+    assert result["suspicious"][0]["quote_id"] == quote_id
+    assert [f["quote_id"] for f in result["forwarded"]] == [quote_id]
 
 
 def test_scan_chapter_quotes_ignores_non_vault_spans(temp_vault_db):
