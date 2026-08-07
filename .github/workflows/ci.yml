@@ -133,6 +133,13 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - name: PreToolUse-Blocker Regression-Harness
         run: bash scripts/dev/test-pretooluse-blocker.sh
+      # NLI-Zitatscan-Hook (#717): faehrt hooks/nli-quote-scan.mjs als echten
+      # Prozess mit Stub-Interpreter — kein Modell, kein Netz, kein Python-Paket.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: NLI-Zitatscan-Hook Regression-Harness
+        run: bash scripts/dev/test-nli-quote-scan-hook.sh
 
   # 4d. Shell-Syntax-Gate: bash -n ueber alle *.sh-Skripte im Repo (#469 AC3)
   shell-syntax:

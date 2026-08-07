@@ -30,6 +30,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-use-decisions.mjs",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/nli-quote-scan.mjs",
+            "timeout": 10
           }
         ]
       }
@@ -54,6 +59,11 @@
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/mid-session-reinforcement.mjs",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/nli-quote-scan.mjs",
+            "timeout": 10
           }
         ]
       }

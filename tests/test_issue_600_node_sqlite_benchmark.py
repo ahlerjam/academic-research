@@ -59,10 +59,17 @@ def _node_versions_in_ci() -> list[str]:
 
 
 def test_ci_pins_node_22_or_newer_in_all_node_jobs():
-    """Beide `setup-node`-Stellen in ci.yml zeigen auf Node >=22 (node:sqlite)."""
+    """JEDE `setup-node`-Stelle in ci.yml zeigt auf Node >=22 (node:sqlite).
+
+    Bis #717 stand hier zusaetzlich eine feste Anzahl (genau zwei:
+    hook-syntax + python-tests). Die Zahl war Geruest, keine Zusicherung: sie
+    bricht, sobald ein weiterer legitimer Node-Job dazukommt (#717 bringt den
+    NLI-Zitatscan-Harness mit). Zugesichert ist die Untergrenze je Stelle --
+    dass es ueberhaupt Node-Jobs gibt, bleibt geprueft.
+    """
     versions = _node_versions_in_ci()
-    assert len(versions) == 2, (
-        f"Erwartet genau zwei node-version-Stellen (hook-syntax + python-tests), "
+    assert len(versions) >= 2, (
+        f"Erwartet mindestens zwei node-version-Stellen (hook-syntax + python-tests), "
         f"gefunden: {versions}"
     )
     for raw in versions:
