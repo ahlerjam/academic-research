@@ -490,3 +490,54 @@ def test_dedup_representative_deterministic_regardless_of_input_order():
     assert len(result_forward) == 1
     assert len(result_reversed) == 1
     assert result_forward[0]["abstract"] == result_reversed[0]["abstract"]
+
+
+def test_dedup_merges_openalex_url_without_doi_into_doi_record():
+    """Ein OpenAlex-Treffer mit URL aber ohne DOI wird per Titel-Similarity in
+    eine DOI-Gruppe gemergt — die Cross-Typ-Regel blockiert nur bei
+    ID-Konflikten desselben Typs, nicht bei unterschiedlichen ID-Typen (#707 P1)."""
+    papers = [
+        {
+            "doi": "10.1234/test.machine.learning",
+            "title": "Machine Learning for Climate Modeling",
+            "authors": ["Alice"],
+            "citations": 5,
+        },
+        {
+            "doi": None,
+            "url": "https://openalex.org/W2741809807",
+            "title": "Machine Learning for Climate Modelling",
+            "authors": ["Bob"],
+            "citations": 2,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert result[0]["doi"] == "10.1234/test.machine.learning"
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]
+
+
+def test_dedup_merges_pubmed_url_without_doi_into_doi_record():
+    """Analog für PubMed: ein PMID aus URL ohne DOI wird per Titel-Similarity in
+    eine DOI-Gruppe gemergt (#707 P1)."""
+    papers = [
+        {
+            "doi": "10.1234/pubmed.test",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Alice"],
+            "citations": 3,
+        },
+        {
+            "doi": None,
+            "url": "https://pubmed.ncbi.nlm.nih.gov/12345678",
+            "title": "Clinical Trial on Medical Device",
+            "authors": ["Bob"],
+            "citations": 1,
+        },
+    ]
+    result = deduplicate(papers)
+    assert len(result) == 1
+    assert result[0]["doi"] == "10.1234/pubmed.test"
+    assert "Alice" in result[0]["authors"]
+    assert "Bob" in result[0]["authors"]

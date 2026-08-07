@@ -164,6 +164,20 @@ def merge_group(group: list[dict[str, Any]]) -> dict[str, Any]:
     return merged
 
 
+def _conflicting_ids(ids_a: dict[str, str | None], ids_b: dict[str, str | None]) -> bool:
+    """Prüfe, ob zwei ID-Dictionaries echte Konflikte haben: beide Seiten tragen
+    IDs desselben Typs mit unterschiedlichem Wert (#707 P1). Verhindert
+    Cross-Typ-Merges (z.B. DOI + OpenAlex-URL ohne DOI), wo nur eine Seite
+    einen bestimmten ID-Typ hat."""
+    for id_type in ("doi", "arxiv_id", "pmid", "openalex_id"):
+        val_a = ids_a.get(id_type)
+        val_b = ids_b.get(id_type)
+        # Beide Seiten tragen denselben ID-Typ UND ihre Werte unterscheiden sich
+        if val_a and val_b and val_a != val_b:
+            return True
+    return False
+
+
 def _canonical_sort_key(paper: dict[str, Any]) -> tuple[str, str, str, str, str, str, str]:
     """Deterministischer Sortierschluessel fuer Gruppenmitglieder vor
     `merge_group()`. `sorted(..., reverse=True)` in `merge_group()` ist
@@ -242,9 +256,11 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
         for j in range(i + 1, count):
             if not titles[j] or uf.find(i) == uf.find(j):
                 continue
-            if has_id[i] and has_id[j]:
-                # Cross-type rule: both sides already carry an identifier —
-                # only exact ID equality (handled above) may merge them.
+            if has_id[i] and has_id[j] and _conflicting_ids(ids_per_paper[i], ids_per_paper[j]):
+                # Cross-type rule: both sides carry IDs of the same type with
+                # different values — only exact ID equality (handled above) may merge them.
+                # This allows OpenAlex-URLs to merge with DOI records if one side
+                # lacks the other's ID type (#707 P1).
                 continue
             if _title_similarity(titles[i], titles[j]) >= threshold:
                 uf.union(i, j)
