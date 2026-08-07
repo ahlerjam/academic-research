@@ -70,6 +70,14 @@ def dersimonianlaird(studies: list[Study]) -> MetaAnalysisResult:
     if len(studies) < 3:
         raise ValueError("Meta-analysis requires at least 3 studies.")
 
+    for s in studies:
+        if not math.isfinite(s.yi):
+            raise ValueError(f"Study '{s.name}': yi must be a finite number, got {s.yi!r}.")
+        if not math.isfinite(s.vi):
+            raise ValueError(f"Study '{s.name}': vi must be a finite number, got {s.vi!r}.")
+        if s.vi <= 0:
+            raise ValueError(f"Study '{s.name}': vi must be > 0, got {s.vi!r}.")
+
     k = len(studies)
     yi = [s.yi for s in studies]
     vi = [s.vi for s in studies]
@@ -164,14 +172,16 @@ def _load_studies(path: str) -> list[Study]:
     with open(path, encoding="utf-8") as fh:
         raw = json.load(fh)
     studies = []
-    for item in raw:
-        studies.append(
-            Study(
-                name=item["name"],
-                yi=float(item["yi"]),
-                vi=float(item["vi"]),
-            )
-        )
+    for i, item in enumerate(raw):
+        name = item.get("name", f"<Studie #{i}>") if isinstance(item, dict) else f"<Studie #{i}>"
+        try:
+            yi = float(item["yi"])
+            vi = float(item["vi"])
+        except KeyError as exc:
+            raise ValueError(f"Study '{name}': missing required field {exc}.") from exc
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Study '{name}': yi/vi must be numeric ({exc}).") from exc
+        studies.append(Study(name=name, yi=yi, vi=vi))
     return studies
 
 

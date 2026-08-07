@@ -1,0 +1,2524 @@
+{
+  "k": 10,
+  "model_id": "intfloat/multilingual-e5-small",
+  "dim": 384,
+  "manifest_sha256": "05193f994f84a149924b8ab11d2b474b3cb8f0e02fbf6774be2f8605de07417e",
+  "transform_manifest_sha256": "2cd017558e41f182d2ae655140801bc67cc4b4b1dcb1e2796d634e59ee3d5074",
+  "query_count": 26,
+  "chunk_count": 30,
+  "transform_model": "sonnet",
+  "hyde_prompt_id": "hyde-fec5f4bd53db",
+  "multi_query_prompt_id": "mq-ffd7e47cb353",
+  "arms": {
+    "baseline": {
+      "overall": {
+        "recall_at_10": 0.7692307692307693,
+        "ndcg_at_10": 0.6651084691792787,
+        "mrr": 0.6314102564102565
+      },
+      "subsets": {
+        "cross-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "language-gap": {
+          "recall_at_10": 0.3333333333333333,
+          "ndcg_at_10": 0.13114729086356922,
+          "mrr": 0.06944444444444443
+        },
+        "same-language": {
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9169964696377684,
+          "mrr": 0.8888888888888888
+        }
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#0",
+            "en-telemetry-retention#1",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#1",
+            "en-infrastructure-drift#1",
+            "en-access-review#1",
+            "en-access-review#0",
+            "en-change-approval#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-02",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-telemetry-retention#0",
+            "en-change-approval#1",
+            "en-access-review#0",
+            "en-access-review#1",
+            "en-telemetry-retention#1",
+            "en-incident-response#1",
+            "en-change-approval#0",
+            "en-change-approval#2",
+            "en-supply-chain#0",
+            "en-incident-response#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-03",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-incident-response#2",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#0",
+            "en-telemetry-retention#1",
+            "en-change-approval#0",
+            "en-incident-response#0",
+            "en-incident-response#1",
+            "en-pipeline-secrets#0",
+            "en-change-approval#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-04",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#1",
+            "en-change-approval#1",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#0",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-telemetry-retention#0",
+            "en-supply-chain#2",
+            "en-telemetry-retention#1",
+            "en-access-review#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-05",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#2",
+            "en-supply-chain#1",
+            "en-supply-chain#0",
+            "en-incident-response#0",
+            "en-pipeline-secrets#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#0",
+            "en-infrastructure-drift#0",
+            "en-access-review#1",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-06",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#0",
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-telemetry-retention#0",
+            "en-access-review#1",
+            "en-supply-chain#2",
+            "en-access-review#0",
+            "en-change-approval#0",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-07",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-access-review#1",
+            "en-incident-response#0",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "en-access-review#0",
+            "en-change-approval#2",
+            "en-infrastructure-drift#0",
+            "en-change-approval#0",
+            "en-incident-response#2",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-08",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#2",
+            "en-change-approval#2",
+            "en-incident-response#1",
+            "en-incident-response#0",
+            "en-telemetry-retention#0",
+            "en-telemetry-retention#1",
+            "en-infrastructure-drift#1",
+            "en-access-review#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-09",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6934264036172708,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#2",
+            "en-access-review#1",
+            "en-incident-response#2",
+            "en-change-approval#0",
+            "en-incident-response#1",
+            "en-telemetry-retention#1",
+            "en-telemetry-retention#0",
+            "en-change-approval#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-10",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#2",
+            "en-pipeline-secrets#0",
+            "en-access-review#1",
+            "en-incident-response#0",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#1",
+            "en-infrastructure-drift#0",
+            "en-supply-chain#0",
+            "en-change-approval#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-11",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-change-approval#0",
+            "en-supply-chain#0",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#0",
+            "en-telemetry-retention#1",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-supply-chain#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-01",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "de-datenschutz-pipeline#0",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-freigabenachweis-archiv#0",
+            "en-access-review#1",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-02",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "de-datenschutz-pipeline#1",
+            "de-datenschutz-pipeline#0",
+            "de-freigabenachweis-archiv#0",
+            "en-change-approval#2",
+            "de-lieferkette-pruefung#1",
+            "en-telemetry-retention#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-access-review#1",
+            "en-incident-response#2",
+            "en-access-review#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-03",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#0",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#1",
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#0",
+            "en-infrastructure-drift#1",
+            "de-freigabenachweis-archiv#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-04",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-datenschutz-pipeline#1",
+            "de-freigabenachweis-archiv#0",
+            "de-mitbestimmung-telemetrie#2",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#0",
+            "de-freigabenachweis-archiv#1",
+            "de-lieferkette-pruefung#1",
+            "en-access-review#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-05",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "de-datenschutz-pipeline#1",
+            "en-infrastructure-drift#0",
+            "de-freigabenachweis-archiv#0",
+            "en-change-approval#0",
+            "de-datenschutz-pipeline#2",
+            "de-datenschutz-pipeline#0",
+            "de-lieferkette-pruefung#0",
+            "en-pipeline-secrets#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-06",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-telemetry-retention#1",
+            "en-change-approval#0",
+            "de-datenschutz-pipeline#1",
+            "de-freigabenachweis-archiv#0",
+            "de-datenschutz-pipeline#2",
+            "en-supply-chain#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-07",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9197207891481876,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#2",
+            "de-datenschutz-pipeline#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-datenschutz-pipeline#1",
+            "de-freigabenachweis-archiv#0",
+            "de-freigabenachweis-archiv#1",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#0",
+            "de-lieferkette-pruefung#2",
+            "en-access-review#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-01",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-telemetry-retention#1",
+            "de-lieferkette-pruefung#2",
+            "de-freigabenachweis-archiv#0",
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#0",
+            "de-datenschutz-pipeline#1",
+            "en-change-approval#1",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#1",
+            "en-incident-response#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-02",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#1",
+            "de-freigabenachweis-archiv#0",
+            "en-access-review#1",
+            "de-lieferkette-pruefung#0",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#1",
+            "en-infrastructure-drift#2",
+            "en-incident-response#1",
+            "en-access-review#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-03",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.43067655807339306,
+          "reciprocal_rank": 0.25,
+          "first_hit_rank": 4,
+          "retrieved": [
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#2",
+            "de-lieferkette-pruefung#0",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#1",
+            "en-supply-chain#1",
+            "en-change-approval#1",
+            "de-datenschutz-pipeline#1",
+            "en-change-approval#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-04",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#1",
+            "de-datenschutz-pipeline#0",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#2",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-05",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-access-review#1",
+            "de-mitbestimmung-telemetrie#1",
+            "en-pipeline-secrets#2",
+            "de-lieferkette-pruefung#2",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#0",
+            "en-incident-response#1",
+            "de-mitbestimmung-telemetrie#2",
+            "en-access-review#0",
+            "en-infrastructure-drift#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-06",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3562071871080222,
+          "reciprocal_rank": 0.16666666666666666,
+          "first_hit_rank": 6,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#1",
+            "en-access-review#1",
+            "de-freigabenachweis-archiv#0",
+            "en-infrastructure-drift#2",
+            "de-datenschutz-pipeline#1",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "de-datenschutz-pipeline#0",
+            "de-lieferkette-pruefung#1",
+            "en-incident-response#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-cross-01",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-supply-chain#1",
+            "en-supply-chain#0",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#1",
+            "en-pipeline-secrets#1",
+            "en-access-review#0",
+            "en-supply-chain#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-cross-02",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-access-review#1",
+            "en-change-approval#1",
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-supply-chain#2",
+            "en-incident-response#1",
+            "en-telemetry-retention#1",
+            "en-access-review#0",
+            "en-incident-response#0"
+          ],
+          "fused_rankings": 1
+        }
+      ],
+      "deltas": {
+        "overall": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "cross-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "language-gap": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "same-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        }
+      }
+    },
+    "hyde_query_prefix": {
+      "overall": {
+        "recall_at_10": 0.7692307692307693,
+        "ndcg_at_10": 0.5696088082184827,
+        "mrr": 0.5134615384615384
+      },
+      "subsets": {
+        "cross-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "language-gap": {
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.7718216255952429,
+          "mrr": 0.6944444444444445
+        },
+        "same-language": {
+          "recall_at_10": 0.7777777777777778,
+          "ndcg_at_10": 0.5654944033393939,
+          "mrr": 0.5101851851851852
+        }
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#0",
+            "en-supply-chain#2",
+            "en-supply-chain#1",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-infrastructure-drift#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-02",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-telemetry-retention#1",
+            "en-supply-chain#1",
+            "en-supply-chain#0",
+            "en-supply-chain#2",
+            "en-telemetry-retention#0",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-access-review#0",
+            "en-pipeline-secrets#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-03",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-infrastructure-drift#0",
+            "en-incident-response#0",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#2",
+            "en-incident-response#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-04",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-supply-chain#1",
+            "en-change-approval#1",
+            "en-pipeline-secrets#0",
+            "en-supply-chain#0",
+            "en-change-approval#0",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#2",
+            "en-infrastructure-drift#2",
+            "en-infrastructure-drift#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-05",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#2",
+            "en-supply-chain#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#0",
+            "en-infrastructure-drift#0",
+            "en-pipeline-secrets#2",
+            "en-change-approval#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-06",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9197207891481876,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-incident-response#0",
+            "en-change-approval#1",
+            "en-access-review#0",
+            "en-change-approval#0",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#0",
+            "en-supply-chain#0",
+            "en-supply-chain#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-07",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#0",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "en-change-approval#1",
+            "en-change-approval#2",
+            "en-supply-chain#2",
+            "en-change-approval#0",
+            "en-access-review#0",
+            "en-infrastructure-drift#0",
+            "en-supply-chain#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-08",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-incident-response#2",
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-change-approval#0",
+            "en-incident-response#0",
+            "en-infrastructure-drift#0",
+            "en-infrastructure-drift#1",
+            "en-supply-chain#0",
+            "en-telemetry-retention#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-09",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-infrastructure-drift#2",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-supply-chain#0",
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-infrastructure-drift#0",
+            "en-supply-chain#2",
+            "en-supply-chain#1",
+            "en-pipeline-secrets#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-10",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "en-pipeline-secrets#1",
+            "en-change-approval#1",
+            "en-supply-chain#0",
+            "en-supply-chain#2",
+            "en-change-approval#0",
+            "en-supply-chain#1",
+            "en-telemetry-retention#1",
+            "en-incident-response#0",
+            "en-access-review#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-11",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#2",
+            "en-change-approval#1",
+            "en-infrastructure-drift#2",
+            "en-change-approval#2",
+            "en-change-approval#0",
+            "en-incident-response#1",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-01",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.31546487678572877,
+          "reciprocal_rank": 0.125,
+          "first_hit_rank": 8,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-telemetry-retention#0",
+            "en-telemetry-retention#1",
+            "en-access-review#1",
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#0",
+            "en-access-review#0",
+            "en-supply-chain#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-02",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-infrastructure-drift#0",
+            "en-incident-response#2",
+            "en-telemetry-retention#1",
+            "en-incident-response#0",
+            "en-access-review#0",
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-telemetry-retention#0",
+            "en-infrastructure-drift#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-03",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#2",
+            "en-change-approval#1",
+            "en-access-review#0",
+            "de-mitbestimmung-telemetrie#2",
+            "en-change-approval#0",
+            "en-access-review#1",
+            "en-telemetry-retention#1",
+            "en-pipeline-secrets#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-04",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-telemetry-retention#0",
+            "de-mitbestimmung-telemetrie#2",
+            "en-access-review#0",
+            "en-telemetry-retention#1",
+            "en-incident-response#0",
+            "en-change-approval#1",
+            "de-lieferkette-pruefung#2",
+            "en-incident-response#1",
+            "en-access-review#1",
+            "de-mitbestimmung-telemetrie#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-05",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.5,
+          "ndcg_at_10": 0.3065735963827292,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_hit_rank": 3,
+          "retrieved": [
+            "en-supply-chain#0",
+            "en-supply-chain#2",
+            "de-lieferkette-pruefung#2",
+            "en-pipeline-secrets#1",
+            "en-telemetry-retention#1",
+            "en-change-approval#1",
+            "en-telemetry-retention#0",
+            "en-pipeline-secrets#2",
+            "en-incident-response#0",
+            "en-change-approval#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-06",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.2890648263178879,
+          "reciprocal_rank": 0.1,
+          "first_hit_rank": 10,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-supply-chain#0",
+            "en-supply-chain#1",
+            "en-supply-chain#2",
+            "de-mitbestimmung-telemetrie#2",
+            "en-pipeline-secrets#2",
+            "en-incident-response#1",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-07",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.5,
+          "ndcg_at_10": 0.19342640361727081,
+          "reciprocal_rank": 0.125,
+          "first_hit_rank": 8,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-incident-response#0",
+            "en-pipeline-secrets#2",
+            "en-change-approval#1",
+            "en-access-review#1",
+            "en-access-review#0",
+            "en-incident-response#1",
+            "de-mitbestimmung-telemetrie#2",
+            "en-change-approval#0",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-01",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-infrastructure-drift#1",
+            "en-change-approval#1",
+            "en-infrastructure-drift#0",
+            "en-change-approval#0",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#1",
+            "en-infrastructure-drift#2",
+            "en-pipeline-secrets#0",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-02",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#2",
+            "en-infrastructure-drift#2",
+            "en-infrastructure-drift#1",
+            "en-supply-chain#2",
+            "en-access-review#1",
+            "en-infrastructure-drift#0",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-03",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#0",
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-supply-chain#1",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#2",
+            "en-pipeline-secrets#0",
+            "en-infrastructure-drift#1",
+            "en-incident-response#0",
+            "en-infrastructure-drift#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-04",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_hit_rank": 3,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-supply-chain#2",
+            "en-incident-response#0",
+            "en-change-approval#1",
+            "en-telemetry-retention#0",
+            "en-infrastructure-drift#0",
+            "en-telemetry-retention#1",
+            "en-infrastructure-drift#1",
+            "de-lieferkette-pruefung#2",
+            "en-supply-chain#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-05",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-access-review#1",
+            "en-access-review#0",
+            "en-pipeline-secrets#2",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-incident-response#0",
+            "en-infrastructure-drift#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-06",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_hit_rank": 3,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-incident-response#1",
+            "en-supply-chain#0",
+            "en-change-approval#1",
+            "en-incident-response#0",
+            "en-change-approval#0",
+            "en-infrastructure-drift#0",
+            "en-infrastructure-drift#2",
+            "en-supply-chain#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-cross-01",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-access-review#1",
+            "en-pipeline-secrets#2",
+            "en-access-review#0",
+            "en-pipeline-secrets#1",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-incident-response#0",
+            "en-supply-chain#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-cross-02",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#2",
+            "en-change-approval#2",
+            "en-access-review#1",
+            "en-infrastructure-drift#0",
+            "en-incident-response#1",
+            "en-incident-response#0",
+            "en-supply-chain#2"
+          ],
+          "fused_rankings": 1
+        }
+      ],
+      "deltas": {
+        "overall": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": -0.09549966096079598,
+          "mrr": -0.11794871794871808
+        },
+        "cross-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "language-gap": {
+          "recall_at_10": 0.6666666666666667,
+          "ndcg_at_10": 0.6406743347316737,
+          "mrr": 0.6250000000000001
+        },
+        "same-language": {
+          "recall_at_10": -0.2222222222222222,
+          "ndcg_at_10": -0.35150206629837444,
+          "mrr": -0.37870370370370365
+        }
+      }
+    },
+    "hyde_passage_prefix": {
+      "overall": {
+        "recall_at_10": 0.75,
+        "ndcg_at_10": 0.6088425417560704,
+        "mrr": 0.5702380952380952
+      },
+      "subsets": {
+        "cross-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "language-gap": {
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.793643251190486,
+          "mrr": 0.7222222222222222
+        },
+        "same-language": {
+          "recall_at_10": 0.75,
+          "ndcg_at_10": 0.614891476584162,
+          "mrr": 0.5829365079365079
+        }
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#0",
+            "en-supply-chain#1",
+            "en-supply-chain#2",
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-pipeline-secrets#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-02",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-supply-chain#1",
+            "en-telemetry-retention#0",
+            "en-supply-chain#0",
+            "en-telemetry-retention#1",
+            "en-supply-chain#2",
+            "en-pipeline-secrets#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#2",
+            "en-change-approval#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-03",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-incident-response#0",
+            "en-infrastructure-drift#0",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#2",
+            "en-pipeline-secrets#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-04",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#1",
+            "en-pipeline-secrets#1",
+            "en-change-approval#1",
+            "en-pipeline-secrets#0",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#2",
+            "en-change-approval#0",
+            "en-supply-chain#2",
+            "en-telemetry-retention#0",
+            "en-infrastructure-drift#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-05",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#2",
+            "en-supply-chain#0",
+            "en-supply-chain#1",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-change-approval#2",
+            "en-pipeline-secrets#2",
+            "en-infrastructure-drift#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-06",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9197207891481876,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-incident-response#0",
+            "en-access-review#0",
+            "en-change-approval#0",
+            "en-supply-chain#0",
+            "en-change-approval#1",
+            "en-infrastructure-drift#1",
+            "en-supply-chain#1",
+            "en-telemetry-retention#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-07",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#0",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-supply-chain#2",
+            "en-infrastructure-drift#0",
+            "en-incident-response#2",
+            "en-change-approval#0",
+            "en-supply-chain#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-08",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#2",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-incident-response#1",
+            "en-incident-response#0",
+            "en-telemetry-retention#0",
+            "en-change-approval#0",
+            "en-infrastructure-drift#0",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-09",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-infrastructure-drift#2",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-supply-chain#0",
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-infrastructure-drift#0",
+            "en-supply-chain#1",
+            "en-supply-chain#2",
+            "en-pipeline-secrets#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-10",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "en-pipeline-secrets#1",
+            "en-change-approval#1",
+            "en-supply-chain#0",
+            "en-supply-chain#1",
+            "en-telemetry-retention#1",
+            "en-supply-chain#2",
+            "en-change-approval#0",
+            "en-incident-response#0",
+            "en-access-review#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-en-11",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#2",
+            "en-change-approval#1",
+            "en-change-approval#2",
+            "en-infrastructure-drift#2",
+            "en-incident-response#1",
+            "en-change-approval#0",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-01",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3333333333333333,
+          "reciprocal_rank": 0.14285714285714285,
+          "first_hit_rank": 7,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-change-approval#0",
+            "en-telemetry-retention#0",
+            "en-change-approval#1",
+            "en-telemetry-retention#1",
+            "en-access-review#1",
+            "de-datenschutz-pipeline#0",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#0",
+            "en-supply-chain#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-02",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-incident-response#2",
+            "en-incident-response#0",
+            "en-telemetry-retention#1",
+            "en-infrastructure-drift#0",
+            "en-telemetry-retention#0",
+            "en-access-review#0",
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-03",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#2",
+            "en-change-approval#1",
+            "de-mitbestimmung-telemetrie#2",
+            "en-access-review#0",
+            "en-access-review#1",
+            "en-pipeline-secrets#0",
+            "en-change-approval#2",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-04",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-telemetry-retention#0",
+            "en-access-review#0",
+            "de-mitbestimmung-telemetrie#2",
+            "en-incident-response#0",
+            "en-telemetry-retention#1",
+            "en-incident-response#1",
+            "en-access-review#1",
+            "en-change-approval#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-lieferkette-pruefung#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-05",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.5,
+          "ndcg_at_10": 0.2640681225725909,
+          "reciprocal_rank": 0.25,
+          "first_hit_rank": 4,
+          "retrieved": [
+            "en-supply-chain#0",
+            "en-supply-chain#2",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#2",
+            "en-telemetry-retention#1",
+            "en-telemetry-retention#0",
+            "en-pipeline-secrets#2",
+            "en-incident-response#0",
+            "en-change-approval#1",
+            "en-change-approval#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-06",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.2890648263178879,
+          "reciprocal_rank": 0.1,
+          "first_hit_rank": 10,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-supply-chain#1",
+            "en-supply-chain#0",
+            "en-supply-chain#2",
+            "de-mitbestimmung-telemetrie#2",
+            "en-incident-response#1",
+            "en-pipeline-secrets#2",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-de-07",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-incident-response#0",
+            "en-pipeline-secrets#2",
+            "en-pipeline-secrets#1",
+            "en-change-approval#1",
+            "en-access-review#1",
+            "en-access-review#0",
+            "en-change-approval#2",
+            "en-incident-response#1",
+            "en-change-approval#0",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-01",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#0",
+            "en-change-approval#1",
+            "en-supply-chain#0",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#1",
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#2",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-02",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#2",
+            "en-infrastructure-drift#2",
+            "en-infrastructure-drift#1",
+            "en-supply-chain#2",
+            "en-change-approval#2",
+            "en-access-review#1",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-03",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#0",
+            "en-supply-chain#1",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#2",
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#0",
+            "en-incident-response#0",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-04",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-incident-response#0",
+            "en-supply-chain#2",
+            "en-telemetry-retention#0",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-infrastructure-drift#0",
+            "en-telemetry-retention#1",
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-05",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-pipeline-secrets#2",
+            "en-access-review#1",
+            "en-access-review#0",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-change-approval#2",
+            "en-incident-response#0",
+            "en-pipeline-secrets#0",
+            "en-incident-response#1"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-gap-06",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_hit_rank": 3,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-incident-response#1",
+            "en-supply-chain#0",
+            "en-incident-response#0",
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-supply-chain#1",
+            "en-infrastructure-drift#0",
+            "en-infrastructure-drift#2"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-cross-01",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-access-review#1",
+            "en-change-approval#2",
+            "en-pipeline-secrets#2",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#0",
+            "en-pipeline-secrets#1",
+            "en-access-review#0",
+            "en-incident-response#0"
+          ],
+          "fused_rankings": 1
+        },
+        {
+          "query_id": "q-cross-02",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-access-review#1",
+            "en-infrastructure-drift#2",
+            "en-incident-response#0",
+            "en-incident-response#1",
+            "en-infrastructure-drift#0",
+            "en-supply-chain#2"
+          ],
+          "fused_rankings": 1
+        }
+      ],
+      "deltas": {
+        "overall": {
+          "recall_at_10": -0.019230769230769273,
+          "ndcg_at_10": -0.05626592742320824,
+          "mrr": -0.06117216117216129
+        },
+        "cross-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "mrr": 0.0
+        },
+        "language-gap": {
+          "recall_at_10": 0.6666666666666667,
+          "ndcg_at_10": 0.6624959603269167,
+          "mrr": 0.6527777777777778
+        },
+        "same-language": {
+          "recall_at_10": -0.25,
+          "ndcg_at_10": -0.3021049930536064,
+          "mrr": -0.305952380952381
+        }
+      }
+    },
+    "multi_query": {
+      "overall": {
+        "recall_at_10": 0.9615384615384616,
+        "ndcg_at_10": 0.6583209326390337,
+        "mrr": 0.5648351648351648
+      },
+      "subsets": {
+        "cross-language": {
+          "recall_at_10": 0.5,
+          "ndcg_at_10": 0.21533827903669653,
+          "mrr": 0.125
+        },
+        "language-gap": {
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.39268688189440276,
+          "mrr": 0.2128968253968254
+        },
+        "same-language": {
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.7960859110652815,
+          "mrr": 0.7310185185185185
+        }
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-telemetry-retention#1",
+            "en-change-approval#2",
+            "en-supply-chain#0",
+            "de-lieferkette-pruefung#2",
+            "en-access-review#1",
+            "de-mitbestimmung-telemetrie#2"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-02",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-supply-chain#0",
+            "en-change-approval#2",
+            "en-access-review#1",
+            "en-telemetry-retention#1",
+            "en-change-approval#0",
+            "en-incident-response#1",
+            "en-telemetry-retention#0",
+            "de-lieferkette-pruefung#1",
+            "de-freigabenachweis-archiv#0"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-03",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-change-approval#0",
+            "en-infrastructure-drift#0",
+            "en-change-approval#1",
+            "en-incident-response#1",
+            "en-incident-response#0",
+            "en-incident-response#2",
+            "de-lieferkette-pruefung#1",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-04",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#1",
+            "en-change-approval#1",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-change-approval#0",
+            "de-lieferkette-pruefung#0",
+            "de-lieferkette-pruefung#1",
+            "de-freigabenachweis-archiv#0",
+            "de-datenschutz-pipeline#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-05",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-supply-chain#2",
+            "en-supply-chain#0",
+            "en-supply-chain#1",
+            "en-change-approval#0",
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "en-pipeline-secrets#1",
+            "de-datenschutz-pipeline#2",
+            "de-lieferkette-pruefung#0",
+            "en-incident-response#0"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-06",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9197207891481876,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-incident-response#0",
+            "en-access-review#0",
+            "en-supply-chain#2",
+            "en-change-approval#0",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#0",
+            "en-telemetry-retention#0",
+            "de-lieferkette-pruefung#2"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-07",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#0",
+            "en-access-review#1",
+            "en-access-review#0",
+            "en-infrastructure-drift#1",
+            "en-change-approval#0",
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-infrastructure-drift#0",
+            "en-change-approval#1",
+            "en-incident-response#2"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-08",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-incident-response#2",
+            "en-change-approval#2",
+            "en-incident-response#1",
+            "en-change-approval#0",
+            "en-incident-response#0",
+            "en-telemetry-retention#1",
+            "en-telemetry-retention#0",
+            "en-infrastructure-drift#1",
+            "en-access-review#0",
+            "de-lieferkette-pruefung#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-09",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6934264036172708,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-infrastructure-drift#2",
+            "en-infrastructure-drift#1",
+            "en-access-review#1",
+            "en-telemetry-retention#1",
+            "de-datenschutz-pipeline#0",
+            "en-change-approval#0",
+            "de-lieferkette-pruefung#1",
+            "en-incident-response#2",
+            "de-datenschutz-pipeline#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-10",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-telemetry-retention#1",
+            "en-access-review#1",
+            "en-infrastructure-drift#0",
+            "en-incident-response#0",
+            "de-lieferkette-pruefung#1",
+            "en-infrastructure-drift#1",
+            "en-access-review#0"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-en-11",
+          "lang": "en",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#2",
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "de-mitbestimmung-telemetrie#1",
+            "en-supply-chain#0",
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#1",
+            "en-telemetry-retention#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-de-01",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-access-review#1",
+            "de-datenschutz-pipeline#0",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#0",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#1",
+            "en-telemetry-retention#1",
+            "de-freigabenachweis-archiv#0",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-de-02",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#2",
+            "de-datenschutz-pipeline#0",
+            "de-datenschutz-pipeline#1",
+            "en-telemetry-retention#0",
+            "de-lieferkette-pruefung#1",
+            "de-freigabenachweis-archiv#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-incident-response#2",
+            "en-telemetry-retention#1",
+            "en-access-review#0"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-de-03",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.31546487678572877,
+          "reciprocal_rank": 0.125,
+          "first_hit_rank": 8,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#2",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#1",
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#0",
+            "en-change-approval#0",
+            "de-datenschutz-pipeline#0",
+            "de-mitbestimmung-telemetrie#0",
+            "en-access-review#1",
+            "en-pipeline-secrets#2"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-de-04",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.38685280723454163,
+          "reciprocal_rank": 0.2,
+          "first_hit_rank": 5,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#0",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-freigabenachweis-archiv#0",
+            "de-datenschutz-pipeline#0",
+            "de-lieferkette-pruefung#1",
+            "en-access-review#1",
+            "de-freigabenachweis-archiv#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-de-05",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5706417189553201,
+          "reciprocal_rank": 0.3333333333333333,
+          "first_hit_rank": 3,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "en-pipeline-secrets#2",
+            "en-supply-chain#0",
+            "en-telemetry-retention#1",
+            "en-change-approval#1",
+            "en-supply-chain#2",
+            "de-datenschutz-pipeline#1"
+          ],
+          "fused_rankings": 3
+        },
+        {
+          "query_id": "q-de-06",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#0",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-datenschutz-pipeline#2",
+            "en-change-approval#1",
+            "de-datenschutz-pipeline#1",
+            "en-pipeline-secrets#2",
+            "de-lieferkette-pruefung#0",
+            "en-supply-chain#0",
+            "de-mitbestimmung-telemetrie#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-de-07",
+          "lang": "de",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9197207891481876,
+          "reciprocal_rank": 1.0,
+          "first_hit_rank": 1,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#2",
+            "de-datenschutz-pipeline#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-datenschutz-pipeline#1",
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#0",
+            "de-lieferkette-pruefung#2",
+            "en-access-review#1",
+            "de-freigabenachweis-archiv#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-gap-01",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3333333333333333,
+          "reciprocal_rank": 0.14285714285714285,
+          "first_hit_rank": 7,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "en-change-approval#1",
+            "en-telemetry-retention#1",
+            "de-datenschutz-pipeline#1",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#1",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#0",
+            "de-lieferkette-pruefung#2",
+            "de-freigabenachweis-archiv#0"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-gap-02",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3333333333333333,
+          "reciprocal_rank": 0.14285714285714285,
+          "first_hit_rank": 7,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#1",
+            "en-access-review#1",
+            "en-pipeline-secrets#1",
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#1",
+            "en-pipeline-secrets#0",
+            "en-infrastructure-drift#2",
+            "de-lieferkette-pruefung#0",
+            "en-change-approval#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-gap-03",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "first_hit_rank": 2,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#1",
+            "en-change-approval#1",
+            "en-supply-chain#2",
+            "de-lieferkette-pruefung#2",
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#0",
+            "de-lieferkette-pruefung#1",
+            "en-supply-chain#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-gap-04",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.31546487678572877,
+          "reciprocal_rank": 0.125,
+          "first_hit_rank": 8,
+          "retrieved": [
+            "de-lieferkette-pruefung#2",
+            "en-pipeline-secrets#2",
+            "en-pipeline-secrets#1",
+            "en-supply-chain#2",
+            "de-lieferkette-pruefung#1",
+            "de-datenschutz-pipeline#2",
+            "de-datenschutz-pipeline#0",
+            "en-incident-response#0",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-gap-05",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3562071871080222,
+          "reciprocal_rank": 0.16666666666666666,
+          "first_hit_rank": 6,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "en-infrastructure-drift#2",
+            "en-access-review#1",
+            "de-lieferkette-pruefung#2",
+            "de-mitbestimmung-telemetrie#2",
+            "en-change-approval#1",
+            "en-access-review#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-incident-response#1",
+            "de-lieferkette-pruefung#0"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-gap-06",
+          "lang": "de",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.38685280723454163,
+          "reciprocal_rank": 0.2,
+          "first_hit_rank": 5,
+          "retrieved": [
+            "de-freigabenachweis-archiv#0",
+            "en-access-review#1",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#1",
+            "en-incident-response#1",
+            "de-lieferkette-pruefung#1",
+            "en-change-approval#0",
+            "de-lieferkette-pruefung#2",
+            "en-infrastructure-drift#1",
+            "de-lieferkette-pruefung#0"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-cross-01",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.43067655807339306,
+          "reciprocal_rank": 0.25,
+          "first_hit_rank": 4,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-mitbestimmung-telemetrie#2",
+            "en-supply-chain#0",
+            "en-supply-chain#1",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#1"
+          ],
+          "fused_rankings": 4
+        },
+        {
+          "query_id": "q-cross-02",
+          "lang": "en",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "first_hit_rank": null,
+          "retrieved": [
+            "en-access-review#1",
+            "en-change-approval#1",
+            "en-change-approval#0",
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-supply-chain#2",
+            "en-access-review#0",
+            "en-telemetry-retention#1",
+            "de-mitbestimmung-telemetrie#2",
+            "en-incident-response#1"
+          ],
+          "fused_rankings": 4
+        }
+      ],
+      "deltas": {
+        "overall": {
+          "recall_at_10": 0.1923076923076923,
+          "ndcg_at_10": -0.006787536540244998,
+          "mrr": -0.06657509157509167
+        },
+        "cross-language": {
+          "recall_at_10": 0.5,
+          "ndcg_at_10": 0.21533827903669653,
+          "mrr": 0.125
+        },
+        "language-gap": {
+          "recall_at_10": 0.6666666666666667,
+          "ndcg_at_10": 0.2615395910308336,
+          "mrr": 0.14345238095238094
+        },
+        "same-language": {
+          "recall_at_10": 0.0,
+          "ndcg_at_10": -0.12091055857248689,
+          "mrr": -0.15787037037037033
+        }
+      }
+    }
+  },
+  "latency": {
+    "baseline": {
+      "transform_ms": 0.0,
+      "embed_ms": 16.9,
+      "search_ms": 1.667,
+      "total_ms": 18.567,
+      "embed_calls_per_query": 1.0
+    },
+    "hyde_query_prefix": {
+      "transform_ms": 8022.82,
+      "embed_ms": 16.9,
+      "search_ms": 1.624,
+      "total_ms": 8041.344,
+      "embed_calls_per_query": 1.0
+    },
+    "hyde_passage_prefix": {
+      "transform_ms": 8022.82,
+      "embed_ms": 16.9,
+      "search_ms": 1.622,
+      "total_ms": 8041.342,
+      "embed_calls_per_query": 1.0
+    },
+    "multi_query": {
+      "transform_ms": 6762.03,
+      "embed_ms": 66.95,
+      "search_ms": 6.49,
+      "total_ms": 6835.47,
+      "embed_calls_per_query": 3.9615384615384617
+    }
+  }
+}

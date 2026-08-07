@@ -31,6 +31,8 @@ danach höchstens den passenden Report.
 | [`embedding-truncatability-730.md`](embedding-truncatability-730.md) | Belegte Truncatierbarkeit der drei #628-Kandidaten auf 384d je Modellkarte — nur Qwen3-Embedding-0.6B ohne Schema-Migration einsetzbar, BGE-M3/e5-large „nicht belegt" (#730) |
 | [`2026-08-06-extended-nli-goldset-721.md`](2026-08-06-extended-nli-goldset-721.md) | Momentaufnahme: erweitertes NLI-Goldset (186 Fälle, 30 echte Paper, acht Fächer) ins Repo aufgenommen, Reproduktion der #720-Schwellenkurve (#721) |
 | [`retrieval-chunk-goldset-708.md`](retrieval-chunk-goldset-708.md) | Chunk-Goldset (30 Chunks, 26 Queries) mit Recall@10/nDCG@10/MRR, hermetisch in CI dank eingecheckter Vektoren — inkl. gemessener Sprachlücke DE→EN (#708) |
+| [`2026-08-07-hyde-multiquery-733.md`](2026-08-07-hyde-multiquery-733.md) | HyDE und Multi-Query prototypisch gegen das Chunk-Goldset aus #708 gemessen: nDCG@10/MRR je Arm, Sprachlücke getrennt ausgewiesen, Latenz je Verfahren, Empfehlung aus den Zahlen (#733) |
+| [`2026-08-07-hyde-multiquery-733-live-results.json`](2026-08-07-hyde-multiquery-733-live-results.json) | Rohdaten des Messlaufs (alle vier Arme, per Query, inklusive Deltas und Latenzblock) — vom CI-Job `retrieval-goldset` gegen einen frischen Lauf geprüft |
 | [`2026-08-07-bge-m3-nli-scorer-720.md`](2026-08-07-bge-m3-nli-scorer-720.md) | Momentaufnahme: NLI-Scorer-Wechsel auf `bge-m3-zeroshot-v2.0` @ Schwelle 0,95, A/B über 278 Fälle, `condition-stripped`-Grenze, zwei verworfene Zusatzansätze (#720) |
 
 ## Konvention

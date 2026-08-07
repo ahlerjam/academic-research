@@ -84,7 +84,11 @@ Kandidatenliste als Tabelle (Studie | yi | vi | Beleg) vor und warte auf seine
 ausdrückliche Bestätigung, bevor du `/tmp/meta_studies.json` schreibst. Meldet
 `vault.extract_tables()` `no-tables`, `no-textlayer` oder `backend-missing`,
 nenne den Status im Klartext und frag nach den Zahlen — nicht schätzen, nicht
-aus dem Abstract ableiten.
+aus dem Abstract ableiten. Eine vom User bestätigte Kennzahl darfst du
+zusätzlich per `vault.add_table_value(paper_id, page, table_index, row, col,
+claimed_value)` als eigenständigen Beleg im Vault erfassen (#741) — das ist
+unabhängig von `/tmp/meta_studies.json` und ersetzt die Bestätigungspflicht
+oben nicht.
 
 Erstelle nach der Bestätigung eine temporäre JSON-Datei `/tmp/meta_studies.json`:
 ```json
