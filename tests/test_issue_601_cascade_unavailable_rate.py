@@ -243,15 +243,28 @@ def test_enough_requests_but_low_rate_no_warning(empty_vault):
     (arXiv) und steigen sofort aus der Kaskade aus; nur der vierte bleibt
     offen und produziert unavailable-Anfragen in Stufe 2/3. Das haelt die
     Rate unter der Default-Schwelle von 0.5, obwohl total >= 5 ist.
+
+    Seit Issue #740 (AC5) genuegt Familienname+Jahr allein nicht mehr fuer
+    ``confirmed`` (siehe citation-cascade.mjs::scoreCandidate) — die drei
+    frueh aussteigenden Belege tragen hier deshalb einen wirklich gelesenen
+    Co-Autor, der den echten Ueberlapp liefert (anders als FOUR_CITATIONS
+    oben, das bewusst einautorige Belege fuer die "kein frueher Ausstieg"-
+    Faelle verwendet).
     """
+    content = (
+        "Der Befund (Fantasius & Reyes 1999, S. 12) belegt die These eindeutig. "
+        "Ebenso zeigt (Wurzelbach & Costa 2001, S. 5) den Effekt. "
+        "Auch (Lindqvist & Novak 2010, S. 30) bestaetigt dies. "
+        "Zuletzt untermauert (Okonkwo 2015, S. 8) den Befund."
+    )
     with CascadeStub(
         {
             "arxiv": {
                 "status": 200,
                 "entries": [
-                    {"title": "T1", "year": 1999, "authors": ["Anna Fantasius"]},
-                    {"title": "T2", "year": 2001, "authors": ["Bruno Wurzelbach"]},
-                    {"title": "T3", "year": 2010, "authors": ["Carla Lindqvist"]},
+                    {"title": "T1", "year": 1999, "authors": ["Anna Fantasius", "Diego Reyes"]},
+                    {"title": "T2", "year": 2001, "authors": ["Bruno Wurzelbach", "Elena Costa"]},
+                    {"title": "T3", "year": 2010, "authors": ["Carla Lindqvist", "Filip Novak"]},
                 ],
             },
             "crossref": {"status": 503},
@@ -260,7 +273,7 @@ def test_enough_requests_but_low_rate_no_warning(empty_vault):
     ) as stub:
         env = {"VAULT_DB_PATH": empty_vault, "ACADEMIC_CITATION_CASCADE": "on"}
         env.update(stub.env())
-        result = run_hook(write_payload(FOUR_CITATIONS), env_overrides=env)
+        result = run_hook(write_payload(content), env_overrides=env)
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "[Citation-Cascade]" not in result.stderr, f"stderr: {result.stderr!r}"
 
