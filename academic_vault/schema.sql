@@ -429,3 +429,41 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
   embedding_vector BLOB,
   created_at       INTEGER NOT NULL
 );
+
+-- FTS5-Index ueber Chunk-Texte (Issue #726). `papers_fts`/`papers_trgm`
+-- matchen nur Paper-Felder (Titel, Abstract, Volltext) -- ein Begriff, der
+-- ausschliesslich im Methodikteil eines einzelnen Chunks steht, war darueber
+-- unauffindbar, obwohl die Vektorsuche laengst chunkgenau trifft. Eigene
+-- virtuelle Tabelle analog zu `notes_fts` (kein `content=`, manuell befuellt),
+-- NICHT analog zu `papers_trgm`: der Auftrag ist ausdruecklich EIN FTS5-Index
+-- mit derselben Tokenizer-Entscheidung wie `papers_fts` (unicode61-Default,
+-- kein Stemming, keine Kompositazerlegung) -- ein Trigram-Pendant fuer
+-- Chunk-Komposita ist bewusst nicht Teil dieses Issues. chunk_id und paper_id
+-- sind regulaere (nicht UNINDEXED) Spalten, damit ein Treffer ohne Zusatz-Join
+-- direkt die paper_id liefert.
+CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
+  chunk_id,
+  paper_id,
+  chunk_text
+);
+
+-- FTS5-Trigger: befuellen chunk_fts manuell. Bewusst DROP + CREATE statt
+-- CREATE TRIGGER IF NOT EXISTS, siehe Kommentar bei papers_ai oben --
+-- init_schema() fuehrt dieses Skript auch auf Bestands-DBs aus.
+DROP TRIGGER IF EXISTS chunk_ai;
+CREATE TRIGGER chunk_ai AFTER INSERT ON chunk_embeddings BEGIN
+  INSERT INTO chunk_fts(chunk_id, paper_id, chunk_text)
+  VALUES (new.chunk_id, new.paper_id, new.chunk_text);
+END;
+
+DROP TRIGGER IF EXISTS chunk_ad;
+CREATE TRIGGER chunk_ad AFTER DELETE ON chunk_embeddings BEGIN
+  DELETE FROM chunk_fts WHERE chunk_id = old.chunk_id;
+END;
+
+DROP TRIGGER IF EXISTS chunk_au;
+CREATE TRIGGER chunk_au AFTER UPDATE ON chunk_embeddings BEGIN
+  DELETE FROM chunk_fts WHERE chunk_id = old.chunk_id;
+  INSERT INTO chunk_fts(chunk_id, paper_id, chunk_text)
+  VALUES (new.chunk_id, new.paper_id, new.chunk_text);
+END;
