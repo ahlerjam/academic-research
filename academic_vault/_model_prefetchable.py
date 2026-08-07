@@ -10,8 +10,8 @@ Zwei Abnehmer:
 
 Bewusst ein eigenes, kleines Modul statt Code in einem der drei Backend-Module
 unterzubringen: keines der drei darf von einem der anderen beiden abhaengen
-(getrennte, optionale Backends -- ``sentence-transformers`` ist Pflicht,
-``FlagEmbedding`` explizit nicht, siehe retrieval.py).
+(getrennte Backends, alle auf ``sentence-transformers`` -- seit #714 auch der
+lokale Reranker, siehe retrieval.py).
 """
 
 from __future__ import annotations

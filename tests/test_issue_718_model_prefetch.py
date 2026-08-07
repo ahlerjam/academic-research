@@ -239,25 +239,27 @@ class TestLazyLoadNotice:
         # in-process, und stdout traegt dort JSON-RPC.
         assert on_stdout.getvalue() == ""
 
-    def test_local_reranker_backend_passes_cache_dir_to_flagreranker(self, monkeypatch):
-        """Reranker-Cache-Mismatch-Fix (#718): cache_dir wird durchgereicht."""
+    def test_local_reranker_backend_passes_cache_dir_to_crossencoder(self, monkeypatch):
+        """Reranker-Cache-Mismatch-Fix (#718): cache_dir wird durchgereicht (#714: CrossEncoder)."""
         monkeypatch.setattr(
             "academic_vault._model_prefetchable.is_cached", lambda repo_id, cache_dir: True
         )
         captured = {}
 
-        fake_flagembedding_module = ModuleType("FlagEmbedding")
-
-        class FakeFlagReranker:
-            def __init__(self, model_id, cache_dir=None, use_fp16=True):
+        class FakeCrossEncoder:
+            def __init__(self, model_id, cache_folder=None, max_length=None):
                 captured["model_id"] = model_id
-                captured["cache_dir"] = cache_dir
+                captured["cache_folder"] = cache_folder
+                captured["max_length"] = max_length
 
-        fake_flagembedding_module.FlagReranker = FakeFlagReranker
-        monkeypatch.setitem(sys.modules, "FlagEmbedding", fake_flagembedding_module)
+        monkeypatch.setattr("sentence_transformers.CrossEncoder", FakeCrossEncoder)
 
         _ORIGINAL_RERANKER_LOAD_BACKEND("BAAI/bge-reranker-v2-m3", cache_dir="/tmp/rr")
-        assert captured == {"model_id": "BAAI/bge-reranker-v2-m3", "cache_dir": "/tmp/rr"}
+        assert captured == {
+            "model_id": "BAAI/bge-reranker-v2-m3",
+            "cache_folder": "/tmp/rr",
+            "max_length": 512,
+        }
 
 
 # ---------------------------------------------------------------------------

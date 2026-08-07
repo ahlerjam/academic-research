@@ -277,7 +277,7 @@ class TestRerankerIntegration:
 
         mock_reranker = MagicMock()
         # p002 bekommt den hoeheren Score -> Rangfolge kehrt sich gegenueber RRF um
-        mock_reranker.compute_score.return_value = [0.1, 0.9]
+        mock_reranker.predict.return_value = [0.1, 0.9]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             result = apply_reranker(
@@ -329,17 +329,13 @@ class TestRerankerIntegration:
         `test_rerank_fallback_when_no_api_key_uses_local_bge` ersetzt -- das
         mockt einen FUNKTIONIERENDEN lokalen Reranker und prueft damit einen
         anderen Zweig. Der Pfad "kein Reranker verfuegbar" blieb dadurch ohne
-        jede Absicherung, obwohl er der Normalfall jeder `setup.sh`-Installation
-        ist: `FlagEmbedding` ist bewusst kein uv-/pip-verwalteter Dependency
-        (weder in `pyproject.toml` noch in `scripts/requirements.txt`, nur
-        manuell per `pip install FlagEmbedding` nachinstallierbar -- vgl.
-        Fixrunde PR #422), also schlaegt `_get_local_reranker()` dort immer
-        fehl.
+        jede Absicherung, obwohl er strukturell moeglich bleibt (Backend-Ladefehler,
+        Netzausfall beim Erstdownload etc., #714).
 
         Bewusst KEIN Patch von `_get_local_reranker`: die autouse-Fixture
         `block_real_local_reranker_backend` (tests/conftest.py) blockiert das
-        echte Backend bereits -- genau das Verhalten, das ein fehlendes
-        `rerank-local`-Extra in der Praxis erzeugt.
+        echte Backend bereits -- genau das Verhalten, das ein Backend-Ladefehler
+        in der Praxis erzeugt.
         """
         from academic_vault.retrieval import apply_reranker
 
@@ -424,7 +420,7 @@ class TestRerankerFallbackStructure:
         ]
 
         mock_reranker = MagicMock()
-        mock_reranker.compute_score.return_value = [0.5, 0.5]
+        mock_reranker.predict.return_value = [0.5, 0.5]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             result = apply_reranker(
@@ -492,7 +488,7 @@ class TestRerankerFallbackStructure:
 
         # Fallback-Pfad — kein Key, lokaler Reranker gemockt (#376)
         mock_local = MagicMock()
-        mock_local.compute_score.return_value = [0.5, 0.5]
+        mock_local.predict.return_value = [0.5, 0.5]
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_local):
             fallback = apply_reranker(
                 query="q",
@@ -661,7 +657,7 @@ class TestLocalBgeReranker:
 
         mock_reranker = MagicMock()
         # p003 bekommt hoechsten Score, dann p001, dann p002
-        mock_reranker.compute_score.return_value = [0.4, 0.1, 0.9]
+        mock_reranker.predict.return_value = [0.4, 0.1, 0.9]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             reranked = rerank_with_local_bge(
@@ -673,7 +669,7 @@ class TestLocalBgeReranker:
         assert reranked[1]["paper_id"] == "p001"
         assert reranked[2]["paper_id"] == "p002"
         # Backend bekommt Query/Text als Paar-Liste
-        call_args = mock_reranker.compute_score.call_args
+        call_args = mock_reranker.predict.call_args
         pairs = call_args[0][0]
         assert pairs == [
             ["transformer attention NLP", "Transformer neural networks."],
@@ -681,14 +677,19 @@ class TestLocalBgeReranker:
             ["transformer attention NLP", "Attention mechanism for NLP."],
         ]
 
-    def test_rerank_with_local_bge_single_candidate_scalar_score(self):
-        """Backend gibt bei genau einem Kandidaten einen Skalar zurueck (kein List) -- muss klappen."""
+    def test_rerank_with_local_bge_single_candidate_array_score(self):
+        """Backend gibt bei genau einem Kandidaten ein Array mit einem Element zurueck (#714).
+
+        Seit #714 (CrossEncoder.predict) gibt es -- anders als beim vorherigen
+        FlagReranker.compute_score() -- keinen Skalar-Sonderfall mehr: `predict`
+        liefert immer ein Array, auch bei genau einem Paar.
+        """
         from academic_vault.retrieval import rerank_with_local_bge
 
         candidates = [{"paper_id": "p001", "text": "Solo candidate."}]
 
         mock_reranker = MagicMock()
-        mock_reranker.compute_score.return_value = 0.42  # Skalar statt Liste
+        mock_reranker.predict.return_value = [0.42]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             reranked = rerank_with_local_bge(query="q", candidates=candidates)
@@ -897,7 +898,6 @@ def test_local_bge_reranker_real_model_reorders_candidates():
     holen -- der Beweis, dass der kostenfreie Fallback tatsaechlich wirkt (nicht
     nur strukturell durchgereicht wird).
     """
-    pytest.importorskip("FlagEmbedding")
     from academic_vault.retrieval import rerank_with_local_bge, reset_local_reranker_cache
 
     reset_local_reranker_cache()

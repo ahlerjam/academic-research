@@ -15,12 +15,13 @@ RRF-Formel: score(d) = 1/(k + rank_vec(d)) + 1/(k + rank_fts(d))
 Standard-Konstante k=60 nach Cormack et al. 2009.
 
 Reranker-Prioritaetskette (#376): Voyage > Cohere > lokaler
-``BAAI/bge-reranker-v2-m3``-Fallback (NUR wenn *beide* Cloud-Keys fehlen) >
-unveraendert. ``voyageai``/``cohere`` sind optionale Extras (``rerank-cloud``
-in pyproject.toml) -- kein stiller ``except Exception: pass`` mehr: jede
-Fehlstufe loggt eine WARNING und das zurueckgegebene Kandidaten-Dict traegt
-``reranked`` (bool) + ``reranker`` (str) als sichtbaren Beleg statt eines
-verschleierten Fallbacks.
+``BAAI/bge-reranker-v2-m3``-Fallback (per Default aktiv, seit #714 ueber
+``sentence_transformers.CrossEncoder`` statt FlagEmbedding geladen -- ueber
+``VAULT_RERANK_LOCAL_DISABLE`` abschaltbar) > unveraendert. ``voyageai``/
+``cohere`` sind optionale Extras (``rerank-cloud`` in pyproject.toml) -- kein
+stiller ``except Exception: pass`` mehr: jede Fehlstufe loggt eine WARNING und
+das zurueckgegebene Kandidaten-Dict traegt ``reranked`` (bool) + ``reranker``
+(str) als sichtbaren Beleg statt eines verschleierten Fallbacks.
 """
 
 import logging
@@ -42,6 +43,11 @@ _HTML_MARK_RE = re.compile(r"</?b>")
 # VOYAGE_API_KEY noch COHERE_API_KEY gesetzt sind (siehe apply_reranker).
 LOCAL_RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
 ENV_LOCAL_RERANKER_MODEL = "VAULT_RERANK_LOCAL_MODEL"
+
+# Opt-out fuer den per-Default-aktiven lokalen Reranker (#714): jeder
+# Wahrheitswert ausser "" schaltet ihn ab, analog dem Muster anderer
+# Boolean-Env-Schalter im Repo (Praesenz-Check, kein "1"-Spezialfall).
+ENV_LOCAL_RERANKER_DISABLE = "VAULT_RERANK_LOCAL_DISABLE"
 
 # Cache-Ziel fuer die Reranker-Gewichte (#718). Zuvor bekam ``FlagReranker``
 # keinen ``cache_dir`` uebergeben und landete im HF-Standard-Cache
@@ -117,7 +123,7 @@ def _get_cohere_client(api_key: str | None = None):
 
 
 def _load_local_reranker_backend(model_id: str, cache_dir: str | None = None):
-    """Laedt das FlagEmbedding-Backend fuer den lokalen Reranker.
+    """Laedt das CrossEncoder-Backend fuer den lokalen Reranker (#714).
 
     Separate Funktion, damit Tests das Fehlen bzw. Scheitern des Backends
     deterministisch simulieren koennen, ohne echte Modellgewichte zu laden —
@@ -127,14 +133,19 @@ def _load_local_reranker_backend(model_id: str, cache_dir: str | None = None):
     ``cache_dir`` wird seit #718 explizit gesetzt (Default
     ``default_cache_dir()``) -- vorher landete der Download unbenannt im
     HF-Standard-Cache, siehe Kommentar bei ``ENV_LOCAL_RERANKER_CACHE`` oben.
+
+    Seit #714 ueber ``sentence_transformers.CrossEncoder`` statt
+    ``FlagEmbedding.FlagReranker`` geladen -- ``sentence-transformers`` ist
+    bereits Hard-Dependency (Embeddings, #372), das gepinnte ``transformers``
+    (kein Downgrade auf <5.0 mehr noetig) reicht aus.
     """
-    from FlagEmbedding import FlagReranker
+    from sentence_transformers import CrossEncoder
 
     from academic_vault._model_prefetchable import notify_lazy_download
 
     resolved_cache_dir = cache_dir if cache_dir is not None else default_cache_dir()
     notify_lazy_download(label="Reranker-Modell", repo_id=model_id, cache_dir=resolved_cache_dir)
-    return FlagReranker(model_id, cache_dir=resolved_cache_dir, use_fp16=True)
+    return CrossEncoder(model_id, cache_folder=resolved_cache_dir, max_length=512)
 
 
 # Cache pro Modell-ID: ``None`` bedeutet "Backend fehlt" und wird bewusst
@@ -151,11 +162,9 @@ def _get_local_reranker(model_id: str | None = None, cache_dir: str | None = Non
     """Gibt den lokalen bge-reranker-v2-m3 zurueck oder ``None`` (Degradationspfad).
 
     Analog ``embedding_model.get_embedder()``: ``None`` ist ein Degradations-,
-    kein Absturzpfad -- fehlt das FlagEmbedding-Backend (kein uv-Extra, nur
-    manuell per ``pip install FlagEmbedding`` installierbar, siehe
-    pyproject.toml) oder schlaegt der Modell-Download fehl, wird das geloggt
-    und ``apply_reranker`` faellt auf die unrerankte Reihenfolge zurueck statt
-    abzustuerzen.
+    kein Absturzpfad -- schlaegt das Laden des CrossEncoder-Backends (#714)
+    bzw. der Modell-Download fehl, wird das geloggt und ``apply_reranker``
+    faellt auf die unrerankte Reihenfolge zurueck statt abzustuerzen.
     """
     key = model_id or os.environ.get(ENV_LOCAL_RERANKER_MODEL) or LOCAL_RERANKER_MODEL_ID
     if key in _LOCAL_RERANKER_CACHE:
@@ -341,9 +350,10 @@ def rerank_with_local_bge(
 ) -> list[dict]:
     """Rerankt Kandidaten via lokalem ``BAAI/bge-reranker-v2-m3`` (Apache-2.0, #376).
 
-    Kostenfreier Fallback ohne Cloud-API-Key: laedt/nutzt das FlagEmbedding-
-    Backend (kein uv-Extra, manuelles Opt-in, siehe pyproject.toml) ueber den
-    lazy Singleton :func:`_get_local_reranker`.
+    Kostenfreier Fallback ohne Cloud-API-Key: laedt/nutzt das
+    CrossEncoder-Backend (#714, ``sentence-transformers`` ist bereits
+    Hard-Dependency, kein manuelles Opt-in mehr noetig) ueber den lazy
+    Singleton :func:`_get_local_reranker`.
 
     Args:
         query: Suchquery.
@@ -363,14 +373,14 @@ def rerank_with_local_bge(
     if reranker is None:
         raise RuntimeError(
             f"Lokaler Reranker '{model_id or LOCAL_RERANKER_MODEL_ID}' nicht verfuegbar "
-            "(FlagEmbedding fehlt oder Modell-Download fehlgeschlagen)."
+            "(Modell-Download fehlgeschlagen oder Backend nicht ladbar)."
         )
 
     pairs = [[query, c["text"]] for c in candidates]
-    scores = reranker.compute_score(pairs, normalize=True)
-    # Backend gibt bei genau einem Paar einen Skalar statt einer Liste zurueck.
-    if isinstance(scores, int | float):
-        scores = [scores]
+    # CrossEncoder.predict() gibt bei num_labels=1 (Default-Sigmoid-Aktivierung)
+    # immer ein Array zurueck, auch bei genau einem Paar -- anders als
+    # FlagReranker.compute_score(), das dort einen Skalar lieferte (#714).
+    scores = reranker.predict(pairs)
 
     reranked: list[dict] = []
     for c, score in zip(candidates, scores, strict=True):
@@ -477,7 +487,17 @@ def apply_reranker(
     # fehlgeschlagener Voyage/Cohere-Aufruf darf NICHT still durch den
     # lokalen Reranker ersetzt werden (sonst waere AC3 -- 'reranked: false'
     # bei ungueltigem Cloud-Key -- durch einen stillen Erfolg verdeckt).
-    if not voyage_api_key and not cohere_api_key:
+    #
+    # Seit #714 ist der lokale Reranker per Default aktiv (kein FlagEmbedding
+    # mehr noetig) -- VAULT_RERANK_LOCAL_DISABLE schaltet ihn explizit ab,
+    # geprueft VOR dem Laden des Backends, damit kein Modell geladen wird.
+    local_disabled = bool(os.environ.get(ENV_LOCAL_RERANKER_DISABLE))
+    if local_disabled:
+        logger.info(
+            "Lokaler Reranker per %s deaktiviert -- RRF-Reihenfolge bleibt unveraendert.",
+            ENV_LOCAL_RERANKER_DISABLE,
+        )
+    if not voyage_api_key and not cohere_api_key and not local_disabled:
         try:
             reranked = rerank_with_local_bge(query, enriched)
         except Exception as exc:

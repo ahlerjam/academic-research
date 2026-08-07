@@ -269,7 +269,7 @@ class TestVaultSearchWithRerank:
         _add_paper(db_path, "p001", "Hybrid Retrieval", "BM25 and dense retrieval combined.")
 
         mock_local_reranker = MagicMock()
-        mock_local_reranker.compute_score.return_value = [0.5]
+        mock_local_reranker.predict.return_value = [0.5]
 
         with patch.dict("os.environ", {}, clear=False):
             # VOYAGE_API_KEY und COHERE_API_KEY nicht gesetzt
