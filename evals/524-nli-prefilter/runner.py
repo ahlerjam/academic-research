@@ -49,6 +49,7 @@ EXTENDED_CASES_PATH = Path(__file__).parent / "extended-cases.json"
 
 sys.path.insert(0, str(REPO_ROOT))
 from academic_vault.nli_prefilter import (  # noqa: E402
+    BgeM3ZeroshotScorer,
     MDebertaScorer,
     default_cache_dir,
 )
@@ -60,6 +61,8 @@ ENV_CACHE_DIR = "NLI_PREFILTER_MODEL_CACHE"
 
 HHEM_MODEL_ID = "vectara/hallucination_evaluation_model"
 MDEBERTA_MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+BGE_M3_MODEL_ID = "MoritzLaurer/bge-m3-zeroshot-v2.0"
+REAL_CASES_PATH = Path(__file__).parent / "real-cases.json"
 
 # HHEM-Score-Schwelle: >= HHEM_THRESHOLD gilt als "faithful" (Modellkarte:
 # Scores nahe 1 = konsistent, nahe 0 = halluziniert).
@@ -132,6 +135,18 @@ def load_extended_cases() -> list[dict]:
     return json.loads(EXTENDED_CASES_PATH.read_text(encoding="utf-8"))["cases"]
 
 
+def _load_real_cases() -> list[dict]:
+    return json.loads(REAL_CASES_PATH.read_text(encoding="utf-8"))["cases"]
+
+
+def load_all_278_cases() -> list[dict]:
+    """Alle drei Goldsets zusammen (32 + 60 + 186 = 278 Faelle, Issue #720):
+    ``cases.json`` (#524, konstruiert) + ``real-cases.json`` (#592, echte
+    Paper, ML/NLP) + ``extended-cases.json`` (#721, echte Paper, acht
+    Fachrichtungen). Basis fuer den Modellvergleich bge-m3 vs. mDeBERTa."""
+    return _load_cases() + _load_real_cases() + load_extended_cases()
+
+
 def _score_model(scorer: NliScorer, cases: list[dict]) -> dict:
     details = []
     total_latency = 0.0
@@ -190,6 +205,24 @@ def run_eval_cases(scorers: list[NliScorer] | None = None) -> dict:
     cases = _load_cases()
     if scorers is None:
         scorers = [HhemScorer(), MDebertaScorer()]
+
+    results = [_score_model(scorer, cases) for scorer in scorers]
+    return {"models": results, "cases": cases}
+
+
+def run_eval_all_278_cases(scorers: list[NliScorer] | None = None) -> dict:
+    """Fuehrt den Modellvergleich (Issue #720) ueber alle 278 Faelle aus den
+    drei Goldsets aus (siehe :func:`load_all_278_cases`), statt nur den 32
+    konstruierten Faellen aus ``cases.json`` wie :func:`run_eval_cases`.
+
+    Default-Kandidaten: HHEM (verworfen, #524), mDeBERTa-XNLI (bisheriges
+    Produktivmodell) und bge-m3-zeroshot (Produktivmodell seit #720).
+    Importierbar ohne Netzzugriff -- die Scorer laden ihre Modelle erst beim
+    ersten ``predict()``-Aufruf lazy.
+    """
+    cases = load_all_278_cases()
+    if scorers is None:
+        scorers = [HhemScorer(), MDebertaScorer(), BgeM3ZeroshotScorer(threshold=0.95)]
 
     results = [_score_model(scorer, cases) for scorer in scorers]
     return {"models": results, "cases": cases}
