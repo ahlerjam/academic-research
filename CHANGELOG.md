@@ -10,6 +10,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Teilwortsuche fuer deutsche Komposita (#703):** `vault.search("Mittelstand")`
+  findet jetzt auch ein Paper, dessen Titel oder Abstract nur
+  `Mittelstandsdigitalisierung` enthaelt. `papers_fts` (`unicode61`) kennt weder
+  Stemming noch Kompositazerlegung -- in einem deutschsprachigen Plugin verfehlte
+  die lexikalische Haelfte des Hybrid-Retrievals damit genau den Normalfall. Neu
+  ist eine ZWEITE virtuelle Tabelle `papers_trgm` (`tokenize='trigram'`) ueber
+  Titel und Abstract (Schema-Version 12, Backfill fuer Bestands-Vaults ueber
+  `migrate.add_papers_trgm_table()`); ihre Treffer haengen als eigener Block
+  HINTER den exakten, bis `k` voll ist -- die bisherigen Treffer bleiben damit
+  Praefix des Ergebnisses, in unveraenderter Reihenfolge. Kein Tokenizer-Wechsel
+  an `papers_fts`: FTS5 kennt keinen Tokenizer je Spalte, ein Umbau wuerde
+  Ranking, Prefix-Suche und alle Kurz-Token zerstoeren. Preis, bewusst getragen
+  und in `docs/reference/vault.md` dokumentiert: der Trigram-Index laesst
+  `fulltext` bewusst aussen vor (Indexgroesse -- Titel+Abstract sind 1-2 KB je
+  Paper, Volltexte 50-200 KB), deshalb greift die Teilwortsuche NICHT im
+  PDF-Volltext; und der Zweig schaltet sich erst ab vier Zeichen je Token frei
+  (`_TRIGRAM_MIN_TOKEN_LEN`), weil ein 3-Zeichen-Token genau ein Trigram ist und
+  jede Wortmitte traefe (`KMU` in `Werkmuseum`) -- Suchen unter vier Zeichen
+  laufen bitgleich auf dem alten Pfad.
+
 - **Kennzahlen aus Tabellen belegen statt abtippen (#741):** Neues MCP-Tool
   `vault.add_table_value(paper_id, page, table_index, row, col, claimed_value)`
   -- der Weg fuer eine Zahl von einer Tabellenzelle in den Kapiteltext, analog
