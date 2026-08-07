@@ -937,8 +937,7 @@ def _fill_missing_reranker_text(db_path: str, fused: list[dict]) -> None:
         if abstract.strip():
             entry["text"] = abstract
             continue
-        chunks = db.get_chunk_embeddings(paper_id)
-        chunk_text = chunks[0].get("chunk_text") if chunks else None
+        chunk_text = db.get_first_chunk_text(paper_id)
         if chunk_text:
             entry["text"] = chunk_text
             continue
