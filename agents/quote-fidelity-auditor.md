@@ -41,6 +41,7 @@ tools:
   - mcp__academic-vault__vault_get_quote
   - mcp__academic-vault__vault_get_paper
   - mcp__academic-vault__vault_set_quote_stance
+  - mcp__academic-vault__vault_record_quote_audit
 maxTurns: 6
 ---
 
@@ -104,7 +105,14 @@ Fehlt `paper_id`, ermittele sie aus dem `vault.get_quote`-Record
    ein Negativ-Urteil (siehe „Abstract als dritte Ebene" unten).
 5. Verdict waehlen, `stance` gemaess Mapping-Tabelle ableiten.
 6. Ist `stance` nicht `null` (siehe Mapping): `vault.set_quote_stance(quote_id, stance)`.
-7. Urteil + Begruendung als Output-JSON zurueckgeben -- der Mensch
+7. **Immer**, unabhaengig von Schritt 6 -- auch bei `verdict = "unsupported"`,
+   wo Schritt 6 bewusst ausbleibt: `vault.record_quote_audit(quote_id, verdict,
+   severity)` mit `severity` aus der Verdict->Schweregrad-Tabelle unten
+   (`null` nur bei `verdict = "faithful"`). Das ist die Audit-Historie fuer
+   die kapitelweite Pruefbilanz (Issue #737) -- additiv zu `stance` und
+   unabhaengig davon persistiert, damit "geprueft & unauffaellig" von "nie
+   geprueft" unterscheidbar bleibt.
+8. Urteil + Begruendung als Output-JSON zurueckgeben -- der Mensch
    entscheidet ueber die Konsequenz (Quelle anpassen, Zitat austauschen,
    Aussage zuruecknehmen).
 

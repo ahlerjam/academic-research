@@ -88,6 +88,21 @@ VALID_EXTRACTION_METHODS = frozenset({"citations-api", "manual", "local-verbatim
 # liefert die lesbare Fehlermeldung.
 VALID_SOURCE_KINDS = frozenset({"literature", "primary"})
 
+# Erlaubte Werte fuer `quotes.audit_verdict` (Issue #737): Urteilsskala des
+# quote-fidelity-auditor-Agenten. Gespiegelt vom CHECK-Constraint in
+# schema.sql bzw. migrate.add_quote_audit_columns() -- additiv zu
+# `stance`/`VALID_STANCES`, nicht deren Ersatz (siehe Kommentar dort).
+VALID_AUDIT_VERDICTS = frozenset(
+    {"faithful", "overstated", "context-stripped", "polarity-flip", "unsupported"}
+)
+
+# Erlaubte Werte fuer `quotes.audit_severity` (Issue #737): feste
+# Verdict->Schweregrad-Tabelle aus agents/quote-fidelity-auditor.md. `None`
+# ist nur fuer den Verdict `faithful` zulaessig (kein Befund) -- jeder der
+# vier Negativ-Verdicts VERLANGT eine dieser drei Stufen, sonst waere ein
+# offener Befund in der Pruefbilanz unsortierbar.
+VALID_AUDIT_SEVERITIES = frozenset({"kritisch", "hoch", "mittel"})
+
 # Dateisuffix des Sidecar-Markers, mit dem der scihub-fetcher-Agent einen
 # erfolgreichen Download kennzeichnet (Issue #627). add_paper() erzwingt
 # provenance="scihub" fuer jeden pdf_path, neben dem eine Datei mit diesem
@@ -138,7 +153,11 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #     Erste Migration, die eine ganze TABELLE nachtraegt statt einer Spalte --
 #     verifiziert wird sie deshalb ueber `_REQUIRED_MIGRATION_TABLES`
 #     (siehe `init_schema()`), nicht ueber `_LEGACY_MIGRATION_COLUMNS`.
-CURRENT_SCHEMA_VERSION = 9
+# 10 = quotes.audited_at + quotes.audit_verdict + quotes.audit_severity
+#      (Issue #737): Audit-Historie fuer die Kapitel-Pruefbilanz
+#      (`vault.chapter_quote_balance`), additiv zu `stance` und unabhaengig
+#      davon persistiert -- siehe Kommentar bei `quotes.stance` in schema.sql.
+CURRENT_SCHEMA_VERSION = 10
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -163,7 +182,9 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
             "retraction_checked_at",
         }
     ),
-    "quotes": frozenset({"stance", "context_source"}),
+    "quotes": frozenset(
+        {"stance", "context_source", "audited_at", "audit_verdict", "audit_severity"}
+    ),
     "notes": frozenset({"page"}),
 }
 
@@ -1183,6 +1204,61 @@ class VaultDB:
             )
             if cursor.rowcount == 0:
                 raise ValueError(f"vault.set_quote_stance: Quote '{quote_id}' nicht gefunden")
+
+    def record_quote_audit(
+        self,
+        quote_id: str,
+        verdict: str,
+        severity: str | None = None,
+    ) -> None:
+        """Protokolliert ein Audit-Urteil eines BESTEHENDEN Quotes (Issue #737).
+
+        Additiver Schreibpfad zusaetzlich zu :meth:`set_quote_stance` -- der
+        `quote-fidelity-auditor`-Agent ruft beide auf, nie nur einen: `stance`
+        ist lossy (bei `unsupported` wird dort gar nichts persistiert) und
+        kann "geprueft & unauffaellig" nicht von "nie geprueft" unterscheiden.
+        `audited_at` (Unix-Epoch) ist die einzige verlaessliche Grundlage
+        dafuer, siehe Kommentar bei `quotes.stance`/`quotes.audited_at` in
+        schema.sql.
+
+        Args:
+            quote_id: Referenz auf ``quotes.quote_id``.
+            verdict: Einer der Werte aus ``VALID_AUDIT_VERDICTS``.
+            severity: Einer der Werte aus ``VALID_AUDIT_SEVERITIES`` fuer
+                jeden Negativ-Verdict (Pflicht dort), ``None`` AUSSCHLIESSLICH
+                fuer ``verdict == "faithful"`` (kein Befund -- siehe
+                Verdict->Schweregrad-Tabelle in
+                agents/quote-fidelity-auditor.md).
+
+        Raises:
+            ValueError: Wenn ``verdict`` nicht in ``VALID_AUDIT_VERDICTS``
+                liegt, wenn ``severity`` bei ``faithful`` gesetzt ist, wenn
+                ``severity`` bei jedem anderen Verdict fehlt oder nicht in
+                ``VALID_AUDIT_SEVERITIES`` liegt, oder wenn ``quote_id`` auf
+                kein bestehendes Zitat verweist.
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+        """
+        if verdict not in VALID_AUDIT_VERDICTS:
+            raise ValueError(
+                f"Ungueltiger verdict '{verdict}' -- erlaubt: {sorted(VALID_AUDIT_VERDICTS)}"
+            )
+        if verdict == "faithful":
+            if severity is not None:
+                raise ValueError("severity muss None sein bei verdict='faithful' (kein Befund)")
+        elif severity not in VALID_AUDIT_SEVERITIES:
+            raise ValueError(
+                f"Ungueltiger severity '{severity}' fuer verdict '{verdict}' -- "
+                f"erlaubt: {sorted(VALID_AUDIT_SEVERITIES)}"
+            )
+        with self._connection(commit=True) as conn:
+            self._raise_if_locked(conn)
+            cursor = conn.execute(
+                "UPDATE quotes SET audited_at = ?, audit_verdict = ?, audit_severity = ? "
+                "WHERE quote_id = ?",
+                (int(time.time()), verdict, severity, quote_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError(f"vault.record_quote_audit: Quote '{quote_id}' nicht gefunden")
 
     def search_quote_text(self, verbatim: str, k: int = 5) -> list[dict]:
         """LIKE-Suche in quotes.verbatim. Gibt [{quote_id, verbatim, paper_id}] zurueck."""

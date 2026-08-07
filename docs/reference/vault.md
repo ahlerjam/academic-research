@@ -220,9 +220,9 @@ Bestands-Datenbanken bekommen `paper_tables` idempotent nachgezogen:
 python -c "from academic_vault.migrate import add_paper_tables_table as m; m('<pfad>/vault.db')"
 ```
 
-## MCP-Tools (alle 47)
+## MCP-Tools (alle 49)
 
-Der Server registriert **47 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **49 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -248,6 +248,8 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.get_quote(quote_id)` | Vollständiger Quote-Record (inkl. Feld `stance`, standardmäßig `null`) | `vault.get_quote("q_42")` | Bekannte `quote_id` | `dict` mit dem vollständigen Record inklusive `stance`, sonst `None` | Rückgabe `None` — die `quote_id` existiert nicht |
 | `vault.verify_verbatim(paper_id, candidate)` | Read-only-Vorschau des Verbatim-Prüfpfads: liefert **immer** `{status, verbatim, pdf_page, ratio}` zurück (`status` ∈ `"exact"`/`"snapped"`/`"no-match"`/`"no-textlayer"`, kein `ValueError` bei Nicht-Treffer). Paper unbekannt oder kein/kein lesbarer `pdf_path` wirft weiterhin `ValueError`. Schreibt nichts (s. u.) | `vault.verify_verbatim("vaswani2017", "Attention is all you need")` | Paper im Vault mit lesbarem `pdf_path` | Immer `{status, verbatim, pdf_page, ratio}` — auch bei Nicht-Treffer | `status` ist `no-match` oder `no-textlayer`; `ValueError` nur bei unbekanntem Paper oder fehlendem PDF |
 | `vault.set_quote_stance(quote_id, stance)` | Setzt `stance` eines **bestehenden** Zitats nachträglich (Audit-Schreibpfad, u. a. für `quote-fidelity-auditor`). `stance` ist Pflicht (`"supports"`/`"contrasts"`/`"mentions"`, kein `None`); `ValueError` bei ungültigem Wert oder unbekannter `quote_id` | `vault.set_quote_stance("q_42", "contrasts")` | Bestehende `quote_id` und ein gültiger `stance` | Kein Rückgabewert; `quotes.stance` ist danach gesetzt | `ValueError` „Ungueltiger stance" oder „Quote '<id>' nicht gefunden" |
+| `vault.record_quote_audit(quote_id, verdict, severity=None)` | Protokolliert ein Audit-Urteil eines **bestehenden** Zitats (Issue #737), additiv zu `vault.set_quote_stance` — beide werden vom `quote-fidelity-auditor` nach jedem Urteil aufgerufen, auch bei `verdict="unsupported"` (dort bleibt `set_quote_stance` aus). `verdict` ∈ `"faithful"`/`"overstated"`/`"context-stripped"`/`"polarity-flip"`/`"unsupported"`; `severity` ∈ `"kritisch"`/`"hoch"`/`"mittel"` ist Pflicht außer bei `verdict="faithful"` (dort zwingend `None`, kein Befund) | `vault.record_quote_audit("q_42", "polarity-flip", "kritisch")` | Bestehende `quote_id`, gültige Verdict/Severity-Kombination | Kein Rückgabewert; `quotes.audited_at`/`audit_verdict`/`audit_severity` sind danach gesetzt | `ValueError` bei ungültiger Kombination oder unbekannter `quote_id` |
+| `vault.chapter_quote_balance(chapter_path)` | Prüfbilanz für ein Kapitel: bucketet alle im Kapiteltext belegten Vault-Zitate nach Audit-Historie (siehe Abschnitt „Prüfbilanz je Kapitel" unten) | `vault.chapter_quote_balance("kapitel/03-methodik.md")` | Lesbare Kapiteldatei; Zitate müssen im Vault stehen, um erfasst zu werden | `dict` mit `total_quotes`, den drei Zählern (`geprueft_unauffaellig`/`befund_offen`/`nicht_geprueft`), `not_audited` (je Eintrag mit `reason`) und `findings` (offene Befunde, schwerste zuerst) | `FileNotFoundError`, wenn `chapter_path` nicht existiert |
 
 **`extraction_method="local-verbatim"` — fail-closed** (Issue #512)
 
@@ -291,6 +293,46 @@ Die Funktion ist auch direkt aufrufbar:
 | Funktion (Signatur mit Defaults) | Beschreibung |
 |---|---|
 | `resolve_quote_context(db_path, quote_id, window=600)` | Sucht die Fundstelle von `quotes.verbatim` im `paper_fulltext` des zugehörigen Papers und schneidet ±`window` Zeichen als Kontext heraus. Persistiert nur bei nachgewiesener Fundstelle (`context_source="fulltext"`), gibt `True`/`False` zurück (`False` = No-Op). Wirft `ValueError` bei unbekannter `quote_id`. |
+
+**Prüfbilanz je Kapitel — `chapter_quote_balance`** (Issue #737)
+
+Ein Abgabe-Check, kein Nebenprodukt eines Schreibvorgangs: `vault.chapter_quote_balance`
+liest die Kapiteldatei von der Platte, findet ALLE darin belegten Vault-Zitate (über
+denselben `nli_prefilter.scan_chapter_quotes`-Mechanismus wie der lokale
+NLI-Vorfilter, Issue #592 — deckt das **gesamte** Kapitel ab, nicht nur die letzte
+Sitzung) und bucketet jedes Zitat anhand seiner Audit-Historie:
+
+- **geprüft & unauffällig** — `quotes.audited_at` gesetzt, letztes Urteil `faithful`.
+- **Befund offen** — `audited_at` gesetzt, letztes Urteil ≠ `faithful`; erscheint mit
+  Zitat, Paper und betroffener Kapitelstelle in `findings`, nach Schwere sortiert
+  (`kritisch` → `hoch` → `mittel`).
+- **nicht geprüft** — `audited_at` ist `NULL`. Jeder Eintrag in `not_audited` trägt
+  einen `reason`; aktuell der einzige unterscheidbare Grund ist „kein
+  Audit-Datensatz vorhanden" (auch für Altbestand, der vor Issue #737 bereits einen
+  `stance`-Wert trug — `stance` und die Audit-Historie sind bewusst getrennte Felder,
+  siehe unten).
+
+Die drei Zähler ergeben zusammen `total_quotes`. Ein Kapitel ohne ein einziges
+belegtes Zitat liefert alle Zähler als `0`, kein Fehler.
+
+Audit-Urteile schreibt der `quote-fidelity-auditor`-Agent über das neue Tool
+`vault.record_quote_audit(quote_id, verdict, severity=None)` — **additiv** zu
+`vault.set_quote_stance`, nicht als dessen Ersatz: `stance` ist lossy (bei
+`verdict="unsupported"` wird laut Mapping-Tabelle des Agenten gar nichts in
+`stance` persistiert, und `add_quote(stance=...)` kann `stance` schon ohne jedes
+Audit gesetzt sein) und kann „geprüft & unauffällig" nicht von „nie geprüft"
+unterscheiden. `audited_at` ist die einzige verlässliche Grundlage dafür — der
+Agent ruft beide Tools nach jedem Urteil auf, auch wenn `set_quote_stance` dabei
+bewusst ausbleibt.
+
+**Was die Bilanz nicht belegt:** Ein Verdikt `faithful` bedeutet „vom
+`quote-fidelity-auditor` als unauffällig eingestuft", nicht „mit letzter
+Sicherheit korrekt verwendet" — die Prüfkette selbst kann irren, und ein Zitat
+ohne Audit-Datensatz ist nicht automatisch problematisch, nur ungeprüft. Die
+Bilanz **priorisiert** die Prüfkette vor der Abgabe, sie **beweist nicht**, dass
+geprüfte Zitate korrekt verwendet sind. Ebenfalls außerhalb ihres Umfangs: kein
+automatisches Nachprüfen ungeprüfter Zitate, keine Blockade auf Basis der Zahlen
+— sie stellt fest, sie handelt nicht.
 
 **Zitat-Embeddings — `embed_quote`** (Issue #521)
 

@@ -3,7 +3,7 @@
 [← Doku-Übersicht](../README.md)
 
 Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin bringt
-**11 Slash-Commands** mit (`commands/*.md`).
+**12 Slash-Commands** mit (`commands/*.md`).
 
 | Command | Beschreibung |
 |---------|-------------|
@@ -18,6 +18,7 @@ Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin 
 | `/academic-research:latex` | LaTeX-Export (`*.tex` + `*.bib`) |
 | `/academic-research:word` | Word-Export (`*.docx`, optional PDF) mit echten Formatvorlagen |
 | `/academic-research:slides` | Foliensatz (`*.pptx`) aus Kapiteln, eine Kernaussage pro Folie |
+| `/academic-research:pruefbilanz` | Prüfbilanz eines Kapitels: geprüft/Befund offen/nicht geprüft |
 
 Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispiel(e)**,
 **Skills/Agents** (was unter der Haube läuft), **Voraussetzungen**, **Rückgabe** und
@@ -358,3 +359,26 @@ und bei `--restore` der wiederhergestellte Projektstand.
 
 **Fehlschlag:** Die Liste bleibt leer, obwohl Suchen gelaufen sind — dann fehlt der
 Session-Index. Bei `--restore` meldet der Command den unbekannten Zeitstempel.
+
+### `/academic-research:pruefbilanz`
+
+**Syntax:** `/academic-research:pruefbilanz <kapitel-datei.md>`
+
+**Beispiele:**
+
+```bash
+/academic-research:pruefbilanz kapitel/03-methodik.md
+```
+
+**Skills/Agents:** Reine Command-Logik (kein Agent/Skill) — ruft
+`vault.chapter_quote_balance(chapter_path)` direkt auf und formatiert die Rückgabe.
+
+**Voraussetzungen:** Lesbare Kapiteldatei; Zitate müssen im Vault stehen, um erfasst
+zu werden (nicht im Vault belegte Passagen tauchen in keiner Bucket-Zahl auf).
+
+**Rückgabe:** `total_quotes`, die drei Zähler (`geprueft_unauffaellig`/`befund_offen`/
+`nicht_geprueft`), `not_audited` (je Eintrag mit `reason`) und `findings` (offene
+Befunde, schwerste zuerst) als formatierte Ausgabe.
+
+**Fehlschlag:** `FileNotFoundError`, wenn die Kapiteldatei nicht existiert. Ein Kapitel
+ohne belegte Zitate ist **kein** Fehlschlag — alle Zähler stehen dann auf `0`.
