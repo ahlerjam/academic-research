@@ -1,4 +1,4 @@
-"""Erzeugt die PDF-Fixture fuer das generische Chunking-Modul (Issue #374).
+"""Erzeugt die Fixtures fuer das generische Chunking-Modul (Issues #374, #709).
 
 Aufruf: python tests/fixtures/chunking/create_fixtures.py
 
@@ -7,7 +7,7 @@ und tests/fixtures/ocr/create_fixtures.py): die Fixture wird als minimale, von H
 gebaute PDF-1.4-Datei geschrieben (nur Standardbibliothek). reportlab ist keine
 Dependency des Projekts.
 
-Eine Fixture: multi_section_paper.pdf
+Fixture 1: multi_section_paper.pdf (#374)
   - 6 physische Seiten, je eine Ueberschrift + ein langer Fliesstext-Absatz
   - Ueberschriften: "Abstract", "1 Introduction", "2 Related Work", "3 Method",
     "4 Experiments", "5 Conclusion" -- erkennbar per Regex-Heuristik in
@@ -19,6 +19,27 @@ Eine Fixture: multi_section_paper.pdf
   - Gesamtwortzahl (1520) ist bewusst so gewaehlt, dass bei TARGET_TOKENS=512 /
     OVERLAP_RATIO=0.125 mehrere Chunks inkl. eines kuerzeren letzten Chunks
     entstehen (siehe tests/test_chunking.py).
+
+Fixture 2: grobid_tei_sample.xml (#709)
+  - TEI-XML, wie GROBID es fuer ``POST /api/processFulltextDocument`` mit
+    ``teiCoordinates=head`` und ``teiCoordinates=p`` liefert. Damit laeuft der
+    GROBID-Pfad im Test OHNE laufenden Server.
+  - Vier ``<div>`` im ``<body>``, jeweils mit ``<head>``:
+      1. "Abstract"                                          (440 Woerter)
+      2. "3.1 Effekte auf die Governance-Praxis, ein Ueberblick"  (341 Woerter,
+         3 Absaetze) -- diese Ueberschrift matcht ``_HEADING_RE`` bewusst NICHT
+         (Kleinschreibung + Komma), waehrend ihr erster Absatz mit "However"
+         beginnt: genau das Wort, das die Regex-Heuristik faelschlich fuer eine
+         Ueberschrift haelt.
+      3. "4 Ergebnisse der Fallstudie"  (EIN Absatz mit 1519 Woertern, also
+         deutlich ueber dem Tokenbudget -- erzwingt mehrere Chunks mit Overlap)
+      4. "5 Fazit"                                           (300 Woerter)
+  - ``@coords`` deckt drei Faelle ab: eine Box, mehrere durch ';' getrennte
+    Boxen mit Seitenwechsel (die ERSTE Box bestimmt die Seite) und einen Absatz
+    ganz ohne ``@coords`` (Seitenzahl wird fortgeschrieben).
+  - Ein ``<back>``-Bereich mit Literaturverzeichnis belegt, dass der Parser nur
+    den ``<body>`` in Sektionen zerlegt.
+  - Alle Body-Woerter sind wie in Fixture 1 global eindeutig.
 """
 
 from pathlib import Path
@@ -166,6 +187,110 @@ def create_multi_section_pdf(path: Path) -> None:
     path.write_bytes(_build_pdf(build_pages()))
 
 
+# ---------------------------------------------------------------------------
+# TEI-Fixture (#709)
+# ---------------------------------------------------------------------------
+
+# Ueberschrift, die _HEADING_RE NICHT matcht (Kleinschreibung + Komma) --
+# der Regex-Pfad verliert sie, der GROBID-Pfad liefert sie.
+TEI_HEAD_MISSED_BY_REGEX = "3.1 Effekte auf die Governance-Praxis, ein Ueberblick"
+
+# Fliesstext-Wort, das _HEADING_RE faelschlich fuer eine Ueberschrift haelt,
+# sobald die PDF-Textextraktion es auf eine eigene Zeile umbricht.
+TEI_REGEX_FALSE_POSITIVE = "However"
+
+# Die uebergrosse Sektion: EIN Absatz, ~3.4x TARGET_TOKENS (448) -- erzwingt
+# mehrere budgetgetriebene Schnitte samt Overlap (AK5 in Issue #709).
+TEI_OVERSIZED_HEAD = "4 Ergebnisse der Fallstudie"
+TEI_OVERSIZED_WORDS = 1519
+
+# (Ueberschrift, [(coords, Wortanzahl), ...]) je <div> im <body>.
+# ``coords`` ist der Wert des @coords-Attributs; ``None`` = Attribut fehlt.
+TEI_SECTIONS: list[tuple[str, list[tuple[str | None, int]]]] = [
+    ("Abstract", [("1,72.00,120.00,451.00,11.00", 440)]),
+    (
+        TEI_HEAD_MISSED_BY_REGEX,
+        [
+            ("1,72.00,240.00,451.00,11.00", 101),
+            # Mehrere Boxen mit Seitenwechsel: die ERSTE Box gibt die Seite (1).
+            ("1,72.00,320.00,451.00,11.00;2,72.00,90.00,451.00,11.00", 150),
+            # Ohne @coords -- die zuletzt bekannte Seite wird fortgeschrieben.
+            (None, 90),
+        ],
+    ),
+    (TEI_OVERSIZED_HEAD, [("2,72.00,150.00,451.00,11.00", TEI_OVERSIZED_WORDS)]),
+    ("5 Fazit", [("3,72.00,400.00,451.00,11.00", 300)]),
+]
+
+# Steht ausschliesslich im <back> und darf in keiner Sektion auftauchen.
+TEI_BACK_MARKER = "Literaturverzeichnismarker"
+
+
+def _tei_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def build_tei_sections() -> list[tuple[str, list[tuple[str | None, list[str]]]]]:
+    """Baut ``[(head, [(coords, woerter), ...]), ...]`` mit global eindeutigen Woertern."""
+    sections: list[tuple[str, list[tuple[str | None, list[str]]]]] = []
+    cursor = 0
+    for head, paragraphs in TEI_SECTIONS:
+        built: list[tuple[str | None, list[str]]] = []
+        for coords, count in paragraphs:
+            if head == TEI_HEAD_MISSED_BY_REGEX and not built:
+                # Erster Absatz der Sektion beginnt mit dem Regex-False-Positive.
+                words = [TEI_REGEX_FALSE_POSITIVE, *_words_for_page(cursor, count - 1)]
+                cursor += count - 1
+            else:
+                words = _words_for_page(cursor, count)
+                cursor += count
+            built.append((coords, words))
+        sections.append((head, built))
+    return sections
+
+
+def build_tei_xml() -> str:
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<TEI xmlns="http://www.tei-c.org/ns/1.0">',
+        "  <teiHeader>",
+        "    <fileDesc>",
+        "      <titleStmt>",
+        '        <title level="a" type="main">Governance-Praxis in DevOps-Organisationen</title>',
+        "      </titleStmt>",
+        "    </fileDesc>",
+        "  </teiHeader>",
+        '  <text xml:lang="de">',
+        "    <body>",
+    ]
+    for head, paragraphs in build_tei_sections():
+        lines.append("      <div>")
+        lines.append(f"        <head>{_tei_escape(head)}</head>")
+        for coords, words in paragraphs:
+            attr = f' coords="{coords}"' if coords else ""
+            lines.append(f"        <p{attr}>{_tei_escape(' '.join(words))}</p>")
+        lines.append("      </div>")
+    lines += [
+        "    </body>",
+        "    <back>",
+        '      <div type="references">',
+        "        <listBibl>",
+        f"          <biblStruct><note>{TEI_BACK_MARKER}</note></biblStruct>",
+        "        </listBibl>",
+        "      </div>",
+        "    </back>",
+        "  </text>",
+        "</TEI>",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def create_grobid_tei_sample(path: Path) -> None:
+    path.write_text(build_tei_xml(), encoding="utf-8")
+
+
 if __name__ == "__main__":
     create_multi_section_pdf(OUT / "multi_section_paper.pdf")
-    print(f"Fixture erstellt in {OUT}")
+    create_grobid_tei_sample(OUT / "grobid_tei_sample.xml")
+    print(f"Fixtures erstellt in {OUT}")

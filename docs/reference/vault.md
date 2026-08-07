@@ -109,10 +109,32 @@ gezielt geht es per `vault.extract_fulltext(paper_id)`. Beide Wege nutzen dassel
   indiziert den TEI-`<text>`-Baum. Jeder Fehler (kein Server, Timeout, kaputtes XML) fällt
   still auf pypdf zurück.
 
+`GROBID_URL` wirkt seit #709 auch auf das **Chunking** (`academic_vault/chunking.py`).
+Ist die Variable gesetzt, schneidet `chunk_pdf()` an den echten Sektions- und
+Absatzgrenzen des TEI statt an der Title-Case-Heuristik `_HEADING_RE`, die auch
+umbrochene Fließtextreste wie „However" für Überschriften hält:
+
+- Der Request fordert zusätzlich `teiCoordinates=head` und `teiCoordinates=p` an — nur
+  über das `@coords`-Attribut (`page,x,y,w,h`, mehrere Kästen durch `;` getrennt) trägt
+  das TEI überhaupt eine Seitenzahl. Antwortet ein Server ohne Koordinaten, wird die
+  zuletzt bekannte Seite fortgeschrieben (Start: 1) und **einmal** gewarnt.
+- Das Tokenbudget bleibt der harte Deckel: ein Chunk endet an der letzten Absatz- oder
+  Sektionsgrenze im Budgetfenster, aber nie darüber hinaus. Eine Sektion über dem Budget
+  wird weiterhin in mehrere überlappende Chunks zerlegt.
+- Overlap gibt es nur bei einem budgetgetriebenen Schnitt. Endet ein Chunk sauber an
+  einer Absatzgrenze, beginnt der nächste genau dort.
+- Liegt die nächste Grenze näher als `MIN_BOUNDARY_FILL_RATIO` (0,6) des Fensters am
+  Chunkstart, bleibt der Budget-Schnitt stehen — sonst entstünden Mini-Chunks.
+- Jeder Fehler und ein leeres Ergebnis fallen mit Warnung auf den pypdf-Seitenpfad
+  zurück. Ohne `GROBID_URL` findet kein HTTP-Versuch statt und das Chunking verhält sich
+  unverändert.
+- Kosten: Volltext-Extraktion und Chunking schicken je einen eigenen Request. Das sind
+  zwei GROBID-Roundtrips pro Paper; ein Cache ist bewusst nicht Teil von #709.
+
 | Env-Variable | Default | Wirkung |
 |---|---|---|
 | `VAULT_AUTO_FULLTEXT` | `1` | `0` schaltet die Volltext-Extraktion in `vault.add_paper()` ab. |
-| `GROBID_URL` | *(aus)* | Aktiviert den GROBID-Pfad, z. B. `http://localhost:8070`. |
+| `GROBID_URL` | *(aus)* | Aktiviert den GROBID-Pfad für Volltext **und** Chunking, z. B. `http://localhost:8070`. |
 | `GROBID_TIMEOUT` | `60` | Timeout des GROBID-Requests in Sekunden. |
 
 Bestands-Datenbanken tragen den Volltext per Backfill nach (idempotent, `papers` und
