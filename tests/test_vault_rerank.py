@@ -314,6 +314,53 @@ class TestAggregateChunksToPapers:
         assert len(aggregated) == 3
         assert [r["paper_id"] for r in aggregated] == ["p9", "p8", "p7"]
 
+    def test_aggregate_merges_fts5_metadata_when_vec0_chunk_wins(self):
+        """Paper lexikalisch UND vektoriell gefunden behaelt score/Highlighting.
+
+        Wenn ein Paper sowohl lexikalisch (FTS5, mit 'score' und gehighlighttem
+        'snippet') als auch vektoriell (vec0, nur 'rerank_score') gefunden wird,
+        und der vec0-Chunk einen hoeheren Reranking-Score hat, muss die
+        Aggregation die FTS5-Metadaten ('score', 'snippet') aus der unterlegenen
+        FTS5-Chunk-Version in den Gewinner mergen -- sonst verliert der
+        Aufrufer das Highlighting und die lexikalische Relevanzangabe.
+        """
+        from academic_vault.server import _aggregate_chunks_to_papers
+
+        # Zwei Chunks desselben Papers (p001):
+        # - c_fts (lexikalisch gefunden): hat 'score' und 'snippet' mit Highlighting
+        # - c_vec0 (vektoriell gefunden): hat hoeheren 'rerank_score', aber kein 'score'/'snippet'
+        chunk_results = [
+            {
+                "chunk_id": "c_fts",
+                "paper_id": "p001",
+                "rrf_score": 0.3,
+                "rerank_score": 0.4,  # unterlegen
+                "score": -1.2,  # BM25-Score vom FTS5-Treffer
+                "snippet": "...ein wichtiger <b>Begriff</b> im Abstract...",
+            },
+            {
+                "chunk_id": "c_vec0",
+                "paper_id": "p001",
+                "rrf_score": 0.5,
+                "rerank_score": 0.8,  # GEWINNER
+                # Kein 'score' oder 'snippet' (vec0-Treffer)
+            },
+        ]
+
+        aggregated = _aggregate_chunks_to_papers(chunk_results, k=10)
+
+        # Nur ein Eintrag fuer p001 (Aggregation hat stattgefunden)
+        assert len(aggregated) == 1
+        winner = aggregated[0]
+        assert winner["paper_id"] == "p001"
+        # Gewinner ist c_vec0 (hoeherer rerank_score)
+        assert winner["chunk_id"] == "c_vec0"
+        # FTS5-Metadaten wurden vom unterlegenen c_fts gemergt
+        assert winner["score"] == -1.2, "FTS5-Score sollte gemergt worden sein"
+        assert winner["snippet"] == "...ein wichtiger <b>Begriff</b> im Abstract...", (
+            "Gehighlightetes FTS5-Snippet sollte gemergt worden sein"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Tests: Reranker-Integration (Voyage/Cohere)

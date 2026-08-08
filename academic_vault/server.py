@@ -1143,6 +1143,12 @@ def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]
     (``reranked=True``), sonst 'rrf_score' -- beide sind "hoeher ist besser"
     und damit direkt vergleichbar innerhalb dieser Funktion.
 
+    Metadaten-Merge bei Paper-Aggregation: FTS5-Metadaten ('score',
+    'snippet') werden von unterlegenen Chunk-Eintraegen desselben Papers in
+    den Gewinner-Eintrag gemergt. Das bewahrt das Highlighting und die
+    FTS5-Relevanzangabe auch dann, wenn ein vec0-Treffer des gleichen Papers
+    einen hoeherem Reranking-Score hat.
+
     Args:
         chunk_results: Chunk-level Kandidaten aus ``apply_reranker`` (bzw.
             direkt aus ``reciprocal_rank_fusion``, falls ungereranked).
@@ -1157,12 +1163,29 @@ def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]
         value = entry.get("rerank_score", entry.get("rrf_score", 0.0))
         return float(value) if value is not None else 0.0
 
+    # Gruppiere alle Eintraege nach paper_id und waehle den besten
     best_per_paper: dict[str, dict] = {}
+    all_per_paper: dict[str, list[dict]] = {}
     for entry in chunk_results:
         paper_id = entry["paper_id"]
+        all_per_paper.setdefault(paper_id, []).append(entry)
         current = best_per_paper.get(paper_id)
         if current is None or _score(entry) > _score(current):
             best_per_paper[paper_id] = entry
+
+    # Merge FTS5-Metadaten von unterlegenen Chunks in den Gewinner
+    for paper_id, entries in all_per_paper.items():
+        winner = best_per_paper[paper_id]
+        # Sammle FTS5-Felder aus allen anderen Eintraegen dieses Papers
+        for entry in entries:
+            if entry is winner:
+                continue
+            # Merge 'score' wenn der gewinner es nicht hat
+            if "score" not in winner and "score" in entry:
+                winner["score"] = entry["score"]
+            # Merge 'snippet' wenn der gewinner es nicht hat
+            if "snippet" not in winner and "snippet" in entry:
+                winner["snippet"] = entry["snippet"]
 
     ranked = sorted(best_per_paper.values(), key=_score, reverse=True)
     return ranked[:k]
