@@ -53,6 +53,39 @@ CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
   fulltext
 );
 
+-- Teilwort-Index fuer deutsche Komposita (Issue #703). ZWEITE virtuelle
+-- Tabelle neben papers_fts, bewusst KEIN Tokenizer-Wechsel an papers_fts:
+--
+--   * FTS5 kennt keinen Tokenizer je Spalte -- `tokenize` ist eine
+--     Tabellenoption. Eine "Trigram-Spalte" in papers_fts ist technisch nicht
+--     baubar, und ein Umbau der Tabelle auf tokenize='trigram' wuerde Ranking
+--     (bm25 ueber Wort-Tokens), die Prefix-Suche und jedes Token unter drei
+--     Zeichen zerstoeren -- der Trigram-Tokenizer indiziert nur Folgen ab drei
+--     Zeichen.
+--
+-- Preis dieses Wegs, bewusst getragen:
+--
+--   * Indexgroesse -- Trigram legt je Zeichenposition einen Term ab, der Index
+--     waechst auf ein Mehrfaches des indizierten Textes. Genau deshalb ist
+--     `fulltext` hier NICHT dabei: Titel+Abstract sind ~1-2 KB je Paper,
+--     PDF-Volltexte 50-200 KB. Folge und zugleich dokumentierte Grenze:
+--     `Mittelstand` findet `Mittelstandsdigitalisierung` in Titel/Abstract,
+--     nicht im PDF-Volltext (siehe docs/reference/vault.md).
+--   * Trefferrauschen bei Kurzsuchen -- ein 3-Zeichen-Token ist genau ein
+--     Trigram und traefe jede Wortmitte ("KMU" in "Werkmuseum"). Deshalb
+--     schaltet server._trigram_match_expression() den Zweig erst ab
+--     `_TRIGRAM_MIN_TOKEN_LEN` (4) Zeichen frei; darunter bleibt die Suche
+--     bitgleich auf dem alten Pfad.
+--
+-- paper_id ist UNINDEXED: die Spalte wird nur mitgelesen, ein indizierter
+-- Bezeichner wuerde als Trigram-Rauschen in jede Suche einstreuen.
+CREATE VIRTUAL TABLE IF NOT EXISTS papers_trgm USING fts5(
+  paper_id UNINDEXED,
+  title,
+  abstract,
+  tokenize='trigram'
+);
+
 CREATE TABLE IF NOT EXISTS quotes (
   quote_id          TEXT PRIMARY KEY,
   paper_id          TEXT NOT NULL REFERENCES papers(paper_id),
@@ -262,6 +295,9 @@ CREATE INDEX IF NOT EXISTS idx_table_values_paper ON table_values(paper_id);
 -- Bewusst DROP + CREATE statt CREATE TRIGGER IF NOT EXISTS: init_schema() fuehrt
 -- dieses Skript auch auf Bestands-DBs aus; mit IF NOT EXISTS behielten die
 -- ihre alten Trigger (fulltext hart NULL) und der Volltext-Index bliebe leer.
+-- Seit #703 schreiben dieselben Trigger zusaetzlich papers_trgm fort -- ein
+-- zweites Trigger-Trio waere eine zweite Stelle, die beim naechsten
+-- Spalten-Zuwachs vergessen werden kann.
 DROP TRIGGER IF EXISTS papers_ai;
 CREATE TRIGGER papers_ai AFTER INSERT ON papers BEGIN
   INSERT INTO papers_fts(paper_id, title, abstract, fulltext)
@@ -271,22 +307,36 @@ CREATE TRIGGER papers_ai AFTER INSERT ON papers BEGIN
     json_extract(new.csl_json, '$.abstract'),
     (SELECT text FROM paper_fulltext WHERE paper_id = new.paper_id)
   );
+  INSERT INTO papers_trgm(paper_id, title, abstract)
+  VALUES (
+    new.paper_id,
+    json_extract(new.csl_json, '$.title'),
+    json_extract(new.csl_json, '$.abstract')
+  );
 END;
 
 DROP TRIGGER IF EXISTS papers_ad;
 CREATE TRIGGER papers_ad AFTER DELETE ON papers BEGIN
   DELETE FROM papers_fts WHERE paper_id = old.paper_id;
+  DELETE FROM papers_trgm WHERE paper_id = old.paper_id;
 END;
 
 DROP TRIGGER IF EXISTS papers_au;
 CREATE TRIGGER papers_au AFTER UPDATE ON papers BEGIN
   DELETE FROM papers_fts WHERE paper_id = old.paper_id;
+  DELETE FROM papers_trgm WHERE paper_id = old.paper_id;
   INSERT INTO papers_fts(paper_id, title, abstract, fulltext)
   VALUES (
     new.paper_id,
     json_extract(new.csl_json, '$.title'),
     json_extract(new.csl_json, '$.abstract'),
     (SELECT text FROM paper_fulltext WHERE paper_id = new.paper_id)
+  );
+  INSERT INTO papers_trgm(paper_id, title, abstract)
+  VALUES (
+    new.paper_id,
+    json_extract(new.csl_json, '$.title'),
+    json_extract(new.csl_json, '$.abstract')
   );
 END;
 
@@ -379,3 +429,43 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
   embedding_vector BLOB,
   created_at       INTEGER NOT NULL
 );
+
+-- FTS5-Index ueber Chunk-Texte (Issue #726). `papers_fts`/`papers_trgm`
+-- matchen nur Paper-Felder (Titel, Abstract, Volltext) -- ein Begriff, der
+-- ausschliesslich im Methodikteil eines einzelnen Chunks steht, war darueber
+-- unauffindbar, obwohl die Vektorsuche laengst chunkgenau trifft. Eigene
+-- virtuelle Tabelle analog zu `notes_fts` (kein `content=`, manuell befuellt),
+-- NICHT analog zu `papers_trgm`: der Auftrag ist ausdruecklich EIN FTS5-Index
+-- mit derselben Tokenizer-Entscheidung wie `papers_fts` (unicode61-Default,
+-- kein Stemming, keine Kompositazerlegung) -- ein Trigram-Pendant fuer
+-- Chunk-Komposita ist bewusst nicht Teil dieses Issues. chunk_id und paper_id
+-- sind regulaere (nicht UNINDEXED) Spalten, damit ein Treffer ohne Zusatz-Join
+-- direkt die paper_id liefert.
+CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
+  chunk_id,
+  paper_id,
+  chunk_text
+);
+
+-- FTS5-Trigger: befuellen chunk_fts manuell. Bewusst DROP + CREATE statt
+-- CREATE TRIGGER IF NOT EXISTS, siehe Kommentar bei papers_ai oben --
+-- init_schema() fuehrt dieses Skript auch auf Bestands-DBs aus.
+DROP TRIGGER IF EXISTS chunk_ai;
+CREATE TRIGGER chunk_ai AFTER INSERT ON chunk_embeddings BEGIN
+  INSERT INTO chunk_fts(rowid, chunk_id, paper_id, chunk_text)
+  VALUES (new.rowid, new.chunk_id, new.paper_id, new.chunk_text);
+END;
+
+DROP TRIGGER IF EXISTS chunk_ad;
+CREATE TRIGGER chunk_ad AFTER DELETE ON chunk_embeddings BEGIN
+  DELETE FROM chunk_fts WHERE rowid = old.rowid;
+END;
+
+DROP TRIGGER IF EXISTS chunk_au;
+CREATE TRIGGER chunk_au AFTER UPDATE OF chunk_text, paper_id ON chunk_embeddings
+  WHEN old.chunk_text IS NOT new.chunk_text OR old.paper_id IS NOT new.paper_id
+BEGIN
+  DELETE FROM chunk_fts WHERE rowid = old.rowid;
+  INSERT INTO chunk_fts(rowid, chunk_id, paper_id, chunk_text)
+  VALUES (new.rowid, new.chunk_id, new.paper_id, new.chunk_text);
+END;

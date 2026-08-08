@@ -112,6 +112,84 @@ wird vor der ersten Änderung abgewiesen. Nicht im Scope des Wechsels: die Chunk
 `chunking.py` bleiben unverändert, ein Modell mit anderem Kontextfenster braucht dafür
 eine eigene Entscheidung.
 
+## Teilwortsuche für deutsche Komposita
+
+`papers_fts` läuft mit dem FTS5-Standardtokenizer `unicode61`: er zerlegt an Wortgrenzen,
+kennt weder Stemming noch Kompositazerlegung. Eine Suche nach `Mittelstand` fand deshalb
+kein Paper, dessen Titel `Mittelstandsdigitalisierung` lautet — in einem deutschsprachigen
+Plugin verfehlte die lexikalische Hälfte des Hybrid-Retrievals damit genau den Normalfall.
+
+Seit #703 gibt es dafür eine **zweite** virtuelle Tabelle `papers_trgm`
+(`tokenize='trigram'`) über Titel und Abstract. `vault.search()` fragt zuerst wie bisher
+`papers_fts` ab und hängt die Teilwort-Treffer als eigenen Block dahinter, bis `k` voll
+ist. Die exakten Wort-Treffer bleiben damit Präfix des Ergebnisses, in unveränderter
+Reihenfolge; die `bm25`-Werte beider Tabellen sind verschiedene Größen und werden bewusst
+nicht gemeinsam sortiert.
+
+Warum keine Umstellung von `papers_fts` selbst: FTS5 kennt keinen Tokenizer je Spalte,
+`tokenize` ist eine Tabellenoption. Eine „Trigram-Spalte" ist technisch nicht baubar, und
+ein Umbau der bestehenden Tabelle würde Ranking, Prefix-Suche und jedes Token unter drei
+Zeichen zerstören.
+
+Der Preis, bewusst getragen und hier nachlesbar statt im Commit vergraben:
+
+- **Indexgröße.** Der Trigram-Tokenizer legt je Zeichenposition einen Term ab; der Index
+  wächst auf ein Mehrfaches des indizierten Textes. Genau deshalb steht `fulltext` **nicht**
+  in `papers_trgm`: Titel und Abstract sind rund 1–2 KB je Paper, PDF-Volltexte 50–200 KB.
+- **Dokumentierte Grenze.** Folge davon: `Mittelstand` findet `Mittelstandsdigitalisierung`
+  in Titel und Abstract, **nicht** im PDF-Volltext. Dort greift weiterhin nur die
+  Wortsuche über `papers_fts.fulltext`. Ein Trigram-Index über den Volltext und über
+  `notes_fts` bleibt ein eigenes Vorhaben — er braucht zuerst eine Größenmessung als
+  Entscheidungsgrundlage.
+- **Trefferrauschen bei Kurzsuchen.** Ein Token aus drei Zeichen *ist* genau ein Trigram
+  und träfe jede Wortmitte (`KMU` in `Werkmuseum`). Der Teilwort-Zweig schaltet sich
+  deshalb erst ab vier Zeichen je Token frei (`server._TRIGRAM_MIN_TOKEN_LEN`); darunter
+  läuft jede Suche bitgleich auf dem alten Pfad. In `KMU Digitalisierung` trägt nur das
+  lange Token zur Teilwortsuche bei.
+
+Bestands-Vaults hebt `migrate.add_papers_trgm_table()` auf Schema-Version 12 und füllt den
+Index für bereits vorhandene Paper nach (die Trigger allein erfassen nur, was danach
+geschrieben wird). Fehlt die Tabelle dennoch, fällt die Suche auf den reinen Exaktpfad
+zurück statt abzustürzen.
+
+## FTS5-Index über Chunk-Texte
+
+`papers_fts` und `papers_trgm` matchen ausschließlich Paper-Felder (Titel, Abstract,
+Volltext) — beide arbeiten auf Paper-Ebene. Ein Suchbegriff, der nur im Methodikteil
+eines einzelnen Chunks steht (`chunk_embeddings.chunk_text`), war darüber lexikalisch
+unauffindbar, obwohl die Vektorsuche längst chunkgenau trifft — genau die Stellen, die
+beim Belegen gesucht werden (#726).
+
+Seit #726 gibt es dafür eine eigenständige virtuelle Tabelle `chunk_fts` (FTS5,
+`unicode61`-Standardtokenizer, kein `content=`, manuell befüllt) über
+`chunk_embeddings.chunk_text` — analog zu `notes_fts`, **nicht** analog zu
+`papers_trgm`: der Auftrag lautete ausdrücklich auf **einen** FTS5-Index mit derselben
+Tokenizer-Entscheidung wie `papers_fts`. `chunk_fts` kennt deshalb ebenfalls kein
+Stemming und keine Kompositazerlegung — `Mittelstand` findet einen Chunk mit
+`Mittelstandsdigitalisierung` genauso wenig wie `papers_fts` das bei einem Paper-Titel
+tut. Ein Trigram-Pendant für Chunk-Komposita (`chunk_trgm`) ist bewusst nicht Teil dieses
+Issues und bliebe, falls gewünscht, ein eigenes Folge-Vorhaben nach dem Muster von #703.
+
+Drei Trigger (`chunk_ai`/`chunk_ad`/`chunk_au`) halten `chunk_fts` bei Insert, Update und
+Delete auf `chunk_embeddings` synchron — dasselbe DROP+CREATE-Muster wie bei
+`papers_ai`/`notes_ai`. Fusion/Retrieval bleibt in diesem Issue unverändert (weiterhin
+`paper_id`-Ebene, Umstellung ein Folge-Issue) — es gibt bewusst keinen neuen MCP-Tool-
+Endpunkt, der `chunk_fts` direkt abfragt.
+
+Bestands-Vaults hebt `migrate.add_chunk_fts()` auf Schema-Version 13 und füllt den Index
+für bereits vorhandene Chunks nach, ohne die `embedding_vector`-Spalten anzurühren — kein
+Reindex der Vektoren nötig. Fehlt die Tabelle dennoch, greift `chunk_fts` weiterhin über
+`server._ensure_schema_for_read()`, damit ein reiner Lesepfad auf einem frischen
+Bestands-Vault nicht mit `no such table: chunk_fts` abstürzt.
+
+**Gemessener Plattenbedarf** (Issue #726, AC5): an einem Test-Vault mit 50 Papern und 200
+Chunks (durchmischt aus Ingest-generierten und manuell hinzugefügten Chunks, Chunk-Texte
+im Bereich von ~100–150 Zeichen) wuchs die Vault-Datei nach `VACUUM` durch `chunk_fts`
+inklusive Backfill um rund 90 KB — etwa 1,8 KB je Paper bzw. rund 450 Byte je Chunk. Der
+FTS5-Index über `unicode61` liegt damit, anders als der Trigram-Index aus #703, in derselben
+Größenordnung wie der indizierte Rohtext, nicht in einem Vielfachen davon — `unicode61`
+legt nur Wort-Tokens ab, kein Trigram je Zeichenposition.
+
 ## PDF-Volltext-Index
 
 `papers_fts.fulltext` wird seit v6.6 real befüllt (zuvor schrieben die FTS5-Trigger die

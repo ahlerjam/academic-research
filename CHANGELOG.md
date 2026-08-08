@@ -10,6 +10,42 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **FTS5-Index ueber Chunk-Texte (#726):** `papers_fts`/`papers_trgm` matchen nur
+  Paper-Felder (Titel, Abstract, Volltext) -- ein Suchbegriff, der ausschliesslich
+  im Methodikteil eines einzelnen Chunks steht (`chunk_embeddings.chunk_text`),
+  war darueber lexikalisch unauffindbar, obwohl die Vektorsuche laengst
+  chunkgenau trifft. Neu ist eine eigenstaendige virtuelle Tabelle `chunk_fts`
+  (`unicode61`-Standardtokenizer, kein `content=`) ueber `chunk_text`, analog zu
+  `notes_fts` -- dieselbe Tokenizer-Entscheidung wie `papers_fts`, bewusst KEIN
+  Trigram-Pendant (der Auftrag lautete auf EINEN Index). Drei Trigger
+  (`chunk_ai`/`chunk_ad`/`chunk_au`) halten den Index bei Insert, Update und
+  Delete auf `chunk_embeddings` synchron (Schema-Version 13, Backfill fuer
+  Bestands-Vaults ueber `migrate.add_chunk_fts()`, ohne Reindex der Vektoren).
+  Fusion/Retrieval bleiben unveraendert auf `paper_id`-Ebene (Out of Scope, ein
+  Folge-Issue) -- kein neuer MCP-Tool-Endpunkt. Gemessener Plattenbedarf an
+  einem 50-Paper/200-Chunk-Vault: rund 90 KB nach `VACUUM`, ~1,8 KB je Paper
+  bzw. ~450 Byte je Chunk (dokumentiert in `docs/reference/vault.md`).
+
+- **Teilwortsuche fuer deutsche Komposita (#703):** `vault.search("Mittelstand")`
+  findet jetzt auch ein Paper, dessen Titel oder Abstract nur
+  `Mittelstandsdigitalisierung` enthaelt. `papers_fts` (`unicode61`) kennt weder
+  Stemming noch Kompositazerlegung -- in einem deutschsprachigen Plugin verfehlte
+  die lexikalische Haelfte des Hybrid-Retrievals damit genau den Normalfall. Neu
+  ist eine ZWEITE virtuelle Tabelle `papers_trgm` (`tokenize='trigram'`) ueber
+  Titel und Abstract (Schema-Version 12, Backfill fuer Bestands-Vaults ueber
+  `migrate.add_papers_trgm_table()`); ihre Treffer haengen als eigener Block
+  HINTER den exakten, bis `k` voll ist -- die bisherigen Treffer bleiben damit
+  Praefix des Ergebnisses, in unveraenderter Reihenfolge. Kein Tokenizer-Wechsel
+  an `papers_fts`: FTS5 kennt keinen Tokenizer je Spalte, ein Umbau wuerde
+  Ranking, Prefix-Suche und alle Kurz-Token zerstoeren. Preis, bewusst getragen
+  und in `docs/reference/vault.md` dokumentiert: der Trigram-Index laesst
+  `fulltext` bewusst aussen vor (Indexgroesse -- Titel+Abstract sind 1-2 KB je
+  Paper, Volltexte 50-200 KB), deshalb greift die Teilwortsuche NICHT im
+  PDF-Volltext; und der Zweig schaltet sich erst ab vier Zeichen je Token frei
+  (`_TRIGRAM_MIN_TOKEN_LEN`), weil ein 3-Zeichen-Token genau ein Trigram ist und
+  jede Wortmitte traefe (`KMU` in `Werkmuseum`) -- Suchen unter vier Zeichen
+  laufen bitgleich auf dem alten Pfad.
+
 - **Belegdichte in der Kapitel-Prüfbilanz (#739):** `vault.chapter_quote_balance`
   weist zusätzlich (additiv, ändert keinen bestehenden Key) die Belegdichte über
   ALLE Aussagesätze des Kapitels aus, nicht nur die mit Zitat --

@@ -656,6 +656,87 @@ def add_notes_fts(db_path: str) -> None:
         conn.close()
 
 
+def add_papers_trgm_table(db_path: str) -> None:
+    """Legt papers_trgm an (falls fehlend) und zieht Bestandspaper nach. (#703)
+
+    ``schema.sql`` legt ``papers_trgm`` bei jedem ``init_schema()``-Lauf an
+    (``CREATE VIRTUAL TABLE IF NOT EXISTS``), aber die Trigger
+    ``papers_ai``/``papers_au`` befuellen den Teilwort-Index nur fuer
+    INSERTs/UPDATEs *nach* ihrer Erstellung -- Paper, die schon vorher in
+    ``papers`` lagen, blieben sonst dauerhaft unsichtbar fuer die
+    Komposita-Suche. Der Backfill liest dieselben Felder wie die Trigger
+    (``json_extract`` auf ``csl_json``) und ist per ``NOT IN`` idempotent,
+    daher unproblematisch bei wiederholtem Aufruf ueber das Versions-Gate.
+
+    Verifiziert wird der Helfer ueber ``db._REQUIRED_MIGRATION_TABLES``, bevor
+    ``init_schema()`` die neue ``user_version`` stempelt.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS papers_trgm USING fts5("
+                "paper_id UNINDEXED, title, abstract, tokenize='trigram')"
+            )
+            conn.execute(
+                """
+                INSERT INTO papers_trgm (paper_id, title, abstract)
+                SELECT paper_id,
+                       json_extract(csl_json, '$.title'),
+                       json_extract(csl_json, '$.abstract')
+                FROM papers
+                WHERE paper_id NOT IN (SELECT paper_id FROM papers_trgm)
+                """
+            )
+            conn.commit()
+        except _sqlite3.OperationalError:
+            pass  # papers-Tabelle fehlt/FTS5 ohne Trigram -- idempotent uebersprungen
+    finally:
+        conn.close()
+
+
+def add_chunk_fts(db_path: str) -> None:
+    """Legt chunk_fts an (falls fehlend) und zieht Bestandschunks nach. (#726)
+
+    ``schema.sql`` legt ``chunk_fts`` bei jedem ``init_schema()``-Lauf an
+    (``CREATE VIRTUAL TABLE IF NOT EXISTS``), aber die Trigger
+    ``chunk_ai``/``chunk_au`` befuellen den Index nur fuer INSERTs/UPDATEs
+    *nach* ihrer Erstellung -- Chunks, die schon vor der chunk_fts-Einfuehrung
+    in ``chunk_embeddings`` lagen, blieben sonst dauerhaft unsichtbar fuer die
+    lexikalische Chunk-Suche (AC3). Der Backfill ist per ``NOT IN`` idempotent
+    (bereits indizierte chunk_ids werden uebersprungen), daher unproblematisch
+    bei wiederholtem Aufruf ueber das Versions-Gate. Ruehrt ``embedding_vector``
+    nicht an -- kein Reindex der Vektoren.
+
+    Verifiziert wird der Helfer ueber ``db._REQUIRED_MIGRATION_TABLES``, bevor
+    ``init_schema()`` die neue ``user_version`` stempelt.
+    Aufruf-Sicher: kann mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts "
+                "USING fts5(chunk_id, paper_id, chunk_text)"
+            )
+            conn.execute(
+                """
+                INSERT INTO chunk_fts (rowid, chunk_id, paper_id, chunk_text)
+                SELECT rowid, chunk_id, paper_id, chunk_text FROM chunk_embeddings
+                WHERE chunk_id NOT IN (SELECT chunk_id FROM chunk_fts)
+                """
+            )
+            conn.commit()
+        except _sqlite3.OperationalError:
+            pass  # chunk_embeddings-Tabelle fehlt -- idempotent uebersprungen
+    finally:
+        conn.close()
+
+
 def apply_pending_migrations(db_path: str) -> None:
     """Buendelt die bekannten additiven Bestands-Migrationshelfer (Issue #368).
 
@@ -698,6 +779,8 @@ def apply_pending_migrations(db_path: str) -> None:
     add_retraction_checked_at_column(db_path)
     add_quote_audit_columns(db_path)
     add_table_values_table(db_path)
+    add_papers_trgm_table(db_path)
+    add_chunk_fts(db_path)
     drop_dead_v64_tables(db_path)
 
 
