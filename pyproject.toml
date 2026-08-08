@@ -54,7 +54,8 @@ dependencies = [
     # intfloat/multilingual-e5-small (MIT, 384d). Harte Dependency, weil
     # chunk_embeddings sonst in jeder realen Installation leer bliebe und
     # vault.search(rerank=True) auf reine FTS5-Umsortierung zurueckfaellt.
-    "sentence-transformers>=3.0",
+    # >=5.0: requirement for CrossEncoder(cache_folder=...) in #714.
+    "sentence-transformers>=5.0",
     # torch ist funktional eine transitive Dependency von sentence-transformers.
     # Es steht hier NUR, damit [tool.uv.sources] greifen kann: uv wendet Sources
     # ausschliesslich auf direkte Dependencies an. Ohne diesen Eintrag loest uv

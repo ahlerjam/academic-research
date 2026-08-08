@@ -33,7 +33,8 @@ pyzotero>=1.5
 # Wer das CPU-Wheel will (deutlich kleiner, fuer diesen Vault ausreichend),
 # installiert Torch vorher separat:
 #   pip install --index-url https://download.pytorch.org/whl/cpu torch
-sentence-transformers>=3.0
+# >=5.0: requirement for CrossEncoder(cache_folder=...) in #714.
+sentence-transformers>=5.0
 # HINWEIS (Issue #376/#714): bewusst KEIN `transformers<5.0`-Cap hier. Der
 # lokale Reranker-Fallback laeuft seit #714 ueber
 # `sentence_transformers.CrossEncoder` mit dem hier gepinnten `transformers`
