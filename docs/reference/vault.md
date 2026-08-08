@@ -163,6 +163,134 @@ Ergebnis und Vorgehen stehen in
 Abschnitt „Migrationsprobe" (Testcode: `tests/test_issue_732_bge_m3_reindex.py`,
 `VAULT_E5_LIVE_TEST=1`).
 
+## Inhaltliche Kontextsätze (#710)
+
+Der Kontextsatz aus dem vorigen Abschnitt ist ein **deterministischer
+Metadaten-Satz** (Sektion, Seitenbereich, Titel/Autor/Jahr) — er sagt nichts
+darüber, WAS ein Chunk inhaltlich behauptet. Seit #783/#784 gibt es einen
+zweiten, optionalen Anreicherungsweg: ein Subagent liest den Chunk-Text und
+schreibt einen echten inhaltlichen Satz. Zwei Zustände koexistieren pro
+Chunk, unterscheidbar über `chunk_embeddings.context_source`:
+
+| `context_source` | Herkunft | Wie entsteht er |
+|---|---|---|
+| `'metadata'` (oder `NULL` bei Bestandschunks vor Schema 15) | Deterministisch, kein Modellaufruf | `chunking.default_context_sentence()`, läuft synchron in jedem `add_paper()` |
+| `'model'` | Inhaltlich, ein Satz je Chunk (≤ 25 Wörter, Sprache des Chunks) | `agents/chunk-context-writer.md`, aufgerufen aus `/academic-research:fetch` Schritt 4 oder manuell |
+
+### Ablauf
+
+`add_paper()` bettet Chunks wie bisher sofort mit dem Metadaten-Satz ein —
+das ändert sich durch #710 nicht, der Vault bleibt in jedem Zustand voll
+durchsuchbar. `/academic-research:fetch` ruft danach automatisch
+`Agent(chunk-context-writer)` für die geladene `paper_id` auf:
+
+1. `vault.pending_context_chunks(paper_id=...)` — Chunks mit
+   `context_source != 'model'`, in Dokumentreihenfolge (`rowid`).
+2. Der Agent formuliert je Chunk einen inhaltlichen Satz.
+3. `vault.enrich_chunk_contexts(items=[...])` — EIN Batch-Aufruf, schreibt
+   Kontextsatz + `embedding_text` + Vektor + vec0-Spiegel je Chunk als
+   Tripel (`db.update_chunk_context()`, `context_source='model'`).
+
+### Fallback-Tabelle (vier benannte Fälle)
+
+| Fall | Auslöser | Verhalten |
+|---|---|---|
+| Anreicherung nie aufgerufen | `chunk-context-writer` scheitert, wird übersprungen, oder läuft nicht (Timeout, kein Agent-Turn) | Metadaten-Satz bleibt stehen, Chunk voll durchsuchbar — der Normalzustand, kein Fehlerpfad |
+| Leerer/zu langer Satz im Batch | Ein einzelnes Item verletzt die Token-Reserve (`CONTEXT_TOKEN_RESERVE - MODEL_INPUT_OVERHEAD_TOKENS`) oder ist leer | Nur dieses Item landet in `skipped`, der Rest des Batches wird trotzdem geschrieben; der Agent unternimmt genau einen Korrekturdurchgang für `skipped`-Einträge |
+| Kein Embedder verfügbar | `get_embedder()` liefert `None` (Modell nicht geladen/inkompatible Umgebung) | `status="embedder-unavailable"`, der GESAMTE Batch bleibt ungeschrieben — kein Teilzustand, kein `ValueError` |
+| Dimensions-Konflikt | Embedder-Dimension passt nicht zum Vault-Bestand | `EmbeddingDimensionMismatchError` (#629), geprüft vor jeder Inferenz — wie bei `_maybe_ingest_embeddings` |
+
+**Fünfter, unbenannter Fall (Beobachtung, #784-Live-Lauf):** Bricht der
+Agent vor Abschluss ab (z. B. `maxTurns` in einer echten `Task()`-Sitzung
+erreicht, bevor ein sehr großes Paper vollständig verarbeitet ist), bleiben
+die noch nicht erreichten Chunks einfach bei `context_source='metadata'`
+stehen — technisch identisch mit Fall 1 oben, kein Sonderzustand. Der
+#784-Live-Lauf hat das an einem 27-Chunk-Paper beobachtet: der Agent
+brauchte 10 Turns statt der im Frontmatter deklarierten `maxTurns: 6` und
+splittete den Schreibvorgang in drei statt einem Batch-Aufruf (alle Chunks
+wurden am Ende trotzdem vollständig angereichert, siehe
+[Kosten unten](#kosten-live-gemessen-784)) — bei einem noch größeren Paper
+ist ein vorzeitiger Abbruch mit teilweise pending bleibenden Chunks
+plausibel.
+
+### Nachtrag für Bestandsvaults
+
+Papers, die vor #784 oder außerhalb von `/academic-research:fetch`
+eingebettet wurden, lassen sich nachträglich anreichern — paperweise, kein
+Ein-Klick-Automatismus für den ganzen Vault:
+
+```
+Agent(chunk-context-writer) mit {"paper_id": "<vorhandene paper_id>"}
+```
+
+Für einen vault-weiten Durchlauf `paper_id: null` übergeben —
+`vault.pending_context_chunks(paper_id=None)` listet dann alle noch
+metadatenbasierten Chunks über alle Papers hinweg (batchweise, `limit`
+begrenzt die Rückgabe je Aufruf). Das ist bewusst kein automatischer
+Hintergrundlauf: jeder Nachtrag verbraucht Sitzungskontingent des
+aufrufenden Agenten (siehe Kosten unten).
+
+### Warum `claude -p` nicht synchron im Ingest läuft
+
+Naheliegend wäre, den Kontextsatz direkt im `add_paper()`-Aufruf zu
+erzeugen — der Serverprozess könnte seit #734 technisch `claude -p` als
+Subprozess starten (`query_expansion.expand_query()` tut das bereits für die
+Query-Umformung, siehe oben). Das ist trotzdem NICHT der gewählte Weg
+(siehe `docs/decisions/0001-modellzugang-ingest.md`, Fußnote zu Weg D):
+
+- **Latenz.** Ein `claude -p`-Aufruf kostet nach der #733-Messung rund 6,8 s.
+  Bei bis zu 64 Chunks/Paper (`VAULT_MAX_CHUNKS`) würde ein synchroner
+  `add_paper()`-Aufruf an einem Subprozess mit 240-s-Timeout hängen — die
+  bestehende Best-effort-Philosophie von `_maybe_ingest_embeddings()`
+  (Ingest darf nie an einem Modell scheitern) wäre durchbrochen.
+- **Doppelte Modellnutzung.** Der Serverprozess liefe als zweiter,
+  unabhängiger Modellverbraucher neben dem ohnehin aktiven Session-Agenten —
+  zwei konkurrierende Anfragen für dieselbe Aufgabe, ohne dass der
+  Session-Agent davon weiß oder es koordinieren könnte.
+
+Der zweistufige Ingest (add_paper schreibt sofort mit dem Metadaten-Satz,
+die Anreicherung läuft entkoppelt als Session-Agent-Aufruf) vermeidet beide
+Probleme: `add_paper()` bleibt synchron und modellunabhängig, die
+inhaltliche Anreicherung läuft dort, wo bereits ein Modell aktiv ist — in
+der laufenden Sitzung.
+
+### Kosten (live gemessen, #784)
+
+`scripts/eval/measure_context_enrichment_710.py` misst den echten
+Aufrufpfad: der reale `chunk-context-writer`-Agent über `claude -p
+--output-format json`, gegen den echten `academic-vault`-MCP-Server, gegen
+die 11 Goldset-Dokumente aus
+[#731](../evals/2026-08-08-embedding-candidates-731.md) (30 Chunks) PLUS ein
+reales Paper mit ≥ 20 Chunks ([„Attention Is All You
+Need"](https://arxiv.org/abs/1706.03762), arXiv:1706.03762, nur für diesen
+Live-Lauf heruntergeladen, nicht im Repo enthalten).
+
+| | Kosten gesamt | Chunks | Kosten/Chunk |
+|---|---:|---:|---:|
+| 11 Goldset-Dokumente (2–3 Chunks/Paper) | 1,05 USD | 30 | 0,0351 USD |
+| 1 reales Paper (27 Chunks) | 0,45 USD | 27 | 0,0169 USD |
+| **Gesamt** | **1,51 USD** | **57** | **0,0265 USD** |
+
+Kosten/Chunk sinkt mit der Papergröße (fixer Sockelbetrag je Sitzung:
+System-Prompt + zwei MCP-Tool-Schemas + `pending_context_chunks`-Aufruf,
+verteilt auf mehr oder weniger Chunks). Alle 57 Chunks wurden in diesem Lauf
+erfolgreich angereichert, 0 `skipped`. Bei einem großen Paper (27 Chunks)
+hielt der Agent die Vorgabe „ein Batch-Aufruf" nicht ein (drei
+`enrich_chunk_contexts`-Aufrufe, 10 Turns statt der im Frontmatter
+deklarierten `maxTurns: 6`) — Details und Einordnung im vollständigen
+Bericht.
+
+Re-Embedding-Latenz je Einzeltext (`BAAI/bge-m3`, CPU, nach dem Muster von
+`build_embedding_candidates_731.py`):
+
+| Posten | n | p50 | p95 | Mittelwert |
+|---|---:|---:|---:|---:|
+| Re-Embedding je Einzeltext (`BAAI/bge-m3`, CPU) | 57 | 83,0 ms | 91,5 ms | 80,8 ms |
+| Sitzung, reine Modellzeit (`duration_api_ms`) | 12 | 14.428 ms | 28.967 ms | 22.407 ms |
+
+Vollständiger Bericht:
+[`docs/evals/2026-08-09-context-enrichment-710.md`](../evals/2026-08-09-context-enrichment-710.md).
+
 ## Reranking (`vault.search(..., rerank=True)`)
 
 Sobald `rerank=True` gesetzt ist, greift ausschließlich der lokale

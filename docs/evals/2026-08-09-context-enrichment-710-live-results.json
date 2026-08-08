@@ -1,0 +1,658 @@
+{
+  "meta": {
+    "issue": 784,
+    "epic": 710,
+    "generator": "scripts/eval/measure_context_enrichment_710.py",
+    "agent_path": "agents/chunk-context-writer.md",
+    "transform_model": "sonnet",
+    "goldset_manifest_sha256": null,
+    "goldset_papers": [
+      {
+        "paper_id": "en-change-approval",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "en-supply-chain",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "en-incident-response",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "en-infrastructure-drift",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "en-pipeline-secrets",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "de-datenschutz-pipeline",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "de-lieferkette-pruefung",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "de-mitbestimmung-telemetrie",
+        "chunk_count": 3,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "en-access-review",
+        "chunk_count": 2,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "en-telemetry-retention",
+        "chunk_count": 2,
+        "source": "goldset-731"
+      },
+      {
+        "paper_id": "de-freigabenachweis-archiv",
+        "chunk_count": 2,
+        "source": "goldset-731"
+      }
+    ],
+    "real_paper": {
+      "paper_id": "vaswani2017-attention",
+      "chunk_count": 27,
+      "source": "https://arxiv.org/pdf/1706.03762",
+      "title": "Attention Is All You Need"
+    },
+    "session_count": 12,
+    "usage_totals": {
+      "input_tokens": 88.0,
+      "cache_creation_input_tokens": 141406.0,
+      "cache_read_input_tokens": 1029006.0,
+      "output_tokens": 23379.0
+    },
+    "total_cost_usd": 1.508087,
+    "duration_ms_wall": {
+      "method": "Wanduhrzeit je claude-p-Aufruf, EIN Aufruf je Paper. Enthaelt MCP-Server-Kaltstart (bge-m3-Modell laden) -- pessimistisch fuer wiederholte Aufrufe in derselben warmen Sitzung, siehe Modul-Docstring.",
+      "n": 12,
+      "p50": 27951.135,
+      "p95": 55666.31,
+      "mean": 36495.673,
+      "max": 108682.67
+    },
+    "duration_api_ms": {
+      "method": "duration_api_ms aus dem JSON-Envelope -- reine Modellzeit, ohne lokalen Subprozess-/Kaltstart-Overhead.",
+      "n": 12,
+      "p50": 14428.0,
+      "p95": 28967.0,
+      "mean": 22406.667,
+      "max": 95119.0
+    }
+  },
+  "sessions": [
+    {
+      "paper_id": "en-change-approval",
+      "duration_ms_wall": 55666.31,
+      "duration_api_ms": 20067,
+      "num_turns": 4,
+      "total_cost_usd": 0.12232140000000001,
+      "usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 12193,
+        "cache_read_input_tokens": 83398,
+        "output_tokens": 1608,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 12193,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 78,
+            "cache_read_input_tokens": 24848,
+            "cache_creation_input_tokens": 614,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 614
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "278062bd-bfdc-4ecc-925a-1fc64f928d70",
+      "result_text": "Alle 3 ausstehenden Chunks für `en-change-approval` erfolgreich mit Kontextsätzen angereichert (`updated: 3`, `skipped: []`). Keine weitere Aktion nötig."
+    },
+    {
+      "paper_id": "en-supply-chain",
+      "duration_ms_wall": 30603.03,
+      "duration_api_ms": 14294,
+      "num_turns": 3,
+      "total_cost_usd": 0.09079140000000001,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 9117,
+        "cache_read_input_tokens": 60938,
+        "output_tokens": 1186,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 9117,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 88,
+            "cache_read_input_tokens": 23652,
+            "cache_creation_input_tokens": 1136,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1136
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "c5811781-d398-4278-bec7-4c7694ae9ce0",
+      "result_text": "Alle 3 ausstehenden Chunks von `en-supply-chain` wurden erfolgreich mit Kontextsätzen angereichert (status: \"ok\", 3 updated, 0 skipped). Kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "en-incident-response",
+      "duration_ms_wall": 29923.9,
+      "duration_api_ms": 17651,
+      "num_turns": 3,
+      "total_cost_usd": 0.0907029,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 9158,
+        "cache_read_input_tokens": 61023,
+        "output_tokens": 1162,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 9158,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 84,
+            "cache_read_input_tokens": 23738,
+            "cache_creation_input_tokens": 1091,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1091
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "29b405d9-d16f-4e75-b9ce-e37ce0343304",
+      "result_text": "Alle 3 ausstehenden Chunks für `en-incident-response` wurden erfolgreich mit Kontextsätzen angereichert (`updated: 3`, `skipped: []`) — kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "en-infrastructure-drift",
+      "duration_ms_wall": 25502.81,
+      "duration_api_ms": 14187,
+      "num_turns": 3,
+      "total_cost_usd": 0.0886728,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 8959,
+        "cache_read_input_tokens": 60886,
+        "output_tokens": 1109,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 8959,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 83,
+            "cache_read_input_tokens": 23597,
+            "cache_creation_input_tokens": 1033,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1033
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "f6bb17af-21b2-411a-82fd-9cb64657dd81",
+      "result_text": "Alle 3 ausstehenden Chunks von `en-infrastructure-drift` wurden erfolgreich mit Kontextsätzen angereichert (status \"ok\", keine Skips) — kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "en-pipeline-secrets",
+      "duration_ms_wall": 21032.03,
+      "duration_api_ms": 9476,
+      "num_turns": 3,
+      "total_cost_usd": 0.0777429,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 8378,
+        "cache_read_input_tokens": 60773,
+        "output_tokens": 615,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 8378,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 81,
+            "cache_read_input_tokens": 23484,
+            "cache_creation_input_tokens": 565,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 565
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "1529c46c-3d4c-45ad-afca-49a3ab2fd148",
+      "result_text": "Alle 3 ausstehenden Chunks von `en-pipeline-secrets` wurden erfolgreich mit Kontextsatz angereichert, `skipped` ist leer. Kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "de-datenschutz-pipeline",
+      "duration_ms_wall": 40534.18,
+      "duration_api_ms": 28967,
+      "num_turns": 3,
+      "total_cost_usd": 0.1320594,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 11764,
+        "cache_read_input_tokens": 61908,
+        "output_tokens": 2859,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 11764,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 72,
+            "cache_read_input_tokens": 24593,
+            "cache_creation_input_tokens": 2842,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2842
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "27713c8e-6578-414f-beea-8b4fd1e103a5",
+      "result_text": "Alle 3 ausstehenden Chunks von `de-datenschutz-pipeline` mit Kontextsätzen angereichert, keine übersprungen — kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "de-lieferkette-pruefung",
+      "duration_ms_wall": 25978.37,
+      "duration_api_ms": 14562,
+      "num_turns": 3,
+      "total_cost_usd": 0.0978414,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 9944,
+        "cache_read_input_tokens": 61648,
+        "output_tokens": 1311,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 9944,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 77,
+            "cache_read_input_tokens": 24320,
+            "cache_creation_input_tokens": 1295,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1295
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "1badd1b6-fac7-44c6-9d0c-7bd8ee64dbef",
+      "result_text": "Alle 3 ausstehenden Chunks für `de-lieferkette-pruefung` wurden mit Kontextsätzen angereichert, keine Fehlschläge – kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "de-mitbestimmung-telemetrie",
+      "duration_ms_wall": 35226.51,
+      "duration_api_ms": 24010,
+      "num_turns": 3,
+      "total_cost_usd": 0.1214445,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 11050,
+        "cache_read_input_tokens": 61655,
+        "output_tokens": 2442,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 11050,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 84,
+            "cache_read_input_tokens": 24324,
+            "cache_creation_input_tokens": 2397,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 2397
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "be231dfd-3dac-4f21-be53-0808425c4649",
+      "result_text": "Alle 3 ausstehenden Chunks von `de-mitbestimmung-telemetrie` wurden mit Kontextsätzen angereichert (status \"ok\", keine `skipped`). Kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "en-access-review",
+      "duration_ms_wall": 20656.1,
+      "duration_api_ms": 9334,
+      "num_turns": 3,
+      "total_cost_usd": 0.0722439,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 7749,
+        "cache_read_input_tokens": 60323,
+        "output_tokens": 509,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 7749,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 86,
+            "cache_read_input_tokens": 22990,
+            "cache_creation_input_tokens": 430,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 430
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "4e2f5fbd-6a8b-4261-955e-ed0a435c7ef2",
+      "result_text": "Fertig: Beide ausstehenden Chunks von `en-access-review` wurden mit Kontextsätzen angereichert (`status: ok`, `updated: 2`, `skipped: []`). Kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "en-telemetry-retention",
+      "duration_ms_wall": 19815.59,
+      "duration_api_ms": 8474,
+      "num_turns": 3,
+      "total_cost_usd": 0.0711795,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 7673,
+        "cache_read_input_tokens": 60295,
+        "output_tokens": 469,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 7673,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 79,
+            "cache_read_input_tokens": 22958,
+            "cache_creation_input_tokens": 386,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 386
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "3d1a2597-4176-4e07-8165-87a1ad2e7ff8",
+      "result_text": "Beide ausstehenden Chunks für `en-telemetry-retention` erfolgreich mit Kontextsätzen angereichert (2 von 2, `skipped: []`). Kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "de-freigabenachweis-archiv",
+      "duration_ms_wall": 24326.58,
+      "duration_api_ms": 12739,
+      "num_turns": 3,
+      "total_cost_usd": 0.08810639999999999,
+      "usage": {
+        "input_tokens": 6,
+        "cache_creation_input_tokens": 8866,
+        "cache_read_input_tokens": 60808,
+        "output_tokens": 1110,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 8866,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 86,
+            "cache_read_input_tokens": 23467,
+            "cache_creation_input_tokens": 1070,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1070
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "8723915e-b661-40d5-8a14-6e8b45350772",
+      "result_text": "Beide ausstehenden Chunks für `de-freigabenachweis-archiv` wurden erfolgreich mit Kontextsätzen angereichert (2 von 2, keine übersprungen). Kein Korrekturdurchgang nötig."
+    },
+    {
+      "paper_id": "vaswani2017-attention",
+      "duration_ms_wall": 108682.67,
+      "duration_api_ms": 95119,
+      "num_turns": 10,
+      "total_cost_usd": 0.45498030000000006,
+      "usage": {
+        "input_tokens": 20,
+        "cache_creation_input_tokens": 36555,
+        "cache_read_input_tokens": 335351,
+        "output_tokens": 8999,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 36555,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 141,
+            "cache_read_input_tokens": 52046,
+            "cache_creation_input_tokens": 180,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 180
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      },
+      "session_id": "8cebf33c-6833-4406-91ab-dd27d0b0743e",
+      "result_text": "Alle 27 ausstehenden Chunks für `vaswani2017-attention` wurden mit inhaltlichen Kontextsätzen versehen — verteilt auf drei Batch-Aufrufe (10, 10, 7 Items), keine Skips, kein Korrekturdurchgang nötig. `vault.pending_context_chunks` liefert jetzt eine leere Liste für dieses Paper."
+    }
+  ],
+  "post_state": {
+    "per_paper": [
+      {
+        "paper_id": "en-change-approval",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "en-supply-chain",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "en-incident-response",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "en-infrastructure-drift",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "en-pipeline-secrets",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "de-datenschutz-pipeline",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "de-lieferkette-pruefung",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "de-mitbestimmung-telemetrie",
+        "chunk_count": 3,
+        "enriched_model": 3,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "en-access-review",
+        "chunk_count": 2,
+        "enriched_model": 2,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "en-telemetry-retention",
+        "chunk_count": 2,
+        "enriched_model": 2,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "de-freigabenachweis-archiv",
+        "chunk_count": 2,
+        "enriched_model": 2,
+        "still_pending": 0
+      },
+      {
+        "paper_id": "vaswani2017-attention",
+        "chunk_count": 27,
+        "enriched_model": 27,
+        "still_pending": 0
+      }
+    ],
+    "total_chunks": 57,
+    "total_enriched_model": 57,
+    "total_still_pending": 0
+  },
+  "embed_latency": {
+    "status": "ok",
+    "model_id": "BAAI/bge-m3",
+    "dim": 1024,
+    "durations_ms": {
+      "n": 57,
+      "p50": 83.016,
+      "p95": 91.471,
+      "mean": 80.8,
+      "max": 147.206
+    }
+  }
+}

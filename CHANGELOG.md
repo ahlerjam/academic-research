@@ -10,6 +10,40 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Kontextsatz-Agent + Einbindung in fetch.md, Kostenmessung (#784, Epic
+  #710-B):** Teilschritt B aus dem Umsetzungsplan zu #710 -- macht den in
+  #783 gebauten Schreibweg nutzbar. Neuer Agent
+  `agents/chunk-context-writer.md` (Sonnet, `tools:` beschraenkt auf
+  `vault.pending_context_chunks`/`vault.enrich_chunk_contexts`, `maxTurns:
+  6`): liest ausstehende Chunks eines Papers in Dokumentreihenfolge,
+  formuliert je Chunk genau einen inhaltlichen Satz (≤ 25 Woerter, Sprache
+  des Chunks -- was der Abschnitt inhaltlich behauptet, NICHT "Abschnitt X
+  aus Paper Y"), schreibt alle Saetze in einem Batch-Aufruf, mit genau einem
+  Korrekturdurchgang fuer `skipped`-Eintraege. `commands/fetch.md` ruft ihn
+  seit diesem Issue automatisch in Schritt 4 (Bei `success`) fuer die
+  geladene `paper_id` auf -- bleibt der Aufruf aus oder scheitert er, bleibt
+  der Metadaten-Kontextsatz stehen, der restliche Command-Ablauf ist davon
+  unberuehrt (`allowed-tools` um `Agent(chunk-context-writer)` erweitert).
+  **Reale Kostenmessung** (nicht geschaetzt):
+  `scripts/eval/measure_context_enrichment_710.py` startet den echten Agenten
+  ueber `claude -p --model sonnet --output-format json` gegen den echten
+  `academic-vault`-MCP-Server (11 Goldset-Dokumente aus #731/#708 plus ein
+  reales Paper mit ≥ 20 Chunks, arXiv:1706.03762, nur fuer den Live-Lauf
+  geladen, nicht im Repo). Erfasst echte `usage`-Felder (Input-/Output-/
+  Cache-Tokens), `total_cost_usd`, `duration_ms` und `duration_api_ms` aus
+  dem JSON-Envelope, sowie die Re-Embedding-Latenz (p50/p95/mean) je
+  Einzeltext nach dem Muster von `build_embedding_candidates_731.py`.
+  Ergebnis: `docs/evals/2026-08-09-context-enrichment-710.md` +
+  Rohdaten-JSON daneben; `docs/reference/vault.md` bekommt einen neuen
+  Abschnitt "Inhaltliche Kontextsätze (#710)" mit Kostentabelle,
+  Fallback-Tabelle (vier benannte Faelle) und Nachtrags-Rezept fuer
+  Bestandsvaults (paperweise ueber `pending_context_chunks`, kein
+  Ein-Klick-Automatismus). `docs/decisions/0001-modellzugang-ingest.md`
+  bekommt eine Fussnote: die Praemisse "kein Modellzugang im Serverprozess"
+  ist seit #734 ueberholt (der Serverprozess KOENNTE `claude -p` starten),
+  die Empfehlung selbst (zweistufiger Ingest statt synchronem Aufruf) bleibt
+  aus messbaren Gruenden (Latenz, doppelte Modellnutzung) richtig.
+
 - **Kontextsatz-Schreibweg: neue Spalte, zwei MCP-Tools, Carry-over-Schutz
   (#783):** Teilschritt A aus dem Umsetzungsplan zu #710 (agentischer
   Kontextsatz). Neue Spalte `chunk_embeddings.context_source` (`'metadata'`/

@@ -79,7 +79,7 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 graph LR
     U[Du in Claude Code] --> C[12 Slash-Commands]
     U --> S[45 Skills<br/>selbstaktivierend]
-    C --> A[28 Agents<br/>Subagents]
+    C --> A[29 Agents<br/>Subagents]
     S --> A
     A --> V[(Vault<br/>SQLite + FTS5 + vec0)]
     C --> V
