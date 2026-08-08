@@ -41,6 +41,8 @@ danach höchstens den passenden Report.
 | [`2026-08-08-embedding-model-decision-732.md`](2026-08-08-embedding-model-decision-732.md) | Entscheidung auf Basis der #731-Zahlen: Wechsel auf `BAAI/bge-m3` (1024d) statt `qwen3-384` (migrationsfrei, aber ~80x CPU-Indexierungszeit) oder „bleiben" bei `e5-small`, Hardwarekosten auf GPU-losem Laptop explizit gewichtet, Migrationsprobe mit dem echten Modell (#732) |
 | [`2026-08-08-chunk-fusion-ablation-729.md`](2026-08-08-chunk-fusion-ablation-729.md) | Trägt der Umbau auf Chunk-Ebene (#726 Chunk-FTS-Index, #727 Chunk-Fusion)? Drei Zustände (vorher/Zwischenzustand A/nachher) gegen das #708-Goldset, Index- und Fusionsbeitrag getrennt ausgewiesen, Index-Zuwachs und Suchlatenz an einem 60-Paper-Vault, vollständig hermetisch (#729) |
 | [`2026-08-08-chunk-fusion-ablation-729-live-results.json`](2026-08-08-chunk-fusion-ablation-729-live-results.json) | Rohdaten des Ablationslaufs (alle drei Zustände, per Query, inklusive Kosten-Block) |
+| [`2026-08-08-context-ablation-710.md`](2026-08-08-context-ablation-710.md) | Vier-Arme-Vergleich auf der bge-m3-Fassung des #708-Goldsets: hilft ein echter, modellgeschriebener Kontextsatz gegenüber dem deterministischen Metadaten-Satz? Sprach-Confound über einen vierten Arm (`model_context_de`) isoliert, Teilmengen getrennt ausgewiesen, `metadata_context`-Arm reproduziert die #731-Zahlen exakt (#785, Epic #710) |
+| [`2026-08-08-context-ablation-710-live-results.json`](2026-08-08-context-ablation-710-live-results.json) | Rohdaten des Vier-Arme-Laufs (alle Arme, per Query, inklusive Deltas und Kontrolltest-Block) |
 
 ## Konvention
 
