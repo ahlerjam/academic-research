@@ -30,7 +30,7 @@ import json
 
 import pytest
 from academic_vault.config_switches import resolve_bool_switch
-from academic_vault.embedding_model import get_embedder, resolve_embedding_enabled
+from academic_vault.embedding_model import resolve_embedding_enabled
 from academic_vault.nli_prefilter import resolve_nli_prefilter_enabled
 from academic_vault.retrieval import apply_reranker, resolve_reranker_enabled
 
