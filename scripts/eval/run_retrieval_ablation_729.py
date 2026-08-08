@@ -63,10 +63,26 @@ Zwei Messteile:
    ``tests/conftest.py::block_real_embedding_backend`` fuer dasselbe Muster
    in der Testsuite).
 
+3. **Nullbefund-Diagnose (Issue #789)**: :func:`run_diagnostics` rechnet je
+   Query mechanistisch gegen die echten Produktionsfunktionen
+   (``retrieval.reciprocal_rank_fusion``, ``server._attach_chunk_to_fts_hit``,
+   ``server._vec0_search``) nach, WARUM alle drei oben gemessenen Zustaende
+   query-fuer-query identische Ergebnisse liefern: die lexikalische Seite des
+   #708-Goldsets ist strukturell tot (ausgeschriebene Saetze mit implizitem
+   AND ueber alle Tokens treffen ``papers_fts``/``papers_trgm`` fast nie),
+   nicht "Korpus zu klein" wie im urspruenglichen #729-Report vermutet --
+   siehe Nachtrag in ``docs/evals/2026-08-08-chunk-fusion-ablation-729.md``.
+   ``--goldset``/``--vectors`` gelten fuer alle drei Messteile gleichermassen.
+
 Nutzung::
 
     uv run python scripts/eval/run_retrieval_ablation_729.py \\
       --out docs/evals/2026-08-08-chunk-fusion-ablation-729-live-results.json
+
+    # Nur die Diagnose (Issue #789), gegen ein alternatives Goldset:
+    uv run python scripts/eval/run_retrieval_ablation_729.py \\
+      --goldset pfad/zu/goldset.json --vectors pfad/zu/vectors.json \\
+      --skip-cost
 """
 
 from __future__ import annotations
@@ -325,6 +341,31 @@ def run_search(
     return seen[:k]
 
 
+def _aggregate_by_case(per_query: list[dict]) -> dict[str, dict]:
+    """Gruppiert die per-Query-Metriken aus :func:`evaluate_combo` nach dem
+    ``case``-Feld des Goldsets (``same-language``/``cross-language``/
+    ``language-gap``, Issue #789).
+
+    Ein einzelnes Gesamtmittel (``overall`` in :func:`evaluate_combo`)
+    verdeckt, ob eine schwaechere Fallgruppe (z. B. ``language-gap``) von
+    einer staerkeren aufgewogen wird -- dieselbe Kritik, die #789 an der
+    pauschalen "Korpus zu klein"-Diagnose im #729-Report uebt, gilt auch
+    fuer ein einzelnes Gesamtmittel ueber alle drei Faelle.
+    """
+    by_case: dict[str, list[dict]] = {}
+    for entry in per_query:
+        by_case.setdefault(entry["case"], []).append(entry)
+    return {
+        case: {
+            "query_count": len(entries),
+            "recall_at_10": round(sum(e["recall_at_10"] for e in entries) / len(entries), 4),
+            "ndcg_at_10": round(sum(e["ndcg_at_10"] for e in entries) / len(entries), 4),
+            "mrr": round(sum(e["reciprocal_rank"] for e in entries) / len(entries), 4),
+        }
+        for case, entries in sorted(by_case.items())
+    }
+
+
 def evaluate_combo(
     db_path: str,
     goldset: dict,
@@ -389,6 +430,7 @@ def evaluate_combo(
         "chunk_fts_index": chunk_fts_index,
         "chunk_fusion": chunk_fusion,
         "overall": overall,
+        "by_case": _aggregate_by_case(per_query),
         "per_query": per_query,
         "fts5_syntax_errors": fts5_syntax_errors,
     }
@@ -484,6 +526,206 @@ def run_quality_ablation(
         "deltas": deltas,
         "regressions": regressions,
     }
+
+
+# ---------------------------------------------------------------------------
+# Nullbefund-Diagnose (Issue #789): mechanistische Nachrechnung je Query
+# gegen die ECHTEN Produktionsfunktionen -- nicht gegen den 'vorher'/
+# Zwischenzustand-A-Shim oben (der historisches Verhalten reimplementiert),
+# sondern gegen exakt den Pfad, den 'nachher' (server.search_papers)
+# tatsaechlich durchlaeuft: papers_fts/papers_trgm als lexikalische
+# Kandidatenquelle, _attach_chunk_to_fts_hit fuer den Chunk-Lookup, der
+# echte chunk-level _vec0_search fuer die Vektorseite.
+# ---------------------------------------------------------------------------
+def diagnose_query(db_path: str, query: str, k: int = DEFAULT_K) -> dict:
+    """Diagnoseblock fuer EINE Query (Issue #789).
+
+    Felder:
+
+    - ``papers_fts_hit_count``/``papers_trgm_hit_count``: die beiden
+      lexikalischen Quellen GETRENNT gezaehlt (``_papers_fts_hits`` oben
+      mischt beide bereits fuer die Kandidatenliste -- hier bewusst
+      aufgespalten, weil der #789-Befund lautet, dass ``papers_trgm`` NIE
+      beitraegt und ``papers_fts`` fast nie).
+    - ``fts_hit_count``: kombiniert, identisch zur Kandidatenzahl, die die
+      Fusion tatsaechlich sieht (``papers_fts_hit_count`` +
+      ``papers_trgm_hit_count``).
+    - ``fts_ranking``: Paper-IDs in der Reihenfolge von ``_papers_fts_hits``
+      (Rang 1 zuerst).
+    - ``attached_chunk``: je Paper-ID der von ``server._attach_chunk_to_fts_hit``
+      (#727) zugeordnete Chunk, ``None`` bei synthetischem Schluessel
+      ``fts-paper::<pid>`` (kein lexikalisch treffender Chunk gefunden).
+    - ``vec_paper_rank``/``vec_chunk_rank``: 1-basierte Raenge aus dem echten
+      chunk-level ``server._vec0_search`` -- Paper-Rang ist der Rang des
+      ERSTEN (naechsten) Chunks je Paper, Chunk-Rang je einzelnem Chunk.
+    - ``attach_equals_vec_best``: je Paper-ID, ob der von
+      ``_attach_chunk_to_fts_hit`` zugeordnete Chunk mit dem vektoriell
+      besten Chunk desselben Papers uebereinstimmt -- Vorbedingung fuer
+      Folge-Issue 1 (bei fehlgeschlagenem Chunk-Lookup faellt die Zuordnung
+      auf den synthetischen Schluessel zurueck statt auf den Vektor-Bestchunk,
+      das kostet den Hybrid-Bonus).
+    - ``min_score_gap_at_k``: kleinster Abstand zwischen zwei aufeinander-
+      folgenden ``rrf_score``-Werten in den fusionierten Top-``k`` -- nahe 0
+      markiert einen Tie, Vorbedingung fuer Folge-Issue 2 (nichtdeterministischer
+      Tie-Break in ``reciprocal_rank_fusion`` bei exakt gleichem Score).
+    - ``fts5_syntax_error``: derselbe vorbestehende Komma-Defekt wie in
+      #722/#729 (``str(exc)`` statt Laufabbruch); alle uebrigen Felder bleiben
+      dann auf ihrem Leerwert.
+    """
+    import sqlite3
+
+    from academic_vault import server as _server
+    from academic_vault.db import VaultDB
+    from academic_vault.retrieval import reciprocal_rank_fusion
+
+    sanitized = _server._sanitize_fts5_query(query)
+    result: dict = {
+        "query": query,
+        "sanitized_query": sanitized,
+        "papers_fts_hit_count": 0,
+        "papers_trgm_hit_count": 0,
+        "fts_hit_count": 0,
+        "fts_ranking": [],
+        "attached_chunk": {},
+        "vec_paper_rank": {},
+        "vec_chunk_rank": {},
+        "attach_equals_vec_best": {},
+        "min_score_gap_at_k": None,
+        "fts5_syntax_error": None,
+    }
+    if not sanitized:
+        return result
+
+    _server._ensure_schema_for_read(db_path)
+    conn = VaultDB._open(db_path)
+    try:
+        try:
+            exact = _server._fts_exact_hits(conn, sanitized, None, k)
+            trigram_rows = _server._fts_trigram_hits(conn, sanitized, None, k)
+        except sqlite3.OperationalError as exc:
+            result["fts5_syntax_error"] = str(exc)
+            return result
+
+        seen = {r["paper_id"] for r in exact}
+        trigram_extra = [row for row in trigram_rows if row["paper_id"] not in seen]
+        result["papers_fts_hit_count"] = len(exact)
+        result["papers_trgm_hit_count"] = len(trigram_extra)
+
+        fts_results = exact + trigram_extra
+        result["fts_hit_count"] = len(fts_results)
+        result["fts_ranking"] = [r["paper_id"] for r in fts_results]
+
+        fts_chunk_results = []
+        for r in fts_results:
+            attached = _server._attach_chunk_to_fts_hit(conn, r, sanitized)
+            chunk_id = attached["chunk_id"]
+            is_synthetic = chunk_id.startswith("fts-paper::")
+            result["attached_chunk"][attached["paper_id"]] = None if is_synthetic else chunk_id
+            fts_chunk_results.append(attached)
+    finally:
+        conn.close()
+
+    vec_results = _server._vec0_search(db_path, query, k=k)
+    best_chunk_per_paper: dict[str, str] = {}
+    for idx, r in enumerate(vec_results):
+        pid, cid = r["paper_id"], r["chunk_id"]
+        result["vec_chunk_rank"][cid] = idx + 1
+        if pid not in result["vec_paper_rank"]:
+            result["vec_paper_rank"][pid] = idx + 1
+            best_chunk_per_paper[pid] = cid
+
+    for pid, attached_cid in result["attached_chunk"].items():
+        best = best_chunk_per_paper.get(pid)
+        result["attach_equals_vec_best"][pid] = (
+            attached_cid is not None and best is not None and attached_cid == best
+        )
+
+    fused = reciprocal_rank_fusion(vec_results, fts_chunk_results, k=60, top_n=k)
+    scores = [entry["rrf_score"] for entry in fused]
+    gaps = [scores[i] - scores[i + 1] for i in range(len(scores) - 1)]
+    result["min_score_gap_at_k"] = min(gaps) if gaps else None
+    return result
+
+
+def _diagnostics_by_case(per_query: list[dict]) -> dict[str, dict]:
+    """Aggregiert den Diagnoseblock nach ``case`` (Issue #789-Task, analog zu
+    :func:`_aggregate_by_case`)."""
+    by_case: dict[str, list[dict]] = {}
+    for entry in per_query:
+        by_case.setdefault(entry["case"], []).append(entry)
+    result: dict[str, dict] = {}
+    for case, entries in sorted(by_case.items()):
+        non_error = [e for e in entries if e["fts5_syntax_error"] is None]
+        result[case] = {
+            "query_count": len(entries),
+            "fts5_syntax_errors": len(entries) - len(non_error),
+            "queries_with_any_fts_hit": sum(1 for e in non_error if e["fts_hit_count"] > 0),
+            "queries_with_papers_fts_hit": sum(
+                1 for e in non_error if e["papers_fts_hit_count"] > 0
+            ),
+            "queries_with_papers_trgm_hit": sum(
+                1 for e in non_error if e["papers_trgm_hit_count"] > 0
+            ),
+        }
+    return result
+
+
+def run_diagnostics(goldset: dict, vectors: dict[str, list[float]], k: int = DEFAULT_K) -> dict:
+    """Diagnoseblock fuer das gesamte Goldset (Issue #789).
+
+    Baut dieselbe hermetische Wegwerf-DB wie :func:`run_quality_ablation`
+    (Playback-Embedder aus der eingecheckten #708-Fixture, kein Netzzugriff)
+    und ruft :func:`diagnose_query` je Query gegen die reale Produktions-DB
+    auf. ``--goldset``/``--vectors`` (siehe ``main()``) steuern, welches
+    Fixture-Paar hier einlaeuft -- Default bleibt das bestehende #708-Set.
+    """
+    import tempfile
+
+    from academic_vault import embedding_model
+
+    doc_titles = {d["doc_id"]: d["title"] for d in goldset["documents"]}
+    chunk_vectors = {c["chunk_id"]: vectors[c["chunk_id"]] for c in goldset["chunks"]}
+    embedding_texts = {c["chunk_id"]: c["embedding_text"] for c in goldset["chunks"]}
+    embedder = build_playback_embedder(goldset, vectors)
+
+    with tempfile.TemporaryDirectory(prefix="diagnostics-789-") as tmp:
+        tmpdir = Path(tmp)
+        db_path = build_db(
+            tmpdir, "diag", goldset, doc_titles, chunk_vectors, embedding_texts, trigram=True
+        )
+        prior_cache = dict(embedding_model._EMBEDDER_CACHE)
+        embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
+        prior_env_model = os.environ.get("VAULT_EMBEDDING_MODEL")
+        os.environ["VAULT_EMBEDDING_MODEL"] = embedder.model_id
+        try:
+            per_query = [
+                {
+                    **diagnose_query(db_path, q["query"], k=k),
+                    "query_id": q["query_id"],
+                    "case": q["case"],
+                }
+                for q in goldset["queries"]
+            ]
+        finally:
+            embedding_model._EMBEDDER_CACHE.clear()
+            embedding_model._EMBEDDER_CACHE.update(prior_cache)
+            if prior_env_model is None:
+                os.environ.pop("VAULT_EMBEDDING_MODEL", None)
+            else:
+                os.environ["VAULT_EMBEDDING_MODEL"] = prior_env_model
+
+    non_error = [q for q in per_query if q["fts5_syntax_error"] is None]
+    summary = {
+        "query_count": len(per_query),
+        "fts5_syntax_errors": [
+            q["query_id"] for q in per_query if q["fts5_syntax_error"] is not None
+        ],
+        "queries_with_any_fts_hit": sum(1 for q in non_error if q["fts_hit_count"] > 0),
+        "queries_with_papers_fts_hit": sum(1 for q in non_error if q["papers_fts_hit_count"] > 0),
+        "queries_with_papers_trgm_hit": sum(1 for q in non_error if q["papers_trgm_hit_count"] > 0),
+        "by_case": _diagnostics_by_case(per_query),
+    }
+    return {"per_query": per_query, "summary": summary}
 
 
 # ---------------------------------------------------------------------------
@@ -781,16 +1023,26 @@ def run_cost_measurement(n_papers: int = AC3_PAPER_COUNT) -> dict:
 # ---------------------------------------------------------------------------
 def run_ablation(goldset: dict, vectors: dict[str, list[float]], k: int = DEFAULT_K) -> dict:
     quality = run_quality_ablation(goldset, vectors, k=k)
+    diagnostics = run_diagnostics(goldset, vectors, k=k)
     cost = run_cost_measurement()
-    return {"quality": quality, "cost": cost}
+    return {"quality": quality, "diagnostics": diagnostics, "cost": cost}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--goldset", type=Path, default=GOLDSET_PATH)
-    parser.add_argument("--vectors", type=Path, default=VECTORS_PATH)
+    parser.add_argument(
+        "--goldset", type=Path, default=GOLDSET_PATH, help="Goldset-JSON (Default: #708-Set)."
+    )
+    parser.add_argument(
+        "--vectors", type=Path, default=VECTORS_PATH, help="Vektor-JSON (Default: #708-Set)."
+    )
     parser.add_argument("--k", type=int, default=DEFAULT_K)
     parser.add_argument("--skip-cost", action="store_true", help="AC3 (Index/Latenz) auslassen.")
+    parser.add_argument(
+        "--skip-diagnostics",
+        action="store_true",
+        help="Nullbefund-Diagnoseblock (Issue #789) auslassen.",
+    )
     parser.add_argument(
         "--out", type=Path, default=None, help="Optional: Report als JSON schreiben."
     )
@@ -808,6 +1060,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     quality = run_quality_ablation(goldset, vectors, k=args.k)
     report: dict = {"quality": quality}
+    if not args.skip_diagnostics:
+        report["diagnostics"] = run_diagnostics(goldset, vectors, k=args.k)
     if not args.skip_cost:
         report["cost"] = run_cost_measurement()
 

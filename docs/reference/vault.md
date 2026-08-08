@@ -428,10 +428,28 @@ zurück statt abzustürzen.
 ## FTS5-Index über Chunk-Texte
 
 `papers_fts` und `papers_trgm` matchen ausschließlich Paper-Felder (Titel, Abstract,
-Volltext) — beide arbeiten auf Paper-Ebene. Ein Suchbegriff, der nur im Methodikteil
-eines einzelnen Chunks steht (`chunk_embeddings.chunk_text`), war darüber lexikalisch
-unauffindbar, obwohl die Vektorsuche längst chunkgenau trifft — genau die Stellen, die
-beim Belegen gesucht werden (#726).
+Volltext) — beide arbeiten auf Paper-Ebene.
+
+**Präzisierung (#789):** Ein Suchbegriff, der nur im Methodikteil eines einzelnen
+Chunks steht (`chunk_embeddings.chunk_text`), ist auf **Paper**-Ebene *nicht*
+grundsätzlich lexikalisch unauffindbar. `papers_fts.fulltext` enthält seit #373
+(Meilenstein v6.6) den echten PDF-Volltext, und `ingest.resolve_paper_text()` liest
+genau diese Spalte als Quelltext für `chunking.chunk_pages()` (Kaskade:
+`papers_fts.fulltext` → Titel + Abstract, siehe `academic_vault/ingest.py`) — jeder
+Chunk eines regulär eingelesenen Papers ist damit ein Ausschnitt aus genau dem Text,
+den `papers_fts`/`papers_trgm` bereits durchsuchen. Ein Begriff, der in einem Chunk
+steht, steht (Tokenizer-Eigenheiten wie Komposita/Stemming ausgenommen, siehe unten)
+auch in `papers_fts.fulltext` und ist über eine Paper-Ebene-Suche auffindbar.
+
+Was vor #726 tatsächlich fehlte, ist nicht lexikalische **Abdeckung**, sondern
+**Auflösung**: `papers_fts`/`papers_trgm` können sagen, dass ein Paper einen Begriff
+enthält, aber nicht, in **welchem** Chunk — genau die Fundstelle, die beim Belegen
+gebraucht wird und die die Vektorsuche längst chunkgenau liefert. (Ausnahme von der
+obigen Garantie: ein Paper ohne extrahierten Volltext — z. B. ein Scan-PDF ohne
+Text-Layer vor OCR, oder `VAULT_AUTO_FULLTEXT=0` — chunkt nur über den
+Titel+Abstract-Fallback von `resolve_paper_text()`; die Garantie gilt dann
+weiterhin, bezieht sich aber auf die schmalere Textbasis, die tatsächlich gechunkt
+wurde.)
 
 Seit #726 gibt es dafür eine eigenständige virtuelle Tabelle `chunk_fts` (FTS5,
 `unicode61`-Standardtokenizer, kein `content=`, manuell befüllt) über
