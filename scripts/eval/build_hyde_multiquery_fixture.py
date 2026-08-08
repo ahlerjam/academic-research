@@ -76,6 +76,14 @@ EMBED_METHOD = (
     "eingerechnet), gemessen auf der Maschine des Generatorlaufs."
 )
 
+# Dieser Fixture-Lauf baut auf dem e5-small-Chunk-Goldset aus #708 auf (per
+# ``load_goldset()``) und misst explizit dessen Embedding-Pfad -- gepinnt statt
+# ``DEFAULT_MODEL_ID`` zu folgen, aus demselben Grund wie in
+# ``scripts/eval/build_retrieval_chunk_goldset.py`` (PR-Review zu #732): seit
+# der Default auf BAAI/bge-m3 zeigt, wuerde ``E5SmallEmbedder()`` ohne Pin
+# heimlich bge-m3-Gewichte mit erzwungenen e5-Praefixen laden.
+LEGACY_EMBEDDING_MODEL_ID = "intfloat/multilingual-e5-small"
+
 
 def _percentiles(samples: list[float]) -> dict[str, float]:
     ordered = sorted(samples)
@@ -235,9 +243,9 @@ def build_vectors(transforms: dict) -> tuple[dict[str, str], dict[str, Any], str
     einer hypothetischen Antwortpassage gebuehrt; die Wahl vorwegzunehmen hiesse,
     womoeglich nur eine falsche Praefixwahl zu messen.
     """
-    from academic_vault.embedding_model import DEFAULT_MODEL_ID, E5SmallEmbedder
+    from academic_vault.embedding_model import embedder_for
 
-    embedder = E5SmallEmbedder()
+    embedder = embedder_for(LEGACY_EMBEDDING_MODEL_ID)
     embedder.load()
 
     encoded: dict[str, str] = {}
@@ -259,7 +267,7 @@ def build_vectors(transforms: dict) -> tuple[dict[str, str], dict[str, Any], str
             _timed(f"{qid}::mq::{idx}", embedder.embed_query, variant)
 
     latency = {"method": EMBED_METHOD, **_percentiles(durations)}
-    return encoded, latency, DEFAULT_MODEL_ID, embedder.dim
+    return encoded, latency, LEGACY_EMBEDDING_MODEL_ID, embedder.dim
 
 
 def _require_gate(name: str, hint: str) -> None:

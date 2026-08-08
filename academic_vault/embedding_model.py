@@ -361,6 +361,30 @@ _EMBEDDER_CLASSES: dict[str, type["E5SmallEmbedder"]] = {
 }
 
 
+def embedder_for(
+    model_id: str, cache_dir: str | None = None, model: Any | None = None
+) -> "E5SmallEmbedder":
+    """Baut den Embedder MIT DEM RICHTIGEN Prompting fuer ``model_id`` (#732).
+
+    Reine Konstruktion ohne Laden, Caching oder Fehlerbehandlung -- das ist
+    :func:`get_embedder`s Job. Diese Funktion existiert, damit Aufrufer, die
+    einen Embedder fuer eine EXPLIZITE (ggf. nicht produktive) Modell-ID
+    brauchen -- Eval-/Fixture-Skripte, die bewusst ein bestimmtes historisches
+    Modell reproduzieren, etwa ``scripts/eval/build_retrieval_chunk_goldset.py``
+    fuer #708/#722/#733s eingefrorenes ``intfloat/multilingual-e5-small`` --
+    nicht mehr ``E5SmallEmbedder(...)`` direkt konstruieren muessen. Wer das
+    tut, bekommt IMMER e5-Praefixe aufgezwungen, unabhaengig von der
+    tatsaechlichen Modell-ID -- das war vor #732 folgenlos (nur e5-kompatible
+    Modelle liefen produktiv), ist es seit dem bge-m3-Default nicht mehr:
+    ``E5SmallEmbedder()`` ohne Argument nimmt sonst ``DEFAULT_MODEL_ID`` als
+    Modell-ID (jetzt bge-m3) UND haengt trotzdem ``passage: ``/``query: `` an
+    -- exakt die "falsch bediente Schnittstelle", die #731 und
+    :class:`BgeM3Embedder` ausschliessen wollen.
+    """
+    embedder_cls = _EMBEDDER_CLASSES.get(model_id, E5SmallEmbedder)
+    return embedder_cls(model_id=model_id, cache_dir=cache_dir, model=model)
+
+
 # Cache pro Modell-ID: ``None`` bedeutet "Backend fehlt" und wird bewusst
 # mitgecacht, damit nicht jeder add_paper-Aufruf erneut einen teuren
 # Import-/Ladeversuch startet.
@@ -400,8 +424,7 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
 
     embedder: Embedder | None
     try:
-        embedder_cls = _EMBEDDER_CLASSES.get(key, E5SmallEmbedder)
-        candidate = embedder_cls(model_id=key)
+        candidate = embedder_for(key)
         candidate.load()
         embedder = candidate
         _EMBEDDER_ERROR_CACHE[key] = None

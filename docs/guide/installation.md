@@ -40,7 +40,8 @@ danach wiederholten Setup-Lauf (`tests/test_issue_718_model_prefetch.py::TestRes
 
 ### Hardware-Anforderungen
 
-**Untergrenze:** 8 GB RAM, 4 GB freier Plattenplatz. **Keine GPU nötig** — alle drei
+**Untergrenze:** 8 GB RAM, 7 GB freier Plattenplatz (~5,7 GB Modellgewichte plus Puffer für
+den Abbruch-/Resume-Fall oben). **Keine GPU nötig** — alle drei
 Modelle laufen auch auf reiner CPU, dabei aber spürbar langsamer als mit
 Hardware-Beschleunigung (Apple-GPU/CUDA).
 

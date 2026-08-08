@@ -269,9 +269,38 @@ def test_node_requirement_is_backed_by_the_hook_wiring() -> None:
 _BGE_M3_TOKEN_RE = re.compile(r"(?<![\w-])bge-m3(?![\w-])")
 
 #: Fenster um eine Groessenangabe, in dem der bge-m3-Token stehen muss, damit
-#: sie als "das Embedding-Modell" zaehlt. Eng genug, um NICHT auf die
-#: Nachbarzeile derselben Markdown-Tabelle (Reranker-/NLI-Zeile) ueberzugreifen.
+#: sie als "das Embedding-Modell" zaehlt.
 _MODEL_SIZE_WINDOW = 45
+
+
+def _cell_scoped_context(text: str, start: int, end: int, window: int) -> str:
+    """Kontext um ``text[start:end]``, begrenzt auf ``window`` Zeichen je Seite
+    UND niemals ueber eine Tabellenzellen- oder Zeilengrenze (``|``, ``\\n``)
+    hinaus (PR-Review zu #732: ein reines Zeichenfenster griff in
+    ``docs/guide/installation.md``s Hardware-Tabelle in die Nachbarspalte
+    derselben Zeile ueber -- Peak-RSS statt Platte -- und war dort nur
+    zufaellig innerhalb der Toleranz gruen).
+
+    Wo eine Groessenangabe und ihr Modellname in DERSELBEN Tabellenzelle
+    stehen (README.md: alle drei Modelle in einer Zelle), bleibt der Treffer
+    erhalten. Wo sie in verschiedenen SPALTEN derselben Zeile stehen
+    (installation.md: ein Modell je Spalte), wird die Angabe hier bewusst
+    NICHT mehr geprueft -- das deckt strukturiert und robust bereits
+    ``tests/test_issue_718_model_prefetch.py::TestHardwareTable``.
+    """
+    raw_left = max(0, start - window)
+    raw_right = min(len(text), end + window)
+    left_boundary = raw_left
+    for i in range(start - 1, raw_left - 1, -1):
+        if text[i] in "|\n":
+            left_boundary = i + 1
+            break
+    right_boundary = raw_right
+    for i in range(end, raw_right):
+        if text[i] in "|\n":
+            right_boundary = i
+            break
+    return text[left_boundary:right_boundary]
 
 
 def _model_download_bytes() -> float:
@@ -295,11 +324,12 @@ def test_model_download_size_matches_the_code_comment() -> None:
     (2,3 GB) selbst GB-skalig ist UND Teilstring von zwei anderen Modell-IDs
     ist (``bge-reranker-v2-m3``, ``bge-m3-zeroshot-v2.0``), braucht es
     stattdessen einen woertlichen, wortgrenzenscharfen "bge-m3"-Treffer in
-    einem engen Fenster um die Zahl (``_MODEL_SIZE_WINDOW`` -- eng genug, um
-    nicht in die Nachbarzeile derselben Tabelle ueberzugreifen) sowie den
-    Ausschluss von Stellen, die im selben Fenster "e5-small" nennen (bewusst
-    gehaltene historische Vergleichswerte, z. B. installation.md's "zuvor
-    ~470 MB").
+    einem engen, zell-/zeilenscharf begrenzten Fenster um die Zahl (siehe
+    :func:`_cell_scoped_context` -- PR-Review zu #732: ein reines
+    Zeichenfenster griff sonst in installation.md's Hardware-Tabelle in die
+    Peak-RSS-Nachbarspalte derselben Zeile ueber) sowie den Ausschluss von
+    Stellen, die im selben Fenster "e5-small" nennen (bewusst gehaltene
+    historische Vergleichswerte, z. B. installation.md's "zuvor ~470 MB").
     """
     expected_bytes = _model_download_bytes()
     wrong: list[str] = []
@@ -308,7 +338,7 @@ def test_model_download_size_matches_the_code_comment() -> None:
             continue
         text = _read(doc)
         for m in re.finditer(r"~?([\d,]+)\s*(MB|GB)", text):
-            near_ctx = text[max(0, m.start() - _MODEL_SIZE_WINDOW) : m.end() + _MODEL_SIZE_WINDOW]
+            near_ctx = _cell_scoped_context(text, m.start(), m.end(), _MODEL_SIZE_WINDOW)
             if not _BGE_M3_TOKEN_RE.search(near_ctx):
                 continue  # keine Aussage ueber das Embedding-Modell
             if "e5-small" in near_ctx:

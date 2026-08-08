@@ -109,7 +109,7 @@ Vier Dinge müssen da sein, der Rest erweitert nur:
 | `uv` oder `pipx` | Optional | installiert die `browser-use`-CLI für die 7 Browser-Module |
 | `ocrmypdf` | Optional | OCR für gescannte PDFs ohne Textebene |
 
-**Hardware-Mindestanforderungen:** 8 GB RAM, 4 GB freier Plattenplatz. Keine GPU nötig —
+**Hardware-Mindestanforderungen:** 8 GB RAM, 7 GB freier Plattenplatz. Keine GPU nötig —
 die drei Modelle laufen auch auf reiner CPU, spürbar langsamer (siehe
 [Installationsanleitung](docs/guide/installation.md#hardware-anforderungen) für die
 Laufzeiten je Modell).

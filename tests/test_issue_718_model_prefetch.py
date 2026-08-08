@@ -463,8 +463,14 @@ class TestResume:
 
 
 # ---------------------------------------------------------------------------
-# AC5 — Doku: 8 GB RAM / 4 GB Platte / keine GPU-Pflicht / CPU-Laufzeit-Hinweis
+# AC5 — Doku: 8 GB RAM / Platten-Untergrenze / keine GPU-Pflicht / CPU-Laufzeit-Hinweis
 # ---------------------------------------------------------------------------
+
+#: Regex fuer "<Zahl> GB freier Plattenplatz" -- toleriert das Komma-Dezimal-
+#: format ("7 GB", "7,5 GB") und faengt beide bekannten Formulierungen
+#: ("... GB freier Plattenplatz" in README.md, "... GB freier Plattenplatz"
+#: in installation.md).
+_DISK_MINIMUM_RE = re.compile(r"([\d,]+)\s*GB freier Plattenplatz")
 
 
 class TestHardwareDocs:
@@ -474,7 +480,36 @@ class TestHardwareDocs:
     def test_mentions_minimum_ram_and_disk(self, doc):
         text = _read(doc)
         assert "8 GB" in text, f"{doc}: '8 GB' RAM-Untergrenze fehlt."
-        assert "4 GB" in text, f"{doc}: '4 GB' Platten-Untergrenze fehlt."
+        assert _DISK_MINIMUM_RE.search(text), (
+            f"{doc}: Platten-Untergrenze ('X GB freier Plattenplatz') fehlt."
+        )
+
+    @pytest.mark.parametrize(
+        "doc", [REPO_ROOT / "README.md", REPO_ROOT / "docs" / "guide" / "installation.md"]
+    )
+    def test_disk_minimum_covers_all_three_model_downloads(self, doc):
+        """Regressionsguard fuer den P1-Fund aus dem PR-Review zu #732.
+
+        Die dokumentierte Platten-Untergrenze muss die Summe der drei
+        tatsaechlich praefetchten Modelle (``APPROX_BYTES``) decken -- sonst
+        bricht ``model_prefetch.py`` bei einem Nutzer, der sich exakt an die
+        Doku-Untergrenze haelt, mit ENOSPC ab. Toleranz 0: die Untergrenze
+        MUSS die Summe erreichen oder ueberschreiten, kein Rundungsspielraum.
+        Bei jedem kuenftigen Modellwechsel (wie #732: e5-small -> bge-m3, das
+        die Gesamtgroesse von ~3,9 GB auf ~5,7 GB anhob, ohne dass die
+        Untergrenze zunaechst mitgezogen wurde) faellt diese Inkonsistenz
+        jetzt hier auf, statt live bei einem Nutzer mit knapper Platte.
+        """
+        text = _read(doc)
+        match = _DISK_MINIMUM_RE.search(text)
+        assert match, f"{doc}: Platten-Untergrenze ('X GB freier Plattenplatz') fehlt."
+        documented_bytes = float(match.group(1).replace(",", ".")) * 1_000_000_000
+        required_bytes = sum(APPROX_BYTES.values())
+        assert documented_bytes >= required_bytes, (
+            f"{doc}: dokumentierte Untergrenze {match.group(0)!r} "
+            f"({documented_bytes / 1e9:.2f} GB) deckt nicht die Summe der drei "
+            f"praefetchten Modelle ({required_bytes / 1e9:.2f} GB) -- ENOSPC-Risiko."
+        )
 
     def test_installation_doc_states_no_gpu_required_and_cpu_runtime_hint(self):
         text = _read(REPO_ROOT / "docs" / "guide" / "installation.md")

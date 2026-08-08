@@ -55,19 +55,32 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
 # Plattformen ab, keine echte Qualitaetsschwankung.
 DEFAULT_MARGIN = 0.02
 
+# Das #708-Goldset ist ausdruecklich das e5-small-Chunk-Goldset (siehe
+# docs/evals/retrieval-chunk-goldset-708.md, "Historisches Dokument") --
+# gepinnt statt ``DEFAULT_MODEL_ID`` zu folgen (PR-Review zu #732: seit der
+# Default auf BAAI/bge-m3 zeigt, wuerde ein Lauf ohne diese Pin-Konstante
+# heimlich mit dem bge-m3-Tokenizer chunken und mit e5-Praefixen ("passage: "/
+# "query: ") auf bge-m3-Gewichten embedden -- genau die "falsch bediente
+# Schnittstelle", die #731 und BgeM3Embedder ausschliessen wollen. #722 und
+# #733 bauen auf diesem Goldset auf und teilen dieselbe Annahme.
+LEGACY_EMBEDDING_MODEL_ID = "intfloat/multilingual-e5-small"
+
 
 def build_chunks(sources: dict) -> list[dict[str, Any]]:
     """Zerlegt jedes Quelldokument ueber ``chunk_pages`` in Goldset-Chunks.
 
     Nutzt bewusst die Produktionsdefaults (``TARGET_TOKENS``, ``OVERLAP_RATIO``,
-    ``default_context_sentence``) und den echten Tokenizer, sofern ladbar.
+    ``default_context_sentence``) und den echten Tokenizer von
+    ``LEGACY_EMBEDDING_MODEL_ID`` (nicht ``DEFAULT_MODEL_ID`` -- dieses Goldset
+    ist auf e5-small gepinnt, s. o.), sofern ladbar.
     """
-    from academic_vault.chunking import chunk_pages
+    from academic_vault.chunking import chunk_pages, model_token_counter
 
+    counter = model_token_counter(LEGACY_EMBEDDING_MODEL_ID)
     records: list[dict[str, Any]] = []
     for document in sources["documents"]:
         pages = [(int(number), text) for number, text in document["pages"]]
-        for chunk in chunk_pages(pages):
+        for chunk in chunk_pages(pages, token_counter=counter):
             records.append(
                 {
                     "chunk_id": f"{document['doc_id']}#{chunk.chunk_index}",
@@ -132,10 +145,14 @@ def resolve_anchors(chunks: list[dict], sources: dict) -> list[dict[str, Any]]:
 def embed_all(
     chunks: list[dict], queries: list[dict]
 ) -> tuple[dict[str, str], dict[str, str], int]:
-    """Embeddet Chunks (``passage: ``) und Queries (``query: ``) mit dem echten Modell."""
-    from academic_vault.embedding_model import E5SmallEmbedder
+    """Embeddet Chunks (``passage: ``) und Queries (``query: ``) mit dem echten Modell.
 
-    embedder = E5SmallEmbedder()
+    Gepinnt auf ``LEGACY_EMBEDDING_MODEL_ID`` ueber :func:`embedder_for`, NICHT
+    auf ``DEFAULT_MODEL_ID`` -- siehe Kommentar dort.
+    """
+    from academic_vault.embedding_model import embedder_for
+
+    embedder = embedder_for(LEGACY_EMBEDDING_MODEL_ID)
     chunk_vectors = embedder.embed_documents([c["embedding_text"] for c in chunks])
     encoded_chunks = {
         c["chunk_id"]: encode_vector(v) for c, v in zip(chunks, chunk_vectors, strict=True)
@@ -148,7 +165,7 @@ def embed_all(
 
 def build(sources: dict) -> tuple[dict, dict]:
     """Baut ``goldset.json``- und ``vectors.json``-Inhalt aus den Quelltexten."""
-    from academic_vault.embedding_model import DEFAULT_MODEL_ID, PASSAGE_PREFIX, QUERY_PREFIX
+    from academic_vault.embedding_model import PASSAGE_PREFIX, QUERY_PREFIX
 
     chunks = build_chunks(sources)
     queries = resolve_anchors(chunks, sources)
@@ -156,7 +173,7 @@ def build(sources: dict) -> tuple[dict, dict]:
 
     meta = {
         "issue": 708,
-        "model_id": DEFAULT_MODEL_ID,
+        "model_id": LEGACY_EMBEDDING_MODEL_ID,
         "dim": dim,
         "passage_prefix": PASSAGE_PREFIX,
         "query_prefix": QUERY_PREFIX,
@@ -164,7 +181,7 @@ def build(sources: dict) -> tuple[dict, dict]:
         "manifest_sha256": compute_manifest_sha256(
             [c["embedding_text"] for c in chunks],
             [q["query"] for q in queries],
-            DEFAULT_MODEL_ID,
+            LEGACY_EMBEDDING_MODEL_ID,
             dim,
         ),
     }
@@ -178,7 +195,7 @@ def build(sources: dict) -> tuple[dict, dict]:
         "queries": queries,
     }
     vectors = {
-        "model_id": DEFAULT_MODEL_ID,
+        "model_id": LEGACY_EMBEDDING_MODEL_ID,
         "dim": dim,
         "manifest_sha256": meta["manifest_sha256"],
         "chunks": encoded_chunks,
