@@ -10,6 +10,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Embedding-Kandidaten auf dem Chunk-Goldset gemessen (#731):** Fuenf
+  Konfigurationen (`e5-small` als Baseline, `Qwen3-Embedding-0.6B` einmal mit
+  `truncate_dim=384` und einmal nativ 1024d, `BGE-M3`, `multilingual-e5-large`)
+  gegen das Chunk-Goldset aus #708 -- auf demselben Weg wie im Betrieb, also mit
+  `chunk_pages()` und dem jeweils **eigenen** Tokenizer des Kandidaten,
+  Kontextsatz im Embedding-Input und Ranking ueber `VaultDB.knn_chunks`. Neu:
+  Live-Generator `scripts/eval/build_embedding_candidates_731.py` (env-gated,
+  ~7 GB Modelle, CPU-Messung) und hermetischer Runner
+  `scripts/eval/run_embedding_candidates_731.py`, der die eingecheckten Vektoren
+  abspielt und in CI gegen die Rohdaten gattert. Report:
+  `docs/evals/2026-08-08-embedding-candidates-731.md`. Kernbefund: Qualitaet und
+  Hardwarekosten zeigen in verschiedene Richtungen -- `qwen3-384` liegt vorn
+  (nDCG@10 0,8241 gegen 0,6651), braucht auf CPU aber rund 2233 ms je Chunk
+  gegenueber 27 ms bei `e5-small`; die Kuerzung auf 384d kostet dabei nichts und
+  bleibt der einzige migrationsfreie Pfad. Bei 26 Queries trennt der Lauf die
+  Kandidaten untereinander nicht -- die Aufloesungsgrenze steht im Report.
+  Kein Eingriff im produktiven Pfad; die Wechselentscheidung bleibt einem
+  Folge-Issue vorbehalten.
+
 - **Entscheidungsvermerk: Modellzugang beim Ingest ohne eigenen Schluessel (#735):**
   Neues Verzeichnis `docs/decisions/` fuer Entwuerfe, die eine projektweite
   Architekturfrage beantworten, bevor sie sich als Umsetzungs-Issue schreiben lassen

@@ -257,9 +257,19 @@ jobs:
           uv run python scripts/eval/run_hyde_multiquery_eval.py \
             --check-against docs/evals/2026-08-07-hyde-multiquery-733-live-results.json \
             > /dev/null
+      # Embedding-Kandidaten (#731): dieselbe Logik wie beim HyDE-Lauf. Der
+      # Live-Generator laedt rund 7 GB Modelle und laeuft nie in CI; hier
+      # laeuft nur der Replay ueber die eingecheckten Vektoren, gegattert
+      # gegen die Rohdaten des Messlaufs.
+      - name: Embedding-Kandidaten gegen die eingecheckten Rohdaten fahren
+        run: |
+          uv run python scripts/eval/run_embedding_candidates_731.py \
+            --check-against docs/evals/2026-08-08-embedding-candidates-731-live-results.json \
+            > /dev/null
       - name: Metriken, Hermetik und Schwellen-Meta pruefen
         run: |
           uv run pytest -p no:cacheprovider -q \
             tests/test_issue_708_ranking_metrics.py \
             tests/test_issue_708_retrieval_chunk_goldset.py \
-            tests/test_issue_733_hyde_multiquery.py
+            tests/test_issue_733_hyde_multiquery.py \
+            tests/test_issue_731_embedding_candidates.py
