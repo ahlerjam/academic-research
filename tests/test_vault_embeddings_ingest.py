@@ -594,20 +594,36 @@ class TestVec0Search:
         assert fallback == with_extension
         assert fallback[0] == "p001"
 
-    def test_vec0_search_aggregates_chunks_per_paper(
+    def test_vec0_search_returns_chunks_of_same_paper_separately(
         self, temp_vault_db, fake_embedder, monkeypatch
     ):
+        """Issue #727: _vec0_search dedupliziert NICHT mehr auf Paper-Ebene.
+
+        Vorher (Regression-Gegenstueck dieses Tests hiess "aggregates_chunks_
+        per_paper" und erwartete genau EINEN Treffer je Paper): die
+        Aggregation warf die chunkgenaue Praezision der Vektorsuche weg,
+        bevor sie ueberhaupt in reciprocal_rank_fusion() (jetzt chunk_id-
+        Keying) eingehen konnte. Beide Chunks desselben Papers muessen daher
+        als eigene Eintraege erhalten bleiben.
+        """
         from academic_vault.server import _vec0_search
 
         monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
         _add_paper(temp_vault_db, "p001", "A", "A")
-        _store_chunk(temp_vault_db, "p001", "Transformer attention mechanism", fake_embedder)
-        _store_chunk(temp_vault_db, "p001", "Transformer encoder decoder stack", fake_embedder)
+        chunk_id_1 = _store_chunk(
+            temp_vault_db, "p001", "Transformer attention mechanism", fake_embedder
+        )
+        chunk_id_2 = _store_chunk(
+            temp_vault_db, "p001", "Transformer encoder decoder stack", fake_embedder
+        )
         _use_embedder(monkeypatch, fake_embedder)
 
         hits = _vec0_search(temp_vault_db, "transformer attention", k=5)
 
-        assert [h["paper_id"] for h in hits] == ["p001"], "Chunks nicht auf Paper-Ebene aggregiert"
+        assert [h["paper_id"] for h in hits] == ["p001", "p001"], (
+            "beide Chunks desselben Papers muessen erhalten bleiben"
+        )
+        assert {h["chunk_id"] for h in hits} == {chunk_id_1, chunk_id_2}
 
     def test_vec0_search_empty_table_returns_empty(self, temp_vault_db, fake_embedder, monkeypatch):
         from academic_vault.server import _vec0_search
@@ -746,6 +762,110 @@ class TestRerankUsesRealVectors:
         server.search_papers(temp_vault_db, "cross-lingual NOT retrieval", k=5, rerank=True)
 
         assert seen == ["cross-lingual NOT retrieval"]
+
+    def test_rerank_true_candidates_are_chunks_of_comparable_length(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """AC2 (Issue #727): alle an apply_reranker() uebergebenen Kandidaten sind Chunks.
+
+        Vorher bekam der Reranker eine Mischung aus vollem Chunk-Text (vec0)
+        und kurzen 10-Token-FTS5-Snippets bzw. Abstracts -- Cross-Encoder
+        reagieren empfindlich auf solche Laengenunterschiede. Nach #727
+        traegt jeder Kandidat 'chunk_id', und die Textlaengen liegen in
+        vergleichbarer Groessenordnung (kein kurzes Snippet neben langem
+        Chunk-Text).
+        """
+        from academic_vault.server import search_papers
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        chunk_a = "Retrieval systems combine sparse and dense representations for search."
+        chunk_b = "Dense passage encoders retrieval improves recall over sparse baselines."
+        _add_paper(temp_vault_db, "p_a", "Retrieval systems", "retrieval methods overview")
+        _add_paper(temp_vault_db, "p_b", "Dense encoders", "retrieval via dense vectors")
+        _store_chunk(temp_vault_db, "p_a", chunk_a, fake_embedder)
+        _store_chunk(temp_vault_db, "p_b", chunk_b, fake_embedder)
+        _use_embedder(monkeypatch, fake_embedder)
+
+        seen_candidates: list[list[dict]] = []
+
+        def _spy(query, candidates, voyage_api_key=None, cohere_api_key=None):
+            seen_candidates.append(candidates)
+            for c in candidates:
+                c["reranked"] = False
+                c["reranker"] = "none"
+            return candidates
+
+        import academic_vault.retrieval as retrieval_module
+
+        monkeypatch.setattr(retrieval_module, "apply_reranker", _spy)
+
+        search_papers(temp_vault_db, "retrieval", k=5, rerank=True)
+
+        assert seen_candidates, "apply_reranker wurde nicht aufgerufen"
+        candidates = seen_candidates[0]
+        assert candidates, "keine Kandidaten fuer den Reranker"
+        for c in candidates:
+            assert c.get("chunk_id"), f"Kandidat ohne chunk_id: {c}"
+        lengths = [len(c.get("text") or "") for c in candidates]
+        assert min(lengths) > 0
+        # Vergleichbare Groessenordnung: kein Kandidat ist um mehr als den
+        # Faktor 5 kuerzer als der laengste -- eine grobe, aber robuste
+        # Schranke gegen "10-Token-Snippet neben vollem Chunk-Text".
+        assert max(lengths) <= min(lengths) * 5
+
+    def test_rerank_true_deduplicates_paper_with_multiple_matching_chunks(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """AC3: der Rueckgabevertrag bleibt paperzentriert -- ein Eintrag je Paper.
+
+        Ein Paper mit mehreren treffenden Chunks (mehrere chunk_id-Kandidaten
+        in der Fusion) darf im Endergebnis trotzdem nur einmal auftauchen.
+        """
+        from academic_vault.server import search_papers
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        _add_paper(temp_vault_db, "p_multi", "Retrieval systems", "retrieval overview")
+        _store_chunk(temp_vault_db, "p_multi", "Retrieval via dense vectors", fake_embedder)
+        _store_chunk(temp_vault_db, "p_multi", "Retrieval via sparse BM25 scoring", fake_embedder)
+        _use_embedder(monkeypatch, fake_embedder)
+
+        results = search_papers(temp_vault_db, "retrieval", k=5, rerank=True)
+
+        paper_ids = [r["paper_id"] for r in results]
+        assert paper_ids.count("p_multi") == 1, "Paper darf nur einmal im Ergebnis auftauchen"
+
+    def test_rerank_true_finds_lexical_only_and_vector_only_together(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """AC5: Paper A nur lexikalisch, Paper B nur vektoriell gefunden -- beide im Ergebnis.
+
+        A hat keine Chunks (nur ueber papers_fts/Titel+Abstract auffindbar),
+        B ist nur ueber einen Vektor-Chunk auffindbar (Titel/Abstract enthalten
+        die Suchbegriffe nicht).
+        """
+        from academic_vault.server import search_papers
+
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        _add_paper(
+            temp_vault_db,
+            "p_lexical_only",
+            "Retrieval retrieval retrieval",
+            "retrieval retrieval retrieval",
+        )
+        _add_paper(temp_vault_db, "p_vector_only", "Katzen und Hunde", "Haustiere im Haushalt")
+        _store_chunk(
+            temp_vault_db,
+            "p_vector_only",
+            "Katzen und Hunde sind beliebte Haustiere",
+            fake_embedder,
+        )
+        _use_embedder(monkeypatch, fake_embedder)
+
+        results = search_papers(temp_vault_db, "retrieval", k=5, rerank=True)
+        paper_ids = {r["paper_id"] for r in results}
+
+        assert "p_lexical_only" in paper_ids
+        assert "p_vector_only" in paper_ids
 
 
 # ---------------------------------------------------------------------------

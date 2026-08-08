@@ -69,55 +69,95 @@ class TestReciprocalRankFusion:
         """reciprocal_rank_fusion gibt Liste absteigend nach Score sortiert zurueck."""
         from academic_vault.retrieval import reciprocal_rank_fusion
 
-        # p001 erscheint in beiden Listen (Rang 1)
-        # p002 erscheint nur in vec0 (Rang 2)
-        # p003 erscheint nur in FTS5 (Rang 2)
+        # c001 (Paper p001) erscheint in beiden Listen (Rang 1)
+        # c002 (Paper p002) erscheint nur in vec0 (Rang 2)
+        # c003 (Paper p003) erscheint nur in FTS5 (Rang 2)
         vec_results = [
-            {"paper_id": "p001", "score": 0.9},
-            {"paper_id": "p002", "score": 0.7},
+            {"chunk_id": "c001", "paper_id": "p001", "score": 0.9},
+            {"chunk_id": "c002", "paper_id": "p002", "score": 0.7},
         ]
         fts_results = [
-            {"paper_id": "p001", "score": -1.5},  # FTS5-rank ist negativ (kleinerer BM25-rank)
-            {"paper_id": "p003", "score": -2.0},
+            {"chunk_id": "c001", "paper_id": "p001", "score": -1.5},  # negativer BM25-Rang
+            {"chunk_id": "c003", "paper_id": "p003", "score": -2.0},
         ]
 
         fused = reciprocal_rank_fusion(vec_results, fts_results, k=60)
 
-        assert len(fused) == 3  # p001, p002, p003
-        # p001 soll hoechsten Score haben (in beiden Listen)
-        assert fused[0]["paper_id"] == "p001"
+        assert len(fused) == 3  # c001, c002, c003
+        # c001 soll hoechsten Score haben (in beiden Listen)
+        assert fused[0]["chunk_id"] == "c001"
         # Scores absteigend sortiert
         scores = [r["rrf_score"] for r in fused]
         assert scores == sorted(scores, reverse=True)
 
-    def test_rrf_fusion_includes_all_papers(self):
-        """RRF-Fusion inkludiert alle Papers aus beiden Listen."""
+    def test_rrf_fusion_includes_all_chunks(self):
+        """RRF-Fusion inkludiert alle Chunks aus beiden Listen."""
         from academic_vault.retrieval import reciprocal_rank_fusion
 
-        vec_results = [{"paper_id": "p001"}, {"paper_id": "p002"}]
-        fts_results = [{"paper_id": "p003"}, {"paper_id": "p001"}]
+        vec_results = [
+            {"chunk_id": "c001", "paper_id": "p001"},
+            {"chunk_id": "c002", "paper_id": "p002"},
+        ]
+        fts_results = [
+            {"chunk_id": "c003", "paper_id": "p003"},
+            {"chunk_id": "c001", "paper_id": "p001"},
+        ]
 
         fused = reciprocal_rank_fusion(vec_results, fts_results, k=60)
+        chunk_ids = {r["chunk_id"] for r in fused}
+        assert chunk_ids == {"c001", "c002", "c003"}
+
+    def test_rrf_fusion_chunk_in_both_lists_ranks_higher(self):
+        """Chunk in beiden Listen rankt hoeher als Chunk nur in einer Liste."""
+        from academic_vault.retrieval import reciprocal_rank_fusion
+
+        # c001 in beiden Listen, c002 nur in vec0
+        vec_results = [
+            {"chunk_id": "c001", "paper_id": "p001"},
+            {"chunk_id": "c002", "paper_id": "p002"},
+        ]
+        fts_results = [{"chunk_id": "c001", "paper_id": "p001"}]
+
+        fused = reciprocal_rank_fusion(vec_results, fts_results, k=60)
+        chunk_ids = [r["chunk_id"] for r in fused]
+        assert chunk_ids.index("c001") < chunk_ids.index("c002")
+
+    def test_rrf_fusion_two_chunks_same_paper_ranked_separately(self):
+        """Zwei Chunks DESSELBEN Papers gehen getrennt in die Rangliste ein (Issue #727, AC1).
+
+        Regression: vorher fusionierte reciprocal_rank_fusion auf 'paper_id' --
+        zwei Chunks desselben Papers verdraengten sich gegenseitig, bevor die
+        chunkgenaue Praezision der Vektorsuche in die Fusion einging.
+        """
+        from academic_vault.retrieval import reciprocal_rank_fusion
+
+        vec_results = [
+            {"chunk_id": "c-a", "paper_id": "p001", "distance": 0.1},
+            {"chunk_id": "c-b", "paper_id": "p001", "distance": 0.3},
+        ]
+        fts_results: list[dict] = []
+
+        fused = reciprocal_rank_fusion(vec_results, fts_results, k=60)
+
+        assert len(fused) == 2, "beide Chunks muessen als eigene Zeilen erhalten bleiben"
+        chunk_ids = {r["chunk_id"] for r in fused}
+        assert chunk_ids == {"c-a", "c-b"}
         paper_ids = {r["paper_id"] for r in fused}
-        assert paper_ids == {"p001", "p002", "p003"}
-
-    def test_rrf_fusion_paper_in_both_lists_ranks_higher(self):
-        """Paper in beiden Listen rankt hoeher als Paper nur in einer Liste."""
-        from academic_vault.retrieval import reciprocal_rank_fusion
-
-        # p001 in beiden Listen, p002 nur in vec0
-        vec_results = [{"paper_id": "p001"}, {"paper_id": "p002"}]
-        fts_results = [{"paper_id": "p001"}]
-
-        fused = reciprocal_rank_fusion(vec_results, fts_results, k=60)
-        paper_ids = [r["paper_id"] for r in fused]
-        assert paper_ids.index("p001") < paper_ids.index("p002")
+        assert paper_ids == {"p001"}
+        # Beide haben einen eigenen rrf_score, kein gemeinsam geteilter Wert.
+        assert (
+            fused[0]["rrf_score"] != fused[1]["rrf_score"]
+            or fused[0]["chunk_id"] != fused[1]["chunk_id"]
+        )
 
     def test_rrf_fusion_empty_vec_results(self):
         """RRF-Fusion mit leerer vec0-Liste gibt FTS5-Ergebnisse zurueck."""
         from academic_vault.retrieval import reciprocal_rank_fusion
 
-        fts_results = [{"paper_id": "p001"}, {"paper_id": "p002"}]
+        fts_results = [
+            {"chunk_id": "c001", "paper_id": "p001"},
+            {"chunk_id": "c002", "paper_id": "p002"},
+        ]
         fused = reciprocal_rank_fusion([], fts_results, k=60)
         assert len(fused) == 2
 
@@ -125,12 +165,15 @@ class TestReciprocalRankFusion:
         """RRF-Fusion mit leerer FTS5-Liste gibt vec0-Ergebnisse zurueck."""
         from academic_vault.retrieval import reciprocal_rank_fusion
 
-        vec_results = [{"paper_id": "p001"}, {"paper_id": "p002"}]
+        vec_results = [
+            {"chunk_id": "c001", "paper_id": "p001"},
+            {"chunk_id": "c002", "paper_id": "p002"},
+        ]
         fused = reciprocal_rank_fusion(vec_results, [], k=60)
         assert len(fused) == 2
 
     def test_rrf_fusion_merges_metadata_of_both_sources(self):
-        """Paper in beiden Listen behaelt FTS5-Metadaten UND vec0-Metadaten (#372).
+        """Chunk in beiden Listen behaelt FTS5-Metadaten UND vec0-Metadaten (#372, #727).
 
         Regression: vorher verdraengte das vec0-Dict das FTS5-Dict komplett —
         der dokumentierte 'score' fiel weg und das '<b>'-Highlighting im
@@ -140,14 +183,15 @@ class TestReciprocalRankFusion:
 
         vec_results = [
             {
-                "paper_id": "p001",
                 "chunk_id": "c-1",
+                "paper_id": "p001",
                 "snippet": "Dense passage retrieval ohne Highlighting",
                 "distance": 0.12,
             }
         ]
         fts_results = [
             {
+                "chunk_id": "c-1",
                 "paper_id": "p001",
                 "snippet": "Dense passage <b>retrieval</b>...",
                 "score": -1.234,
@@ -159,31 +203,116 @@ class TestReciprocalRankFusion:
 
         assert entry["score"] == -1.234, "FTS5-'score' wurde vom vec0-Dict verdraengt"
         assert "<b>" in entry["snippet"], "FTS5-Highlighting im Snippet verloren"
-        assert entry["chunk_id"] == "c-1", "vec0-Metadaten duerfen nicht verloren gehen"
-        assert entry["distance"] == 0.12
+        assert entry["distance"] == 0.12, "vec0-Metadaten duerfen nicht verloren gehen"
+        assert entry["paper_id"] == "p001"
 
     def test_rrf_fusion_keeps_vec_only_metadata(self):
         """Nur-vektorielle Treffer behalten ihr Snippet (kein FTS5-Gegenstueck)."""
         from academic_vault.retrieval import reciprocal_rank_fusion
 
-        vec_results = [{"paper_id": "p_vec", "snippet": "nur vektoriell", "distance": 0.4}]
-        fts_results = [{"paper_id": "p_fts", "snippet": "<b>fts</b>", "score": -2.0}]
+        vec_results = [
+            {"chunk_id": "c-vec", "paper_id": "p_vec", "snippet": "nur vektoriell", "distance": 0.4}
+        ]
+        fts_results = [
+            {"chunk_id": "c-fts", "paper_id": "p_fts", "snippet": "<b>fts</b>", "score": -2.0}
+        ]
 
-        by_id = {r["paper_id"]: r for r in reciprocal_rank_fusion(vec_results, fts_results, k=60)}
+        by_id = {r["chunk_id"]: r for r in reciprocal_rank_fusion(vec_results, fts_results, k=60)}
 
-        assert by_id["p_vec"]["snippet"] == "nur vektoriell"
-        assert "score" not in by_id["p_vec"]
-        assert by_id["p_fts"]["score"] == -2.0
+        assert by_id["c-vec"]["snippet"] == "nur vektoriell"
+        assert "score" not in by_id["c-vec"]
+        assert by_id["c-fts"]["score"] == -2.0
 
     def test_rrf_fusion_respects_top_n(self):
         """reciprocal_rank_fusion schneidet nach top_n ab."""
         from academic_vault.retrieval import reciprocal_rank_fusion
 
-        vec_results = [{"paper_id": f"p{i:03d}"} for i in range(10)]
-        fts_results = [{"paper_id": f"p{i:03d}"} for i in range(5, 15)]
+        vec_results = [{"chunk_id": f"c{i:03d}", "paper_id": f"p{i:03d}"} for i in range(10)]
+        fts_results = [{"chunk_id": f"c{i:03d}", "paper_id": f"p{i:03d}"} for i in range(5, 15)]
 
         fused = reciprocal_rank_fusion(vec_results, fts_results, k=60, top_n=5)
         assert len(fused) == 5
+
+
+# ---------------------------------------------------------------------------
+# Tests: Paper-Aggregation NACH Fusion+Reranking (Issue #727)
+# ---------------------------------------------------------------------------
+
+
+class TestAggregateChunksToPapers:
+    """Unit-Tests fuer server._aggregate_chunks_to_papers (AC3, AC4)."""
+
+    def test_aggregate_keeps_one_entry_per_paper(self):
+        from academic_vault.server import _aggregate_chunks_to_papers
+
+        chunk_results = [
+            {"chunk_id": "c1", "paper_id": "p001", "rrf_score": 0.5},
+            {"chunk_id": "c2", "paper_id": "p001", "rrf_score": 0.3},
+            {"chunk_id": "c3", "paper_id": "p002", "rrf_score": 0.4},
+        ]
+
+        aggregated = _aggregate_chunks_to_papers(chunk_results, k=10)
+
+        paper_ids = [r["paper_id"] for r in aggregated]
+        assert sorted(paper_ids) == ["p001", "p002"]
+
+    def test_aggregate_uses_max_not_sum_of_chunk_scores(self):
+        """AC4: viele mittelstarke Chunks eines Papers duerfen eine einzelne
+
+        starke Fundstelle eines anderen Papers nicht per Summenbildung
+        ueberholen. p_many hat zwei Chunks (0.4 + 0.4 = 0.8 in Summe), p_one
+        hat einen einzigen staerkeren Chunk (0.6). MAX-Aggregation muss
+        p_one vor p_many ranken; eine SUM-Aggregation wuerde p_many
+        (faelschlich) vorne sehen.
+        """
+        from academic_vault.server import _aggregate_chunks_to_papers
+
+        chunk_results = [
+            {"chunk_id": "c-many-1", "paper_id": "p_many", "rrf_score": 0.4},
+            {"chunk_id": "c-many-2", "paper_id": "p_many", "rrf_score": 0.4},
+            {"chunk_id": "c-one", "paper_id": "p_one", "rrf_score": 0.6},
+        ]
+
+        aggregated = _aggregate_chunks_to_papers(chunk_results, k=10)
+
+        paper_ids = [r["paper_id"] for r in aggregated]
+        assert paper_ids[0] == "p_one", "MAX-Aggregation: staerkste Einzelfundstelle gewinnt"
+        assert paper_ids[1] == "p_many"
+
+    def test_aggregate_prefers_rerank_score_over_rrf_score(self):
+        """Nach Reranking zaehlt 'rerank_score', nicht mehr 'rrf_score'."""
+        from academic_vault.server import _aggregate_chunks_to_papers
+
+        chunk_results = [
+            {
+                "chunk_id": "c1",
+                "paper_id": "p_low_rrf_high_rerank",
+                "rrf_score": 0.1,
+                "rerank_score": 0.9,
+            },
+            {
+                "chunk_id": "c2",
+                "paper_id": "p_high_rrf_low_rerank",
+                "rrf_score": 0.9,
+                "rerank_score": 0.1,
+            },
+        ]
+
+        aggregated = _aggregate_chunks_to_papers(chunk_results, k=10)
+
+        assert aggregated[0]["paper_id"] == "p_low_rrf_high_rerank"
+
+    def test_aggregate_respects_k(self):
+        from academic_vault.server import _aggregate_chunks_to_papers
+
+        chunk_results = [
+            {"chunk_id": f"c{i}", "paper_id": f"p{i}", "rrf_score": float(i)} for i in range(10)
+        ]
+
+        aggregated = _aggregate_chunks_to_papers(chunk_results, k=3)
+
+        assert len(aggregated) == 3
+        assert [r["paper_id"] for r in aggregated] == ["p9", "p8", "p7"]
 
 
 # ---------------------------------------------------------------------------
@@ -621,11 +750,15 @@ class TestRecallEval:
         )
 
         fts_results = search_papers(db_path, "hybrid retrieval dense sparse", k=10)
+        # reciprocal_rank_fusion schluesselt seit Issue #727 auf 'chunk_id' --
+        # dieser vereinfachte Test simuliert Chunk-IDs 1:1 aus den paper-level
+        # FTS5-Treffern (kein echter Chunk-Index noetig fuer diesen Zweck).
+        fts_chunk_results = [{**r, "chunk_id": f"c-{r['paper_id']}"} for r in fts_results]
 
         # Simuliere vec0-Ergebnis (gleiche Reihenfolge wie FTS5 fuer diesen Test)
-        vec_results = [{"paper_id": "p001", "score": 0.9}]
+        vec_results = [{"chunk_id": "c-p001", "paper_id": "p001", "score": 0.9}]
 
-        fused = reciprocal_rank_fusion(vec_results, fts_results, k=60, top_n=10)
+        fused = reciprocal_rank_fusion(vec_results, fts_chunk_results, k=60, top_n=10)
         fused_ids = [r["paper_id"] for r in fused]
 
         relevant = ["p001"]
