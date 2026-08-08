@@ -1174,18 +1174,35 @@ def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]
             best_per_paper[paper_id] = entry
 
     # Merge FTS5-Metadaten von unterlegenen Chunks in den Gewinner
+    # (Issue #727, P1-Regression). FTS5-Felder (score, snippet mit <b>-Highlighting)
+    # muessen bewahrt bleiben, auch wenn ein vec0-Chunk hoeher gereranked wird.
+    #
+    # Differenzierung nach Herkunft: FTS5-Chunks tragen 'score' (BM25-Wert),
+    # vec0-Chunks nicht. Bei Paper-Merge gewinnt das FTS5-Snippet, analog zur
+    # Regel "bei Schluesselkollision gewinnt FTS5" in reciprocal_rank_fusion.
     for paper_id, entries in all_per_paper.items():
         winner = best_per_paper[paper_id]
-        # Sammle FTS5-Felder aus allen anderen Eintraegen dieses Papers
+        # Durchsuche alle unterlegenen Chunks dieses Papers nach FTS5-Snippets
+        fts5_snippet_owner = None
+        fts5_score_owner = None
         for entry in entries:
             if entry is winner:
                 continue
-            # Merge 'score' wenn der gewinner es nicht hat
-            if "score" not in winner and "score" in entry:
-                winner["score"] = entry["score"]
-            # Merge 'snippet' wenn der gewinner es nicht hat
-            if "snippet" not in winner and "snippet" in entry:
-                winner["snippet"] = entry["snippet"]
+            if "score" in entry:  # FTS5-Treffer haben 'score'
+                if fts5_snippet_owner is None and "snippet" in entry:
+                    fts5_snippet_owner = entry
+                if fts5_score_owner is None:
+                    fts5_score_owner = entry
+        # Merge FTS5-Felder in den Winner, falls vorhanden
+        if fts5_score_owner is not None and "score" not in winner:
+            winner["score"] = fts5_score_owner["score"]
+        if (
+            fts5_snippet_owner is not None
+            and "snippet" in fts5_snippet_owner
+            and "<b>" in fts5_snippet_owner["snippet"]
+        ):
+            # FTS5-Snippet mit Highlighting ueberschreibt vec0-Snippet
+            winner["snippet"] = fts5_snippet_owner["snippet"]
 
     ranked = sorted(best_per_paper.values(), key=_score, reverse=True)
     return ranked[:k]

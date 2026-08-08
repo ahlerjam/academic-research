@@ -318,32 +318,34 @@ class TestAggregateChunksToPapers:
         """Paper lexikalisch UND vektoriell gefunden behaelt score/Highlighting.
 
         Wenn ein Paper sowohl lexikalisch (FTS5, mit 'score' und gehighlighttem
-        'snippet') als auch vektoriell (vec0, nur 'rerank_score') gefunden wird,
-        und der vec0-Chunk einen hoeheren Reranking-Score hat, muss die
-        Aggregation die FTS5-Metadaten ('score', 'snippet') aus der unterlegenen
-        FTS5-Chunk-Version in den Gewinner mergen -- sonst verliert der
-        Aufrufer das Highlighting und die lexikalische Relevanzangabe.
+        'snippet') als auch vektoriell (vec0, nur 'rerank_score' und vec0-Snippet
+        ohne Highlighting) gefunden wird, und der vec0-Chunk einen hoeheren
+        Reranking-Score hat, muss die Aggregation die FTS5-Metadaten (v.a.
+        das gehighlightete 'snippet') aus der unterlegenen FTS5-Chunk-Version
+        in den Gewinner mergen -- sonst verliert der Aufrufer das Highlighting
+        und die lexikalische Relevanzangabe.
         """
         from academic_vault.server import _aggregate_chunks_to_papers
 
         # Zwei Chunks desselben Papers (p001):
-        # - c_fts (lexikalisch gefunden): hat 'score' und 'snippet' mit Highlighting
-        # - c_vec0 (vektoriell gefunden): hat hoeheren 'rerank_score', aber kein 'score'/'snippet'
+        # - c_fts (lexikalisch gefunden): hat 'score' und gehighlightetes 'snippet'
+        # - c_vec0 (vektoriell gefunden): hat hoeheren 'rerank_score' und vec0-Snippet ohne Highlighting
+        # Realistisches Szenario: beide traegen 'snippet', aber nur FTS5 hat Highlighting + 'score'
         chunk_results = [
             {
                 "chunk_id": "c_fts",
                 "paper_id": "p001",
                 "rrf_score": 0.3,
                 "rerank_score": 0.4,  # unterlegen
-                "score": -1.2,  # BM25-Score vom FTS5-Treffer
-                "snippet": "...ein wichtiger <b>Begriff</b> im Abstract...",
+                "score": -1.2,  # BM25-Score, nur bei FTS5
+                "snippet": "...ein wichtiger <b>Begriff</b> im Abstract...",  # mit Highlighting
             },
             {
                 "chunk_id": "c_vec0",
                 "paper_id": "p001",
                 "rrf_score": 0.5,
-                "rerank_score": 0.8,  # GEWINNER
-                # Kein 'score' oder 'snippet' (vec0-Treffer)
+                "rerank_score": 0.8,  # GEWINNER (hoeher bewertet vom Reranker)
+                "snippet": "...ein wichtiger Begriff im Abstract...",  # vec0-Snippet ohne Highlighting
             },
         ]
 
@@ -355,10 +357,11 @@ class TestAggregateChunksToPapers:
         assert winner["paper_id"] == "p001"
         # Gewinner ist c_vec0 (hoeherer rerank_score)
         assert winner["chunk_id"] == "c_vec0"
-        # FTS5-Metadaten wurden vom unterlegenen c_fts gemergt
-        assert winner["score"] == -1.2, "FTS5-Score sollte gemergt worden sein"
+        # FTS5-Score wurde vom unterlegenen c_fts gemergt (kein 'score' im vec0-Eintrag)
+        assert winner["score"] == -1.2, "FTS5-BM25-Score sollte gemergt worden sein"
+        # FTS5-Snippet MIT Highlighting ueberschreibt das vec0-Snippet ohne Highlighting
         assert winner["snippet"] == "...ein wichtiger <b>Begriff</b> im Abstract...", (
-            "Gehighlightetes FTS5-Snippet sollte gemergt worden sein"
+            "Gehighlightetes FTS5-Snippet sollte das vec0-Snippet ueberschreiben"
         )
 
 
