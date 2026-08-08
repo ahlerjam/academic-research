@@ -782,6 +782,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_papers_trgm_table(db_path)
     add_chunk_fts(db_path)
     add_chunk_location_columns(db_path)
+    add_chunk_context_source_column(db_path)
     drop_dead_v64_tables(db_path)
 
 
@@ -972,6 +973,35 @@ def add_chunk_location_columns(db_path: str) -> None:
             conn.execute("ALTER TABLE chunk_embeddings ADD COLUMN page_end INTEGER")
         except _sqlite3.OperationalError:
             pass
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_chunk_context_source_column(db_path: str) -> None:
+    """Fuegt context_source zu chunk_embeddings hinzu. Idempotent. (#783)
+
+    Herkunft des Kontextsatzes -- ``'metadata'`` (deterministischer Satz aus
+    ``chunking.default_context_sentence()``, der Bestand) oder ``'model'``
+    (inhaltlicher Satz, geschrieben von ``vault.enrich_chunk_contexts()``).
+    Additiv und nullable: Bestandschunks vor dieser Migration bleiben ``NULL``,
+    was ``pending_context_chunks()`` genauso wie ``'metadata'`` behandelt --
+    kein Reindex noetig, sie bleiben ohne weiteres Zutun durchsuchbar. Der
+    CHECK-Constraint wird mit angelegt, damit eine migrierte Bestands-DB
+    dieselbe zweite Verteidigungslinie hat wie eine frisch aus ``schema.sql``
+    erzeugte. Aufruf-sicher: kann mehrfach auf derselben DB ausgefuehrt werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "ALTER TABLE chunk_embeddings ADD COLUMN context_source TEXT "
+                "CHECK(context_source IN ('metadata','model') OR context_source IS NULL)"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits (oder Tabelle fehlt) -- idempotent
         conn.commit()
     finally:
         conn.close()

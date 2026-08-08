@@ -201,3 +201,25 @@ CAPTCHA erkannt bei <source>.
 3. Warte auf User-Eingabe.
 4. Bei "weiter": Behandle wie `pickup_required` (Schritt oben).
 5. Bei "abbrechen": Abbruch mit Meldung.
+
+---
+
+## Hinweis: Inhaltliche Kontextsatz-Anreicherung (optional, Issue #783)
+
+Der `vault_add_paper`-Aufruf aus Schritt 4 bettet Chunks mit dem
+deterministischen Metadaten-Kontextsatz ein (`context_source="metadata"`,
+`chunking.default_context_sentence()`, kein Modellaufruf, #632-konform).
+Wer den Kontextsatz nachtraeglich inhaltlich statt nur metadatenbasiert
+schreiben will, kann das manuell in der laufenden Sitzung tun -- ein
+eigener Anreicherungs-Agent samt automatischer Einbindung hier in
+`/academic-research:fetch` ist NICHT Teil dieses Workflows (geplant fuer
+Issue #710-B):
+
+1. `vault.pending_context_chunks(paper_id="<sanitized>")` listet die Chunks
+   des soeben angelegten Papers in Dokumentreihenfolge.
+2. Fuer jeden Chunk einen inhaltlichen Satz (≤25 Woerter, Sprache des Chunks)
+   formulieren.
+3. `vault.enrich_chunk_contexts(items=[{"chunk_id": ..., "context_sentence": ...}, ...])`
+   schreibt Satz, `embedding_text` und Vektor als Tripel
+   (`context_source="model"`); leere/zu lange Saetze landen einzeln in
+   `skipped`, der Rest des Batches wird trotzdem geschrieben.
