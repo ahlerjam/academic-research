@@ -253,6 +253,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   angebunden, das ist an dieser Stelle explizit dokumentiert statt
   stillschweigend übersprungen.
 
+### Removed
+
+- **Cloud-Reranker Voyage und Cohere ersatzlos entfernt (#715).**
+  `academic_vault/retrieval.py` verliert `rerank_with_voyage()`,
+  `rerank_with_cohere()`, die Client-Helfer `_get_voyage_client()`/
+  `_get_cohere_client()`, die `VoyageError`/`CohereApiError`-Platzhalterklassen
+  und die zugehörigen Zweige in `apply_reranker()` — die Funktion nimmt jetzt
+  nur noch `query`/`candidates` entgegen und geht direkt auf den lokalen
+  `bge-reranker-v2-m3`-Fallback (#714), ohne Gate auf fehlende Cloud-Keys.
+  `server.py::search_papers` liest `VOYAGE_API_KEY`/`COHERE_API_KEY` nicht
+  mehr. Das Extra `rerank-cloud` (`voyageai`, `cohere`) ist aus
+  `pyproject.toml` verschwunden — beide Pakete kommen im Repo nirgends mehr
+  vor (Import, Extra, Requirements). Der Ergebnisvertrag bleibt unverändert:
+  jeder Kandidat trägt weiterhin `reranked` (bool) und `reranker`
+  (`"local-bge"`/`"none"`). Grund: zwei kostenpflichtige Anbieter mit eigenen
+  API-Schlüsseln für einen Vorteil, den ein lokal in 26–48 ms pro Paar
+  laufendes Modell nicht rechtfertigt — konsequent aus Issue 632 (keine
+  Plugin-Funktion setzt einen eigenen Schlüssel voraus).
+
 ### Changed
 
 - **Lokaler Reranker läuft über `CrossEncoder` und ist per Default aktiv
