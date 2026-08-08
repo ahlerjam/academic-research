@@ -1127,14 +1127,20 @@ def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) 
         entry["text"] = row["chunk_text"]
         # chunk_fts (virtuelle FTS5-Tabelle) traegt keine Lokationsspalten --
         # Nachschlag gegen chunk_embeddings fuer die Fundstelle (Issue #728).
-        location = conn.execute(
-            "SELECT section_title, page_start, page_end FROM chunk_embeddings WHERE chunk_id = ?",
-            (row["chunk_id"],),
-        ).fetchone()
-        if location is not None:
-            entry["section_title"] = location["section_title"]
-            entry["page_start"] = location["page_start"]
-            entry["page_end"] = location["page_end"]
+        # Graceful degradation auf v13-Bestaenden (Spalten noch nicht migriert).
+        try:
+            location = conn.execute(
+                "SELECT section_title, page_start, page_end FROM chunk_embeddings WHERE chunk_id = ?",
+                (row["chunk_id"],),
+            ).fetchone()
+            if location is not None:
+                entry["section_title"] = location["section_title"]
+                entry["page_start"] = location["page_start"]
+                entry["page_end"] = location["page_end"]
+        except sqlite3.OperationalError:
+            # v13-Datenbank: chunk_embeddings existiert, Spalten aber noch nicht.
+            # Lokation bleibt ungesetzt -- dokumentiertes Verhalten fuer Bestaende.
+            pass
     else:
         entry["chunk_id"] = f"fts-paper::{paper_id}"
     return entry
