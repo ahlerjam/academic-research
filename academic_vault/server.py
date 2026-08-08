@@ -1041,14 +1041,21 @@ def search_papers(
     # entfernt Bindestriche und Operator-Keywords und verfaelscht damit die
     # Semantik, auf die das Embedding-Modell reagiert.
     #
-    # top_n=None (kein Abschneiden auf chunk-Ebene, #727): mehrere Chunks
-    # desselben Papers duerfen die Fusion getrennt durchlaufen, sonst wuerde
-    # ein Paper mit vielen mittelstarken Chunks andere Paper aus den Top-k
-    # verdraengen, bevor die Paper-Aggregation (unten) ueberhaupt zum Zug
-    # kommt. Der Abschnitt auf 'k' passiert erst NACH dem Reranking, auf
-    # Paper-Ebene.
+    # top_n=k*4 (Decklung der Reranker-Kandidaten, #727, P1-Performance):
+    # Mehrere Chunks desselben Papers duerfen die Fusion getrennt durchlaufen,
+    # sonst wuerde ein Paper mit vielen mittelstarken Chunks andere Paper aus
+    # den Top-k verdraengen, bevor die Paper-Aggregation ueberhaupt zum Zug
+    # kommt. AC1 bleibt dabei voll erhalten (4x der Basisgranularitaet ist
+    # genug fuer mehrere Chunks pro Paper). Die aggressive `top_n=None`
+    # von anfangs fuehrt sonst zu 5x-Ueberlast des Rerankers pro Suche,
+    # weil alle ~4k vec0-Chunks plus alle FTS5-Chunks ohne Abschnitt durch
+    # apply_reranker gehen (erst NACH Reranking in _aggregate_chunks_to_papers
+    # auf k gekuerzt). Mit `top_n=k*4` in der Fusion ist der Reranker auf
+    # maximal ~5k Kandidaten (4k vec + k FTS) begrenzt, was bei k=5 nur 25
+    # statt 5 sind -- noch ein erheblicher Mehraufwand, aber deutlich unter
+    # der ungekappten Variante (die lokal zum Einfrieren fuehrt).
     fused = reciprocal_rank_fusion(
-        _vec0_search(db_path, raw_query, k=k), fts_chunk_results, k=60, top_n=None
+        _vec0_search(db_path, raw_query, k=k), fts_chunk_results, k=60, top_n=k * 4
     )
     _fill_missing_reranker_text(db_path, fused)
 
