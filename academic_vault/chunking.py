@@ -294,6 +294,46 @@ def _format_authors(authors: Sequence[str] | None) -> str | None:
     return f"{names[0]} et al."
 
 
+def _truncate_title_to_token_budget(title: str, max_tokens: int = 30) -> str:
+    """Kürzt einen Papier-Titel auf ein Tokenbudget.
+
+    Verhindert, dass lange Titel (insbes. deutsche Komposita) das
+    CONTEXT_TOKEN_RESERVE sprengen (P1-Regression #701). Schneidet
+    iterativ Wörter ab und hängt Ellipse an, bis der Titel unter dem
+    Budget liegt. Fallback: Der Titel wird auf sein erstes Wort +
+    Ellipse gekürzt, falls selbst das noch zu lang ist.
+
+    Args:
+        title: Der zu kürzende Titel.
+        max_tokens: Maximale Token-Anzahl (default: 30, basierend auf
+            der Empfehlung aus dem P1-Finding #701).
+
+    Returns:
+        Der gekürzte Titel mit Ellipse ("..."), oder der Originaltitel,
+        falls dieser unter dem Budget liegt.
+    """
+    counter = resolve_token_counter()
+    if counter(title) <= max_tokens:
+        return title
+
+    words = title.split()
+    if not words:
+        return title
+
+    # Versuche iterativ Wörter zu entfernen, bis der Titel unter dem Budget liegt.
+    for i in range(len(words) - 1, 0, -1):
+        truncated = " ".join(words[:i]) + "..."
+        if counter(truncated) <= max_tokens:
+            return truncated
+
+    # Fallback: nur das erste Wort + Ellipse.
+    fallback = words[0] + "..."
+    if counter(fallback) > max_tokens:
+        # Letzter Ausweg: nur Ellipse (sollte in praxi nicht vorkommen).
+        return "..."
+    return fallback
+
+
 def default_context_sentence(
     section_title: str,
     chunk_index: int,
@@ -329,7 +369,10 @@ def default_context_sentence(
 
     lead_parts: list[str] = []
     if title:
-        lead_parts.append(f'"{title}"')
+        # Kürze den Titel auf ein Tokenbudget, um nicht das CONTEXT_TOKEN_RESERVE
+        # zu sprengen (P1-Regression #701). Siehe _truncate_title_to_token_budget.
+        truncated_title = _truncate_title_to_token_budget(title, max_tokens=30)
+        lead_parts.append(f'"{truncated_title}"')
     if author_str:
         lead_parts.append(f"von {author_str}")
     if year is not None:

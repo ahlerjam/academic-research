@@ -609,6 +609,62 @@ class TestDefaultContextSentenceWithPaperMeta:
             == chunk_pages([(1, text)], paper_meta=None)[0].context_sentence
         )
 
+    def test_long_title_in_context_sentence_stays_within_token_budget(self):
+        """AC5 (offline): Kontextsatz mit langen Titeln sprengt nicht das Budget.
+
+        Regression-Test für P1-Finding #701: lange deutsche Titel (Komposita)
+        wurden ungekürzt in den Kontextsatz eingefügt, sprengten damit das
+        CONTEXT_TOKEN_RESERVE von 64 und führten zu stiller Trunkation in der
+        SentenceTransformer.
+
+        Nutzt einen injizierter TokenCounter, um den Test offline zu fahren
+        (kein e5-Tokenizer-Download nötig). Prüft mit dem realistischen 2.47
+        Tokens/Wort-Multiplikator für deutsche Prosa.
+        """
+        from academic_vault.chunking import (
+            MODEL_INPUT_OVERHEAD_TOKENS,
+            MODEL_MAX_TOKENS,
+            PaperMeta,
+            chunk_pages,
+        )
+
+        # Langer deutscher Titel aus dem P1-Finding: realistische Komposita.
+        long_title = (
+            "Der Einfluss agiler Governance-Strukturen auf die Wirksamkeit von "
+            "Change-Approval-Prozessen in mittelständischen IT-Organisationen: "
+            "eine systematische Literaturrecherche"
+        )
+
+        # TokenCounter mit 2.47 Tokens/Wort für deutsche Prosa
+        # (aus der Tabelle in chunking.py:32-43).
+        def german_prose_counter(text: str) -> int:
+            words = len(text.split())
+            return int(words * 2.47)
+
+        paper_meta = PaperMeta(
+            title=long_title,
+            authors=["Ahler", "Mueller"],
+            year=2024,
+        )
+
+        chunks = chunk_pages(
+            [(1, _GERMAN_PROSE * 80)],
+            paper_meta=paper_meta,
+            token_counter=german_prose_counter,
+        )
+        assert len(chunks) > 0
+
+        # Prüfe, dass embedding_text unter dem Fenster bleibt.
+        # Der Kontextsatz wird jetzt gekürzt, deshalb sollte dies passen.
+        for chunk in chunks:
+            # embedding_text = context_sentence + " " + chunk_text
+            # Im Modell: "passage: " + embedding_text
+            tokens = german_prose_counter(chunk.embedding_text) + MODEL_INPUT_OVERHEAD_TOKENS
+            assert tokens <= MODEL_MAX_TOKENS, (
+                f"Chunk {chunk.chunk_index}: {tokens} geschätzte Tokens "
+                f"> {MODEL_MAX_TOKENS} (Fenster) -- Titel-Trunkation funktioniert nicht"
+            )
+
 
 @pytest.mark.skipif(
     os.environ.get("VAULT_E5_LIVE_TEST") != "1",
