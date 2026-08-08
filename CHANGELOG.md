@@ -10,6 +10,43 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Nullbefund-Diagnose fuer die Chunk-Fusion-Ablation (#789, 711-A, Nachfolger
+  von #729/PR #781):** Der #729-Report erklaerte den Nullbefund (alle drei
+  Retrieval-Zustaende liefern query-fuer-query identische Ergebnisse auf dem
+  #708-Goldset) mit "Korpus zu klein / gesaettigt". Eine mechanistische
+  Nachrechnung gegen die echten Produktionsfunktionen zeigt: die eigentliche
+  Ursache ist eine strukturell tote lexikalische Seite im #708-Goldset -- nur
+  1 von 26 Queries erzielt ueberhaupt einen `papers_fts`-Treffer, 0 bei
+  `papers_trgm` (ausgeschriebene Saetze mit implizitem AND ueber alle Tokens).
+  Mathematisch beweisbar: bei leerer FTS-Trefferliste sind Paper-Ebene-Fusion
+  und Chunk-Ebene-Fusion + MAX-Aggregation ordnungsgleich, unabhaengig von
+  Korpusgroesse (`1/(60+r)` ist streng monoton). Neuer Diagnoseblock in
+  `scripts/eval/run_retrieval_ablation_729.py` (`diagnose_query`/
+  `run_diagnostics`: `fts_hit_count`, `fts_ranking`, `attached_chunk`,
+  `vec_paper_rank`/`vec_chunk_rank`, `attach_equals_vec_best`,
+  `min_score_gap_at_k`, `--goldset`/`--vectors`-Flags, Aggregation je
+  `case`-Feld), zwei neue Unit-Tests in `tests/test_issue_789_fts_diagnosis.py`
+  (Ordnungsgleichheits-Beweis direkt gegen
+  `retrieval.reciprocal_rank_fusion`/`server._aggregate_chunks_to_papers`,
+  kein Mock der Kernlogik; sowie die 1/26-/0/26-Zahl als Regressionstest statt
+  Prosa). Nachtrag in
+  `docs/evals/2026-08-08-chunk-fusion-ablation-729.md` korrigiert die
+  urspruengliche Diagnose, ohne den historischen Lauf umzuschreiben.
+  `docs/reference/vault.md` praezisiert die Aussage "lexikalisch
+  unauffindbar" fuer Chunk-interne Begriffe: `papers_fts.fulltext` enthaelt
+  seit #373 (Meilenstein v6.6) den echten PDF-Volltext, aus dem
+  `ingest.resolve_paper_text()` auch den Chunking-Quelltext zieht -- ein
+  Begriff ist auf Paper-Ebene lexikalisch praktisch immer findbar, was fehlt
+  ist die Chunk-genaue AUFLOESUNG, nicht die Abdeckung. Zwei Folge-Issues aus
+  diesem Befund abgeleitet (`area/vault`, bewusst kein `agent-ready` --
+  protected area, manuelle Triage): #791 (`_attach_chunk_to_fts_hit` verliert
+  den Hybrid-Bonus bei fehlgeschlagenem Chunk-Lookup, Fallback auf
+  synthetischen Schluessel statt Vektor-Bestchunk) und #792
+  (nichtdeterministischer Tie-Break in `reciprocal_rank_fusion` bei exakt
+  gleichem `rrf_score`, Iteration ueber `set(...)` von `chunk_id`).
+  `academic_vault/` selbst bleibt unveraendert (protected area) -- reine
+  Instrumentierung in `scripts/eval/` und `tests/`.
+
 - **Kontextsatz-Agent + Einbindung in fetch.md, Kostenmessung (#784, Epic
   #710-B):** Teilschritt B aus dem Umsetzungsplan zu #710 -- macht den in
   #783 gebauten Schreibweg nutzbar. Neuer Agent

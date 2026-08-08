@@ -270,3 +270,75 @@ Netzzugriff, kein Modell-Download. Laufzeit auf der Messmaschine unter
 Qualitätszahlen interessieren. Report-Tabellen und die eingecheckte JSON
 stammen aus demselben Aufruf — bei einem erneuten Lauf beide Dateien
 zusammen neu schreiben, nie nur eine von Hand nachziehen.
+
+## Nachtrag (2026-08-09, #789): Die "Korpus zu klein"-Diagnose war unvollständig
+
+> Dieser Abschnitt korrigiert eine Aussage weiter oben
+> ([„Warum die Nullen erklärbar sind"](#warum-die-nullen-erklärbar-sind--zwei-verschiedene-gründe-nicht-einer)),
+> ergänzt sie aber nur — der Rest des Dokuments bleibt als Momentaufnahme des
+> ursprünglichen Laufs unverändert stehen (siehe Hinweis am Dokumentanfang).
+
+Δ(Chunk-Fusion) = 0 wurde oben mit „Korpus zu klein / gesättigt gegenüber
+`k=10`" erklärt. Diese Erklärung ist nicht falsch, aber **unvollständig** und
+verdeckt die eigentliche, strukturelle Ursache: Eine mechanistische
+Nachrechnung gegen die echten Produktionsfunktionen
+(`retrieval.reciprocal_rank_fusion`, `server._attach_chunk_to_fts_hit`,
+`server._vec0_search`) zeigt, dass die lexikalische Seite des #708-Goldsets
+für die Chunk-Fusion praktisch **tot** ist — unabhängig von der Korpusgröße:
+
+- **Nur 1 von 26 Queries erzielt überhaupt einen `papers_fts`-Treffer, 0 bei
+  `papers_trgm`** (`scripts/eval/run_retrieval_ablation_729.py::run_diagnostics`,
+  `tests/test_issue_789_fts_diagnosis.py::test_708_goldset_lexical_side_is_structurally_dead`).
+  Ursache: Die Goldset-Queries sind ausgeschriebene Sätze
+  (`"how can a pipeline enforce that the author of a change is not the one
+  who releases it"`), FTS5-`MATCH` ohne `OR`-Operator verlangt implizit
+  **jedes** Token im indizierten Feld (`AND`-Semantik) — ein einziges Token,
+  das nicht wörtlich im Titel/Abstract/Volltext steht, lässt den gesamten
+  Treffer scheitern. Das ist kein Korpusgrößeneffekt; ein Goldset mit 1.000
+  statt 11 Papern hätte an dieser Query-Formulierung dieselbe Nullquote.
+- **Mathematisch beweisbar, nicht nur beobachtet:** Bei leerer
+  FTS-Trefferliste sind Paper-Ebene-Fusion (`vorher`) und Chunk-Ebene-Fusion +
+  MAX-Aggregation (`nachher`) **ordnungsgleich** — `rrf_score = 1/(60+r)` ist
+  streng monoton fallend in `r`, MAX über die Chunk-Ränge je Paper
+  reproduziert deshalb exakt dieselbe Paper-Reihenfolge wie eine direkte
+  Paper-Ebene-Dedup nach bestem Vektor-Rang. Formaler Beleg (kein Mock der
+  Kernlogik, kein DB-Fixture nötig) in
+  `tests/test_issue_789_fts_diagnosis.py::test_empty_fts_makes_chunk_and_paper_level_fusion_order_equivalent`
+  und der randomisierten Ergänzung direkt danach. Mit anderen Worten: Bei 25
+  von 26 Queries konnte die Chunk-Fusion die Reihenfolge schlicht **nicht**
+  verändern, weil ihr eigener Eingabezustand (leere FTS-Liste) das
+  algebraisch ausschließt — unabhängig davon, ob der Korpus 11 oder 10.000
+  Paper groß ist.
+- Bei der einen Query mit einem tatsächlichen `papers_fts`-Treffer
+  (`q-en-01`) bestätigt der Diagnoseblock zusätzlich, dass
+  `_attach_chunk_to_fts_hit` einen echten Chunk zuordnet (kein Rückfall auf
+  den synthetischen Schlüssel `fts-paper::<pid>`) und dieser Chunk mit dem
+  vektoriell besten Chunk desselben Papers übereinstimmt — auch hier bleibt
+  kein Spielraum für eine abweichende Fusionsreihenfolge.
+
+**Folge für die Empfehlung oben:** Die Empfehlung „nicht zurückrollen" bleibt
+unverändert richtig, aber Grund 1 dort sollte um diesen Befund ergänzt
+gelesen werden — die Null ist nicht nur „mit diesem Goldset nicht zeigbar",
+sondern bei 25 von 26 Queries **strukturell nicht zeigbar**, ganz gleich wie
+groß das Goldset gebaut würde. Ein aussagekräftiger Nachweis des
+Chunk-Fusions-Beitrags braucht ein Goldset mit Queries, die tatsächlich
+lexikalische Treffer erzeugen (kurze Stichwort-Queries statt ausgeschriebener
+Sätze, oder ein `OR`-fähiges Query-Muster) — genau die Grundlage, die #789 für
+ein künftiges Probe-Goldset-Issue legt (gezielt konstruierte Fälle, deren
+Vorbedingungen maschinell prüfbar sind, statt eines weiteren Zufallstreffers
+wie `q-en-01`).
+
+Der Diagnoseblock deckt zusätzlich zwei vom Nullbefund unabhängige
+Code-Befunde auf, die als eigene Folge-Issues laufen (nicht Teil dieses
+Laufs, `academic_vault/` ist geschützt):
+[#791](https://github.com/ahlerjam/academic-research/issues/791)
+(`_attach_chunk_to_fts_hit` verliert den Hybrid-Bonus bei fehlgeschlagenem
+Chunk-Lookup) und
+[#792](https://github.com/ahlerjam/academic-research/issues/792)
+(nichtdeterministischer Tie-Break in `reciprocal_rank_fusion` bei exakt
+gleichem `rrf_score`).
+
+Diagnoseblock, Zahlen und Tests: `scripts/eval/run_retrieval_ablation_729.py`
+(`diagnose_query`/`run_diagnostics`, `--goldset`/`--vectors`-Flags, Aggregation
+je `case`) und `tests/test_issue_789_fts_diagnosis.py`. Vollständige
+Herleitung: Issue [#789](https://github.com/ahlerjam/academic-research/issues/789).
