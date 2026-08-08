@@ -1101,8 +1101,9 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
     ``reciprocal_rank_fusion`` auf ``paper_id`` schluesselt.
 
     Leere Liste — und damit RRF auf FTS5-Basis — genau dann, wenn kein
-    Embedding-Backend installiert ist, noch keine Chunk-Vektoren existieren oder
-    die Vektor-Suche fehlschlaegt. Die Textsuche darf daran nie scheitern.
+    Embedding-Backend installiert ist, noch keine Chunk-Vektoren existieren,
+    die Vektor-Suche fehlschlaegt ODER die Embedding-Komponente per Schalter
+    abgeschaltet ist (Issue #719). Die Textsuche darf daran nie scheitern.
 
     Returns:
         Liste aus ``{paper_id, chunk_id, snippet, text, distance}``, aufsteigend
@@ -1110,6 +1111,9 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
         ``snippet`` ist der gekuerzte, ``text`` der volle Chunk-Text
         (Reranker-Input).
     """
+    if not resolve_embedding_enabled():
+        return []
+
     embedder = get_embedder()
     if embedder is None:
         return []
