@@ -88,6 +88,42 @@ wird vor der ersten Änderung abgewiesen. Nicht im Scope des Wechsels: die Chunk
 `chunking.py` bleiben unverändert, ein Modell mit anderem Kontextfenster braucht dafür
 eine eigene Entscheidung.
 
+## Reranking (`vault.search(..., rerank=True)`)
+
+Priorität, sobald `rerank=True` gesetzt ist: Voyage > Cohere > lokaler
+`BAAI/bge-reranker-v2-m3`-Fallback > unveränderte RRF-Reihenfolge. Jeder
+Kandidat trägt danach `reranked` (bool) und `reranker`
+(`"voyage"`/`"cohere"`/`"local-bge"`/`"none"`) — sichtbarer Beleg statt
+stillem Fallback.
+
+Der lokale Fallback läuft **per Default aktiv**, sobald weder `VOYAGE_API_KEY`
+noch `COHERE_API_KEY` gesetzt sind. Seit #714 lädt er das Modell über
+`sentence_transformers.CrossEncoder` — `sentence-transformers` ist ohnehin
+Hard-Dependency (Embedding-Pipeline, siehe oben), kein zusätzliches Paket und
+kein manueller Installationsschritt nötig (vorher: `FlagEmbedding`, das
+`transformers<5.0` erzwang und deshalb nie standardmäßig installiert war).
+
+Gemessen am 2026-08-06 auf Apple M4 Pro, 16 Query-Dokument-Paare,
+`max_length=512`:
+
+| Pfad | Laden | pro Paar | Peak-RSS |
+|---|---|---|---|
+| CrossEncoder, CPU | 0,8 s | 48 ms | 2,12 GB |
+| CrossEncoder, MPS | 2,3 s | 26 ms | 0,86 GB |
+
+Bei ~20 Kandidaten je Suche also rund 1 s zusätzliche Latenz auf CPU, ~0,5 s
+mit GPU (MPS/CUDA).
+
+Schlägt das Laden des Modells fehl (Netzausfall beim Erstdownload,
+inkompatible Umgebung), bleibt die RRF-Reihenfolge unverändert, `reranked`
+wird `False` und eine `WARNING` landet im Log — kein Absturz.
+
+| Env-Variable | Default | Wirkung |
+|---|---|---|
+| `VAULT_RERANK_LOCAL_DISABLE` | nicht gesetzt | Jeder gesetzte Wert schaltet den lokalen Reranker ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden. |
+| `VAULT_RERANK_LOCAL_MODEL` | `BAAI/bge-reranker-v2-m3` | Alternatives Reranker-Modell. |
+| `VAULT_RERANK_LOCAL_CACHE` | `~/.academic-research/models` | Ablageort der Reranker-Gewichte (gleiches Verzeichnis wie Embedding-/NLI-Modell). |
+
 ## Teilwortsuche für deutsche Komposita
 
 `papers_fts` läuft mit dem FTS5-Standardtokenizer `unicode61`: er zerlegt an Wortgrenzen,

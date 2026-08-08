@@ -7,12 +7,11 @@ einer Suche oder einem Kapitel-Write auszuloesen (siehe Issue-Begruendung).
 
 Downloadmechanik bewusst ueber ``huggingface_hub.snapshot_download`` je
 Modell-Repo -- NICHT ueber die jeweiligen Backend-Klassen
-(``SentenceTransformer``/``AutoModel...``/``FlagReranker``): das ist die
+(``SentenceTransformer``/``AutoModel...``/``CrossEncoder``): das ist die
 einzige Stelle, die fuer alle drei Modelle Fortschritt + Resume beherrscht,
-ohne ``sentence-transformers``/``transformers``/``FlagEmbedding`` zwingend zu
-instanziieren (``FlagEmbedding`` ist bewusst kein verwaltetes uv-Extra, siehe
-``academic_vault/retrieval.py``). ``huggingface_hub`` liegt bereits transitiv
-vor (Dependency von ``sentence-transformers``).
+ohne ``sentence-transformers``/``transformers`` zwingend zu instanziieren.
+``huggingface_hub`` liegt bereits transitiv vor (Dependency von
+``sentence-transformers``).
 
 Fortsetzen nach Abbruch (AC4) braucht keinen eigenen Code, aber es setzt
 NICHT an der Abbruchstelle einer einzelnen Datei an -- die Grenze ist die

@@ -33,16 +33,12 @@ pyzotero>=1.5
 # Wer das CPU-Wheel will (deutlich kleiner, fuer diesen Vault ausreichend),
 # installiert Torch vorher separat:
 #   pip install --index-url https://download.pytorch.org/whl/cpu torch
-sentence-transformers>=3.0
-# HINWEIS (Issue #376, P1-Fix Fixrunde PR #422): bewusst KEIN
-# `transformers<5.0`-Cap hier. Der lokale Reranker-Fallback (FlagEmbedding
-# 1.4.0, optional per `pip install FlagEmbedding`) braucht zwar
-# transformers<5.0 (ruft intern Tokenizer.prepare_for_model() auf, das in
-# transformers>=5.x entfernt wurde), aber FlagEmbedding steht hier ohnehin
-# nicht drin -- ein globaler Cap wuerde jede Installation (auch ohne den
-# lokalen Reranker) unnoetig auf die aeltere transformers-Version zwingen.
-# Wer FlagEmbedding manuell nachinstalliert, deckelt transformers im selben
-# Schritt: `pip install 'FlagEmbedding>=1.3,<2.0' 'transformers<5.0'`.
+# >=5.0: requirement for CrossEncoder(cache_folder=...) in #714.
+sentence-transformers>=5.0
+# HINWEIS (Issue #376/#714): bewusst KEIN `transformers<5.0`-Cap hier. Der
+# lokale Reranker-Fallback laeuft seit #714 ueber
+# `sentence_transformers.CrossEncoder` mit dem hier gepinnten `transformers`
+# -- kein Versionskonflikt mehr, kein manueller Installationsschritt.
 # Fuzzy-Snap in academic_vault/verbatim.py (Issue #511): findet die
 # naechstliegende Textstelle fuer leicht abweichende Zitat-Kandidaten.
 # Zweitstelle: pyproject.toml [project.dependencies].

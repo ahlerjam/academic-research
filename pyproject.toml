@@ -54,7 +54,8 @@ dependencies = [
     # intfloat/multilingual-e5-small (MIT, 384d). Harte Dependency, weil
     # chunk_embeddings sonst in jeder realen Installation leer bliebe und
     # vault.search(rerank=True) auf reine FTS5-Umsortierung zurueckfaellt.
-    "sentence-transformers>=3.0",
+    # >=5.0: requirement for CrossEncoder(cache_folder=...) in #714.
+    "sentence-transformers>=5.0",
     # torch ist funktional eine transitive Dependency von sentence-transformers.
     # Es steht hier NUR, damit [tool.uv.sources] greifen kann: uv wendet Sources
     # ausschliesslich auf direkte Dependencies an. Ohne diesen Eintrag loest uv
@@ -108,8 +109,8 @@ dev = [
     "vulture>=2.16",
 ]
 # Cloud-Reranker-SDKs (#376): optionale Extras, KEINE Hard-Dependency. Ohne
-# gesetzten API-Key UND ohne installiertes FlagEmbedding (siehe Kommentar
-# unten) faellt academic_vault.retrieval auf die unveraenderte RRF-Reihenfolge
+# gesetzten API-Key faellt academic_vault.retrieval auf den lokalen
+# CrossEncoder-Reranker (#714) bzw. auf die unveraenderte RRF-Reihenfolge
 # zurueck.
 rerank-cloud = [
     "voyageai>=0.5,<1.0",
@@ -122,26 +123,13 @@ rerank-cloud = [
 # "extra tables is not defined" zu scheitern.
 tables = []
 
-# Lokaler Reranker-Fallback (BAAI/bge-reranker-v2-m3, #376): FlagEmbedding ist
-# ABSICHTLICH KEIN uv-verwaltetes Extra (P1-Fix, Fixrunde PR #422) -- kein
-# `rerank-local`-Eintrag hier, kein Eintrag in uv.lock. Grund: uv loest
-# [project.dependencies], optional-dependencies und dev-Gruppen ohne
-# `tool.uv.conflicts` GEMEINSAM zu EINER universellen Version je Paket auf.
-# FlagEmbedding 1.4.0 braucht `transformers<5.0` (ruft intern
-# Tokenizer.prepare_for_model() auf, das in transformers>=5.x entfernt wurde --
-# verifiziert per Live-Download, AttributeError). Eine solche Ceiling in
-# EINEM Extra deklariert haette trotzdem JEDE Installation erzwungen, auch
-# `uv sync --extra dev` ohne diesen Extra (real beobachtet: transformers
-# 5.14.1->4.57.6, huggingface-hub 1.24.0->0.36.2 im Default-Lock). Der
-# naheliegende Ausweg -- `tool.uv.conflicts` zwischen `dev` und einem
-# `rerank-local`-Extra -- verbietet aber die GLEICHZEITIGE Installation beider
-# (uv-Doku: konfliktaer markierte Extras "cannot be installed into the same
-# environment simultaneously"), genau das braucht jedoch der AC2-Live-Test
-# (pytest kommt aus `dev`). Deshalb bewusst außerhalb der uv-Resolution:
-# Opt-in nur manuell, NACH `uv sync --extra dev`, per
-#   uv pip install 'FlagEmbedding>=1.3,<2.0' 'transformers<5.0'
-#   uv run --no-sync pytest ...   # --no-sync, sonst syncet uv den Downgrade weg
-# Siehe tests/test_issue_376_reranker_extras.py fuer die Regressionstests
+# Lokaler Reranker-Fallback (BAAI/bge-reranker-v2-m3, #376): seit #714 ueber
+# `sentence_transformers.CrossEncoder` geladen -- `sentence-transformers` ist
+# bereits Hard-Dependency (Embeddings, #372), kein eigenes Extra mehr noetig.
+# Der vorherige FlagEmbedding-Pfad erzwang `transformers<5.0` und stand
+# deshalb bewusst ausserhalb der uv-Resolution (siehe PR #422); dieser Zwang
+# entfaellt mit CrossEncoder ersatzlos. Siehe
+# tests/test_issue_376_reranker_extras.py fuer die weiterhin gueltigen Guards
 # (FlagEmbedding darf hier NIE wieder auftauchen, transformers NIE wieder eine
 # Ceiling in [project.dependencies] tragen).
 
@@ -257,12 +245,6 @@ module = [
     "transformers.*",
     "sentence_transformers",
     "sentence_transformers.*",
-    # Lokaler Reranker-Fallback (#376) -- kein uv-Extra mehr (siehe
-    # [project.optional-dependencies]-Kommentar), aber falls manuell per
-    # `uv pip install FlagEmbedding` in ein Dev-Venv installiert: gleicher
-    # Grund wie sentence_transformers oben.
-    "FlagEmbedding",
-    "FlagEmbedding.*",
 ]
 follow_imports = "skip"
 follow_imports_for_stubs = true
