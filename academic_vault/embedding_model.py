@@ -88,6 +88,62 @@ PASSAGE_PREFIX = "passage: "
 ENV_MODEL_ID = "VAULT_EMBEDDING_MODEL"
 ENV_CACHE_DIR = "VAULT_EMBEDDING_CACHE"
 
+# ---------------------------------------------------------------------------
+# Toggle (Issue #719, Muster: nli_prefilter.resolve_nli_prefilter_enabled)
+# ---------------------------------------------------------------------------
+
+#: Kanonischer Schalter seit #719.
+ENV_EMBEDDING_ENABLED = "ACADEMIC_RESEARCH_EMBEDDING_ENABLED"
+#: Alt-Name seit #372, bleibt als Alias erhalten -- bestehende Setups mit
+#: ``VAULT_AUTO_EMBED=0`` brechen dadurch nicht still.
+ENV_AUTO_EMBED_ALIAS = "VAULT_AUTO_EMBED"
+CONFIG_KEY_EMBEDDING = "embedding_enabled"
+DEFAULT_EMBEDDING_ENABLED = True
+
+
+def resolve_embedding_enabled(
+    explicit: bool | None = None,
+    config_path: str | Path | None = None,
+    *,
+    legacy_alias: bool = True,
+) -> bool:
+    """Schalter fuer das lokale Embedding-Modell (Issue #719).
+
+    Vorrang: Argument > Env (``ACADEMIC_RESEARCH_EMBEDDING_ENABLED``, mit
+    ``legacy_alias=True`` zusaetzlich Alt-Name ``VAULT_AUTO_EMBED``) >
+    ``config/parallel_agents.json`` (Schluessel ``embedding_enabled``) >
+    Default ``True``. :func:`get_embedder` selbst wertet diesen Schalter
+    NICHT aus (siehe dessen Docstring): explizite Aufrufer
+    (``vault.embed_quote``, ``quote_context_similarity``,
+    ``migrate.reindex_embeddings``) laden das Backend immer, unabhaengig vom
+    Schalter -- wer sie aufruft, will das Modell laden.
+
+    ``legacy_alias`` steuert, ob der Alt-Name ``VAULT_AUTO_EMBED`` (#372)
+    mitzaehlt. Er gatete vor #719 AUSSCHLIESSLICH den Auto-Ingest in
+    ``server._auto_embed_enabled`` -- Default ``True`` erhaelt das:
+    bestehende Setups mit ``VAULT_AUTO_EMBED=0`` bleiben unveraendert
+    (auch von Tests genutzt, um den Auto-Ingest-Seiteneffekt beim manuellen
+    Bestuecken von ``chunk_embeddings`` zu unterdruecken, ohne die Suche
+    abzuschalten). ``server._vec0_search`` ruft deshalb explizit
+    ``legacy_alias=False`` auf: die Vektor-Suche ist eine mit #719 NEUE
+    Gate-Faehigkeit, die es unter dem Alt-Namen nie gab, und sie darf nur
+    ueber den kanonischen Schalter (oder die Config-Datei) abschaltbar sein.
+    Fuer AC4 aus #719 ("alle drei Schalter aus => reine FTS5-Suche") genuegt
+    der kanonische Schalter -- er gatet beide Pfade gleichzeitig.
+    """
+    from .config_switches import resolve_bool_switch
+
+    env_vars = (
+        (ENV_EMBEDDING_ENABLED, ENV_AUTO_EMBED_ALIAS) if legacy_alias else (ENV_EMBEDDING_ENABLED,)
+    )
+    return resolve_bool_switch(
+        explicit,
+        env_vars,
+        CONFIG_KEY_EMBEDDING,
+        DEFAULT_EMBEDDING_ENABLED,
+        config_path,
+    )
+
 
 def default_cache_dir() -> str:
     """Ablageort fuer heruntergeladene Modellgewichte."""
@@ -261,6 +317,13 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
     nutzbares Backend vollstaendig bedienbar (FTS5-only). Der Grund landet im
     Log — eine dauerhaft leere ``chunk_embeddings``-Tabelle soll nicht wieder
     unbemerkt bleiben (#372).
+
+    Der Schalter (:func:`resolve_embedding_enabled`, Issue #719) wertet DIESE
+    Funktion nicht selbst aus -- gegated sind ihre AUFRUFER
+    (``server._maybe_ingest_embeddings``, ``server._vec0_search``). Explizite
+    Aufrufer (``embed_quote``, ``quote_context_similarity``,
+    ``migrate.reindex_embeddings``) laden das Backend deshalb immer, auch bei
+    abgeschaltetem Schalter -- wer sie aufruft, will das Modell laden.
     """
     key = model_id or os.environ.get(ENV_MODEL_ID) or DEFAULT_MODEL_ID
     if key in _EMBEDDER_CACHE:
