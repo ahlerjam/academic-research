@@ -10,6 +10,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Traegt der Umbau auf Chunk-Ebene? (#729):** #726 (Chunk-FTS-Index
+  `chunk_fts`) und #727 (RRF-Fusion auf `chunk_id` statt `paper_id`) gegen das
+  Chunk-Goldset aus #708 gemessen -- drei Zustaende statt zwei (vorher /
+  Zwischenzustand A: nur der Index / nachher: Index + Chunk-Fusion), damit der
+  Beitrag des Index getrennt vom Beitrag der Fusionsgranularitaet ausgewiesen
+  ist. Neu: `scripts/eval/run_retrieval_ablation_729.py`, vollstaendig
+  hermetisch (kein `VAULT_E5_LIVE_TEST=1` noetig -- weder #701 noch der
+  Reranker sind Teil dieses Umbaus, ein Playback-Embedder bedient die
+  #708-Fixture). Kernbefund: auf dem 11-Paper-Goldset sind alle drei Zustaende
+  fuer jede der 26 Queries bitgleich (Recall@10 0,7308, nDCG@10 0,6619, MRR
+  0,6394 in allen dreien) -- strukturell erklaerbar (Korpus zu klein/gesaettigt
+  fuer `k=10`, jedes Paper hat vollstaendige Chunk-Embeddings), keine
+  Regression, aber auch kein belegter Gewinn auf diesem Set. Kostenseite an
+  einem synthetischen 60-Paper-Vault (deterministischer Fake-Embedder, echtes
+  Chunking): Chunk-FTS-Index kostet +13,3 % Dateigroesse und kaum Latenz
+  (+2,7 % p50), die Chunk-Fusion selbst +19,5 % p50-Suchlatenz gegenueber
+  Paper-Ebene-Fusion. Empfehlung: nicht zurueckrollen (moderate Kosten, die
+  Null ist eine Aussage ueber das Goldset, nicht ueber den Mechanismus).
+  Report: `docs/evals/2026-08-08-chunk-fusion-ablation-729.md`.
+
 - **Embedding-Kandidaten auf dem Chunk-Goldset gemessen (#731):** Fuenf
   Konfigurationen (`e5-small` als Baseline, `Qwen3-Embedding-0.6B` einmal mit
   `truncate_dim=384` und einmal nativ 1024d, `BGE-M3`, `multilingual-e5-large`)
