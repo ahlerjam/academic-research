@@ -527,6 +527,163 @@ class TestExtractPagesLogsCorruptedPage:
         )
 
 
+class TestDefaultContextSentenceWithPaperMeta:
+    """Issue #701: Kontextsatz mit echten Paper-Metadaten statt Boilerplate."""
+
+    def test_full_metadata_is_included_verbatim(self):
+        """AC1/AC4: Titel, Erstautor (>=3 Autoren -> 'et al.') und Jahr im Satz."""
+        from academic_vault.chunking import PaperMeta, default_context_sentence
+
+        sentence = default_context_sentence(
+            "Introduction",
+            2,
+            3,
+            4,
+            paper_meta=PaperMeta(
+                title="Attention Is All You Need",
+                authors=["Vaswani", "Shazeer", "Parmar"],
+                year=2017,
+            ),
+        )
+        assert sentence == (
+            'Dieser Abschnitt stammt aus "Attention Is All You Need" '
+            'von Vaswani et al. (2017), Abschnitt "Introduction" '
+            "(Seite 3-4, Chunk 2)."
+        )
+
+    def test_missing_metadata_falls_back_without_raising(self):
+        """AC2/AC4: fehlende Metadaten -> kein Abbruch, Sektions-/Seiten-Teil bleibt."""
+        from academic_vault.chunking import PaperMeta, default_context_sentence
+
+        sentence = default_context_sentence(
+            "Introduction", 2, 3, 4, paper_meta=PaperMeta(title=None, authors=None, year=None)
+        )
+        assert sentence == default_context_sentence("Introduction", 2, 3, 4)
+        assert 'Abschnitt "Introduction"' not in sentence  # unveraendertes Basisformat
+        assert '"Introduction"' in sentence
+        assert "(Seite 3-4, Chunk 2)." in sentence
+
+    def test_missing_title_and_year_keeps_authors_and_section(self):
+        """AC2: Titel unbekannt, kein Jahr -> Satz ohne diese Teile, kein Absturz."""
+        from academic_vault.chunking import PaperMeta, default_context_sentence
+
+        sentence = default_context_sentence(
+            "Introduction",
+            0,
+            1,
+            1,
+            paper_meta=PaperMeta(title=None, authors=["Müller"], year=None),
+        )
+        assert sentence == (
+            'Dieser Abschnitt stammt von Müller, Abschnitt "Introduction" (Seite 1-1, Chunk 0).'
+        )
+
+    def test_two_authors_are_joined_with_und(self):
+        from academic_vault.chunking import PaperMeta, default_context_sentence
+
+        sentence = default_context_sentence(
+            "Intro", 0, 1, 1, paper_meta=PaperMeta(title=None, authors=["A", "B"], year=None)
+        )
+        assert "von A und B" in sentence
+
+    def test_chunk_pages_accepts_optional_paper_meta(self):
+        """AC3: chunk_pages() akzeptiert Paper-Metadaten als optionales Argument."""
+        from academic_vault.chunking import PaperMeta, chunk_pages
+
+        text = " ".join(f"word{i}" for i in range(50))
+        chunks = chunk_pages(
+            [(1, text)], paper_meta=PaperMeta(title="Ein Titel", authors=["Autor"], year=2020)
+        )
+        assert len(chunks) == 1
+        assert "Ein Titel" in chunks[0].context_sentence
+
+    def test_chunk_pages_without_paper_meta_argument_is_unchanged(self):
+        """AC3: bestehende Aufrufe ohne paper_meta funktionieren unveraendert weiter."""
+        from academic_vault.chunking import chunk_pages
+
+        text = " ".join(f"word{i}" for i in range(50))
+        chunks = chunk_pages([(1, text)])
+        assert len(chunks) == 1
+        assert (
+            chunks[0].context_sentence
+            == chunk_pages([(1, text)], paper_meta=None)[0].context_sentence
+        )
+
+    def test_long_title_and_section_in_context_sentence_stays_within_reserve(self):
+        """AC5 (offline): Gesamter Kontextsatz passt in CONTEXT_TOKEN_RESERVE.
+
+        Regression-Test für P1-Finding #701: Der komplette Kontextsatz mit
+        langen Titeln, mehreren Autoren, Jahr UND langen Section-Titeln
+        muss in das CONTEXT_TOKEN_RESERVE (64 Tokens) passen, um zu verhindern,
+        dass embedding_text > 512 Tokens wird und von SentenceTransformer
+        stillschweigend gekürzt wird.
+
+        Nutzt einen injizierter TokenCounter, um den Test offline zu fahren
+        (kein e5-Tokenizer-Download nötig). Prüft mit dem realistischen 2.47
+        Tokens/Wort-Multiplikator für deutsche Prosa.
+        """
+        from academic_vault.chunking import (
+            CONTEXT_TOKEN_RESERVE,
+            MODEL_INPUT_OVERHEAD_TOKENS,
+            MODEL_MAX_TOKENS,
+            PaperMeta,
+            chunk_pages,
+        )
+
+        # Langer deutscher Titel aus dem P1-Finding: realistische Komposita.
+        long_title = (
+            "Der Einfluss agiler Governance-Strukturen auf die Wirksamkeit von "
+            "Change-Approval-Prozessen in mittelständischen IT-Organisationen: "
+            "eine systematische Literaturrecherche"
+        )
+
+        # Langer Section-Titel (bis zu _MAX_HEADING_LEN=80 Zeichen sind möglich).
+        long_section_title = "Grundlagen der Softwareentwicklung und ihrer Auswirkungen auf die Organisationsstruktur"
+
+        # TokenCounter mit 2.47 Tokens/Wort für deutsche Prosa
+        # (aus der Tabelle in chunking.py:32-43).
+        def german_prose_counter(text: str) -> int:
+            words = len(text.split())
+            return int(words * 2.47)
+
+        paper_meta = PaperMeta(
+            title=long_title,
+            authors=["Ahler", "Mueller", "Schmidt"],  # Drei Autoren -> "et al."
+            year=2024,
+        )
+
+        # Nutze den langen Section-Titel durch _detect_heading Heuristik.
+        # Alternativ: direkt mit section_title prüfen über custom text.
+        text_with_heading = f"{long_section_title}\n" + (_GERMAN_PROSE * 80)
+
+        chunks = chunk_pages(
+            [(1, text_with_heading)],
+            paper_meta=paper_meta,
+            token_counter=german_prose_counter,
+        )
+        assert len(chunks) > 0
+
+        # Prüfe, dass der Kontextsatz selbst unter CONTEXT_TOKEN_RESERVE bleibt.
+        for chunk in chunks:
+            context_tokens = (
+                german_prose_counter(chunk.context_sentence) + MODEL_INPUT_OVERHEAD_TOKENS
+            )
+            assert context_tokens <= CONTEXT_TOKEN_RESERVE, (
+                f"Chunk {chunk.chunk_index}: Kontextsatz {context_tokens} Tokens "
+                f"> CONTEXT_TOKEN_RESERVE {CONTEXT_TOKEN_RESERVE} -- "
+                f"Titel-Kürzung funktioniert nicht oder ist zu konservativ"
+            )
+
+            # Prüfe auch, dass embedding_text unter dem Fenster bleibt.
+            # embedding_text = context_sentence + " " + chunk_text
+            # Im Modell: "passage: " + embedding_text
+            tokens = german_prose_counter(chunk.embedding_text) + MODEL_INPUT_OVERHEAD_TOKENS
+            assert tokens <= MODEL_MAX_TOKENS, (
+                f"Chunk {chunk.chunk_index}: {tokens} geschätzte Tokens "
+                f"> {MODEL_MAX_TOKENS} (Fenster) -- embedding_text sprengt das Modell-Fenster"
+            )
+
+
 @pytest.mark.skipif(
     os.environ.get("VAULT_E5_LIVE_TEST") != "1",
     reason="Live-Tokenizer-Test nur mit VAULT_E5_LIVE_TEST=1 (laedt e5-Tokenizer)",
@@ -556,6 +713,35 @@ class TestRealE5TokenizerRespectsContextWindow:
 
         for chunk in chunks:
             # Genau das, was E5SmallEmbedder.embed_documents an das Modell gibt.
+            model_input = PASSAGE_PREFIX + chunk.embedding_text
+            size = len(tokenizer.encode(model_input))
+            assert size <= MODEL_MAX_TOKENS, (
+                f"Chunk {chunk.chunk_index}: {size} e5-Tokens > {MODEL_MAX_TOKENS} -- "
+                "sentence-transformers wuerde den Rest stillschweigend abschneiden"
+            )
+
+    def test_embedding_text_with_paper_meta_fits_the_real_context_window(self):
+        """AC5: embedding_text (Kontextsatz inkl. Paper-Metadaten + Chunk) bleibt
+        im 512-Token-Fenster -- nachgewiesen mit dem echten Tokenizer."""
+        from academic_vault.chunking import (
+            MODEL_MAX_TOKENS,
+            PaperMeta,
+            chunk_pages,
+            reset_token_counter_cache,
+        )
+        from academic_vault.embedding_model import PASSAGE_PREFIX
+
+        reset_token_counter_cache()
+        tokenizer = self._tokenizer()
+        paper_meta = PaperMeta(
+            title="DevOps-Governance im Mittelstand",
+            authors=["Ahler"],
+            year=2024,
+        )
+        chunks = chunk_pages([(1, _GERMAN_PROSE * 120)], paper_meta=paper_meta)
+        assert len(chunks) > 1
+
+        for chunk in chunks:
             model_input = PASSAGE_PREFIX + chunk.embedding_text
             size = len(tokenizer.encode(model_input))
             assert size <= MODEL_MAX_TOKENS, (

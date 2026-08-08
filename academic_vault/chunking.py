@@ -260,8 +260,118 @@ class Chunk:
 ContextProvider = Callable[[str, str, int, int, int], str]
 
 
+@dataclass(frozen=True)
+class PaperMeta:
+    """Deterministisch aus Ingest-Metadaten befuellte Paper-Angaben (#701).
+
+    Alle Felder optional: fehlt eines (Titel unbekannt, kein Jahr im
+    CSL-JSON, keine Autoren), wird es im Kontextsatz ausgelassen statt einen
+    Platzhalter oder einen Fehler zu erzeugen (siehe
+    :func:`default_context_sentence`).
+    """
+
+    title: str | None = None
+    authors: Sequence[str] | None = None
+    year: int | None = None
+
+
+def _format_authors(authors: Sequence[str] | None) -> str | None:
+    """Formatiert Autoren-Familiennamen: Einzelname, ``A und B``, ``A et al.``
+
+    Ab drei Autoren nur der Erstautor plus "et al." -- die Issue-Vorgabe.
+    Der Zwei-Autoren-Fall ist im Issue nicht spezifiziert; hier bewusst als
+    eigener Fall entschieden (weder Einzelautor noch "et al.").
+    """
+    if not authors:
+        return None
+    names = [str(a).strip() for a in authors if a and str(a).strip()]
+    if not names:
+        return None
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} und {names[1]}"
+    return f"{names[0]} et al."
+
+
+def _truncate_title_to_fit_reserve(
+    title: str,
+    section_title: str,
+    author_str: str | None,
+    year: int | None,
+    counter: TokenCounter,
+    max_reserve_tokens: int = CONTEXT_TOKEN_RESERVE - MODEL_INPUT_OVERHEAD_TOKENS,
+) -> str:
+    """Kürzt Titel so, dass der komplette Kontextsatz in das Reserve passt.
+
+    Verhindert, dass der vollständige Kontextsatz (mit Section-Titel, Autoren,
+    Jahr) das CONTEXT_TOKEN_RESERVE sprengt (P1-Regression #701). Schneidet
+    den Titel iterativ, bis counter(gesamter_kontextsatz) <= max_reserve_tokens.
+
+    Args:
+        title: Der zu kürzende Papier-Titel.
+        section_title: Der Section-Titel (wird nicht gekürzt).
+        author_str: Formatierte Autorenliste oder None.
+        year: Publikationsjahr oder None.
+        counter: Token-Zähler (wird injiziert von _make_chunk).
+        max_reserve_tokens: Maximale Tokens für den kompletten Kontextsatz
+            (default: CONTEXT_TOKEN_RESERVE - MODEL_INPUT_OVERHEAD_TOKENS = 60).
+
+    Returns:
+        Der gekürzte Titel mit Ellipse ("..."), oder der Originaltitel,
+        falls dieser bereits passt.
+    """
+    # Baue den Kontextsatz schrittweise auf, um die Länge zu prüfen.
+    section_clause = (
+        f'Abschnitt "{section_title}" (Seite ???-???, Chunk 0)'  # Platzhalter für Längenberechnung
+    )
+
+    # Test: mit vollständigem Originaltitel
+    lead_parts: list[str] = []
+    if title:
+        lead_parts.append(f'"{title}"')
+    if author_str:
+        lead_parts.append(f"von {author_str}")
+    if year is not None:
+        lead_parts.append(f"({year})")
+
+    if lead_parts:
+        lead = "aus " + " ".join(lead_parts) if title else " ".join(lead_parts)
+        test_sentence = f"Dieser Abschnitt stammt {lead}, {section_clause}."
+        if counter(test_sentence) <= max_reserve_tokens:
+            return title  # Passt schon!
+
+    # Originaltitel passt nicht, kürze ihn iterativ.
+    if not title or " " not in title:
+        # Single-word title oder leer: maximale Kurzung
+        return title if not title else title[0] + "..."
+
+    words = title.split()
+    # Versuche iterativ Wörter zu entfernen.
+    for num_words in range(len(words) - 1, 0, -1):
+        truncated_title = " ".join(words[:num_words]) + "..."
+        lead_parts_test = [f'"{truncated_title}"']
+        if author_str:
+            lead_parts_test.append(f"von {author_str}")
+        if year is not None:
+            lead_parts_test.append(f"({year})")
+
+        lead_test = "aus " + " ".join(lead_parts_test)
+        test_sentence = f"Dieser Abschnitt stammt {lead_test}, {section_clause}."
+        if counter(test_sentence) <= max_reserve_tokens:
+            return truncated_title
+
+    # Fallback: nur erstes Wort + Ellipse
+    return words[0] + "..."
+
+
 def default_context_sentence(
-    section_title: str, chunk_index: int, page_start: int, page_end: int
+    section_title: str,
+    chunk_index: int,
+    page_start: int,
+    page_end: int,
+    paper_meta: PaperMeta | None = None,
+    token_counter: TokenCounter | None = None,
 ) -> str:
     """Deterministischer Offline-Default fuer den Kontextsatz.
 
@@ -269,11 +379,59 @@ def default_context_sentence(
     keine Plugin-Funktion darf einen eigenen Modellzugang voraussetzen. Ein
     abweichender ``context_provider`` bleibt ueber :func:`chunk_pages`
     injizierbar.
+
+    Ohne ``paper_meta`` (oder wenn keines seiner Felder befuellt ist) bleibt
+    der Satz auf Sektion/Seite/Chunk beschraenkt (#374). Mit ``paper_meta``
+    (#701) treten Titel, Autor(en) und Jahr davor, jeweils nur, wenn
+    vorhanden -- der Sektions-/Seiten-Teil bleibt in JEDEM Fall erhalten.
+
+    Der token_counter wird als injizierter Parameter weitergegeben, um
+    sicherzustellen, dass alle Komponenten (Fenstergroesse, Titel-Kurzung)
+    mit demselben Zaehler rechnen (P1-Befund #701).
     """
-    return (
+    section_clause = (
+        f'Abschnitt "{section_title}" (Seite {page_start}-{page_end}, Chunk {chunk_index})'
+    )
+    base_sentence = (
         f'Dieser Abschnitt stammt aus "{section_title}" '
         f"(Seite {page_start}-{page_end}, Chunk {chunk_index})."
     )
+    if paper_meta is None:
+        return base_sentence
+
+    title = (paper_meta.title or "").strip() or None
+    author_str = _format_authors(paper_meta.authors)
+    year = paper_meta.year
+
+    if not title and not author_str and year is None:
+        return base_sentence
+
+    # Nutze den injizierten counter oder resolve ihn selbst.
+    counter = resolve_token_counter(token_counter)
+
+    # Kürze den Titel so, dass der gesamte Kontextsatz in CONTEXT_TOKEN_RESERVE passt.
+    if title:
+        truncated_title = _truncate_title_to_fit_reserve(
+            title, section_title, author_str, year, counter
+        )
+    else:
+        truncated_title = None
+
+    # Baue den Satz mit dem gekuerzten Titel.
+    lead_parts: list[str] = []
+    if truncated_title:
+        lead_parts.append(f'"{truncated_title}"')
+    if author_str:
+        lead_parts.append(f"von {author_str}")
+    # Jahr nur mit Titel oder Autoren rendern, um ungrammatische Saetze zu vermeiden.
+    if year is not None and (truncated_title or author_str):
+        lead_parts.append(f"({year})")
+
+    if not lead_parts:
+        return base_sentence
+
+    lead = "aus " + " ".join(lead_parts) if truncated_title else " ".join(lead_parts)
+    return f"Dieser Abschnitt stammt {lead}, {section_clause}."
 
 
 def _split_words_with_metadata(
@@ -368,6 +526,7 @@ def chunk_pages(
     overlap_ratio: float = OVERLAP_RATIO,
     context_provider: ContextProvider | None = None,
     token_counter: TokenCounter | None = None,
+    paper_meta: PaperMeta | None = None,
 ) -> list[Chunk]:
     """Zerlegt seitenweisen Text in ueberlappende, seitenbewusste Chunks.
 
@@ -385,6 +544,9 @@ def chunk_pages(
             ``None`` = :func:`default_context_sentence` (deterministisch, offline).
         token_counter: Optionaler Tokenzaehler. ``None`` = echter Tokenizer des
             Embedding-Modells, ersatzweise :func:`approximate_token_count`.
+        paper_meta: Optionale Paper-Angaben (Titel/Autoren/Jahr, #701) fuer den
+            Default-Kontextsatz. ``None`` = heutiges Verhalten (nur Sektion/
+            Seite/Chunk); wirkungslos, wenn ``context_provider`` gesetzt ist.
 
     Returns:
         Liste von :class:`Chunk` in Dokumentreihenfolge. Leer, wenn ``pages``
@@ -413,6 +575,7 @@ def chunk_pages(
                 _section_title_at(headings, start),
                 context_provider,
                 counter,
+                paper_meta,
             )
         )
 
@@ -433,6 +596,7 @@ def _make_chunk(
     section_title: str,
     context_provider: ContextProvider | None,
     counter: TokenCounter,
+    paper_meta: PaperMeta | None = None,
 ) -> Chunk:
     """Baut einen :class:`Chunk` aus ``words[start:end]`` samt Kontextsatz."""
     chunk_text = " ".join(words[start:end])
@@ -445,7 +609,7 @@ def _make_chunk(
         )
     else:
         context_sentence = default_context_sentence(
-            section_title, chunk_index, page_start, page_end
+            section_title, chunk_index, page_start, page_end, paper_meta, token_counter=counter
         )
     embedding_text = build_contextual_embedding_text(context_sentence, chunk_text)
     _warn_if_over_context_window(chunk_index, embedding_text, counter)
@@ -538,6 +702,7 @@ def chunk_sections(
     context_provider: ContextProvider | None = None,
     token_counter: TokenCounter | None = None,
     min_boundary_fill_ratio: float = MIN_BOUNDARY_FILL_RATIO,
+    paper_meta: PaperMeta | None = None,
 ) -> list[Chunk]:
     """Zerlegt TEI-Sektionen (#709) an ECHTEN Struktur-, nicht an Regex-Grenzen.
 
@@ -560,6 +725,7 @@ def chunk_sections(
         token_counter: wie bei :func:`chunk_pages`.
         min_boundary_fill_ratio: Mindestfuellgrad fuer das Zurueckschnappen,
             siehe :data:`MIN_BOUNDARY_FILL_RATIO`.
+        paper_meta: wie bei :func:`chunk_pages`.
 
     Returns:
         Liste von :class:`Chunk` in Dokumentreihenfolge. Leer, wenn die
@@ -594,6 +760,7 @@ def chunk_sections(
                 _section_title_at(section_starts, start),
                 context_provider,
                 counter,
+                paper_meta,
             )
         )
 
@@ -656,6 +823,7 @@ def chunk_pdf(
     overlap_ratio: float = OVERLAP_RATIO,
     context_provider: ContextProvider | None = None,
     token_counter: TokenCounter | None = None,
+    paper_meta: PaperMeta | None = None,
 ) -> list[Chunk]:
     """Liest ein PDF ein und zerlegt es in Retrieval-Chunks.
 
@@ -691,6 +859,7 @@ def chunk_pdf(
                 overlap_ratio=overlap_ratio,
                 context_provider=context_provider,
                 token_counter=token_counter,
+                paper_meta=paper_meta,
             )
         if sections is not None:
             logger.warning(
@@ -706,4 +875,5 @@ def chunk_pdf(
         overlap_ratio=overlap_ratio,
         context_provider=context_provider,
         token_counter=token_counter,
+        paper_meta=paper_meta,
     )

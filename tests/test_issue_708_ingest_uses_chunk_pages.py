@@ -123,10 +123,13 @@ class TestIngestChunksViaChunkPages:
         ``split_text`` schneidet nach 1600 Zeichen, ``chunk_pages`` nach
         Modell-Tokens — die Grenzen liegen zwangslaeufig woanders.
         """
-        from academic_vault.chunking import chunk_pages
+        from academic_vault.chunking import PaperMeta, chunk_pages
 
         rows, flat_text, _ = ingested
-        expected = chunk_pages([(1, flat_text)])
+        # Der Ingest baut PaperMeta aus dem CSL-JSON des Papers (#701) --
+        # "Change Approval"/"Abstract" aus ``_add_paper`` traegt keine
+        # Autoren/kein Jahr, also nur der Titel.
+        expected = chunk_pages([(1, flat_text)], paper_meta=PaperMeta(title="Change Approval"))
 
         assert [r["chunk_text"] for r in rows] == [c.chunk_text for c in expected]
         assert [r["context_sentence"] for r in rows] == [c.context_sentence for c in expected]
@@ -138,13 +141,15 @@ class TestIngestChunksViaChunkPages:
         Bis #708 stand hier durchgehend ``""`` — das Goldset misst aber
         Embeddings, in deren Input der Kontextsatz steckt.
         """
-        from academic_vault.chunking import default_context_sentence
+        from academic_vault.chunking import PaperMeta, default_context_sentence
 
         rows, _, _ = ingested
         assert all(r["context_sentence"].strip() for r in rows)
         for index, row in enumerate(rows):
+            # Format seit #701: '...aus "<Titel>", Abschnitt "<Sektion>" (...)'.
+            section_title = row["context_sentence"].split('"')[3]
             assert row["context_sentence"] == default_context_sentence(
-                row["context_sentence"].split('"')[1], index, 1, 1
+                section_title, index, 1, 1, paper_meta=PaperMeta(title="Change Approval")
             )
 
     def test_embedder_sees_context_plus_chunk(self, ingested):
@@ -195,6 +200,80 @@ class TestIngestChunksViaChunkPages:
         import academic_vault.ingest as ingest
 
         assert not hasattr(ingest, "split_text")
+
+
+# ---------------------------------------------------------------------------
+# Issue #701: der Ingest baut PaperMeta aus dem CSL-JSON und reicht sie durch
+# ---------------------------------------------------------------------------
+
+
+class TestIngestPassesPaperMetaFromCsl:
+    def test_context_sentence_carries_title_authors_and_year_from_csl(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """AC1: Titel, Erstautor/"et al." und Jahr stammen aus dem CSL-JSON des Papers."""
+        from academic_vault.chunking import PaperMeta, default_context_sentence
+        from academic_vault.db import VaultDB
+        from academic_vault.ingest import ingest_paper_embeddings
+        from academic_vault.server import add_paper
+
+        csl = {
+            "type": "article-journal",
+            "title": "Attention Is All You Need",
+            "author": [
+                {"family": "Vaswani"},
+                {"family": "Shazeer"},
+                {"family": "Parmar"},
+            ],
+            "issued": {"date-parts": [[2017]]},
+        }
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        add_paper(temp_vault_db, "p701", json.dumps(csl))
+        _use_embedder(monkeypatch, fake_embedder)
+
+        written = ingest_paper_embeddings(
+            temp_vault_db, "p701", text="Ein kurzer Volltext fuer den Test."
+        )
+        assert written == 1
+
+        rows = VaultDB(temp_vault_db).get_chunk_embeddings("p701")
+        assert len(rows) == 1
+        expected = default_context_sentence(
+            "Unbenannter Abschnitt",
+            0,
+            1,
+            1,
+            paper_meta=PaperMeta(
+                title="Attention Is All You Need",
+                authors=["Vaswani", "Shazeer", "Parmar"],
+                year=2017,
+            ),
+        )
+        assert rows[0]["context_sentence"] == expected
+        assert '"Attention Is All You Need"' in rows[0]["context_sentence"]
+        assert "Vaswani et al." in rows[0]["context_sentence"]
+        assert "(2017)" in rows[0]["context_sentence"]
+
+    def test_missing_csl_metadata_does_not_crash_ingest(
+        self, temp_vault_db, fake_embedder, monkeypatch
+    ):
+        """AC2: unvollstaendiges CSL-JSON (kein Titel/kein Jahr) -> kein Absturz."""
+        from academic_vault.db import VaultDB
+        from academic_vault.ingest import ingest_paper_embeddings
+        from academic_vault.server import add_paper
+
+        csl = {"type": "article-journal"}
+        monkeypatch.setenv("VAULT_AUTO_EMBED", "0")
+        add_paper(temp_vault_db, "p701b", json.dumps(csl))
+        _use_embedder(monkeypatch, fake_embedder)
+
+        written = ingest_paper_embeddings(
+            temp_vault_db, "p701b", text="Ein weiterer kurzer Volltext."
+        )
+        assert written == 1
+
+        rows = VaultDB(temp_vault_db).get_chunk_embeddings("p701b")
+        assert rows[0]["context_sentence"].strip()
 
 
 # ---------------------------------------------------------------------------

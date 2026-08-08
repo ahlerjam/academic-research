@@ -22,11 +22,17 @@ noch Section-Titel -- vermessen in
 haben ohnehin keine Spalte in ``chunk_embeddings``.
 """
 
+from __future__ import annotations
+
 import json
 import os
+from typing import TYPE_CHECKING
 
 from .db import VaultDB
 from .embedding_model import get_embedder
+
+if TYPE_CHECKING:  # pragma: no cover - nur fuer die Typpruefung
+    from . import chunking
 
 # Obergrenze pro Ingest: haelt die Latenz von add_paper beschraenkt (#372, Risiko 5).
 DEFAULT_MAX_CHUNKS = 64
@@ -77,6 +83,33 @@ def _max_chunks_from_env() -> int:
     return value if value > 0 else DEFAULT_MAX_CHUNKS
 
 
+def _paper_meta_from_csl(csl_json: str | None) -> chunking.PaperMeta | None:
+    """Baut ``PaperMeta`` (#701) aus dem CSL-JSON eines Papers.
+
+    Deterministisch aus Metadaten, die beim Ingest ohnehin vorliegen -- kein
+    Modellaufruf. Liefert ``None`` bei fehlendem/kaputtem CSL-JSON, statt den
+    Ingest abzubrechen; :func:`chunking.default_context_sentence` behandelt
+    das identisch zu "keine Metadaten vorhanden".
+    """
+    from . import chunking
+    from .db import csl_families, csl_title, csl_year
+
+    if not csl_json:
+        return None
+    try:
+        csl = json.loads(csl_json)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(csl, dict):
+        return None
+
+    return chunking.PaperMeta(
+        title=csl_title(csl),
+        authors=csl_families(csl) or None,
+        year=csl_year(csl),
+    )
+
+
 def ingest_paper_embeddings(
     db_path: str,
     paper_id: str,
@@ -119,7 +152,8 @@ def ingest_paper_embeddings(
         return 0
 
     db = VaultDB(db_path)
-    if db.get_paper(paper_id) is None:
+    paper = db.get_paper(paper_id)
+    if paper is None:
         return 0
 
     # Bestandsabgleich vor dem teuren Teil: passt die Modell-Dimension nicht
@@ -139,9 +173,15 @@ def ingest_paper_embeddings(
     # ein Monkeypatch auf ``academic_vault.chunking.chunk_pages``.
     from . import chunking
 
+    paper_meta = _paper_meta_from_csl(paper.get("csl_json"))
+
     # Eine Seite: der Volltext aus #373 traegt keine Seitengrenzen mehr (siehe
     # Modul-Docstring). Die Seitenangabe im Kontextsatz lautet damit "Seite 1-1".
-    chunks = [c for c in chunking.chunk_pages([(1, source)]) if c.chunk_text.strip()]
+    chunks = [
+        c
+        for c in chunking.chunk_pages([(1, source)], paper_meta=paper_meta)
+        if c.chunk_text.strip()
+    ]
     if not chunks:
         return 0
     limit = max_chunks if max_chunks is not None else _max_chunks_from_env()
