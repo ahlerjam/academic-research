@@ -98,7 +98,7 @@ INFO:__main__:Found 15 papers (0 modules failed, 0 modules skipped)
 ```
 
 Beim ersten Paper mit PDF lädt das Plugin einmalig die Gewichte des Embedding-Modells
-(~470 MB) nach `~/.academic-research/models`. Das sieht aus wie ein Hänger, ist aber
+(~2,3 GB) nach `~/.academic-research/models`. Das sieht aus wie ein Hänger, ist aber
 Fortschritt. Danach laufen Volltext- und Vektorsuche offline.
 
 Ist dir das für den ersten Versuch zu viel, nimm `--mode quick` — weniger Module, weniger

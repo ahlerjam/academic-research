@@ -23,13 +23,21 @@ Title-Case-Heuristik :func:`_detect_heading`, die zwangslaeufig unscharf ist
 (siehe dort). Der Regex bleibt der Fallback, GROBID bleibt Opt-in.
 
 Tokenbudget (WICHTIG): die Zielgroesse ist in **Modell-Tokens** definiert, nicht
-in Woertern. Das Embedding-Backend ``intfloat/multilingual-e5-small`` hat ein
-hartes Kontextfenster von ``max_seq_length=512``; ``SentenceTransformer.encode``
-schneidet laengere Eingaben STILLSCHWEIGEND ab -- ohne Log, ohne Exception. Ein
-zu grosser Chunk verliert seinen Schwanz also ersatzlos aus dem Vektor, und zwar
-unbemerkt. Eine wortbasierte Zaehlung kann diese Grenze prinzipiell nicht
-einhalten, weil der XLM-R-SentencePiece-Tokenizer je nach Textsorte stark
-unterschiedlich viele Tokens pro Wort erzeugt (gemessen an e5-small):
+in Woertern. Das Fenster (:data:`MODEL_MAX_TOKENS`, 512) ist seit #732 bewusst
+FEST und modellunabhaengig -- unabhaengig davon, welches ``max_seq_length`` das
+konfigurierte Embedding-Modell tatsaechlich zuliesse. ``BAAI/bge-m3`` (Default
+seit #732) traegt nativ ein 8192-Token-Fenster; dieses Modul nutzt das
+absichtlich NICHT aus, um nicht stillschweigend in Long-Context-/Late-Chunking-
+Verhalten zu rutschen -- Late Chunking ist explizit Out-of-Scope von #732 und
+braucht eine eigene Entscheidung. ``SentenceTransformer.encode`` schneidet
+Eingaben ueber dem WIRKLICHEN Modell-Limit STILLSCHWEIGEND ab -- ohne Log, ohne
+Exception -- ein zu grosser Chunk verliert seinen Schwanz also ersatzlos aus dem
+Vektor, und zwar unbemerkt; das feste 512er-Fenster bleibt bei jedem bisher
+unterstuetzten Modell (e5-small: 512, bge-m3: 8192) sicher innerhalb dieser
+Grenze. Eine wortbasierte Zaehlung kann ein Token-Budget prinzipiell nicht
+einhalten, weil Subword-Tokenizer je nach Textsorte stark unterschiedlich viele
+Tokens pro Wort erzeugen -- illustriert an einer Messung mit dem damaligen
+Default ``intfloat/multilingual-e5-small`` (XLM-R-SentencePiece):
 
 ===================== ==============
 Textsorte             Tokens / Wort
@@ -42,6 +50,13 @@ Summenformeln                   7.60
 deutsche Komposita             10.67
 URLs                           38.00
 ===================== ==============
+
+Die Tabelle ist ein Prinzipbeleg, keine fuer den aktiven Default gepflegte
+Messreihe: der tatsaechliche Tokenizer des konfigurierten Modells kommt zur
+Laufzeit ueber :func:`model_token_counter`, nie ueber diese Zahlen. Zur
+Groessenordnung bei ``BAAI/bge-m3``: eine Stichprobe deutscher Fachprosa
+(187 Woerter, gemessen 2026-08-08 fuer #732) liegt bei ≈2,0 Tokens/Wort --
+niedriger als der e5-small-Wert oben, aber in derselben Groessenordnung.
 
 Deshalb wird die Fenstergroesse ueber einen :data:`TokenCounter` bestimmt:
 :func:`resolve_token_counter` nimmt bevorzugt den ECHTEN Tokenizer des
@@ -69,23 +84,35 @@ if TYPE_CHECKING:  # pragma: no cover - nur fuer die Typpruefung
 
 logger = logging.getLogger(__name__)
 
-# Hartes Kontextfenster von intfloat/multilingual-e5-small
-# (== SentenceTransformer.max_seq_length == tokenizer.model_max_length).
-# Alles darueber wird vom Backend stillschweigend abgeschnitten.
+# Bewusst FESTES Fenster, unabhaengig vom konfigurierten Embedding-Modell
+# (Issue #732 -- vorher das tatsaechliche Kontextfenster von
+# intfloat/multilingual-e5-small, das damals wie heute den Default deckelte).
+# ``BAAI/bge-m3`` (Default seit #732) traegt nativ 8192 Tokens; dieses Fenster
+# schoepft das absichtlich NICHT aus, um nicht ungewollt in Long-Context-/
+# Late-Chunking-Verhalten zu rutschen -- siehe Modul-Docstring. Alles ueber
+# dem WIRKLICHEN Modell-Limit wird vom Backend stillschweigend abgeschnitten;
+# 512 liegt bei jedem bisher unterstuetzten Modell sicher darunter.
 MODEL_MAX_TOKENS = 512
 
 # Reserve fuer alles, was neben dem Chunk-Text im Modell-Input landet:
 # Kontextsatz (gemessen 17 Tokens bei kurzem, 28 bei langem Section-Titel),
-# e5-Praefix "passage: " (2) und die Sondertokens <s>/</s> (2). 64 laesst
-# genug Luft fuer einen laengeren, per Anthropic-API generierten Kontextsatz.
+# ein optionales Instruktions-Praefix (e5-Familie: "passage: ", 2 Tokens; der
+# Default bge-m3 braucht seit #732 gar keins) und die Sondertokens <s>/</s>
+# (2). 64 laesst genug Luft fuer einen laengeren, per Anthropic-API
+# generierten Kontextsatz UND bleibt fuer bge-m3 konservativ (die 2
+# Praefix-Tokens sind dort schlicht ungenutzte Reserve, kein Fehlbetrag).
 CONTEXT_TOKEN_RESERVE = 64
 
 # Tokenbudget fuer den reinen Chunk-Text. Der VOLLSTAENDIGE Embedding-Input
 # (Kontextsatz + Chunk) zielt damit auf MODEL_MAX_TOKENS.
 TARGET_TOKENS = MODEL_MAX_TOKENS - CONTEXT_TOKEN_RESERVE
 
-# "passage: " + <s>/</s>: der Aufschlag, den E5SmallEmbedder.embed_documents
-# zusaetzlich zum embedding_text an das Modell gibt.
+# Konservativer oberer Aufschlag, den der konfigurierte Embedder zusaetzlich
+# zum embedding_text an das Modell gibt: Sondertokens <s>/</s> (2) plus ein
+# optionales Instruktions-Praefix (e5-Familie: "passage: ", 2 Tokens). Der
+# Default seit #732, BgeM3Embedder, haengt kein Praefix an -- fuer ihn ist der
+# Wert eine sichere Obergrenze, kein exakter Aufschlag; das WARNT frueher, nie
+# spaeter, wenn ein Chunk das Fenster sprengt (siehe _warn_if_over_context_window).
 MODEL_INPUT_OVERHEAD_TOKENS = 4
 
 # 10-15%-Korridor aus dem Issue; 0.125 liegt exakt in der Mitte.

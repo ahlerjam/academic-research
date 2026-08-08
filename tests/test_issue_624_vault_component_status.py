@@ -166,7 +166,7 @@ def test_readme_model_not_marked_pflicht():
     Code auffaengt, ist keine Pflicht (Issue #624 Scope).
     """
     readme = README.read_text(encoding="utf-8")
-    lines = [line for line in readme.splitlines() if "multilingual-e5-small" in line]
+    lines = [line for line in readme.splitlines() if "bge-m3" in line and "Embedding" in line]
     assert lines, "README-Quickstart-Zeile zum Embedding-Modell nicht gefunden"
     for line in lines:
         assert "| Pflicht" not in line and "Pflicht," not in line, (

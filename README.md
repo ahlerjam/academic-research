@@ -105,7 +105,7 @@ Vier Dinge müssen da sein, der Rest erweitert nur:
 | **Python 3.11+** | Pflicht | Vault-MCP-Server, Such- und PDF-Skripte |
 | **Node.js** | Pflicht | Die Hooks laufen als `node …mjs` — ohne Node kein Zitat-Guard |
 | **Git** | Pflicht | Installation über den Plugin-Marketplace |
-| Drei lokale Modelle: `multilingual-e5-small` (Embedding, 470 MB), `bge-reranker-v2-m3` (Reranker), `bge-m3-zeroshot-v2.0` (NLI-Zitatscan) | Optional, Setup fragt einmal | ~3,9 GB gesamt — Vorab-Download beim Setup oder Lazy-Load beim ersten Gebrauch; ohne sie läuft die Suche sauber auf Stichwortsuche (FTS5) zurück — Zustand siehe [Vault-MCP-Server](docs/reference/vault.md#mcp-tools-alle-50) |
+| Drei lokale Modelle: `bge-m3` (Embedding, 2,3 GB), `bge-reranker-v2-m3` (Reranker), `bge-m3-zeroshot-v2.0` (NLI-Zitatscan) | Optional, Setup fragt einmal | ~5,7 GB gesamt — Vorab-Download beim Setup oder Lazy-Load beim ersten Gebrauch; ohne sie läuft die Suche sauber auf Stichwortsuche (FTS5) zurück — Zustand siehe [Vault-MCP-Server](docs/reference/vault.md#mcp-tools-alle-50) |
 | `uv` oder `pipx` | Optional | installiert die `browser-use`-CLI für die 7 Browser-Module |
 | `ocrmypdf` | Optional | OCR für gescannte PDFs ohne Textebene |
 
@@ -164,7 +164,7 @@ sieht ein geglückter Lauf aus:
 INFO:__main__:Found 15 papers (0 modules failed)
 ```
 
-> Hier greift der Modell-Download aus der Tabelle oben: einmalig ~470 MB Gewichte für die
+> Hier greift der Modell-Download aus der Tabelle oben: einmalig ~2,3 GB Gewichte für die
 > Vektor-Suche. Das sieht aus wie ein Hänger, ist aber Fortschritt.
 
 **6. Erstes verifiziertes Zitat holen:**

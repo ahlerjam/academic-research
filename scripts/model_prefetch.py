@@ -80,7 +80,7 @@ def build_model_specs() -> list[ModelSpec]:
     """
     return [
         ModelSpec(
-            label="Embedding (multilingual-e5-small)",
+            label="Embedding (bge-m3)",
             repo_id=embedding_model.DEFAULT_MODEL_ID,
             cache_dir=embedding_model.default_cache_dir(),
         ),

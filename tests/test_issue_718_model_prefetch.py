@@ -185,12 +185,12 @@ class TestLazyLoadNotice:
         )
         notify_lazy_download(
             label="Embedding-Modell",
-            repo_id="intfloat/multilingual-e5-small",
+            repo_id="BAAI/bge-m3",
             cache_dir="/tmp/does-not-matter",
         )
         captured = capsys.readouterr()
         assert "Embedding-Modell" in captured.err
-        assert format_gb(APPROX_BYTES["intfloat/multilingual-e5-small"]) in captured.err
+        assert format_gb(APPROX_BYTES["BAAI/bge-m3"]) in captured.err
         # stdout ist im MCP-Server der JSON-RPC-Kanal (``mcp.run()`` -> stdio),
         # dort darf keine Klartextzeile landen. Protokollnachweis am echten
         # Serverprozess: tests/test_issue_718_mcp_stdio_stream.py
@@ -202,7 +202,7 @@ class TestLazyLoadNotice:
         )
         notify_lazy_download(
             label="Embedding-Modell",
-            repo_id="intfloat/multilingual-e5-small",
+            repo_id="BAAI/bge-m3",
             cache_dir="/tmp/does-not-matter",
         )
         captured = capsys.readouterr()
@@ -230,7 +230,7 @@ class TestLazyLoadNotice:
         on_stdout = io.StringIO()
         monkeypatch.setattr(sys, "stderr", on_stderr)
         monkeypatch.setattr(sys, "stdout", on_stdout)
-        _ORIGINAL_EMBEDDING_LOAD_BACKEND("intfloat/multilingual-e5-small", "/tmp/cache")
+        _ORIGINAL_EMBEDDING_LOAD_BACKEND("BAAI/bge-m3", "/tmp/cache")
         monkeypatch.undo()
 
         assert "Embedding-Modell" in on_stderr.getvalue()
