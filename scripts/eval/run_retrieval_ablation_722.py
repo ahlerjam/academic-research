@@ -95,6 +95,15 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
 DEFAULT_K = 10
 METRICS = ("recall_at_10", "ndcg_at_10", "mrr")
 
+# Dieser Ablationslauf misst gegen das e5-small-basierte #708-Goldset und
+# embeddet fuer die #701-'nach'-Variante Kontextsaetze live neu -- gepinnt auf
+# dasselbe Modell wie die eingecheckten "vor"-Vektoren, sonst mischt der
+# Vergleich den #701-Effekt mit einem unbeabsichtigten Modellwechsel (PR-Review
+# zu #732: seit DEFAULT_MODEL_ID auf BAAI/bge-m3 zeigt, wuerde ein
+# ungepinnter Lauf 384d-"vor"-Vektoren gegen 1024d-"nach"-Vektoren vergleichen
+# und die Wegwerf-DB faelschlich als bge-m3-Bestand registrieren).
+LEGACY_EMBEDDING_MODEL_ID = "intfloat/multilingual-e5-small"
+
 # Eine Zeile je Aenderung: (Flag-Name, Issue, PR, Kurzbeschreibung "nach").
 CHANGES: tuple[tuple[str, int, int, str], ...] = (
     ("ctx_meta", 701, 771, "Kontextsatz traegt Paper-Titel"),
@@ -202,12 +211,12 @@ def build_ctx_meta_vectors(
     vektor)`` zurueck. Nur die Chunk-Vektoren aendern sich durch #701 -- die
     Query-Vektoren bleiben identisch mit der eingecheckten #708-Fixture.
     """
-    from academic_vault.chunking import PaperMeta, default_context_sentence, resolve_token_counter
-    from academic_vault.embedding_model import E5SmallEmbedder
+    from academic_vault.chunking import PaperMeta, default_context_sentence, model_token_counter
+    from academic_vault.embedding_model import embedder_for
     from academic_vault.embeddings import build_contextual_embedding_text
 
-    counter = resolve_token_counter()
-    embedder = E5SmallEmbedder()
+    counter = model_token_counter(LEGACY_EMBEDDING_MODEL_ID)
+    embedder = embedder_for(LEGACY_EMBEDDING_MODEL_ID)
 
     embedding_texts: dict[str, str] = {}
     for chunk in goldset["chunks"]:
@@ -248,7 +257,7 @@ def build_db(
     nicht.
     """
     from academic_vault.db import VaultDB
-    from academic_vault.embedding_model import DEFAULT_MODEL_ID, serialize_f32
+    from academic_vault.embedding_model import serialize_f32
 
     db_path = str(tmpdir / f"{name}.db")
     db = VaultDB(db_path)
@@ -266,7 +275,9 @@ def build_db(
         if fulltext.strip():
             db.set_fulltext(doc_id, fulltext)
 
-    db.register_embedding_inventory(DEFAULT_MODEL_ID, len(next(iter(chunk_vectors.values()))))
+    db.register_embedding_inventory(
+        LEGACY_EMBEDDING_MODEL_ID, len(next(iter(chunk_vectors.values())))
+    )
 
     id_map: dict[str, str] = {}
     for chunk in goldset["chunks"]:

@@ -16,7 +16,8 @@ Detail, was das Setup genau tut, und wie eine Migration von v5 abläuft.
 | **`uv` oder `pipx`** *(optional)* | Automatische `browser-use`-Installation | `brew install pipx` oder `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 
 **Modell-Download.** Das Plugin nutzt drei lokale Modelle: das Embedding-Modell
-`intfloat/multilingual-e5-small` (~470 MB) für die Vektor-Suche, einen Reranker für die
+`BAAI/bge-m3` (~2,3 GB, seit #732; zuvor `intfloat/multilingual-e5-small`, ~470 MB) für die
+Vektor-Suche, einen Reranker für die
 Trefferreihenfolge und einen NLI-Vorfilter für den Zitatscan — alle drei landen nach
 `~/.academic-research/models`. Schritt 9 des Setups (`model_prefetch.py`) fragt genau
 einmal, ob alle drei jetzt vollständig geladen werden sollen, und nennt dabei die
@@ -39,30 +40,39 @@ danach wiederholten Setup-Lauf (`tests/test_issue_718_model_prefetch.py::TestRes
 
 ### Hardware-Anforderungen
 
-**Untergrenze:** 8 GB RAM, 4 GB freier Plattenplatz. **Keine GPU nötig** — alle drei
+**Untergrenze:** 8 GB RAM, 7 GB freier Plattenplatz (~5,7 GB Modellgewichte plus Puffer für
+den Abbruch-/Resume-Fall oben). **Keine GPU nötig** — alle drei
 Modelle laufen auch auf reiner CPU, dabei aber spürbar langsamer als mit
 Hardware-Beschleunigung (Apple-GPU/CUDA).
 
 | Modell | Platte | Peak-RSS | CPU | Apple GPU |
 |---|---|---|---|---|
-| `intfloat/multilingual-e5-small` (Embedding) | 470 MB | 1,0 GB | 14 ms/Chunk | 6 ms |
+| `BAAI/bge-m3` (Embedding) | 2,3 GB | 2,2 GB | 169 ms/Chunk | 63 ms |
 | `bge-reranker-v2-m3` (Reranker) | 2,3 GB | 2,1 GB | 48 ms/Paar | 26 ms |
 | `bge-m3-zeroshot-v2.0` (NLI-Zitatscan) | 1,1 GB | 1,5 GB | 570 ms/Paar | 38 ms |
 
-Platte gemessen über den `model.safetensors`-Content-Length je HF-Repo (2026-08-07) —
-dieselbe Quelle, aus der der Setup-Prompt seine Gesamtgröße bildet. Peak-RSS/CPU/Apple-GPU
-für Embedding und Reranker gemessen am 2026-08-06 auf Apple M4 Pro (12 Kerne, 24 GB), die
-NLI-Zeile am 2026-08-07 auf derselben Maschine: 30 Läufe nach 3 Warmläufen über
-`nli_prefilter.BgeM3ZeroshotScorer.predict`, Median, Eingabe 210 Token (Quellenabsatz plus
-Behauptungssatz), Peak-RSS als `ru_maxrss` des Messprozesses. Die CPU-Spalte ist der
-Produktionspfad — im Code steht kein `.to("mps")`; die Apple-GPU-Spalte zeigt dieselbe
-Vorhersage nach manuellem Verschieben auf `mps`, also die erreichbare Untergrenze, nicht
-das Standardverhalten. Die Millisekunden hängen an der Eingabelänge und sind zwischen den
-Zeilen nur grob vergleichbar (Embedding je Chunk, Reranker und NLI je Paar).
-`evals/524-nli-prefilter/README.md` zeigt weiterhin die Werte des alten NLI-Modells
-(`mDeBERTa-v3-XNLI`, seit #720 kein Produktivmodell mehr).
+Platte gemessen über den Content-Length-Header des jeweiligen Gewichts-Blobs je HF-Repo
+(`model.safetensors` bei Reranker/NLI, `pytorch_model.bin` bei `bge-m3` — dessen Repo liefert
+kein `safetensors`, siehe HF-Dateiliste; gemessen 2026-08-08 für die Embedding-Zeile,
+2026-08-07 für die anderen beiden) — dieselbe Quelle, aus der der Setup-Prompt seine
+Gesamtgröße bildet. Peak-RSS/Apple-GPU der Embedding-Zeile ebenfalls gemessen 2026-08-08 auf
+Apple M4 Pro (12 Kerne, 12 CPU-Threads, MPS verfügbar): 3 Warmläufe verworfen, 30 Läufe über
+`SentenceTransformer.encode` mit einem repräsentativen ~190-Wort-Chunk, Median, `ru_maxrss`
+über beide Geräte hinweg (CPU zuerst, dann MPS, also der Prozess-Peak über beide Läufe). Die
+CPU-Spalte der Embedding-Zeile übernimmt stattdessen den bereits gemessenen Wert aus
+[`docs/evals/2026-08-08-embedding-candidates-731.md`](../evals/2026-08-08-embedding-candidates-731.md)
+(Indexierung p50, Einzeltext-Encode über das Chunk-Goldset) statt einer zweiten, redundanten
+Messung derselben Größe. Reranker/NLI gemessen am 2026-08-06 bzw. 2026-08-07 auf derselben
+Maschinenklasse: 30 Läufe nach 3 Warmläufen über die jeweilige `predict`-Methode, Median,
+Eingabe 210 Token (Quellenabsatz plus Behauptungssatz), Peak-RSS als `ru_maxrss` des
+Messprozesses. Die CPU-Spalte ist überall der Produktionspfad — im Code steht kein
+`.to("mps")`; die Apple-GPU-Spalte zeigt dieselbe Vorhersage nach manuellem Verschieben auf
+`mps`, also die erreichbare Untergrenze, nicht das Standardverhalten. Die Millisekunden
+hängen an der Eingabelänge und sind zwischen den Zeilen nur grob vergleichbar (Embedding je
+Chunk, Reranker und NLI je Paar). `evals/524-nli-prefilter/README.md` zeigt weiterhin die
+Werte des alten NLI-Modells (`mDeBERTa-v3-XNLI`, seit #720 kein Produktivmodell mehr).
 
-Zusammen ~3,9 GB Plattenplatz für alle drei Modellgewichte. Ein anderes Embedding-Modell
+Zusammen ~5,7 GB Plattenplatz für alle drei Modellgewichte. Ein anderes Embedding-Modell
 lässt sich über `VAULT_EMBEDDING_MODEL` setzen, siehe [Vault-Referenz](../reference/vault.md).
 
 `uv`/`pipx` sind optional: fehlen sie, überspringt das Setup die `browser-use`-CLI und

@@ -70,10 +70,14 @@ class TestEmbeddingModel:
 
         assert DEFAULT_EMBEDDING_DIM == 384
 
-    def test_default_model_is_multilingual_e5_small(self):
+    def test_default_model_is_bge_m3(self):
+        """Seit #732: BAAI/bge-m3 statt intfloat/multilingual-e5-small.
+
+        Entscheidung und Zahlen: docs/evals/2026-08-08-embedding-model-decision-732.md.
+        """
         from academic_vault.embedding_model import DEFAULT_MODEL_ID
 
-        assert DEFAULT_MODEL_ID == "intfloat/multilingual-e5-small"
+        assert DEFAULT_MODEL_ID == "BAAI/bge-m3"
 
     def test_serialize_f32_is_little_endian_float32(self):
         from academic_vault.embedding_model import serialize_f32
@@ -140,6 +144,59 @@ class TestEmbeddingModel:
 
         assert seen == [["query: transformer attention"]]
         assert len(vector) == 384
+
+    def test_bge_m3_embed_documents_uses_no_prefix(self):
+        """BGE-M3-Modellkarte: kein Instruktions-Praefix fuer Dokumente (#732)."""
+        from academic_vault.embedding_model import BgeM3Embedder
+
+        seen: list[list[str]] = []
+
+        class _StubModel:
+            def encode(self, texts, **kwargs):
+                seen.append(list(texts))
+                return [[1.0] + [0.0] * 1023 for _ in texts]
+
+        embedder = BgeM3Embedder(model=_StubModel())
+        embedder.embed_documents(["Erster Chunk", "Zweiter Chunk"])
+
+        assert seen == [["Erster Chunk", "Zweiter Chunk"]]
+
+    def test_bge_m3_embed_query_uses_no_prefix(self):
+        """BGE-M3-Modellkarte: kein Instruktions-Praefix fuer Suchanfragen (#732)."""
+        from academic_vault.embedding_model import BgeM3Embedder
+
+        seen: list[list[str]] = []
+
+        class _StubModel:
+            def encode(self, texts, **kwargs):
+                seen.append(list(texts))
+                return [[1.0] + [0.0] * 1023 for _ in texts]
+
+        embedder = BgeM3Embedder(model=_StubModel())
+        vector = embedder.embed_query("transformer attention")
+
+        assert seen == [["transformer attention"]]
+        assert len(vector) == 1024
+
+    def test_get_embedder_uses_bge_m3_embedder_for_default_model(self, monkeypatch):
+        """get_embedder() waehlt BgeM3Embedder ueber die Klassen-Registrierung (#732)."""
+        import academic_vault.embedding_model as em
+
+        class _StubModel:
+            def encode(self, texts, **kwargs):
+                return [[1.0] + [0.0] * 1023 for _ in texts]
+
+            def get_sentence_embedding_dimension(self):
+                return 1024
+
+        monkeypatch.setattr(em, "_load_backend_model", lambda *a, **k: _StubModel())
+        em.reset_embedder_cache()
+        try:
+            embedder = em.get_embedder()
+            assert isinstance(embedder, em.BgeM3Embedder)
+            assert embedder.dim == 1024
+        finally:
+            em.reset_embedder_cache()
 
     def test_embed_query_normalizes_backend_output(self):
         from academic_vault.embedding_model import E5SmallEmbedder
@@ -903,9 +960,17 @@ class TestMigration:
 
 @pytest.mark.skipif(
     os.environ.get("VAULT_E5_LIVE_TEST") != "1",
-    reason="Live-Modelltest nur mit VAULT_E5_LIVE_TEST=1 (laedt ~500 MB Modell)",
+    reason="Live-Modelltest nur mit VAULT_E5_LIVE_TEST=1 (laedt das konfigurierte "
+    "Embedding-Modell -- seit #732 standardmaessig BAAI/bge-m3, ~2,3 GB)",
 )
-def test_e5_small_real_model_roundtrip():
+def test_default_embedder_real_model_roundtrip():
+    """Roundtrip gegen den TATSAECHLICH konfigurierten Default (#732: bge-m3).
+
+    Frueher e5-small-spezifisch benannt; die Pruefung selbst war schon immer
+    modellunabhaengig (gegen ``embedder.dim``, nicht gegen eine Konstante,
+    #629) und laeuft unveraendert mit jedem via ``VAULT_EMBEDDING_MODEL``
+    konfigurierten Modell.
+    """
     pytest.importorskip("sentence_transformers")
     from academic_vault.embedding_model import get_embedder, reset_embedder_cache
 

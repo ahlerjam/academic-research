@@ -157,7 +157,7 @@ $ vault.get_paper('vaswani2017')
 ```
 
 Der erste `add_paper()`-Aufruf mit PDF lädt das Embedding-Modell
-(`intfloat/multilingual-e5-small`, ~470 MB) nach `~/.academic-research/models` herunter.
+(`BAAI/bge-m3`, ~2,3 GB, seit #732) nach `~/.academic-research/models` herunter.
 Das dauert einmalig spürbar lange und braucht Netz — danach läuft alles lokal. Dieser
 Hinweis steht jetzt im Quickstart, weil er sonst wie ein Hänger wirkt.
 
@@ -362,7 +362,7 @@ Alles hier Aufgeführte ist in dieser Dokumentation eingearbeitet.
 | # | Befund | Konsequenz |
 |---|--------|------------|
 | 1 | Ohne TTY legt das Setup den Arbeitsordner nicht an (sicherer Default, kein Bug) | Hinweis in [installation.md](guide/installation.md) und [troubleshooting.md](guide/troubleshooting.md) |
-| 2 | Der erste `add_paper()`-Lauf lädt ~470 MB Modellgewichte — sieht wie ein Hänger aus | Erwartungsmanagement im README-Quickstart |
+| 2 | Der erste `add_paper()`-Lauf lädt Modellgewichte des Embedding-Modells (2026-08-08 gemessen: ~470 MB für `intfloat/multilingual-e5-small`, seit #732 ~2,3 GB für `BAAI/bge-m3`) — sieht wie ein Hänger aus | Erwartungsmanagement im README-Quickstart |
 | 3 | Die alte README schrieb den `SessionStart`-Hook `onboard-project-uni-prompt.sh` zu; `hooks/hooks.json` verdrahtet dort ein Inline-Bash-Kommando | Korrigiert in [hooks.md](reference/hooks.md), Guard in `tests/test_issue_402_readme_relaunch.py` |
 | 4 | Die alte README stellte pyzotero als selbsttätig nachinstallierte Abhängigkeit dar; der Code fordert nur zur Installation auf | Korrigiert in [installation.md](guide/installation.md), Guard im selben Test |
 | 5 | Der alte Tests-Badge nannte „963 passing / 1111 collected", gemessen wurden 1809/148 | Zahlen-Badge entfernt, siehe [development.md](development.md) |

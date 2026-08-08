@@ -36,7 +36,7 @@ REQUIRED_TOOL_MARKERS = (
     "Python 3.11",
     "Node.js",
     "Git",
-    "multilingual-e5-small",
+    "bge-m3",
     "ocrmypdf",
 )
 
@@ -146,7 +146,7 @@ def test_credentials_section_covers_all_three_paths_together() -> None:
 
 def test_installation_doc_mentions_model_download_size_and_location() -> None:
     text = _installation_text()
-    assert "470 MB" in text, "installation.md nennt die Modellgroesse (~470 MB) nicht."
+    assert "2,3 GB" in text, "installation.md nennt die Modellgroesse (~2,3 GB) nicht."
     assert "~/.academic-research/models" in text, (
         "installation.md nennt den Ablageort des Modell-Downloads nicht."
     )
@@ -154,4 +154,4 @@ def test_installation_doc_mentions_model_download_size_and_location() -> None:
 
 def test_readme_mentions_model_download_size_and_location() -> None:
     text = _read(README)
-    assert "470 MB" in text, "README nennt die Modellgroesse (~470 MB) nicht."
+    assert "2,3 GB" in text, "README nennt die Modellgroesse (~2,3 GB) nicht."

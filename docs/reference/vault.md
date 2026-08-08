@@ -50,7 +50,7 @@ Modell bewusst und unabhängig vom Schalter laden.
 
 | Komponente | Config-Schlüssel | Default | Wirkung bei `false` | Plattenbedarf | Laufzeitkosten |
 |---|---|---|---|---|---|
-| Embedding-Modell (`intfloat/multilingual-e5-small`) | `embedding_enabled` | `true` | `vault.add_paper()`/`vault.search()` laufen FTS5-only, `chunk_embeddings` bleibt leer. | ~470 MB (Modellgewichte) | Ingest: ~1 Chunk/10–50 ms auf CPU; Suche: eine Query-Embedding-Berechnung (<50 ms). |
+| Embedding-Modell (`BAAI/bge-m3`, seit #732) | `embedding_enabled` | `true` | `vault.add_paper()`/`vault.search()` laufen FTS5-only, `chunk_embeddings` bleibt leer. | ~2,27 GB (Modellgewichte) | Ingest: ~169 ms/Chunk auf CPU (Apple M4 Pro, gemessen #731); Suche: eine Query-Embedding-Berechnung (~130–170 ms auf CPU) plus SQLite-KNN (<10 ms). |
 | Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); seit #715 gibt es keinen weiteren Reranking-Weg (Voyage/Cohere ersatzlos entfernt). | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
 | NLI-Zitatscan (`MoritzLaurer/bge-m3-zeroshot-v2.0`) | `nli_prefilter_enabled` | `true` | Der `nli-quote-scan.mjs`-Hook tut nichts — weder Anstoß noch Abholung, kein Zitat wird bewertet oder gemeldet. | ~1,3 GB (0,6 Mrd. Parameter, F16 — Schätzung, HF nennt keine Dateigröße) | ~0,127 s/Zitat auf CPU zzgl. 1,6 s einmaligem Modell-Laden je Worker-Start (gemessen, s. `docs/reference/hooks.md`). |
 | Query-Umformung (Multi-Query, #734) | `query_expansion_enabled` | **`false`** | `vault.search(..., rerank=True)` sucht mit der unveränderten Query (ein `_vec0_search`-Aufruf statt vier) — Default ist AN für die drei Modelle oben, aber AUS für dieses Verfahren (Begründung s. u.). | kein zusätzliches Modell (nutzt die eingeloggte `claude`-CLI-Sitzung, kein Download) | ≈ 6,8 s/Suche (gemessen, s. Abschnitt „Query-Umformung" unten) — nur bei `rerank=True` UND aktivem Schalter. |
@@ -70,9 +70,9 @@ Reciprocal-Rank-Fusion mit dem BM25-Ranking zusammen.
 
 Das Embedding-Backend (`sentence-transformers`) ist eine **reguläre Abhängigkeit** und wird
 von `scripts/setup.sh` bzw. `uv sync` mitinstalliert — ohne es bliebe `chunk_embeddings`
-leer und die Vektor-Suche wäre wirkungslos. Die Modellgewichte (~470 MB) lädt das Plugin
-beim ersten `vault.add_paper()` nach `VAULT_EMBEDDING_CACHE` herunter; danach läuft alles
-lokal und offline.
+leer und die Vektor-Suche wäre wirkungslos. Die Modellgewichte des Defaults `BAAI/bge-m3`
+(~2,27 GB, seit #732) lädt das Plugin beim ersten `vault.add_paper()` nach
+`VAULT_EMBEDDING_CACHE` herunter; danach läuft alles lokal und offline.
 
 Für die Dev-Umgebung bezieht `uv` Torch aus dem CPU-Index von PyTorch
 (`[tool.uv.sources]` in `pyproject.toml`), damit nicht der komplette CUDA-Stack im
@@ -93,7 +93,7 @@ rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
 |---|---|---|
 | `ACADEMIC_RESEARCH_EMBEDDING_ENABLED` | `1` | Kanonischer Schalter (#719). `0` schaltet den Embedding-Ingest in `vault.add_paper()` und die Vektor-Suche in `vault.search()` ab — kein Ladeversuch, kein Download in diesen automatischen Pfaden, `vault.search()` läuft FTS5-only. `get_embedder()` selbst wertet den Schalter nicht aus: explizite Aufrufe (`vault.embed_quote()`, `migrate.reindex_embeddings`) laden das Modell weiterhin. Ebenfalls per `"embedding_enabled": false` in `config/parallel_agents.json` setzbar. |
 | `VAULT_AUTO_EMBED` | `1` | Alt-Name (#372), bleibt als Alias erhalten -- ABER mit dem urspruenglichen, engeren Geltungsbereich: `0` schaltet nur den Embedding-Ingest in `vault.add_paper()` ab, NICHT die Vektor-Suche (kein Verhaltenswechsel gegenüber vor #719). Wer auch `vault.search()` abschalten will, braucht `ACADEMIC_RESEARCH_EMBEDDING_ENABLED=0`. |
-| `VAULT_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Alternatives Modell, beliebige Dimension. Auf einem bereits befüllten Vault braucht ein Wechsel der Dimension einen Re-Index (siehe unten). |
+| `VAULT_EMBEDDING_MODEL` | `BAAI/bge-m3` (seit #732; zuvor `intfloat/multilingual-e5-small`) | Alternatives Modell, beliebige Dimension. Auf einem bereits befüllten Vault braucht ein Wechsel der Dimension einen Re-Index (siehe unten). |
 | `VAULT_EMBEDDING_CACHE` | `~/.academic-research/models` | Ablageort der Modellgewichte. |
 | `VAULT_MAX_CHUNKS` | `64` | Obergrenze der Chunks pro Ingest (Latenzschutz). |
 
@@ -155,6 +155,13 @@ verschwindet ein Mischbestand aus zwei Modellen. Ein gesperrter Vault (Material-
 wird vor der ersten Änderung abgewiesen. Nicht im Scope des Wechsels: die Chunk-Größen in
 `chunking.py` bleiben unverändert, ein Modell mit anderem Kontextfenster braucht dafür
 eine eigene Entscheidung.
+
+Dieser Weg stammt aus #629 und wurde mit dem konkreten Wechsel auf `BAAI/bge-m3`
+(384d → 1024d, seit #732 der Default) an einem synthetischen Bestands-Vault erprobt —
+Ergebnis und Vorgehen stehen in
+[`docs/evals/2026-08-08-embedding-model-decision-732.md`](../evals/2026-08-08-embedding-model-decision-732.md),
+Abschnitt „Migrationsprobe" (Testcode: `tests/test_issue_732_bge_m3_reindex.py`,
+`VAULT_E5_LIVE_TEST=1`).
 
 ## Reranking (`vault.search(..., rerank=True)`)
 

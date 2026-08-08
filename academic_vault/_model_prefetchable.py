@@ -33,8 +33,18 @@ logger = logging.getLogger(__name__)
 # ``MDebertaScorer`` existiert weiterhin als Eval-Kandidat, ist aber nicht
 # mehr der Default. Praefetcht wird hier der tatsaechliche Default
 # (``nli_prefilter.MODEL_ID``), nicht der in der Issue-Tabelle genannte.
+#
+# Der Embedding-Eintrag wechselte mit #732 von ``intfloat/multilingual-e5-
+# small`` (470_641_600 Byte) auf ``BAAI/bge-m3``: gemessen am 2026-08-08 ueber
+# den Content-Length-Header von ``pytorch_model.bin`` (bge-m3 liefert kein
+# ``model.safetensors``, siehe HF-Repo-Dateiliste) -- 2_271_145_830 Byte,
+# deckungsgleich mit der unabhaengigen Messung in
+# ``docs/evals/embedding-truncatability-730.md`` (2,27 GB). Genau ein Eintrag
+# pro tatsaechlich praefetchtem Modell (``build_model_specs()``) -- die
+# Hardware-Tabelle in ``docs/guide/installation.md`` wird darueber ueber
+# ``tests/test_issue_718_model_prefetch.py::TestHardwareTable`` erzwungen.
 APPROX_BYTES: dict[str, int] = {
-    "intfloat/multilingual-e5-small": 470_641_600,
+    "BAAI/bge-m3": 2_271_145_830,
     "BAAI/bge-reranker-v2-m3": 2_271_071_852,
     "MoritzLaurer/bge-m3-zeroshot-v2.0": 1_135_561_748,
 }

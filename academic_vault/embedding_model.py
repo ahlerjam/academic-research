@@ -1,13 +1,20 @@
-"""Lokales Embedding-Modell fuer academic_vault (Issue #372).
+"""Lokales Embedding-Modell fuer academic_vault (Issue #372, seit #732: ``BAAI/bge-m3``).
 
-Kapselt ``intfloat/multilingual-e5-small`` (MIT, 384 Dimensionen) hinter einem
-schmalen ``Embedder``-Protokoll:
+Kapselt das konfigurierte Embedding-Modell (Default seit #732: ``BAAI/bge-m3``,
+MIT, 1024 Dimensionen; zuvor ``intfloat/multilingual-e5-small``, 384d) hinter
+einem schmalen ``Embedder``-Protokoll:
 
-* ``embed_documents(texts)`` — Chunks fuer den Ingest (e5-Praefix ``passage: ``)
-* ``embed_query(text)``      — Suchanfragen (e5-Praefix ``query: ``)
+* ``embed_documents(texts)`` — Chunks fuer den Ingest
+* ``embed_query(text)``      — Suchanfragen
 
-Beide Praefixe sind bei der e5-Familie kein Detail, sondern Teil des
-Trainings-Setups: ohne sie sinkt die Retrieval-Qualitaet spuerbar.
+Das Praefix-Schema haengt vom Modell ab, nicht ist es ein Detail: die
+e5-Familie (``E5SmallEmbedder``, weiterhin genutzt fuer ``VAULT_EMBEDDING_MODEL``-
+Overrides auf e5-kompatible Modelle) verlangt ``passage: ``/``query: `` als Teil
+ihres Trainings-Setups. ``BAAI/bge-m3`` verlangt laut Modellkarte ausdruecklich
+KEINE Instruktion ("the BGE-M3 model no longer requires adding instructions to
+the queries") — ``BgeM3Embedder`` haengt deshalb keine Praefixe an. Ein
+aufgezwungenes ``passage: `` waere hier kein Betriebspfad, sondern eine falsch
+bediente Schnittstelle (belegt in ``docs/evals/2026-08-08-embedding-candidates-731.md``).
 
 Backend-Politik: ``sentence-transformers`` ist eine **harte** Dependency
 (pyproject.toml und scripts/requirements.txt) — ohne sie bliebe
@@ -21,7 +28,7 @@ Torch-Version). Das ist ein Degradations-, kein Absturzpfad: der Vault laeuft
 dann FTS5-only weiter. Der Grund wird geloggt, damit eine leere
 ``chunk_embeddings``-Tabelle nicht wieder unbemerkt bleibt.
 
-Das Modell selbst (~470 MB) wird beim ersten Gebrauch nach
+Das Modell selbst (~2,27 GB) wird beim ersten Gebrauch nach
 ``default_cache_dir()`` heruntergeladen und danach von dort geladen.
 """
 
@@ -35,15 +42,32 @@ from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
-# Dimensionalitaet von intfloat/multilingual-e5-small und damit die Breite, in
-# der ein FRISCHER Vault seine vec0-Tabellen anlegt (Issue #629). Bewusst KEINE
-# Aussage mehr ueber "die" Embedding-Dimension: die eines Bestands steht in
-# ``embedding_meta`` (siehe schema.sql), die eines Modells liefert der Embedder
-# selbst (``Embedder.dim``). Wer hier wieder eine globale Konstante hineinliest,
-# baut den Fehler aus #629 nach.
+# Legacy-Breite: die Dimension, in der vec0-Tabellen angelegt werden, solange
+# ``embedding_meta`` noch keine Zeile traegt (frischer Vault vor dem ersten
+# Embed, oder Bestands-DB ohne je registriertes Inventar, Issue #629). Bewusst
+# KEINE Aussage mehr ueber "die" Embedding-Dimension: die eines Bestands steht
+# in ``embedding_meta`` (siehe schema.sql), die eines Modells liefert der
+# Embedder selbst (``Embedder.dim``). Wer hier wieder eine globale Konstante
+# hineinliest, baut den Fehler aus #629 nach.
+#
+# Bleibt bewusst bei 384, auch nachdem #732 ``DEFAULT_MODEL_ID`` auf ein 1024d-
+# Modell umgestellt hat: JEDER Bestands-Vault, der vor #732 existierte, wurde
+# mit einem 384d-Modell befuellt -- das ist die Annahme, die dieser Fallback
+# absichert. Ein frischer Vault ohne Bestand ist davon nicht betroffen:
+# ``register_embedding_inventory()`` erkennt den leeren Bestand und baut
+# ``chunk_vectors``/``quote_embeddings`` beim ersten echten Embed selbstheilend
+# in der tatsaechlichen Modell-Dimension neu auf (``_rebuild_vector_tables``) --
+# der Wert hier ist nie mehr als eine Uebergangsbreite fuer ``init_schema()``.
 DEFAULT_EMBEDDING_DIM = 384
 
-DEFAULT_MODEL_ID = "intfloat/multilingual-e5-small"
+# Seit #732: BAAI/bge-m3 (MIT, 1024d) statt intfloat/multilingual-e5-small
+# (MIT, 384d). Entscheidung und Zahlen: docs/evals/2026-08-08-embedding-model-
+# decision-732.md, Datenbasis docs/evals/2026-08-08-embedding-candidates-731.md.
+# Kurzfassung: BGE-M3 liefert auf dem Chunk-Goldset aus #708 den besten Recall
+# (0,9808) bei CPU-Indexierungszeiten, die auf einem Laptop ohne GPU praktikabel
+# bleiben (168,6 ms/Chunk) -- anders als der qualitativ ebenbuertige Kandidat
+# qwen3-384, der trotz Migrationsfreiheit ~80x so lange je Chunk braucht.
+DEFAULT_MODEL_ID = "BAAI/bge-m3"
 
 # Dokumentierter Ausweg bei Dimensions-Mismatch. Steht hier, weil die
 # Fehlermeldung aus mehreren Modulen erzeugt wird und ueberall denselben
@@ -221,11 +245,28 @@ def _load_backend_model(model_id: str, cache_dir: str | None = None) -> Any:
 
 
 class E5SmallEmbedder:
-    """Embedder auf Basis von ``intfloat/multilingual-e5-small``.
+    """Embedder mit e5-Praefixschema (``passage: ``/``query: ``).
+
+    Urspruenglich fuer ``intfloat/multilingual-e5-small`` geschrieben (#372);
+    das Praefixschema ist Teil des Trainings-Setups der GESAMTEN e5-Familie
+    (auch ``multilingual-e5-large``), deshalb bleibt diese Klasse die
+    Basisimplementierung fuer jedes ueber ``VAULT_EMBEDDING_MODEL`` gesetzte
+    e5-kompatible Modell -- der Klassenname ist historisch, keine Aussage
+    ueber die konfigurierte Modell-ID. Fuer Modelle mit ANDEREM Prompting
+    (seit #732: ``BAAI/bge-m3``, kein Praefix) siehe :class:`BgeM3Embedder`.
+
+    ``query_prefix``/``passage_prefix`` sind Klassenattribute, keine
+    Instanzattribute -- eine Unterklasse veraendert sie durch simples
+    Ueberschreiben, ohne ``__init__`` anzufassen (siehe ``BgeM3Embedder``).
 
     ``model`` kann injiziert werden (Tests/alternative Backends); ohne
     Injektion wird das Backend beim ersten Encode lazy geladen.
     """
+
+    #: Praefixe dieser Embedder-Klasse (Issue #732: konfigurierbar je
+    #: Unterklasse statt hart auf die Modul-Konstanten verdrahtet).
+    query_prefix: str = QUERY_PREFIX
+    passage_prefix: str = PASSAGE_PREFIX
 
     def __init__(
         self,
@@ -273,7 +314,7 @@ class E5SmallEmbedder:
             reported = getter()
             if isinstance(reported, int) and reported > 0:
                 return reported
-        probe = model.encode([PASSAGE_PREFIX + "dimension probe"], normalize_embeddings=True)
+        probe = model.encode([self.passage_prefix + "dimension probe"], normalize_embeddings=True)
         return len(list(probe[0]))
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
@@ -286,10 +327,62 @@ class E5SmallEmbedder:
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        return self._encode([PASSAGE_PREFIX + t for t in texts])
+        return self._encode([self.passage_prefix + t for t in texts])
 
     def embed_query(self, text: str) -> list[float]:
-        return self._encode([QUERY_PREFIX + text])[0]
+        return self._encode([self.query_prefix + text])[0]
+
+
+class BgeM3Embedder(E5SmallEmbedder):
+    """Embedder fuer ``BAAI/bge-m3`` (Issue #732): kein Instruktions-Praefix.
+
+    Nur das Prompting unterscheidet sich von :class:`E5SmallEmbedder` --
+    Backend-Laden, Dimension-Probe und L2-Normalisierung sind identisch, daher
+    Unterklasse statt Duplikat. Modellkarte von ``BAAI/bge-m3``: "the BGE-M3
+    model no longer requires adding instructions to the queries" -- weder
+    Query- noch Passage-Praefix. Ein aufgezwungenes ``passage: ``/``query: ``
+    waere keine Betriebstreue, sondern eine falsch bediente Schnittstelle
+    (gemessen in ``docs/evals/2026-08-08-embedding-candidates-731.md``, das
+    denselben Kandidaten mit demselben Prompting-Prinzip fuehrt).
+    """
+
+    query_prefix = ""
+    passage_prefix = ""
+
+
+# Modell-IDs, die eine ANDERE Embedder-Klasse als die e5-Basisimplementierung
+# brauchen -- bislang nur bge-m3 (#732). Ein per VAULT_EMBEDDING_MODEL
+# gesetztes, hier nicht gelistetes Modell faellt auf E5SmallEmbedder zurueck;
+# das war schon vor #732 so (jedes Nicht-e5-Modell bekam stillschweigend
+# e5-Praefixe aufgezwungen) und wird durch diese Registrierung nur fuer den
+# jetzt produktiven Default korrigiert, nicht generell geloest.
+_EMBEDDER_CLASSES: dict[str, type["E5SmallEmbedder"]] = {
+    "BAAI/bge-m3": BgeM3Embedder,
+}
+
+
+def embedder_for(
+    model_id: str, cache_dir: str | None = None, model: Any | None = None
+) -> "E5SmallEmbedder":
+    """Baut den Embedder MIT DEM RICHTIGEN Prompting fuer ``model_id`` (#732).
+
+    Reine Konstruktion ohne Laden, Caching oder Fehlerbehandlung -- das ist
+    :func:`get_embedder`s Job. Diese Funktion existiert, damit Aufrufer, die
+    einen Embedder fuer eine EXPLIZITE (ggf. nicht produktive) Modell-ID
+    brauchen -- Eval-/Fixture-Skripte, die bewusst ein bestimmtes historisches
+    Modell reproduzieren, etwa ``scripts/eval/build_retrieval_chunk_goldset.py``
+    fuer #708/#722/#733s eingefrorenes ``intfloat/multilingual-e5-small`` --
+    nicht mehr ``E5SmallEmbedder(...)`` direkt konstruieren muessen. Wer das
+    tut, bekommt IMMER e5-Praefixe aufgezwungen, unabhaengig von der
+    tatsaechlichen Modell-ID -- das war vor #732 folgenlos (nur e5-kompatible
+    Modelle liefen produktiv), ist es seit dem bge-m3-Default nicht mehr:
+    ``E5SmallEmbedder()`` ohne Argument nimmt sonst ``DEFAULT_MODEL_ID`` als
+    Modell-ID (jetzt bge-m3) UND haengt trotzdem ``passage: ``/``query: `` an
+    -- exakt die "falsch bediente Schnittstelle", die #731 und
+    :class:`BgeM3Embedder` ausschliessen wollen.
+    """
+    embedder_cls = _EMBEDDER_CLASSES.get(model_id, E5SmallEmbedder)
+    return embedder_cls(model_id=model_id, cache_dir=cache_dir, model=model)
 
 
 # Cache pro Modell-ID: ``None`` bedeutet "Backend fehlt" und wird bewusst
@@ -331,7 +424,7 @@ def get_embedder(model_id: str | None = None) -> Embedder | None:
 
     embedder: Embedder | None
     try:
-        candidate = E5SmallEmbedder(model_id=key)
+        candidate = embedder_for(key)
         candidate.load()
         embedder = candidate
         _EMBEDDER_ERROR_CACHE[key] = None

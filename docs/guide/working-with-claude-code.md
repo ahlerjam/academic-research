@@ -178,7 +178,7 @@ Vier Stellen kosten spürbar mehr als der Rest:
 |---|---|---|
 | Tiefensuche über Browser-Module | Jede Seite wird geladen, gerendert und gelesen; dazu Wartezeit pro Modul | Modus senken, Module gezielt wählen |
 | Relevanz-Scoring großer Treffermengen | Ein Modellaufruf pro Papergruppe | kleinere Treffermenge (`--limit`), Modus senken |
-| Volltext plus Embedding-Erstlauf | Erstes PDF zieht die Modellgewichte (~470 MB) und indexiert den ganzen Text | einmalig hinnehmen, danach offline |
+| Volltext plus Embedding-Erstlauf | Erstes PDF zieht die Modellgewichte (~2,3 GB) und indexiert den ganzen Text | einmalig hinnehmen, danach offline |
 | Kapitelentwürfe | Langer Output auf einem starken Modell, oft mehrfach überarbeitet | eigene Sitzung pro Kapitel |
 
 **Woran du es merkst, bevor es teuer geworden ist:** Der Verbrauch steigt mit der Menge an

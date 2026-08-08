@@ -21,10 +21,15 @@ Schritt 1.
   `backend-missing` statt Zahlen — `academic_vault/tables.py`. Die `meta-analysis`-Pipeline
   übernimmt Effektstärken (`yi`, `vi`) ohnehin nur aus einem vom Nutzer bestätigten
   Eingabe-JSON, nie automatisch aus einer erkannten Tabelle — `scripts/meta_analysis.py`.
-- **Kein unbegrenztes Kontextfenster beim Embedding.** Das Vektor-Modell
-  `intfloat/multilingual-e5-small` schneidet Eingaben über seinem harten Limit
-  stillschweigend ab. Bei deutscher Fachprosa (≈2,47 Tokens/Wort) liegt die nutzbare
-  Chunkgröße bei rund 180 Wörtern — `academic_vault/chunking.py` (`TARGET_TOKENS`).
+- **Kein unbegrenztes Kontextfenster beim Embedding.** Das Chunking-Fenster ist mit 512
+  Tokens fest verdrahtet (`academic_vault/chunking.py`, `MODEL_MAX_TOKENS`) — bewusst
+  unabhängig davon, wie groß das Kontextfenster des konfigurierten Modells tatsächlich ist
+  (`BAAI/bge-m3`, Default seit #732, trägt nativ 8192 Tokens; das wird absichtlich nicht
+  ausgenutzt, siehe Modul-Docstring). `SentenceTransformer.encode` schneidet Eingaben über
+  dem tatsächlichen Modell-Limit stillschweigend ab. Bei deutscher Fachprosa liegt die
+  nutzbare Chunkgröße je nach Tokenizer bei rund 180–220 Wörtern (≈2,47 Tokens/Wort bei
+  `intfloat/multilingual-e5-small`, dem Default vor #732; ≈2,0 Tokens/Wort bei `BAAI/bge-m3`,
+  Stichprobenmessung 2026-08-08) — `academic_vault/chunking.py` (`TARGET_TOKENS`).
 - **Keine eigene Datenerhebung und keine Statistik-Suite.** Interviews, Fragebögen,
   Laborwerte, Signifikanztests und Regressionsmodelle liegen außerhalb des Plugins.
   `scripts/meta_analysis.py` rechnet eine DerSimonian-Laird-Meta-Analyse auf bereits

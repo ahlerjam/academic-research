@@ -233,9 +233,7 @@ def test_prerequisites_table_exists_before_the_first_command() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "component", ["Claude Code", "Python 3.11+", "Node.js", "Git", "multilingual-e5-small"]
-)
+@pytest.mark.parametrize("component", ["Claude Code", "Python 3.11+", "Node.js", "Git", "bge-m3"])
 def test_prerequisites_table_names_component(component: str) -> None:
     """Jede tragende Voraussetzung steht in der Tabelle."""
     joined = "\n".join(" | ".join(row) for row in _prerequisite_rows())
@@ -263,29 +261,96 @@ def test_node_requirement_is_backed_by_the_hook_wiring() -> None:
     assert "Node.js" in joined, "hooks.json braucht node, die Tabelle verschweigt es."
 
 
-def _model_download_size_mb() -> int:
-    """Groessenangabe aus der Code-Quelle (academic_vault/embedding_model.py)."""
-    src = _read(REPO_ROOT / "academic_vault" / "embedding_model.py")
-    m = re.search(r"~(\d+)\s*MB", src)
-    assert m, "academic_vault/embedding_model.py nennt keine Modellgroesse."
-    return int(m.group(1))
+#: Bounded-Token-Match fuer "bge-m3", der NICHT auf "bge-m3-zeroshot-v2.0"
+#: (NLI-Modell) oder "bge-reranker-v2-m3" anschlaegt -- alle drei Modell-IDs
+#: teilen sich Teilstrings, seit der Embedding-Default mit #732 selbst
+#: "bge-m3" heisst (zuvor war er der einzige MB-skalige der drei Kandidaten
+#: und damit ueber die Einheit allein unterscheidbar, siehe Kommentar unten).
+_BGE_M3_TOKEN_RE = re.compile(r"(?<![\w-])bge-m3(?![\w-])")
+
+#: Fenster um eine Groessenangabe, in dem der bge-m3-Token stehen muss, damit
+#: sie als "das Embedding-Modell" zaehlt.
+_MODEL_SIZE_WINDOW = 45
+
+
+def _cell_scoped_context(text: str, start: int, end: int, window: int) -> str:
+    """Kontext um ``text[start:end]``, begrenzt auf ``window`` Zeichen je Seite
+    UND niemals ueber eine Tabellenzellen- oder Zeilengrenze (``|``, ``\\n``)
+    hinaus (PR-Review zu #732: ein reines Zeichenfenster griff in
+    ``docs/guide/installation.md``s Hardware-Tabelle in die Nachbarspalte
+    derselben Zeile ueber -- Peak-RSS statt Platte -- und war dort nur
+    zufaellig innerhalb der Toleranz gruen).
+
+    Wo eine Groessenangabe und ihr Modellname in DERSELBEN Tabellenzelle
+    stehen (README.md: alle drei Modelle in einer Zelle), bleibt der Treffer
+    erhalten. Wo sie in verschiedenen SPALTEN derselben Zeile stehen
+    (installation.md: ein Modell je Spalte), wird die Angabe hier bewusst
+    NICHT mehr geprueft -- das deckt strukturiert und robust bereits
+    ``tests/test_issue_718_model_prefetch.py::TestHardwareTable``.
+    """
+    raw_left = max(0, start - window)
+    raw_right = min(len(text), end + window)
+    left_boundary = raw_left
+    for i in range(start - 1, raw_left - 1, -1):
+        if text[i] in "|\n":
+            left_boundary = i + 1
+            break
+    right_boundary = raw_right
+    for i in range(end, raw_right):
+        if text[i] in "|\n":
+            right_boundary = i
+            break
+    return text[left_boundary:right_boundary]
+
+
+def _model_download_bytes() -> float:
+    """Download-Groesse aus der Code-Quelle (``APPROX_BYTES``, seit #718 die
+    einzige Quelle -- ``academic_vault/embedding_model.py`` selbst nennt seit
+    #732 keine Zahl mehr in Ziffern, siehe dessen Docstring)."""
+    from academic_vault._model_prefetchable import APPROX_BYTES
+    from academic_vault.embedding_model import DEFAULT_MODEL_ID
+
+    size = APPROX_BYTES.get(DEFAULT_MODEL_ID)
+    assert size is not None, f"APPROX_BYTES kennt DEFAULT_MODEL_ID '{DEFAULT_MODEL_ID}' nicht."
+    return float(size)
 
 
 def test_model_download_size_matches_the_code_comment() -> None:
-    """Jede Modellgroessen-Angabe in der Doku stimmt mit der Code-Quelle ueberein."""
-    expected = _model_download_size_mb()
+    """Jede bge-m3-Groessenangabe in der Doku stimmt mit ``APPROX_BYTES`` ueberein.
+
+    Bis #732 genuegte ein reiner MB-Regex: das Embedding-Modell war das
+    einzige MB-skalige der drei lokalen Modelle, Reranker und NLI standen
+    immer in GB -- die Einheit allein hielt Verwechslungen fern. Seit bge-m3
+    (2,3 GB) selbst GB-skalig ist UND Teilstring von zwei anderen Modell-IDs
+    ist (``bge-reranker-v2-m3``, ``bge-m3-zeroshot-v2.0``), braucht es
+    stattdessen einen woertlichen, wortgrenzenscharfen "bge-m3"-Treffer in
+    einem engen, zell-/zeilenscharf begrenzten Fenster um die Zahl (siehe
+    :func:`_cell_scoped_context` -- PR-Review zu #732: ein reines
+    Zeichenfenster griff sonst in installation.md's Hardware-Tabelle in die
+    Peak-RSS-Nachbarspalte derselben Zeile ueber) sowie den Ausschluss von
+    Stellen, die im selben Fenster "e5-small" nennen (bewusst gehaltene
+    historische Vergleichswerte, z. B. installation.md's "zuvor ~470 MB").
+    """
+    expected_bytes = _model_download_bytes()
     wrong: list[str] = []
     for doc in D.doc_surface():
         if not doc.exists():
             continue
         text = _read(doc)
-        for m in re.finditer(r"~?(\d+)\s*MB", text):
-            context = text[max(0, m.start() - 200) : m.end() + 200]
-            if "Modell" not in context and "e5-small" not in context:
-                continue  # andere MB-Angabe (z. B. Log-Rotation)
-            if int(m.group(1)) != expected:
+        for m in re.finditer(r"~?([\d,]+)\s*(MB|GB)", text):
+            near_ctx = _cell_scoped_context(text, m.start(), m.end(), _MODEL_SIZE_WINDOW)
+            if not _BGE_M3_TOKEN_RE.search(near_ctx):
+                continue  # keine Aussage ueber das Embedding-Modell
+            if "e5-small" in near_ctx:
+                continue  # bewusst gehaltener historischer Vergleichswert
+            factor = 1_000_000 if m.group(2) == "MB" else 1_000_000_000
+            documented_bytes = float(m.group(1).replace(",", ".")) * factor
+            if abs(documented_bytes - expected_bytes) / expected_bytes > 0.05:
                 line = text[: m.start()].count("\n") + 1
-                wrong.append(f"{doc.relative_to(REPO_ROOT)}:{line}: {m.group(0)} != ~{expected} MB")
+                wrong.append(
+                    f"{doc.relative_to(REPO_ROOT)}:{line}: {m.group(0)} "
+                    f"(!= ~{expected_bytes / 1_000_000_000:.2f} GB, Toleranz 5 %)"
+                )
     assert not wrong, f"Modell-Downloadgroesse driftet: {wrong}"
 
 

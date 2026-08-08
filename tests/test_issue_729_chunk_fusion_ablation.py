@@ -17,6 +17,7 @@ import json
 import os
 import sqlite3
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -161,16 +162,33 @@ class _FixedVectorEmbedder:
         return self._vector
 
 
+@contextmanager
+def _cached_embedder(embedder):
+    """Belegt ``get_embedder()`` mit ``embedder`` vor -- Cache-Key UND
+    ``VAULT_EMBEDDING_MODEL`` (PR-Review zu #732): ``_server._vec0_search``
+    ruft ``get_embedder()`` OHNE ``model_id`` auf, das loest ueber
+    ``DEFAULT_MODEL_ID`` auf (seit #732 ``bge-m3``, nicht mehr
+    ``embedder.model_id``) -- ohne den Env-Override traefe der Cache nie."""
+    prior_cache = dict(embedding_model._EMBEDDER_CACHE)
+    embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
+    prior_env_model = os.environ.get("VAULT_EMBEDDING_MODEL")
+    os.environ["VAULT_EMBEDDING_MODEL"] = embedder.model_id
+    try:
+        yield
+    finally:
+        embedding_model._EMBEDDER_CACHE.clear()
+        embedding_model._EMBEDDER_CACHE.update(prior_cache)
+        if prior_env_model is None:
+            os.environ.pop("VAULT_EMBEDDING_MODEL", None)
+        else:
+            os.environ["VAULT_EMBEDDING_MODEL"] = prior_env_model
+
+
 def test_vec0_search_paper_level_keeps_only_best_chunk_per_paper(tmp_path) -> None:
     db_path = _build_two_paper_db(tmp_path)
     embedder = _FixedVectorEmbedder([1.0, 0.0, 0.0, 0.0])
-    prior = dict(embedding_model._EMBEDDER_CACHE)
-    embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
-    try:
+    with _cached_embedder(embedder):
         results = _vec0_search_paper_level(db_path, "irrelevant query text", k=10)
-    finally:
-        embedding_model._EMBEDDER_CACHE.clear()
-        embedding_model._EMBEDDER_CACHE.update(prior)
 
     paper_ids = [r["paper_id"] for r in results]
     assert paper_ids.count("p1") == 1  # nicht zwei Eintraege trotz zwei Chunks
@@ -183,13 +201,8 @@ def test_vec0_search_paper_level_keeps_only_best_chunk_per_paper(tmp_path) -> No
 def test_vec0_search_paper_level_truncates_to_k(tmp_path) -> None:
     db_path = _build_two_paper_db(tmp_path)
     embedder = _FixedVectorEmbedder([1.0, 0.0, 0.0, 0.0])
-    prior = dict(embedding_model._EMBEDDER_CACHE)
-    embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
-    try:
+    with _cached_embedder(embedder):
         results = _vec0_search_paper_level(db_path, "q", k=1)
-    finally:
-        embedding_model._EMBEDDER_CACHE.clear()
-        embedding_model._EMBEDDER_CACHE.update(prior)
     assert len(results) == 1
 
 

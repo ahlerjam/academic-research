@@ -442,8 +442,17 @@ def run_quality_ablation(
         # zu laden (kein Netzzugriff, kein VAULT_E5_LIVE_TEST=1 noetig) -- der
         # Playback-Embedder erfuellt dasselbe Embedder-Protokoll
         # (embed_query/embed_documents), siehe run_retrieval_chunk_goldset.py.
+        # VAULT_EMBEDDING_MODEL zusaetzlich zum Cache-Key gesetzt (PR-Review zu
+        # #732, wie bereits in _run_latency_ablation unten): _server._vec0_search
+        # ruft get_embedder() OHNE model_id auf, die also ueber
+        # DEFAULT_MODEL_ID aufloest -- seit #732 (bge-m3) nicht mehr dieselbe
+        # ID wie embedder.model_id (das #708-Goldset ist e5-small). Ohne den
+        # Env-Override traefe der Cache nie, get_embedder() versuchte bge-m3
+        # zu laden (im Testlauf geblockt) und der Lauf misste FTS5-only.
         prior_cache = dict(embedding_model._EMBEDDER_CACHE)
         embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
+        prior_env_model = os.environ.get("VAULT_EMBEDDING_MODEL")
+        os.environ["VAULT_EMBEDDING_MODEL"] = embedder.model_id
         try:
             combos = {
                 "vorher": {"chunk_fts_index": False, "chunk_fusion": False},
@@ -457,6 +466,10 @@ def run_quality_ablation(
         finally:
             embedding_model._EMBEDDER_CACHE.clear()
             embedding_model._EMBEDDER_CACHE.update(prior_cache)
+            if prior_env_model is None:
+                os.environ.pop("VAULT_EMBEDDING_MODEL", None)
+            else:
+                os.environ["VAULT_EMBEDDING_MODEL"] = prior_env_model
 
     deltas = compute_deltas(results)
     regressions = {

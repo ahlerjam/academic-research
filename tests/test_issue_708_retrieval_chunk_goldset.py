@@ -82,10 +82,21 @@ class TestChunkContract:
             ), chunk["chunk_id"]
 
     def test_manifest_records_passage_prefix_and_model(self, goldset, vectors):
-        from academic_vault.embedding_model import DEFAULT_MODEL_ID, PASSAGE_PREFIX
+        """Fixture-Manifest ist eine Momentaufnahme (#708), keine Live-Ableitung.
+
+        Verglichen wird gegen den Kandidaten, mit dem die eingecheckten
+        Vektoren TATSAECHLICH erzeugt wurden -- nicht gegen den heutigen
+        ``DEFAULT_MODEL_ID``. Der wechselte mit #732 auf ``BAAI/bge-m3``; das
+        macht dieses Manifest nicht falsch, nur historisch (siehe Kopf von
+        ``docs/evals/retrieval-chunk-goldset-708.md``: "Historisches Dokument").
+        Eine Kopplung an die Live-Konstante wuerde bei jedem kuenftigen
+        Modellwechsel erneut brechen, ohne dass die Fixture selbst veraltet
+        waere.
+        """
+        from academic_vault.embedding_model import PASSAGE_PREFIX
 
         meta = goldset["meta"]
-        assert meta["model_id"] == DEFAULT_MODEL_ID
+        assert meta["model_id"] == "intfloat/multilingual-e5-small"
         assert meta["passage_prefix"] == PASSAGE_PREFIX
         assert meta["query_prefix"] == "query: "
         assert meta["dim"] == 384

@@ -335,6 +335,35 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Embedding-Default-Modell wechselt von `intfloat/multilingual-e5-small`
+  (384d) auf `BAAI/bge-m3` (1024d) — Modellentscheidung getroffen und
+  festgehalten (#732, Datenbasis #731).** Auf dem Chunk-Goldset aus #708
+  trägt `bge-m3` signifikant gegenüber der Baseline in Recall@10 (0,9808) und
+  nDCG@10, schließt die Sprachlücke (cross-language nDCG 0,00 → 0,82) und ist
+  vom qualitativ ebenbürtigen, aber migrationsfreien Kandidaten `qwen3-384`
+  statistisch nicht unterscheidbar — den Ausschlag gibt die
+  CPU-Indexierungszeit (AC2, Hardwarekosten ohne GPU explizit gewichtet):
+  168,6 ms/Chunk bei `bge-m3` gegenüber ~2233 ms/Chunk bei `qwen3-384` (~80x
+  langsamer als der Status quo, ~14x langsamer als `bge-m3`) — eine Kosten,
+  die bei jedem künftigen `add_paper()`-Aufruf erneut anfällt, nicht nur
+  einmalig bei der Migration. Neue Klasse `BgeM3Embedder`
+  (`academic_vault/embedding_model.py`): kein Instruktions-Präfix, anders als
+  die e5-Familie (`passage: `/`query: `), laut `bge-m3`-Modellkarte
+  ausdrücklich nicht nötig. `DEFAULT_EMBEDDING_DIM` bleibt bewusst bei 384
+  (Legacy-Fallback-Breite für Bestands-Vaults ohne `embedding_meta`-Eintrag,
+  entkoppelt von `DEFAULT_MODEL_ID` seit #629). Der Reindex-Weg für
+  Bestands-Vaults (`migrate.reindex_embeddings`, `--reindex-embeddings`,
+  aus #629) ist unverändert und wurde für diesen konkreten Wechsel an einem
+  synthetischen Bestands-Vault mit dem echten Modell erprobt
+  (`tests/test_issue_732_bge_m3_reindex.py`, `VAULT_E5_LIVE_TEST=1`):
+  384d → 1024d, vec0-Spalten verbreitert, KNN-Suche findet nach dem Wechsel
+  wieder das passende Paper. Modell-Download wächst von ~470 MB auf ~2,3 GB
+  (Setup-Prompt, Lazy-Load-Meldung, Hardware-Tabelle in
+  `docs/guide/installation.md` entsprechend aktualisiert). Vollständige
+  Abwägung inkl. Signifikanztest und Bedingungen für eine erneute Prüfung:
+  `docs/evals/2026-08-08-embedding-model-decision-732.md`. Epic #712 bleibt
+  offen (Late Chunking als zweiter, eigenständiger Teil steht noch aus).
+
 - **Lokaler Reranker läuft über `CrossEncoder` und ist per Default aktiv
   (#714, Verhaltensänderung gegenüber #376).** `_load_local_reranker_backend()`
   lud bisher `FlagEmbedding.FlagReranker` — ein Paket, das bewusst kein
