@@ -427,7 +427,16 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
   context_sentence TEXT NOT NULL,
   embedding_text   TEXT NOT NULL,
   embedding_vector BLOB,
-  created_at       INTEGER NOT NULL
+  created_at       INTEGER NOT NULL,
+  -- Fundstelle des Chunks (Issue #728): additiv, nullable -- Bestandschunks
+  -- vor dieser Migration und Fallback-Kandidaten ohne echten Chunk haben
+  -- keine Lokation. `chunking.chunk_pages()` liefert diese Felder seit #708
+  -- pro Chunk (`Chunk.section_title`/`.page_start`/`.page_end`), sie wurden
+  -- bis #728 nur in den Kontextsatz-Text hineingerechnet statt strukturiert
+  -- gespeichert.
+  section_title    TEXT,
+  page_start       INTEGER,
+  page_end         INTEGER
 );
 
 -- FTS5-Index ueber Chunk-Texte (Issue #726). `papers_fts`/`papers_trgm`

@@ -1125,6 +1125,16 @@ def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) 
     if row is not None:
         entry["chunk_id"] = row["chunk_id"]
         entry["text"] = row["chunk_text"]
+        # chunk_fts (virtuelle FTS5-Tabelle) traegt keine Lokationsspalten --
+        # Nachschlag gegen chunk_embeddings fuer die Fundstelle (Issue #728).
+        location = conn.execute(
+            "SELECT section_title, page_start, page_end FROM chunk_embeddings WHERE chunk_id = ?",
+            (row["chunk_id"],),
+        ).fetchone()
+        if location is not None:
+            entry["section_title"] = location["section_title"]
+            entry["page_start"] = location["page_start"]
+            entry["page_end"] = location["page_end"]
     else:
         entry["chunk_id"] = f"fts-paper::{paper_id}"
     return entry
@@ -1155,6 +1165,12 @@ def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]
     den Gewinner-Eintrag gemergt. Das bewahrt das Highlighting und die
     FTS5-Relevanzangabe auch dann, wenn ein vec0-Treffer des gleichen Papers
     einen hoeherem Reranking-Score hat.
+
+    Fundstelle (Issue #728, AC2): der Gewinner-Chunk (nicht ein Merge
+    mehrerer Chunks) liefert 'section' (aus 'section_title') sowie
+    'page_start'/'page_end' fuer die Ausgabe -- ``None``, wenn der Chunk
+    keine Lokation traegt (Bestandschunks vor der Migration, oder
+    Fallback-Snippet-Kandidaten ohne echten Chunk).
 
     Args:
         chunk_results: Chunk-level Kandidaten aus ``apply_reranker`` (bzw.
@@ -1210,6 +1226,17 @@ def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]
         ):
             # FTS5-Snippet mit Highlighting ueberschreibt vec0-Snippet
             winner["snippet"] = fts5_snippet_owner["snippet"]
+
+    # Fundstelle des Gewinner-Chunks in benannte Ausgabefelder spiegeln
+    # (Issue #728, AC2). 'section' statt 'section_title', damit der
+    # paperzentrierte Vertrag nicht suggeriert, das Paper selbst haette
+    # einen Titel-Alias -- die interne chunk-Feldbezeichnung bleibt intern.
+    # None-sicher: Bestandschunks vor der Migration und Fallback-Kandidaten
+    # ohne echten Chunk tragen keine Lokation.
+    for winner in best_per_paper.values():
+        winner["section"] = winner.get("section_title")
+        winner["page_start"] = winner.get("page_start")
+        winner["page_end"] = winner.get("page_end")
 
     ranked = sorted(best_per_paper.values(), key=_score, reverse=True)
     return ranked[:k]
@@ -1320,6 +1347,11 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
                 # 'text' den laengeren Chunk-Text fuer apply_reranker erhaelt.
                 "text": chunk_text,
                 "distance": hit["distance"],
+                # Fundstelle des Chunks (Issue #728), None fuer Bestandschunks
+                # vor der Migration.
+                "section_title": hit.get("section_title"),
+                "page_start": hit.get("page_start"),
+                "page_end": hit.get("page_end"),
             }
         )
     return results
