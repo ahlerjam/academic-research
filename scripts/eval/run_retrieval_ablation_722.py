@@ -178,9 +178,7 @@ def search_papers_pre_702(db_path: str, query: str, k: int = DEFAULT_K) -> list[
         _server._vec0_search(db_path, raw_query, k=k), fts_results, k=60, top_n=k
     )
     # PRE-#702: bewusst KEIN _fill_missing_reranker_text(db_path, fused).
-    return apply_reranker(
-        query=sanitized, candidates=fused, voyage_api_key=None, cohere_api_key=None
-    )
+    return apply_reranker(query=sanitized, candidates=fused)
 
 
 # ---------------------------------------------------------------------------
