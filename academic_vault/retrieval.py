@@ -47,7 +47,55 @@ ENV_LOCAL_RERANKER_MODEL = "VAULT_RERANK_LOCAL_MODEL"
 # Opt-out fuer den per-Default-aktiven lokalen Reranker (#714): jeder
 # Wahrheitswert ausser "" schaltet ihn ab, analog dem Muster anderer
 # Boolean-Env-Schalter im Repo (Praesenz-Check, kein "1"-Spezialfall).
+# Bleibt seit #719 als Alias-Sonderfall neben dem kanonischen Schalter
+# erhalten -- siehe resolve_reranker_enabled().
 ENV_LOCAL_RERANKER_DISABLE = "VAULT_RERANK_LOCAL_DISABLE"
+
+# ---------------------------------------------------------------------------
+# Toggle (Issue #719, Muster: nli_prefilter.resolve_nli_prefilter_enabled)
+# ---------------------------------------------------------------------------
+
+#: Kanonischer Schalter seit #719 -- betrifft NUR den lokalen bge-Fallback.
+#: Voyage/Cohere sind Cloud-Reranking, kein lokales Modell, und bleiben ueber
+#: Cloud-Keys unabhaengig von diesem Schalter nutzbar.
+ENV_RERANKER_ENABLED = "ACADEMIC_RESEARCH_RERANKER_ENABLED"
+CONFIG_KEY_RERANKER = "reranker_enabled"
+DEFAULT_RERANKER_ENABLED = True
+
+
+def resolve_reranker_enabled(
+    explicit: bool | None = None,
+    config_path: str | Path | None = None,
+) -> bool:
+    """Schalter fuer den lokalen ``bge-reranker-v2-m3``-Fallback (Issue #719).
+
+    Vorrang: Argument > Env > ``config/parallel_agents.json`` (Schluessel
+    ``reranker_enabled``) > Default ``True``. Betrifft NUR den lokalen
+    Fallback -- Voyage/Cohere sind Cloud-Dienste, kein lokales Modell, und
+    Reranking als Feature bleibt darueber unabhaengig von diesem Schalter
+    nutzbar (sonst wuerde "abschaltbar, ohne dass eine andere Komponente
+    ausfaellt" verletzt).
+
+    ``VAULT_RERANK_LOCAL_DISABLE`` (#714) bleibt als Alias erhalten, hat aber
+    ABWEICHENDE Semantik: ein reines Praesenz-Flag (jeder gesetzte Wert
+    schaltet ab, kein truthy/falsy-Parsing) statt eines echten
+    Boolean-Schalters. Deshalb kein Eintrag in der ``env_vars``-Liste des
+    generischen Resolvers, sondern ein Sonderfall davor: gesetzt, gewinnt er
+    ueber den kanonischen Schalter (bestehende Setups mit
+    ``VAULT_RERANK_LOCAL_DISABLE=1`` brechen dadurch nicht still).
+    """
+    if explicit is not None:
+        return bool(explicit)
+
+    if os.environ.get(ENV_LOCAL_RERANKER_DISABLE):
+        return False
+
+    from .config_switches import resolve_bool_switch
+
+    return resolve_bool_switch(
+        None, ENV_RERANKER_ENABLED, CONFIG_KEY_RERANKER, DEFAULT_RERANKER_ENABLED, config_path
+    )
+
 
 # Cache-Ziel fuer die Reranker-Gewichte (#718). Zuvor bekam ``FlagReranker``
 # keinen ``cache_dir`` uebergeben und landete im HF-Standard-Cache
@@ -489,15 +537,16 @@ def apply_reranker(
     # bei ungueltigem Cloud-Key -- durch einen stillen Erfolg verdeckt).
     #
     # Seit #714 ist der lokale Reranker per Default aktiv (kein FlagEmbedding
-    # mehr noetig) -- VAULT_RERANK_LOCAL_DISABLE schaltet ihn explizit ab,
-    # geprueft VOR dem Laden des Backends, damit kein Modell geladen wird.
-    local_disabled = bool(os.environ.get(ENV_LOCAL_RERANKER_DISABLE))
-    if local_disabled:
+    # mehr noetig) -- resolve_reranker_enabled() (#719) schaltet ihn ab
+    # (kanonischer Schalter oder Alias VAULT_RERANK_LOCAL_DISABLE), geprueft
+    # VOR dem Laden des Backends, damit kein Modell geladen wird.
+    local_enabled = resolve_reranker_enabled()
+    if not local_enabled:
         logger.info(
-            "Lokaler Reranker per %s deaktiviert -- RRF-Reihenfolge bleibt unveraendert.",
-            ENV_LOCAL_RERANKER_DISABLE,
+            "Lokaler Reranker deaktiviert (Schalter/Env/Config) -- "
+            "RRF-Reihenfolge bleibt unveraendert."
         )
-    if not voyage_api_key and not cohere_api_key and not local_disabled:
+    if not voyage_api_key and not cohere_api_key and local_enabled:
         try:
             reranked = rerank_with_local_bge(query, enriched)
         except Exception as exc:

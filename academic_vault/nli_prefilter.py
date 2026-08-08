@@ -51,7 +51,6 @@ daraus?"), nicht durch Modellwahl behebbar.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from pathlib import Path
@@ -111,9 +110,6 @@ ENV_PREFILTER_ENABLED = "ACADEMIC_RESEARCH_NLI_PREFILTER"
 CONFIG_KEY = "nli_prefilter_enabled"
 DEFAULT_PREFILTER_ENABLED = True
 
-_TRUTHY = {"1", "true", "yes", "on"}
-_FALSY = {"0", "false", "no", "off"}
-
 
 def resolve_nli_prefilter_enabled(
     explicit: bool | None = None,
@@ -127,28 +123,17 @@ def resolve_nli_prefilter_enabled(
     Detektor-Modus laeuft und kein Zitat aus dem Pruefpfad entfernen kann.
     Abschalten: ``ACADEMIC_RESEARCH_NLI_PREFILTER=0`` oder
     ``"nli_prefilter_enabled": false`` in ``config/parallel_agents.json``.
+
+    Seit #719 nur noch ein duenner Wrapper um den gemeinsamen Resolver
+    :func:`academic_vault.config_switches.resolve_bool_switch` (kein
+    Verhaltenswechsel -- war bereits das Muster, an dem sich die anderen
+    beiden Schalter orientieren).
     """
-    if explicit is not None:
-        return bool(explicit)
+    from .config_switches import resolve_bool_switch
 
-    raw_env = os.environ.get(ENV_PREFILTER_ENABLED)
-    if raw_env is not None:
-        stripped = raw_env.strip().lower()
-        if stripped in _TRUTHY:
-            return True
-        if stripped in _FALSY:
-            return False
-
-    path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        value = data[CONFIG_KEY]
-    except (OSError, ValueError, KeyError, TypeError):
-        value = None
-    if isinstance(value, bool):
-        return value
-
-    return DEFAULT_PREFILTER_ENABLED
+    return resolve_bool_switch(
+        explicit, ENV_PREFILTER_ENABLED, CONFIG_KEY, DEFAULT_PREFILTER_ENABLED, config_path
+    )
 
 
 # ---------------------------------------------------------------------------
