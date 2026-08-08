@@ -1,0 +1,2709 @@
+{
+  "k": 10,
+  "chunk_count": 30,
+  "query_count": 26,
+  "paper_count": 11,
+  "changes": [
+    {
+      "flag": "ctx_meta",
+      "issue": 701,
+      "pr": 771,
+      "description": "Kontextsatz traegt Paper-Titel"
+    },
+    {
+      "flag": "fts_text_fix",
+      "issue": 702,
+      "pr": 768,
+      "description": "Reranker bekommt echten Chunk-/Abstract-Text"
+    },
+    {
+      "flag": "trigram",
+      "issue": 703,
+      "pr": 767,
+      "description": "papers_trgm findet Komposita-Teilworte"
+    },
+    {
+      "flag": "local_rerank",
+      "issue": 714,
+      "pr": 772,
+      "description": "lokaler bge-reranker-v2-m3 laeuft per Default"
+    }
+  ],
+  "results": {
+    "baseline_vor": {
+      "flags": {
+        "ctx_meta": false,
+        "fts_text_fix": false,
+        "trigram": false,
+        "local_rerank": false
+      },
+      "overall": {
+        "recall_at_10": 0.7307692307692307,
+        "ndcg_at_10": 0.6618559283653885,
+        "mrr": 0.6394230769230769
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-telemetry-retention",
+            "en-change-approval",
+            "en-access-review",
+            "en-incident-response",
+            "en-supply-chain",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "en-access-review",
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv",
+            "de-datenschutz-pipeline",
+            "en-incident-response"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets",
+            "de-mitbestimmung-telemetrie",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-access-review",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-pipeline-secrets",
+            "de-mitbestimmung-telemetrie",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-change-approval",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-access-review",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-change-approval",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "de-freigabenachweis-archiv",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv",
+            "en-change-approval",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-incident-response"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-access-review",
+            "en-change-approval",
+            "en-incident-response",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-telemetry-retention"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-access-review",
+            "en-incident-response",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-change-approval",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.31546487678572877,
+          "reciprocal_rank": 0.125,
+          "retrieved": [
+            "en-change-approval",
+            "en-supply-chain",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        }
+      ],
+      "fts5_syntax_errors": [
+        "q-de-05",
+        "q-gap-01",
+        "q-gap-03",
+        "q-gap-04",
+        "q-gap-05",
+        "q-gap-06",
+        "q-cross-02"
+      ]
+    },
+    "baseline_nach": {
+      "flags": {
+        "ctx_meta": true,
+        "fts_text_fix": true,
+        "trigram": true,
+        "local_rerank": true
+      },
+      "overall": {
+        "recall_at_10": 0.7307692307692307,
+        "ndcg_at_10": 0.6867771995041547,
+        "mrr": 0.6730769230769231
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-supply-chain",
+            "en-incident-response"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-supply-chain",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "de-datenschutz-pipeline",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-supply-chain",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "en-telemetry-retention",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets",
+            "en-supply-chain",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-supply-chain",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "en-supply-chain",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-supply-chain",
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "en-access-review",
+            "en-supply-chain",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "de-mitbestimmung-telemetrie",
+            "en-incident-response",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-infrastructure-drift",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-supply-chain",
+            "en-incident-response",
+            "en-change-approval",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-supply-chain",
+            "de-freigabenachweis-archiv",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3562071871080222,
+          "reciprocal_rank": 0.16666666666666666,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        }
+      ],
+      "fts5_syntax_errors": [
+        "q-de-05",
+        "q-gap-01",
+        "q-gap-03",
+        "q-gap-04",
+        "q-gap-05",
+        "q-gap-06",
+        "q-cross-02"
+      ]
+    },
+    "nach_minus_ctx_meta": {
+      "flags": {
+        "ctx_meta": false,
+        "fts_text_fix": true,
+        "trigram": true,
+        "local_rerank": true
+      },
+      "overall": {
+        "recall_at_10": 0.7307692307692307,
+        "ndcg_at_10": 0.6918129592569031,
+        "mrr": 0.6794871794871795
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-access-review",
+            "en-supply-chain",
+            "en-incident-response",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-access-review",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "de-datenschutz-pipeline",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "de-datenschutz-pipeline",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-supply-chain",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "en-telemetry-retention",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-supply-chain",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "de-datenschutz-pipeline",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-supply-chain",
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "en-incident-response",
+            "de-datenschutz-pipeline",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "de-mitbestimmung-telemetrie",
+            "en-incident-response",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-change-approval",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-infrastructure-drift",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-supply-chain",
+            "en-change-approval",
+            "en-access-review",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-supply-chain",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3562071871080222,
+          "reciprocal_rank": 0.16666666666666666,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        }
+      ],
+      "fts5_syntax_errors": [
+        "q-de-05",
+        "q-gap-01",
+        "q-gap-03",
+        "q-gap-04",
+        "q-gap-05",
+        "q-gap-06",
+        "q-cross-02"
+      ]
+    },
+    "nach_minus_fts_text_fix": {
+      "flags": {
+        "ctx_meta": true,
+        "fts_text_fix": false,
+        "trigram": true,
+        "local_rerank": true
+      },
+      "overall": {
+        "recall_at_10": 0.7307692307692307,
+        "ndcg_at_10": 0.6867771995041547,
+        "mrr": 0.6730769230769231
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-supply-chain",
+            "en-incident-response"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-supply-chain",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "de-datenschutz-pipeline",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-supply-chain",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "en-telemetry-retention",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets",
+            "en-supply-chain",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-supply-chain",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "en-supply-chain",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-supply-chain",
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "en-access-review",
+            "en-supply-chain",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-change-approval",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "de-mitbestimmung-telemetrie",
+            "en-incident-response",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-infrastructure-drift",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-supply-chain",
+            "en-incident-response",
+            "en-change-approval",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-supply-chain",
+            "de-freigabenachweis-archiv",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3562071871080222,
+          "reciprocal_rank": 0.16666666666666666,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        }
+      ],
+      "fts5_syntax_errors": [
+        "q-de-05",
+        "q-gap-01",
+        "q-gap-03",
+        "q-gap-04",
+        "q-gap-05",
+        "q-gap-06",
+        "q-cross-02"
+      ]
+    },
+    "nach_minus_trigram": {
+      "flags": {
+        "ctx_meta": true,
+        "fts_text_fix": true,
+        "trigram": false,
+        "local_rerank": true
+      },
+      "overall": {
+        "recall_at_10": 0.7307692307692307,
+        "ndcg_at_10": 0.6867771995041547,
+        "mrr": 0.6730769230769231
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-supply-chain",
+            "en-incident-response"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-supply-chain",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "de-datenschutz-pipeline",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-supply-chain",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "en-telemetry-retention",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets",
+            "en-supply-chain",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "en-supply-chain",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-change-approval",
+            "en-access-review",
+            "en-supply-chain",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-supply-chain",
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "en-access-review",
+            "en-supply-chain",
+            "de-mitbestimmung-telemetrie",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "de-lieferkette-pruefung",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "de-mitbestimmung-telemetrie",
+            "en-incident-response",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-infrastructure-drift",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "de-freigabenachweis-archiv",
+            "en-supply-chain",
+            "en-incident-response",
+            "en-change-approval",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "de-freigabenachweis-archiv",
+            "de-datenschutz-pipeline",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-supply-chain",
+            "de-freigabenachweis-archiv",
+            "en-change-approval"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3562071871080222,
+          "reciprocal_rank": 0.16666666666666666,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-access-review",
+            "de-mitbestimmung-telemetrie",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        }
+      ],
+      "fts5_syntax_errors": [
+        "q-de-05",
+        "q-gap-01",
+        "q-gap-03",
+        "q-gap-04",
+        "q-gap-05",
+        "q-gap-06",
+        "q-cross-02"
+      ]
+    },
+    "nach_minus_local_rerank": {
+      "flags": {
+        "ctx_meta": true,
+        "fts_text_fix": true,
+        "trigram": true,
+        "local_rerank": false
+      },
+      "overall": {
+        "recall_at_10": 0.7307692307692307,
+        "ndcg_at_10": 0.6760509378434094,
+        "mrr": 0.6586538461538461
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-supply-chain",
+            "en-incident-response",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-telemetry-retention",
+            "en-change-approval",
+            "en-access-review",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-freigabenachweis-archiv"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "en-supply-chain",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-telemetry-retention",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "de-freigabenachweis-archiv"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain",
+            "en-incident-response",
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-telemetry-retention",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-pipeline-secrets",
+            "de-mitbestimmung-telemetrie",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-supply-chain",
+            "en-pipeline-secrets",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-change-approval",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-change-approval",
+            "en-supply-chain",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline",
+            "de-mitbestimmung-telemetrie"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-access-review",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "de-freigabenachweis-archiv"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-telemetry-retention",
+            "en-incident-response",
+            "en-pipeline-secrets"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-change-approval",
+            "de-freigabenachweis-archiv",
+            "en-incident-response",
+            "de-mitbestimmung-telemetrie",
+            "en-access-review",
+            "en-telemetry-retention",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-infrastructure-drift",
+            "en-pipeline-secrets",
+            "en-change-approval",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-access-review"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-freigabenachweis-archiv",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "en-change-approval",
+            "en-incident-response",
+            "en-access-review",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-telemetry-retention"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung",
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "en-change-approval",
+            "en-telemetry-retention",
+            "de-freigabenachweis-archiv",
+            "en-supply-chain",
+            "en-pipeline-secrets",
+            "en-incident-response",
+            "en-infrastructure-drift"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-incident-response",
+            "en-change-approval",
+            "en-pipeline-secrets",
+            "en-infrastructure-drift",
+            "en-telemetry-retention"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets",
+            "de-datenschutz-pipeline",
+            "de-lieferkette-pruefung",
+            "de-freigabenachweis-archiv",
+            "en-access-review",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "de-mitbestimmung-telemetrie",
+            "en-change-approval",
+            "en-supply-chain"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.31546487678572877,
+          "reciprocal_rank": 0.125,
+          "retrieved": [
+            "en-change-approval",
+            "en-supply-chain",
+            "en-infrastructure-drift",
+            "en-incident-response",
+            "en-telemetry-retention",
+            "en-access-review",
+            "en-pipeline-secrets",
+            "de-mitbestimmung-telemetrie",
+            "de-lieferkette-pruefung",
+            "de-datenschutz-pipeline"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": []
+        }
+      ],
+      "fts5_syntax_errors": [
+        "q-de-05",
+        "q-gap-01",
+        "q-gap-03",
+        "q-gap-04",
+        "q-gap-05",
+        "q-gap-06",
+        "q-cross-02"
+      ]
+    }
+  },
+  "deltas_vs_current": {
+    "ctx_meta": {
+      "recall_at_10": 0.0,
+      "ndcg_at_10": -0.005,
+      "mrr": -0.0064
+    },
+    "fts_text_fix": {
+      "recall_at_10": 0.0,
+      "ndcg_at_10": 0.0,
+      "mrr": 0.0
+    },
+    "trigram": {
+      "recall_at_10": 0.0,
+      "ndcg_at_10": 0.0,
+      "mrr": 0.0
+    },
+    "local_rerank": {
+      "recall_at_10": 0.0,
+      "ndcg_at_10": 0.0107,
+      "mrr": 0.0144
+    }
+  },
+  "regressions": {
+    "ctx_meta": {
+      "recall_at_10": 0.0,
+      "ndcg_at_10": -0.005,
+      "mrr": -0.0064
+    }
+  }
+}
