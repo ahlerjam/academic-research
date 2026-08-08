@@ -71,20 +71,22 @@ Modellaufruf. Fehlende Angaben (kein Titel, kein Jahr) lässt der Satz einfach
 aus, statt abzubrechen; Sektion und Seitenbereich bleiben in jedem Fall
 erhalten.
 
-**Bestands-Vaults zeigen den Effekt erst nach Löschen und Neuing**: Chunks, die vor
-#701 eingebettet wurden, tragen den alten, metadatenfreien Kontextsatz fest in
-ihrem gespeicherten Vektor. Um die neuen Kontextsaetze mit Paper-Metadaten zu
-aktivieren, müssen die Chunks gelöscht und erneut über `ingest_paper_embeddings`
-ingested werden — z.B. per CLI:
+**Bestands-Vaults zeigen den Effekt erst nach einem erneuten Ingest**: Chunks,
+die vor #701 eingebettet wurden, tragen den alten, metadatenfreien Kontextsatz
+fest in ihrem gespeicherten Vektor. Um die neuen Kontextsaetze mit
+Paper-Metadaten zu aktivieren, muss das Paper erneut ueber
+`ingest_paper_embeddings()` verarbeitet werden — die Funktion loescht die
+alten Chunks selbst (`writer.delete_chunk_embeddings`), ein manuelles
+Loeschen vorher ist nicht noetig:
 
 ```bash
-claude research ingest-paper <project-id> --reset <paper-id>
+python -c "from academic_vault.ingest import ingest_paper_embeddings; ingest_paper_embeddings('<pfad>/vault.db', '<paper-id>')"
 ```
 
 Das `--reindex-embeddings`-Kommando (siehe unten) berechnet die Vektoren zwar neu,
 regeneriert die Kontextsaetze aber NICHT — es liest nur die bereits gespeicherten
 `chunk_embeddings.embedding_text` ein. Für die neuen Kontextsaetze ist ein
-vollständiger Neuing notwendig.
+vollständiger erneuter Ingest notwendig.
 
 ### Modellwechsel und Re-Index
 
