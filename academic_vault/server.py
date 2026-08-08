@@ -28,7 +28,12 @@ from .db import (
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
 from .decision_log import parse_model_version_text as _parse_model_version_text
-from .embedding_model import REINDEX_HINT, EmbeddingDimensionMismatchError, get_embedder
+from .embedding_model import (
+    REINDEX_HINT,
+    EmbeddingDimensionMismatchError,
+    get_embedder,
+    resolve_embedding_enabled,
+)
 from .health import get_component_status
 
 logger = logging.getLogger(__name__)
@@ -1091,8 +1096,12 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
     ``reciprocal_rank_fusion`` auf ``paper_id`` schluesselt.
 
     Leere Liste — und damit RRF auf FTS5-Basis — genau dann, wenn kein
-    Embedding-Backend installiert ist, noch keine Chunk-Vektoren existieren oder
-    die Vektor-Suche fehlschlaegt. Die Textsuche darf daran nie scheitern.
+    Embedding-Backend installiert ist, noch keine Chunk-Vektoren existieren,
+    die Vektor-Suche fehlschlaegt ODER die Embedding-Komponente per Schalter
+    abgeschaltet ist (Issue #719, NUR der kanonische Schalter oder die
+    Config-Datei -- ``legacy_alias=False``, der Alt-Name ``VAULT_AUTO_EMBED``
+    gatete diesen Pfad nie und tut es weiterhin nicht). Die Textsuche darf
+    daran nie scheitern.
 
     Returns:
         Liste aus ``{paper_id, chunk_id, snippet, text, distance}``, aufsteigend
@@ -1100,6 +1109,9 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
         ``snippet`` ist der gekuerzte, ``text`` der volle Chunk-Text
         (Reranker-Input).
     """
+    if not resolve_embedding_enabled(legacy_alias=False):
+        return []
+
     embedder = get_embedder()
     if embedder is None:
         return []
@@ -1149,13 +1161,14 @@ def _vec_snippet(chunk_text: str, limit: int = _VEC_SNIPPET_CHARS) -> str:
 
 
 def _auto_embed_enabled() -> bool:
-    """Ob ``add_paper`` Embeddings erzeugt (abschaltbar via ``VAULT_AUTO_EMBED=0``)."""
-    return os.environ.get("VAULT_AUTO_EMBED", "1").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
+    """Ob ``add_paper`` Embeddings erzeugt.
+
+    Seit #719 ein duenner Wrapper um
+    ``embedding_model.resolve_embedding_enabled()`` (Vorrang
+    Argument > Env > Config > Default, ``VAULT_AUTO_EMBED`` bleibt als
+    Alias-Env erhalten -- kein Verhaltenswechsel fuer bestehende Setups).
+    """
+    return resolve_embedding_enabled()
 
 
 def _auto_fulltext_enabled() -> bool:

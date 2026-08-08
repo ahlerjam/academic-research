@@ -104,7 +104,13 @@ class TestLocalRerankerDefaultActive:
         mock_get_local.assert_not_called()
         assert all(entry["reranked"] is False for entry in result)
         assert all(entry["reranker"] == "none" for entry in result)
-        assert any("VAULT_RERANK_LOCAL_DISABLE" in r.message for r in caplog.records)
+        # Seit #719 ein gemeinsamer Log-Text fuer kanonischen Schalter UND
+        # Alias (resolve_reranker_enabled()) statt einer env-var-spezifischen
+        # Meldung -- die Kernaussage ("deaktiviert, keine Umsortierung")
+        # bleibt erhalten.
+        assert any(
+            "deaktiviert" in r.message and "unveraendert" in r.message for r in caplog.records
+        )
 
 
 # ---------------------------------------------------------------------------
