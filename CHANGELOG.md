@@ -10,6 +10,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Entscheidungsvermerk: Modellzugang beim Ingest ohne eigenen Schluessel (#735):**
+  Neues Verzeichnis `docs/decisions/` fuer Entwuerfe, die eine projektweite
+  Architekturfrage beantworten, bevor sie sich als Umsetzungs-Issue schreiben lassen
+  -- Praezedenzfall analog zu Vault-Decisions (`vault.add_decision`), hier als
+  Markdown, weil die Frage projektweit ist statt an eine einzelne Recherche-Sitzung
+  gebunden. Der erste Vermerk (`docs/decisions/0001-modellzugang-ingest.md`)
+  bewertet drei Wege, wie der Vault-Ingest (`chunking.py`s injizierbarer
+  `context_provider`) an ein Modell fuer inhaltliche Kontextsaetze kommt, ohne die
+  No-Key-Randbedingung fuer Plugin-Funktionen zu verletzen (kein vom Nutzer zu
+  stellender Schluessel): Ingest-Agent in der Sitzung, lokales Kleinmodell im
+  Vault-Prozess, zweistufiger Ingest mit nachgelagerter Anreicherung. Empfehlung:
+  zweistufiger Ingest, gespeist von einem Agent in der Sitzung -- `add_paper()`
+  bleibt synchron und modellunabhaengig, `default_context_sentence()` (#701) ist
+  der Normalzustand jedes Chunks bis zur optionalen Anreicherung. Reines
+  Doku-Issue, keine Codeaenderung.
+
 - **FTS5-Index ueber Chunk-Texte (#726):** `papers_fts`/`papers_trgm` matchen nur
   Paper-Felder (Titel, Abstract, Volltext) -- ein Suchbegriff, der ausschliesslich
   im Methodikteil eines einzelnen Chunks steht (`chunk_embeddings.chunk_text`),
