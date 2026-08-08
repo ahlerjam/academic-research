@@ -971,6 +971,13 @@ def search_papers(
     vektoriell gefundene Paper haben mangels FTS5-Treffer kein 'score' und ein
     Snippet aus dem passenden Chunk-Text (ohne Highlighting).
 
+    Seit Issue #727 fusioniert die Hybrid-Suche INTERN auf Chunk-Ebene
+    (``reciprocal_rank_fusion`` schluesselt auf 'chunk_id', die lexikalische
+    Seite nutzt den chunk-level FTS5-Index ``chunk_fts``, #726) und aggregiert
+    erst NACH dem Reranking wieder zu Papern (``_aggregate_chunks_to_papers``,
+    MAX-Aggregation je Paper). Der Rueckgabevertrag bleibt dabei unveraendert
+    paperzentriert -- ein Eintrag je 'paper_id'.
+
     Args:
         db_path: Pfad zur Vault-DB.
         query: Suchquery.
@@ -1023,11 +1030,38 @@ def search_papers(
 
     from .retrieval import apply_reranker, reciprocal_rank_fusion
 
+    # Chunk-Zuordnung fuer die lexikalische Seite (Issue #727): jeder
+    # paper-level FTS5-Treffer bekommt ueber chunk_fts (#726) seinen
+    # best-passenden Chunk zugeordnet, damit reciprocal_rank_fusion() auf
+    # 'chunk_id' (statt 'paper_id') schluesseln kann -- die chunkgenaue
+    # Praezision der Vektorsuche geht damit nicht mehr vor der Fusion
+    # verloren (vorher: _vec0_search deduplizierte VOR der Fusion).
+    _ensure_schema_for_read(db_path)
+    conn = VaultDB._open(db_path)
+    try:
+        fts_chunk_results = [_attach_chunk_to_fts_hit(conn, r, query) for r in fts_results]
+    finally:
+        conn.close()
+
     # Der Vektorpfad bekommt die UNSANITIERTE Query: das FTS5-Sanitizing
     # entfernt Bindestriche und Operator-Keywords und verfaelscht damit die
     # Semantik, auf die das Embedding-Modell reagiert.
+    #
+    # top_n=k*4 (Decklung der Reranker-Kandidaten, #727, P1-Performance):
+    # Mehrere Chunks desselben Papers duerfen die Fusion getrennt durchlaufen,
+    # sonst wuerde ein Paper mit vielen mittelstarken Chunks andere Paper aus
+    # den Top-k verdraengen, bevor die Paper-Aggregation ueberhaupt zum Zug
+    # kommt. AC1 bleibt dabei voll erhalten (4x der Basisgranularitaet ist
+    # genug fuer mehrere Chunks pro Paper). Die aggressive `top_n=None`
+    # von anfangs fuehrt sonst zu 5x-Ueberlast des Rerankers pro Suche,
+    # weil alle ~4k vec0-Chunks plus alle FTS5-Chunks ohne Abschnitt durch
+    # apply_reranker gehen (erst NACH Reranking in _aggregate_chunks_to_papers
+    # auf k gekuerzt). Mit `top_n=k*4` in der Fusion ist der Reranker auf
+    # maximal ~5k Kandidaten (4k vec + k FTS) begrenzt, was bei k=5 nur 25
+    # statt 5 sind -- noch ein erheblicher Mehraufwand, aber deutlich unter
+    # der ungekappten Variante (die lokal zum Einfrieren fuehrt).
     fused = reciprocal_rank_fusion(
-        _vec0_search(db_path, raw_query, k=k), fts_results, k=60, top_n=k
+        _vec0_search(db_path, raw_query, k=k), fts_chunk_results, k=60, top_n=k * 4
     )
     _fill_missing_reranker_text(db_path, fused)
 
@@ -1039,10 +1073,146 @@ def search_papers(
     # Sanitizing entfernt Bindestriche und Operator-Keywords und verfaelscht
     # damit die Semantik, gegen die ein Cross-Encoder bewertet -- derselbe
     # Grund, aus dem _vec0_search oben bereits raw_query bekommt.
-    return apply_reranker(
+    reranked = apply_reranker(
         query=raw_query,
         candidates=fused,
     )
+
+    # Paper-Aggregation als letzter Schritt (Issue #727): vorher lag sie in
+    # _vec0_search VOR der Fusion und warf die chunk-genaue Praezision der
+    # Vektorsuche weg, bevor sie in RRF/Reranking einfliessen konnte. Der
+    # Rueckgabevertrag von vault_search bleibt paperzentriert (AC3) --
+    # geaendert hat sich nur die Position der Aggregation, nicht ihr
+    # Ergebnis-Schema.
+    return _aggregate_chunks_to_papers(reranked, k)
+
+
+def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) -> dict:
+    """Ordnet einem paper-level FTS5-Treffer seinen best-passenden Chunk zu (Issue #727).
+
+    Sucht ueber ``chunk_fts`` (#726, echter chunk-level FTS5-Index) den
+    Chunk desselben Papers, der die (sanitierte) Query selbst lexikalisch
+    trifft -- damit reciprocal_rank_fusion() auf 'chunk_id' schluesseln kann
+    und der Reranker echten, zur Query passenden Chunk-Text statt eines
+    pauschalen Abstracts sieht.
+
+    Ohne passenden Chunk (Paper noch nicht gechunkt, oder kein vorhandener
+    Chunk enthaelt die Suchbegriffe) bleibt 'text' unbesetzt -- ein
+    synthetischer Fallback-Schluessel haelt den Kandidaten trotzdem eindeutig
+    fuer die Fusion; ``_fill_missing_reranker_text`` liefert danach den
+    bisherigen Abstract-/Erster-Chunk-Fallback (#702). Der synthetische
+    Schluessel kollidiert nicht mit echten Chunk-IDs (UUID4, siehe
+    ``VaultDB.add_chunk_embedding``).
+
+    Args:
+        conn: Offene Connection auf dieselbe DB, ueber die ``fts_results``
+            bereits gelesen wurden (kein zusaetzliches ``VaultDB._open``).
+        entry: Ein Eintrag aus ``_fts_exact_hits``/``_fts_trigram_hits``
+            (traegt mindestens 'paper_id').
+        query: Sanitierte FTS5-Query (dieselbe, mit der ``papers_fts``
+            durchsucht wurde).
+
+    Returns:
+        Kopie von ``entry``, ergaenzt um 'chunk_id' und ggf. 'text'.
+    """
+    entry = dict(entry)
+    paper_id = entry["paper_id"]
+    row = conn.execute(
+        "SELECT chunk_id, chunk_text FROM chunk_fts "
+        "WHERE chunk_fts MATCH ? AND paper_id = ? ORDER BY rank LIMIT 1",
+        (query, paper_id),
+    ).fetchone()
+    if row is not None:
+        entry["chunk_id"] = row["chunk_id"]
+        entry["text"] = row["chunk_text"]
+    else:
+        entry["chunk_id"] = f"fts-paper::{paper_id}"
+    return entry
+
+
+def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]:
+    """Aggregiert chunk-level RRF-/Reranker-Kandidaten zu einem paperzentrierten Ergebnis.
+
+    Letzter Schritt NACH Fusion+Reranking (Issue #727) -- vorher lag diese
+    Aggregation in ``_vec0_search`` VOR der Fusion und warf die chunk-genaue
+    Praezision der Vektorsuche weg, bevor sie ueberhaupt in RRF/Reranking
+    einfliessen konnte.
+
+    Aggregationsverfahren: MAX statt SUM je Paper. Ein Paper mit vielen nur
+    mittelstarken Chunk-Treffern soll nicht automatisch ueber ein Paper mit
+    einer einzelnen sehr starken Fundstelle ranken (AC4) -- eine
+    Summenbildung wuerde genau das belohnen (mehr Chunks = hoeherer Score,
+    unabhaengig von deren individueller Relevanz). MAX behandelt den besten
+    Treffer je Paper als dessen Relevanzsignal, analog dazu, wie ein Mensch
+    ein Paper anhand seiner staerksten Fundstelle beurteilt.
+
+    Bewertungsgrundlage: 'rerank_score' wenn der Kandidat gereranked wurde
+    (``reranked=True``), sonst 'rrf_score' -- beide sind "hoeher ist besser"
+    und damit direkt vergleichbar innerhalb dieser Funktion.
+
+    Metadaten-Merge bei Paper-Aggregation: FTS5-Metadaten ('score',
+    'snippet') werden von unterlegenen Chunk-Eintraegen desselben Papers in
+    den Gewinner-Eintrag gemergt. Das bewahrt das Highlighting und die
+    FTS5-Relevanzangabe auch dann, wenn ein vec0-Treffer des gleichen Papers
+    einen hoeherem Reranking-Score hat.
+
+    Args:
+        chunk_results: Chunk-level Kandidaten aus ``apply_reranker`` (bzw.
+            direkt aus ``reciprocal_rank_fusion``, falls ungereranked).
+        k: Maximale Anzahl zurueckgegebener Paper.
+
+    Returns:
+        Liste mit maximal einem Eintrag je 'paper_id', absteigend nach
+        Score sortiert, auf ``k`` gekuerzt.
+    """
+
+    def _score(entry: dict) -> float:
+        value = entry.get("rerank_score", entry.get("rrf_score", 0.0))
+        return float(value) if value is not None else 0.0
+
+    # Gruppiere alle Eintraege nach paper_id und waehle den besten
+    best_per_paper: dict[str, dict] = {}
+    all_per_paper: dict[str, list[dict]] = {}
+    for entry in chunk_results:
+        paper_id = entry["paper_id"]
+        all_per_paper.setdefault(paper_id, []).append(entry)
+        current = best_per_paper.get(paper_id)
+        if current is None or _score(entry) > _score(current):
+            best_per_paper[paper_id] = entry
+
+    # Merge FTS5-Metadaten von unterlegenen Chunks in den Gewinner
+    # (Issue #727, P1-Regression). FTS5-Felder (score, snippet mit <b>-Highlighting)
+    # muessen bewahrt bleiben, auch wenn ein vec0-Chunk hoeher gereranked wird.
+    #
+    # Differenzierung nach Herkunft: FTS5-Chunks tragen 'score' (BM25-Wert),
+    # vec0-Chunks nicht. Bei Paper-Merge gewinnt das FTS5-Snippet, analog zur
+    # Regel "bei Schluesselkollision gewinnt FTS5" in reciprocal_rank_fusion.
+    for paper_id, entries in all_per_paper.items():
+        winner = best_per_paper[paper_id]
+        # Durchsuche alle unterlegenen Chunks dieses Papers nach FTS5-Snippets
+        fts5_snippet_owner = None
+        fts5_score_owner = None
+        for entry in entries:
+            if entry is winner:
+                continue
+            if "score" in entry:  # FTS5-Treffer haben 'score'
+                if fts5_snippet_owner is None and "snippet" in entry:
+                    fts5_snippet_owner = entry
+                if fts5_score_owner is None:
+                    fts5_score_owner = entry
+        # Merge FTS5-Felder in den Winner, falls vorhanden
+        if fts5_score_owner is not None and "score" not in winner:
+            winner["score"] = fts5_score_owner["score"]
+        if (
+            fts5_snippet_owner is not None
+            and "snippet" in fts5_snippet_owner
+            and "<b>" in fts5_snippet_owner["snippet"]
+        ):
+            # FTS5-Snippet mit Highlighting ueberschreibt vec0-Snippet
+            winner["snippet"] = fts5_snippet_owner["snippet"]
+
+    ranked = sorted(best_per_paper.values(), key=_score, reverse=True)
+    return ranked[:k]
 
 
 def _fill_missing_reranker_text(db_path: str, fused: list[dict]) -> None:
@@ -1089,11 +1259,16 @@ def _fill_missing_reranker_text(db_path: str, fused: list[dict]) -> None:
 
 
 def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
-    """Vektor-KNN ueber chunk_embeddings fuer das Hybrid-Retrieval (Issue #372).
+    """Vektor-KNN ueber chunk_embeddings fuer das Hybrid-Retrieval (Issue #372, #727).
 
-    Ablauf: Query-Embedding (lokales e5-Modell) -> KNN ueber die Chunks ->
-    Aggregation auf Paper-Ebene (bester Chunk je Paper), weil
-    ``reciprocal_rank_fusion`` auf ``paper_id`` schluesselt.
+    Ablauf: Query-Embedding (lokales e5-Modell) -> KNN ueber die Chunks.
+
+    Seit Issue #727 OHNE Aggregation auf Paper-Ebene: ``reciprocal_rank_fusion``
+    schluesselt inzwischen auf ``chunk_id`` (vorher ``paper_id``) -- eine
+    Dedup-Aggregation hier wuerfe die chunkgenaue Praezision der Vektorsuche
+    weg, bevor sie ueberhaupt in die Fusion eingehen kann. Die Aggregation zu
+    Papern fuer die Ausgabe passiert jetzt als letzter Schritt NACH
+    Fusion+Reranking (siehe ``_aggregate_chunks_to_papers``).
 
     Leere Liste — und damit RRF auf FTS5-Basis — genau dann, wenn kein
     Embedding-Backend installiert ist, noch keine Chunk-Vektoren existieren,
@@ -1105,7 +1280,10 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
 
     Returns:
         Liste aus ``{paper_id, chunk_id, snippet, text, distance}``, aufsteigend
-        nach Distanz (nahester Treffer zuerst), maximal ``k`` Eintraege.
+        nach Distanz (nahester Treffer zuerst), maximal ``max(k*4, k)``
+        Eintraege (bewusst mehr als ``k``, da hier keine Paper-Dedup mehr
+        stattfindet -- mehrere Chunks desselben Papers sollen die Fusion
+        getrennt durchlaufen, siehe AC1).
         ``snippet`` ist der gekuerzte, ``text`` der volle Chunk-Text
         (Reranker-Input).
     """
@@ -1118,8 +1296,6 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
 
     try:
         query_vector = embedder.embed_query(query)
-        # Mehr Chunks als Paper anfragen: mehrere Chunks koennen zum selben
-        # Paper gehoeren und werden anschliessend aggregiert.
         hits = VaultDB(db_path).knn_chunks(query_vector, k=max(k * 4, k))
     except EmbeddingDimensionMismatchError:
         # Carve-out (#629): hier still auf FTS5-only zurueckzufallen waere die
@@ -1131,25 +1307,22 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
         logger.warning("vec0-Suche fehlgeschlagen, Fallback auf FTS5-only: %s", exc)
         return []
 
-    best_per_paper: dict[str, dict] = {}
+    results: list[dict] = []
     for hit in hits:  # bereits aufsteigend nach Distanz sortiert
-        paper_id = hit["paper_id"]
-        if paper_id in best_per_paper:
-            continue
         chunk_text = hit.get("chunk_text") or ""
-        best_per_paper[paper_id] = {
-            "paper_id": paper_id,
-            "chunk_id": hit["chunk_id"],
-            "snippet": _vec_snippet(chunk_text),
-            # Reranker-Input explizit mitgeben: im RRF-Merge gewinnt fuer
-            # 'snippet' das FTS5-Feld (Vertrag + Highlighting), waehrend
-            # 'text' den laengeren Chunk-Text fuer apply_reranker erhaelt.
-            "text": chunk_text,
-            "distance": hit["distance"],
-        }
-
-    ranked = sorted(best_per_paper.values(), key=lambda entry: entry["distance"])
-    return ranked[:k]
+        results.append(
+            {
+                "paper_id": hit["paper_id"],
+                "chunk_id": hit["chunk_id"],
+                "snippet": _vec_snippet(chunk_text),
+                # Reranker-Input explizit mitgeben: im RRF-Merge gewinnt fuer
+                # 'snippet' das FTS5-Feld (Vertrag + Highlighting), waehrend
+                # 'text' den laengeren Chunk-Text fuer apply_reranker erhaelt.
+                "text": chunk_text,
+                "distance": hit["distance"],
+            }
+        )
+    return results
 
 
 def _vec_snippet(chunk_text: str, limit: int = _VEC_SNIPPET_CHARS) -> str:

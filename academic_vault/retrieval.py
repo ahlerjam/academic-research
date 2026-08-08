@@ -215,45 +215,56 @@ def reciprocal_rank_fusion(
     k: int = 60,
     top_n: int | None = None,
 ) -> list[dict]:
-    """Kombiniert vec0- und FTS5-Ergebnisse via Reciprocal-Rank-Fusion.
+    """Kombiniert vec0- und Chunk-FTS5-Ergebnisse via Reciprocal-Rank-Fusion.
 
-    Jedes Ergebnis-Dict muss 'paper_id' enthalten.
+    Jedes Ergebnis-Dict muss 'chunk_id' enthalten (Issue #727: vorher wurde
+    hier auf 'paper_id' geschluesselt -- zwei Chunks desselben Papers
+    verdraengten sich damit gegenseitig, bevor die chunkgenaue Praezision der
+    Vektorsuche ueberhaupt in die Fusion einging). 'paper_id' bleibt als
+    Passthrough-Feld auf jedem Eintrag erhalten; die Aggregation auf
+    Paper-Ebene fuer die Ausgabe passiert bewusst NICHT hier, sondern als
+    letzter Schritt NACH Fusion+Reranking (siehe
+    ``server._aggregate_chunks_to_papers``).
+
     Das Ergebnis-Dict wird um 'rrf_score' ergaenzt.
 
-    Metadaten werden pro Paper aus beiden Quellen zusammengefuehrt: ein Paper,
-    das in beiden Listen auftaucht, behaelt sowohl die vec0-Felder
-    (chunk_id, distance) als auch die FTS5-Felder (score, Snippet mit
+    Metadaten werden pro Chunk aus beiden Quellen zusammengefuehrt: ein
+    Chunk, der in beiden Listen auftaucht (z. B. derselbe Chunk sowohl per
+    Vektor- als auch per Chunk-FTS5-Treffer gefunden), behaelt sowohl die
+    vec0-Felder (distance) als auch die FTS5-Felder (score, Snippet mit
     '<b>'-Highlighting). Bei gleichem Schluessel gewinnt FTS5.
 
     Args:
-        vec_results: Liste von Dicts aus vec0-Suche (geordnet nach Relevanz).
-        fts_results: Liste von Dicts aus FTS5-Suche (geordnet nach Relevanz).
+        vec_results: Liste von Dicts aus vec0-Suche (geordnet nach Relevanz),
+            je Eintrag 'chunk_id' und 'paper_id'.
+        fts_results: Liste von Dicts aus (Chunk-)FTS5-Suche (geordnet nach
+            Relevanz), je Eintrag 'chunk_id' und 'paper_id'.
         k: RRF-Konstante (Standard: 60).
         top_n: Maximale Anzahl zurueckgegebener Ergebnisse. None = alle.
 
     Returns:
         Kombinierte Liste, absteigend nach rrf_score sortiert.
     """
-    vec_ranks: dict[str, int] = {r["paper_id"]: idx + 1 for idx, r in enumerate(vec_results)}
-    fts_ranks: dict[str, int] = {r["paper_id"]: idx + 1 for idx, r in enumerate(fts_results)}
-    all_paper_ids = set(vec_ranks.keys()) | set(fts_ranks.keys())
+    vec_ranks: dict[str, int] = {r["chunk_id"]: idx + 1 for idx, r in enumerate(vec_results)}
+    fts_ranks: dict[str, int] = {r["chunk_id"]: idx + 1 for idx, r in enumerate(fts_results)}
+    all_chunk_ids = set(vec_ranks.keys()) | set(fts_ranks.keys())
 
     # Metadaten BEIDER Quellen zusammenfuehren statt einander verdraengen zu
-    # lassen: vec0 liefert chunk_id/distance, FTS5 den dokumentierten 'score'
-    # und das '<b>'-Highlighting im Snippet. Bei Schluesselkollision gewinnt
-    # FTS5, weil dessen Felder den Rueckgabevertrag von search_papers bilden.
-    paper_data: dict[str, dict] = {}
+    # lassen: vec0 liefert distance, FTS5 den dokumentierten 'score' und das
+    # '<b>'-Highlighting im Snippet. Bei Schluesselkollision gewinnt FTS5,
+    # weil dessen Felder den Rueckgabevertrag von search_papers bilden.
+    chunk_data: dict[str, dict] = {}
     for r in vec_results:
-        paper_data.setdefault(r["paper_id"], {}).update(r)
+        chunk_data.setdefault(r["chunk_id"], {}).update(r)
     for r in fts_results:
-        paper_data.setdefault(r["paper_id"], {}).update(r)
+        chunk_data.setdefault(r["chunk_id"], {}).update(r)
 
     fused: list[dict] = []
-    for pid in all_paper_ids:
-        entry = dict(paper_data.get(pid, {"paper_id": pid}))
+    for cid in all_chunk_ids:
+        entry = dict(chunk_data.get(cid, {"chunk_id": cid}))
         entry["rrf_score"] = rrf_score(
-            rank_vec=vec_ranks.get(pid),
-            rank_fts=fts_ranks.get(pid),
+            rank_vec=vec_ranks.get(cid),
+            rank_fts=fts_ranks.get(cid),
             k=k,
         )
         fused.append(entry)
