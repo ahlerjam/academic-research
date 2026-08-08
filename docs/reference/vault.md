@@ -128,6 +128,44 @@ Index für bereits vorhandene Paper nach (die Trigger allein erfassen nur, was d
 geschrieben wird). Fehlt die Tabelle dennoch, fällt die Suche auf den reinen Exaktpfad
 zurück statt abzustürzen.
 
+## FTS5-Index über Chunk-Texte
+
+`papers_fts` und `papers_trgm` matchen ausschließlich Paper-Felder (Titel, Abstract,
+Volltext) — beide arbeiten auf Paper-Ebene. Ein Suchbegriff, der nur im Methodikteil
+eines einzelnen Chunks steht (`chunk_embeddings.chunk_text`), war darüber lexikalisch
+unauffindbar, obwohl die Vektorsuche längst chunkgenau trifft — genau die Stellen, die
+beim Belegen gesucht werden (#726).
+
+Seit #726 gibt es dafür eine eigenständige virtuelle Tabelle `chunk_fts` (FTS5,
+`unicode61`-Standardtokenizer, kein `content=`, manuell befüllt) über
+`chunk_embeddings.chunk_text` — analog zu `notes_fts`, **nicht** analog zu
+`papers_trgm`: der Auftrag lautete ausdrücklich auf **einen** FTS5-Index mit derselben
+Tokenizer-Entscheidung wie `papers_fts`. `chunk_fts` kennt deshalb ebenfalls kein
+Stemming und keine Kompositazerlegung — `Mittelstand` findet einen Chunk mit
+`Mittelstandsdigitalisierung` genauso wenig wie `papers_fts` das bei einem Paper-Titel
+tut. Ein Trigram-Pendant für Chunk-Komposita (`chunk_trgm`) ist bewusst nicht Teil dieses
+Issues und bliebe, falls gewünscht, ein eigenes Folge-Vorhaben nach dem Muster von #703.
+
+Drei Trigger (`chunk_ai`/`chunk_ad`/`chunk_au`) halten `chunk_fts` bei Insert, Update und
+Delete auf `chunk_embeddings` synchron — dasselbe DROP+CREATE-Muster wie bei
+`papers_ai`/`notes_ai`. Fusion/Retrieval bleibt in diesem Issue unverändert (weiterhin
+`paper_id`-Ebene, Umstellung ein Folge-Issue) — es gibt bewusst keinen neuen MCP-Tool-
+Endpunkt, der `chunk_fts` direkt abfragt.
+
+Bestands-Vaults hebt `migrate.add_chunk_fts()` auf Schema-Version 13 und füllt den Index
+für bereits vorhandene Chunks nach, ohne die `embedding_vector`-Spalten anzurühren — kein
+Reindex der Vektoren nötig. Fehlt die Tabelle dennoch, greift `chunk_fts` weiterhin über
+`server._ensure_schema_for_read()`, damit ein reiner Lesepfad auf einem frischen
+Bestands-Vault nicht mit `no such table: chunk_fts` abstürzt.
+
+**Gemessener Plattenbedarf** (Issue #726, AC5): an einem Test-Vault mit 50 Papern und 200
+Chunks (durchmischt aus Ingest-generierten und manuell hinzugefügten Chunks, Chunk-Texte
+im Bereich von ~100–150 Zeichen) wuchs die Vault-Datei nach `VACUUM` durch `chunk_fts`
+inklusive Backfill um rund 90 KB — etwa 1,8 KB je Paper bzw. rund 450 Byte je Chunk. Der
+FTS5-Index über `unicode61` liegt damit, anders als der Trigram-Index aus #703, in derselben
+Größenordnung wie der indizierte Rohtext, nicht in einem Vielfachen davon — `unicode61`
+legt nur Wort-Tokens ab, kein Trigram je Zeichenposition.
+
 ## PDF-Volltext-Index
 
 `papers_fts.fulltext` wird seit v6.6 real befüllt (zuvor schrieben die FTS5-Trigger die

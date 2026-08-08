@@ -167,7 +167,12 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #      `Mittelstandsdigitalisierung` findet. Ebenfalls eine ganze TABELLE
 #      (Verifikation ueber `_REQUIRED_MIGRATION_TABLES`); der Backfill fuer
 #      Bestandspaper steckt in `migrate.add_papers_trgm_table()`.
-CURRENT_SCHEMA_VERSION = 12
+# 13 = chunk_fts (Issue #726): FTS5-Index ueber chunk_embeddings.chunk_text,
+#      dieselbe Tokenizer-Entscheidung wie papers_fts (unicode61, kein
+#      Trigram-Pendant -- der Auftrag ist ausdruecklich EIN Index). Ebenfalls
+#      eine ganze TABELLE (Verifikation ueber `_REQUIRED_MIGRATION_TABLES`);
+#      der Backfill fuer Bestandschunks steckt in `migrate.add_chunk_fts()`.
+CURRENT_SCHEMA_VERSION = 13
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -204,7 +209,9 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
 # Tabelle waere ueber `PRAGMA table_info()` unsichtbar, und der
 # `user_version`-Stempel wuerde sich irrtuemlich schliessen -- exakt der
 # Review-Fund aus PR #427, nur eine Ebene hoeher.
-_REQUIRED_MIGRATION_TABLES = frozenset({"embedding_meta", "table_values", "papers_trgm"})
+_REQUIRED_MIGRATION_TABLES = frozenset(
+    {"embedding_meta", "table_values", "papers_trgm", "chunk_fts"}
+)
 
 
 class _Unset:
