@@ -171,11 +171,20 @@ def search_papers_pre_702(db_path: str, query: str, k: int = DEFAULT_K) -> list[
                 seen.add(row["paper_id"])
                 if len(fts_results) >= k:
                     break
+        # Chunk-Zuordnung (#727, wie server.search_papers): reciprocal_rank_fusion
+        # schluesselt seit #727 auf 'chunk_id' statt 'paper_id' -- ohne diesen
+        # Schritt fehlt jedem paper-level FTS5-Treffer der Schluessel und die
+        # Fusion wirft KeyError. Kein #702-Verhalten (die Textquelle bleibt das
+        # rohe Snippet, siehe Docstring), nur die Fusion muss mit dem aktuellen
+        # Vertrag mithalten koennen.
+        fts_chunk_results = [
+            _server._attach_chunk_to_fts_hit(conn, r, sanitized) for r in fts_results
+        ]
     finally:
         conn.close()
 
     fused = reciprocal_rank_fusion(
-        _server._vec0_search(db_path, raw_query, k=k), fts_results, k=60, top_n=k
+        _server._vec0_search(db_path, raw_query, k=k), fts_chunk_results, k=60, top_n=k
     )
     # PRE-#702: bewusst KEIN _fill_missing_reranker_text(db_path, fused).
     return apply_reranker(
