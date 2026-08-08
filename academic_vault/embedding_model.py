@@ -299,16 +299,13 @@ def get_embedder(model_id: str | None = None, enabled: bool | None = None) -> Em
     Log — eine dauerhaft leere ``chunk_embeddings``-Tabelle soll nicht wieder
     unbemerkt bleiben (#372).
 
-    Ist das Embedding-Modell per Schalter abgeschaltet
-    (:func:`resolve_embedding_enabled`, Issue #719), liefert diese Funktion
-    ``None``, OHNE ``_load_backend_model`` je aufzurufen -- kein Download,
-    kein Ladeversuch, kein Cache-Eintrag in ``_EMBEDDER_ERROR_CACHE`` (der
-    Aus-Zustand ist kein Fehler). ``enabled`` erlaubt Aufrufern, den Schalter
-    explizit zu uebersteuern (Argument-Vorrang, s. ``resolve_bool_switch``).
+    Der Schalter (:func:`resolve_embedding_enabled`, Issue #719) gatet ausschliesslich
+    den Auto-Ingest-Pfad (``_maybe_ingest_embeddings``), nicht diese Funktion selbst.
+    Damit koennen explizite Aufrufer (``embed_quote``, ``quote_context_similarity``,
+    ``migrate.reindex_embeddings``) und Queries das Backend weiterhin nutzen, auch wenn
+    Auto-Ingest ausgeschaltet ist. Das ``enabled``-Argument bleibt fuer zukuenftige
+    Erweiterungen, wird aber hier nicht genutzt.
     """
-    if not resolve_embedding_enabled(enabled):
-        return None
-
     key = model_id or os.environ.get(ENV_MODEL_ID) or DEFAULT_MODEL_ID
     if key in _EMBEDDER_CACHE:
         return _EMBEDDER_CACHE[key]

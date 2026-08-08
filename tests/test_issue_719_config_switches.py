@@ -193,7 +193,10 @@ def test_repo_default_config_has_new_switches_enabled():
 
 
 def test_disabling_embedding_leaves_reranker_and_nli_unaffected(monkeypatch):
-    assert get_embedder(enabled=False) is None
+    # Mit explicit=False sollte resolve_embedding_enabled() False sein,
+    # aber get_embedder() sollte weiterhin versuchen, das Modell zu laden
+    # (der Schalter wird nur in _auto_embed_enabled() und _vec0_search() geprueft).
+    assert resolve_embedding_enabled(explicit=False) is False
     assert resolve_reranker_enabled() is True
     assert resolve_nli_prefilter_enabled() is True
 
