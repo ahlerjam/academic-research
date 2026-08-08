@@ -2918,11 +2918,19 @@ class VaultDB:
 
         hits: list[dict] = []
         for row in rows:
-            meta = conn.execute(
-                "SELECT paper_id, chunk_text, section_title, page_start, page_end "
-                "FROM chunk_embeddings WHERE chunk_id = ?",
-                (row["chunk_id"],),
-            ).fetchone()
+            # Versuche, Lokationsspalten zu lesen; fallback auf Basis-Spalten für v13.
+            try:
+                meta = conn.execute(
+                    "SELECT paper_id, chunk_text, section_title, page_start, page_end "
+                    "FROM chunk_embeddings WHERE chunk_id = ?",
+                    (row["chunk_id"],),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                # v13-Datenbank: section_title/page_start/page_end Spalten existieren nicht.
+                meta = conn.execute(
+                    "SELECT paper_id, chunk_text FROM chunk_embeddings WHERE chunk_id = ?",
+                    (row["chunk_id"],),
+                ).fetchone()
             if meta is None:
                 continue
             hit = {
@@ -2931,15 +2939,11 @@ class VaultDB:
                 "chunk_text": meta["chunk_text"],
                 "distance": float(row["distance"]),
             }
-            # Lokationsspalten aus Meta abgesichert einlesen (v13-Kompatibilität).
-            try:
+            # Lokationsspalten nur setzen, wenn sie existieren (bei v13 fallback oben).
+            if "section_title" in meta.keys():
                 hit["section_title"] = meta["section_title"]
                 hit["page_start"] = meta["page_start"]
                 hit["page_end"] = meta["page_end"]
-            except (sqlite3.OperationalError, IndexError):
-                # v13-Datenbank: section_title/page_start/page_end existieren nicht.
-                # Lokation bleibt ungesetzt -- dokumentiertes Verhalten für Bestände.
-                pass
             hits.append(hit)
         # Gleicher Tiebreaker wie im Python-Fallback: bei exakt gleicher Distanz
         # (z. B. zwei zur Query orthogonale Chunks) wuerde vec0 sonst nach
