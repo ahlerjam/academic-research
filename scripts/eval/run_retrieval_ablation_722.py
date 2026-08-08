@@ -295,11 +295,17 @@ def run_search(
     ``local_rerank`` steuert ``VAULT_RERANK_LOCAL_DISABLE`` (#714, echter
     Produktions-Schalter). ``fts_text_fix`` waehlt zwischen
     ``server.search_papers`` (aktueller Code) und dem #702-Shim.
+
+    Cloud-Reranker-Keys (VOYAGE_API_KEY, COHERE_API_KEY) werden neutralisiert,
+    um sicherzustellen, dass alle Arme denselben Reranker-Zustand haben
+    (entweder Shim oder lokaler Fallback je nach Flags, nie Cloud).
     """
     from academic_vault.retrieval import ENV_LOCAL_RERANKER_DISABLE
     from academic_vault.server import search_papers
 
-    prior = os.environ.get(ENV_LOCAL_RERANKER_DISABLE)
+    prior_local = os.environ.get(ENV_LOCAL_RERANKER_DISABLE)
+    prior_voyage = os.environ.pop("VOYAGE_API_KEY", None)
+    prior_cohere = os.environ.pop("COHERE_API_KEY", None)
     try:
         if local_rerank:
             os.environ.pop(ENV_LOCAL_RERANKER_DISABLE, None)
@@ -311,10 +317,14 @@ def run_search(
         else:
             results = search_papers_pre_702(db_path, query, k=k)
     finally:
-        if prior is None:
+        if prior_local is None:
             os.environ.pop(ENV_LOCAL_RERANKER_DISABLE, None)
         else:
-            os.environ[ENV_LOCAL_RERANKER_DISABLE] = prior
+            os.environ[ENV_LOCAL_RERANKER_DISABLE] = prior_local
+        if prior_voyage is not None:
+            os.environ["VOYAGE_API_KEY"] = prior_voyage
+        if prior_cohere is not None:
+            os.environ["COHERE_API_KEY"] = prior_cohere
 
     seen: list[str] = []
     for r in results:
