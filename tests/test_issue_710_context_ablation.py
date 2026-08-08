@@ -410,3 +410,96 @@ class TestBuilderPrompt:
             0: {"sentence": "a", "sentence_de": "b"},
             1: {"sentence": "c", "sentence_de": "d"},
         }
+
+
+# ---------------------------------------------------------------------------
+# Regressionsfall: Resume-Cache ueberlebt den JSON-Roundtrip (int-Keys)
+# ---------------------------------------------------------------------------
+class TestBuilderCacheResume:
+    """``by_index`` hat int-Schluessel im Speicher, aber JSON kennt nur String-Keys.
+
+    ``transform_one_document`` liefert ``by_index`` mit int-Schluesseln
+    (siehe ``_validate_sentences``). Landet das Record ueber
+    ``json.dumps``/``json.loads`` im Cache und zurueck, werden daraus
+    ``"0"``/``"1"``/... -- der Lesepfad in ``build_sentences`` greift aber mit
+    ``chunk["chunk_index"]`` (ein int) zu. Ohne Ruecktausch stirbt jeder
+    Wiederanlauf nach einem Abbruch (Timeout, erschoepfte Versuche) mit
+    ``KeyError``, obwohl genau dafuer der Cache existiert.
+    """
+
+    @staticmethod
+    def _tiny_goldset() -> dict:
+        return {
+            "meta": {"manifest_sha256": "test-manifest"},
+            "documents": [{"doc_id": "doc-a", "lang": "en", "title": "Titel A"}],
+            "chunks": [
+                {
+                    "chunk_id": "doc-a#0",
+                    "doc_id": "doc-a",
+                    "lang": "en",
+                    "chunk_index": 0,
+                    "chunk_text": "Erster Chunk.",
+                },
+                {
+                    "chunk_id": "doc-a#1",
+                    "doc_id": "doc-a",
+                    "lang": "en",
+                    "chunk_index": 1,
+                    "chunk_text": "Zweiter Chunk.",
+                },
+            ],
+        }
+
+    def test_build_sentences_resumes_from_a_cache_file_without_keyerror(self, tmp_path):
+        record = {
+            "doc_id": "doc-a",
+            "by_index": {
+                0: {"sentence": "a", "sentence_de": "a-de"},
+                1: {"sentence": "b", "sentence_de": "b-de"},
+            },
+            "duration_ms": 123.4,
+            "attempts": 1,
+            "session_id": "sess-1",
+            "total_cost_usd": 0.01,
+            "usage": {"input_tokens": 1, "output_tokens": 2},
+        }
+        cache_path = tmp_path / "sentences.partial.jsonl"
+        # Derselbe Roundtrip wie im echten Lauf: build_sentences schreibt mit
+        # json.dumps, ein Wiederanlauf liest mit json.loads -- die Testdaten
+        # muessen also durch genau diesen Roundtrip, sonst waeren int-Keys
+        # (die ``dict`` in Python zulaesst) nie zu String-Keys geworden und
+        # der Test wuerde den Bug gar nicht auf die Probe stellen.
+        cache_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+        assert json.loads(cache_path.read_text(encoding="utf-8").strip())["by_index"] == {
+            "0": {"sentence": "a", "sentence_de": "a-de"},
+            "1": {"sentence": "b", "sentence_de": "b-de"},
+        }, "Testvoraussetzung: JSON macht aus den int-Keys String-Keys"
+
+        payload = builder.build_sentences(self._tiny_goldset(), "sonnet", cache_path=cache_path)
+
+        assert [s["sentence"] for s in payload["sentences"]] == ["a", "b"]
+        assert [s["sentence_de"] for s in payload["sentences"]] == ["a-de", "b-de"]
+        assert [s["chunk_index"] for s in payload["sentences"]] == [0, 1]
+
+    def test_cache_survives_a_second_load_after_being_read_once(self, tmp_path):
+        """Der Ruecktausch darf den Cache selbst nicht veraendern (kein Re-Dump noetig)."""
+        record = {
+            "doc_id": "doc-a",
+            "by_index": {0: {"sentence": "a", "sentence_de": "a-de"}},
+            "duration_ms": 1.0,
+            "attempts": 1,
+            "session_id": "sess-1",
+            "total_cost_usd": 0.0,
+            "usage": {},
+        }
+        cache_path = tmp_path / "sentences.partial.jsonl"
+        cache_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        goldset = self._tiny_goldset()
+        goldset["chunks"] = goldset["chunks"][:1]
+        builder.build_sentences(goldset, "sonnet", cache_path=cache_path)
+        # Zweiter Aufruf mit derselben (unveraenderten) Cache-Datei muss
+        # ebenso funktionieren -- kein einmaliger Seiteneffekt, der den
+        # zweiten Lauf wieder auf int-Keys angewiesen macht.
+        payload_again = builder.build_sentences(goldset, "sonnet", cache_path=cache_path)
+        assert payload_again["sentences"][0]["sentence"] == "a"

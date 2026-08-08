@@ -277,6 +277,14 @@ def build_sentences(goldset: dict, model: str, cache_path: Path | None = None) -
         for line in cache_path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 record = json.loads(line)
+                # JSON-Objektschluessel sind immer Strings -- record["by_index"]
+                # kommt aus transform_one_document() mit int-Schluesseln (siehe
+                # _validate_sentences) und muss nach dem Roundtrip durch
+                # json.dumps/json.loads zurueckgewandelt werden. Sonst schlaegt
+                # der Lesepfad unten (Zugriff mit chunk["chunk_index"], ein int)
+                # mit KeyError fehl, sobald ein Dokument aus dem Cache kommt --
+                # der dokumentierte Resume waere dann nie erreichbar.
+                record["by_index"] = {int(k): v for k, v in record["by_index"].items()}
                 done[record["doc_id"]] = record
         print(f"{len(done)} Dokumente aus dem Cache uebernommen.", file=sys.stderr)
 

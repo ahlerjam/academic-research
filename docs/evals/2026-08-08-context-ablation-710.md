@@ -160,9 +160,9 @@ Rang, Erster Treffer je Query:
 | q-gap-06 | 2 | 6 | 3 | 2 |
 
 `model_context` verbessert q-gap-02 (Rang 4 → 1) und q-gap-06 (Rang 6 → 3)
-gegenüber `metadata_context` deutlich; q-gap-04 verschlechtert sich leicht
-(Rang 6 → 6, unverändert) bzw. bei `model_context_de` sogar (Rang 6 → 7). Der
-Gewinn ist also nicht gleichmäßig über alle sechs Queries verteilt, sondern
+gegenüber `metadata_context` deutlich; q-gap-04 bleibt unverändert (Rang 6 → 6)
+und verschlechtert sich bei `model_context_de` leicht (Rang 6 → 7). Der Gewinn
+ist also nicht gleichmäßig über alle sechs Queries verteilt, sondern
 konzentriert sich auf zwei bis drei Fälle — bei `n=6` ist das die eigentliche
 Evidenz, kein Widerspruch zum signifikanten Mittelwert.
 
