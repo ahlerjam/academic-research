@@ -14,6 +14,7 @@ standalone).
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -26,10 +27,10 @@ from scripts.eval.run_retrieval_ablation_722 import build_db
 from scripts.eval.run_retrieval_ablation_729 import (
     AC3_PAPER_COUNT,
     AC3_QUERIES,
-    _chunk_fts_hits_paper_level,
     _DeterministicEmbedder,
     _env_guard,
     _paper_id_rrf,
+    _papers_fts_hits,
     _vec0_search_paper_level,
     build_ac3_corpus,
     build_paper_relevance,
@@ -193,87 +194,124 @@ def test_vec0_search_paper_level_truncates_to_k(tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _chunk_fts_hits_paper_level: Chunk-FTS (#726), aber auf Paper-Ebene aggregiert
+# _papers_fts_hits: die reale, unveraenderte lexikalische Kandidatenquelle
+# (papers_fts/papers_trgm) -- identisch fuer 'vorher' UND Zwischenzustand A.
+# chunk_fts ist NIE eine eigene Suchquelle (PR-Review-Fund an einer frueheren
+# Fassung dieses Skripts, siehe Modul-Docstring).
 # ---------------------------------------------------------------------------
-def test_chunk_fts_hits_paper_level_dedupes_and_caps_at_k(tmp_path) -> None:
+def test_papers_fts_hits_finds_paper_by_title(tmp_path) -> None:
     db_path = str(tmp_path / "vault.db")
     db = VaultDB(db_path)
     db.init_schema()
-    db.add_paper(paper_id="p1", csl_json=json.dumps({"title": "x", "type": "article-journal"}))
-    db.add_paper(paper_id="p2", csl_json=json.dumps({"title": "y", "type": "article-journal"}))
-    db.add_chunk_embedding(
+    db.add_paper(
         paper_id="p1",
-        chunk_text="zebra migration patterns across the savanna",
-        context_sentence="ctx",
-        embedding_text="ctx zebra migration patterns across the savanna",
-        embedding_vector=None,
+        csl_json=json.dumps({"title": "Zebra Migration Patterns", "type": "article-journal"}),
     )
-    db.add_chunk_embedding(
-        paper_id="p1",
-        chunk_text="a second zebra chunk about migration too",
-        context_sentence="ctx",
-        embedding_text="ctx a second zebra chunk about migration too",
-        embedding_vector=None,
-    )
-    db.add_chunk_embedding(
-        paper_id="p2",
-        chunk_text="zebra herds and migration behaviour",
-        context_sentence="ctx",
-        embedding_text="ctx zebra herds and migration behaviour",
-        embedding_vector=None,
+    db.add_paper(
+        paper_id="p2", csl_json=json.dumps({"title": "Unrelated", "type": "article-journal"})
     )
     conn = VaultDB._open(db_path)
     try:
-        hits = _chunk_fts_hits_paper_level(conn, "zebra migration", k=10)
+        hits = _papers_fts_hits(conn, "zebra", k=10)
     finally:
         conn.close()
-    paper_ids = [h["paper_id"] for h in hits]
-    assert len(paper_ids) == len(set(paper_ids))  # keine Dubletten
-    assert set(paper_ids) == {"p1", "p2"}
-    for h in hits:
-        assert h["text"]  # voller Chunk-Text, kein Snippet-Fallback noetig
+    assert [h["paper_id"] for h in hits] == ["p1"]
 
 
-def test_chunk_fts_hits_paper_level_respects_k_cap(tmp_path) -> None:
+def test_papers_fts_hits_never_queries_chunk_fts_table(tmp_path) -> None:
+    """chunk_fts bleibt LEER (keine Chunks eingefuegt) -- ein Treffer ueber den
+    Titel darf davon unberuehrt bleiben, sonst waere chunk_fts doch eine
+    (verdeckte) Suchquelle."""
     db_path = str(tmp_path / "vault.db")
     db = VaultDB(db_path)
     db.init_schema()
-    for i in range(3):
-        pid = f"p{i}"
-        db.add_paper(paper_id=pid, csl_json=json.dumps({"title": pid, "type": "article-journal"}))
-        db.add_chunk_embedding(
-            paper_id=pid,
-            chunk_text="zebra migration text",
-            context_sentence="ctx",
-            embedding_text=f"ctx zebra migration text {i}",
-            embedding_vector=None,
-        )
+    db.add_paper(
+        paper_id="p1",
+        csl_json=json.dumps({"title": "Zebra Migration Patterns", "type": "article-journal"}),
+    )
     conn = VaultDB._open(db_path)
     try:
-        hits = _chunk_fts_hits_paper_level(conn, "zebra", k=2)
+        assert conn.execute("SELECT COUNT(*) FROM chunk_fts").fetchone()[0] == 0
+        hits = _papers_fts_hits(conn, "zebra", k=10)
     finally:
         conn.close()
-    assert len(hits) == 2
+    assert [h["paper_id"] for h in hits] == ["p1"]
 
 
 # ---------------------------------------------------------------------------
-# search_papers_paper_level: Shim-Zusammenspiel (fts_source-Umschaltung)
+# search_papers_paper_level: Shim-Zusammenspiel (attach_chunk-Umschaltung)
 # ---------------------------------------------------------------------------
 def test_search_papers_paper_level_empty_query_returns_empty(tmp_path) -> None:
     db_path = str(tmp_path / "vault.db")
     db = VaultDB(db_path)
     db.init_schema()
-    assert search_papers_paper_level(db_path, "   ", k=5, fts_source="papers_fts") == []
-    assert search_papers_paper_level(db_path, "   ", k=5, fts_source="chunk_fts") == []
+    assert search_papers_paper_level(db_path, "   ", k=5, attach_chunk=False) == []
+    assert search_papers_paper_level(db_path, "   ", k=5, attach_chunk=True) == []
 
 
-def test_search_papers_paper_level_rejects_unknown_fts_source(tmp_path) -> None:
+def test_search_papers_paper_level_attach_chunk_uses_real_attach_function(tmp_path) -> None:
+    """attach_chunk=True reichert den papers_fts-Treffer per ECHTER
+    Produktionsfunktion ``server._attach_chunk_to_fts_hit`` (#727) um einen
+    Chunk aus ``chunk_fts`` (#726) an -- die Kandidatenquelle bleibt trotzdem
+    papers_fts (dasselbe Paper-Set wie attach_chunk=False, siehe Test unten)."""
     db_path = str(tmp_path / "vault.db")
     db = VaultDB(db_path)
     db.init_schema()
-    db.add_paper(paper_id="p1", csl_json=json.dumps({"title": "x", "type": "article-journal"}))
-    with pytest.raises(ValueError):
-        search_papers_paper_level(db_path, "zebra", k=5, fts_source="bogus")
+    db.add_paper(
+        paper_id="p1",
+        csl_json=json.dumps({"title": "Zebra Migration Patterns", "type": "article-journal"}),
+    )
+    chunk_text = "Zebras migrate across the savanna in long seasonal loops."
+    db.add_chunk_embedding(
+        paper_id="p1",
+        chunk_text=chunk_text,
+        context_sentence="ctx",
+        embedding_text=f"ctx {chunk_text}",
+        embedding_vector=None,
+    )
+    os.environ[ENV_LOCAL_RERANKER_DISABLE] = "1"
+    try:
+        without = search_papers_paper_level(db_path, "zebra", k=5, attach_chunk=False)
+        with_attach = search_papers_paper_level(db_path, "zebra", k=5, attach_chunk=True)
+    finally:
+        os.environ.pop(ENV_LOCAL_RERANKER_DISABLE, None)
+
+    assert [r["paper_id"] for r in without] == ["p1"]
+    assert [r["paper_id"] for r in with_attach] == ["p1"]
+    # attach_chunk=True: 'text' kommt aus dem echten Chunk (chunk_fts-Lookup).
+    assert with_attach[0]["text"] == chunk_text
+
+
+def test_zwischenzustand_a_is_identical_to_vorher_when_reranker_disabled(tmp_path) -> None:
+    """Kernaussage des Reports: bei ausgeschaltetem Reranker kann die
+    Chunk-Anreicherung (attach_chunk=True) die Paper-Ebene-RRF-Reihenfolge NIE
+    beeinflussen -- die Fusion schluesselt auf 'paper_id' und ignoriert
+    'chunk_id'/'text' vollstaendig. Das ist eine mathematische Eigenschaft,
+    kein empirischer Zufall, und diese Regression waere ein Bruch derselben."""
+    db_path = str(tmp_path / "vault.db")
+    db = VaultDB(db_path)
+    db.init_schema()
+    for i, title in enumerate(("Zebra Migration Patterns", "Zebra Herd Dynamics")):
+        pid = f"p{i}"
+        db.add_paper(paper_id=pid, csl_json=json.dumps({"title": title, "type": "article-journal"}))
+        db.add_chunk_embedding(
+            paper_id=pid,
+            chunk_text=f"zebra chunk text {i}",
+            context_sentence="ctx",
+            embedding_text=f"ctx zebra chunk text {i}",
+            embedding_vector=None,
+        )
+    os.environ[ENV_LOCAL_RERANKER_DISABLE] = "1"
+    try:
+        vorher = search_papers_paper_level(db_path, "zebra", k=5, attach_chunk=False)
+        zwischenzustand_a = search_papers_paper_level(db_path, "zebra", k=5, attach_chunk=True)
+    finally:
+        os.environ.pop(ENV_LOCAL_RERANKER_DISABLE, None)
+
+    vorher_ids = [r["paper_id"] for r in vorher]
+    a_ids = [r["paper_id"] for r in zwischenzustand_a]
+    assert vorher_ids == a_ids  # gleiche Paper-Reihenfolge trotz angereicherten 'text'
+    assert vorher_ids  # sanity: nicht trivial leer
 
 
 # ---------------------------------------------------------------------------
@@ -300,8 +338,6 @@ def test_env_guard_disables_local_reranker(monkeypatch) -> None:
         assert result[0]["reranked"] is False
         assert result[0]["reranker"] == "none"
     # Nach dem Guard: Umgebungsvariable wieder entfernt (Ausgangszustand).
-    import os
-
     assert os.environ.get(ENV_LOCAL_RERANKER_DISABLE) is None
 
 
@@ -309,19 +345,13 @@ def test_env_guard_restores_prior_local_rerank_value(monkeypatch) -> None:
     monkeypatch.setenv(ENV_LOCAL_RERANKER_DISABLE, "prior-value")
     with _env_guard():
         pass
-    import os
-
     assert os.environ.get(ENV_LOCAL_RERANKER_DISABLE) == "prior-value"
 
 
 def test_env_guard_restores_cloud_keys(monkeypatch) -> None:
     monkeypatch.setenv("VOYAGE_API_KEY", "secret")
     with _env_guard():
-        import os
-
         assert "VOYAGE_API_KEY" not in os.environ
-    import os
-
     assert os.environ.get("VOYAGE_API_KEY") == "secret"
 
 
@@ -403,10 +433,12 @@ def test_run_quality_ablation_leaves_embedder_cache_clean() -> None:
 
 
 @pytest.mark.skipif(not GOLDSET_PATH.exists(), reason="#708-Fixture nicht vorhanden")
-def test_fts5_comma_defect_affects_both_fts_sources_identically() -> None:
+def test_fts5_comma_defect_affects_vorher_and_zwischenzustand_a_identically() -> None:
     """Derselbe vorbestehende Defekt wie in #722 (Komma nicht sanitisiert,
-    sqlite3.OperationalError) betrifft chunk_fts UND papers_fts gleichermassen
-    -- kein #729-spezifisches Verhalten, nur die gemeinsame Ursache in
+    sqlite3.OperationalError) betrifft BEIDE Faelle gleichermassen -- er
+    sitzt in ``_papers_fts_hits`` (gemeinsame Kandidatenquelle, siehe
+    Modul-Docstring), lange bevor ``attach_chunk`` ueberhaupt ausgewertet
+    wird. Kein #729-spezifisches Verhalten, nur die gemeinsame Ursache in
     ``db._sanitize_fts5_query``."""
     goldset = load_goldset()
     vectors = dict(load_vectors())
@@ -424,11 +456,11 @@ def test_fts5_comma_defect_affects_both_fts_sources_identically() -> None:
         try:
             with pytest.raises(sqlite3.OperationalError):
                 search_papers_paper_level(
-                    db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, fts_source="papers_fts"
+                    db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, attach_chunk=False
                 )
             with pytest.raises(sqlite3.OperationalError):
                 search_papers_paper_level(
-                    db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, fts_source="chunk_fts"
+                    db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, attach_chunk=True
                 )
         finally:
             embedding_model._EMBEDDER_CACHE.clear()
@@ -554,6 +586,4 @@ def test_measure_search_latency_restores_embedder_cache_and_env(tmp_path, monkey
     prior_cache = dict(embedding_model._EMBEDDER_CACHE)
     measure_search_latency(db_path, queries=AC3_QUERIES[:1], repeats=1)
     assert embedding_model._EMBEDDER_CACHE == prior_cache
-    import os
-
     assert "VAULT_EMBEDDING_MODEL" not in os.environ

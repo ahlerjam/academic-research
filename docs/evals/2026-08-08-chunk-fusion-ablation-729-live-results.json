@@ -1343,27 +1343,27 @@
     "chunk_count_max": 6,
     "index_growth": {
       "bytes_without_chunk_fts": 2830336,
-      "bytes_with_chunk_fts": 3207168,
-      "growth_bytes": 376832,
-      "growth_pct": 13.31
+      "bytes_with_chunk_fts": 3182592,
+      "growth_bytes": 352256,
+      "growth_pct": 12.45
     },
     "search_latency": {
       "vorher": {
-        "p50_ms": 6.14,
-        "p95_ms": 7.572,
-        "mean_ms": 6.243,
+        "p50_ms": 4.83,
+        "p95_ms": 6.234,
+        "mean_ms": 5.326,
         "n": 36
       },
       "zwischenzustand_a": {
-        "p50_ms": 6.278,
-        "p95_ms": 7.406,
-        "mean_ms": 6.386,
+        "p50_ms": 4.844,
+        "p95_ms": 5.537,
+        "mean_ms": 4.919,
         "n": 36
       },
       "nachher": {
-        "p50_ms": 7.391,
-        "p95_ms": 8.721,
-        "mean_ms": 7.539,
+        "p50_ms": 7.018,
+        "p95_ms": 8.785,
+        "mean_ms": 7.141,
         "n": 36
       }
     }

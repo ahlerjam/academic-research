@@ -10,24 +10,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
-- **Traegt der Umbau auf Chunk-Ebene? (#729):** #726 (Chunk-FTS-Index
-  `chunk_fts`) und #727 (RRF-Fusion auf `chunk_id` statt `paper_id`) gegen das
-  Chunk-Goldset aus #708 gemessen -- drei Zustaende statt zwei (vorher /
-  Zwischenzustand A: nur der Index / nachher: Index + Chunk-Fusion), damit der
-  Beitrag des Index getrennt vom Beitrag der Fusionsgranularitaet ausgewiesen
-  ist. Neu: `scripts/eval/run_retrieval_ablation_729.py`, vollstaendig
-  hermetisch (kein `VAULT_E5_LIVE_TEST=1` noetig -- weder #701 noch der
-  Reranker sind Teil dieses Umbaus, ein Playback-Embedder bedient die
-  #708-Fixture). Kernbefund: auf dem 11-Paper-Goldset sind alle drei Zustaende
-  fuer jede der 26 Queries bitgleich (Recall@10 0,7308, nDCG@10 0,6619, MRR
-  0,6394 in allen dreien) -- strukturell erklaerbar (Korpus zu klein/gesaettigt
-  fuer `k=10`, jedes Paper hat vollstaendige Chunk-Embeddings), keine
-  Regression, aber auch kein belegter Gewinn auf diesem Set. Kostenseite an
-  einem synthetischen 60-Paper-Vault (deterministischer Fake-Embedder, echtes
-  Chunking): Chunk-FTS-Index kostet +13,3 % Dateigroesse und kaum Latenz
-  (+2,7 % p50), die Chunk-Fusion selbst +19,5 % p50-Suchlatenz gegenueber
-  Paper-Ebene-Fusion. Empfehlung: nicht zurueckrollen (moderate Kosten, die
-  Null ist eine Aussage ueber das Goldset, nicht ueber den Mechanismus).
+- **Traegt der Umbau auf Chunk-Ebene? (#729):** #726 (Chunk-Anreicherung ueber
+  `server._attach_chunk_to_fts_hit`, nutzt den `chunk_fts`-Index als Lookup
+  fuer einen bereits ueber `papers_fts`/`papers_trgm` gefundenen Treffer --
+  KEINE eigene Suchquelle) und #727 (RRF-Fusion auf `chunk_id` statt
+  `paper_id`) getrennt gegen das Chunk-Goldset aus #708 gemessen -- drei
+  Zustaende (vorher / Zwischenzustand A: nur die Anreicherung / nachher:
+  Anreicherung + Chunk-Fusion), damit AC2 den Beitrag der Anreicherung vom
+  Beitrag der Fusionsgranularitaet trennt. Neu:
+  `scripts/eval/run_retrieval_ablation_729.py`, vollstaendig hermetisch (kein
+  `VAULT_E5_LIVE_TEST=1` noetig -- weder #701 noch der Reranker sind Teil
+  dieses Umbaus, ein Playback-Embedder bedient die #708-Fixture). Kernbefund:
+  auf dem 11-Paper-Goldset sind alle drei Zustaende fuer jede der 26 Queries
+  bitgleich (Recall@10 0,7308, nDCG@10 0,6619, MRR 0,6394 in allen dreien) --
+  zwei verschiedene Gruende: der Anreicherungs-Delta ist bei deaktiviertem
+  Reranker mathematisch zwingend null (Paper-Ebene-RRF liest `chunk_id`/`text`
+  nie), der Fusions-Delta ist ein empirischer Nullbefund wegen
+  Goldset-Saettigung (11 Paper bei k=10). Keine Regression, aber auch kein
+  belegter Gewinn auf diesem Set. Kostenseite an einem synthetischen
+  60-Paper-Vault (deterministischer Fake-Embedder, echtes Chunking, beide
+  Varianten gleich VACUUMt): der `chunk_fts`-Index kostet +12,45 %
+  Dateigroesse, die Chunk-Anreicherung selbst kaum Latenz (+0,29 % p50), die
+  Chunk-Fusion +44,9 % p50-Suchlatenz gegenueber Paper-Ebene-Fusion.
+  Empfehlung: nicht zurueckrollen (moderate Kosten, die Nullen sind Aussagen
+  ueber Messaufbau/Goldset, nicht ueber den Mechanismus).
   Report: `docs/evals/2026-08-08-chunk-fusion-ablation-729.md`.
 
 - **Embedding-Kandidaten auf dem Chunk-Goldset gemessen (#731):** Fuenf

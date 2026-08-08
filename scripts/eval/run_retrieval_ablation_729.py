@@ -13,14 +13,31 @@ Chunk-Goldset aus #708 gemessen. Dieses Skript misst drei Zustaende:
   vorhanden (beide Pfade wurden ersetzt) -- Shim, dokumentiert und
   differenziell gegen den historischen Code (Commit ``a32f570^``) geprueft in
   ``tests/test_issue_729_chunk_fusion_ablation.py``.
-- **Zwischenzustand A** (``chunk_fts_index=True, chunk_fusion=False``): der
-  #726-Index ist da, aber die Fusion bleibt auf Paper-Ebene aggregiert --
-  isoliert den Beitrag des Index von dem der Fusionsgranularitaet.
+- **Zwischenzustand A** (``chunk_fts_index=True, chunk_fusion=False``):
+  WICHTIG -- ``chunk_fts`` ist im echten Produktionscode NIE eine eigene
+  Kandidatenquelle (das war ein Fehler in einer frueheren Fassung dieses
+  Skripts, PR-Review-Fund). Die lexikalische KandidatenSUCHE bleibt in JEDEM
+  gemessenen Zustand ``papers_fts``/``papers_trgm`` (unveraendert seit #703,
+  siehe ``server.search_papers`` Zeilen 1011-1024). Was #726 tatsaechlich
+  liefert, ist ein Chunk-LOOKUP fuer einen bereits gefundenen Paper-Treffer:
+  ``server._attach_chunk_to_fts_hit`` (#727, nutzt intern den #726-Index)
+  ordnet jedem ``papers_fts``/``papers_trgm``-Treffer seinen best-passenden
+  Chunk zu. Zwischenzustand A ruft exakt diese reale Produktionsfunktion auf,
+  haelt die Fusion aber auf Paper-Ebene (wie vor #727) -- isoliert damit, was
+  eine chunk-Anreicherung *ohne* Aenderung der Fusionsgranularitaet bewirken
+  wuerde.
 - **nachher** (``chunk_fts_index=True, chunk_fusion=True``): der aktuelle
   Produktionscode, unveraendert ueber ``academic_vault.server.search_papers``.
 
-Delta(A - vorher) = Beitrag des Chunk-FTS-Index.
-Delta(nachher - A) = Beitrag der Chunk-Ebene-Fusion.
+Delta(A - vorher) = Beitrag der Chunk-Anreicherung (#726 ueber
+``_attach_chunk_to_fts_hit``) OHNE Fusionsaenderung. Bei deaktiviertem
+Reranker (siehe unten) ist dieser Beitrag NULL per Konstruktion: Paper-Ebene-
+RRF schluesselt auf ``paper_id`` und ignoriert ``chunk_id``/``text`` voll-
+staendig -- eine Chunk-Anreicherung kann die Rangfolge erst beeinflussen,
+sobald ein Reranker das angereicherte ``text``-Feld tatsaechlich liest. Das
+ist eine mathematische Eigenschaft der Paper-Ebene-Fusion, kein empirischer
+Befund -- siehe Report fuer die Einordnung.
+Delta(nachher - A) = Beitrag der Chunk-Ebene-Fusion (#727) selbst.
 Delta(nachher - vorher) = Gesamtbeitrag des Umbaus (nicht notwendig additiv).
 
 Zwei Messteile:
@@ -154,15 +171,21 @@ def _vec0_search_paper_level(db_path: str, query: str, k: int) -> list[dict]:
     """Reimplementiert die Paper-Dedup, die ``server._vec0_search()`` vor #727
     selbst durchfuehrte (Commit ``a32f570^``).
 
-    Ruft den heutigen (chunk-level, #727) ``_vec0_search`` auf -- der zugrunde
-    liegende KNN-Mechanismus (``VaultDB.knn_chunks``) ist seit #727
-    unveraendert, nur die Aggregation wurde AUS der Funktion heraus verschoben
-    -- und aggregiert hier wieder auf bestes Chunk je Paper (nach Distanz
-    aufsteigend), genau wie der historische Code.
+    Ruft den heutigen (chunk-level, #727) ``_vec0_search`` mit dem
+    UNVERAENDERTEN ``k`` auf -- der historische Code rief
+    ``knn_chunks(k=max(k*4, k))`` GENAU EINMAL auf; die heutige
+    ``_vec0_search`` wendet dieselbe ``max(k*4, k)``-Multiplikation intern
+    SELBST an. Wuerde diese Funktion hier zusaetzlich ``k*4`` uebergeben,
+    verdoppelte sich die Multiplikation (``max((k*4)*4, k*4)`` -> ein 16-facher
+    statt 4-facher Pool, PR-Review-Fund) -- der zugrunde liegende
+    KNN-Mechanismus (``VaultDB.knn_chunks``) ist seit #727 unveraendert, nur
+    die Aggregation wurde AUS der Funktion heraus verschoben, und wird hier
+    wieder auf bestes Chunk je Paper (nach Distanz aufsteigend) aggregiert,
+    genau wie der historische Code.
     """
     from academic_vault import server as _server
 
-    chunk_hits = _server._vec0_search(db_path, query, k=max(k * 4, k))
+    chunk_hits = _server._vec0_search(db_path, query, k=k)
     best_per_paper: dict[str, dict] = {}
     for hit in chunk_hits:  # bereits aufsteigend nach Distanz sortiert
         pid = hit["paper_id"]
@@ -173,43 +196,39 @@ def _vec0_search_paper_level(db_path: str, query: str, k: int) -> list[dict]:
     return ranked[:k]
 
 
-def _chunk_fts_hits_paper_level(conn, query: str, k: int) -> list[dict]:
-    """Chunk-FTS-Treffer (#726), auf Paper-Ebene aggregiert (Zwischenzustand A).
-
-    Isoliert den Beitrag des Chunk-FTS-Index OHNE die Fusion selbst auf
-    Chunk-Ebene zu heben (#727 bleibt hier aus): sucht ueber ``chunk_fts``
-    (voller Chunk-Text statt Titel/Abstract wie ``papers_fts``), behaelt aber
-    nur den besten Treffer je Paper (erstes Vorkommen in Rang-Reihenfolge),
-    gedeckelt auf ``k`` Paper.
+def _papers_fts_hits(conn, query: str, k: int) -> list[dict]:
+    """Die reale, UNVERAENDERTE lexikalische Kandidatenquelle (``papers_fts``/
+    ``papers_trgm``, seit #703 unangetastet) -- identisch fuer 'vorher' UND
+    Zwischenzustand A. Zeile-fuer-Zeile dasselbe Verfahren wie in
+    ``server.search_papers`` vor dem ``rerank``-Zweig (Zeilen 1011-1024).
     """
-    rows = conn.execute(
-        "SELECT chunk_id, paper_id, chunk_text FROM chunk_fts WHERE chunk_fts MATCH ? ORDER BY rank",
-        (query,),
-    ).fetchall()
-    best_per_paper: dict[str, dict] = {}
-    for row in rows:
-        pid = row["paper_id"]
-        if pid in best_per_paper:
-            continue
-        best_per_paper[pid] = {
-            "paper_id": pid,
-            "chunk_id": row["chunk_id"],
-            "text": row["chunk_text"],
-        }
-        if len(best_per_paper) >= k:
-            break
-    return list(best_per_paper.values())
+    from academic_vault import server as _server
+
+    fts_results = _server._fts_exact_hits(conn, query, None, k)
+    if len(fts_results) < k:
+        seen = {r["paper_id"] for r in fts_results}
+        for row in _server._fts_trigram_hits(conn, query, None, k):
+            if row["paper_id"] in seen:
+                continue
+            fts_results.append(row)
+            seen.add(row["paper_id"])
+            if len(fts_results) >= k:
+                break
+    return fts_results
 
 
-def search_papers_paper_level(db_path: str, query: str, k: int, fts_source: str) -> list[dict]:
-    """'vorher' bzw. Zwischenzustand A: Fusion auf ``paper_id`` (Shim).
+def search_papers_paper_level(db_path: str, query: str, k: int, attach_chunk: bool) -> list[dict]:
+    """'vorher' (``attach_chunk=False``) bzw. Zwischenzustand A
+    (``attach_chunk=True``): Fusion auf ``paper_id`` (Shim, wie vor #727).
 
-    ``fts_source`` waehlt die lexikalische Seite:
-
-    - ``"papers_fts"`` ('vorher', wie vor #726): echte, UNVERAENDERTE
-      Produktionsfunktionen ``server._fts_exact_hits``/``_fts_trigram_hits``
-      (Titel/Abstract-Suche, seit #703 unangetastet).
-    - ``"chunk_fts"`` (Zwischenzustand A): :func:`_chunk_fts_hits_paper_level`.
+    Die lexikalische KandidatenSUCHE ist in BEIDEN Faellen
+    ``papers_fts``/``papers_trgm`` (:func:`_papers_fts_hits`) -- ``chunk_fts``
+    ist in der echten Produktion NIE eine eigene Suchquelle (PR-Review-Fund an
+    einer frueheren Fassung dieses Skripts, die ``chunk_fts`` faelschlich
+    direkt befragte). ``attach_chunk=True`` reichert jeden gefundenen
+    Paper-Treffer zusaetzlich per ``server._attach_chunk_to_fts_hit`` (#727,
+    die REALE Produktionsfunktion, die den #726-Index als Chunk-LOOKUP fuer
+    ein bereits gefundenes Paper nutzt) um ``chunk_id``/``text`` an.
 
     Beide Zweige nutzen denselben paper-level Vektorpfad
     (:func:`_vec0_search_paper_level`) und dieselbe paper_id-Fusion
@@ -227,21 +246,11 @@ def search_papers_paper_level(db_path: str, query: str, k: int, fts_source: str)
     _server._ensure_schema_for_read(db_path)
     conn = VaultDB._open(db_path)
     try:
-        if fts_source == "papers_fts":
-            fts_results = _server._fts_exact_hits(conn, sanitized, None, k)
-            if len(fts_results) < k:
-                seen = {r["paper_id"] for r in fts_results}
-                for row in _server._fts_trigram_hits(conn, sanitized, None, k):
-                    if row["paper_id"] in seen:
-                        continue
-                    fts_results.append(row)
-                    seen.add(row["paper_id"])
-                    if len(fts_results) >= k:
-                        break
-        elif fts_source == "chunk_fts":
-            fts_results = _chunk_fts_hits_paper_level(conn, sanitized, k)
-        else:
-            raise ValueError(f"unbekannte fts_source: {fts_source!r}")
+        fts_results = _papers_fts_hits(conn, sanitized, k)
+        if attach_chunk:
+            fts_results = [
+                _server._attach_chunk_to_fts_hit(conn, r, sanitized) for r in fts_results
+            ]
     finally:
         conn.close()
 
@@ -288,7 +297,14 @@ def _env_guard():
 def run_search(
     db_path: str, query: str, k: int, chunk_fts_index: bool, chunk_fusion: bool
 ) -> list[str]:
-    """Fuehrt EINE Suche fuer die gewuenschte Kombination aus, gibt Paper-IDs zurueck."""
+    """Fuehrt EINE Suche fuer die gewuenschte Kombination aus, gibt Paper-IDs zurueck.
+
+    ``chunk_fts_index`` steuert hier, ob die Paper-Ebene-Fusion (``chunk_fusion=False``)
+    jeden Treffer per ``server._attach_chunk_to_fts_hit`` (#727, nutzt den
+    #726-Index als Chunk-LOOKUP, siehe :func:`search_papers_paper_level`) um
+    einen Chunk anreichert -- NICHT, ob ``chunk_fts`` als eigene Suchquelle
+    dient (das tut sie in der echten Produktion nie).
+    """
     from academic_vault.server import search_papers
 
     with _env_guard():
@@ -299,8 +315,7 @@ def run_search(
                 )
             results = search_papers(db_path, query, k=k, rerank=True)
         else:
-            fts_source = "chunk_fts" if chunk_fts_index else "papers_fts"
-            results = search_papers_paper_level(db_path, query, k, fts_source=fts_source)
+            results = search_papers_paper_level(db_path, query, k, attach_chunk=chunk_fts_index)
 
     seen: list[str] = []
     for r in results:
@@ -628,9 +643,7 @@ def _build_ac3_db(tmpdir: Path, name: str, corpus: list[dict], with_chunk_fts: b
     if not with_chunk_fts:
         # Bildet den Zustand VOR #726 nach: Tabelle + Trigger existierten
         # nicht. Drop NACH der Befuellung (die Insert-Trigger duerfen beim
-        # Aufbau nicht brechen, Muster wie papers_trgm in #722), danach VACUUM,
-        # damit die Dateigroesse den tatsaechlichen Platzbedarf zeigt statt
-        # den durch SQLite freigegebenen, aber nicht zurueckgegebenen Space.
+        # Aufbau nicht brechen, Muster wie papers_trgm in #722).
         conn = VaultDB._open(db_path)
         try:
             conn.execute("DROP TRIGGER IF EXISTS chunk_ai")
@@ -638,15 +651,21 @@ def _build_ac3_db(tmpdir: Path, name: str, corpus: list[dict], with_chunk_fts: b
             conn.execute("DROP TRIGGER IF EXISTS chunk_au")
             conn.execute("DROP TABLE IF EXISTS chunk_fts")
             conn.commit()
-            conn.execute("VACUUM")
         finally:
             conn.close()
-    else:
-        conn = VaultDB._open(db_path)
-        try:
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        finally:
-            conn.close()
+
+    # VACUUM in JEDEM Fall (PR-Review-Fund: vorher nur im with_chunk_fts=False-
+    # Zweig, das machte den Groessenvergleich asymmetrisch -- eine kompaktierte
+    # gegen eine unkompaktierte DB). Die Dateigroesse soll den tatsaechlichen
+    # Platzbedarf zeigen, nicht den durch SQLite freigegebenen, aber nicht
+    # zurueckgegebenen Space, UND beide Varianten muessen gleich behandelt
+    # werden, damit die Differenz ausschliesslich auf chunk_fts zurueckgeht.
+    conn = VaultDB._open(db_path)
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.execute("VACUUM")
+    finally:
+        conn.close()
     return db_path
 
 
@@ -699,11 +718,11 @@ def measure_search_latency(
             for _ in range(repeats):
                 for q in queries:
                     t0 = time.perf_counter()
-                    search_papers_paper_level(db_path, q, k, fts_source="papers_fts")
+                    search_papers_paper_level(db_path, q, k, attach_chunk=False)
                     timings["vorher"].append(time.perf_counter() - t0)
 
                     t0 = time.perf_counter()
-                    search_papers_paper_level(db_path, q, k, fts_source="chunk_fts")
+                    search_papers_paper_level(db_path, q, k, attach_chunk=True)
                     timings["zwischenzustand_a"].append(time.perf_counter() - t0)
 
                     t0 = time.perf_counter()
