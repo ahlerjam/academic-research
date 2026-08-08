@@ -34,6 +34,8 @@ danach höchstens den passenden Report.
 | [`2026-08-07-hyde-multiquery-733.md`](2026-08-07-hyde-multiquery-733.md) | HyDE und Multi-Query prototypisch gegen das Chunk-Goldset aus #708 gemessen: nDCG@10/MRR je Arm, Sprachlücke getrennt ausgewiesen, Latenz je Verfahren, Empfehlung aus den Zahlen (#733) |
 | [`2026-08-07-hyde-multiquery-733-live-results.json`](2026-08-07-hyde-multiquery-733-live-results.json) | Rohdaten des Messlaufs (alle vier Arme, per Query, inklusive Deltas und Latenzblock) — vom CI-Job `retrieval-goldset` gegen einen frischen Lauf geprüft |
 | [`2026-08-07-bge-m3-nli-scorer-720.md`](2026-08-07-bge-m3-nli-scorer-720.md) | Momentaufnahme: NLI-Scorer-Wechsel auf `bge-m3-zeroshot-v2.0` @ Schwelle 0,95, A/B über 278 Fälle, `condition-stripped`-Grenze, zwei verworfene Zusatzansätze (#720) |
+| [`retrieval-ablation-722.md`](retrieval-ablation-722.md) | Ablation der vier Retrieval-Änderungen #701/#702/#703/#714 gegen die volle Hybrid-Pipeline (FTS5+Vektor+RRF+Reranker), Paper-Ebene-Aggregation aus #708, Leave-one-out je Änderung, aufgedeckter FTS5-Sanitize-Defekt außerhalb des Scopes (#722) |
+| [`retrieval-ablation-722-live-results.json`](retrieval-ablation-722-live-results.json) | Rohdaten des Ablationslaufs (alle 6 Kombinationen, per Query, inklusive `fts5_syntax_errors`) |
 
 ## Konvention
 
