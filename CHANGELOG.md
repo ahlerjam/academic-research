@@ -10,6 +10,32 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Hilft ein inhaltlicher Kontextsatz gegenueber Metadaten? (#785, Epic
+  #710-C):** Vier-Arme-Vergleich auf der bge-m3-Fassung des Chunk-Goldsets aus
+  #708/#731 (nicht die aeltere e5-Fassung -- #732 hat den produktiven
+  Embedding-Default umgestellt): `no_context` (nur `chunk_text`),
+  `metadata_context` (Produktionszustand, `default_context_sentence()`,
+  unveraendert aus #731 uebernommen), `model_context` (echter,
+  modellgeschriebener Satz, `claude -p --output-format json`, ≤ 25 Woerter,
+  Sprache des Chunks) und optional `model_context_de` (derselbe Inhalt, aber
+  Deutsch erzwungen -- isoliert den Sprach-Confound, GEBAUT statt weggelassen).
+  Neu: zweistufiger Generator `scripts/eval/build_context_sentences_710.py`
+  (`--stage sentences` hinter `VAULT_CONTEXT_LIVE_TRANSFORM=1`, `--stage
+  vectors` hinter `VAULT_E5_LIVE_TEST=1`) und hermetischer Runner
+  `scripts/eval/run_context_ablation_710.py` (Playback-Embedder, echter
+  `VaultDB.add_chunk_embedding`/`knn_chunks`-Pfad, Chunk-Ebene, Teilmengen
+  `same-language`/`language-gap`/`cross-language` getrennt ausgewiesen).
+  Kontrolltest: `metadata_context` reproduziert die #731-bge-m3-Zahlen exakt
+  (Toleranz 1e-9, gegen einen frischen #731-Lauf, nicht gegen eine
+  vorgeschriebene Zahl). Kernbefund: kein Nullbefund wie #729 -- `model_context`
+  gewinnt gegen `metadata_context` signifikant im Gesamtmittel (+0,0626
+  nDCG@10, +0,0898 MRR, 95-%-Bootstrap-CI schliesst die Null aus) und staerker
+  bei `language-gap` (+0,1804 nDCG@10, +0,2361 MRR); Recall@10 bleibt in jedem
+  Arm identisch (Goldset-Saettigung bei k=10, reiner Rangeffekt). Der
+  Sprachanteil (`model_context_de` gegen `metadata_context`) ist positiv, aber
+  nicht signifikant -- Inhalt und Sprache sind mit 26 Queries nicht sauber
+  trennbar. Report: `docs/evals/2026-08-08-context-ablation-710.md`.
+
 - **Traegt der Umbau auf Chunk-Ebene? (#729):** #726 (Chunk-Anreicherung ueber
   `server._attach_chunk_to_fts_hit`, nutzt den `chunk_fts`-Index als Lookup
   fuer einen bereits ueber `papers_fts`/`papers_trgm` gefundenen Treffer --
