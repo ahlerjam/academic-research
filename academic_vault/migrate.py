@@ -781,6 +781,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_table_values_table(db_path)
     add_papers_trgm_table(db_path)
     add_chunk_fts(db_path)
+    add_chunk_location_columns(db_path)
     drop_dead_v64_tables(db_path)
 
 
@@ -941,6 +942,36 @@ def add_quote_audit_columns(db_path: str) -> None:
             )
         except _sqlite3.OperationalError:
             pass  # Spalte existiert bereits -- idempotent
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_chunk_location_columns(db_path: str) -> None:
+    """Fuegt section_title/page_start/page_end zu chunk_embeddings hinzu. Idempotent. (#728)
+
+    Fundstelle des Gewinner-Chunks (Sektion + Seitenbereich), additiv und
+    nullable -- Bestandschunks vor dieser Migration haben keine Lokation
+    (kein Backfill aus Text moeglich, die Info steckt nur unstrukturiert im
+    Kontextsatz). Aufruf-sicher: kann mehrfach auf derselben DB ausgefuehrt
+    werden.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute("ALTER TABLE chunk_embeddings ADD COLUMN section_title TEXT")
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits (oder Tabelle fehlt) -- idempotent
+        try:
+            conn.execute("ALTER TABLE chunk_embeddings ADD COLUMN page_start INTEGER")
+        except _sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE chunk_embeddings ADD COLUMN page_end INTEGER")
+        except _sqlite3.OperationalError:
+            pass
         conn.commit()
     finally:
         conn.close()

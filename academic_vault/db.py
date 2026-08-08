@@ -172,7 +172,14 @@ VALID_CATEGORY_ORIGINS = frozenset({"induktiv", "deduktiv"})
 #      Trigram-Pendant -- der Auftrag ist ausdruecklich EIN Index). Ebenfalls
 #      eine ganze TABELLE (Verifikation ueber `_REQUIRED_MIGRATION_TABLES`);
 #      der Backfill fuer Bestandschunks steckt in `migrate.add_chunk_fts()`.
-CURRENT_SCHEMA_VERSION = 13
+# 14 = chunk_embeddings.section_title + .page_start + .page_end (Issue #728):
+#      Fundstelle des Gewinner-Chunks, additiv und nullable -- Bestandschunks
+#      vor dieser Migration haben keine Lokation (kein Backfill aus Text
+#      moeglich). Bis #728 lieferte `chunking.chunk_pages()` diese Felder
+#      pro Chunk bereits (seit #708), sie wurden aber nur in den
+#      Kontextsatz-Text hineingerechnet statt strukturiert gespeichert.
+#      Migrationshelfer: `migrate.add_chunk_location_columns()`.
+CURRENT_SCHEMA_VERSION = 14
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -201,6 +208,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
         {"stance", "context_source", "audited_at", "audit_verdict", "audit_severity"}
     ),
     "notes": frozenset({"page"}),
+    "chunk_embeddings": frozenset({"section_title", "page_start", "page_end"}),
 }
 
 # Tabellen, die `migrate.apply_pending_migrations()` auf einer Bestands-DB
@@ -2429,6 +2437,9 @@ class VaultDB:
         context_sentence: str,
         embedding_text: str,
         embedding_vector: bytes | None,
+        section_title: str | None = None,
+        page_start: int | None = None,
+        page_end: int | None = None,
     ) -> str:
         """INSERT eines Chunk-Embeddings. Gibt chunk_id (UUID) zurueck.
 
@@ -2438,6 +2449,11 @@ class VaultDB:
             context_sentence: 1-Satz-Kontext generiert via Anthropic API.
             embedding_text: Kombinierter Text (context_sentence + chunk_text).
             embedding_vector: Serialisierter Embedding-Vektor (bytes) oder None.
+            section_title: Abschnittstitel des Chunks (Issue #728). ``None``,
+                wenn keine Lokation bekannt ist (z. B. Aufrufer aelter als
+                #728).
+            page_start: Erste Seite des Chunks (Issue #728). ``None`` wie oben.
+            page_end: Letzte Seite des Chunks (Issue #728). ``None`` wie oben.
 
         Raises:
             VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
@@ -2457,8 +2473,8 @@ class VaultDB:
                 """
                 INSERT INTO chunk_embeddings
                   (chunk_id, paper_id, chunk_text, context_sentence, embedding_text,
-                   embedding_vector, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                   embedding_vector, created_at, section_title, page_start, page_end)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chunk_id,
@@ -2468,6 +2484,9 @@ class VaultDB:
                     embedding_text,
                     embedding_vector,
                     now,
+                    section_title,
+                    page_start,
+                    page_end,
                 ),
             )
             self._mirror_chunk_vector(conn, chunk_id, embedding_vector)
@@ -2899,20 +2918,33 @@ class VaultDB:
 
         hits: list[dict] = []
         for row in rows:
-            meta = conn.execute(
-                "SELECT paper_id, chunk_text FROM chunk_embeddings WHERE chunk_id = ?",
-                (row["chunk_id"],),
-            ).fetchone()
+            # Versuche, Lokationsspalten zu lesen; fallback auf Basis-Spalten für v13.
+            try:
+                meta = conn.execute(
+                    "SELECT paper_id, chunk_text, section_title, page_start, page_end "
+                    "FROM chunk_embeddings WHERE chunk_id = ?",
+                    (row["chunk_id"],),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                # v13-Datenbank: section_title/page_start/page_end Spalten existieren nicht.
+                meta = conn.execute(
+                    "SELECT paper_id, chunk_text FROM chunk_embeddings WHERE chunk_id = ?",
+                    (row["chunk_id"],),
+                ).fetchone()
             if meta is None:
                 continue
-            hits.append(
-                {
-                    "chunk_id": row["chunk_id"],
-                    "paper_id": meta["paper_id"],
-                    "chunk_text": meta["chunk_text"],
-                    "distance": float(row["distance"]),
-                }
-            )
+            hit = {
+                "chunk_id": row["chunk_id"],
+                "paper_id": meta["paper_id"],
+                "chunk_text": meta["chunk_text"],
+                "distance": float(row["distance"]),
+            }
+            # Lokationsspalten nur setzen, wenn sie existieren (bei v13 fallback oben).
+            if "section_title" in meta.keys():
+                hit["section_title"] = meta["section_title"]
+                hit["page_start"] = meta["page_start"]
+                hit["page_end"] = meta["page_end"]
+            hits.append(hit)
         # Gleicher Tiebreaker wie im Python-Fallback: bei exakt gleicher Distanz
         # (z. B. zwei zur Query orthogonale Chunks) wuerde vec0 sonst nach
         # interner rowid ordnen und beide Pfade lieferten verschiedene
@@ -2928,11 +2960,23 @@ class VaultDB:
     ) -> list[dict]:
         """Reiner Python-Fallback: euklidische Distanz ueber alle Chunk-BLOBs."""
         dim = len(query_vector)
-        rows = conn.execute(
-            "SELECT chunk_id, paper_id, chunk_text, embedding_vector FROM chunk_embeddings "
-            "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
-            (dim * 4,),
-        ).fetchall()
+        # Versuche mit allen Spalten (aktuelles Schema), fallback auf Basis-Spalten
+        # fuer v13-Datenbanken (Issue #728, graceful degradation).
+        try:
+            rows = conn.execute(
+                "SELECT chunk_id, paper_id, chunk_text, embedding_vector, "
+                "section_title, page_start, page_end FROM chunk_embeddings "
+                "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
+                (dim * 4,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # v13-Datenbank: section_title/page_start/page_end Spalten existieren nicht.
+            rows = conn.execute(
+                "SELECT chunk_id, paper_id, chunk_text, embedding_vector "
+                "FROM chunk_embeddings "
+                "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
+                (dim * 4,),
+            ).fetchall()
 
         hits: list[dict] = []
         for row in rows:
@@ -2943,14 +2987,18 @@ class VaultDB:
             distance = math.sqrt(
                 sum((a - b) ** 2 for a, b in zip(query_vector, vector, strict=True))
             )
-            hits.append(
-                {
-                    "chunk_id": row["chunk_id"],
-                    "paper_id": row["paper_id"],
-                    "chunk_text": row["chunk_text"],
-                    "distance": distance,
-                }
-            )
+            hit = {
+                "chunk_id": row["chunk_id"],
+                "paper_id": row["paper_id"],
+                "chunk_text": row["chunk_text"],
+                "distance": distance,
+            }
+            # Lokationsspalten abgesichert setzen (v13-Fallback oben).
+            if "section_title" in row.keys():
+                hit["section_title"] = row["section_title"]
+                hit["page_start"] = row["page_start"]
+                hit["page_end"] = row["page_end"]
+            hits.append(hit)
         # chunk_id als Tiebreaker: deterministische Reihenfolge bei Gleichstand.
         hits.sort(key=lambda hit: (hit["distance"], hit["chunk_id"]))
         return hits[:k]
