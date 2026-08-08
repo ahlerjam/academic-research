@@ -82,7 +82,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.4" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.16.0" },
     { name = "scipy", specifier = ">=1.11" },
-    { name = "sentence-transformers", specifier = ">=3.0" },
+    { name = "sentence-transformers", specifier = ">=5.0" },
     { name = "sqlite-vec", specifier = "==0.1.10a4" },
     { name = "torch", specifier = ">=2.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "voyageai", marker = "extra == 'rerank-cloud'", specifier = ">=0.5,<1.0" },
