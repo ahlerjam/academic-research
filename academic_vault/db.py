@@ -2925,17 +2925,22 @@ class VaultDB:
             ).fetchone()
             if meta is None:
                 continue
-            hits.append(
-                {
-                    "chunk_id": row["chunk_id"],
-                    "paper_id": meta["paper_id"],
-                    "chunk_text": meta["chunk_text"],
-                    "distance": float(row["distance"]),
-                    "section_title": meta["section_title"],
-                    "page_start": meta["page_start"],
-                    "page_end": meta["page_end"],
-                }
-            )
+            hit = {
+                "chunk_id": row["chunk_id"],
+                "paper_id": meta["paper_id"],
+                "chunk_text": meta["chunk_text"],
+                "distance": float(row["distance"]),
+            }
+            # Lokationsspalten aus Meta abgesichert einlesen (v13-Kompatibilität).
+            try:
+                hit["section_title"] = meta["section_title"]
+                hit["page_start"] = meta["page_start"]
+                hit["page_end"] = meta["page_end"]
+            except (sqlite3.OperationalError, IndexError):
+                # v13-Datenbank: section_title/page_start/page_end existieren nicht.
+                # Lokation bleibt ungesetzt -- dokumentiertes Verhalten für Bestände.
+                pass
+            hits.append(hit)
         # Gleicher Tiebreaker wie im Python-Fallback: bei exakt gleicher Distanz
         # (z. B. zwei zur Query orthogonale Chunks) wuerde vec0 sonst nach
         # interner rowid ordnen und beide Pfade lieferten verschiedene
@@ -2951,12 +2956,23 @@ class VaultDB:
     ) -> list[dict]:
         """Reiner Python-Fallback: euklidische Distanz ueber alle Chunk-BLOBs."""
         dim = len(query_vector)
-        rows = conn.execute(
-            "SELECT chunk_id, paper_id, chunk_text, embedding_vector, "
-            "section_title, page_start, page_end FROM chunk_embeddings "
-            "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
-            (dim * 4,),
-        ).fetchall()
+        # Versuche mit allen Spalten (aktuelles Schema), fallback auf Basis-Spalten
+        # fuer v13-Datenbanken (Issue #728, graceful degradation).
+        try:
+            rows = conn.execute(
+                "SELECT chunk_id, paper_id, chunk_text, embedding_vector, "
+                "section_title, page_start, page_end FROM chunk_embeddings "
+                "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
+                (dim * 4,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # v13-Datenbank: section_title/page_start/page_end Spalten existieren nicht.
+            rows = conn.execute(
+                "SELECT chunk_id, paper_id, chunk_text, embedding_vector "
+                "FROM chunk_embeddings "
+                "WHERE embedding_vector IS NOT NULL AND length(embedding_vector) = ?",
+                (dim * 4,),
+            ).fetchall()
 
         hits: list[dict] = []
         for row in rows:
@@ -2967,17 +2983,18 @@ class VaultDB:
             distance = math.sqrt(
                 sum((a - b) ** 2 for a, b in zip(query_vector, vector, strict=True))
             )
-            hits.append(
-                {
-                    "chunk_id": row["chunk_id"],
-                    "paper_id": row["paper_id"],
-                    "chunk_text": row["chunk_text"],
-                    "distance": distance,
-                    "section_title": row["section_title"],
-                    "page_start": row["page_start"],
-                    "page_end": row["page_end"],
-                }
-            )
+            hit = {
+                "chunk_id": row["chunk_id"],
+                "paper_id": row["paper_id"],
+                "chunk_text": row["chunk_text"],
+                "distance": distance,
+            }
+            # Lokationsspalten abgesichert setzen (v13-Fallback oben).
+            if "section_title" in row.keys():
+                hit["section_title"] = row["section_title"]
+                hit["page_start"] = row["page_start"]
+                hit["page_end"] = row["page_end"]
+            hits.append(hit)
         # chunk_id als Tiebreaker: deterministische Reihenfolge bei Gleichstand.
         hits.sort(key=lambda hit: (hit["distance"], hit["chunk_id"]))
         return hits[:k]
