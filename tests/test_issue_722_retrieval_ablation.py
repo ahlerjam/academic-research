@@ -179,9 +179,7 @@ def test_local_rerank_env_disable_short_circuits_without_loading_model(monkeypat
     """
     monkeypatch.setenv(ENV_LOCAL_RERANKER_DISABLE, "1")
     candidates = [{"paper_id": "p1", "text": "irrelevant"}]
-    result = apply_reranker(
-        query="q", candidates=candidates, voyage_api_key=None, cohere_api_key=None
-    )
+    result = apply_reranker(query="q", candidates=candidates)
     assert result[0]["reranked"] is False
     assert result[0]["reranker"] == "none"
 

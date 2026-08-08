@@ -51,7 +51,7 @@ Modell bewusst und unabhängig vom Schalter laden.
 | Komponente | Config-Schlüssel | Default | Wirkung bei `false` | Plattenbedarf | Laufzeitkosten |
 |---|---|---|---|---|---|
 | Embedding-Modell (`intfloat/multilingual-e5-small`) | `embedding_enabled` | `true` | `vault.add_paper()`/`vault.search()` laufen FTS5-only, `chunk_embeddings` bleibt leer. | ~470 MB (Modellgewichte) | Ingest: ~1 Chunk/10–50 ms auf CPU; Suche: eine Query-Embedding-Berechnung (<50 ms). |
-| Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); betrifft **nur** den lokalen Fallback — Voyage/Cohere bleiben über ihre Cloud-Keys unabhängig davon nutzbar. | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
+| Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); seit #715 gibt es keinen weiteren Reranking-Weg (Voyage/Cohere ersatzlos entfernt). | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
 | NLI-Zitatscan (`MoritzLaurer/bge-m3-zeroshot-v2.0`) | `nli_prefilter_enabled` | `true` | Der `nli-quote-scan.mjs`-Hook tut nichts — weder Anstoß noch Abholung, kein Zitat wird bewertet oder gemeldet. | ~1,3 GB (0,6 Mrd. Parameter, F16 — Schätzung, HF nennt keine Dateigröße) | ~0,127 s/Zitat auf CPU zzgl. 1,6 s einmaligem Modell-Laden je Worker-Start (gemessen, s. `docs/reference/hooks.md`). |
 
 Env-Variablen je Komponente (kanonischer Name, Alt-Name als Alias sofern
@@ -156,18 +156,19 @@ eine eigene Entscheidung.
 
 ## Reranking (`vault.search(..., rerank=True)`)
 
-Priorität, sobald `rerank=True` gesetzt ist: Voyage > Cohere > lokaler
-`BAAI/bge-reranker-v2-m3`-Fallback > unveränderte RRF-Reihenfolge. Jeder
-Kandidat trägt danach `reranked` (bool) und `reranker`
-(`"voyage"`/`"cohere"`/`"local-bge"`/`"none"`) — sichtbarer Beleg statt
-stillem Fallback.
+Sobald `rerank=True` gesetzt ist, greift ausschließlich der lokale
+`BAAI/bge-reranker-v2-m3`-Fallback (#715 — die vorherige Voyage/Cohere/lokal-
+Prioritätskette aus #376 ist ersatzlos entfernt), sonst bleibt die
+RRF-Reihenfolge unverändert. Jeder Kandidat trägt danach `reranked` (bool)
+und `reranker` (`"local-bge"`/`"none"`) — sichtbarer Beleg statt stillem
+Fallback.
 
-Der lokale Fallback läuft **per Default aktiv**, sobald weder `VOYAGE_API_KEY`
-noch `COHERE_API_KEY` gesetzt sind. Seit #714 lädt er das Modell über
-`sentence_transformers.CrossEncoder` — `sentence-transformers` ist ohnehin
-Hard-Dependency (Embedding-Pipeline, siehe oben), kein zusätzliches Paket und
-kein manueller Installationsschritt nötig (vorher: `FlagEmbedding`, das
-`transformers<5.0` erzwang und deshalb nie standardmäßig installiert war).
+Der lokale Fallback läuft **per Default aktiv** und lädt das Modell seit #714
+über `sentence_transformers.CrossEncoder` — `sentence-transformers` ist
+ohnehin Hard-Dependency (Embedding-Pipeline, siehe oben), kein zusätzliches
+Paket und kein manueller Installationsschritt nötig (vorher: `FlagEmbedding`,
+das `transformers<5.0` erzwang und deshalb nie standardmäßig installiert
+war). Mit `VAULT_RERANK_LOCAL_DISABLE` lässt er sich abschalten.
 
 Gemessen am 2026-08-06 auf Apple M4 Pro, 16 Query-Dokument-Paare,
 `max_length=512`:
@@ -186,7 +187,7 @@ wird `False` und eine `WARNING` landet im Log — kein Absturz.
 
 | Env-Variable | Default | Wirkung |
 |---|---|---|
-| `ACADEMIC_RESEARCH_RERANKER_ENABLED` | `1` (nicht gesetzt) | Kanonischer Schalter (#719). `0` schaltet NUR den lokalen Fallback ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden — Voyage/Cohere bleiben unabhängig davon nutzbar. Ebenfalls per `"reranker_enabled": false` in `config/parallel_agents.json` setzbar. |
+| `ACADEMIC_RESEARCH_RERANKER_ENABLED` | `1` (nicht gesetzt) | Kanonischer Schalter (#719). `0` schaltet den Reranker ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden — seit #715 der einzige Reranking-Weg. Ebenfalls per `"reranker_enabled": false` in `config/parallel_agents.json` setzbar. |
 | `VAULT_RERANK_LOCAL_DISABLE` | nicht gesetzt | Alt-Name (#714), bleibt als Alias erhalten — ABWEICHENDE Semantik: ein reines Präsenz-Flag, jeder gesetzte Wert (auch `"0"`) schaltet ab, kein truthy/falsy-Parsing. Gesetzt, gewinnt er über `ACADEMIC_RESEARCH_RERANKER_ENABLED`. |
 | `VAULT_RERANK_LOCAL_MODEL` | `BAAI/bge-reranker-v2-m3` | Alternatives Reranker-Modell. |
 | `VAULT_RERANK_LOCAL_CACHE` | `~/.academic-research/models` | Ablageort der Reranker-Gewichte (gleiches Verzeichnis wie Embedding-/NLI-Modell). |
@@ -447,7 +448,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call | Voraussetzung | Rückgabe | Fehlschlag erkennbar an |
 |------|-------------|------|---------------|----------|-------------------------|
-| `vault.search(query, type=None, k=5, rerank=False)` | Hybrid-Suche (BM25 + vec0-KNN + RRF); `rerank=True` aktiviert zusätzlich Voyage/Cohere | `vault.search("transformer attention", k=10)` | Vault mit indizierten Papers; die Vektor-Hälfte braucht ein geladenes Embedding-Modell | `list[dict]` der Treffer, nach Rang zusammengeführt | Leere Liste trotz passender Papers — dann fehlt der Index; `vault.component_status()` nennt die Ursache |
+| `vault.search(query, type=None, k=5, rerank=False)` | Hybrid-Suche (BM25 + vec0-KNN + RRF); `rerank=True` aktiviert zusätzlich den lokalen Reranker | `vault.search("transformer attention", k=10)` | Vault mit indizierten Papers; die Vektor-Hälfte braucht ein geladenes Embedding-Modell | `list[dict]` der Treffer, nach Rang zusammengeführt | Leere Liste trotz passender Papers — dann fehlt der Index; `vault.component_status()` nennt die Ursache |
 | `vault.get_paper(paper_id)` | Paper-Metadaten + `pdf_status` | `vault.get_paper("vaswani2017")` | Bekannte `paper_id` | `dict` mit Metadaten und `pdf_status`, sonst `None` | Rückgabe `None` — die `paper_id` steht nicht im Vault |
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` | Gültiges CSL-JSON (`type` ∈ `book`/`chapter`/`article-journal`), Vault nicht gesperrt | Kein Rückgabewert; das Paper steht danach im Vault, Volltext und Embeddings laufen mit | `ValueError` („csl_json ist kein valides JSON", „verletzt Schema"); bei gesperrtem Vault `VaultLockedError` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` | Vorhandenes Eltern-Paper und gültiges Kapitel-CSL-JSON | `paper_id` des angelegten Kind-Papers | `ValueError` „add_chapter: Ungueltiges csl_json" |
