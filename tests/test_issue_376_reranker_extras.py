@@ -1,11 +1,12 @@
-"""Regressionstest fuer Issue #376 (AC1): voyageai/cohere sind optionale Extras.
+"""Regressionstest fuer Issue #715: voyageai/cohere kommen in pyproject.toml
+nicht mehr vor.
 
-Vorher waren `rerank_with_voyage`/`rerank_with_cohere` faktisch tot, weil weder
-`voyageai` noch `cohere` in irgendeiner Dependency-Datei standen (Live-Aufruf
-schlug sofort mit ImportError fehl) UND der stille `except Exception: pass` in
-`apply_reranker` das verschleierte. AC1 verlangt, dass beide SDKs als
-*optionale* Extras deklariert sind -- nicht als versteckte Hard-Dependency in
-`[project.dependencies]`.
+Vormals (Issue #376) waren `voyageai`/`cohere` als optionales Extra
+`rerank-cloud` deklariert. #715 entfernt den Cloud-Reranker ersatzlos -- der
+lokale `bge-reranker-v2-m3`-Fallback ist der einzige verbleibende Weg. Dieser
+Test ersetzt die vorherigen #376-AC1-Tests (die verlangten, dass beide SDKs
+als optionale Extras existieren) durch die Umkehrung: beide Namen duerfen
+weder als Hard-Dependency noch als Extra auftauchen.
 """
 
 import tomllib
@@ -19,30 +20,33 @@ def _load_pyproject() -> dict:
     return tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
 
 
-def test_voyageai_and_cohere_not_hard_dependencies():
-    """voyageai/cohere duerfen NICHT in [project.dependencies] stehen (AC1)."""
+def test_voyageai_and_cohere_absent_from_pyproject():
+    """voyageai/cohere duerfen NIRGENDS in pyproject.toml stehen (Issue #715).
+
+    Weder als Hard-Dependency ([project.dependencies]) noch als optionales
+    Extra ([project.optional-dependencies]) -- der Cloud-Reranker ist
+    ersatzlos entfernt.
+    """
     data = _load_pyproject()
     hard_deps = {
         __import__("re").split(r"[<>=!~\[ ;]", dep, maxsplit=1)[0].strip().lower()
         for dep in data["project"]["dependencies"]
     }
-    assert "voyageai" not in hard_deps, "voyageai ist als Hard-Dependency deklariert (AC1 verletzt)"
-    assert "cohere" not in hard_deps, "cohere ist als Hard-Dependency deklariert (AC1 verletzt)"
-
-
-def test_voyageai_and_cohere_declared_as_optional_extras():
-    """voyageai/cohere muessen unter [project.optional-dependencies] auffindbar sein (AC1)."""
-    data = _load_pyproject()
-    optional = data["project"]["optional-dependencies"]
+    assert "voyageai" not in hard_deps, (
+        "voyageai ist als Hard-Dependency deklariert (#715 verletzt)"
+    )
+    assert "cohere" not in hard_deps, "cohere ist als Hard-Dependency deklariert (#715 verletzt)"
 
     all_optional_names = set()
-    for group in optional.values():
+    for group in data["project"]["optional-dependencies"].values():
         for dep in group:
             name = __import__("re").split(r"[<>=!~\[ ;]", dep, maxsplit=1)[0].strip().lower()
             all_optional_names.add(name)
 
-    assert "voyageai" in all_optional_names, "voyageai fehlt in [project.optional-dependencies]"
-    assert "cohere" in all_optional_names, "cohere fehlt in [project.optional-dependencies]"
+    assert "voyageai" not in all_optional_names, (
+        "voyageai noch als Extra deklariert (#715 verletzt)"
+    )
+    assert "cohere" not in all_optional_names, "cohere noch als Extra deklariert (#715 verletzt)"
 
 
 def _all_declared_dependency_names(data: dict) -> set[str]:

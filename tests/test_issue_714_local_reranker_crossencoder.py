@@ -68,7 +68,7 @@ def test_load_local_reranker_backend_uses_crossencoder():
 
 class TestLocalRerankerDefaultActive:
     def test_apply_reranker_uses_local_backend_by_default(self, monkeypatch):
-        """Ohne Cloud-Keys und ohne Disable-Schalter greift der lokale Reranker (AC3)."""
+        """Ohne Disable-Schalter greift der lokale Reranker (AC3)."""
         from academic_vault.retrieval import apply_reranker
 
         monkeypatch.delenv("VAULT_RERANK_LOCAL_DISABLE", raising=False)
@@ -82,12 +82,7 @@ class TestLocalRerankerDefaultActive:
         mock_reranker.predict.return_value = [0.1, 0.9]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
-            result = apply_reranker(
-                query="test query",
-                candidates=candidates,
-                voyage_api_key=None,
-                cohere_api_key=None,
-            )
+            result = apply_reranker(query="test query", candidates=candidates)
 
         assert all(entry["reranked"] is True for entry in result)
         assert all(entry["reranker"] == "local-bge" for entry in result)
@@ -104,12 +99,7 @@ class TestLocalRerankerDefaultActive:
 
         with patch("academic_vault.retrieval._get_local_reranker") as mock_get_local:
             with caplog.at_level(logging.INFO, logger="academic_vault.retrieval"):
-                result = apply_reranker(
-                    query="test",
-                    candidates=candidates,
-                    voyage_api_key=None,
-                    cohere_api_key=None,
-                )
+                result = apply_reranker(query="test", candidates=candidates)
 
         mock_get_local.assert_not_called()
         assert all(entry["reranked"] is False for entry in result)

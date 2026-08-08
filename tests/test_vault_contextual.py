@@ -256,8 +256,8 @@ class TestVaultSearchWithRerank:
 
         assert isinstance(results, list)
 
-    def test_search_papers_rerank_true_without_api_key_returns_rrf(self, tmp_path):
-        """search_papers mit rerank=True aber ohne API-Key nutzt den lokalen Reranker-Fallback (#376).
+    def test_search_papers_rerank_true_uses_local_reranker(self, tmp_path):
+        """search_papers mit rerank=True nutzt den lokalen Reranker-Fallback (#376; #715).
 
         Der lokale bge-reranker-v2-m3 wird gemockt, damit dieser Test kein
         echtes Modell laedt (die autouse-Fixture in conftest.py blockt das
@@ -271,20 +271,13 @@ class TestVaultSearchWithRerank:
         mock_local_reranker = MagicMock()
         mock_local_reranker.predict.return_value = [0.5]
 
-        with patch.dict("os.environ", {}, clear=False):
-            # VOYAGE_API_KEY und COHERE_API_KEY nicht gesetzt
-            import os
+        from academic_vault.server import search_papers
 
-            os.environ.pop("VOYAGE_API_KEY", None)
-            os.environ.pop("COHERE_API_KEY", None)
-
-            from academic_vault.server import search_papers
-
-            with patch(
-                "academic_vault.retrieval._get_local_reranker",
-                return_value=mock_local_reranker,
-            ):
-                results = search_papers(db_path, "hybrid retrieval", k=5, rerank=True)
+        with patch(
+            "academic_vault.retrieval._get_local_reranker",
+            return_value=mock_local_reranker,
+        ):
+            results = search_papers(db_path, "hybrid retrieval", k=5, rerank=True)
 
         assert isinstance(results, list)
         assert len(results) == 1

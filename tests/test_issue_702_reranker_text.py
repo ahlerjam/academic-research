@@ -67,7 +67,7 @@ class TestFtsOnlyCandidateGetsFullText:
 
         seen_candidates: list[list[dict]] = []
 
-        def _spy(query, candidates, voyage_api_key=None, cohere_api_key=None):
+        def _spy(query, candidates):
             seen_candidates.append(candidates)
             for c in candidates:
                 c["reranked"] = False
@@ -128,7 +128,7 @@ class TestApplyRerankerGetsRawQuery:
 
         seen_queries: list[str] = []
 
-        def _spy(query, candidates, voyage_api_key=None, cohere_api_key=None):
+        def _spy(query, candidates):
             seen_queries.append(query)
             for c in candidates:
                 c["reranked"] = False
@@ -179,7 +179,7 @@ class TestMissingBetterTextLogsWarning:
         _add_paper(temp_vault_db, "p_bare", "Retrieval systems", "")
         monkeypatch.setattr(server, "get_embedder", lambda *a, **kw: None)
 
-        def _spy(query, candidates, voyage_api_key=None, cohere_api_key=None):
+        def _spy(query, candidates):
             for c in candidates:
                 c["reranked"] = False
                 c["reranker"] = "none"
