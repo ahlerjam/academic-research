@@ -294,44 +294,75 @@ def _format_authors(authors: Sequence[str] | None) -> str | None:
     return f"{names[0]} et al."
 
 
-def _truncate_title_to_token_budget(title: str, max_tokens: int = 30) -> str:
-    """Kürzt einen Papier-Titel auf ein Tokenbudget.
+def _truncate_title_to_fit_reserve(
+    title: str,
+    section_title: str,
+    author_str: str | None,
+    year: int | None,
+    counter: TokenCounter,
+    max_reserve_tokens: int = CONTEXT_TOKEN_RESERVE - MODEL_INPUT_OVERHEAD_TOKENS,
+) -> str:
+    """Kürzt Titel so, dass der komplette Kontextsatz in das Reserve passt.
 
-    Verhindert, dass lange Titel (insbes. deutsche Komposita) das
-    CONTEXT_TOKEN_RESERVE sprengen (P1-Regression #701). Schneidet
-    iterativ Wörter ab und hängt Ellipse an, bis der Titel unter dem
-    Budget liegt. Fallback: Der Titel wird auf sein erstes Wort +
-    Ellipse gekürzt, falls selbst das noch zu lang ist.
+    Verhindert, dass der vollständige Kontextsatz (mit Section-Titel, Autoren,
+    Jahr) das CONTEXT_TOKEN_RESERVE sprengt (P1-Regression #701). Schneidet
+    den Titel iterativ, bis counter(gesamter_kontextsatz) <= max_reserve_tokens.
 
     Args:
-        title: Der zu kürzende Titel.
-        max_tokens: Maximale Token-Anzahl (default: 30, basierend auf
-            der Empfehlung aus dem P1-Finding #701).
+        title: Der zu kürzende Papier-Titel.
+        section_title: Der Section-Titel (wird nicht gekürzt).
+        author_str: Formatierte Autorenliste oder None.
+        year: Publikationsjahr oder None.
+        counter: Token-Zähler (wird injiziert von _make_chunk).
+        max_reserve_tokens: Maximale Tokens für den kompletten Kontextsatz
+            (default: CONTEXT_TOKEN_RESERVE - MODEL_INPUT_OVERHEAD_TOKENS = 60).
 
     Returns:
         Der gekürzte Titel mit Ellipse ("..."), oder der Originaltitel,
-        falls dieser unter dem Budget liegt.
+        falls dieser bereits passt.
     """
-    counter = resolve_token_counter()
-    if counter(title) <= max_tokens:
-        return title
+    # Baue den Kontextsatz schrittweise auf, um die Länge zu prüfen.
+    section_clause = (
+        f'Abschnitt "{section_title}" (Seite ???-???, Chunk 0)'  # Platzhalter für Längenberechnung
+    )
+
+    # Test: mit vollständigem Originaltitel
+    lead_parts: list[str] = []
+    if title:
+        lead_parts.append(f'"{title}"')
+    if author_str:
+        lead_parts.append(f"von {author_str}")
+    if year is not None:
+        lead_parts.append(f"({year})")
+
+    if lead_parts:
+        lead = "aus " + " ".join(lead_parts) if title else " ".join(lead_parts)
+        test_sentence = f"Dieser Abschnitt stammt {lead}, {section_clause}."
+        if counter(test_sentence) <= max_reserve_tokens:
+            return title  # Passt schon!
+
+    # Originaltitel passt nicht, kürze ihn iterativ.
+    if not title or " " not in title:
+        # Single-word title oder leer: maximale Kurzung
+        return title if not title else title[0] + "..."
 
     words = title.split()
-    if not words:
-        return title
+    # Versuche iterativ Wörter zu entfernen.
+    for num_words in range(len(words) - 1, 0, -1):
+        truncated_title = " ".join(words[:num_words]) + "..."
+        lead_parts_test = [f'"{truncated_title}"']
+        if author_str:
+            lead_parts_test.append(f"von {author_str}")
+        if year is not None:
+            lead_parts_test.append(f"({year})")
 
-    # Versuche iterativ Wörter zu entfernen, bis der Titel unter dem Budget liegt.
-    for i in range(len(words) - 1, 0, -1):
-        truncated = " ".join(words[:i]) + "..."
-        if counter(truncated) <= max_tokens:
-            return truncated
+        lead_test = "aus " + " ".join(lead_parts_test)
+        test_sentence = f"Dieser Abschnitt stammt {lead_test}, {section_clause}."
+        if counter(test_sentence) <= max_reserve_tokens:
+            return truncated_title
 
-    # Fallback: nur das erste Wort + Ellipse.
-    fallback = words[0] + "..."
-    if counter(fallback) > max_tokens:
-        # Letzter Ausweg: nur Ellipse (sollte in praxi nicht vorkommen).
-        return "..."
-    return fallback
+    # Fallback: nur erstes Wort + Ellipse
+    return words[0] + "..."
 
 
 def default_context_sentence(
@@ -340,6 +371,7 @@ def default_context_sentence(
     page_start: int,
     page_end: int,
     paper_meta: PaperMeta | None = None,
+    token_counter: TokenCounter | None = None,
 ) -> str:
     """Deterministischer Offline-Default fuer den Kontextsatz.
 
@@ -352,6 +384,10 @@ def default_context_sentence(
     der Satz auf Sektion/Seite/Chunk beschraenkt (#374). Mit ``paper_meta``
     (#701) treten Titel, Autor(en) und Jahr davor, jeweils nur, wenn
     vorhanden -- der Sektions-/Seiten-Teil bleibt in JEDEM Fall erhalten.
+
+    Der token_counter wird als injizierter Parameter weitergegeben, um
+    sicherzustellen, dass alle Komponenten (Fenstergroesse, Titel-Kurzung)
+    mit demselben Zaehler rechnen (P1-Befund #701).
     """
     section_clause = (
         f'Abschnitt "{section_title}" (Seite {page_start}-{page_end}, Chunk {chunk_index})'
@@ -367,21 +403,34 @@ def default_context_sentence(
     author_str = _format_authors(paper_meta.authors)
     year = paper_meta.year
 
-    lead_parts: list[str] = []
+    if not title and not author_str and year is None:
+        return base_sentence
+
+    # Nutze den injizierten counter oder resolve ihn selbst.
+    counter = resolve_token_counter(token_counter)
+
+    # Kürze den Titel so, dass der gesamte Kontextsatz in CONTEXT_TOKEN_RESERVE passt.
     if title:
-        # Kürze den Titel auf ein Tokenbudget, um nicht das CONTEXT_TOKEN_RESERVE
-        # zu sprengen (P1-Regression #701). Siehe _truncate_title_to_token_budget.
-        truncated_title = _truncate_title_to_token_budget(title, max_tokens=30)
+        truncated_title = _truncate_title_to_fit_reserve(
+            title, section_title, author_str, year, counter
+        )
+    else:
+        truncated_title = None
+
+    # Baue den Satz mit dem gekuerzten Titel.
+    lead_parts: list[str] = []
+    if truncated_title:
         lead_parts.append(f'"{truncated_title}"')
     if author_str:
         lead_parts.append(f"von {author_str}")
-    if year is not None:
+    # Jahr nur mit Titel oder Autoren rendern, um ungrammatische Saetze zu vermeiden.
+    if year is not None and (truncated_title or author_str):
         lead_parts.append(f"({year})")
 
     if not lead_parts:
         return base_sentence
 
-    lead = "aus " + " ".join(lead_parts) if title else " ".join(lead_parts)
+    lead = "aus " + " ".join(lead_parts) if truncated_title else " ".join(lead_parts)
     return f"Dieser Abschnitt stammt {lead}, {section_clause}."
 
 
@@ -560,7 +609,7 @@ def _make_chunk(
         )
     else:
         context_sentence = default_context_sentence(
-            section_title, chunk_index, page_start, page_end, paper_meta
+            section_title, chunk_index, page_start, page_end, paper_meta, token_counter=counter
         )
     embedding_text = build_contextual_embedding_text(context_sentence, chunk_text)
     _warn_if_over_context_window(chunk_index, embedding_text, counter)

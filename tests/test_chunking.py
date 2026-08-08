@@ -609,19 +609,21 @@ class TestDefaultContextSentenceWithPaperMeta:
             == chunk_pages([(1, text)], paper_meta=None)[0].context_sentence
         )
 
-    def test_long_title_in_context_sentence_stays_within_token_budget(self):
-        """AC5 (offline): Kontextsatz mit langen Titeln sprengt nicht das Budget.
+    def test_long_title_and_section_in_context_sentence_stays_within_reserve(self):
+        """AC5 (offline): Gesamter Kontextsatz passt in CONTEXT_TOKEN_RESERVE.
 
-        Regression-Test für P1-Finding #701: lange deutsche Titel (Komposita)
-        wurden ungekürzt in den Kontextsatz eingefügt, sprengten damit das
-        CONTEXT_TOKEN_RESERVE von 64 und führten zu stiller Trunkation in der
-        SentenceTransformer.
+        Regression-Test für P1-Finding #701: Der komplette Kontextsatz mit
+        langen Titeln, mehreren Autoren, Jahr UND langen Section-Titeln
+        muss in das CONTEXT_TOKEN_RESERVE (64 Tokens) passen, um zu verhindern,
+        dass embedding_text > 512 Tokens wird und von SentenceTransformer
+        stillschweigend gekürzt wird.
 
         Nutzt einen injizierter TokenCounter, um den Test offline zu fahren
         (kein e5-Tokenizer-Download nötig). Prüft mit dem realistischen 2.47
         Tokens/Wort-Multiplikator für deutsche Prosa.
         """
         from academic_vault.chunking import (
+            CONTEXT_TOKEN_RESERVE,
             MODEL_INPUT_OVERHEAD_TOKENS,
             MODEL_MAX_TOKENS,
             PaperMeta,
@@ -635,6 +637,9 @@ class TestDefaultContextSentenceWithPaperMeta:
             "eine systematische Literaturrecherche"
         )
 
+        # Langer Section-Titel (bis zu _MAX_HEADING_LEN=80 Zeichen sind möglich).
+        long_section_title = "Grundlagen der Softwareentwicklung und ihrer Auswirkungen auf die Organisationsstruktur"
+
         # TokenCounter mit 2.47 Tokens/Wort für deutsche Prosa
         # (aus der Tabelle in chunking.py:32-43).
         def german_prose_counter(text: str) -> int:
@@ -643,26 +648,39 @@ class TestDefaultContextSentenceWithPaperMeta:
 
         paper_meta = PaperMeta(
             title=long_title,
-            authors=["Ahler", "Mueller"],
+            authors=["Ahler", "Mueller", "Schmidt"],  # Drei Autoren -> "et al."
             year=2024,
         )
 
+        # Nutze den langen Section-Titel durch _detect_heading Heuristik.
+        # Alternativ: direkt mit section_title prüfen über custom text.
+        text_with_heading = f"{long_section_title}\n" + (_GERMAN_PROSE * 80)
+
         chunks = chunk_pages(
-            [(1, _GERMAN_PROSE * 80)],
+            [(1, text_with_heading)],
             paper_meta=paper_meta,
             token_counter=german_prose_counter,
         )
         assert len(chunks) > 0
 
-        # Prüfe, dass embedding_text unter dem Fenster bleibt.
-        # Der Kontextsatz wird jetzt gekürzt, deshalb sollte dies passen.
+        # Prüfe, dass der Kontextsatz selbst unter CONTEXT_TOKEN_RESERVE bleibt.
         for chunk in chunks:
+            context_tokens = (
+                german_prose_counter(chunk.context_sentence) + MODEL_INPUT_OVERHEAD_TOKENS
+            )
+            assert context_tokens <= CONTEXT_TOKEN_RESERVE, (
+                f"Chunk {chunk.chunk_index}: Kontextsatz {context_tokens} Tokens "
+                f"> CONTEXT_TOKEN_RESERVE {CONTEXT_TOKEN_RESERVE} -- "
+                f"Titel-Kürzung funktioniert nicht oder ist zu konservativ"
+            )
+
+            # Prüfe auch, dass embedding_text unter dem Fenster bleibt.
             # embedding_text = context_sentence + " " + chunk_text
             # Im Modell: "passage: " + embedding_text
             tokens = german_prose_counter(chunk.embedding_text) + MODEL_INPUT_OVERHEAD_TOKENS
             assert tokens <= MODEL_MAX_TOKENS, (
                 f"Chunk {chunk.chunk_index}: {tokens} geschätzte Tokens "
-                f"> {MODEL_MAX_TOKENS} (Fenster) -- Titel-Trunkation funktioniert nicht"
+                f"> {MODEL_MAX_TOKENS} (Fenster) -- embedding_text sprengt das Modell-Fenster"
             )
 
 
