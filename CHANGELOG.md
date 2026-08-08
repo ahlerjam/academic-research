@@ -18,13 +18,18 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `academic_vault.config_switches.resolve_bool_switch()` (Muster:
   `nli_prefilter.resolve_nli_prefilter_enabled`). Alte Schalter
   (`VAULT_AUTO_EMBED`, `VAULT_RERANK_LOCAL_DISABLE`) bleiben als Alias
-  funktionsfaehig, kein Verhaltenswechsel fuer bestehende Setups. `get_embedder()`
-  liefert bei abgeschaltetem Embedding jetzt `None`, OHNE das Backend zu laden
-  oder Gewichte herunterzuladen -- trifft auch `vault.component_status()`, das
-  bisher unabhaengig vom Schalter einen Ladeversuch ausloeste. Mit allen drei
-  Schaltern auf "aus" laeuft der Vault als reine FTS5-Suche, ohne dass ein
-  einziges Modell geladen wird. Tabelle mit Default/Wirkung/Plattenbedarf/
-  Laufzeitkosten je Schalter in `docs/reference/vault.md`.
+  funktionsfaehig, kein Verhaltenswechsel fuer bestehende Setups:
+  `VAULT_AUTO_EMBED` gatet weiterhin AUSSCHLIESSLICH den Auto-Ingest in
+  `vault.add_paper()` (wie vor #719 seit #372) -- die neu gegatete
+  Vektor-Suche (`vault.search()`) und `vault.component_status()` lassen sich
+  nur ueber den kanonischen Schalter `ACADEMIC_RESEARCH_EMBEDDING_ENABLED`
+  (bzw. `"embedding_enabled": false` in `config/parallel_agents.json`)
+  abschalten, nicht ueber den Alt-Namen (`resolve_embedding_enabled(...,
+  legacy_alias=False)`). `get_embedder()` selbst wertet keinen der beiden
+  Schalter aus: explizite Aufrufe (`vault.embed_quote()`,
+  `migrate.reindex_embeddings`) laden das Backend unveraendert. Tabelle mit
+  Default/Wirkung/Plattenbedarf/Laufzeitkosten je Schalter in
+  `docs/reference/vault.md`.
 
 - **FTS5-Index ueber Chunk-Texte (#726):** `papers_fts`/`papers_trgm` matchen nur
   Paper-Felder (Titel, Abstract, Volltext) -- ein Suchbegriff, der ausschliesslich

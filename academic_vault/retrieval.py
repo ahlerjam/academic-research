@@ -65,7 +65,7 @@ DEFAULT_RERANKER_ENABLED = True
 
 def resolve_reranker_enabled(
     explicit: bool | None = None,
-    config_path: str | None = None,
+    config_path: str | Path | None = None,
 ) -> bool:
     """Schalter fuer den lokalen ``bge-reranker-v2-m3``-Fallback (Issue #719).
 

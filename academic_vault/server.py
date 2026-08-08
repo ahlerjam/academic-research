@@ -1103,7 +1103,10 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
     Leere Liste — und damit RRF auf FTS5-Basis — genau dann, wenn kein
     Embedding-Backend installiert ist, noch keine Chunk-Vektoren existieren,
     die Vektor-Suche fehlschlaegt ODER die Embedding-Komponente per Schalter
-    abgeschaltet ist (Issue #719). Die Textsuche darf daran nie scheitern.
+    abgeschaltet ist (Issue #719, NUR der kanonische Schalter oder die
+    Config-Datei -- ``legacy_alias=False``, der Alt-Name ``VAULT_AUTO_EMBED``
+    gatete diesen Pfad nie und tut es weiterhin nicht). Die Textsuche darf
+    daran nie scheitern.
 
     Returns:
         Liste aus ``{paper_id, chunk_id, snippet, text, distance}``, aufsteigend
@@ -1111,7 +1114,7 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
         ``snippet`` ist der gekuerzte, ``text`` der volle Chunk-Text
         (Reranker-Input).
     """
-    if not resolve_embedding_enabled():
+    if not resolve_embedding_enabled(legacy_alias=False):
         return []
 
     embedder = get_embedder()

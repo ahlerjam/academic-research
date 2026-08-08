@@ -282,13 +282,27 @@ def test_all_three_disabled_no_model_ever_loaded(tmp_path, monkeypatch, temp_vau
     em.reset_embedder_cache()
     retrieval.reset_local_reranker_cache()
 
-    def _fail(*_args, **_kwargs):
+    # Aufrufzaehler statt Exception: ein AssertionError aus dem Stub wuerde von
+    # breiten ``except Exception``-Klauseln in get_embedder()/apply_reranker()
+    # geschluckt und den Test unfaehig machen zu fehlschlagen (Review-Fund auf
+    # PR #774) -- der Zaehler belegt den Nicht-Aufruf direkt, unabhaengig von
+    # jeder Fehlerbehandlung dazwischen.
+    calls = {"embedding": 0, "reranker": 0}
+
+    def _fail_embedding(*_args, **_kwargs):
+        calls["embedding"] += 1
         raise AssertionError(
             "Modell-Loader haette bei abgeschalteten Schaltern nie aufgerufen werden duerfen"
         )
 
-    monkeypatch.setattr(em, "_load_backend_model", _fail)
-    monkeypatch.setattr(retrieval, "_load_local_reranker_backend", _fail)
+    def _fail_reranker(*_args, **_kwargs):
+        calls["reranker"] += 1
+        raise AssertionError(
+            "Modell-Loader haette bei abgeschalteten Schaltern nie aufgerufen werden duerfen"
+        )
+
+    monkeypatch.setattr(em, "_load_backend_model", _fail_embedding)
+    monkeypatch.setattr(retrieval, "_load_local_reranker_backend", _fail_reranker)
 
     csl_json = json.dumps(
         {
@@ -302,6 +316,10 @@ def test_all_three_disabled_no_model_ever_loaded(tmp_path, monkeypatch, temp_vau
 
     results = server.search_papers(temp_vault_db, "DevOps-Governance", rerank=True)
     assert isinstance(results, list)
+    assert calls["embedding"] == 0, (
+        "Embedding-Loader wurde trotz abgeschaltetem Schalter aufgerufen"
+    )
+    assert calls["reranker"] == 0, "Reranker-Loader wurde trotz abgeschaltetem Schalter aufgerufen"
 
     em.reset_embedder_cache()
     retrieval.reset_local_reranker_cache()

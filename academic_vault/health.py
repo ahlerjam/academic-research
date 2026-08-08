@@ -68,11 +68,14 @@ def get_component_status(db_path: str) -> dict:
     db.init_schema()
 
     # Schalter-Check VOR get_embedder() (Issue #719): bei abgeschaltetem
-    # Embedding darf component_status() keinen Ladeversuch/Download ausloesen
-    # -- get_embedder() gated zwar bereits selbst (liefert None ohne
-    # _load_backend_model aufzurufen), aber ohne diesen Check bliebe "reason"
-    # leer (kein Fehler wurde je aufgezeichnet, weil keiner auftrat).
-    embedding_switch_on = resolve_embedding_enabled()
+    # Embedding darf component_status() keinen Ladeversuch/Download ausloesen.
+    # get_embedder() selbst gated NICHT (siehe dessen Docstring) -- dieser
+    # Check hier ist die EINZIGE Absicherung dagegen, und ohne ihn bliebe
+    # "reason" zusaetzlich leer (kein Fehler wurde je aufgezeichnet, weil
+    # keiner auftrat). legacy_alias=False wie in _vec0_search: der Status soll
+    # widerspiegeln, ob eine SUCHE das Modell laden wuerde, und die Suche
+    # ignoriert den Alt-Namen VAULT_AUTO_EMBED (der gatet nur den Auto-Ingest).
+    embedding_switch_on = resolve_embedding_enabled(legacy_alias=False)
     embedder = get_embedder() if embedding_switch_on else None
     embedding_loaded = embedder is not None
     embedding_status = {

@@ -34,11 +34,19 @@ Issue #719 demselben Vorrang, ausgewertet vom gemeinsamen Resolver
 **Argument > Umgebungsvariable > `config/parallel_agents.json` > Default**
 
 Alte, komponentenspezifische Schalter (`VAULT_AUTO_EMBED`,
-`VAULT_RERANK_LOCAL_DISABLE`) bleiben als Alias funktionsfähig, damit
-bestehende Konfigurationen nicht still brechen — Details je Komponente in den
-Env-Variablen-Tabellen unten. Mit allen drei Schaltern auf "aus" läuft der
-Vault als reine FTS5-Stichwortsuche, ohne dass ein einziges Modell geladen
-oder heruntergeladen wird.
+`VAULT_RERANK_LOCAL_DISABLE`) bleiben als Alias funktionsfähig, ohne
+Verhaltensänderung für bestehende Setups — Details je Komponente in den
+Env-Variablen-Tabellen unten. `VAULT_AUTO_EMBED` gatet weiterhin
+ausschließlich den Auto-Ingest in `vault.add_paper()` (wie vor #719 seit
+#372); die seit #719 neu gegatete Vektor-Suche (`vault.search()`) reagiert
+NICHT auf diesen Alt-Namen, nur auf den kanonischen Schalter
+`ACADEMIC_RESEARCH_EMBEDDING_ENABLED` bzw. `config/parallel_agents.json`.
+Mit dem kanonischen Schalter aller drei Komponenten auf "aus" laufen
+`vault.add_paper()`/`vault.search()` als reine FTS5-Stichwortsuche, ohne
+dass ein einziges Modell geladen oder heruntergeladen wird — das gilt für
+diese automatischen Pfade, nicht für explizite Aufrufe wie
+`vault.embed_quote()` oder `migrate.reindex_embeddings`, die das jeweilige
+Modell bewusst und unabhängig vom Schalter laden.
 
 | Komponente | Config-Schlüssel | Default | Wirkung bei `false` | Plattenbedarf | Laufzeitkosten |
 |---|---|---|---|---|---|
@@ -81,8 +89,8 @@ rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
 
 | Env-Variable | Default | Wirkung |
 |---|---|---|
-| `ACADEMIC_RESEARCH_EMBEDDING_ENABLED` | `1` | Kanonischer Schalter (#719). `0` schaltet den Embedding-Ingest in `vault.add_paper()` UND `get_embedder()` ab — kein Ladeversuch, kein Download, `vault.search()` läuft FTS5-only. Ebenfalls per `"embedding_enabled": false` in `config/parallel_agents.json` setzbar. |
-| `VAULT_AUTO_EMBED` | `1` | Alt-Name (#372), bleibt als Alias erhalten. `0` wirkt identisch zu `ACADEMIC_RESEARCH_EMBEDDING_ENABLED=0`. |
+| `ACADEMIC_RESEARCH_EMBEDDING_ENABLED` | `1` | Kanonischer Schalter (#719). `0` schaltet den Embedding-Ingest in `vault.add_paper()` und die Vektor-Suche in `vault.search()` ab — kein Ladeversuch, kein Download in diesen automatischen Pfaden, `vault.search()` läuft FTS5-only. `get_embedder()` selbst wertet den Schalter nicht aus: explizite Aufrufe (`vault.embed_quote()`, `migrate.reindex_embeddings`) laden das Modell weiterhin. Ebenfalls per `"embedding_enabled": false` in `config/parallel_agents.json` setzbar. |
+| `VAULT_AUTO_EMBED` | `1` | Alt-Name (#372), bleibt als Alias erhalten -- ABER mit dem urspruenglichen, engeren Geltungsbereich: `0` schaltet nur den Embedding-Ingest in `vault.add_paper()` ab, NICHT die Vektor-Suche (kein Verhaltenswechsel gegenüber vor #719). Wer auch `vault.search()` abschalten will, braucht `ACADEMIC_RESEARCH_EMBEDDING_ENABLED=0`. |
 | `VAULT_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Alternatives Modell, beliebige Dimension. Auf einem bereits befüllten Vault braucht ein Wechsel der Dimension einen Re-Index (siehe unten). |
 | `VAULT_EMBEDDING_CACHE` | `~/.academic-research/models` | Ablageort der Modellgewichte. |
 | `VAULT_MAX_CHUNKS` | `64` | Obergrenze der Chunks pro Ingest (Latenzschutz). |

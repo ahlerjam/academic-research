@@ -104,22 +104,41 @@ DEFAULT_EMBEDDING_ENABLED = True
 def resolve_embedding_enabled(
     explicit: bool | None = None,
     config_path: str | Path | None = None,
+    *,
+    legacy_alias: bool = True,
 ) -> bool:
     """Schalter fuer das lokale Embedding-Modell (Issue #719).
 
-    Vorrang: Argument > Env (``ACADEMIC_RESEARCH_EMBEDDING_ENABLED``, danach
-    Alias ``VAULT_AUTO_EMBED``) > ``config/parallel_agents.json`` (Schluessel
-    ``embedding_enabled``) > Default ``True``. Bei ``False`` liefert
-    :func:`get_embedder` ``None``, OHNE das Backend zu laden oder das Modell
-    herunterzuladen -- ``vault.search``/``vault.add_paper`` degradieren dann
-    auf FTS5-only (identisch zum bisherigen "Backend nicht ladbar"-Pfad, nur
-    absichtlich statt als Fehlerfall).
+    Vorrang: Argument > Env (``ACADEMIC_RESEARCH_EMBEDDING_ENABLED``, mit
+    ``legacy_alias=True`` zusaetzlich Alt-Name ``VAULT_AUTO_EMBED``) >
+    ``config/parallel_agents.json`` (Schluessel ``embedding_enabled``) >
+    Default ``True``. :func:`get_embedder` selbst wertet diesen Schalter
+    NICHT aus (siehe dessen Docstring): explizite Aufrufer
+    (``vault.embed_quote``, ``quote_context_similarity``,
+    ``migrate.reindex_embeddings``) laden das Backend immer, unabhaengig vom
+    Schalter -- wer sie aufruft, will das Modell laden.
+
+    ``legacy_alias`` steuert, ob der Alt-Name ``VAULT_AUTO_EMBED`` (#372)
+    mitzaehlt. Er gatete vor #719 AUSSCHLIESSLICH den Auto-Ingest in
+    ``server._auto_embed_enabled`` -- Default ``True`` erhaelt das:
+    bestehende Setups mit ``VAULT_AUTO_EMBED=0`` bleiben unveraendert
+    (auch von Tests genutzt, um den Auto-Ingest-Seiteneffekt beim manuellen
+    Bestuecken von ``chunk_embeddings`` zu unterdruecken, ohne die Suche
+    abzuschalten). ``server._vec0_search`` ruft deshalb explizit
+    ``legacy_alias=False`` auf: die Vektor-Suche ist eine mit #719 NEUE
+    Gate-Faehigkeit, die es unter dem Alt-Namen nie gab, und sie darf nur
+    ueber den kanonischen Schalter (oder die Config-Datei) abschaltbar sein.
+    Fuer AC4 aus #719 ("alle drei Schalter aus => reine FTS5-Suche") genuegt
+    der kanonische Schalter -- er gatet beide Pfade gleichzeitig.
     """
     from .config_switches import resolve_bool_switch
 
+    env_vars = (
+        (ENV_EMBEDDING_ENABLED, ENV_AUTO_EMBED_ALIAS) if legacy_alias else (ENV_EMBEDDING_ENABLED,)
+    )
     return resolve_bool_switch(
         explicit,
-        (ENV_EMBEDDING_ENABLED, ENV_AUTO_EMBED_ALIAS),
+        env_vars,
         CONFIG_KEY_EMBEDDING,
         DEFAULT_EMBEDDING_ENABLED,
         config_path,
@@ -291,7 +310,7 @@ def reset_embedder_cache() -> None:
     _EMBEDDER_ERROR_CACHE.clear()
 
 
-def get_embedder(model_id: str | None = None, enabled: bool | None = None) -> Embedder | None:
+def get_embedder(model_id: str | None = None) -> Embedder | None:
     """Gibt den lokalen Embedder zurueck oder ``None``, wenn keiner nutzbar ist.
 
     ``None`` ist ein Degradations-, kein Absturzpfad: der Vault bleibt auch ohne
@@ -299,12 +318,12 @@ def get_embedder(model_id: str | None = None, enabled: bool | None = None) -> Em
     Log — eine dauerhaft leere ``chunk_embeddings``-Tabelle soll nicht wieder
     unbemerkt bleiben (#372).
 
-    Der Schalter (:func:`resolve_embedding_enabled`, Issue #719) gatet ausschliesslich
-    den Auto-Ingest-Pfad (``_maybe_ingest_embeddings``), nicht diese Funktion selbst.
-    Damit koennen explizite Aufrufer (``embed_quote``, ``quote_context_similarity``,
-    ``migrate.reindex_embeddings``) und Queries das Backend weiterhin nutzen, auch wenn
-    Auto-Ingest ausgeschaltet ist. Das ``enabled``-Argument bleibt fuer zukuenftige
-    Erweiterungen, wird aber hier nicht genutzt.
+    Der Schalter (:func:`resolve_embedding_enabled`, Issue #719) wertet DIESE
+    Funktion nicht selbst aus -- gegated sind ihre AUFRUFER
+    (``server._maybe_ingest_embeddings``, ``server._vec0_search``). Explizite
+    Aufrufer (``embed_quote``, ``quote_context_similarity``,
+    ``migrate.reindex_embeddings``) laden das Backend deshalb immer, auch bei
+    abgeschaltetem Schalter -- wer sie aufruft, will das Modell laden.
     """
     key = model_id or os.environ.get(ENV_MODEL_ID) or DEFAULT_MODEL_ID
     if key in _EMBEDDER_CACHE:
