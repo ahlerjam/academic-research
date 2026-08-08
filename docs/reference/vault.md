@@ -23,6 +23,35 @@ im [Quickstart-Protokoll](../quickstart-protocol.md#5-halluzinationsschutz-verba
 > Der Guard ist eine Absicherung, kein Freibrief. Prüfe Seitenzahlen, Autorennamen und
 > Jahreszahlen weiterhin am Original, bevor du ein Zitat abgibst.
 
+## Lokale Modelle: Schalter im Überblick
+
+Der Vault lädt bis zu drei lokale Modelle: das Embedding-Modell (Vektor-Suche),
+den lokalen Reranker-Fallback und den NLI-Zitatscan. Alle drei sind **per
+Default aktiv** und lassen sich einzeln abschalten — jeder Schalter folgt seit
+Issue #719 demselben Vorrang, ausgewertet vom gemeinsamen Resolver
+`academic_vault.config_switches.resolve_bool_switch()`:
+
+**Argument > Umgebungsvariable > `config/parallel_agents.json` > Default**
+
+Alte, komponentenspezifische Schalter (`VAULT_AUTO_EMBED`,
+`VAULT_RERANK_LOCAL_DISABLE`) bleiben als Alias funktionsfähig, damit
+bestehende Konfigurationen nicht still brechen — Details je Komponente in den
+Env-Variablen-Tabellen unten. Mit allen drei Schaltern auf "aus" läuft der
+Vault als reine FTS5-Stichwortsuche, ohne dass ein einziges Modell geladen
+oder heruntergeladen wird.
+
+| Komponente | Config-Schlüssel | Default | Wirkung bei `false` | Plattenbedarf | Laufzeitkosten |
+|---|---|---|---|---|---|
+| Embedding-Modell (`intfloat/multilingual-e5-small`) | `embedding_enabled` | `true` | `vault.add_paper()`/`vault.search()` laufen FTS5-only, `chunk_embeddings` bleibt leer. | ~470 MB (Modellgewichte) | Ingest: ~1 Chunk/10–50 ms auf CPU; Suche: eine Query-Embedding-Berechnung (<50 ms). |
+| Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); betrifft **nur** den lokalen Fallback — Voyage/Cohere bleiben über ihre Cloud-Keys unabhängig davon nutzbar. | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
+| NLI-Zitatscan (`MoritzLaurer/bge-m3-zeroshot-v2.0`) | `nli_prefilter_enabled` | `true` | Der `nli-quote-scan.mjs`-Hook tut nichts — weder Anstoß noch Abholung, kein Zitat wird bewertet oder gemeldet. | ~1,3 GB (0,6 Mrd. Parameter, F16 — Schätzung, HF nennt keine Dateigröße) | ~0,127 s/Zitat auf CPU zzgl. 1,6 s einmaligem Modell-Laden je Worker-Start (gemessen, s. `docs/reference/hooks.md`). |
+
+Env-Variablen je Komponente (kanonischer Name, Alt-Name als Alias sofern
+vorhanden): `ACADEMIC_RESEARCH_EMBEDDING_ENABLED` (Alias `VAULT_AUTO_EMBED`),
+`ACADEMIC_RESEARCH_RERANKER_ENABLED` (Alias `VAULT_RERANK_LOCAL_DISABLE` —
+abweichende Semantik: reines Präsenz-Flag statt truthy/falsy-Wert),
+`ACADEMIC_RESEARCH_NLI_PREFILTER` (kein Alias, seit #592 unverändert).
+
 ## Vektor-Suche (Embedding-Pipeline)
 
 `vault.add_paper()` erzeugt seit v6.6 automatisch Chunk-Embeddings (`chunk_embeddings` +
@@ -52,7 +81,8 @@ rechnet dann in reinem Python über dieselben Vektoren, nur langsamer.
 
 | Env-Variable | Default | Wirkung |
 |---|---|---|
-| `VAULT_AUTO_EMBED` | `1` | `0` schaltet den Embedding-Ingest in `vault.add_paper()` ab. |
+| `ACADEMIC_RESEARCH_EMBEDDING_ENABLED` | `1` | Kanonischer Schalter (#719). `0` schaltet den Embedding-Ingest in `vault.add_paper()` UND `get_embedder()` ab — kein Ladeversuch, kein Download, `vault.search()` läuft FTS5-only. Ebenfalls per `"embedding_enabled": false` in `config/parallel_agents.json` setzbar. |
+| `VAULT_AUTO_EMBED` | `1` | Alt-Name (#372), bleibt als Alias erhalten. `0` wirkt identisch zu `ACADEMIC_RESEARCH_EMBEDDING_ENABLED=0`. |
 | `VAULT_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Alternatives Modell, beliebige Dimension. Auf einem bereits befüllten Vault braucht ein Wechsel der Dimension einen Re-Index (siehe unten). |
 | `VAULT_EMBEDDING_CACHE` | `~/.academic-research/models` | Ablageort der Modellgewichte. |
 | `VAULT_MAX_CHUNKS` | `64` | Obergrenze der Chunks pro Ingest (Latenzschutz). |
@@ -148,7 +178,8 @@ wird `False` und eine `WARNING` landet im Log — kein Absturz.
 
 | Env-Variable | Default | Wirkung |
 |---|---|---|
-| `VAULT_RERANK_LOCAL_DISABLE` | nicht gesetzt | Jeder gesetzte Wert schaltet den lokalen Reranker ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden. |
+| `ACADEMIC_RESEARCH_RERANKER_ENABLED` | `1` (nicht gesetzt) | Kanonischer Schalter (#719). `0` schaltet NUR den lokalen Fallback ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden — Voyage/Cohere bleiben unabhängig davon nutzbar. Ebenfalls per `"reranker_enabled": false` in `config/parallel_agents.json` setzbar. |
+| `VAULT_RERANK_LOCAL_DISABLE` | nicht gesetzt | Alt-Name (#714), bleibt als Alias erhalten — ABWEICHENDE Semantik: ein reines Präsenz-Flag, jeder gesetzte Wert (auch `"0"`) schaltet ab, kein truthy/falsy-Parsing. Gesetzt, gewinnt er über `ACADEMIC_RESEARCH_RERANKER_ENABLED`. |
 | `VAULT_RERANK_LOCAL_MODEL` | `BAAI/bge-reranker-v2-m3` | Alternatives Reranker-Modell. |
 | `VAULT_RERANK_LOCAL_CACHE` | `~/.academic-research/models` | Ablageort der Reranker-Gewichte (gleiches Verzeichnis wie Embedding-/NLI-Modell). |
 

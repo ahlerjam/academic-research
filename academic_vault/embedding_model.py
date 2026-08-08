@@ -88,6 +88,43 @@ PASSAGE_PREFIX = "passage: "
 ENV_MODEL_ID = "VAULT_EMBEDDING_MODEL"
 ENV_CACHE_DIR = "VAULT_EMBEDDING_CACHE"
 
+# ---------------------------------------------------------------------------
+# Toggle (Issue #719, Muster: nli_prefilter.resolve_nli_prefilter_enabled)
+# ---------------------------------------------------------------------------
+
+#: Kanonischer Schalter seit #719.
+ENV_EMBEDDING_ENABLED = "ACADEMIC_RESEARCH_EMBEDDING_ENABLED"
+#: Alt-Name seit #372, bleibt als Alias erhalten -- bestehende Setups mit
+#: ``VAULT_AUTO_EMBED=0`` brechen dadurch nicht still.
+ENV_AUTO_EMBED_ALIAS = "VAULT_AUTO_EMBED"
+CONFIG_KEY_EMBEDDING = "embedding_enabled"
+DEFAULT_EMBEDDING_ENABLED = True
+
+
+def resolve_embedding_enabled(
+    explicit: bool | None = None,
+    config_path: str | Path | None = None,
+) -> bool:
+    """Schalter fuer das lokale Embedding-Modell (Issue #719).
+
+    Vorrang: Argument > Env (``ACADEMIC_RESEARCH_EMBEDDING_ENABLED``, danach
+    Alias ``VAULT_AUTO_EMBED``) > ``config/parallel_agents.json`` (Schluessel
+    ``embedding_enabled``) > Default ``True``. Bei ``False`` liefert
+    :func:`get_embedder` ``None``, OHNE das Backend zu laden oder das Modell
+    herunterzuladen -- ``vault.search``/``vault.add_paper`` degradieren dann
+    auf FTS5-only (identisch zum bisherigen "Backend nicht ladbar"-Pfad, nur
+    absichtlich statt als Fehlerfall).
+    """
+    from .config_switches import resolve_bool_switch
+
+    return resolve_bool_switch(
+        explicit,
+        (ENV_EMBEDDING_ENABLED, ENV_AUTO_EMBED_ALIAS),
+        CONFIG_KEY_EMBEDDING,
+        DEFAULT_EMBEDDING_ENABLED,
+        config_path,
+    )
+
 
 def default_cache_dir() -> str:
     """Ablageort fuer heruntergeladene Modellgewichte."""
@@ -254,14 +291,24 @@ def reset_embedder_cache() -> None:
     _EMBEDDER_ERROR_CACHE.clear()
 
 
-def get_embedder(model_id: str | None = None) -> Embedder | None:
+def get_embedder(model_id: str | None = None, enabled: bool | None = None) -> Embedder | None:
     """Gibt den lokalen Embedder zurueck oder ``None``, wenn keiner nutzbar ist.
 
     ``None`` ist ein Degradations-, kein Absturzpfad: der Vault bleibt auch ohne
     nutzbares Backend vollstaendig bedienbar (FTS5-only). Der Grund landet im
     Log — eine dauerhaft leere ``chunk_embeddings``-Tabelle soll nicht wieder
     unbemerkt bleiben (#372).
+
+    Ist das Embedding-Modell per Schalter abgeschaltet
+    (:func:`resolve_embedding_enabled`, Issue #719), liefert diese Funktion
+    ``None``, OHNE ``_load_backend_model`` je aufzurufen -- kein Download,
+    kein Ladeversuch, kein Cache-Eintrag in ``_EMBEDDER_ERROR_CACHE`` (der
+    Aus-Zustand ist kein Fehler). ``enabled`` erlaubt Aufrufern, den Schalter
+    explizit zu uebersteuern (Argument-Vorrang, s. ``resolve_bool_switch``).
     """
+    if not resolve_embedding_enabled(enabled):
+        return None
+
     key = model_id or os.environ.get(ENV_MODEL_ID) or DEFAULT_MODEL_ID
     if key in _EMBEDDER_CACHE:
         return _EMBEDDER_CACHE[key]

@@ -24,7 +24,7 @@ import sqlite3
 import sys
 
 from .db import VaultDB
-from .embedding_model import get_embedder, get_embedder_error
+from .embedding_model import get_embedder, get_embedder_error, resolve_embedding_enabled
 
 # Tabellen, deren Existenz FTS5-Verfuegbarkeit belegt (schema.sql). Beide
 # werden per CREATE VIRTUAL TABLE ... USING fts5(...) angelegt -- existieren
@@ -67,7 +67,13 @@ def get_component_status(db_path: str) -> dict:
     db = VaultDB(db_path)
     db.init_schema()
 
-    embedder = get_embedder()
+    # Schalter-Check VOR get_embedder() (Issue #719): bei abgeschaltetem
+    # Embedding darf component_status() keinen Ladeversuch/Download ausloesen
+    # -- get_embedder() gated zwar bereits selbst (liefert None ohne
+    # _load_backend_model aufzurufen), aber ohne diesen Check bliebe "reason"
+    # leer (kein Fehler wurde je aufgezeichnet, weil keiner auftrat).
+    embedding_switch_on = resolve_embedding_enabled()
+    embedder = get_embedder() if embedding_switch_on else None
     embedding_loaded = embedder is not None
     embedding_status = {
         "loaded": embedding_loaded,
@@ -79,7 +85,15 @@ def get_component_status(db_path: str) -> dict:
             "Stichwortsuche -- inhaltlich passende, aber wortlich abweichende "
             "Textstellen werden nicht gefunden."
         ),
-        "reason": None if embedding_loaded else get_embedder_error(),
+        "reason": (
+            None
+            if embedding_loaded
+            else (
+                "Embedding-Schalter ist aus (Argument/Env/Config, Issue #719)."
+                if not embedding_switch_on
+                else get_embedder_error()
+            )
+        ),
     }
 
     sqlite_vec_loaded = db.vec_available

@@ -28,7 +28,12 @@ from .db import (
 from .decision_log import AUTO_CATEGORY as _AUTO_DECISION_CATEGORY
 from .decision_log import MODEL_VERSION_CATEGORY as _MODEL_VERSION_CATEGORY
 from .decision_log import parse_model_version_text as _parse_model_version_text
-from .embedding_model import REINDEX_HINT, EmbeddingDimensionMismatchError, get_embedder
+from .embedding_model import (
+    REINDEX_HINT,
+    EmbeddingDimensionMismatchError,
+    get_embedder,
+    resolve_embedding_enabled,
+)
 from .health import get_component_status
 
 logger = logging.getLogger(__name__)
@@ -1154,13 +1159,14 @@ def _vec_snippet(chunk_text: str, limit: int = _VEC_SNIPPET_CHARS) -> str:
 
 
 def _auto_embed_enabled() -> bool:
-    """Ob ``add_paper`` Embeddings erzeugt (abschaltbar via ``VAULT_AUTO_EMBED=0``)."""
-    return os.environ.get("VAULT_AUTO_EMBED", "1").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
+    """Ob ``add_paper`` Embeddings erzeugt.
+
+    Seit #719 ein duenner Wrapper um
+    ``embedding_model.resolve_embedding_enabled()`` (Vorrang
+    Argument > Env > Config > Default, ``VAULT_AUTO_EMBED`` bleibt als
+    Alias-Env erhalten -- kein Verhaltenswechsel fuer bestehende Setups).
+    """
+    return resolve_embedding_enabled()
 
 
 def _auto_fulltext_enabled() -> bool:

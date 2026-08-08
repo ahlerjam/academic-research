@@ -10,6 +10,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Einheitlicher Config-Block fuer die drei lokalen Modelle (#719):** Embedding
+  (`embedding_enabled`), lokaler Reranker (`reranker_enabled`) und NLI-Zitatscan
+  (`nli_prefilter_enabled`, unveraendert seit #592/#717) folgen jetzt demselben
+  Vorrang -- Argument > Umgebungsvariable > `config/parallel_agents.json` >
+  Default -- ausgewertet vom neuen, generischen
+  `academic_vault.config_switches.resolve_bool_switch()` (Muster:
+  `nli_prefilter.resolve_nli_prefilter_enabled`). Alte Schalter
+  (`VAULT_AUTO_EMBED`, `VAULT_RERANK_LOCAL_DISABLE`) bleiben als Alias
+  funktionsfaehig, kein Verhaltenswechsel fuer bestehende Setups. `get_embedder()`
+  liefert bei abgeschaltetem Embedding jetzt `None`, OHNE das Backend zu laden
+  oder Gewichte herunterzuladen -- trifft auch `vault.component_status()`, das
+  bisher unabhaengig vom Schalter einen Ladeversuch ausloeste. Mit allen drei
+  Schaltern auf "aus" laeuft der Vault als reine FTS5-Suche, ohne dass ein
+  einziges Modell geladen wird. Tabelle mit Default/Wirkung/Plattenbedarf/
+  Laufzeitkosten je Schalter in `docs/reference/vault.md`.
+
 - **FTS5-Index ueber Chunk-Texte (#726):** `papers_fts`/`papers_trgm` matchen nur
   Paper-Felder (Titel, Abstract, Volltext) -- ein Suchbegriff, der ausschliesslich
   im Methodikteil eines einzelnen Chunks steht (`chunk_embeddings.chunk_text`),
