@@ -1504,9 +1504,22 @@ def pending_context_chunks(
 
     Duenner Wrapper um ``VaultDB.pending_context_chunks()`` -- Dokumentation
     (Sortierung, "pending"-Definition, Rueckgabefelder) steht dort.
+
+    Bewusst ``db.init_schema()`` statt ``_ensure_schema_for_read()``: Letzteres
+    prueft laut eigenem Docstring nur auf FEHLENDE TABELLEN
+    (``_READ_REQUIRED_TABLES``) und ueberlaesst die Reparatur von
+    Spalten-Drift ausdruecklich den Schreibpfaden. Die Query in
+    ``VaultDB.pending_context_chunks()`` selektiert aber ``context_source``
+    NAMENTLICH -- eine Spalte, die auf jeder Bestands-DB unter Schema 15
+    (``chunk_embeddings`` existiert bereits, die Spalte noch nicht) fehlt.
+    Ohne den unbedingten Aufruf hier wuerde genau der in
+    ``docs/reference/vault.md`` beworbene Bestandsvault-Nachtrag
+    (``paper_id=None`` auf einer alten DB) mit
+    ``sqlite3.OperationalError: no such column: ce.context_source``
+    abstuerzen statt eine Liste zu liefern.
     """
     db = VaultDB(db_path)
-    _ensure_schema_for_read(db_path)
+    db.init_schema()
     return db.pending_context_chunks(paper_id=paper_id, limit=limit)
 
 

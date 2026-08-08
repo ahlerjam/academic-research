@@ -172,6 +172,145 @@ class TestSchemaMigration:
         assert version == 15
 
 
+def _degrade_chunk_embeddings_to_schema_14(db_path: str) -> None:
+    """Simuliert eine Bestands-DB unter Schema 15: ``chunk_embeddings`` OHNE
+    ``context_source``, ``user_version`` auf 14 zurueckgesetzt. Alle Tabellen
+    aus ``server._READ_REQUIRED_TABLES`` bleiben unangetastet vorhanden -- der
+    Read-Guard ``_ensure_schema_for_read()`` prueft laut eigenem Docstring nur
+    fehlende TABELLEN, nie Spalten-Drift, wuerde diese DB also faelschlich als
+    "vollstaendig" ansehen (Review-Fund P1 zu PR #786/#783).
+
+    ``ALTER TABLE ... DROP COLUMN`` scheitert hier an SQLites eigener
+    Einschraenkung (keine Spalte droppen, die in einem CHECK-Constraint
+    steht) -- deshalb Tabellen-Rebuild auf die tatsaechliche Schema-14-Form
+    (mit ``section_title``/``page_start``/``page_end`` aus #728, noch ohne
+    ``context_source`` aus #783), Daten unveraendert uebernommen.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = [dict(r) for r in conn.execute("SELECT * FROM chunk_embeddings").fetchall()]
+        conn.execute("DROP TABLE chunk_embeddings")
+        conn.execute(
+            """
+            CREATE TABLE chunk_embeddings (
+              chunk_id         TEXT PRIMARY KEY,
+              paper_id         TEXT NOT NULL REFERENCES papers(paper_id),
+              chunk_text       TEXT NOT NULL,
+              context_sentence TEXT NOT NULL,
+              embedding_text   TEXT NOT NULL,
+              embedding_vector BLOB,
+              created_at       INTEGER NOT NULL,
+              section_title    TEXT,
+              page_start       INTEGER,
+              page_end         INTEGER
+            )
+            """
+        )
+        for row in rows:
+            conn.execute(
+                "INSERT INTO chunk_embeddings "
+                "(chunk_id, paper_id, chunk_text, context_sentence, embedding_text, "
+                " embedding_vector, created_at, section_title, page_start, page_end) "
+                "VALUES (:chunk_id, :paper_id, :chunk_text, :context_sentence, "
+                " :embedding_text, :embedding_vector, :created_at, :section_title, "
+                " :page_start, :page_end)",
+                row,
+            )
+        conn.execute("PRAGMA user_version = 14")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+class TestServerReadPathMigratesLegacySchema14Db:
+    """Regressionstest (Review-Fund P1, PR #786): ``server.pending_context_chunks()``
+
+    darf auf einer Schema-14-Bestands-DB nicht mit
+    ``sqlite3.OperationalError: no such column: ce.context_source`` abstuerzen.
+    ``_ensure_schema_for_read()`` deckt das NICHT ab (nur Tabellen-Drift,
+    s. Docstring dort) -- der Lesepfad muss deshalb unbedingt
+    ``VaultDB.init_schema()`` aufrufen, wie die Schreibpfade es bereits tun.
+    """
+
+    def test_read_guard_alone_would_not_have_caught_the_drift(self, tmp_path):
+        """Vorbedingung/Beweis: der (unveraenderte) Tabellen-Guard allein reicht
+        hier nicht -- sonst waere die Regression nie aufgetreten."""
+        from academic_vault.server import _ensure_schema_for_read
+
+        db_path = str(tmp_path / "vault.db")
+        _seed_paper(db_path, "p1")
+        VaultDB(db_path).add_chunk_embedding(
+            paper_id="p1",
+            chunk_text="Bestandstext",
+            context_sentence="Alter Kontext.",
+            embedding_text="Alter Kontext. Bestandstext",
+            embedding_vector=None,
+        )
+        _degrade_chunk_embeddings_to_schema_14(db_path)
+
+        _ensure_schema_for_read(db_path)  # der alte Guard allein
+
+        conn = sqlite3.connect(db_path)
+        try:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(chunk_embeddings)")}
+        finally:
+            conn.close()
+        assert "context_source" not in columns, (
+            "Testannahme verletzt: _ensure_schema_for_read() hat die Spalte "
+            "doch repariert -- dann waere dieser Regressionstest gegenstandslos."
+        )
+
+    def test_pending_context_chunks_does_not_crash_on_legacy_db(self, tmp_path):
+        db_path = str(tmp_path / "vault.db")
+        _seed_paper(db_path, "p1")
+        db = VaultDB(db_path)
+        db.add_chunk_embedding(
+            paper_id="p1",
+            chunk_text="Bestandstext",
+            context_sentence="Alter Kontext.",
+            embedding_text="Alter Kontext. Bestandstext",
+            embedding_vector=None,
+        )
+        _degrade_chunk_embeddings_to_schema_14(db_path)
+
+        result = server.pending_context_chunks(db_path, paper_id="p1")
+
+        assert [c["chunk_text"] for c in result] == ["Bestandstext"]
+
+        # Server-Aufruf muss die DB dabei tatsaechlich migriert haben.
+        conn = sqlite3.connect(db_path)
+        try:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(chunk_embeddings)")}
+        finally:
+            conn.close()
+        assert "context_source" in columns
+
+    def test_enrich_chunk_contexts_already_migrates_legacy_db(self, tmp_path):
+        """Gegenprobe (Review-Auftrag): enrich_chunk_contexts() ruft bereits
+
+        unbedingt db.init_schema() auf und hat denselben Fund NICHT."""
+        db_path = str(tmp_path / "vault.db")
+        _seed_paper(db_path, "p1")
+        db = VaultDB(db_path)
+        chunk_id = db.add_chunk_embedding(
+            paper_id="p1",
+            chunk_text="Bestandstext",
+            context_sentence="Alter Kontext.",
+            embedding_text="Alter Kontext. Bestandstext",
+            embedding_vector=None,
+        )
+        _degrade_chunk_embeddings_to_schema_14(db_path)
+
+        result = server.enrich_chunk_contexts(
+            db_path,
+            items=[{"chunk_id": chunk_id, "context_sentence": "Ein inhaltlicher Satz."}],
+            embedder=SizedEmbedder(8),
+        )
+
+        assert result["updated"] == [chunk_id]
+
+
 # ---------------------------------------------------------------------------
 # AC2 -- db.VaultDB.pending_context_chunks()
 # ---------------------------------------------------------------------------
