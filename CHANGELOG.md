@@ -234,6 +234,23 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Changed
 
+- **Lokaler Reranker läuft über `CrossEncoder` und ist per Default aktiv
+  (#714, Verhaltensänderung gegenüber #376).** `_load_local_reranker_backend()`
+  lud bisher `FlagEmbedding.FlagReranker` — ein Paket, das bewusst kein
+  uv-Extra war, weil es `transformers<5.0` erzwang und damit jede Installation
+  auf einen Downgrade gezogen hätte (real beobachtet: 5.14.1 → 4.57.6). Folge:
+  der kostenfreie Fallback aus #376 war gebaut und getestet, lief in der
+  Praxis aber nie, weil niemand `FlagEmbedding` manuell installierte. Er lädt
+  dasselbe Modell (`BAAI/bge-reranker-v2-m3`) jetzt über
+  `sentence_transformers.CrossEncoder` — bereits Hard-Dependency seit #372
+  (Embedding-Pipeline), keine zusätzliche Installation nötig. Damit greift der
+  lokale Reranker ohne Cloud-API-Key jetzt **per Default**, abschaltbar über
+  den neuen Schalter `VAULT_RERANK_LOCAL_DISABLE`. Gemessene Zusatzlatenz
+  (Apple M4 Pro, 16 Kandidatenpaare): 48 ms/Paar auf CPU, 26 ms/Paar auf MPS —
+  siehe `docs/reference/vault.md`, Abschnitt „Reranking". Der
+  FlagEmbedding-Sonderblock (Kommentar zur bewussten Nicht-Deklaration) ist
+  aus `pyproject.toml` und `scripts/requirements.txt` entfernt.
+
 - **Der Ingest chunkt über `chunk_pages()` statt über ein Zeichenfenster (#708,
   Verhaltensänderung).** `ingest_paper_embeddings()` zerlegte seit #372 über den
   Platzhalter `split_text()` — 1600-Zeichen-Fenster, `context_sentence=""` — und

@@ -277,7 +277,7 @@ class TestRerankerIntegration:
 
         mock_reranker = MagicMock()
         # p002 bekommt den hoeheren Score -> Rangfolge kehrt sich gegenueber RRF um
-        mock_reranker.compute_score.return_value = [0.1, 0.9]
+        mock_reranker.predict.return_value = [0.1, 0.9]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             result = apply_reranker(
@@ -329,17 +329,13 @@ class TestRerankerIntegration:
         `test_rerank_fallback_when_no_api_key_uses_local_bge` ersetzt -- das
         mockt einen FUNKTIONIERENDEN lokalen Reranker und prueft damit einen
         anderen Zweig. Der Pfad "kein Reranker verfuegbar" blieb dadurch ohne
-        jede Absicherung, obwohl er der Normalfall jeder `setup.sh`-Installation
-        ist: `FlagEmbedding` ist bewusst kein uv-/pip-verwalteter Dependency
-        (weder in `pyproject.toml` noch in `scripts/requirements.txt`, nur
-        manuell per `pip install FlagEmbedding` nachinstallierbar -- vgl.
-        Fixrunde PR #422), also schlaegt `_get_local_reranker()` dort immer
-        fehl.
+        jede Absicherung, obwohl er strukturell moeglich bleibt (Backend-Ladefehler,
+        Netzausfall beim Erstdownload etc., #714).
 
         Bewusst KEIN Patch von `_get_local_reranker`: die autouse-Fixture
         `block_real_local_reranker_backend` (tests/conftest.py) blockiert das
-        echte Backend bereits -- genau das Verhalten, das ein fehlendes
-        `rerank-local`-Extra in der Praxis erzeugt.
+        echte Backend bereits -- genau das Verhalten, das ein Backend-Ladefehler
+        in der Praxis erzeugt.
         """
         from academic_vault.retrieval import apply_reranker
 
@@ -424,7 +420,7 @@ class TestRerankerFallbackStructure:
         ]
 
         mock_reranker = MagicMock()
-        mock_reranker.compute_score.return_value = [0.5, 0.5]
+        mock_reranker.predict.return_value = [0.5, 0.5]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             result = apply_reranker(
@@ -492,7 +488,7 @@ class TestRerankerFallbackStructure:
 
         # Fallback-Pfad — kein Key, lokaler Reranker gemockt (#376)
         mock_local = MagicMock()
-        mock_local.compute_score.return_value = [0.5, 0.5]
+        mock_local.predict.return_value = [0.5, 0.5]
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_local):
             fallback = apply_reranker(
                 query="q",
@@ -661,7 +657,7 @@ class TestLocalBgeReranker:
 
         mock_reranker = MagicMock()
         # p003 bekommt hoechsten Score, dann p001, dann p002
-        mock_reranker.compute_score.return_value = [0.4, 0.1, 0.9]
+        mock_reranker.predict.return_value = [0.4, 0.1, 0.9]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             reranked = rerank_with_local_bge(
@@ -673,7 +669,7 @@ class TestLocalBgeReranker:
         assert reranked[1]["paper_id"] == "p001"
         assert reranked[2]["paper_id"] == "p002"
         # Backend bekommt Query/Text als Paar-Liste
-        call_args = mock_reranker.compute_score.call_args
+        call_args = mock_reranker.predict.call_args
         pairs = call_args[0][0]
         assert pairs == [
             ["transformer attention NLP", "Transformer neural networks."],
@@ -681,14 +677,19 @@ class TestLocalBgeReranker:
             ["transformer attention NLP", "Attention mechanism for NLP."],
         ]
 
-    def test_rerank_with_local_bge_single_candidate_scalar_score(self):
-        """Backend gibt bei genau einem Kandidaten einen Skalar zurueck (kein List) -- muss klappen."""
+    def test_rerank_with_local_bge_single_candidate_array_score(self):
+        """Backend gibt bei genau einem Kandidaten ein Array mit einem Element zurueck (#714).
+
+        Seit #714 (CrossEncoder.predict) gibt es -- anders als beim vorherigen
+        FlagReranker.compute_score() -- keinen Skalar-Sonderfall mehr: `predict`
+        liefert immer ein Array, auch bei genau einem Paar.
+        """
         from academic_vault.retrieval import rerank_with_local_bge
 
         candidates = [{"paper_id": "p001", "text": "Solo candidate."}]
 
         mock_reranker = MagicMock()
-        mock_reranker.compute_score.return_value = 0.42  # Skalar statt Liste
+        mock_reranker.predict.return_value = [0.42]
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             reranked = rerank_with_local_bge(query="q", candidates=candidates)
@@ -897,7 +898,6 @@ def test_local_bge_reranker_real_model_reorders_candidates():
     holen -- der Beweis, dass der kostenfreie Fallback tatsaechlich wirkt (nicht
     nur strukturell durchgereicht wird).
     """
-    pytest.importorskip("FlagEmbedding")
     from academic_vault.retrieval import rerank_with_local_bge, reset_local_reranker_cache
 
     reset_local_reranker_cache()
@@ -924,3 +924,130 @@ def test_local_bge_reranker_real_model_reorders_candidates():
 
     assert reranked_order != rrf_order, "lokaler Reranker hat die RRF-Reihenfolge nicht veraendert"
     assert reranked_order[0] == "p_relevant", "relevanter Kandidat wurde nicht nach vorne gerankt"
+
+
+@pytest.mark.skipif(
+    os.environ.get("VAULT_RERANK_LOCAL_LIVE_TEST") != "1",
+    reason="Live-Modelltest nur mit VAULT_RERANK_LOCAL_LIVE_TEST=1 (laedt bge-reranker-v2-m3)",
+)
+def test_local_bge_reranker_crossencoder_matches_flagembedding_baseline_order():
+    """AC2: CrossEncoder-Pfad (#714) reproduziert die Rangfolge des alten FlagEmbedding-Pfads.
+
+    Der bisherige Live-Test (``test_local_bge_reranker_real_model_reorders_candidates``)
+    beweist nur, dass der neue CrossEncoder-Pfad *irgendeine* sinnvolle
+    Umsortierung vornimmt -- nicht, dass sie mit dem VORHERIGEN
+    ``FlagEmbedding.FlagReranker``-Pfad uebereinstimmt. Das ist AC2's
+    eigentliche Behauptung ("Trefferreihenfolge gegenueber dem
+    FlagEmbedding-Pfad unveraendert") und wurde im PR-Review (PR #772)
+    zu Recht als Luecke markiert: kein Test verglich tatsaechlich gegen eine
+    FlagEmbedding-Ausgabe.
+
+    FlagEmbedding bleibt bewusst ausserhalb der uv-verwalteten Dependencies
+    (AC5, siehe ``test_issue_376_reranker_extras.py``) und ist deshalb in
+    KEINER CI-Umgebung dieses Repos installierbar/installiert. Ein Live-Test,
+    der FlagEmbedding zur Laufzeit importiert, waere also nie gruen -- das
+    ist der Grund, warum der PR-Autor einen solchen Test im Task-Kasten der
+    PR-Beschreibung explizit uebersprungen hat.
+
+    Statt eines Live-Imports von FlagEmbedding vergleicht dieser Test die
+    reale CrossEncoder-Ausgabe (dieser Prozess, echtes bge-reranker-v2-m3,
+    kein Mock) gegen eine EINMALIG aufgezeichnete FlagEmbedding-Baseline fuer
+    denselben Query/Kandidaten-Satz. Die Baseline wurde ausserhalb dieses
+    Repos erzeugt (separates venv, damit AC5 -- kein FlagEmbedding in
+    pyproject.toml/uv.lock -- unangetastet bleibt):
+
+        python3 -m venv /tmp/flagembedding-baseline-venv
+        /tmp/flagembedding-baseline-venv/bin/pip install \
+            'FlagEmbedding>=1.3,<2.0' 'transformers<5.0'
+        # FlagEmbedding 1.4.0, transformers 4.57.6, torch 2.13.0
+        /tmp/flagembedding-baseline-venv/bin/python - <<'PY'
+        from FlagEmbedding import FlagReranker
+        r = FlagReranker("BAAI/bge-reranker-v2-m3", use_fp16=False)
+        print(r.compute_score(PAIRS, normalize=True))
+        PY
+
+    Aufgezeichnete FlagEmbedding-Scores (normalize=True, identisch zur
+    Sigmoid-Aktivierung von ``CrossEncoder.predict()``) fuer PAIRS = [[QUERY,
+    c["text"]] for c in CANDIDATES] unten:
+
+        p_relevant_primary     0.9964107162736381
+        p_relevant_secondary   0.17979691103617984
+        p_irrelevant_weather   1.6168727883409747e-05
+        p_irrelevant_art       1.6107935622014048e-05
+        p_irrelevant_finance   1.606611461875519e-05
+
+    Diese Werte liegen bei einer unabhaengigen Reproduktion mit
+    ``sentence_transformers.CrossEncoder`` (derselbe Prozess/dieselbe Suite
+    wie dieser Test, gemessen beim Schreiben dieses Tests) auf < 1e-4 an den
+    hier assertierten Toleranzen -- die Rangfolge ist exakt identisch, die
+    Scores stimmen bis auf Backend-bedingte Gleitkomma-Rundung ueberein.
+    """
+    from academic_vault.retrieval import rerank_with_local_bge, reset_local_reranker_cache
+
+    reset_local_reranker_cache()
+
+    query = "What are the health benefits of regular exercise?"
+    candidates = [
+        {
+            "paper_id": "p_irrelevant_art",
+            "text": "The history of Renaissance oil painting techniques in 15th century Florence.",
+        },
+        {
+            "paper_id": "p_relevant_primary",
+            "text": (
+                "Regular physical exercise improves cardiovascular health, strengthens "
+                "muscles, and reduces the risk of chronic diseases such as diabetes and "
+                "hypertension."
+            ),
+        },
+        {
+            "paper_id": "p_irrelevant_weather",
+            "text": "Seasonal rainfall patterns across the Amazon basin over the last decade.",
+        },
+        {
+            "paper_id": "p_relevant_secondary",
+            "text": (
+                "Moderate aerobic activity such as brisk walking has been shown to lower "
+                "blood pressure and improve mental well-being in adults."
+            ),
+        },
+        {
+            "paper_id": "p_irrelevant_finance",
+            "text": "An overview of quarterly earnings reports for publicly traded technology firms.",
+        },
+    ]
+
+    # Baseline, aufgezeichnet mit FlagEmbedding.FlagReranker.compute_score(
+    # ..., normalize=True) -- siehe Docstring fuer die exakte Reproduktion.
+    flagembedding_baseline_scores = {
+        "p_relevant_primary": 0.9964107162736381,
+        "p_relevant_secondary": 0.17979691103617984,
+        "p_irrelevant_weather": 1.6168727883409747e-05,
+        "p_irrelevant_art": 1.6107935622014048e-05,
+        "p_irrelevant_finance": 1.606611461875519e-05,
+    }
+    flagembedding_baseline_order = [
+        "p_relevant_primary",
+        "p_relevant_secondary",
+        "p_irrelevant_weather",
+        "p_irrelevant_art",
+        "p_irrelevant_finance",
+    ]
+
+    reranked = rerank_with_local_bge(query=query, candidates=candidates)
+    crossencoder_order = [c["paper_id"] for c in reranked]
+
+    assert crossencoder_order == flagembedding_baseline_order, (
+        "CrossEncoder-Rangfolge weicht von der aufgezeichneten FlagEmbedding-Rangfolge ab "
+        f"(AC2) -- CrossEncoder: {crossencoder_order}, FlagEmbedding-Baseline: "
+        f"{flagembedding_baseline_order}"
+    )
+
+    for entry in reranked:
+        baseline_score = flagembedding_baseline_scores[entry["paper_id"]]
+        assert entry["rerank_score"] == pytest.approx(baseline_score, abs=1e-3), (
+            f"CrossEncoder-Score fuer {entry['paper_id']} ({entry['rerank_score']}) weicht "
+            f"um mehr als 1e-3 von der FlagEmbedding-Baseline ({baseline_score}) ab -- "
+            "AC2 verlangt Aequivalenz zum vorherigen Backend, nicht nur eine plausible "
+            "eigene Umsortierung."
+        )
