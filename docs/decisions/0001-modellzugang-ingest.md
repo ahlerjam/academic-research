@@ -20,7 +20,7 @@ server.py:1591  add_paper()
 
 Entscheidend: Das läuft im **Python-MCP-Serverprozess**, nicht in einem
 Claude-Code-Agent-Turn. Der Serverprozess hat keinen Modellzugang — weder OAuth-Sitzung
-noch API-Schlüssel. `_maybe_ingest_embeddings()` fängt zudem jede Ausnahme außer
+noch API-Schlüssel.[^1] `_maybe_ingest_embeddings()` fängt zudem jede Ausnahme außer
 `EmbeddingDimensionMismatchError` ab und loggt nur (server.py:1223): ein kaputter oder
 fehlender Kontextsatz-Weg darf `add_paper()` nicht scheitern lassen.
 
@@ -194,3 +194,21 @@ facto zu Weg C wird.
   eigenes Folge-Issue nach der Umsetzung, nicht Teil dieses Schritts.
 - Kein Trigger-Design (Cron vs. nutzerinitiiert vs. nach N neuen Papers) wird hier
   vorentschieden — das ist Teil der Spezifikation des Umsetzungs-Issues selbst.
+
+---
+
+[^1]: **Nachtrag (#710-Plan-Kommentar, Abschnitt 0):** Die Prämisse „weder
+    OAuth-Sitzung noch API-Schlüssel" stimmt seit #734 nicht mehr —
+    `query_expansion.expand_query()` ruft im selben Serverprozess bereits
+    `claude -p` als Subprozess über die eingeloggte OAuth-Sitzung auf (siehe
+    `docs/reference/vault.md`, Abschnitt „Query-Umformung"). Es gäbe damit
+    einen Weg D (`claude -p` direkt als synchroner `context_provider` in
+    `chunk_pages()`). Er bleibt verworfen — aber aus messbaren Gründen, nicht
+    aus der überholten Prämisse: rund 6,8 s je `claude -p`-Aufruf (#733-Messung)
+    bei bis zu 64 Chunks/Paper hinge der synchrone `add_paper()`-Ingest an
+    einem Subprozess mit 240-s-Timeout, und der Aufruf liefe neben dem
+    ohnehin aktiven Session-Agenten als zweite, konkurrierende
+    Modellnutzung. Die Empfehlung dieses Vermerks (Weg C, zweistufiger
+    Ingest, umgesetzt in #783/#784) bleibt davon unberührt richtig — Weg D
+    würde die synchrone `add_paper()`-Architektur genau in der Weise
+    verletzen, die Weg C bewusst vermeidet.

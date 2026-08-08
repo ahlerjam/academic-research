@@ -6,7 +6,7 @@ description: >
   pickup_required (Fernleihe-Eintrag in ~/.academic-research/pickup_queue.json
   angelegt), captcha (Screenshot anzeigen, manuelle Entscheidung abwarten),
   no_match (kein Treffer -> ebenfalls pickup_required-Eintrag).
-allowed-tools: Read, Write, Agent(book-fetcher), mcp__academic-vault__vault_add_paper
+allowed-tools: Read, Write, Agent(book-fetcher), Agent(chunk-context-writer), mcp__academic-vault__vault_add_paper
 argument-hint: <isbn|doi|url|titel>
 ---
 
@@ -154,7 +154,15 @@ Textbehandlung nicht beeinflussen. Die Provenienz bleibt vollstaendig im
 Vault erhalten (`vault.get_paper()`, `vault.list_papers_by_provenance()`) —
 ueber den `vault_add_paper`-Aufruf aus Schritt 2 tatsaechlich geschrieben.
 
-4. Ausgabe an User:
+4. Rufe `Agent(chunk-context-writer)` mit `{"paper_id": "<sanitized aus
+   Schritt 2>"}` auf (Issue #710/#784) — schreibt inhaltliche Kontextsaetze
+   fuer die soeben eingebetteten Chunks statt des deterministischen
+   Metadaten-Satzes. **Bleibt der Aufruf aus oder scheitert er (Timeout,
+   Tool-Fehler, `embedder-unavailable`): folgenlos fuer den restlichen
+   Ablauf.** Kein Retry, keine Fehlermeldung an den User noetig — die Chunks
+   behalten dann einfach ihren Metadaten-Kontextsatz und bleiben voll
+   durchsuchbar. Dieser Schritt darf Schritt 5 (Ausgabe) nie blockieren.
+5. Ausgabe an User:
 ```
 PDF heruntergeladen: <file_path>
   Quelle: <source>
@@ -204,22 +212,20 @@ CAPTCHA erkannt bei <source>.
 
 ---
 
-## Hinweis: Inhaltliche Kontextsatz-Anreicherung (optional, Issue #783)
+## Hinweis: Inhaltliche Kontextsatz-Anreicherung (Issue #710/#784)
 
-Der `vault_add_paper`-Aufruf aus Schritt 4 bettet Chunks mit dem
+Der `vault_add_paper`-Aufruf aus Schritt 2 bettet Chunks zunaechst mit dem
 deterministischen Metadaten-Kontextsatz ein (`context_source="metadata"`,
 `chunking.default_context_sentence()`, kein Modellaufruf, #632-konform).
-Wer den Kontextsatz nachtraeglich inhaltlich statt nur metadatenbasiert
-schreiben will, kann das manuell in der laufenden Sitzung tun -- ein
-eigener Anreicherungs-Agent samt automatischer Einbindung hier in
-`/academic-research:fetch` ist NICHT Teil dieses Workflows (geplant fuer
-Issue #710-B):
+Schritt 4 (Bei `success`) ruft direkt danach `Agent(chunk-context-writer)`
+fuer die geladene `paper_id` auf und schreibt dabei inhaltliche Saetze in
+der Sprache jedes Chunks (`context_source="model"`) — automatisch, ohne
+manuelles Zutun. Bleibt der Aufruf aus oder scheitert er, bleibt der
+Metadaten-Satz stehen: die Chunks sind in jedem Fall voll durchsuchbar,
+nur der Kontextsatz ist entweder metadatenbasiert oder inhaltlich.
 
-1. `vault.pending_context_chunks(paper_id="<sanitized>")` listet die Chunks
-   des soeben angelegten Papers in Dokumentreihenfolge.
-2. Fuer jeden Chunk einen inhaltlichen Satz (≤25 Woerter, Sprache des Chunks)
-   formulieren.
-3. `vault.enrich_chunk_contexts(items=[{"chunk_id": ..., "context_sentence": ...}, ...])`
-   schreibt Satz, `embedding_text` und Vektor als Tripel
-   (`context_source="model"`); leere/zu lange Saetze landen einzeln in
-   `skipped`, der Rest des Batches wird trotzdem geschrieben.
+Fuer einen **nachtraeglichen Bestandsvault-Nachtrag** (Papers, die vor #784
+oder ausserhalb von `/academic-research:fetch` eingebettet wurden) denselben
+Agenten manuell mit der jeweiligen `paper_id` aufrufen, oder mit
+`paper_id: null` fuer einen vault-weiten Durchlauf (paperweise, kein
+Ein-Klick-Automatismus — siehe `docs/reference/vault.md`).

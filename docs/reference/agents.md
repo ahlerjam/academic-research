@@ -4,7 +4,7 @@
 
 Agents sind LLM-Subagents. Anders als Skills aktivieren sie sich nicht selbst — sie
 werden von einem Command oder einem Skill gestartet und laufen in eigenem Kontext.
-Das Plugin bringt **28 Agents** mit (`agents/*.md`).
+Das Plugin bringt **29 Agents** mit (`agents/*.md`).
 
 Die Dispatch-Spalte zeigt, wie ein Agent tatsächlich gestartet wird: **automatisch**
 heißt, ein Command/Skill/anderer Agent löst ihn ohne weiteres Zutun aus (sobald der
@@ -33,7 +33,7 @@ Der `book-fetcher` ist der Master-Orchestrator; er entscheidet, welche Site-Agen
 welcher Reihenfolge probiert werden. Details zur Fallback-Kette in
 [commands.md](commands.md#academic-researchfetch).
 
-Von den 28 Agents greifen 16 als Site-Agent direkt auf fremde Verlags- oder
+Von den 29 Agents greifen 16 als Site-Agent direkt auf fremde Verlags- oder
 Archivseiten zu, plus `auth-helper` als Grenzfall (führt SSO-Logins gegen
 Verlags-/Hochschulseiten aus, ist aber kein eigener Site-Agent). `book-fetcher`
 selbst ruft keine fremde Seite auf — er ist reiner Dispatcher (Issue #612). Die
@@ -86,3 +86,4 @@ Login-Wall zurück; den tatsächlichen Aufruf macht ausschließlich der Master
 | `meta-analysis` | Sonnet | direkt | manuell | DerSimonian-Laird Random-Effects + Forest-Plot | Effektgrößen und Varianzen je Studie, ausdrücklich bestätigt (`yi`/`vi`) | `kapitel/meta-analyse.md` mit Statistik-Tabelle, Mermaid-Forest-Plot, I², τ², gepooltem Effekt und 95 %-KI | Eine der vier Prüfpositionen fehlt in der Datei — etwa Forest-Plot ohne Pool-Node |
 | `figure-verifier` | Sonnet | direkt | manuell | VLM-basierte Abbildungsverifikation | Paper im Vault mit lesbarem `pdf_path` | JSON je Figure (`figure_id`, `caption`, `vlm_description`) plus Zusammenfassung mit `unverifiable_pages` | Seiten landen in `unverifiable_pages`, mit `reason` wie „pdf_path fehlt" oder „OCR fehlgeschlagen" |
 | `quote-fidelity-auditor` | Sonnet | direkt (Empfehlung aus `claim-drift-guard`-Warnung oder aus dem NLI-Batch-Vorfilter `academic_vault/nli_prefilter.py`, #592, Default AUS) | manuell | Urteilt über ein bestehendes Zitat gegen Kapitel-Behauptung, Quote-Kontext und Abstract; persistiert `quotes.stance` UND (additiv, immer, #737) die Audit-Historie `quotes.audited_at`/`audit_verdict`/`audit_severity` — Grundlage für `vault.chapter_quote_balance()` | Bestehende `quote_id` im Vault und die Kapitel-Behauptung, auf die sie sich stützt | JSON mit `verdict`, `severity` (feste Stufe `kritisch`/`hoch`/`mittel`, `null` bei `faithful`; #736), `stance_persisted`, `abstract_check`, `reasoning` und `recommendation` | `vault.set_quote_stance`/`vault.record_quote_audit` wirft `ValueError` (unbekannte `quote_id` oder ungültiger Wert), `stance_persisted` fehlt, oder `severity` fehlt/ist nicht der festen Verdict-Tabelle zugeordnet |
+| `chunk-context-writer` | Sonnet | `/academic-research:fetch` (Schritt 4, nach `vault_add_paper`), auch direkt für einen Bestandsvault-Nachtrag | automatisch via `/academic-research:fetch`; manuell für den Nachtrag | Schreibt je ausstehendem Chunk eines Papers einen inhaltlichen Kontextsatz (≤ 25 Wörter, Sprache des Chunks) statt des deterministischen Metadaten-Satzes (#710/#783/#784) | Paper im Vault mit Chunks, deren `context_source` noch nicht `'model'` ist (`vault.pending_context_chunks`) | `vault.enrich_chunk_contexts`-Ergebnis mit `updated`-Liste (Chunk-IDs) und `skipped` (Grund je Item) | `status="embedder-unavailable"` (nichts geschrieben, kein Fehler) oder Einträge bleiben nach dem einen Korrekturdurchgang weiterhin in `skipped` |

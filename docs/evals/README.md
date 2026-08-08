@@ -43,6 +43,8 @@ danach höchstens den passenden Report.
 | [`2026-08-08-chunk-fusion-ablation-729-live-results.json`](2026-08-08-chunk-fusion-ablation-729-live-results.json) | Rohdaten des Ablationslaufs (alle drei Zustände, per Query, inklusive Kosten-Block) |
 | [`2026-08-08-context-ablation-710.md`](2026-08-08-context-ablation-710.md) | Vier-Arme-Vergleich auf der bge-m3-Fassung des #708-Goldsets: hilft ein echter, modellgeschriebener Kontextsatz gegenüber dem deterministischen Metadaten-Satz? Sprach-Confound über einen vierten Arm (`model_context_de`) isoliert, Teilmengen getrennt ausgewiesen, `metadata_context`-Arm reproduziert die #731-Zahlen exakt (#785, Epic #710) |
 | [`2026-08-08-context-ablation-710-live-results.json`](2026-08-08-context-ablation-710-live-results.json) | Rohdaten des Vier-Arme-Laufs (alle Arme, per Query, inklusive Deltas und Kontrolltest-Block) |
+| [`2026-08-09-context-enrichment-710.md`](2026-08-09-context-enrichment-710.md) | Reale Kostenmessung des Kontextsatz-Schreibwegs (#783/#784): der echte `chunk-context-writer`-Agent über `claude -p`, gegen den echten MCP-Server, 11 Goldset-Dokumente plus ein reales Paper mit 27 Chunks — Tokens/Kosten/Latenz aus echten `usage`-Feldern, Re-Embedding-Latenz je Einzeltext, Beobachtung zum Batch-/Turn-Verhalten bei großen Papers (#784, Epic #710) |
+| [`2026-08-09-context-enrichment-710-live-results.json`](2026-08-09-context-enrichment-710-live-results.json) | Rohdaten des Kostenlaufs (alle 12 Sitzungen, Tokens/Kosten/Dauer je Paper, Post-Zustand je Chunk, Re-Embedding-Latenzblock) |
 
 ## Konvention
 
