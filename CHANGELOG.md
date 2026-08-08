@@ -10,6 +10,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **FTS5-Index ueber Chunk-Texte (#726):** `papers_fts`/`papers_trgm` matchen nur
+  Paper-Felder (Titel, Abstract, Volltext) -- ein Suchbegriff, der ausschliesslich
+  im Methodikteil eines einzelnen Chunks steht (`chunk_embeddings.chunk_text`),
+  war darueber lexikalisch unauffindbar, obwohl die Vektorsuche laengst
+  chunkgenau trifft. Neu ist eine eigenstaendige virtuelle Tabelle `chunk_fts`
+  (`unicode61`-Standardtokenizer, kein `content=`) ueber `chunk_text`, analog zu
+  `notes_fts` -- dieselbe Tokenizer-Entscheidung wie `papers_fts`, bewusst KEIN
+  Trigram-Pendant (der Auftrag lautete auf EINEN Index). Drei Trigger
+  (`chunk_ai`/`chunk_ad`/`chunk_au`) halten den Index bei Insert, Update und
+  Delete auf `chunk_embeddings` synchron (Schema-Version 13, Backfill fuer
+  Bestands-Vaults ueber `migrate.add_chunk_fts()`, ohne Reindex der Vektoren).
+  Fusion/Retrieval bleiben unveraendert auf `paper_id`-Ebene (Out of Scope, ein
+  Folge-Issue) -- kein neuer MCP-Tool-Endpunkt. Gemessener Plattenbedarf an
+  einem 50-Paper/200-Chunk-Vault: rund 90 KB nach `VACUUM`, ~1,8 KB je Paper
+  bzw. ~450 Byte je Chunk (dokumentiert in `docs/reference/vault.md`).
+
 - **Teilwortsuche fuer deutsche Komposita (#703):** `vault.search("Mittelstand")`
   findet jetzt auch ein Paper, dessen Titel oder Abstract nur
   `Mittelstandsdigitalisierung` enthaelt. `papers_fts` (`unicode61`) kennt weder

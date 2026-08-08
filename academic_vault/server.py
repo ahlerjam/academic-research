@@ -98,7 +98,15 @@ def validate_csl_json(csl_json: str) -> dict:
 # Fehlt eine davon, zieht _ensure_schema_for_read() die Migration einmalig
 # nach. Jede kuenftige Tabelle mit eigenem Lesepfad gehoert hier hinein.
 _READ_REQUIRED_TABLES = frozenset(
-    {"papers", "notes_fts", "transcript_segments", "codings", "paper_tables", "papers_trgm"}
+    {
+        "papers",
+        "notes_fts",
+        "transcript_segments",
+        "codings",
+        "paper_tables",
+        "papers_trgm",
+        "chunk_fts",
+    }
 )
 
 
