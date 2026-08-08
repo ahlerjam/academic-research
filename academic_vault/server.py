@@ -984,11 +984,12 @@ def search_papers(
         type_filter: Optionaler Paper-Type-Filter (article-journal, book, chapter).
         k: Maximale Trefferzahl.
         rerank: Wenn True, wird Hybrid-Retrieval (RRF) und Reranking aktiviert.
-                Prioritaet (#376): VOYAGE_API_KEY > COHERE_API_KEY > kostenfreier
-                lokaler bge-reranker-v2-m3-Fallback (nur wenn beide Cloud-Keys
-                fehlen). Jedes Ergebnis-Dict traegt 'reranked' (bool) und
-                'reranker' (str), damit ein fehlgeschlagenes Cloud-Reranking
-                sichtbar bleibt statt still auf RRF zurueckzufallen.
+                Reranking laeuft ausschliesslich ueber den kostenfreien
+                lokalen bge-reranker-v2-m3-Fallback (#715, vormals
+                Voyage/Cohere/lokal-Prioritaetskette aus #376). Jedes
+                Ergebnis-Dict traegt 'reranked' (bool) und 'reranker' (str),
+                damit ein fehlgeschlagenes Reranking sichtbar bleibt statt
+                still auf RRF zurueckzufallen.
     """
     raw_query = query
     query = _sanitize_fts5_query(query)
@@ -1064,13 +1065,9 @@ def search_papers(
     )
     _fill_missing_reranker_text(db_path, fused)
 
-    voyage_key = os.environ.get("VOYAGE_API_KEY") or None
-    cohere_key = os.environ.get("COHERE_API_KEY") or None
-
-    # Kein Gate mehr auf "irgendein Cloud-Key gesetzt" (#376): apply_reranker
-    # wird immer aufgerufen, damit auch ohne Cloud-Keys der kostenfreie lokale
-    # bge-reranker-v2-m3-Fallback greifen kann. Ohne diesen Aufruf bliebe der
-    # lokale Fallback in retrieval.py toter Code.
+    # apply_reranker() wird immer aufgerufen (#715, vormals Gate auf "kein
+    # Cloud-Key gesetzt" aus #376): der kostenfreie lokale
+    # bge-reranker-v2-m3-Fallback ist der einzige verbleibende Reranking-Weg.
     #
     # query=raw_query statt der FTS5-sanitisierten Variante (#702): das
     # Sanitizing entfernt Bindestriche und Operator-Keywords und verfaelscht
@@ -1079,8 +1076,6 @@ def search_papers(
     reranked = apply_reranker(
         query=raw_query,
         candidates=fused,
-        voyage_api_key=voyage_key,
-        cohere_api_key=cohere_key,
     )
 
     # Paper-Aggregation als letzter Schritt (Issue #727): vorher lag sie in
@@ -2709,7 +2704,7 @@ def _build_mcp_server():
     def _vault_search(
         query: str, type: str | None = None, k: int = 5, rerank: bool = False
     ) -> list[dict]:
-        """Hybrid-Suche in papers. rerank=True aktiviert RRF + optionalen Voyage/Cohere-Reranker."""
+        """Hybrid-Suche in papers. rerank=True aktiviert RRF + lokalen Reranker."""
         return search_papers(db_path, query, type_filter=type, k=k, rerank=rerank)
 
     @mcp.tool(name="vault.get_paper")

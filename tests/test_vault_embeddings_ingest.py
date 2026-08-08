@@ -56,13 +56,6 @@ def _store_chunk(db_path: str, paper_id: str, text: str, embedder) -> str:
     )
 
 
-@pytest.fixture(autouse=True)
-def _offline_env(monkeypatch):
-    """Keine Reranker-Keys in Tests."""
-    monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-    monkeypatch.delenv("COHERE_API_KEY", raising=False)
-
-
 # ---------------------------------------------------------------------------
 # embedding_model.py — Serialisierung, Praefixe, Graceful Degradation
 # ---------------------------------------------------------------------------

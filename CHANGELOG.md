@@ -10,6 +10,22 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Entscheidungsvermerk: Modellzugang beim Ingest ohne eigenen Schluessel (#735):**
+  Neues Verzeichnis `docs/decisions/` fuer Entwuerfe, die eine projektweite
+  Architekturfrage beantworten, bevor sie sich als Umsetzungs-Issue schreiben lassen
+  -- Praezedenzfall analog zu Vault-Decisions (`vault.add_decision`), hier als
+  Markdown, weil die Frage projektweit ist statt an eine einzelne Recherche-Sitzung
+  gebunden. Der erste Vermerk (`docs/decisions/0001-modellzugang-ingest.md`)
+  bewertet drei Wege, wie der Vault-Ingest (`chunking.py`s injizierbarer
+  `context_provider`) an ein Modell fuer inhaltliche Kontextsaetze kommt, ohne die
+  No-Key-Randbedingung fuer Plugin-Funktionen zu verletzen (kein vom Nutzer zu
+  stellender Schluessel): Ingest-Agent in der Sitzung, lokales Kleinmodell im
+  Vault-Prozess, zweistufiger Ingest mit nachgelagerter Anreicherung. Empfehlung:
+  zweistufiger Ingest, gespeist von einem Agent in der Sitzung -- `add_paper()`
+  bleibt synchron und modellunabhaengig, `default_context_sentence()` (#701) ist
+  der Normalzustand jedes Chunks bis zur optionalen Anreicherung. Reines
+  Doku-Issue, keine Codeaenderung.
+
 - **Einheitlicher Config-Block fuer die drei lokalen Modelle (#719):** Embedding
   (`embedding_enabled`), lokaler Reranker (`reranker_enabled`) und NLI-Zitatscan
   (`nli_prefilter_enabled`, unveraendert seit #592/#717) folgen jetzt demselben
@@ -252,6 +268,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Auditor weiter — er ist an die neue Severity-Stufe aktuell nicht
   angebunden, das ist an dieser Stelle explizit dokumentiert statt
   stillschweigend übersprungen.
+
+### Removed
+
+- **Cloud-Reranker Voyage und Cohere ersatzlos entfernt (#715).**
+  `academic_vault/retrieval.py` verliert `rerank_with_voyage()`,
+  `rerank_with_cohere()`, die Client-Helfer `_get_voyage_client()`/
+  `_get_cohere_client()`, die `VoyageError`/`CohereApiError`-Platzhalterklassen
+  und die zugehörigen Zweige in `apply_reranker()` — die Funktion nimmt jetzt
+  nur noch `query`/`candidates` entgegen und geht direkt auf den lokalen
+  `bge-reranker-v2-m3`-Fallback (#714), ohne Gate auf fehlende Cloud-Keys.
+  `server.py::search_papers` liest `VOYAGE_API_KEY`/`COHERE_API_KEY` nicht
+  mehr. Das Extra `rerank-cloud` (`voyageai`, `cohere`) ist aus
+  `pyproject.toml` verschwunden — beide Pakete kommen im Repo nirgends mehr
+  vor (Import, Extra, Requirements). Der Ergebnisvertrag bleibt unverändert:
+  jeder Kandidat trägt weiterhin `reranked` (bool) und `reranker`
+  (`"local-bge"`/`"none"`). Grund: zwei kostenpflichtige Anbieter mit eigenen
+  API-Schlüsseln für einen Vorteil, den ein lokal in 26–48 ms pro Paar
+  laufendes Modell nicht rechtfertigt — konsequent aus Issue 632 (keine
+  Plugin-Funktion setzt einen eigenen Schlüssel voraus).
 
 ### Changed
 
