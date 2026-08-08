@@ -248,7 +248,7 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   jeder Kandidat trägt weiterhin `reranked` (bool) und `reranker`
   (`"local-bge"`/`"none"`). Grund: zwei kostenpflichtige Anbieter mit eigenen
   API-Schlüsseln für einen Vorteil, den ein lokal in 26–48 ms pro Paar
-  laufendes Modell nicht rechtfertigt — konsequent aus #632 (keine
+  laufendes Modell nicht rechtfertigt — konsequent aus Issue 632 (keine
   Plugin-Funktion setzt einen eigenen Schlüssel voraus).
 
 ### Changed

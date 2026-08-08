@@ -283,6 +283,69 @@ class TestRerankerIntegration:
         assert all(r["reranked"] is True for r in result_with_keys)
         assert all(r["reranker"] == "local-bge" for r in result_with_keys)
 
+    def test_apply_reranker_signature_has_no_cloud_key_params(self):
+        """AC5 (#715): apply_reranker() akzeptiert keine Voyage-/Cohere-Keys mehr.
+
+        Der obige Test ruft apply_reranker() ohne voyage_api_key/cohere_api_key
+        auf und beweist damit nichts: er laeuft auch auf dem alten Code (vor
+        #715) gruen, weil dort die Cloud-Kwargs auf None defaulten, sobald sie
+        nicht explizit uebergeben werden -- apply_reranker() selbst hat
+        os.environ nie gelesen, das tat nur server.py als Kwarg-Uebergabe.
+        Diese strukturelle Pruefung verhindert eine Wiedereinfuehrung der
+        Kwargs (und damit der Cloud-Kette) direkt an der Signatur.
+        """
+        import inspect
+
+        from academic_vault.retrieval import apply_reranker
+
+        params = set(inspect.signature(apply_reranker).parameters)
+        assert params == {"query", "candidates"}, (
+            f"apply_reranker() hat unerwartete Parameter {params - {'query', 'candidates'}} "
+            "-- Cloud-Reranker-Kwargs duerfen nicht wieder auftauchen (#715)."
+        )
+
+    def test_search_papers_never_reads_voyage_cohere_env_keys(self, tmp_path, monkeypatch):
+        """AC5 (#715): der eigentliche Aufrufpfad liest die Cloud-Keys nicht mehr.
+
+        Vor #715 las NICHT apply_reranker(), sondern server.search_papers()
+        VOYAGE_API_KEY/COHERE_API_KEY aus os.environ und reichte sie als Kwarg
+        durch. Dieser Test faengt os.environ.get am echten Einstiegspunkt ab
+        und beweist, dass diese beiden Keys beim Reranking-Aufruf nie
+        abgefragt werden -- der Regressionsfall, den ein reiner
+        Ergebnisvergleich (siehe Test oben) nicht abdeckt.
+        """
+        from academic_vault import server
+
+        db_path = _make_db(tmp_path)
+        _add_paper(
+            db_path,
+            "p001",
+            "Hybrid Retrieval BM25 Dense",
+            "Combining sparse and dense methods.",
+        )
+
+        monkeypatch.setenv("VOYAGE_API_KEY", "leftover-voyage-key")
+        monkeypatch.setenv("COHERE_API_KEY", "leftover-cohere-key")
+
+        queried_keys: list[str] = []
+        real_environ_get = os.environ.get
+
+        def spy_get(name, *args, **kwargs):
+            if name in ("VOYAGE_API_KEY", "COHERE_API_KEY"):
+                queried_keys.append(name)
+            return real_environ_get(name, *args, **kwargs)
+
+        monkeypatch.setattr(os.environ, "get", spy_get)
+
+        results = server.search_papers(db_path, "hybrid retrieval dense sparse", k=10, rerank=True)
+
+        assert queried_keys == [], (
+            f"os.environ.get wurde fuer {queried_keys} aufgerufen -- "
+            "search_papers() darf Cloud-Reranker-Keys nicht mehr lesen (#715)."
+        )
+        assert results, "search_papers() sollte Treffer liefern"
+        assert all(r.get("reranker") in ("local-bge", "none") for r in results)
+
 
 # ---------------------------------------------------------------------------
 # Tests: Fallback-Struktur-Konsistenz (#233)
