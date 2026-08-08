@@ -73,6 +73,35 @@ def resolve_paper_text(db_path: str, paper_id: str) -> str:
         conn.close()
 
 
+def _carry_over_model_context(db_path: str, paper_id: str) -> dict[str, str]:
+    """Sichert inhaltliche Kontextsaetze VOR ``delete_chunk_embeddings`` (#783).
+
+    ``add_paper()`` ist ein Upsert, ``ingest_paper_embeddings()`` loescht und
+    schreibt Chunks eines Papers komplett neu -- ohne diese Sicherung waere
+    jede Anreicherung ueber ``vault.enrich_chunk_contexts()`` nach dem
+    naechsten ``add_paper()``-Aufruf (der Normalfall bei einer erneuten
+    Metadaten-Korrektur, s. ``commands/fetch.md``) ersatzlos weg. Match ist ein
+    EXAKTER ``chunk_text``-Vergleich: bleibt der Chunk-Text bitgleich, bleibt
+    auch sein Kontextsatz gueltig; aendert er sich (anderer Text, andere
+    Chunk-Grenzen), gibt es keinen sicheren Bezugspunkt mehr -- der Chunk
+    landet stattdessen wieder unter ``pending_context_chunks()``.
+
+    Returns:
+        ``dict[chunk_text, context_sentence]`` fuer alle Chunks des Papers mit
+        ``context_source == 'model'``. Leer, wenn nie angereichert wurde.
+    """
+    conn = VaultDB._open(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT chunk_text, context_sentence FROM chunk_embeddings "
+            "WHERE paper_id = ? AND context_source = 'model'",
+            (paper_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return {row["chunk_text"]: row["context_sentence"] for row in rows}
+
+
 def _max_chunks_from_env() -> int:
     raw = os.environ.get(ENV_MAX_CHUNKS, "").strip()
     if not raw:
@@ -189,12 +218,37 @@ def ingest_paper_embeddings(
     if limit > 0:
         chunks = chunks[:limit]
 
+    # Carry-over (#783): VOR dem Loeschen alte inhaltliche Kontextsaetze
+    # sichern und -- per exaktem chunk_text-Abgleich -- auf die neu gebauten
+    # Chunks anwenden. Muss VOR delete_chunk_embeddings gelesen werden, sonst
+    # ist die alte Zeile bereits weg.
+    carry_over = _carry_over_model_context(db_path, paper_id)
+    context_sources = ["metadata"] * len(chunks)
+    if carry_over:
+        from .embeddings import build_contextual_embedding_text
+
+        for i, chunk in enumerate(chunks):
+            carried_sentence = carry_over.get(chunk.chunk_text)
+            if carried_sentence is None:
+                continue
+            chunk.context_sentence = carried_sentence
+            chunk.embedding_text = build_contextual_embedding_text(
+                carried_sentence, chunk.chunk_text
+            )
+            context_sources[i] = "model"
+
     # Der Kontextsatz kommt aus ``chunking.default_context_sentence`` -- seit
     # #632 der einzige Kontextsatz-Weg, weil keine Plugin-Funktion einen
-    # ANTHROPIC_API_KEY voraussetzen darf.
+    # ANTHROPIC_API_KEY voraussetzen darf -- ausser bei einem oben angewendeten
+    # Carry-over (#783).
     embedding_texts = [c.embedding_text for c in chunks]
     # Embeddings VOR der Schreib-Transaktion berechnen: Modell-Inferenz kann
-    # Sekunden dauern und darf keinen SQLite-Write-Lock halten.
+    # Sekunden dauern und darf keinen SQLite-Write-Lock halten. Fuer
+    # carry-over-Chunks ist embedding_text bitgleich zum vorherigen Lauf
+    # (identischer chunk_text + identischer context_sentence), der Vektor wird
+    # trotzdem ueber den AKTUELLEN Embedder neu berechnet statt den alten
+    # Bytes zu vertrauen -- robust gegen einen zwischenzeitlichen Modellwechsel
+    # auf ein gleich-dimensioniertes, aber anderes Modell.
     vectors = active_embedder.embed_documents(embedding_texts)  # type: ignore[attr-defined]
 
     from .embedding_model import serialize_f32
@@ -203,7 +257,7 @@ def ingest_paper_embeddings(
     # darf kein Paper mit halb geloeschten Chunks hinterlassen.
     with VaultDB(db_path) as writer:
         writer.delete_chunk_embeddings(paper_id)
-        for chunk, vector in zip(chunks, vectors, strict=True):
+        for chunk, vector, context_source in zip(chunks, vectors, context_sources, strict=True):
             writer.add_chunk_embedding(
                 paper_id=paper_id,
                 chunk_text=chunk.chunk_text,
@@ -213,5 +267,6 @@ def ingest_paper_embeddings(
                 section_title=chunk.section_title,
                 page_start=chunk.page_start,
                 page_end=chunk.page_end,
+                context_source=context_source,
             )
     return len(chunks)

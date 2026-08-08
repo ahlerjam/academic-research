@@ -1497,6 +1497,149 @@ def _maybe_ingest_embeddings(db_path: str, paper_id: str) -> int:
         return 0
 
 
+def pending_context_chunks(
+    db_path: str, paper_id: str | None = None, limit: int = 64
+) -> list[dict]:
+    """Chunks mit ausstehender inhaltlicher Kontextsatz-Anreicherung (Issue #783).
+
+    Duenner Wrapper um ``VaultDB.pending_context_chunks()`` -- Dokumentation
+    (Sortierung, "pending"-Definition, Rueckgabefelder) steht dort.
+
+    Bewusst ``db.init_schema()`` statt ``_ensure_schema_for_read()``: Letzteres
+    prueft laut eigenem Docstring nur auf FEHLENDE TABELLEN
+    (``_READ_REQUIRED_TABLES``) und ueberlaesst die Reparatur von
+    Spalten-Drift ausdruecklich den Schreibpfaden. Die Query in
+    ``VaultDB.pending_context_chunks()`` selektiert aber ``context_source``
+    NAMENTLICH -- eine Spalte, die auf jeder Bestands-DB unter Schema 15
+    (``chunk_embeddings`` existiert bereits, die Spalte noch nicht) fehlt.
+    Ohne den unbedingten Aufruf hier wuerde genau der in
+    ``docs/reference/vault.md`` beworbene Bestandsvault-Nachtrag
+    (``paper_id=None`` auf einer alten DB) mit
+    ``sqlite3.OperationalError: no such column: ce.context_source``
+    abstuerzen statt eine Liste zu liefern.
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+    return db.pending_context_chunks(paper_id=paper_id, limit=limit)
+
+
+def enrich_chunk_contexts(
+    db_path: str,
+    items: list[dict],
+    embedder: object | None = None,
+) -> dict:
+    """Batch-Schreibweg fuer inhaltliche Kontextsaetze (Issue #783).
+
+    Fuer jedes Item ``{"chunk_id": ..., "context_sentence": ...}``: validiert
+    den Satz, baut ``embedding_text`` aus dem im Vault hinterlegten
+    ``chunk_text`` (NIE vom Aufrufer uebernommen), embedded und schreibt
+    Kontextsatz + ``embedding_text`` + Vektor + vec0-Spiegel als EIN Tripel
+    ueber ``VaultDB.update_chunk_context()`` (``context_source="model"``).
+
+    Validierung je Item, Rest des Batches wird trotzdem geschrieben:
+
+    * Leerer oder zu langer Satz (> ``CONTEXT_TOKEN_RESERVE -
+      MODEL_INPUT_OVERHEAD_TOKENS`` Tokens, dieselbe Reserve wie beim
+      Chunking selbst) -> ``skipped`` mit Grund, NIE stilles Abschneiden.
+    * Unbekannte ``chunk_id`` -> ``skipped`` mit Grund ``"not-found"``.
+
+    Zwei Faelle brechen den GESAMTEN Batch ab, bevor irgendetwas geschrieben
+    wird (kein Teilzustand):
+
+    * Kein Embedding-Backend verfuegbar -> ``status="embedder-unavailable"``,
+      keine Zeile geaendert (kein ``ValueError``, das ist ein
+      Degradationspfad wie bei ``embed_quote``).
+    * Modell-Dimension passt nicht zum Vault-Bestand ->
+      ``EmbeddingDimensionMismatchError`` (Issue #629), geprueft VOR jeder
+      Inferenz ueber ``register_embedding_inventory``.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        items: ``[{"chunk_id": str, "context_sentence": str}, ...]``.
+        embedder: Embedder-Instanz. ``None`` = ``get_embedder()``.
+
+    Returns:
+        ``{"status": "ok" | "embedder-unavailable", "updated": [chunk_id, ...],
+        "skipped": [{"chunk_id", "reason"}, ...]}``. Ein zweiter identischer
+        Aufruf ist idempotent -- derselbe Satz fuehrt zum selben Endzustand.
+
+    Raises:
+        EmbeddingDimensionMismatchError: Siehe oben.
+        VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+    """
+    db = VaultDB(db_path)
+    db.init_schema()
+
+    active_embedder = embedder if embedder is not None else get_embedder()
+    if active_embedder is None:
+        logger.warning(
+            "vault.enrich_chunk_contexts: kein Embedding-Backend verfuegbar -- "
+            "Batch mit %d Item(s) bleibt vollstaendig ungeschrieben (#783).",
+            len(items),
+        )
+        return {"status": "embedder-unavailable", "updated": [], "skipped": []}
+
+    # Bestandsabgleich VOR dem teuren Teil (#629): passt die Dimension nicht,
+    # wirft das hier -- statt spaeter halb geschriebene Chunks in zwei
+    # Vektorraeumen zu hinterlassen.
+    db.register_embedding_inventory(
+        getattr(active_embedder, "model_id", None),
+        int(active_embedder.dim),  # type: ignore[attr-defined]
+    )
+
+    from . import chunking
+    from .embedding_model import serialize_f32
+    from .embeddings import build_contextual_embedding_text
+
+    max_tokens = chunking.CONTEXT_TOKEN_RESERVE - chunking.MODEL_INPUT_OVERHEAD_TOKENS
+    counter = chunking.resolve_token_counter()
+
+    skipped: list[dict] = []
+    # (chunk_id, context_sentence, chunk_text)
+    valid: list[tuple[str, str, str]] = []
+
+    for item in items:
+        chunk_id: str | None = item.get("chunk_id")
+        sentence: str = str(item.get("context_sentence") or "").strip()
+        if not sentence:
+            skipped.append({"chunk_id": chunk_id, "reason": "empty"})
+            continue
+        if counter(sentence) > max_tokens:
+            skipped.append({"chunk_id": chunk_id, "reason": "too-long"})
+            continue
+        row = db.get_chunk_by_id(chunk_id) if chunk_id else None
+        if row is None or chunk_id is None:
+            skipped.append({"chunk_id": chunk_id, "reason": "not-found"})
+            continue
+        valid.append((chunk_id, sentence, row["chunk_text"]))
+
+    if not valid:
+        return {"status": "ok", "updated": [], "skipped": skipped}
+
+    embedding_texts = [
+        build_contextual_embedding_text(sentence, chunk_text) for _, sentence, chunk_text in valid
+    ]
+    # Embeddings VOR jedem einzelnen Schreibzugriff berechnen: Modell-Inferenz
+    # kann Sekunden dauern und darf keinen SQLite-Write-Lock halten (Muster
+    # ingest.ingest_paper_embeddings).
+    vectors = active_embedder.embed_documents(embedding_texts)  # type: ignore[attr-defined]
+
+    updated: list[str] = []
+    for (chunk_id, sentence, _chunk_text), embedding_text, vector in zip(
+        valid, embedding_texts, vectors, strict=True
+    ):
+        db.update_chunk_context(
+            chunk_id,
+            context_sentence=sentence,
+            embedding_text=embedding_text,
+            embedding_vector=serialize_f32(vector),
+            context_source="model",
+        )
+        updated.append(chunk_id)
+
+    return {"status": "ok", "updated": updated, "skipped": skipped}
+
+
 def search_quote_text(db_path: str, verbatim: str, k: int = 5) -> list[dict]:
     """LIKE-Suche in quotes.verbatim. Gibt [{quote_id, verbatim, paper_id}] zurueck."""
     db = VaultDB(db_path)
@@ -3048,6 +3191,21 @@ def _build_mcp_server():
     def _vault_component_status() -> dict:
         """Zustand optionaler Bestandteile: Embedding-Modell, sqlite-vec, FTS5 (#624)."""
         return component_status(db_path)
+
+    @mcp.tool(name="vault.pending_context_chunks")
+    def _vault_pending_context_chunks(paper_id: str | None = None, limit: int = 64) -> list[dict]:
+        """Chunks ohne inhaltlichen Kontextsatz, Dokumentreihenfolge (rowid) (#783)."""
+        return pending_context_chunks(db_path, paper_id=paper_id, limit=limit)
+
+    @mcp.tool(name="vault.enrich_chunk_contexts")
+    def _vault_enrich_chunk_contexts(items: list[dict]) -> dict:
+        """Batch-Schreibweg: Kontextsatz+embedding_text+Vektor als Tripel (#783).
+
+        items: [{"chunk_id": str, "context_sentence": str}, ...]. Leerer/zu
+        langer Satz oder unbekannte chunk_id -> skipped (Rest wird trotzdem
+        geschrieben); kein Embedder -> status="embedder-unavailable".
+        """
+        return enrich_chunk_contexts(db_path, items)
 
     @mcp.tool(name="vault.set_ocr_done")
     def _vault_set_ocr_done(paper_id: str, value: int = 1) -> None:

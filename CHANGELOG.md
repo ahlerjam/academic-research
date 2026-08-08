@@ -10,6 +10,36 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Kontextsatz-Schreibweg: neue Spalte, zwei MCP-Tools, Carry-over-Schutz
+  (#783):** Teilschritt A aus dem Umsetzungsplan zu #710 (agentischer
+  Kontextsatz). Neue Spalte `chunk_embeddings.context_source` (`'metadata'`/
+  `'model'`/`NULL` fuer Bestand, Schema 14→15, idempotente Migration
+  `migrate.add_chunk_context_source_column()`). Zwei neue MCP-Tools:
+  `vault.pending_context_chunks(paper_id=None, limit=64)` listet Chunks ohne
+  inhaltliche Anreicherung in **Dokumentreihenfolge** (`rowid`, bewusst nicht
+  `created_at`/`chunk_id` -- Sekunden-Aufloesung bzw. UUID-Schluessel waeren
+  eine willkuerliche Sortierung); `vault.enrich_chunk_contexts(items)`
+  schreibt Kontextsatz + `embedding_text` + Vektor + vec0-Spiegel je Chunk als
+  EIN Tripel (`db.update_chunk_context()`, nie ein Teil-Update). Batch-
+  Validierung: leerer/zu langer Satz (> `CONTEXT_TOKEN_RESERVE -
+  MODEL_INPUT_OVERHEAD_TOKENS` Tokens) landet einzeln in `skipped`, der Rest
+  des Batches wird trotzdem geschrieben; fehlt ein Embedder, bricht der
+  gesamte Batch mit `status="embedder-unavailable"` ab (nichts geschrieben);
+  ein Dimensions-Mismatch wirft `EmbeddingDimensionMismatchError` (#629)
+  statt still zu degradieren. **Carry-over-Schutz:** `add_paper()` ist ein
+  Upsert, `ingest_paper_embeddings()` loescht und schreibt Chunks eines
+  Papers bei jedem erneuten Ingest komplett neu (Normalfall bei einer
+  Metadaten-Korrektur, s. `commands/fetch.md`) -- `ingest.py` sichert deshalb
+  VOR `delete_chunk_embeddings` alle `context_source='model'`-Kontextsaetze
+  und wendet sie per exaktem `chunk_text`-Abgleich auf die neuen Chunks an,
+  sonst waere jede Anreicherung nach dem naechsten Upsert ersatzlos weg.
+  `add_chunk_embedding()` um `context_source: str = "metadata"` erweitert
+  (Default fuer alle bestehenden Aufrufer, kein Verhaltenswechsel). Der
+  eigentliche Anreicherungs-Agent und seine automatische Einbindung in
+  `/academic-research:fetch` sind NICHT Teil dieses Issues (folgen mit
+  #710-B) -- `commands/fetch.md` dokumentiert den manuellen Weg ueber beide
+  Tools als optionalen Hinweis.
+
 - **Hilft ein inhaltlicher Kontextsatz gegenueber Metadaten? (#785, Epic
   #710-C):** Vier-Arme-Vergleich auf der bge-m3-Fassung des Chunk-Goldsets aus
   #708/#731 (nicht die aeltere e5-Fassung -- #732 hat den produktiven

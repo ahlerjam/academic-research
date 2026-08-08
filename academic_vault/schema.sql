@@ -436,7 +436,15 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
   -- gespeichert.
   section_title    TEXT,
   page_start       INTEGER,
-  page_end         INTEGER
+  page_end         INTEGER,
+  -- Herkunft des Kontextsatzes (Issue #783): additiv, nullable -- Bestandschunks
+  -- vor dieser Migration und alle ueber default_context_sentence() erzeugten
+  -- Chunks bleiben `'metadata'` (deterministischer Metadaten-Satz, s.
+  -- chunking.default_context_sentence). `'model'` markiert einen inhaltlichen
+  -- Kontextsatz, den `vault.enrich_chunk_contexts()` in einer Sitzung
+  -- geschrieben hat -- gespiegelt vom CHECK-Constraint hier bzw.
+  -- migrate.add_chunk_context_source_column() fuer Bestands-DBs.
+  context_source   TEXT CHECK(context_source IN ('metadata','model') OR context_source IS NULL)
 );
 
 -- FTS5-Index ueber Chunk-Texte (Issue #726). `papers_fts`/`papers_trgm`

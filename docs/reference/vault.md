@@ -502,9 +502,9 @@ Kennzahlen) — der Weg ist derselbe wie bei Zitaten: nicht raten, sondern beim 
 belegen. Erfasste Kennzahlen erscheinen als eigene Kategorie `erfasste_kennzahlen` in
 `vault.chapter_quote_balance` (Issue #737, siehe Abschnitt „Prüfbilanz je Kapitel" oben).
 
-## MCP-Tools (alle 50)
+## MCP-Tools (alle 52)
 
-Der Server registriert **50 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
+Der Server registriert **52 MCP-Tools** (`@mcp.tool`). Maßgebliche Code-Referenz:
 [`academic_vault/server.py`](../../academic_vault/server.py) (Funktion
 `_build_mcp_server`). Die folgenden Tabellen sind nach Kategorie geordnet; Signatur mit
 Default-Werten, Beschreibung und Beispiel-Call.
@@ -519,6 +519,8 @@ Default-Werten, Beschreibung und Beispiel-Call.
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` | Vorhandenes Eltern-Paper und gültiges Kapitel-CSL-JSON | `paper_id` des angelegten Kind-Papers | `ValueError` „add_chapter: Ungueltiges csl_json" |
 | `vault.stats()` | DB-Counts (`paper_count`, `quote_count`) plus Embedding-Bestand (`embedding_model`, `embedding_dim`) | `vault.stats()` | Erreichbare Vault-DB | `dict` mit `paper_count`, `quote_count`, `embedding_model`, `embedding_dim` | `embedding_model` und `embedding_dim` sind `null` — es wurde nie ein Embedding geschrieben |
 | `vault.component_status()` | Zustand der optionalen Bestandteile (Embedding-Modell, `sqlite-vec`, FTS5): je `loaded`, laienverständlicher `impact`-Text bei Fehlen, `reason` sofern ermittelbar, plus `python_executable` und `db_path` (#624) | `vault.component_status()` | Keine — der Aufruf lädt bewusst kein Modell | `dict` je Bestandteil mit `loaded`, `impact` und `reason`, dazu `python_executable` und `db_path` | `loaded: false` bei Embedding-Modell oder `sqlite-vec`; `impact` sagt, was dadurch fehlt |
+| `vault.pending_context_chunks(paper_id=None, limit=64)` | Chunks ohne inhaltliche Kontextsatz-Anreicherung (`context_source` ≠ `'model'`), sortiert nach `rowid` (Dokumentreihenfolge — bewusst NICHT `created_at`/`chunk_id`, s. u.); `paper_id=None` durchsucht den ganzen Vault (Nachtrag auf einem Bestandsvault, #783) | `vault.pending_context_chunks(paper_id="vaswani2017")` | Vault mit mindestens einem Chunk-Embedding | `list[dict]` mit `chunk_id`, `paper_id`, `chunk_text`, `section_title`, `page_start`, `page_end`, `title`, `year` (letztere zwei aus `papers.csl_json`, `None` falls nicht ermittelbar) | Leere Liste — entweder gibt es keine Chunks, oder alle sind bereits `context_source="model"` |
+| `vault.enrich_chunk_contexts(items)` | Batch-Schreibweg: `items=[{"chunk_id","context_sentence"}, ...]`, schreibt Kontextsatz + `embedding_text` + Vektor + vec0-Spiegel je Item als EIN Tripel (`context_source="model"`), nie ein Teil-Update; `chunk_text` kommt dabei aus dem Vault, nie vom Aufrufer | `vault.enrich_chunk_contexts(items=[{"chunk_id": "c1", "context_sentence": "Beschreibt die Stichprobenziehung der Interviewstudie."}])` | Geladenes Embedding-Modell; bekannte `chunk_id`s | `dict` mit `status` (`"ok"`/`"embedder-unavailable"`), `updated` (geschriebene `chunk_id`s) und `skipped` (`[{"chunk_id","reason"}]`, Grund ∈ `"empty"`/`"too-long"`/`"not-found"`) | `status="embedder-unavailable"` — kein Item geschrieben; `EmbeddingDimensionMismatchError`, wenn die Modell-Dimension nicht zum Bestand passt (#629, geprüft vor jeder Inferenz) |
 
 **Zitate (Quotes)**
 
