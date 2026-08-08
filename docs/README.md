@@ -67,6 +67,8 @@ Neue Begriffe schlägst du unterwegs im [Glossar](reference/glossary.md) nach.
 - [AGENTS.md](../AGENTS.md) — verbindliche Konventionen und rote Linien, auch für
   menschliche Beitragende.
 - [CHANGELOG.md](../CHANGELOG.md) — was sich wann geändert hat.
+- [Entscheidungsvermerke](decisions/README.md) — Entwürfe, die eine projektweite
+  Architekturfrage beantworten, bevor sie sich als Umsetzungs-Issue schreiben lässt.
 
 ## Historisches und Momentaufnahmen
 
