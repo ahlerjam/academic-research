@@ -53,12 +53,14 @@ Modell bewusst und unabhängig vom Schalter laden.
 | Embedding-Modell (`intfloat/multilingual-e5-small`) | `embedding_enabled` | `true` | `vault.add_paper()`/`vault.search()` laufen FTS5-only, `chunk_embeddings` bleibt leer. | ~470 MB (Modellgewichte) | Ingest: ~1 Chunk/10–50 ms auf CPU; Suche: eine Query-Embedding-Berechnung (<50 ms). |
 | Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); seit #715 gibt es keinen weiteren Reranking-Weg (Voyage/Cohere ersatzlos entfernt). | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
 | NLI-Zitatscan (`MoritzLaurer/bge-m3-zeroshot-v2.0`) | `nli_prefilter_enabled` | `true` | Der `nli-quote-scan.mjs`-Hook tut nichts — weder Anstoß noch Abholung, kein Zitat wird bewertet oder gemeldet. | ~1,3 GB (0,6 Mrd. Parameter, F16 — Schätzung, HF nennt keine Dateigröße) | ~0,127 s/Zitat auf CPU zzgl. 1,6 s einmaligem Modell-Laden je Worker-Start (gemessen, s. `docs/reference/hooks.md`). |
+| Query-Umformung (Multi-Query, #734) | `query_expansion_enabled` | **`false`** | `vault.search(..., rerank=True)` sucht mit der unveränderten Query (ein `_vec0_search`-Aufruf statt vier) — Default ist AN für die drei Modelle oben, aber AUS für dieses Verfahren (Begründung s. u.). | kein zusätzliches Modell (nutzt die eingeloggte `claude`-CLI-Sitzung, kein Download) | ≈ 6,8 s/Suche (gemessen, s. Abschnitt „Query-Umformung" unten) — nur bei `rerank=True` UND aktivem Schalter. |
 
 Env-Variablen je Komponente (kanonischer Name, Alt-Name als Alias sofern
 vorhanden): `ACADEMIC_RESEARCH_EMBEDDING_ENABLED` (Alias `VAULT_AUTO_EMBED`),
 `ACADEMIC_RESEARCH_RERANKER_ENABLED` (Alias `VAULT_RERANK_LOCAL_DISABLE` —
 abweichende Semantik: reines Präsenz-Flag statt truthy/falsy-Wert),
-`ACADEMIC_RESEARCH_NLI_PREFILTER` (kein Alias, seit #592 unverändert).
+`ACADEMIC_RESEARCH_NLI_PREFILTER` (kein Alias, seit #592 unverändert),
+`ACADEMIC_RESEARCH_QUERY_EXPANSION` (kein Alias, neu seit #734).
 
 ## Vektor-Suche (Embedding-Pipeline)
 
@@ -191,6 +193,62 @@ wird `False` und eine `WARNING` landet im Log — kein Absturz.
 | `VAULT_RERANK_LOCAL_DISABLE` | nicht gesetzt | Alt-Name (#714), bleibt als Alias erhalten — ABWEICHENDE Semantik: ein reines Präsenz-Flag, jeder gesetzte Wert (auch `"0"`) schaltet ab, kein truthy/falsy-Parsing. Gesetzt, gewinnt er über `ACADEMIC_RESEARCH_RERANKER_ENABLED`. |
 | `VAULT_RERANK_LOCAL_MODEL` | `BAAI/bge-reranker-v2-m3` | Alternatives Reranker-Modell. |
 | `VAULT_RERANK_LOCAL_CACHE` | `~/.academic-research/models` | Ablageort der Reranker-Gewichte (gleiches Verzeichnis wie Embedding-/NLI-Modell). |
+
+## Query-Umformung (Multi-Query, `vault.search(..., rerank=True)`)
+
+Multi-Query ist das in #733 gemessene und **empfohlene** der beiden geprüften
+Umformungsverfahren (HyDE verliert same-language-Recall bei
+Cross-Language-Queries, Multi-Query nicht — Messung in
+`docs/evals/2026-08-07-hyde-multiquery-733.md`). Seit #734 hängt es —
+abschaltbar — vor die Vektorsuche: bei `rerank=True` UND aktivem Schalter
+erzeugt die eingeloggte `claude`-CLI (Subprozess, OAuth-Sitzung — kein
+API-Key, #632) drei Umformulierungen der Query (eine englisch, eine deutsch,
+eine ausführlichere in der Sprache der Anfrage). Jede läuft einzeln durch
+`_vec0_search`, die vier Ranglisten (Original + 3 Varianten) werden per
+Reciprocal-Rank-Fusion (`k=60`) zu einer fusioniert, bevor diese wie bisher
+mit dem FTS5-Ranking kombiniert wird.
+
+Jedes Ergebnis-Dict trägt seit #734 `queries_used` — die Liste der
+tatsächlich gesuchten Queries, nicht nur die Nutzereingabe: `[raw_query]` im
+Normalfall, bei abgeschaltetem Schalter und bei fehlgeschlagener Umformung;
+vier Einträge (Original + 3 Varianten), wenn die Umformung griff. Wer ein
+unerklärliches Trefferbild sieht, kann so nachvollziehen, wonach tatsächlich
+gesucht wurde.
+
+**Default: aus.** Anders als bei den drei Modellschaltern oben (die alle
+Default-an sind) ist dieser Schalter Default-aus: die Messung aus #733 zeigt
+einen Gesamtmittel-MRR-Verlust (-0,0666 gegenüber der Baseline) bei einer
+~350-fachen Latenz — ein Nutzen, der nur bei language-gap-Queries greift, ist
+kein Fall für einen budgetneutralen Default-an wie beim NLI-Prefilter (#717).
+
+**Fehlerpfad:** Fehlt die `claude`-CLI (nicht im PATH), läuft sie in einen
+Timeout, endet mit Non-Zero-Exit oder liefert eine leere/unbrauchbare
+Antwort, sucht `vault.search()` mit der unveränderten Query weiter (ein
+`_vec0_search`-Aufruf statt vier) und schreibt genau eine `WARNING` ins Log
+— die Suche bricht nie ab.
+
+**Latenz** (produktiver Pfad — `expand_query()` ruft dieselbe `claude -p
+<prompt> --model sonnet`-Subprozess-Invocation wie der `multi_query`-Arm der
+#733-Messung auf, mit demselben Prompt und Modell; die dort gemessene Zahl
+gilt daher unverändert für den produktiven Aufruf, ohne dass etwas
+Abweichendes neu zu messen wäre):
+
+| Schritt | Median | Bemerkung |
+|---|---|---|
+| Umformung (`claude -p`, ein Aufruf für alle 3 Varianten) | 6762 ms | p50/p95: 6762 / 7906 ms, 26 Live-Aufrufe (#733) |
+| 4× Query-Embedding (Original + 3 Varianten) | ≈ 68 ms | 4 × 16,9 ms Median-Embedding |
+| 4× `_vec0_search` (KNN) | ≈ 26 ms | 4 × 6,5 ms Median-Suche |
+| **Gesamt zusätzlich ggü. abgeschaltetem Schalter** | **≈ 6,86 s** | gegen ≈ 19 ms ohne Umformung — ≈ 350-fach |
+
+Nicht eingerechnet: die zusätzliche Reranker-Latenz, weil bis zu 4× so viele
+Kandidaten (4 vec0-Ranglisten statt 1) in die RRF-Fusion einfließen, bevor
+`top_n=k*4` deckelt — bei ~20 statt ~5 Kandidaten je Suche liegt das im
+selben Rahmen wie die reguläre Reranker-Latenz oben (Abschnitt „Reranking"),
+fällt gegen die ≈6,8 s der Umformung selbst aber nicht mehr ins Gewicht.
+
+| Env-Variable | Default | Wirkung |
+|---|---|---|
+| `ACADEMIC_RESEARCH_QUERY_EXPANSION` | `0` (nicht gesetzt) | Kanonischer Schalter (#734, kein Alt-Schalter/Alias). `1` aktiviert die Multi-Query-Umformung vor `vault.search(..., rerank=True)`. Ebenfalls per `"query_expansion_enabled": true` in `config/parallel_agents.json` setzbar. |
 
 ## Teilwortsuche für deutsche Komposita
 
@@ -448,7 +506,7 @@ Default-Werten, Beschreibung und Beispiel-Call.
 
 | Tool (Signatur mit Defaults) | Beschreibung | Beispiel-Call | Voraussetzung | Rückgabe | Fehlschlag erkennbar an |
 |------|-------------|------|---------------|----------|-------------------------|
-| `vault.search(query, type=None, k=5, rerank=False)` | Hybrid-Suche (BM25 + vec0-KNN + RRF); `rerank=True` aktiviert zusätzlich den lokalen Reranker | `vault.search("transformer attention", k=10)` | Vault mit indizierten Papers; die Vektor-Hälfte braucht ein geladenes Embedding-Modell | `list[dict]` der Treffer, nach Rang zusammengeführt | Leere Liste trotz passender Papers — dann fehlt der Index; `vault.component_status()` nennt die Ursache |
+| `vault.search(query, type=None, k=5, rerank=False)` | Hybrid-Suche (BM25 + vec0-KNN + RRF); `rerank=True` aktiviert zusätzlich den lokalen Reranker | `vault.search("transformer attention", k=10)` | Vault mit indizierten Papers; die Vektor-Hälfte braucht ein geladenes Embedding-Modell | `list[dict]` der Treffer, nach Rang zusammengeführt — paperzentriert (ein Eintrag je `paper_id`); mit `rerank=True` trägt jeder Treffer zusätzlich die Fundstelle des besten Chunks: `section` (Abschnittstitel), `page_start`/`page_end` (Seitenbereich) — `None`, wenn der Chunk keine Lokation trägt (Bestandschunks vor Issue #728, oder Fallback-Kandidaten ohne echten Chunk) | Leere Liste trotz passender Papers — dann fehlt der Index; `vault.component_status()` nennt die Ursache |
 | `vault.get_paper(paper_id)` | Paper-Metadaten + `pdf_status` | `vault.get_paper("vaswani2017")` | Bekannte `paper_id` | `dict` mit Metadaten und `pdf_status`, sonst `None` | Rückgabe `None` — die `paper_id` steht nicht im Vault |
 | `vault.add_paper(paper_id, csl_json, pdf_path=None, doi=None, isbn=None, page_offset=0, editor=None, chapter=None, page_first=None, page_last=None, container_title=None, parent_paper_id=None)` | Upsert eines Papers; `type` aus `csl_json` | `vault.add_paper("vaswani2017", csl_json, doi="10.5555/...")` | Gültiges CSL-JSON (`type` ∈ `book`/`chapter`/`article-journal`), Vault nicht gesperrt | Kein Rückgabewert; das Paper steht danach im Vault, Volltext und Embeddings laufen mit | `ValueError` („csl_json ist kein valides JSON", „verletzt Schema"); bei gesperrtem Vault `VaultLockedError` |
 | `vault.add_chapter(parent_paper_id, chapter_number, csl_json, paper_id=None, pdf_path=None, page_first=None, page_last=None)` | Legt Kapitel als Kind-Paper an; gibt `paper_id` zurück | `vault.add_chapter("book2020", 3, csl_json, page_first=45)` | Vorhandenes Eltern-Paper und gültiges Kapitel-CSL-JSON | `paper_id` des angelegten Kind-Papers | `ValueError` „add_chapter: Ungueltiges csl_json" |

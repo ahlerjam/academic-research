@@ -18,8 +18,9 @@ genau eine Seite in ``chunk_pages``; die Seitenangabe im Kontextsatz lautet auf
 diesem Weg immer "Seite 1-1". Das ist die einzige verbleibende Abweichung zum
 Goldset (dessen Quelldokumente mehrseitig sind) und beruehrt weder Chunkgrenzen
 noch Section-Titel -- vermessen in
-``tests/test_issue_708_ingest_uses_chunk_pages.py``. ``page_start``/``page_end``
-haben ohnehin keine Spalte in ``chunk_embeddings``.
+``tests/test_issue_708_ingest_uses_chunk_pages.py``. Seit #728 schreibt der
+Ingest ``page_start``/``page_end``/``section_title`` strukturiert in
+``chunk_embeddings`` (vorher nur unstrukturiert im Kontextsatz-Text).
 """
 
 from __future__ import annotations
@@ -209,5 +210,8 @@ def ingest_paper_embeddings(
                 context_sentence=chunk.context_sentence,
                 embedding_text=chunk.embedding_text,
                 embedding_vector=serialize_f32(vector),
+                section_title=chunk.section_title,
+                page_start=chunk.page_start,
+                page_end=chunk.page_end,
             )
     return len(chunks)

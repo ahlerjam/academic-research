@@ -1028,6 +1028,7 @@ def search_papers(
     if not rerank:
         return fts_results
 
+    from .query_expansion import expand_query, resolve_query_expansion_enabled
     from .retrieval import apply_reranker, reciprocal_rank_fusion
 
     # Chunk-Zuordnung fuer die lexikalische Seite (Issue #727): jeder
@@ -1047,6 +1048,31 @@ def search_papers(
     # entfernt Bindestriche und Operator-Keywords und verfaelscht damit die
     # Semantik, auf die das Embedding-Modell reagiert.
     #
+    # Query-Umformung (Issue #734, Multi-Query -- in #733 gemessenes und
+    # empfohlenes Verfahren): bei aktivem Schalter erzeugt die eingeloggte
+    # claude-CLI drei Umformulierungen, jede durchlaeuft _vec0_search
+    # einzeln, die Ranglisten werden per RRF fusioniert. Schlaegt die
+    # Umformung fehl oder ist der Schalter aus, bleibt es bei der
+    # unveraenderten Query und genau einem _vec0_search-Aufruf -- die Suche
+    # darf daran nie scheitern. 'queries_used' auf jedem Ergebnis macht
+    # sichtbar, wonach tatsaechlich gesucht wurde.
+    queries_used = [raw_query]
+    if resolve_query_expansion_enabled():
+        variants, expansion_error = expand_query(raw_query)
+        if expansion_error is not None:
+            logger.warning(
+                "Query-Umformung fehlgeschlagen, nutze unveraenderte Query: %s",
+                expansion_error,
+            )
+        else:
+            queries_used = [raw_query, *variants]
+
+    if len(queries_used) > 1:
+        vec_lists = [_vec0_search(db_path, q, k=k) for q in queries_used]
+        vec_results = _fuse_multi_query_vec_results(vec_lists)
+    else:
+        vec_results = _vec0_search(db_path, raw_query, k=k)
+
     # top_n=k*4 (Decklung der Reranker-Kandidaten, #727, P1-Performance):
     # Mehrere Chunks desselben Papers duerfen die Fusion getrennt durchlaufen,
     # sonst wuerde ein Paper mit vielen mittelstarken Chunks andere Paper aus
@@ -1060,9 +1086,7 @@ def search_papers(
     # maximal ~5k Kandidaten (4k vec + k FTS) begrenzt, was bei k=5 nur 25
     # statt 5 sind -- noch ein erheblicher Mehraufwand, aber deutlich unter
     # der ungekappten Variante (die lokal zum Einfrieren fuehrt).
-    fused = reciprocal_rank_fusion(
-        _vec0_search(db_path, raw_query, k=k), fts_chunk_results, k=60, top_n=k * 4
-    )
+    fused = reciprocal_rank_fusion(vec_results, fts_chunk_results, k=60, top_n=k * 4)
     _fill_missing_reranker_text(db_path, fused)
 
     # apply_reranker() wird immer aufgerufen (#715, vormals Gate auf "kein
@@ -1084,7 +1108,36 @@ def search_papers(
     # Rueckgabevertrag von vault_search bleibt paperzentriert (AC3) --
     # geaendert hat sich nur die Position der Aggregation, nicht ihr
     # Ergebnis-Schema.
-    return _aggregate_chunks_to_papers(reranked, k)
+    aggregated = _aggregate_chunks_to_papers(reranked, k)
+    # 'queries_used' additiv auf jedem Ergebnis (Issue #734): [raw_query] im
+    # Normalfall/bei abgeschaltetem Schalter/bei fehlgeschlagener Umformung,
+    # sonst Original + Umformulierungen -- macht sichtbar, wonach tatsaechlich
+    # gesucht wurde, statt nur die Nutzereingabe zu zeigen.
+    for entry in aggregated:
+        entry["queries_used"] = queries_used
+    return aggregated
+
+
+def _fuse_multi_query_vec_results(vec_lists: list[list[dict]]) -> list[dict]:
+    """Fusioniert die vec0-Ranglisten mehrerer Query-Varianten zu einer (Issue #734).
+
+    Jede Liste stammt aus einem eigenen ``_vec0_search``-Aufruf (Original +
+    Umformulierungen) und ist bereits nach Relevanz geordnet. Die Fusion
+    laeuft ueber ``chunk_id`` (RRF, wie die nachgelagerte Fusion mit den
+    FTS5-Treffern) und liefert eine einzelne geordnete, deduplizierte Liste
+    mit denselben Feldern wie ``_vec0_search`` (Metadaten aus dem ersten
+    Vorkommen eines Chunks -- die Distanzwerte selbst fliessen nicht mehr in
+    die nachgelagerte RRF-Fusion ein, nur die Rangposition).
+    """
+    from .query_expansion import RRF_K, fuse_rankings_with_scores
+
+    rankings = [[r["chunk_id"] for r in lst] for lst in vec_lists]
+    fused_order = fuse_rankings_with_scores(rankings, k=RRF_K)
+    chunk_data: dict[str, dict] = {}
+    for lst in vec_lists:
+        for r in lst:
+            chunk_data.setdefault(r["chunk_id"], r)
+    return [chunk_data[chunk_id] for chunk_id, _ in fused_order if chunk_id in chunk_data]
 
 
 def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) -> dict:
@@ -1125,6 +1178,22 @@ def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) 
     if row is not None:
         entry["chunk_id"] = row["chunk_id"]
         entry["text"] = row["chunk_text"]
+        # chunk_fts (virtuelle FTS5-Tabelle) traegt keine Lokationsspalten --
+        # Nachschlag gegen chunk_embeddings fuer die Fundstelle (Issue #728).
+        # Graceful degradation auf v13-Bestaenden (Spalten noch nicht migriert).
+        try:
+            location = conn.execute(
+                "SELECT section_title, page_start, page_end FROM chunk_embeddings WHERE chunk_id = ?",
+                (row["chunk_id"],),
+            ).fetchone()
+            if location is not None:
+                entry["section_title"] = location["section_title"]
+                entry["page_start"] = location["page_start"]
+                entry["page_end"] = location["page_end"]
+        except sqlite3.OperationalError:
+            # v13-Datenbank: chunk_embeddings existiert, Spalten aber noch nicht.
+            # Lokation bleibt ungesetzt -- dokumentiertes Verhalten fuer Bestaende.
+            pass
     else:
         entry["chunk_id"] = f"fts-paper::{paper_id}"
     return entry
@@ -1155,6 +1224,12 @@ def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]
     den Gewinner-Eintrag gemergt. Das bewahrt das Highlighting und die
     FTS5-Relevanzangabe auch dann, wenn ein vec0-Treffer des gleichen Papers
     einen hoeherem Reranking-Score hat.
+
+    Fundstelle (Issue #728, AC2): der Gewinner-Chunk (nicht ein Merge
+    mehrerer Chunks) liefert 'section' (aus 'section_title') sowie
+    'page_start'/'page_end' fuer die Ausgabe -- ``None``, wenn der Chunk
+    keine Lokation traegt (Bestandschunks vor der Migration, oder
+    Fallback-Snippet-Kandidaten ohne echten Chunk).
 
     Args:
         chunk_results: Chunk-level Kandidaten aus ``apply_reranker`` (bzw.
@@ -1210,6 +1285,17 @@ def _aggregate_chunks_to_papers(chunk_results: list[dict], k: int) -> list[dict]
         ):
             # FTS5-Snippet mit Highlighting ueberschreibt vec0-Snippet
             winner["snippet"] = fts5_snippet_owner["snippet"]
+
+    # Fundstelle des Gewinner-Chunks in benannte Ausgabefelder spiegeln
+    # (Issue #728, AC2). 'section' statt 'section_title', damit der
+    # paperzentrierte Vertrag nicht suggeriert, das Paper selbst haette
+    # einen Titel-Alias -- die interne chunk-Feldbezeichnung bleibt intern.
+    # None-sicher: Bestandschunks vor der Migration und Fallback-Kandidaten
+    # ohne echten Chunk tragen keine Lokation.
+    for winner in best_per_paper.values():
+        winner["section"] = winner.get("section_title")
+        winner["page_start"] = winner.get("page_start")
+        winner["page_end"] = winner.get("page_end")
 
     ranked = sorted(best_per_paper.values(), key=_score, reverse=True)
     return ranked[:k]
@@ -1320,6 +1406,11 @@ def _vec0_search(db_path: str, query: str, k: int = 10) -> list[dict]:
                 # 'text' den laengeren Chunk-Text fuer apply_reranker erhaelt.
                 "text": chunk_text,
                 "distance": hit["distance"],
+                # Fundstelle des Chunks (Issue #728), None fuer Bestandschunks
+                # vor der Migration.
+                "section_title": hit.get("section_title"),
+                "page_start": hit.get("page_start"),
+                "page_end": hit.get("page_end"),
             }
         )
     return results
