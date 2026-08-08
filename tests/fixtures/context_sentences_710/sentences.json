@@ -1,0 +1,676 @@
+{
+  "meta": {
+    "issue": 785,
+    "epic": 710,
+    "goldset_manifest_sha256": "4f0a92c64707d8dd2be4ef27eadf11529cf96096e2f813ab8543e84a341e07b2",
+    "transform_model": "sonnet",
+    "generator": "scripts/eval/build_context_sentences_710.py",
+    "max_sentence_words": 25,
+    "sentence_latency_ms": {
+      "method": "Wanduhrzeit je `claude -p`-Aufruf (CLI-Subprozess, eingeloggte OAuth-Sitzung, --output-format json), ein Aufruf je Goldset-Dokument (alle Chunks des Dokuments in einem Prompt, in Lesereihenfolge), serieller Lauf. Bei einer verworfenen Antwort zaehlt der erfolgreiche Versuch (`attempts` je Dokument).",
+      "n": 11,
+      "p50": 17867.62,
+      "p95": 22162.79,
+      "mean": 15129.76,
+      "max": 22162.79
+    },
+    "usage_totals": {
+      "input_tokens": 24.0,
+      "cache_creation_input_tokens": 192202.0,
+      "cache_read_input_tokens": 370886.0,
+      "output_tokens": 15480.0
+    },
+    "total_cost_usd": 1.49675
+  },
+  "documents": [
+    {
+      "doc_id": "en-change-approval",
+      "duration_ms": 19475.04,
+      "attempts": 1,
+      "session_id": "6a7a16e4-450d-41fc-8487-4dc919b01171",
+      "total_cost_usd": 0.1399827,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 16807,
+        "cache_read_input_tokens": 29949,
+        "output_tokens": 2010,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 16807,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 2010,
+            "cache_read_input_tokens": 29949,
+            "cache_creation_input_tokens": 16807,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 16807
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "en-supply-chain",
+      "duration_ms": 7752.57,
+      "attempts": 1,
+      "session_id": "903e59e1-850f-4a04-a985-559c843e5353",
+      "total_cost_usd": 0.1506852,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 22753,
+        "cache_read_input_tokens": 23954,
+        "output_tokens": 465,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 22753,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 465,
+            "cache_read_input_tokens": 23954,
+            "cache_creation_input_tokens": 22753,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 22753
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "en-incident-response",
+      "duration_ms": 8793.7,
+      "attempts": 1,
+      "session_id": "e3e792fc-bf5f-463a-8545-60d8e32efc86",
+      "total_cost_usd": 0.1168524,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 16811,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 466,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 16811,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 466,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 16811,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 16811
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "en-infrastructure-drift",
+      "duration_ms": 16326.32,
+      "attempts": 1,
+      "session_id": "9beb0993-6bc5-404b-84ac-7990617fcecb",
+      "total_cost_usd": 0.13566540000000002,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 16649,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 1785,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 16649,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1785,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 16649,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 16649
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "en-pipeline-secrets",
+      "duration_ms": 8302.41,
+      "attempts": 1,
+      "session_id": "8fdad0fe-7176-4ead-a347-58e15b8b650b",
+      "total_cost_usd": 0.1162104,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 16549,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 528,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 16549,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 528,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 16549,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 16549
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "de-datenschutz-pipeline",
+      "duration_ms": 20535.48,
+      "attempts": 1,
+      "session_id": "8ef9df2a-73eb-4e05-bf19-47ef32cae5cf",
+      "total_cost_usd": 0.1478874,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 17571,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 2231,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 17571,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 2231,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 17571,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 17571
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "de-lieferkette-pruefung",
+      "duration_ms": 19437.67,
+      "attempts": 1,
+      "session_id": "968a13b7-20bb-4cae-b337-3364e4d0ed5d",
+      "total_cost_usd": 0.1399494,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 17328,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 1799,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 17328,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1799,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 17328,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 17328
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "de-mitbestimmung-telemetrie",
+      "duration_ms": 22162.79,
+      "attempts": 1,
+      "session_id": "ef9c4c68-cce7-426f-b3a3-69db99a09a5a",
+      "total_cost_usd": 0.1695387,
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 18935,
+        "cache_read_input_tokens": 77239,
+        "output_tokens": 2183,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 18935,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 564,
+            "cache_read_input_tokens": 47271,
+            "cache_creation_input_tokens": 1632,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 1632
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "en-access-review",
+      "duration_ms": 17961.99,
+      "attempts": 1,
+      "session_id": "93331474-fedd-4170-8efd-189b5e70d738",
+      "total_cost_usd": 0.1328124,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 16136,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 1800,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 16136,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1800,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 16136,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 16136
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "en-telemetry-retention",
+      "duration_ms": 7811.75,
+      "attempts": 1,
+      "session_id": "3353aa4c-ca07-4790-a850-ff6166290962",
+      "total_cost_usd": 0.11207639999999999,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 16085,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 438,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 16085,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 438,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 16085,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 16085
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    },
+    {
+      "doc_id": "de-freigabenachweis-archiv",
+      "duration_ms": 17867.62,
+      "attempts": 1,
+      "session_id": "3eae66f3-74b0-4955-9a5d-00b523f64267",
+      "total_cost_usd": 0.1350894,
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 16578,
+        "cache_read_input_tokens": 29968,
+        "output_tokens": 1775,
+        "server_tool_use": {
+          "web_search_requests": 0,
+          "web_fetch_requests": 0
+        },
+        "service_tier": "standard",
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 16578,
+          "ephemeral_5m_input_tokens": 0
+        },
+        "inference_geo": "not_available",
+        "iterations": [
+          {
+            "input_tokens": 2,
+            "output_tokens": 1775,
+            "cache_read_input_tokens": 29968,
+            "cache_creation_input_tokens": 16578,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 16578
+            },
+            "type": "message"
+          }
+        ],
+        "speed": "standard"
+      }
+    }
+  ],
+  "sentences": [
+    {
+      "chunk_id": "en-change-approval#0",
+      "doc_id": "en-change-approval",
+      "lang": "en",
+      "chunk_index": 0,
+      "sentence": "The introduction argues that manual committee approval fails continuous delivery and reframes approval as evidence of independent review, recording, and immutability.",
+      "sentence_de": "Die Einleitung argumentiert, dass manuelle Ausschussfreigaben bei Continuous Delivery versagen, und definiert Freigabe als Nachweis unabhängiger Prüfung, Dokumentation und Unveränderlichkeit."
+    },
+    {
+      "chunk_id": "en-change-approval#1",
+      "doc_id": "en-change-approval",
+      "lang": "en",
+      "chunk_index": 1,
+      "sentence": "The section shows how segregation of duties breaks via identity leaks, shared accounts, and emergency access, then introduces automated evidence for auditors.",
+      "sentence_de": "Der Abschnitt zeigt, wie Aufgabentrennung durch Identitätslecks, geteilte Konten und Notfallzugriffe versagt, und führt automatisierte Nachweise für Prüfer ein."
+    },
+    {
+      "chunk_id": "en-change-approval#2",
+      "doc_id": "en-change-approval",
+      "lang": "en",
+      "chunk_index": 2,
+      "sentence": "The text warns that reconstructed evidence often fails audits, then examines emergency-change bypass paths and their volume and closure failure modes.",
+      "sentence_de": "Der Text warnt, dass rekonstruierte Nachweise Prüfungen oft nicht bestehen, und untersucht Notfalländerungs-Umgehungen sowie deren Volumen- und Abschluss-Fehlermodi."
+    },
+    {
+      "chunk_id": "en-supply-chain#0",
+      "doc_id": "en-supply-chain",
+      "lang": "en",
+      "chunk_index": 0,
+      "sentence": "The section argues that software today is assembled from dependencies, so vulnerability response needs a build-generated inventory of what actually shipped.",
+      "sentence_de": "Der Abschnitt argumentiert, dass Software heute aus Abhängigkeiten zusammengesetzt wird und daher ein vom Build erzeugtes Inventar des tatsächlich Ausgelieferten nötig ist."
+    },
+    {
+      "chunk_id": "en-supply-chain#1",
+      "doc_id": "en-supply-chain",
+      "lang": "en",
+      "chunk_index": 1,
+      "sentence": "The section proposes instrumenting the build to capture resolver decisions and comparing them against the finished artefact, treating mismatches as defects.",
+      "sentence_de": "Der Abschnitt schlägt vor, den Build zu instrumentieren, um Resolver-Entscheidungen zu erfassen und mit dem fertigen Artefakt abzugleichen, wobei Abweichungen als Fehler gelten."
+    },
+    {
+      "chunk_id": "en-supply-chain#2",
+      "doc_id": "en-supply-chain",
+      "lang": "en",
+      "chunk_index": 2,
+      "sentence": "The section explains that matching inventories against vulnerability feeds is noisy and only indicates where to look, not what actually needs fixing.",
+      "sentence_de": "Der Abschnitt erklärt, dass der Abgleich von Inventaren mit Schwachstellen-Feeds ungenau ist und nur zeigt, wo zu prüfen ist, nicht was tatsächlich zu beheben ist."
+    },
+    {
+      "chunk_id": "en-incident-response#0",
+      "doc_id": "en-incident-response",
+      "lang": "en",
+      "chunk_index": 0,
+      "sentence": "The section argues that blameless review only works if the same guarantee protects every future review from performance-related use.",
+      "sentence_de": "Der Abschnitt argumentiert, dass blameless Review nur funktioniert, wenn dieselbe Garantie jede künftige Review vor leistungsbezogener Nutzung schützt."
+    },
+    {
+      "chunk_id": "en-incident-response#1",
+      "doc_id": "en-incident-response",
+      "lang": "en",
+      "chunk_index": 1,
+      "sentence": "The section examines escalation and review-writing, arguing coordination should separate from investigation and rejected arguments deserve documentation.",
+      "sentence_de": "Der Abschnitt untersucht Eskalation und das Verfassen von Reviews und argumentiert, dass Koordination von Untersuchung getrennt und verworfene Argumente dokumentiert werden sollten."
+    },
+    {
+      "chunk_id": "en-incident-response#2",
+      "doc_id": "en-incident-response",
+      "lang": "en",
+      "chunk_index": 2,
+      "sentence": "The section explains that error budgets pre-negotiate reliability decisions, working only under three specific conditions on derivation, consequence, and period.",
+      "sentence_de": "Der Abschnitt erklärt, dass Fehlerbudgets Zuverlässigkeitsentscheidungen vorab verhandeln und nur unter drei Bedingungen zu Herkunft, Konsequenz und Zeitraum funktionieren."
+    },
+    {
+      "chunk_id": "en-infrastructure-drift#0",
+      "doc_id": "en-infrastructure-drift",
+      "lang": "en",
+      "chunk_index": 0,
+      "sentence": "The introduction argues that gaps between declared and running configuration are a permanent measurement problem, not a discipline failure to eliminate.",
+      "sentence_de": "Die Einleitung argumentiert, dass die Lücke zwischen deklarierter und laufender Konfiguration ein dauerhaftes Messproblem ist, kein Disziplinproblem."
+    },
+    {
+      "chunk_id": "en-infrastructure-drift#1",
+      "doc_id": "en-infrastructure-drift",
+      "lang": "en",
+      "chunk_index": 1,
+      "sentence": "The section explains that divergence detection tools only see managed attributes, so hasty suppression rules can hide genuine, unnoticed configuration drift.",
+      "sentence_de": "Der Abschnitt erklärt, dass Vergleichswerkzeuge nur bekannte Attribute erfassen, sodass hastige Unterdrückungsregeln echte, unbemerkte Konfigurationsabweichungen verdecken können."
+    },
+    {
+      "chunk_id": "en-infrastructure-drift#2",
+      "doc_id": "en-infrastructure-drift",
+      "lang": "en",
+      "chunk_index": 2,
+      "sentence": "The section warns that reconciliation loops can undo emergency fixes instantly, so suspensions must be scoped, documented, and automatically expiring.",
+      "sentence_de": "Der Abschnitt warnt, dass Reconciliation-Loops Notfalleingriffe sofort rückgängig machen können, weshalb Unterbrechungen begrenzt, dokumentiert und automatisch befristet sein müssen."
+    },
+    {
+      "chunk_id": "en-pipeline-secrets#0",
+      "doc_id": "en-pipeline-secrets",
+      "lang": "en",
+      "chunk_index": 0,
+      "sentence": "The section argues that reducing a credential's value—shorter life, narrower reach, observable use—beats merely hiding it better.",
+      "sentence_de": "Der Abschnitt argumentiert, dass die Reduzierung des Werts eines Credentials—kürzere Lebensdauer, engere Reichweite, beobachtbare Nutzung—besser ist als bloßes Verstecken."
+    },
+    {
+      "chunk_id": "en-pipeline-secrets#1",
+      "doc_id": "en-pipeline-secrets",
+      "lang": "en",
+      "chunk_index": 1,
+      "sentence": "The section describes short-lived broker-issued tokens and two recurring mistakes: unverified repository identity and overly broad token permissions.",
+      "sentence_de": "Der Abschnitt beschreibt kurzlebige, von einem Broker ausgestellte Tokens und zwei wiederkehrende Fehler: ungeprüfte Repository-Identität und zu weitreichende Token-Rechte."
+    },
+    {
+      "chunk_id": "en-pipeline-secrets#2",
+      "doc_id": "en-pipeline-secrets",
+      "lang": "en",
+      "chunk_index": 2,
+      "sentence": "The section explains that fast credential rotation requires an accurate, log-derived list of consumers, not just tooling, to avoid outages.",
+      "sentence_de": "Der Abschnitt erklärt, dass schnelle Credential-Rotation eine genaue, aus Logs abgeleitete Liste der Nutzer erfordert, nicht nur Tooling, um Ausfälle zu vermeiden."
+    },
+    {
+      "chunk_id": "de-datenschutz-pipeline#0",
+      "doc_id": "de-datenschutz-pipeline",
+      "lang": "de",
+      "chunk_index": 0,
+      "sentence": "The section argues that continuous delivery invalidates static privacy impact assessments, so only a few decisive characteristics should be monitored continuously instead of yearly.",
+      "sentence_de": "Der Abschnitt argumentiert, dass kontinuierliche Auslieferung statische Datenschutz-Folgenabschätzungen entwertet, weshalb nur wenige entscheidende Merkmale fortlaufend statt jährlich beobachtet werden sollten."
+    },
+    {
+      "chunk_id": "de-datenschutz-pipeline#1",
+      "doc_id": "de-datenschutz-pipeline",
+      "lang": "de",
+      "chunk_index": 1,
+      "sentence": "The section identifies three triggers—new data categories, new recipients, extended retention—that are traceable via technical artifacts like schema, network connections, and deletion periods.",
+      "sentence_de": "Der Abschnitt nennt drei Auslöser – neue Datenkategorien, neue Empfänger, verlängerte Aufbewahrung –, die sich an Schema, Netzverbindungen und Löschfristen ablesen lassen."
+    },
+    {
+      "chunk_id": "de-datenschutz-pipeline#2",
+      "doc_id": "de-datenschutz-pipeline",
+      "lang": "de",
+      "chunk_index": 2,
+      "sentence": "The section warns that automation can detect changes but cannot judge sensitivity or necessity, so it should only trigger human review, never claim compliance.",
+      "sentence_de": "Der Abschnitt warnt, dass Automatisierung Änderungen erkennt, aber Sensibilität oder Erforderlichkeit nicht beurteilen kann und deshalb nur eine menschliche Prüfung auslösen sollte."
+    },
+    {
+      "chunk_id": "de-lieferkette-pruefung#0",
+      "doc_id": "de-lieferkette-pruefung",
+      "lang": "de",
+      "chunk_index": 0,
+      "sentence": "Der Abschnitt erklärt, dass neue Regulierung Nachweispflichten von Sorgfalt bei Auswahl hin zu tatsächlicher Kenntnis des Software-Bestands verschiebt.",
+      "sentence_de": "Der Abschnitt erklärt, dass neue Regulierung Nachweispflichten von Sorgfalt bei Auswahl hin zu tatsächlicher Kenntnis des Software-Bestands verschiebt."
+    },
+    {
+      "chunk_id": "de-lieferkette-pruefung#1",
+      "doc_id": "de-lieferkette-pruefung",
+      "lang": "de",
+      "chunk_index": 1,
+      "sentence": "Der Abschnitt fordert, dass Zulieferer-SBOMs Prüfwerte enthalten, maschinell abgleichbar sind und bei Sicherheitskorrekturen aktualisiert werden.",
+      "sentence_de": "Der Abschnitt fordert, dass Zulieferer-SBOMs Prüfwerte enthalten, maschinell abgleichbar sind und bei Sicherheitskorrekturen aktualisiert werden."
+    },
+    {
+      "chunk_id": "de-lieferkette-pruefung#2",
+      "doc_id": "de-lieferkette-pruefung",
+      "lang": "de",
+      "chunk_index": 2,
+      "sentence": "Der Abschnitt beschreibt Frühindikatoren für das Ende der Pflege einer Fremdkomponente, etwa offene Meldungen und Release-Abstände.",
+      "sentence_de": "Der Abschnitt beschreibt Frühindikatoren für das Ende der Pflege einer Fremdkomponente, etwa offene Meldungen und Release-Abstände."
+    },
+    {
+      "chunk_id": "de-mitbestimmung-telemetrie#0",
+      "doc_id": "de-mitbestimmung-telemetrie",
+      "lang": "de",
+      "chunk_index": 0,
+      "sentence": "Der Abschnitt erklärt, dass Mitbestimmung schon bei Eignung zur Leistungsüberwachung greift und alltägliche Tools unbemerkt personenbezogene Daten erzeugen.",
+      "sentence_de": "Der Abschnitt erklärt, dass Mitbestimmung schon bei Eignung zur Leistungsüberwachung greift und alltägliche Tools unbemerkt personenbezogene Daten erzeugen."
+    },
+    {
+      "chunk_id": "de-mitbestimmung-telemetrie#1",
+      "doc_id": "de-mitbestimmung-telemetrie",
+      "lang": "de",
+      "chunk_index": 1,
+      "sentence": "Der Abschnitt beschreibt vier Kernpunkte einer wirksamen Vereinbarung sowie eine gestufte Regelung für Streitfälle nach technischen Vorfällen mit Personenbezug.",
+      "sentence_de": "Der Abschnitt beschreibt vier Kernpunkte einer wirksamen Vereinbarung sowie eine gestufte Regelung für Streitfälle nach technischen Vorfällen mit Personenbezug."
+    },
+    {
+      "chunk_id": "de-mitbestimmung-telemetrie#2",
+      "doc_id": "de-mitbestimmung-telemetrie",
+      "lang": "de",
+      "chunk_index": 2,
+      "sentence": "Der Abschnitt betont, dass die gestufte Auswertung die Ursachenklärung ermöglicht, ohne unbemerkt in eine personenbezogene Leistungsbeurteilung überzugehen.",
+      "sentence_de": "Der Abschnitt betont, dass die gestufte Auswertung die Ursachenklärung ermöglicht, ohne unbemerkt in eine personenbezogene Leistungsbeurteilung überzugehen."
+    },
+    {
+      "chunk_id": "en-access-review#0",
+      "doc_id": "en-access-review",
+      "lang": "en",
+      "chunk_index": 0,
+      "sentence": "This section argues that periodic reviews fail via rubber-stamping, and proposes grounding them in usage data, defaulting unused rights to removal.",
+      "sentence_de": "Der Abschnitt argumentiert, dass periodische Reviews am blinden Abnicken scheitern, und schlägt vor, sie auf Nutzungsdaten zu stützen und unbenutzte Rechte standardmäßig zu entziehen."
+    },
+    {
+      "chunk_id": "en-access-review#1",
+      "doc_id": "en-access-review",
+      "lang": "en",
+      "chunk_index": 1,
+      "sentence": "This section proposes staged, reversible removal: deny access first, allow recovery for two weeks, then confirm the change, treating shared accounts separately.",
+      "sentence_de": "Der Abschnitt schlägt gestufte, reversible Entzüge vor: erst Zugriff verweigern, zwei Wochen Wiederherstellung erlauben, dann bestätigen; Shared-Accounts sollen separat behandelt werden."
+    },
+    {
+      "chunk_id": "en-telemetry-retention#0",
+      "doc_id": "en-telemetry-retention",
+      "lang": "en",
+      "chunk_index": 0,
+      "sentence": "The section argues retained telemetry carries three costs—storage, ingestion, and legal obligation—and proposes classifying streams by how long their answers matter.",
+      "sentence_de": "Der Abschnitt argumentiert, dass gespeicherte Telemetriedaten drei Kosten haben – Speicherung, Ingestion, rechtliche Pflicht – und schlaegt eine Klassifizierung nach Antwortdauer vor."
+    },
+    {
+      "chunk_id": "en-telemetry-retention#1",
+      "doc_id": "en-telemetry-retention",
+      "lang": "en",
+      "chunk_index": 1,
+      "sentence": "The section argues written retention periods are meaningless without enforcement, and proposes enumerating actual data copies rather than trusting stated rules.",
+      "sentence_de": "Der Abschnitt argumentiert, dass schriftliche Aufbewahrungsfristen ohne Durchsetzung wirkungslos sind, und schlaegt vor, tatsaechliche Datenkopien statt Regeln aufzulisten."
+    },
+    {
+      "chunk_id": "de-freigabenachweis-archiv#0",
+      "doc_id": "de-freigabenachweis-archiv",
+      "lang": "de",
+      "chunk_index": 0,
+      "sentence": "Der Abschnitt erklärt, dass Freigabenachweise nur wirken, wenn sie langfristig lesbar und in migrationssicherer, selbsttragender Form am richtigen Ort abgelegt werden.",
+      "sentence_de": "Freigabenachweise sind nur wertvoll, wenn sie dauerhaft lesbar bleiben, migrationssicher formuliert und eindeutig mit dem geprüften Artefakt verknüpft sind."
+    },
+    {
+      "chunk_id": "de-freigabenachweis-archiv#1",
+      "doc_id": "de-freigabenachweis-archiv",
+      "lang": "de",
+      "chunk_index": 1,
+      "sentence": "Der Abschnitt fordert kürzere, verjährungsbasierte Aufbewahrungsfristen und eine dokumentierte Aussonderung, statt unbegrenzt viele Nachweise als Beweislast anzuhäufen.",
+      "sentence_de": "Aufbewahrungsfristen sollten sich an der Verjährung orientieren, und ausgesonderte Nachweise müssen protokolliert werden, um Aufsichten glaubhaft Vollständigkeit zu zeigen."
+    }
+  ]
+}
