@@ -51,7 +51,7 @@ Modell bewusst und unabhängig vom Schalter laden.
 | Komponente | Config-Schlüssel | Default | Wirkung bei `false` | Plattenbedarf | Laufzeitkosten |
 |---|---|---|---|---|---|
 | Embedding-Modell (`intfloat/multilingual-e5-small`) | `embedding_enabled` | `true` | `vault.add_paper()`/`vault.search()` laufen FTS5-only, `chunk_embeddings` bleibt leer. | ~470 MB (Modellgewichte) | Ingest: ~1 Chunk/10–50 ms auf CPU; Suche: eine Query-Embedding-Berechnung (<50 ms). |
-| Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); betrifft **nur** den lokalen Fallback — Voyage/Cohere bleiben über ihre Cloud-Keys unabhängig davon nutzbar. | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
+| Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); seit #715 gibt es keinen weiteren Reranking-Weg (Voyage/Cohere ersatzlos entfernt). | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
 | NLI-Zitatscan (`MoritzLaurer/bge-m3-zeroshot-v2.0`) | `nli_prefilter_enabled` | `true` | Der `nli-quote-scan.mjs`-Hook tut nichts — weder Anstoß noch Abholung, kein Zitat wird bewertet oder gemeldet. | ~1,3 GB (0,6 Mrd. Parameter, F16 — Schätzung, HF nennt keine Dateigröße) | ~0,127 s/Zitat auf CPU zzgl. 1,6 s einmaligem Modell-Laden je Worker-Start (gemessen, s. `docs/reference/hooks.md`). |
 
 Env-Variablen je Komponente (kanonischer Name, Alt-Name als Alias sofern
@@ -158,9 +158,10 @@ eine eigene Entscheidung.
 
 Sobald `rerank=True` gesetzt ist, greift ausschließlich der lokale
 `BAAI/bge-reranker-v2-m3`-Fallback (#715 — die vorherige Voyage/Cohere/lokal-
-Prioritätskette aus #376 ist ersatzlos entfernt) > unveränderte
-RRF-Reihenfolge. Jeder Kandidat trägt danach `reranked` (bool) und `reranker`
-(`"local-bge"`/`"none"`) — sichtbarer Beleg statt stillem Fallback.
+Prioritätskette aus #376 ist ersatzlos entfernt), sonst bleibt die
+RRF-Reihenfolge unverändert. Jeder Kandidat trägt danach `reranked` (bool)
+und `reranker` (`"local-bge"`/`"none"`) — sichtbarer Beleg statt stillem
+Fallback.
 
 Der lokale Fallback läuft **per Default aktiv** und lädt das Modell seit #714
 über `sentence_transformers.CrossEncoder` — `sentence-transformers` ist
@@ -186,7 +187,7 @@ wird `False` und eine `WARNING` landet im Log — kein Absturz.
 
 | Env-Variable | Default | Wirkung |
 |---|---|---|
-| `ACADEMIC_RESEARCH_RERANKER_ENABLED` | `1` (nicht gesetzt) | Kanonischer Schalter (#719). `0` schaltet NUR den lokalen Fallback ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden — Voyage/Cohere bleiben unabhängig davon nutzbar. Ebenfalls per `"reranker_enabled": false` in `config/parallel_agents.json` setzbar. |
+| `ACADEMIC_RESEARCH_RERANKER_ENABLED` | `1` (nicht gesetzt) | Kanonischer Schalter (#719). `0` schaltet den Reranker ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden — seit #715 der einzige Reranking-Weg. Ebenfalls per `"reranker_enabled": false` in `config/parallel_agents.json` setzbar. |
 | `VAULT_RERANK_LOCAL_DISABLE` | nicht gesetzt | Alt-Name (#714), bleibt als Alias erhalten — ABWEICHENDE Semantik: ein reines Präsenz-Flag, jeder gesetzte Wert (auch `"0"`) schaltet ab, kein truthy/falsy-Parsing. Gesetzt, gewinnt er über `ACADEMIC_RESEARCH_RERANKER_ENABLED`. |
 | `VAULT_RERANK_LOCAL_MODEL` | `BAAI/bge-reranker-v2-m3` | Alternatives Reranker-Modell. |
 | `VAULT_RERANK_LOCAL_CACHE` | `~/.academic-research/models` | Ablageort der Reranker-Gewichte (gleiches Verzeichnis wie Embedding-/NLI-Modell). |

@@ -251,12 +251,14 @@ class TestRerankerIntegration:
             f"{[r.message for r in warnings]}"
         )
 
-    def test_rerank_happens_regardless_of_voyage_cohere_env_keys(self, monkeypatch):
-        """AC5 (#715): gesetzte VOYAGE_API_KEY/COHERE_API_KEY aendern das Verhalten nicht mehr.
+    def test_local_rerank_result_is_independent_of_leftover_env_keys(self, monkeypatch):
+        """Leftover VOYAGE_API_KEY/COHERE_API_KEY (z.B. aus einer alten .env)
+        beeinflussen das lokale Reranking-Ergebnis nicht.
 
-        Reranking laeuft ausschliesslich ueber den lokalen Fallback -- ein
-        Leftover-Wert in der Umgebung (z.B. aus einer alten .env) darf keinen
-        Unterschied machen.
+        Beweist NICHT AC5 (#715, 'apply_reranker() liest diese Keys nie') --
+        das ruft apply_reranker() ohne die Kwargs auf und waere auch auf dem
+        alten Code (vor #715) gruen. Der eigentliche AC5-Beweis ist
+        test_search_papers_never_reads_voyage_cohere_env_keys weiter unten.
         """
         from academic_vault.retrieval import apply_reranker
 

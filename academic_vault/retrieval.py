@@ -365,7 +365,7 @@ def apply_reranker(
             "Lokaler Reranker deaktiviert (Schalter/Env/Config) -- "
             "RRF-Reihenfolge bleibt unveraendert."
         )
-    if local_enabled:
+    else:
         try:
             reranked = rerank_with_local_bge(query, enriched)
         except Exception as exc:
