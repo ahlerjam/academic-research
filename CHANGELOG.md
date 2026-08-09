@@ -44,8 +44,9 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   einer Ergebnis-JSON) sowie `compare_against`/`--check-against` als
   Replay-Gatter im CI-Job `retrieval-goldset` (Muster wie #731/#733; kein
   Schwellwert-Gate, sondern Deckungsgleichheit von Lauf und Rohdaten,
-  `PYTHONHASHSEED` gepinnt wegen #792, dessen Tie hier zum ersten Mal an einem
-  realen Datenstand auftritt). 21 Tests in
+  Trefferlisten-Vergleich setzt Tie-Freiheit des Sets voraus -- #792 ist NICHT
+  durch einen gepinnten PYTHONHASHSEED zu zaehmen, weil die chunk_id-Schluessel
+  selbst UUID4 und pro Lauf neu sind). 22 Tests in
   `tests/test_issue_790_probe_goldset.py`. Modell bleibt bewusst
   `intfloat/multilingual-e5-small` (Kontrollierbarkeit der Altwerte, 470 MB
   statt 2,3 GB). `academic_vault/` unveraendert (protected area).

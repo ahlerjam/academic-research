@@ -50,12 +50,16 @@ Konkret an `p-gain-01` nachgerechnet, mit den gemessenen Rängen aus
 `conditions.json`:
 
 ```
-Decoy   fts-Rang 1, Vektor-Paperrang 1, KEIN Chunk mit allen Tokens
-Ziel    fts-Rang 2, Vektor-Paperrang 2, GENAU EIN solcher Chunk = Vektor-Bestchunk
+Decoy   fts-Rang 1, Vektor-Paperrang 1 (Chunkrang 1), KEIN Chunk mit allen Tokens
+Ziel    fts-Rang 2, Vektor-Paperrang 3 (Chunkrang 4), GENAU EIN solcher Chunk = Vektor-Bestchunk
 
-vorher   Decoy = 1/61 + 1/61 = 0,032787     Ziel = 1/62 + 1/62 = 0,032258   → Decoy vorn
-nachher  Decoy = max(1/61, 1/64) = 0,016393  Ziel = 1/64 + 1/62 = 0,031754   → Ziel vorn
+vorher   Decoy = 1/61 + 1/61 = 0,032787    Ziel = 1/63 + 1/62 = 0,032002   → Decoy vorn (Abstand 7,9·10⁻⁴)
+nachher  Decoy = max(1/61, 1/61) = 0,016393  Ziel = 1/64 + 1/62 = 0,031754   → Ziel vorn (Abstand 1,5·10⁻²)
 ```
+
+Der `vorher`-Arm rechnet mit dem **Paper**-Rang (1 bzw. 3), der `nachher`-Arm mit
+dem **Chunk**-Rang (1 bzw. 4) — deshalb stehen in den beiden Zeilen
+unterschiedliche Nenner für dasselbe Paper.
 
 Der Decoy verliert im `nachher`-Arm einen ganzen RRF-Summanden, weil sein
 lexikalischer Treffer unter einem synthetischen Schlüssel läuft, den die
@@ -237,19 +241,34 @@ nicht nur als Reportzahl. Der #708-Block der Rohdaten (`baseline`) zeigt
 zusätzlich, dass dasselbe Set isoliert gefahren weiterhin den Nullbefund aus
 #729 reproduziert.
 
-## Nebenbefund: ein echter Gleichstand (#792)
+## Nebenbefund: #792 ist nicht durch einen Seed zu zähmen
 
-Auf `p-gain-02` tragen Decoy und Glossar-Decoy im `nachher`-Arm **exakt
-denselben** `rrf_score`. Ihre Reihenfolge auf den Rängen 2 und 3 hängt damit
-von Pythons Hash-Randomisierung ab, weil `reciprocal_rank_fusion` über ein
-`set` von `chunk_id`s iteriert — genau der in
-[#792](https://github.com/ahlerjam/academic-research/issues/792) beschriebene
-Defekt, hier zum ersten Mal an einem realen Datenstand statt als Konstruktion.
+Eine frühere Fassung dieses Goldsets erzeugte auf `p-gain-02` einen **exakten
+Gleichstand**: Decoy und Glossar-Decoy trugen im `nachher`-Arm denselben
+`rrf_score` (beide 1/61 — der eine aus einem lexikalischen Rang 1 mit
+synthetischem Schlüssel, der andere aus einem Vektor-Chunkrang 1). Ihre
+Reihenfolge auf den Rängen 2 und 3 wechselte von Lauf zu Lauf; die CI wurde
+sporadisch rot, obwohl sich an den Metriken nichts änderte.
 
-Auf die Metriken wirkt sich das nicht aus (beide Paper sind für diese Query
-irrelevant), auf die eingecheckte Trefferliste schon. Der Replay-Schritt setzt
-deshalb `PYTHONHASHSEED=0`. Das ist eine Krücke und als solche benannt: sie
-macht den Vergleich reproduzierbar, sie behebt den Defekt nicht.
+Der naheliegende Reflex — `PYTHONHASHSEED` pinnen — **hilft hier nicht**, und
+das ist der eigentliche Befund für
+[#792](https://github.com/ahlerjam/academic-research/issues/792):
+`reciprocal_rank_fusion` iteriert über ein `set` von `chunk_id`s, und diese IDs
+sind UUID4, die `VaultDB.add_chunk_embedding` bei jedem Aufbau der Wegwerf-DB
+neu vergibt. Zufällig ist nicht der Hash-Seed, sondern der Schlüssel selbst.
+Ein gepinnter Seed macht die Iterationsreihenfolge einer *festen* Schlüsselmenge
+reproduzierbar — hier ist die Menge in jedem Lauf eine andere. Wer #792 mit
+`PYTHONHASHSEED` abzudichten versucht, bekommt eine CI, die seltener rot wird,
+ohne dass sich am Defekt etwas ändert.
+
+Die Konsequenz für dieses Goldset war deshalb, den Gleichstand **aus der
+Fixture zu entfernen** statt ihn zu überdecken: der Decoy trägt jetzt genug
+Material, um den Glossar-Decoy auch vektoriell zu überholen, womit beide
+unterschiedliche Scores haben.
+`tests/test_issue_790_probe_goldset.py::test_ranking_is_reproducible_across_runs`
+fährt die Ablation zweimal und vergleicht alle Trefferlisten — ein
+wiedereingeführtes Unentschieden meldet sich dort, statt als sporadisch rote
+CI.
 
 ## Grenzen
 
@@ -278,6 +297,10 @@ macht den Vergleich reproduzierbar, sie behebt den Defekt nicht.
   #708-Set: hermetisch fällt `chunk_pages()` auf `approximate_token_count`
   zurück und setzt die Grenzen anders als der echte e5-Tokenizer. Die
   eingecheckten Chunks stammen aus einem Lauf mit dem echten Tokenizer.
+- **Der Replay-Vergleich hängt an der Tie-Freiheit des Sets.** Er vergleicht
+  Trefferlisten, und die sind nur reproduzierbar, solange keine zwei Paper
+  denselben `rrf_score` tragen (siehe [Nebenbefund](#nebenbefund-792-ist-nicht-durch-einen-seed-zu-zähmen)).
+  Das ist eine Eigenschaft dieser Fixture, keine des Suchpfads.
 - **`vorher` ist ein Shim.** Unverändert übernommen aus #729 (dort unter
   [Grenzen](2026-08-08-chunk-fusion-ablation-729.md#grenzen) beschrieben und
   differenziell gegen den historischen Code geprüft).
@@ -287,7 +310,7 @@ macht den Vergleich reproduzierbar, sie behebt den Defekt nicht.
 Messlauf (hermetisch, kein Modell-Download, unter 30 Sekunden):
 
 ```bash
-PYTHONHASHSEED=0 uv run python scripts/eval/run_retrieval_ablation_729.py \
+uv run python scripts/eval/run_retrieval_ablation_729.py \
   --goldset tests/fixtures/retrieval_goldset_chunk_fusion_790/goldset.json \
   --vectors tests/fixtures/retrieval_goldset_chunk_fusion_790/vectors.json \
   --baseline-goldset tests/fixtures/retrieval_goldset_chunks_708/goldset.json \

@@ -28,7 +28,6 @@ lautlos aufloest, waere schlimmer als keins.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -415,14 +414,7 @@ def test_check_against_detects_a_stale_report() -> None:
 
 @pytest.mark.skipif(not LIVE_RESULTS.exists(), reason="Rohdaten des Messlaufs fehlen")
 def test_cli_check_against_exits_zero_on_the_checked_in_results() -> None:
-    """Ende-zu-Ende ueber die CLI -- derselbe Aufruf, den der CI-Job faehrt.
-
-    ``PYTHONHASHSEED=0`` ist Teil des Aufrufs und kein Testtrick: bei exakt
-    gleichem ``rrf_score`` haengt die Reihenfolge von Pythons
-    Hash-Randomisierung ab (Folge-Issue #792). Auf diesem Goldset betrifft das
-    genau die Raenge 2 und 3 von ``p-gain-02`` -- ohne Wirkung auf die
-    Metriken, mit Wirkung auf die verglichene Trefferliste."""
-    env = {**os.environ, "PYTHONHASHSEED": "0"}
+    """Ende-zu-Ende ueber die CLI -- derselbe Aufruf, den der CI-Job faehrt."""
     result = subprocess.run(
         [
             sys.executable,
@@ -442,6 +434,29 @@ def test_cli_check_against_exits_zero_on_the_checked_in_results() -> None:
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
-        env=env,
     )
     assert result.returncode == 0, result.stderr[-4000:]
+
+
+@pytest.mark.skipif(not LIVE_RESULTS.exists(), reason="Rohdaten des Messlaufs fehlen")
+def test_ranking_is_reproducible_across_runs(probe_goldset: dict, probe_vectors: dict) -> None:
+    """Das Replay-Gatter vergleicht ``per_query.retrieved`` -- das setzt voraus,
+    dass zwei Laeufe dieselbe Reihenfolge liefern.
+
+    Das ist keine Selbstverstaendlichkeit: ``reciprocal_rank_fusion`` iteriert
+    ueber ein ``set`` von ``chunk_id``s, und die Chunk-IDs sind UUID4, die beim
+    Aufbau jeder Wegwerf-DB neu vergeben werden. Bei zwei exakt gleichen
+    ``rrf_score``-Werten faellt die Reihenfolge deshalb pro Lauf anders aus --
+    auch mit gepinntem ``PYTHONHASHSEED``, denn nicht der Hash-Seed ist
+    zufaellig, sondern die Schluessel selbst (Folge-Issue #792). Eine fruehe
+    Fassung dieses Goldsets hatte genau so einen Gleichstand (Decoy und
+    Glossar-Decoy auf den Raengen 2 und 3 von ``p-gain-02``); die Texte wurden
+    daraufhin so nachgezogen, dass er verschwindet. Dieser Test haelt fest,
+    dass es dabei bleibt -- er wuerde ein wiedereingefuehrtes Unentschieden
+    hier melden statt als sporadisch rote CI."""
+    first = run_quality_ablation(probe_goldset, probe_vectors, k=10)
+    second = run_quality_ablation(probe_goldset, probe_vectors, k=10)
+    for state in first["results"]:
+        left = [q["retrieved"] for q in first["results"][state]["per_query"]]
+        right = [q["retrieved"] for q in second["results"][state]["per_query"]]
+        assert left == right, state

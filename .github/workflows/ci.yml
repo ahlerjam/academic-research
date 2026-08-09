@@ -272,14 +272,14 @@ jobs:
       # dass ein frischer Lauf dieselben Raenge und Deltas liefert wie die
       # eingecheckten Rohdaten. Ein Aufruf deckt beide Bloecke ab: das
       # Probe-Set und das #708-Set als Regressionsanker (--baseline-*).
-      # PYTHONHASHSEED ist gepinnt, weil reciprocal_rank_fusion bei exakt
-      # gleichem rrf_score ueber ein set iteriert und die Reihenfolge dann von
-      # Pythons Hash-Randomisierung abhaengt (Folge-Issue #792, auf diesem Set
-      # an den Raengen 2/3 von p-gain-02 real vorhanden). Die Metriken sind
-      # davon unberuehrt, die verglichene Trefferliste nicht.
+      # Der Vergleich der Trefferlisten setzt voraus, dass das Goldset keine
+      # exakt gleichen rrf_score-Werte enthaelt: reciprocal_rank_fusion
+      # iteriert ueber ein set von chunk_ids, und die sind UUID4 und bei jedem
+      # DB-Aufbau neu -- ein Gleichstand waere damit von Lauf zu Lauf anders
+      # sortiert, auch mit gepinntem PYTHONHASHSEED (Folge-Issue #792). Das
+      # Probe-Set ist tie-frei gebaut, geprueft in
+      # tests/test_issue_790_probe_goldset.py.
       - name: Chunk-Fusions-Probe-Goldset gegen die eingecheckten Rohdaten fahren
-        env:
-          PYTHONHASHSEED: "0"
         run: |
           uv run python scripts/eval/run_retrieval_ablation_729.py \
             --goldset tests/fixtures/retrieval_goldset_chunk_fusion_790/goldset.json \

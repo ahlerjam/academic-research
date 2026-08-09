@@ -1065,14 +1065,15 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
     Dateigroessen haengen an der Maschine und waeren als Gatter nur eine Quelle
     roter CI-Laeufe ohne Aussage -- dieselbe Abgrenzung wie in #731.
 
-    WICHTIG fuer den Vergleich von ``per_query.retrieved``: der Aufrufer muss
-    ``PYTHONHASHSEED`` pinnen. ``reciprocal_rank_fusion`` iteriert ueber ein
-    ``set`` von ``chunk_id``s; bei exakt gleichem ``rrf_score`` haengt die
-    Reihenfolge damit von Pythons Hash-Randomisierung ab (Folge-Issue #792).
-    Auf dem #790-Probe-Goldset trifft das genau eine Stelle: die Raenge 2 und 3
-    von ``p-gain-02``, wo Decoy und Glossar-Decoy denselben Score tragen. Die
-    METRIKEN sind davon unberuehrt (beide sind irrelevant fuer diese Query),
-    die Trefferliste nicht.
+    WICHTIG fuer den Vergleich von ``per_query.retrieved``: das Goldset darf
+    keine exakt gleichen ``rrf_score``-Werte enthalten. ``reciprocal_rank_fusion``
+    iteriert ueber ein ``set`` von ``chunk_id``s, und die Chunk-IDs sind UUID4,
+    die bei jedem Aufbau der Wegwerf-DB neu vergeben werden -- bei einem
+    Gleichstand ist die Reihenfolge deshalb von Lauf zu Lauf verschieden, und
+    zwar auch bei gepinntem ``PYTHONHASHSEED`` (Folge-Issue #792; das Pinnen
+    hilft nur, wenn die Schluessel selbst konstant sind, was sie hier nicht
+    sind). Das #790-Probe-Goldset ist deshalb tie-frei konstruiert, geprueft in
+    ``tests/test_issue_790_probe_goldset.py::test_ranking_is_reproducible_across_runs``.
     """
     problems: list[str] = []
 
