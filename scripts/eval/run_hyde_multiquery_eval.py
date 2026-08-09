@@ -56,6 +56,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     _populate_vault,
     build_playback_embedder,
     decode_vector,
+    diverged_per_query,
     load_goldset,
     load_vectors,
 )
@@ -369,10 +370,9 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
                     problems.append(
                         f"{arm}.{scope}.{metric}: gemessen {value!r}, im Report {other!r}"
                     )
-        fresh_ranked = [r["retrieved"] for r in fresh_arm["per_query"]]
-        stored_ranked = [r.get("retrieved") for r in stored_arm.get("per_query", [])]
-        if fresh_ranked != stored_ranked:
-            problems.append(f"{arm}.per_query.retrieved: Rangfolge weicht von den Rohdaten ab")
+        problems += diverged_per_query(
+            fresh_arm["per_query"], stored_arm.get("per_query", []), f"{arm}.per_query"
+        )
     return problems
 
 

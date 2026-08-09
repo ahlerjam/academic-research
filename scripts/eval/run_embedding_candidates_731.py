@@ -45,6 +45,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     build_playback_embedder,
     compute_manifest_sha256,
     decode_vector,
+    diverged_per_query,
 )
 
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "embedding_candidates_731"
@@ -543,10 +544,9 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
                     problems.append(
                         f"{key}.{scope}.{metric}: gemessen {value!r}, im Report {other!r}"
                     )
-        if [r["retrieved"] for r in fresh["per_query"]] != [
-            r.get("retrieved") for r in old.get("per_query", [])
-        ]:
-            problems.append(f"{key}.per_query.retrieved: Rangfolge weicht von den Rohdaten ab")
+        problems += diverged_per_query(
+            fresh["per_query"], old.get("per_query", []), f"{key}.per_query"
+        )
         for field_name in ("dim", "chunk_count", "schema_migration"):
             if fresh[field_name] != old.get(field_name):
                 problems.append(
