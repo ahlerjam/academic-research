@@ -10,6 +10,50 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Probe-Goldset macht den Chunk-Fusions-Effekt sichtbar (#790, 711-B,
+  Nachfolger von #789):** #789 hatte belegt, WARUM der #729-Lauf einen
+  Nullbefund lieferte -- bei leerer FTS-Trefferliste sind Paper- und
+  Chunk-Ebene-Fusion beweisbar ordnungsgleich, und im #708-Goldset ist die
+  lexikalische Seite bei 25 von 26 Queries leer. Neues, zusaetzliches Goldset
+  `tests/fixtures/retrieval_goldset_chunk_fusion_790/` (Ergaenzung, kein
+  Ersatz): die elf #708-Dokumente und 26 #708-Queries wortgleich uebernommen,
+  dazu zehn selbst geschriebene Dokumente (~12.200 Woerter Chunk-Text,
+  Englisch und Deutsch, Release-Governance/Compliance/Datenschutz) und zwoelf
+  Probe-Queries in vier Familien (`probe_role`: 5x `gain`, 3x `harm`, 2x
+  `crowding`, 2x `control`). Ergebnis des Messlaufs
+  (`docs/evals/2026-08-09-chunk-fusion-goldset-790.md`): der
+  Signal-Split-Mechanismus (M1) ist belegt -- Familie A +0,3691 nDCG@10 /
+  +0,5000 MRR, Familie C betragsgleich negativ (dieselbe Konstruktion mit
+  vertauschter Relevanz -- Chunk-Fusion belohnt lexikalische Geschlossenheit
+  auf Chunk-Ebene, nicht Relevanz), Crowding (M2) messbar (Score-Abstand
+  5,3e-4 -> 1,7e-3) und zu schwach fuer einen Rangwechsel, Kontrollen exakt 0.
+  Die 26 Altqueries bleiben im auf 21 Paper gewachsenen Korpus Query fuer
+  Query bei Delta 0 (Invarianztest). Der Report trennt ausdruecklich
+  "Mechanismus belegt" von "Betriebshaeufigkeit offen". Generator-Erweiterung
+  in `scripts/eval/build_retrieval_chunk_goldset.py`: `--reuse-vectors`
+  (uebernimmt bei byteweise unveraendertem Text den eingecheckten Vektor --
+  30 Alt-Chunks und 26 Alt-Queries unveraendert, nur der Zuwachs neu
+  embeddet), `--verify-probe-conditions` (prueft die sechs Design-Regeln je
+  Probe-Query gegen die echten Produktionsfunktionen, schreibt
+  `conditions.json`, Exit 3 mit Klarnamen der verletzenden Query),
+  `--conditions-out`, `--issue`, `--skip-thresholds-report`. In
+  `scripts/eval/run_retrieval_ablation_729.py` neu: `compute_deltas_by_case`
+  (Delta je Familie statt nur im Gesamtmittel), `hermetic_goldset_db`
+  (herausgezogener Wegwerf-DB-Aufbau, jetzt von drei Aufrufern genutzt),
+  `--baseline-goldset`/`--baseline-vectors` (Haupt- und Regressionsmessung in
+  einer Ergebnis-JSON) sowie `compare_against`/`--check-against` als
+  Replay-Gatter im CI-Job `retrieval-goldset` (Muster wie #731/#733; kein
+  Schwellwert-Gate, sondern Deckungsgleichheit von Lauf und Rohdaten,
+  Trefferlisten-Vergleich setzt Tie-Freiheit des Sets voraus -- #792 ist NICHT
+  durch einen gepinnten PYTHONHASHSEED zu zaehmen, weil die chunk_id-Schluessel
+  selbst UUID4 und pro Lauf neu sind; Tie-Freiheit ist seit dem PR-Review ein
+  rollenunabhaengiger Check in conditions.json, ebenso die Bindung des
+  Familienlabels an relevant_chunk_ids sowie die Vollstaendigkeit des
+  probe-Blocks). 35 Tests in
+  `tests/test_issue_790_probe_goldset.py`. Modell bleibt bewusst
+  `intfloat/multilingual-e5-small` (Kontrollierbarkeit der Altwerte, 470 MB
+  statt 2,3 GB). `academic_vault/` unveraendert (protected area).
+
 - **Nullbefund-Diagnose fuer die Chunk-Fusion-Ablation (#789, 711-A, Nachfolger
   von #729/PR #781):** Der #729-Report erklaerte den Nullbefund (alle drei
   Retrieval-Zustaende liefern query-fuer-query identische Ergebnisse auf dem

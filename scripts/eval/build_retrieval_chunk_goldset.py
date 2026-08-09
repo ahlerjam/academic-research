@@ -23,6 +23,27 @@ woertliche ``anchors``. Verschieben sich Chunkgrenzen (anderer Tokenizer,
 anderes Tokenbudget), bleiben die Urteile damit gueltig; ein Anker, der in
 keinem Chunk mehr auftaucht, ist ein harter Fehler statt einer stillen
 Fehlmessung.
+
+Seit Issue #790 baut derselbe Generator auch das **Probe-Goldset**
+``tests/fixtures/retrieval_goldset_chunk_fusion_790/`` — dieselben elf
+#708-Dokumente plus zehn gezielt konstruierte Dokumente, deren Queries den
+Chunk-Fusions-Mechanismus ueberhaupt erst sichtbar machen. Zwei Flags kommen
+dafuer hinzu::
+
+    VAULT_E5_LIVE_TEST=1 uv run python scripts/eval/build_retrieval_chunk_goldset.py \\
+      --sources tests/fixtures/retrieval_goldset_chunk_fusion_790/sources.json \\
+      --goldset-out tests/fixtures/retrieval_goldset_chunk_fusion_790/goldset.json \\
+      --vectors-out tests/fixtures/retrieval_goldset_chunk_fusion_790/vectors.json \\
+      --conditions-out tests/fixtures/retrieval_goldset_chunk_fusion_790/conditions.json \\
+      --reuse-vectors tests/fixtures/retrieval_goldset_chunks_708/vectors.json \\
+      --verify-probe-conditions --issue 790 --skip-thresholds-report
+
+* ``--reuse-vectors`` uebernimmt fuer jede ``chunk_id``/``query_id``, deren
+  Text **byteweise unveraendert** ist, den eingecheckten Vektor und embeddet
+  nur den Zuwachs neu.
+* ``--verify-probe-conditions`` prueft die im Issue festgelegten Design-Regeln
+  je Probe-Query gegen die echten Produktionsfunktionen und bricht mit
+  Klarnamen der verletzenden Query ab, bevor gemessen wird.
 """
 
 from __future__ import annotations
@@ -45,6 +66,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     THRESHOLDS_PATH,
     VECTORS_PATH,
     compute_manifest_sha256,
+    decode_vector,
     encode_vector,
     load_sources,
 )
@@ -64,6 +86,34 @@ DEFAULT_MARGIN = 0.02
 # Schnittstelle", die #731 und BgeM3Embedder ausschliessen wollen. #722 und
 # #733 bauen auf diesem Goldset auf und teilen dieselbe Annahme.
 LEGACY_EMBEDDING_MODEL_ID = "intfloat/multilingual-e5-small"
+
+# Probe-Rollen des #790-Sets. 'gain'/'harm' beschreiben denselben Mechanismus
+# (M1, Signal-Split) in beide Richtungen, 'crowding' den schwaecheren M2, und
+# 'control' den Fall, in dem gar nichts passieren darf.
+PROBE_ROLES = ("gain", "harm", "crowding", "control")
+
+# Pflichtfelder des ``probe``-Blocks je Rolle. Ohne diese Tabelle wuerde eine
+# Query mit vergessenem oder vertipptem Feld den Generator mit einem KeyError
+# abbrechen -- statt, wie zugesagt, mit Exit 3, dem Klarnamen der Query und
+# einer geschriebenen conditions.json, die genau das benennt.
+REQUIRED_PROBE_FIELDS: dict[str, tuple[str, ...]] = {
+    "gain": ("split_doc", "coherent_doc", "relevant_doc"),
+    "harm": ("split_doc", "coherent_doc", "relevant_doc"),
+    "crowding": ("crowder_doc", "focused_doc", "relevant_doc"),
+    "control": ("papers", "relevant_doc"),
+}
+
+# Obergrenze fuer die Tokenzahl einer Probe-Query (Design-Regel 1 aus #790):
+# ``papers_fts`` MATCH verknuepft Tokens implizit mit AND -- jedes zusaetzliche
+# Token senkt die Trefferwahrscheinlichkeit multiplikativ, und genau daran ist
+# die lexikalische Seite des #708-Sets gestorben (#789).
+MAX_PROBE_QUERY_TOKENS = 4
+
+# Mindestabstand zwischen den RRF-Scores an der Kippstelle (Design-Regel 6).
+# RRF erzeugt bei exakt gleichem Score eine Reihenfolge, die von der
+# Einfuegereihenfolge in ein ``set`` und damit von Pythons Hash-Randomisierung
+# abhaengt (Folge-Issue #792) -- ein messbarer Abstand ist der Schutz dagegen.
+MIN_SCORE_GAP = 1e-4
 
 
 def build_chunks(sources: dict) -> list[dict[str, Any]]:
@@ -129,50 +179,159 @@ def resolve_anchors(chunks: list[dict], sources: dict) -> list[dict[str, Any]]:
                     "sources.json und die Anker sind auseinandergelaufen."
                 )
             relevant.extend(cid for cid in hits if cid not in relevant)
-        queries.append(
-            {
-                "query_id": query["query_id"],
-                "lang": query["lang"],
-                "case": query["case"],
-                "query": query["query"],
-                "anchors": list(query["anchors"]),
-                "relevant_chunk_ids": relevant,
-            }
-        )
+        entry = {
+            "query_id": query["query_id"],
+            "lang": query["lang"],
+            "case": query["case"],
+            "query": query["query"],
+            "anchors": list(query["anchors"]),
+            "relevant_chunk_ids": relevant,
+        }
+        # Probe-Felder (Issue #790) nur durchreichen, wenn sie da sind -- das
+        # #708-Set kennt sie nicht und soll dadurch keine leeren Schluessel
+        # bekommen (sein manifest_sha256 haengt zwar nicht daran, seine
+        # eingecheckte goldset.json aber schon).
+        if "probe_role" in query:
+            entry["probe_role"] = query["probe_role"]
+        if "probe" in query:
+            entry["probe"] = json.loads(json.dumps(query["probe"]))
+        queries.append(entry)
     return queries
 
 
+def load_reuse_index(vectors_path: Path) -> dict[str, tuple[str, str]]:
+    """Baut den Wiederverwendungs-Index aus einem eingecheckten Fixture-Paar (#790).
+
+    ``vectors_path`` zeigt auf eine ``vectors.json``; die zugehoerige
+    ``goldset.json`` wird im selben Verzeichnis erwartet — sie liefert die
+    Texte, gegen die byteweise verglichen wird. Ein Vektor ohne Text (oder
+    umgekehrt) wird stillschweigend uebergangen: er kann die Gleichheitspruefung
+    ohnehin nicht bestehen und wuerde sonst nur eine Ausnahme an einer Stelle
+    ausloesen, an der ein Neu-Embedding die richtige Antwort ist.
+
+    Returns:
+        Mapping ``id -> (text, base64-Vektor)`` ueber Chunks UND Queries. Die
+        beiden Namensraeume kollidieren nicht (``<doc_id>#<index>`` vs.
+        ``q-...``), siehe ``run_retrieval_chunk_goldset.load_vectors``.
+    """
+    goldset_path = vectors_path.parent / "goldset.json"
+    if not goldset_path.exists():
+        raise FileNotFoundError(
+            f"--reuse-vectors {vectors_path} braucht die zugehoerige {goldset_path.name} "
+            "im selben Verzeichnis (sie liefert die Texte fuer den Byte-Vergleich)."
+        )
+    old_goldset = json.loads(goldset_path.read_text(encoding="utf-8"))
+    old_vectors = json.loads(vectors_path.read_text(encoding="utf-8"))
+
+    # Modell der Quelle hart pruefen. Ohne diese Pruefung genuegt Text- und
+    # ID-Gleichheit, um einen Vektor zu uebernehmen -- ein Set aus einem
+    # ANDEREN Vektorraum (etwa die bge-m3-Fassungen aus #732/#710 mit 1024
+    # Dimensionen) haette dieselben ``embedding_text``e und lieferte eine
+    # vectors.json mit gemischten Dimensionen, waehrend ``meta.dim`` die des
+    # neu geladenen Modells meldet. ``verify_manifest`` faende das nicht: es
+    # hasht Texte, Modell-ID und Dimension, nicht die Vektoren selbst.
+    source_model = old_goldset.get("meta", {}).get("model_id") or old_vectors.get("model_id")
+    if source_model != LEGACY_EMBEDDING_MODEL_ID:
+        raise ValueError(
+            f"--reuse-vectors {vectors_path} stammt aus dem Modell {source_model!r}, "
+            f"gebaut wird mit {LEGACY_EMBEDDING_MODEL_ID!r}. Vektoren aus zwei "
+            "Raeumen zu mischen ergibt eine Fixture, die nirgends auffaellt und "
+            "ueberall falsch misst."
+        )
+
+    index: dict[str, tuple[str, str]] = {}
+    for chunk in old_goldset["chunks"]:
+        encoded = old_vectors.get("chunks", {}).get(chunk["chunk_id"])
+        if encoded is not None:
+            index[chunk["chunk_id"]] = (chunk["embedding_text"], encoded)
+    for query in old_goldset["queries"]:
+        encoded = old_vectors.get("queries", {}).get(query["query_id"])
+        if encoded is not None:
+            index[query["query_id"]] = (query["query"], encoded)
+    return index
+
+
 def embed_all(
-    chunks: list[dict], queries: list[dict]
-) -> tuple[dict[str, str], dict[str, str], int]:
+    chunks: list[dict],
+    queries: list[dict],
+    reuse_index: dict[str, tuple[str, str]] | None = None,
+) -> tuple[dict[str, str], dict[str, str], int, dict[str, int]]:
     """Embeddet Chunks (``passage: ``) und Queries (``query: ``) mit dem echten Modell.
 
     Gepinnt auf ``LEGACY_EMBEDDING_MODEL_ID`` ueber :func:`embedder_for`, NICHT
     auf ``DEFAULT_MODEL_ID`` -- siehe Kommentar dort.
+
+    Mit ``reuse_index`` (Issue #790, ``--reuse-vectors``) wird der eingecheckte
+    Vektor uebernommen, sobald ID **und** Text byteweise uebereinstimmen. Der
+    Textvergleich ist die eigentliche Bedingung: eine gleichnamige ``chunk_id``
+    mit veraendertem Text bekommt einen frischen Vektor, sonst zeigte der
+    ``manifest_sha256`` zwar Drift an, die Fixture waere aber schon falsch.
+
+    Returns:
+        ``(chunk_vektoren, query_vektoren, dim, statistik)`` -- die Statistik
+        zaehlt ``reused``/``embedded`` getrennt fuer Chunks und Queries.
     """
-    from academic_vault.embedding_model import embedder_for
+    reuse_index = reuse_index or {}
 
-    embedder = embedder_for(LEGACY_EMBEDDING_MODEL_ID)
-    chunk_vectors = embedder.embed_documents([c["embedding_text"] for c in chunks])
-    encoded_chunks = {
-        c["chunk_id"]: encode_vector(v) for c, v in zip(chunks, chunk_vectors, strict=True)
+    def _split(items: list[dict], id_key: str, text_key: str) -> tuple[dict[str, str], list[dict]]:
+        reused: dict[str, str] = {}
+        todo: list[dict] = []
+        for item in items:
+            known = reuse_index.get(item[id_key])
+            if known is not None and known[0] == item[text_key]:
+                reused[item[id_key]] = known[1]
+            else:
+                todo.append(item)
+        return reused, todo
+
+    encoded_chunks, todo_chunks = _split(chunks, "chunk_id", "embedding_text")
+    encoded_queries, todo_queries = _split(queries, "query_id", "query")
+
+    dim: int | None = None
+    if todo_chunks or todo_queries:
+        from academic_vault.embedding_model import embedder_for
+
+        embedder = embedder_for(LEGACY_EMBEDDING_MODEL_ID)
+        dim = embedder.dim
+        fresh = embedder.embed_documents([c["embedding_text"] for c in todo_chunks])
+        for chunk, vector in zip(todo_chunks, fresh, strict=True):
+            encoded_chunks[chunk["chunk_id"]] = encode_vector(vector)
+        for query in todo_queries:
+            encoded_queries[query["query_id"]] = encode_vector(embedder.embed_query(query["query"]))
+    else:
+        # Vollstaendige Wiederverwendung: die Dimension steht in den
+        # uebernommenen Vektoren selbst, das Modell muss dafuer nicht laden.
+        any_vector = next(iter({**encoded_chunks, **encoded_queries}.values()))
+        dim = len(decode_vector(any_vector))
+
+    # Reihenfolge an die Eingabe angleichen: die JSON-Fixture soll in
+    # Dokument-/Query-Reihenfolge lesbar bleiben, nicht in "erst
+    # wiederverwendet, dann neu".
+    ordered_chunks = {c["chunk_id"]: encoded_chunks[c["chunk_id"]] for c in chunks}
+    ordered_queries = {q["query_id"]: encoded_queries[q["query_id"]] for q in queries}
+    stats = {
+        "chunks_reused": len(chunks) - len(todo_chunks),
+        "chunks_embedded": len(todo_chunks),
+        "queries_reused": len(queries) - len(todo_queries),
+        "queries_embedded": len(todo_queries),
     }
-    encoded_queries = {
-        q["query_id"]: encode_vector(embedder.embed_query(q["query"])) for q in queries
-    }
-    return encoded_chunks, encoded_queries, embedder.dim
+    return ordered_chunks, ordered_queries, dim, stats
 
 
-def build(sources: dict) -> tuple[dict, dict]:
+def build(
+    sources: dict,
+    issue: int = 708,
+    reuse_index: dict[str, tuple[str, str]] | None = None,
+) -> tuple[dict, dict, dict[str, int]]:
     """Baut ``goldset.json``- und ``vectors.json``-Inhalt aus den Quelltexten."""
     from academic_vault.embedding_model import PASSAGE_PREFIX, QUERY_PREFIX
 
     chunks = build_chunks(sources)
     queries = resolve_anchors(chunks, sources)
-    encoded_chunks, encoded_queries, dim = embed_all(chunks, queries)
+    encoded_chunks, encoded_queries, dim, stats = embed_all(chunks, queries, reuse_index)
 
     meta = {
-        "issue": 708,
+        "issue": issue,
         "model_id": LEGACY_EMBEDDING_MODEL_ID,
         "dim": dim,
         "passage_prefix": PASSAGE_PREFIX,
@@ -201,7 +360,401 @@ def build(sources: dict) -> tuple[dict, dict]:
         "chunks": encoded_chunks,
         "queries": encoded_queries,
     }
-    return goldset, vectors
+    return goldset, vectors, stats
+
+
+# ---------------------------------------------------------------------------
+# Probe-Vorbedingungen (Issue #790, --verify-probe-conditions)
+# ---------------------------------------------------------------------------
+# Design-Regel 5: der Decoy muss BEIDSEITIG stark sein. Ist sein
+# Vektor-Paperrang schlechter als 2, gewinnt das Zielpaper schon im
+# 'vorher'-Arm und der Fall belegt nichts ueber die Fusionsgranularitaet.
+MAX_SPLIT_VEC_PAPER_RANK = 2
+
+# Familie B (Crowding, M2): der 'Crowder' braucht genug eigene Chunks, um
+# fremde Bestchunks nach hinten zu druecken, und der Bestchunk des fokussierten
+# Dokuments muss deutlich hinter seinem Paperrang liegen -- sonst ist der
+# Unterschied zwischen Paper- und Chunk-Rang gar nicht vorhanden.
+CROWDING_MIN_CHUNKS = 9
+CROWDING_MIN_TARGET_VEC_CHUNK_RANK = 7
+CROWDING_MAX_TARGET_VEC_PAPER_RANK = 2
+
+
+class ProbeConditionError(RuntimeError):
+    """Mindestens eine Probe-Query verletzt ihre Design-Regel (#790).
+
+    Harter Abbruch statt Warnung: ein Probe-Goldset, dessen Kippbedingungen
+    nicht erfuellt sind, misst nicht den Mechanismus, sondern nur noch, was
+    zufaellig herauskommt -- und sieht dabei genauso aus wie ein gelungenes.
+    """
+
+
+def probe_queries(goldset: dict) -> list[dict]:
+    """Alle Queries mit ``probe_role`` (Issue #790), in Goldset-Reihenfolge."""
+    return [q for q in goldset["queries"] if q.get("probe_role")]
+
+
+def _rank_and_score(results: list[dict]) -> tuple[dict[str, int], dict[str, float]]:
+    """Paper-Rang (1-basiert) und ``rrf_score`` je Paper aus einer Trefferliste."""
+    ranks: dict[str, int] = {}
+    scores: dict[str, float] = {}
+    for idx, entry in enumerate(results):
+        pid = entry["paper_id"]
+        if pid in ranks:
+            continue
+        ranks[pid] = idx + 1
+        scores[pid] = float(entry.get("rrf_score") or 0.0)
+    return ranks, scores
+
+
+def _full_token_chunks(conn, sanitized_query: str, paper_id: str) -> list[str]:
+    """Alle Chunks EINES Papers, die saemtliche Query-Tokens enthalten.
+
+    Dieselbe Bedingung, die ``server._attach_chunk_to_fts_hit`` intern stellt
+    (``chunk_fts MATCH ... AND paper_id = ...``) -- nur ohne ``LIMIT 1``, damit
+    die Design-Regel "GENAU EIN Volltreffer-Chunk" pruefbar wird statt nur
+    "mindestens einer".
+    """
+    rows = conn.execute(
+        "SELECT chunk_id FROM chunk_fts WHERE chunk_fts MATCH ? AND paper_id = ? ORDER BY rank",
+        (sanitized_query, paper_id),
+    ).fetchall()
+    return [row["chunk_id"] for row in rows]
+
+
+def _chunk_count_per_paper(goldset: dict) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for chunk in goldset["chunks"]:
+        counts[chunk["doc_id"]] = counts.get(chunk["doc_id"], 0) + 1
+    return counts
+
+
+def dense_paper_ranks(vec_best_chunk_rank: dict[str, int]) -> dict[str, int]:
+    """Vektor-PAPERrang aus dem Chunkrang des jeweils besten Chunks je Paper.
+
+    ``diagnose_query`` (#789) liefert unter ``vec_paper_rank`` die POSITION des
+    besten Chunks eines Papers in der chunk-level Trefferliste -- also 1, 4, 5
+    fuer drei Paper, deren Bestchunks auf den Chunkraengen 1, 4 und 5 liegen.
+    Der 'vorher'-Arm rankt dagegen auf PAPER-Ebene und sieht dieselben drei
+    Paper als Raenge 1, 2, 3 (``_vec0_search_paper_level``: bestes Chunk je
+    Paper, danach nach Distanz sortiert). Design-Regel 5 aus #790 meint diesen
+    dichten Paperrang; ihn mit dem Chunkrang zu verwechseln haette Familie A
+    faelschlich als verletzt gemeldet.
+    """
+    ordered = sorted(vec_best_chunk_rank.items(), key=lambda kv: kv[1])
+    return {paper_id: index + 1 for index, (paper_id, _) in enumerate(ordered)}
+
+
+def min_score_gap(scores: dict[str, float]) -> float | None:
+    """Kleinster Abstand zwischen zwei benachbarten Paper-Scores einer Rangliste.
+
+    ``None`` bei weniger als zwei Papern. ``0.0`` bedeutet: mindestens zwei
+    Paper tragen exakt denselben Score, ihre Reihenfolge ist damit
+    unbestimmt (Folge-Issue #792).
+    """
+    ordered = sorted(scores.values(), reverse=True)
+    if len(ordered) < 2:
+        return None
+    return min(ordered[i] - ordered[i + 1] for i in range(len(ordered) - 1))
+
+
+def relevant_doc_ids(query: dict, chunk_owner: dict[str, str]) -> list[str]:
+    """Die Dokumente hinter ``relevant_chunk_ids`` einer Query.
+
+    ``resolve_anchors`` loest die woertlichen Anker auf Chunks auf; welches
+    Dokument dahintersteht, sagt erst diese Zuordnung. Sie ist die einzige
+    Stelle, an der die im ``probe``-Block behauptete Relevanz gegen die
+    tatsaechliche Relevanz des Goldsets gehalten werden kann.
+    """
+    docs: list[str] = []
+    for chunk_id in query.get("relevant_chunk_ids", []):
+        owner = chunk_owner.get(chunk_id)
+        if owner is not None and owner not in docs:
+            docs.append(owner)
+    return sorted(docs)
+
+
+def _check_common_rules(
+    query: dict,
+    diagnosis: dict,
+    scores_before: dict[str, float],
+    scores_after: dict[str, float],
+    relevant_docs: list[str],
+) -> dict[str, bool]:
+    """Design-Regeln 1, 2 und die Tie-Freiheit -- gelten fuer JEDE Probe-Rolle.
+
+    Die Tie-Pruefung ist bewusst rollenunabhaengig und breiter als Regel 6:
+    Regel 6 misst den Abstand an der KIPPSTELLE (``split_doc`` gegen
+    ``coherent_doc``), das Replay-Gatter ``--check-against`` vergleicht aber die
+    komplette Top-``k``-Trefferliste. Der einzige Gleichstand, den dieses Set je
+    hatte, lag zwischen Decoy und Glossar-Decoy -- also gerade NICHT an der
+    Kippstelle, und Regel 6 haette ihn durchgewinkt. Gefunden wurde er damals
+    von Hand; diese beiden Checks finden ihn ab jetzt beim Bauen.
+
+    Grenze, die dabei bleibt: ``scores_before``/``scores_after`` stammen aus den
+    bereits auf ``k`` gekuerzten Trefferlisten. Ein Gleichstand exakt an der
+    Grenze zwischen Rang ``k`` und ``k+1`` ist hier nicht sichtbar; er wuerde
+    die Zusammensetzung der Liste aendern und faellt dann im
+    Reproduzierbarkeitstest auf.
+
+    ``relevant_doc_matches_goldset``bindet das Familienlabel an die
+    Messrealitaet: die uebrigen Rollenpruefungen vergleichen Felder des
+    handgeschriebenen ``probe``-Blocks miteinander und wuerden nicht bemerken,
+    wenn ein Anker beim naechsten Textnachzug in das falsche Dokument rutscht.
+    Genau dann kippte das Delta der Query, ohne dass eine Vorbedingung
+    anschluege.
+    """
+    text = query["query"]
+    tokens = text.split()
+    gap_before = min_score_gap(scores_before)
+    gap_after = min_score_gap(scores_after)
+    declared_relevant = (query.get("probe") or {}).get("relevant_doc")
+    return {
+        "rule1_no_comma": "," not in text,
+        "rule1_at_most_four_tokens": 1 <= len(tokens) <= MAX_PROBE_QUERY_TOKENS,
+        "rule1_no_fts5_syntax_error": diagnosis["fts5_syntax_error"] is None,
+        "rule2_term_family_in_at_least_two_documents": diagnosis["papers_fts_hit_count"] >= 2,
+        "no_exact_score_tie_before": gap_before is None or gap_before > 0.0,
+        "no_exact_score_tie_after": gap_after is None or gap_after > 0.0,
+        "relevant_doc_matches_goldset": (
+            declared_relevant is not None and relevant_docs == [declared_relevant]
+        ),
+    }
+
+
+def _check_split_pair(
+    probe: dict,
+    diagnosis: dict,
+    full_token_chunks: dict[str, list[str]],
+    scores_before: dict[str, float],
+    scores_after: dict[str, float],
+) -> dict[str, bool]:
+    """Design-Regeln 3-6 fuer die Rollen ``gain``/``harm`` (Mechanismus M1).
+
+    ``split_doc`` traegt das aufgespaltene Signal (kein Chunk enthaelt alle
+    Tokens -> ``_attach_chunk_to_fts_hit`` faellt auf ``fts-paper::<pid>``
+    zurueck), ``coherent_doc`` die geschlossene Fundstelle. Welches der beiden
+    das RELEVANTE ist, unterscheidet die Richtung: bei ``gain`` das kohaerente
+    (erwartetes positives Delta), bei ``harm`` das gesplittete (erwartetes
+    negatives Delta). Die Regeln selbst sind in beiden Faellen dieselben --
+    genau deshalb ist Familie C kein anderer Mechanismus, sondern derselbe mit
+    vertauschter Relevanz.
+    """
+    split_doc = probe["split_doc"]
+    coherent_doc = probe["coherent_doc"]
+    fts_ranking = diagnosis["fts_ranking"]
+    fts_rank = {pid: idx + 1 for idx, pid in enumerate(fts_ranking)}
+
+    def _gap(scores: dict[str, float]) -> float:
+        return abs(scores.get(split_doc, 0.0) - scores.get(coherent_doc, 0.0))
+
+    return {
+        "rule3_split_doc_has_no_full_token_chunk": (
+            split_doc in diagnosis["attached_chunk"]
+            and diagnosis["attached_chunk"][split_doc] is None
+            and full_token_chunks.get(split_doc) == []
+        ),
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": (
+            len(full_token_chunks.get(coherent_doc, [])) == 1
+        ),
+        "rule4_coherent_chunk_is_vector_best_chunk": (
+            diagnosis["attach_equals_vec_best"].get(coherent_doc) is True
+        ),
+        "rule5_split_doc_lexically_at_least_as_strong": (
+            split_doc in fts_rank
+            and coherent_doc in fts_rank
+            and fts_rank[split_doc] <= fts_rank[coherent_doc]
+        ),
+        "rule5_split_doc_vector_paper_rank_at_most_2": (
+            dense_paper_ranks(diagnosis["vec_paper_rank"]).get(split_doc, 10**6)
+            <= MAX_SPLIT_VEC_PAPER_RANK
+        ),
+        "rule6_score_gap_before_above_threshold": _gap(scores_before) > MIN_SCORE_GAP,
+        "rule6_score_gap_after_above_threshold": _gap(scores_after) > MIN_SCORE_GAP,
+    }
+
+
+def _check_control(
+    probe: dict, diagnosis: dict, full_token_chunks: dict[str, list[str]]
+) -> dict[str, bool]:
+    """Familie D: bei ALLEN beteiligten Papern faellt Zuordnung und
+    Vektor-Bestchunk zusammen -- dann darf die Fusionsgranularitaet nichts
+    aendern, und ein gemessenes Delta ungleich 0 waere ein Befund ueber den
+    Messaufbau, nicht ueber den Mechanismus."""
+    papers = probe["papers"]
+    return {
+        "control_all_papers_are_fts_hits": all(p in diagnosis["attached_chunk"] for p in papers),
+        "control_attach_equals_vec_best_for_all_papers": all(
+            diagnosis["attach_equals_vec_best"].get(p) is True for p in papers
+        ),
+        "control_every_paper_has_exactly_one_full_token_chunk": all(
+            len(full_token_chunks.get(p, [])) == 1 for p in papers
+        ),
+    }
+
+
+def _check_crowding(probe: dict, diagnosis: dict, chunk_counts: dict[str, int]) -> dict[str, bool]:
+    """Familie B: Effektgroesse von M2 (Crowding), nicht Fundament.
+
+    Gemessen wird, ob ein chunkreiches Dokument die vorderen CHUNK-Raenge
+    besetzt und damit den Bestchunk eines fremden Papers nach hinten drueckt,
+    obwohl dessen PAPER-Rang vorn liegt. Genau diese Schere zwischen den beiden
+    Raengen IST der Mechanismus: der 'vorher'-Arm sieht nur den Paperrang, der
+    'nachher'-Arm rechnet mit dem Chunkrang.
+    """
+    crowder = probe["crowder_doc"]
+    focused = probe["focused_doc"]
+    chunk_rank = diagnosis["vec_paper_rank"].get(focused)
+    paper_rank = dense_paper_ranks(diagnosis["vec_paper_rank"]).get(focused, 10**6)
+    return {
+        "crowding_crowder_has_enough_chunks": chunk_counts.get(crowder, 0) >= CROWDING_MIN_CHUNKS,
+        "crowding_focused_vector_chunk_rank_is_deep": (
+            chunk_rank is not None and chunk_rank >= CROWDING_MIN_TARGET_VEC_CHUNK_RANK
+        ),
+        "crowding_focused_vector_paper_rank_is_high": (
+            paper_rank <= CROWDING_MAX_TARGET_VEC_PAPER_RANK
+        ),
+    }
+
+
+def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: int = 10) -> dict:
+    """Prueft jede Probe-Query gegen die Design-Regeln aus #790.
+
+    Laeuft gegen die ECHTEN Produktionsfunktionen (``server.search_papers``,
+    ``server._attach_chunk_to_fts_hit``, ``server._vec0_search``,
+    ``retrieval.reciprocal_rank_fusion``) auf einer hermetischen Wegwerf-DB mit
+    den eingecheckten Vektoren -- dieselbe Grundlage wie der Diagnoseblock aus
+    #789, den diese Funktion dafuer wiederverwendet.
+
+    Returns:
+        ``conditions.json``-Inhalt: je Query die Einzelchecks, das Sammelurteil
+        ``conditions_met`` und die gemessenen Groessen (Raenge/Scores in beiden
+        Fusionszustaenden), aus denen das Urteil entstanden ist.
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.server import _sanitize_fts5_query, search_papers
+
+    from scripts.eval.run_retrieval_ablation_729 import (
+        _env_guard,
+        diagnose_query,
+        hermetic_goldset_db,
+        search_papers_paper_level,
+    )
+
+    chunk_counts = _chunk_count_per_paper(goldset)
+    chunk_owner = {c["chunk_id"]: c["doc_id"] for c in goldset["chunks"]}
+    queries = probe_queries(goldset)
+    results: dict[str, Any] = {}
+
+    with hermetic_goldset_db(goldset, vectors, name="probe-790") as db_path:
+        for query in queries:
+            text = query["query"]
+            probe = query.get("probe") or {}
+            role = query["probe_role"]
+            diagnosis = diagnose_query(db_path, text, k=k)
+
+            with _env_guard():
+                before = search_papers_paper_level(db_path, text, k, attach_chunk=False)
+                after = search_papers(db_path, text, k=k, rerank=True)
+            ranks_before, scores_before = _rank_and_score(before)
+            ranks_after, scores_after = _rank_and_score(after)
+
+            sanitized = _sanitize_fts5_query(text)
+            full_token_chunks: dict[str, list[str]] = {}
+            if sanitized and diagnosis["fts5_syntax_error"] is None:
+                conn = VaultDB._open(db_path)
+                try:
+                    for paper_id in sorted(diagnosis["attached_chunk"]):
+                        full_token_chunks[paper_id] = _full_token_chunks(conn, sanitized, paper_id)
+                finally:
+                    conn.close()
+
+            relevant_docs = relevant_doc_ids(query, chunk_owner)
+            checks = _check_common_rules(
+                query, diagnosis, scores_before, scores_after, relevant_docs
+            )
+            if role not in REQUIRED_PROBE_FIELDS:
+                raise ProbeConditionError(
+                    f"Query {query['query_id']}: unbekannte probe_role {role!r} "
+                    f"(erlaubt: {', '.join(PROBE_ROLES)})"
+                )
+
+            # Vollstaendigkeit des probe-Blocks als regulaerer Check, nicht als
+            # Ausnahme: ein vergessenes Feld landet damit in 'violations' und
+            # in der geschriebenen conditions.json, statt den Lauf mit einem
+            # KeyError abzubrechen, bevor die Datei ueberhaupt entsteht.
+            missing = [field for field in REQUIRED_PROBE_FIELDS[role] if not probe.get(field)]
+            checks["probe_block_is_complete"] = not missing
+
+            if not missing and role in ("gain", "harm"):
+                checks.update(
+                    _check_split_pair(
+                        probe, diagnosis, full_token_chunks, scores_before, scores_after
+                    )
+                )
+                expected = probe["coherent_doc"] if role == "gain" else probe["split_doc"]
+                checks["role_matches_relevance_direction"] = probe["relevant_doc"] == expected
+            elif not missing and role == "control":
+                checks.update(_check_control(probe, diagnosis, full_token_chunks))
+            elif not missing and role == "crowding":
+                checks.update(_check_crowding(probe, diagnosis, chunk_counts))
+
+            results[query["query_id"]] = {
+                "probe_role": role,
+                "case": query["case"],
+                "query": text,
+                "probe": probe,
+                "conditions_met": all(checks.values()),
+                "checks": checks,
+                "violations": sorted(name for name, ok in checks.items() if not ok),
+                "measured": {
+                    "papers_fts_hit_count": diagnosis["papers_fts_hit_count"],
+                    "papers_trgm_hit_count": diagnosis["papers_trgm_hit_count"],
+                    "fts_ranking": diagnosis["fts_ranking"],
+                    "attached_chunk": diagnosis["attached_chunk"],
+                    "attach_equals_vec_best": diagnosis["attach_equals_vec_best"],
+                    # Chunkrang des jeweils besten Chunks je Paper (so liefert
+                    # ihn diagnose_query) UND der daraus abgeleitete dichte
+                    # Paperrang, mit dem der 'vorher'-Arm rechnet.
+                    "vec_best_chunk_rank": diagnosis["vec_paper_rank"],
+                    "vec_paper_rank": dense_paper_ranks(diagnosis["vec_paper_rank"]),
+                    "full_token_chunk_count": {
+                        pid: len(cids) for pid, cids in sorted(full_token_chunks.items())
+                    },
+                    "paper_rank_before": ranks_before,
+                    "paper_rank_after": ranks_after,
+                    "paper_score_before": scores_before,
+                    "paper_score_after": scores_after,
+                    "min_paper_score_gap_before": min_score_gap(scores_before),
+                    "min_paper_score_gap_after": min_score_gap(scores_after),
+                    # Aufgeloest aus relevant_chunk_ids -- die TATSAECHLICHE
+                    # Relevanz des Goldsets, gegen die probe['relevant_doc']
+                    # gehalten wird.
+                    "relevant_docs": relevant_docs,
+                    "missing_probe_fields": missing,
+                },
+            }
+
+    violating = sorted(qid for qid, entry in results.items() if not entry["conditions_met"])
+    return {
+        "_comment": (
+            "Geprueft mit build_retrieval_chunk_goldset.py --verify-probe-conditions "
+            "gegen die echten Produktionsfunktionen (server.search_papers, "
+            "server._attach_chunk_to_fts_hit, server._vec0_search). 'conditions_met' "
+            "sagt, ob die Konstruktion haelt -- NICHT, ob das gemessene Delta "
+            "positiv ausfaellt."
+        ),
+        "issue": goldset["meta"].get("issue"),
+        "k": k,
+        "model_id": goldset["meta"]["model_id"],
+        "manifest_sha256": goldset["meta"]["manifest_sha256"],
+        "query_count": len(queries),
+        "queries_with_conditions_met": sum(
+            1 for entry in results.values() if entry["conditions_met"]
+        ),
+        "violating_queries": violating,
+        "queries": results,
+    }
 
 
 def derive_thresholds(report: dict, margin: float = DEFAULT_MARGIN) -> dict:
@@ -235,7 +788,55 @@ def main(argv: list[str] | None = None) -> int:
         help="Schwellen aus dem frisch gemessenen Lauf neu ableiten (ueberschreibt!).",
     )
     parser.add_argument("--margin", type=float, default=DEFAULT_MARGIN)
+    parser.add_argument(
+        "--issue",
+        type=int,
+        default=708,
+        help="Issue-Nummer fuer meta.issue im Goldset (708 = Basisset, 790 = Probe-Set).",
+    )
+    parser.add_argument(
+        "--reuse-vectors",
+        type=Path,
+        default=None,
+        help=(
+            "vectors.json eines bestehenden Sets. Jeder Chunk/jede Query mit "
+            "byteweise unveraendertem Text uebernimmt den eingecheckten Vektor; "
+            "nur der Zuwachs wird neu embeddet (Issue #790)."
+        ),
+    )
+    parser.add_argument(
+        "--verify-probe-conditions",
+        action="store_true",
+        help=(
+            "Design-Regeln je Probe-Query pruefen (Issue #790) und mit Exit 3 "
+            "abbrechen, falls eine Vorbedingung verletzt ist."
+        ),
+    )
+    parser.add_argument(
+        "--conditions-out",
+        type=Path,
+        default=None,
+        help="Zielpfad fuer conditions.json (nur mit --verify-probe-conditions).",
+    )
+    parser.add_argument(
+        "--skip-thresholds-report",
+        action="store_true",
+        help=(
+            "Den Chunk-Metrik-Report am Ende auslassen. Fuer das Probe-Set aus "
+            "#790 sinnvoll: es hat keine thresholds.json und wird nicht ueber "
+            "Recall/nDCG gegattert, sondern ueber conditions.json."
+        ),
+    )
     args = parser.parse_args(argv)
+    # Widerspruechliche Kombinationen hart abweisen statt still zu schlucken:
+    # --skip-thresholds-report springt vor dem Schwellen-Block heraus, und
+    # --conditions-out schreibt nur, wenn geprueft wird. Beides waere sonst ein
+    # No-op mit Exit 0 -- dasselbe Muster wie --baseline-goldset/--baseline-vectors
+    # in run_retrieval_ablation_729.py.
+    if args.write_thresholds and args.skip_thresholds_report:
+        parser.error("--write-thresholds und --skip-thresholds-report schliessen sich aus")
+    if args.conditions_out is not None and not args.verify_probe_conditions:
+        parser.error("--conditions-out wirkt nur zusammen mit --verify-probe-conditions")
 
     if os.environ.get("VAULT_E5_LIVE_TEST") != "1":
         print(
@@ -246,7 +847,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     sources = load_sources(args.sources)
-    goldset, vectors = build(sources)
+    reuse_index = load_reuse_index(args.reuse_vectors) if args.reuse_vectors else None
+    goldset, vectors, stats = build(sources, issue=args.issue, reuse_index=reuse_index)
 
     args.goldset_out.parent.mkdir(parents=True, exist_ok=True)
     args.goldset_out.write_text(
@@ -260,10 +862,48 @@ def main(argv: list[str] | None = None) -> int:
         f"manifest_sha256={goldset['meta']['manifest_sha256'][:16]}...",
         file=sys.stderr,
     )
+    if reuse_index is not None:
+        print(
+            f"Vektoren wiederverwendet: {stats['chunks_reused']} Chunks / "
+            f"{stats['queries_reused']} Queries; neu embeddet: "
+            f"{stats['chunks_embedded']} Chunks / {stats['queries_embedded']} Queries.",
+            file=sys.stderr,
+        )
 
     from scripts.eval.run_retrieval_chunk_goldset import evaluate, load_vectors
 
-    report = evaluate(goldset, load_vectors(args.vectors_out))
+    loaded_vectors = load_vectors(args.vectors_out)
+
+    if args.verify_probe_conditions:
+        conditions = verify_probe_conditions(goldset, loaded_vectors)
+        target = args.conditions_out or args.goldset_out.parent / "conditions.json"
+        target.write_text(
+            json.dumps(conditions, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(f"Vorbedingungen geschrieben: {target}", file=sys.stderr)
+        if conditions["violating_queries"]:
+            for query_id in conditions["violating_queries"]:
+                entry = conditions["queries"][query_id]
+                print(
+                    f"  VERLETZT {query_id} ({entry['probe_role']}): "
+                    f"{', '.join(entry['violations'])}",
+                    file=sys.stderr,
+                )
+            print(
+                "Probe-Vorbedingungen verletzt — das Set misst so nicht den "
+                "Mechanismus. Texte nachziehen und neu bauen.",
+                file=sys.stderr,
+            )
+            return 3
+        print(
+            f"Alle {conditions['query_count']} Probe-Queries erfuellen ihre Vorbedingungen.",
+            file=sys.stderr,
+        )
+
+    if args.skip_thresholds_report:
+        return 0
+
+    report = evaluate(goldset, loaded_vectors)
     print(json.dumps(report, indent=2, ensure_ascii=False))
 
     if args.write_thresholds:

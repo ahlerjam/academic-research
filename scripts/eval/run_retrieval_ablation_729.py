@@ -96,6 +96,7 @@ import statistics
 import sys
 import time
 from collections.abc import Sequence
+from contextlib import contextmanager
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -459,52 +460,79 @@ def compute_deltas(results: dict[str, dict]) -> dict[str, dict[str, float]]:
     }
 
 
-def run_quality_ablation(
-    goldset: dict, vectors: dict[str, list[float]], k: int = DEFAULT_K
-) -> dict:
-    """AC1/AC2: die drei Zustaende gegen das #708-Goldset, hermetisch."""
+def compute_deltas_by_case(results: dict[str, dict]) -> dict[str, dict[str, dict[str, float]]]:
+    """Dieselben drei Beitraege wie :func:`compute_deltas`, aber je ``case`` (#790).
+
+    Das Probe-Goldset aus #790 fuehrt seine vier Familien als eigene ``case``-
+    Werte (``probe-gain``/``probe-crowding``/``probe-harm``/``probe-control``).
+    Ein Gesamtmittel ueber 38 Queries verduennt einen Effekt, der bauartbedingt
+    nur an 12 davon auftreten kann -- und ein Set, dessen Gewinn- und
+    Schadensfaelle sich im Aggregat gegenseitig aufheben, saehe dort aus wie
+    ein Nullbefund.
+    """
+    cases = sorted({case for result in results.values() for case in result.get("by_case", {})})
+
+    def _case_delta(a: dict, b: dict, case: str) -> dict[str, float]:
+        return {
+            metric: round(b["by_case"][case][metric] - a["by_case"][case][metric], 4)
+            for metric in METRICS
+        }
+
+    return {
+        case: {
+            "query_count": results["nachher"]["by_case"][case]["query_count"],
+            "chunk_fts_index_beitrag": _case_delta(
+                results["vorher"], results["zwischenzustand_a"], case
+            ),
+            "chunk_fusion_beitrag": _case_delta(
+                results["zwischenzustand_a"], results["nachher"], case
+            ),
+            "gesamt": _case_delta(results["vorher"], results["nachher"], case),
+        }
+        for case in cases
+    }
+
+
+@contextmanager
+def hermetic_goldset_db(goldset: dict, vectors: dict[str, list[float]], name: str = "goldset"):
+    """Wegwerf-Vault-DB aus einem eingecheckten Fixture-Paar, Playback-Embedder aktiv.
+
+    Kein Netzzugriff, kein ``VAULT_E5_LIVE_TEST=1``: die Vektoren kommen aus
+    der Fixture, der Playback-Embedder erfuellt dasselbe Embedder-Protokoll
+    (``embed_query``/``embed_documents``) wie das echte Modell (siehe
+    ``run_retrieval_chunk_goldset.py``).
+
+    ``VAULT_EMBEDDING_MODEL`` wird zusaetzlich zum Cache-Key gesetzt (PR-Review
+    zu #732): ``server._vec0_search`` ruft ``get_embedder()`` OHNE ``model_id``
+    auf, die also ueber ``DEFAULT_MODEL_ID`` aufloest -- seit #732 (bge-m3)
+    nicht mehr dieselbe ID wie ``embedder.model_id`` (die Chunk-Goldsets sind
+    e5-small). Ohne den Env-Override traefe der Cache nie, ``get_embedder()``
+    versuchte bge-m3 zu laden (im Testlauf geblockt) und der Lauf misste
+    FTS5-only.
+
+    In #790 herausgezogen, weil inzwischen drei Aufrufer denselben Aufbau
+    brauchen: Qualitaetsablation, Diagnoseblock (#789) und die
+    Probe-Vorbedingungspruefung im Goldset-Generator.
+    """
     import tempfile
 
     from academic_vault import embedding_model
 
     doc_titles = {d["doc_id"]: d["title"] for d in goldset["documents"]}
-    relevance = build_paper_relevance(goldset)
     chunk_vectors = {c["chunk_id"]: vectors[c["chunk_id"]] for c in goldset["chunks"]}
     embedding_texts = {c["chunk_id"]: c["embedding_text"] for c in goldset["chunks"]}
-
     embedder = build_playback_embedder(goldset, vectors)
 
-    with tempfile.TemporaryDirectory(prefix="ablation-729-") as tmp:
-        tmpdir = Path(tmp)
+    with tempfile.TemporaryDirectory(prefix=f"{name}-") as tmp:
         db_path = build_db(
-            tmpdir, "shared", goldset, doc_titles, chunk_vectors, embedding_texts, trigram=True
+            Path(tmp), name, goldset, doc_titles, chunk_vectors, embedding_texts, trigram=True
         )
-
-        # get_embedder() lokal ueber den Cache bedienen statt ein echtes Modell
-        # zu laden (kein Netzzugriff, kein VAULT_E5_LIVE_TEST=1 noetig) -- der
-        # Playback-Embedder erfuellt dasselbe Embedder-Protokoll
-        # (embed_query/embed_documents), siehe run_retrieval_chunk_goldset.py.
-        # VAULT_EMBEDDING_MODEL zusaetzlich zum Cache-Key gesetzt (PR-Review zu
-        # #732, wie bereits in _run_latency_ablation unten): _server._vec0_search
-        # ruft get_embedder() OHNE model_id auf, die also ueber
-        # DEFAULT_MODEL_ID aufloest -- seit #732 (bge-m3) nicht mehr dieselbe
-        # ID wie embedder.model_id (das #708-Goldset ist e5-small). Ohne den
-        # Env-Override traefe der Cache nie, get_embedder() versuchte bge-m3
-        # zu laden (im Testlauf geblockt) und der Lauf misste FTS5-only.
         prior_cache = dict(embedding_model._EMBEDDER_CACHE)
         embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
         prior_env_model = os.environ.get("VAULT_EMBEDDING_MODEL")
         os.environ["VAULT_EMBEDDING_MODEL"] = embedder.model_id
         try:
-            combos = {
-                "vorher": {"chunk_fts_index": False, "chunk_fusion": False},
-                "zwischenzustand_a": {"chunk_fts_index": True, "chunk_fusion": False},
-                "nachher": {"chunk_fts_index": True, "chunk_fusion": True},
-            }
-            results = {
-                name: evaluate_combo(db_path, goldset, relevance, k=k, **flags)
-                for name, flags in combos.items()
-            }
+            yield db_path
         finally:
             embedding_model._EMBEDDER_CACHE.clear()
             embedding_model._EMBEDDER_CACHE.update(prior_cache)
@@ -513,7 +541,27 @@ def run_quality_ablation(
             else:
                 os.environ["VAULT_EMBEDDING_MODEL"] = prior_env_model
 
+
+def run_quality_ablation(
+    goldset: dict, vectors: dict[str, list[float]], k: int = DEFAULT_K
+) -> dict:
+    """AC1/AC2: die drei Zustaende gegen das #708-Goldset, hermetisch."""
+    doc_titles = {d["doc_id"]: d["title"] for d in goldset["documents"]}
+    relevance = build_paper_relevance(goldset)
+
+    with hermetic_goldset_db(goldset, vectors, name="ablation-729") as db_path:
+        combos = {
+            "vorher": {"chunk_fts_index": False, "chunk_fusion": False},
+            "zwischenzustand_a": {"chunk_fts_index": True, "chunk_fusion": False},
+            "nachher": {"chunk_fts_index": True, "chunk_fusion": True},
+        }
+        results = {
+            name: evaluate_combo(db_path, goldset, relevance, k=k, **flags)
+            for name, flags in combos.items()
+        }
+
     deltas = compute_deltas(results)
+    deltas_by_case = compute_deltas_by_case(results)
     regressions = {
         name: delta for name, delta in deltas.items() if any(v < 0 for v in delta.values())
     }
@@ -524,6 +572,7 @@ def run_quality_ablation(
         "paper_count": len(doc_titles),
         "results": results,
         "deltas": deltas,
+        "deltas_by_case": deltas_by_case,
         "regressions": regressions,
     }
 
@@ -679,40 +728,15 @@ def run_diagnostics(goldset: dict, vectors: dict[str, list[float]], k: int = DEF
     auf. ``--goldset``/``--vectors`` (siehe ``main()``) steuern, welches
     Fixture-Paar hier einlaeuft -- Default bleibt das bestehende #708-Set.
     """
-    import tempfile
-
-    from academic_vault import embedding_model
-
-    doc_titles = {d["doc_id"]: d["title"] for d in goldset["documents"]}
-    chunk_vectors = {c["chunk_id"]: vectors[c["chunk_id"]] for c in goldset["chunks"]}
-    embedding_texts = {c["chunk_id"]: c["embedding_text"] for c in goldset["chunks"]}
-    embedder = build_playback_embedder(goldset, vectors)
-
-    with tempfile.TemporaryDirectory(prefix="diagnostics-789-") as tmp:
-        tmpdir = Path(tmp)
-        db_path = build_db(
-            tmpdir, "diag", goldset, doc_titles, chunk_vectors, embedding_texts, trigram=True
-        )
-        prior_cache = dict(embedding_model._EMBEDDER_CACHE)
-        embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
-        prior_env_model = os.environ.get("VAULT_EMBEDDING_MODEL")
-        os.environ["VAULT_EMBEDDING_MODEL"] = embedder.model_id
-        try:
-            per_query = [
-                {
-                    **diagnose_query(db_path, q["query"], k=k),
-                    "query_id": q["query_id"],
-                    "case": q["case"],
-                }
-                for q in goldset["queries"]
-            ]
-        finally:
-            embedding_model._EMBEDDER_CACHE.clear()
-            embedding_model._EMBEDDER_CACHE.update(prior_cache)
-            if prior_env_model is None:
-                os.environ.pop("VAULT_EMBEDDING_MODEL", None)
-            else:
-                os.environ["VAULT_EMBEDDING_MODEL"] = prior_env_model
+    with hermetic_goldset_db(goldset, vectors, name="diagnostics-789") as db_path:
+        per_query = [
+            {
+                **diagnose_query(db_path, q["query"], k=k),
+                "query_id": q["query_id"],
+                "case": q["case"],
+            }
+            for q in goldset["queries"]
+        ]
 
     non_error = [q for q in per_query if q["fts5_syntax_error"] is None]
     summary = {
@@ -1028,6 +1052,93 @@ def run_ablation(goldset: dict, vectors: dict[str, list[float]], k: int = DEFAUL
     return {"quality": quality, "diagnostics": diagnostics, "cost": cost}
 
 
+def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list[str]:
+    """Vergleicht einen frischen Lauf mit den eingecheckten Rohdaten (#790).
+
+    Muster wie ``run_embedding_candidates_731.compare_against`` und
+    ``run_hyde_multiquery_eval.compare_against``: gegattert wird nicht die
+    QUALITAET (dafuer gibt es hier keine Schwelle), sondern die
+    Deckungsgleichheit von Lauf und Report -- sonst altert der Report
+    unbemerkt, sobald jemand am Suchpfad oder an der Fusion dreht.
+
+    Der Kostenblock (``cost``) bleibt bewusst aussen vor: Latenz und
+    Dateigroessen haengen an der Maschine und waeren als Gatter nur eine Quelle
+    roter CI-Laeufe ohne Aussage -- dieselbe Abgrenzung wie in #731.
+
+    WICHTIG fuer den Vergleich von ``per_query.retrieved``: das Goldset darf
+    keine exakt gleichen ``rrf_score``-Werte enthalten. ``reciprocal_rank_fusion``
+    iteriert ueber ein ``set`` von ``chunk_id``s, und die Chunk-IDs sind UUID4,
+    die bei jedem Aufbau der Wegwerf-DB neu vergeben werden -- bei einem
+    Gleichstand ist die Reihenfolge deshalb von Lauf zu Lauf verschieden, und
+    zwar auch bei gepinntem ``PYTHONHASHSEED`` (Folge-Issue #792; das Pinnen
+    hilft nur, wenn die Schluessel selbst konstant sind, was sie hier nicht
+    sind). Das #790-Probe-Goldset ist deshalb tie-frei konstruiert, geprueft in
+    ``tests/test_issue_790_probe_goldset.py::test_ranking_is_reproducible_across_runs``.
+    """
+    problems: list[str] = []
+
+    def _compare_block(fresh_block: dict, old_block: dict, prefix: str) -> None:
+        fresh_quality = fresh_block["quality"]
+        old_quality = old_block.get("quality", {})
+        for state, fresh in fresh_quality["results"].items():
+            old = old_quality.get("results", {}).get(state)
+            if old is None:
+                problems.append(
+                    f"{prefix}quality.results.{state}: fehlt in den eingecheckten Rohdaten"
+                )
+                continue
+            for metric, value in fresh["overall"].items():
+                other = old.get("overall", {}).get(metric)
+                if other is None or abs(other - value) > tolerance:
+                    problems.append(
+                        f"{prefix}quality.results.{state}.overall.{metric}: gemessen {value!r}, "
+                        f"im Report {other!r}"
+                    )
+            if [r["retrieved"] for r in fresh["per_query"]] != [
+                r.get("retrieved") for r in old.get("per_query", [])
+            ]:
+                problems.append(
+                    f"{prefix}quality.results.{state}.per_query.retrieved: Rangfolge weicht "
+                    "von den Rohdaten ab"
+                )
+            if fresh["by_case"] != old.get("by_case"):
+                problems.append(
+                    f"{prefix}quality.results.{state}.by_case: weicht von den Rohdaten ab"
+                )
+        for block in ("deltas", "deltas_by_case"):
+            if fresh_quality.get(block) != old_quality.get(block):
+                problems.append(f"{prefix}quality.{block}: gemessen {fresh_quality.get(block)!r}")
+        if "diagnostics" in fresh_block:
+            fresh_summary = fresh_block["diagnostics"]["summary"]
+            old_summary = old_block.get("diagnostics", {}).get("summary")
+            if fresh_summary != old_summary:
+                problems.append(
+                    f"{prefix}diagnostics.summary: weicht von den eingecheckten Rohdaten ab"
+                )
+        elif "diagnostics" in old_block:
+            # Dieselbe Asymmetrie wie beim baseline-Block unten: laesst jemand
+            # --skip-diagnostics in den CI-Schritt einlaufen, altert der im
+            # Report zitierte Diagnoseblock ab da unbemerkt weiter.
+            problems.append(
+                f"{prefix}diagnostics: die eingecheckten Rohdaten fuehren einen "
+                "Diagnoseblock, dieser Lauf nicht -- --skip-diagnostics ist gesetzt"
+            )
+
+    _compare_block(report, stored, "")
+    if "baseline" in report:
+        _compare_block(report["baseline"], stored.get("baseline", {}), "baseline.")
+    elif "baseline" in stored:
+        # Umgekehrter Fall, sonst stillschweigend gruen: die Rohdaten fuehren
+        # einen Regressionsanker, der frische Lauf nicht. Wer
+        # --baseline-goldset/--baseline-vectors aus dem CI-Schritt streicht,
+        # laesst damit die Haelfte der eingecheckten Daten ungeprueft altern.
+        problems.append(
+            "baseline: die eingecheckten Rohdaten fuehren einen Regressionsanker, "
+            "dieser Lauf nicht -- --baseline-goldset/--baseline-vectors fehlen"
+        )
+    return problems
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1046,7 +1157,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--out", type=Path, default=None, help="Optional: Report als JSON schreiben."
     )
+    parser.add_argument(
+        "--check-against",
+        type=Path,
+        default=None,
+        help="Exit 1 bei Abweichung von diesen Rohdaten (Kostenblock ausgenommen).",
+    )
+    parser.add_argument(
+        "--baseline-goldset",
+        type=Path,
+        default=None,
+        help=(
+            "Zweites Goldset, das im selben Report unter 'baseline' mitlaeuft "
+            "(Issue #790: das #708-Set als Regressionsanker neben der Hauptmessung)."
+        ),
+    )
+    parser.add_argument(
+        "--baseline-vectors",
+        type=Path,
+        default=None,
+        help="Vektor-JSON zu --baseline-goldset.",
+    )
     args = parser.parse_args(argv)
+    if bool(args.baseline_goldset) != bool(args.baseline_vectors):
+        parser.error("--baseline-goldset und --baseline-vectors nur gemeinsam")
 
     goldset = load_goldset(args.goldset)
     try:
@@ -1059,9 +1193,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     vectors: dict[str, list[float]] = dict(vectors_raw)
 
     quality = run_quality_ablation(goldset, vectors, k=args.k)
-    report: dict = {"quality": quality}
+    report: dict = {"goldset": str(args.goldset), "quality": quality}
     if not args.skip_diagnostics:
         report["diagnostics"] = run_diagnostics(goldset, vectors, k=args.k)
+
+    if args.baseline_goldset is not None:
+        baseline_goldset = load_goldset(args.baseline_goldset)
+        try:
+            verify_manifest(baseline_goldset)
+        except ManifestMismatchError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        baseline_vectors = dict(load_vectors(args.baseline_vectors))
+        baseline: dict = {
+            "goldset": str(args.baseline_goldset),
+            "quality": run_quality_ablation(baseline_goldset, baseline_vectors, k=args.k),
+        }
+        if not args.skip_diagnostics:
+            baseline["diagnostics"] = run_diagnostics(baseline_goldset, baseline_vectors, k=args.k)
+        report["baseline"] = baseline
+
     if not args.skip_cost:
         report["cost"] = run_cost_measurement()
 
@@ -1071,6 +1222,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(text + "\n", encoding="utf-8")
         print(f"Report geschrieben: {args.out}", file=sys.stderr)
+
+    if args.check_against is not None:
+        stored = json.loads(args.check_against.read_text(encoding="utf-8"))
+        problems = compare_against(report, stored)
+        if problems:
+            print(f"Lauf und {args.check_against} laufen auseinander:", file=sys.stderr)
+            for problem in problems:
+                print(f"  - {problem}", file=sys.stderr)
+            return 1
+        print(f"Deckungsgleich mit {args.check_against}.", file=sys.stderr)
     return 0
 
 

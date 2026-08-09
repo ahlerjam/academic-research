@@ -266,10 +266,34 @@ jobs:
           uv run python scripts/eval/run_embedding_candidates_731.py \
             --check-against docs/evals/2026-08-08-embedding-candidates-731-live-results.json \
             > /dev/null
+      # Chunk-Fusions-Probe-Goldset (#790): wieder dieselbe Logik. Gegattert
+      # wird nicht die Qualitaet -- das Set ist gezielt so konstruiert, dass
+      # der Mechanismus feuert, eine Schwelle darauf waere sinnlos --, sondern
+      # dass ein frischer Lauf dieselben Raenge und Deltas liefert wie die
+      # eingecheckten Rohdaten. Ein Aufruf deckt beide Bloecke ab: das
+      # Probe-Set und das #708-Set als Regressionsanker (--baseline-*).
+      # Der Vergleich der Trefferlisten setzt voraus, dass das Goldset keine
+      # exakt gleichen rrf_score-Werte enthaelt: reciprocal_rank_fusion
+      # iteriert ueber ein set von chunk_ids, und die sind UUID4 und bei jedem
+      # DB-Aufbau neu -- ein Gleichstand waere damit von Lauf zu Lauf anders
+      # sortiert, auch mit gepinntem PYTHONHASHSEED (Folge-Issue #792). Das
+      # Probe-Set ist tie-frei gebaut, geprueft in
+      # tests/test_issue_790_probe_goldset.py.
+      - name: Chunk-Fusions-Probe-Goldset gegen die eingecheckten Rohdaten fahren
+        run: |
+          uv run python scripts/eval/run_retrieval_ablation_729.py \
+            --goldset tests/fixtures/retrieval_goldset_chunk_fusion_790/goldset.json \
+            --vectors tests/fixtures/retrieval_goldset_chunk_fusion_790/vectors.json \
+            --baseline-goldset tests/fixtures/retrieval_goldset_chunks_708/goldset.json \
+            --baseline-vectors tests/fixtures/retrieval_goldset_chunks_708/vectors.json \
+            --skip-cost \
+            --check-against docs/evals/2026-08-09-chunk-fusion-goldset-790-live-results.json \
+            > /dev/null
       - name: Metriken, Hermetik und Schwellen-Meta pruefen
         run: |
           uv run pytest -p no:cacheprovider -q \
             tests/test_issue_708_ranking_metrics.py \
             tests/test_issue_708_retrieval_chunk_goldset.py \
             tests/test_issue_733_hyde_multiquery.py \
-            tests/test_issue_731_embedding_candidates.py
+            tests/test_issue_731_embedding_candidates.py \
+            tests/test_issue_790_probe_goldset.py

@@ -174,6 +174,17 @@ müssen die Anker weiter im Text vorkommen, sonst bricht der Generator ab.
   passt in die Trefferliste. Recall@10 ist deshalb innerhalb einer Sprache
   gesättigt und trennt dort nicht mehr; die Aussagekraft liegt bei nDCG@10, MRR
   und der Sprachlücke. Für einen Modellvergleich braucht es ein größeres Set.
+- **Die lexikalische Seite dieses Sets ist praktisch tot.** Die Queries sind
+  ausgeschriebene Sätze; FTS5-`MATCH` verknüpft ohne `OR` implizit mit UND, und
+  ein einziges Token, das nirgends wörtlich vorkommt, lässt den gesamten
+  Treffer scheitern. Gemessen: 1 von 26 Queries erzielt überhaupt einen
+  `papers_fts`-Treffer, 0 bei `papers_trgm`
+  ([#789](2026-08-08-chunk-fusion-ablation-729.md#nachtrag-2026-08-09-789-die-korpus-zu-klein-diagnose-war-unvollständig)).
+  Für die Vektorstrecke, die dieses Set messen soll, ist das folgenlos; für
+  jede Frage nach der **Hybrid**-Fusion ist es der entscheidende Vorbehalt.
+  Dafür gibt es seit [#790](2026-08-09-chunk-fusion-goldset-790.md) ein
+  ergänzendes Probe-Goldset, das dieselben elf Dokumente und 26 Queries
+  wortgleich enthält und um lexikalisch treffende Probe-Queries erweitert.
 - **Die Texte sind synthetisch.** Sie imitieren Fachprosa in Aufbau und
   Registerhöhe, aber sie enthalten weder Formeln, noch Tabellenreste, noch die
   Umbruchartefakte einer PDF-Extraktion — genau die Textsorten also, bei denen
