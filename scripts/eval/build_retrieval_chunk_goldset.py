@@ -482,7 +482,9 @@ def _check_split_pair(
     }
 
 
-def _check_control(probe: dict, diagnosis: dict, full_token_chunks: dict[str, list[str]]):
+def _check_control(
+    probe: dict, diagnosis: dict, full_token_chunks: dict[str, list[str]]
+) -> dict[str, bool]:
     """Familie D: bei ALLEN beteiligten Papern faellt Zuordnung und
     Vektor-Bestchunk zusammen -- dann darf die Fusionsgranularitaet nichts
     aendern, und ein gemessenes Delta ungleich 0 waere ein Befund ueber den
