@@ -1094,16 +1094,32 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
                         f"{prefix}quality.results.{state}.overall.{metric}: gemessen {value!r}, "
                         f"im Report {other!r}"
                     )
-            if [r["retrieved"] for r in fresh["per_query"]] != [
-                r.get("retrieved") for r in old.get("per_query", [])
-            ]:
+            fresh_retrieved = {r["query_id"]: r["retrieved"] for r in fresh["per_query"]}
+            old_retrieved = {
+                r.get("query_id"): r.get("retrieved") for r in old.get("per_query", [])
+            }
+            diverged_queries = sorted(
+                qid
+                for qid in set(fresh_retrieved) | set(old_retrieved)
+                if fresh_retrieved.get(qid) != old_retrieved.get(qid)
+            )
+            if diverged_queries:
                 problems.append(
                     f"{prefix}quality.results.{state}.per_query.retrieved: Rangfolge weicht "
-                    "von den Rohdaten ab"
+                    f"von den Rohdaten ab bei query_id={diverged_queries!r}"
                 )
-            if fresh["by_case"] != old.get("by_case"):
+
+            fresh_by_case = fresh["by_case"]
+            old_by_case = old.get("by_case") or {}
+            diverged_cases = sorted(
+                case
+                for case in set(fresh_by_case) | set(old_by_case)
+                if fresh_by_case.get(case) != old_by_case.get(case)
+            )
+            if diverged_cases:
                 problems.append(
-                    f"{prefix}quality.results.{state}.by_case: weicht von den Rohdaten ab"
+                    f"{prefix}quality.results.{state}.by_case: weicht von den Rohdaten ab bei "
+                    f"case={diverged_cases!r}"
                 )
         for block in ("deltas", "deltas_by_case"):
             if fresh_quality.get(block) != old_quality.get(block):

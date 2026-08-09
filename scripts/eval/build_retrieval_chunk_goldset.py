@@ -298,11 +298,22 @@ def embed_all(
             encoded_chunks[chunk["chunk_id"]] = encode_vector(vector)
         for query in todo_queries:
             encoded_queries[query["query_id"]] = encode_vector(embedder.embed_query(query["query"]))
+    elif not encoded_chunks and not encoded_queries:
+        raise ValueError("embed_all() erhielt weder Chunks noch Queries -- nichts zu embedden.")
     else:
         # Vollstaendige Wiederverwendung: die Dimension steht in den
         # uebernommenen Vektoren selbst, das Modell muss dafuer nicht laden.
-        any_vector = next(iter({**encoded_chunks, **encoded_queries}.values()))
-        dim = len(decode_vector(any_vector))
+        # Alle wiederverwendeten Vektoren muessen dieselbe Laenge tragen --
+        # sonst wuerde ein beschaedigter/falsch langer Alt-Vektor still die
+        # falsche Dimension melden.
+        lengths = {len(decode_vector(v)) for v in {**encoded_chunks, **encoded_queries}.values()}
+        if len(lengths) > 1:
+            raise ValueError(
+                f"--reuse-vectors liefert widerspruechliche Vektordimensionen {sorted(lengths)!r} "
+                "-- mindestens ein wiederverwendeter Vektor ist beschaedigt oder stammt aus einem "
+                "anderen Modellraum."
+            )
+        dim = lengths.pop()
 
     # Reihenfolge an die Eingabe angleichen: die JSON-Fixture soll in
     # Dokument-/Query-Reihenfolge lesbar bleiben, nicht in "erst
