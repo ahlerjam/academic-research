@@ -36,7 +36,7 @@ dafuer hinzu::
       --vectors-out tests/fixtures/retrieval_goldset_chunk_fusion_790/vectors.json \\
       --conditions-out tests/fixtures/retrieval_goldset_chunk_fusion_790/conditions.json \\
       --reuse-vectors tests/fixtures/retrieval_goldset_chunks_708/vectors.json \\
-      --verify-probe-conditions --issue 790 --skip-thresholds
+      --verify-probe-conditions --issue 790 --skip-thresholds-report
 
 * ``--reuse-vectors`` uebernimmt fuer jede ``chunk_id``/``query_id``, deren
   Text **byteweise unveraendert** ist, den eingecheckten Vektor und embeddet
@@ -447,11 +447,28 @@ def min_score_gap(scores: dict[str, float]) -> float | None:
     return min(ordered[i] - ordered[i + 1] for i in range(len(ordered) - 1))
 
 
+def relevant_doc_ids(query: dict, chunk_owner: dict[str, str]) -> list[str]:
+    """Die Dokumente hinter ``relevant_chunk_ids`` einer Query.
+
+    ``resolve_anchors`` loest die woertlichen Anker auf Chunks auf; welches
+    Dokument dahintersteht, sagt erst diese Zuordnung. Sie ist die einzige
+    Stelle, an der die im ``probe``-Block behauptete Relevanz gegen die
+    tatsaechliche Relevanz des Goldsets gehalten werden kann.
+    """
+    docs: list[str] = []
+    for chunk_id in query.get("relevant_chunk_ids", []):
+        owner = chunk_owner.get(chunk_id)
+        if owner is not None and owner not in docs:
+            docs.append(owner)
+    return sorted(docs)
+
+
 def _check_common_rules(
     query: dict,
     diagnosis: dict,
     scores_before: dict[str, float],
     scores_after: dict[str, float],
+    relevant_docs: list[str],
 ) -> dict[str, bool]:
     """Design-Regeln 1, 2 und die Tie-Freiheit -- gelten fuer JEDE Probe-Rolle.
 
@@ -468,11 +485,19 @@ def _check_common_rules(
     Grenze zwischen Rang ``k`` und ``k+1`` ist hier nicht sichtbar; er wuerde
     die Zusammensetzung der Liste aendern und faellt dann im
     Reproduzierbarkeitstest auf.
+
+    ``relevant_doc_matches_goldset``bindet das Familienlabel an die
+    Messrealitaet: die uebrigen Rollenpruefungen vergleichen Felder des
+    handgeschriebenen ``probe``-Blocks miteinander und wuerden nicht bemerken,
+    wenn ein Anker beim naechsten Textnachzug in das falsche Dokument rutscht.
+    Genau dann kippte das Delta der Query, ohne dass eine Vorbedingung
+    anschluege.
     """
     text = query["query"]
     tokens = text.split()
     gap_before = min_score_gap(scores_before)
     gap_after = min_score_gap(scores_after)
+    declared_relevant = (query.get("probe") or {}).get("relevant_doc")
     return {
         "rule1_no_comma": "," not in text,
         "rule1_at_most_four_tokens": 1 <= len(tokens) <= MAX_PROBE_QUERY_TOKENS,
@@ -480,6 +505,9 @@ def _check_common_rules(
         "rule2_term_family_in_at_least_two_documents": diagnosis["papers_fts_hit_count"] >= 2,
         "no_exact_score_tie_before": gap_before is None or gap_before > 0.0,
         "no_exact_score_tie_after": gap_after is None or gap_after > 0.0,
+        "relevant_doc_matches_goldset": (
+            declared_relevant is not None and relevant_docs == [declared_relevant]
+        ),
     }
 
 
@@ -603,6 +631,7 @@ def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: i
     )
 
     chunk_counts = _chunk_count_per_paper(goldset)
+    chunk_owner = {c["chunk_id"]: c["doc_id"] for c in goldset["chunks"]}
     queries = probe_queries(goldset)
     results: dict[str, Any] = {}
 
@@ -629,7 +658,10 @@ def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: i
                 finally:
                     conn.close()
 
-            checks = _check_common_rules(query, diagnosis, scores_before, scores_after)
+            relevant_docs = relevant_doc_ids(query, chunk_owner)
+            checks = _check_common_rules(
+                query, diagnosis, scores_before, scores_after, relevant_docs
+            )
             if role in ("gain", "harm"):
                 checks.update(
                     _check_split_pair(
@@ -677,6 +709,10 @@ def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: i
                     "paper_score_after": scores_after,
                     "min_paper_score_gap_before": min_score_gap(scores_before),
                     "min_paper_score_gap_after": min_score_gap(scores_after),
+                    # Aufgeloest aus relevant_chunk_ids -- die TATSAECHLICHE
+                    # Relevanz des Goldsets, gegen die probe['relevant_doc']
+                    # gehalten wird.
+                    "relevant_docs": relevant_docs,
                 },
             }
 

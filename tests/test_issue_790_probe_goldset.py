@@ -40,6 +40,7 @@ from scripts.eval.build_retrieval_chunk_goldset import (
     load_reuse_index,
     min_score_gap,
     probe_queries,
+    relevant_doc_ids,
 )
 from scripts.eval.run_retrieval_ablation_729 import (
     compare_against,
@@ -257,6 +258,26 @@ def test_no_probe_query_has_an_exact_score_tie(conditions: dict) -> None:
         for field in ("min_paper_score_gap_before", "min_paper_score_gap_after"):
             gap = entry["measured"][field]
             assert gap is None or gap > 0.0, (query_id, field, gap)
+
+
+def test_declared_relevant_doc_matches_the_goldset_relevance(conditions: dict) -> None:
+    """Das Familienlabel haengt an der tatsaechlichen Relevanz, nicht nur an
+    sich selbst.
+
+    Die uebrigen Rollenpruefungen vergleichen Felder des handgeschriebenen
+    ``probe``-Blocks miteinander. Rutscht beim naechsten Textnachzug ein Anker
+    in das Decoy-Dokument, kippt das Delta der Query ins Gegenteil, waehrend
+    jene Pruefungen weiter zufrieden waeren -- dieser Check nicht."""
+    for query_id, entry in conditions["queries"].items():
+        assert entry["checks"]["relevant_doc_matches_goldset"], query_id
+        assert entry["measured"]["relevant_docs"] == [entry["probe"]["relevant_doc"]], query_id
+
+
+def test_relevant_doc_ids_resolve_chunks_to_documents() -> None:
+    owner = {"a#0": "doc-a", "a#1": "doc-a", "b#0": "doc-b"}
+    assert relevant_doc_ids({"relevant_chunk_ids": ["a#0", "a#1"]}, owner) == ["doc-a"]
+    assert relevant_doc_ids({"relevant_chunk_ids": ["b#0", "a#0"]}, owner) == ["doc-a", "doc-b"]
+    assert relevant_doc_ids({}, owner) == []
 
 
 def test_min_score_gap_flags_an_exact_tie() -> None:

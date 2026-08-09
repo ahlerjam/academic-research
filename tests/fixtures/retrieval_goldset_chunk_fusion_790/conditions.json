@@ -26,6 +26,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -45,7 +46,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-decoy": null,
-          "en-probe-gain-target": "888004f4-0bdd-4732-8bf5-6c9dd17cb63e"
+          "en-probe-gain-target": "ba0d0e4d-3edc-4140-bfa0-6a543463ffc7"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-decoy": false,
@@ -136,7 +137,10 @@
           "en-probe-harm-counter": 0.0125
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00018018018018018007
+        "min_paper_score_gap_after": 0.00018018018018018007,
+        "relevant_docs": [
+          "en-probe-gain-target"
+        ]
       }
     },
     "p-gain-02": {
@@ -157,6 +161,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -176,7 +181,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-decoy": null,
-          "en-probe-gain-target": "f38afe09-d9c1-4eab-981e-0b2a609e8024"
+          "en-probe-gain-target": "74fd3b68-bd48-4c81-94cb-ce358d6c063c"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-decoy": false,
@@ -275,7 +280,10 @@
           "en-probe-harm-source": 0.013333333333333334
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00018018018018018007
+        "min_paper_score_gap_after": 0.00018018018018018007,
+        "relevant_docs": [
+          "en-probe-gain-target"
+        ]
       }
     },
     "p-gain-03": {
@@ -296,6 +304,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -315,7 +324,7 @@
         ],
         "attached_chunk": {
           "de-probe-gain-decoy": null,
-          "de-probe-gain-target": "dbe58f3f-578a-40f1-b4f6-3b9296ef5e8b"
+          "de-probe-gain-target": "f7184d5d-adbd-44bb-a449-0b117345a8fc"
         },
         "attach_equals_vec_best": {
           "de-probe-gain-decoy": false,
@@ -414,7 +423,10 @@
           "en-change-approval": 0.0125
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.0001665001665001678
+        "min_paper_score_gap_after": 0.0001665001665001678,
+        "relevant_docs": [
+          "de-probe-gain-target"
+        ]
       }
     },
     "p-gain-04": {
@@ -435,6 +447,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -454,7 +467,7 @@
         ],
         "attached_chunk": {
           "de-probe-gain-decoy": null,
-          "de-probe-gain-target": "dbe58f3f-578a-40f1-b4f6-3b9296ef5e8b"
+          "de-probe-gain-target": "f7184d5d-adbd-44bb-a449-0b117345a8fc"
         },
         "attach_equals_vec_best": {
           "de-probe-gain-decoy": false,
@@ -553,7 +566,10 @@
           "en-change-approval": 0.012987012987012988
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00018511662347278635
+        "min_paper_score_gap_after": 0.00018511662347278635,
+        "relevant_docs": [
+          "de-probe-gain-target"
+        ]
       }
     },
     "p-gain-05": {
@@ -574,6 +590,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -593,7 +610,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-lexicon": null,
-          "en-probe-gain-target": "f38afe09-d9c1-4eab-981e-0b2a609e8024"
+          "en-probe-gain-target": "74fd3b68-bd48-4c81-94cb-ce358d6c063c"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-lexicon": false,
@@ -686,7 +703,10 @@
           "en-pipeline-secrets": 0.012987012987012988
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00017088174982911666
+        "min_paper_score_gap_after": 0.00017088174982911666,
+        "relevant_docs": [
+          "en-probe-gain-target"
+        ]
       }
     },
     "p-crowd-01": {
@@ -707,6 +727,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "crowding_crowder_has_enough_chunks": true,
         "crowding_focused_vector_chunk_rank_is_deep": true,
         "crowding_focused_vector_paper_rank_is_high": true
@@ -720,8 +741,8 @@
           "en-probe-crowd-few"
         ],
         "attached_chunk": {
-          "en-probe-crowd-many": "c00d95d6-f924-484b-a1a6-b7a61f05de45",
-          "en-probe-crowd-few": "367a1bfb-73ae-4bba-9239-0b1e1325708b"
+          "en-probe-crowd-many": "f43ab0e2-89f5-451a-ac2a-6d478419c1c0",
+          "en-probe-crowd-few": "8ac37bef-8f7c-4a43-93a5-a59a0adf814b"
         },
         "attach_equals_vec_best": {
           "en-probe-crowd-many": false,
@@ -810,7 +831,10 @@
           "en-change-approval": 0.0125
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00015822784810126493
+        "min_paper_score_gap_after": 0.00015822784810126493,
+        "relevant_docs": [
+          "en-probe-crowd-few"
+        ]
       }
     },
     "p-crowd-02": {
@@ -831,6 +855,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "crowding_crowder_has_enough_chunks": true,
         "crowding_focused_vector_chunk_rank_is_deep": true,
         "crowding_focused_vector_paper_rank_is_high": true
@@ -844,8 +869,8 @@
           "en-probe-crowd-few"
         ],
         "attached_chunk": {
-          "en-probe-crowd-many": "143e792c-cd81-4ba2-9e7d-c907e1bdf8bf",
-          "en-probe-crowd-few": "367a1bfb-73ae-4bba-9239-0b1e1325708b"
+          "en-probe-crowd-many": "d164058f-6c35-430f-bcf9-28dd321d0479",
+          "en-probe-crowd-few": "8ac37bef-8f7c-4a43-93a5-a59a0adf814b"
         },
         "attach_equals_vec_best": {
           "en-probe-crowd-many": true,
@@ -934,7 +959,10 @@
           "en-probe-gain-lexicon": 0.011764705882352941
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00014692918013517464
+        "min_paper_score_gap_after": 0.00014692918013517464,
+        "relevant_docs": [
+          "en-probe-crowd-few"
+        ]
       }
     },
     "p-harm-01": {
@@ -955,6 +983,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -974,7 +1003,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "6ecae8af-a317-483d-96a7-04db89fcd168"
+          "en-probe-harm-counter": "9023443e-92fb-4636-b16a-f3cbda82f4d9"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1065,7 +1094,10 @@
           "en-probe-crowd-few": 0.01282051282051282
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.0001665001665001678
+        "min_paper_score_gap_after": 0.0001665001665001678,
+        "relevant_docs": [
+          "en-probe-harm-source"
+        ]
       }
     },
     "p-harm-02": {
@@ -1086,6 +1118,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -1105,7 +1138,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "03521681-8b32-4c0c-b4b9-734cc6f537d1"
+          "en-probe-harm-counter": "c1375003-beed-4568-8148-6506b1010c9e"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1196,7 +1229,10 @@
           "en-supply-chain": 0.013333333333333334
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.0001902587519025875
+        "min_paper_score_gap_after": 0.0001902587519025875,
+        "relevant_docs": [
+          "en-probe-harm-source"
+        ]
       }
     },
     "p-harm-03": {
@@ -1217,6 +1253,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -1236,7 +1273,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "b6266cfc-0636-476c-b1be-f6632d407295"
+          "en-probe-harm-counter": "ec83941d-a395-4c9b-9f34-fcc63dab55b4"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1325,7 +1362,10 @@
           "en-incident-response": 0.011764705882352941
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00018511662347278635
+        "min_paper_score_gap_after": 0.00018511662347278635,
+        "relevant_docs": [
+          "en-probe-harm-source"
+        ]
       }
     },
     "p-control-01": {
@@ -1348,6 +1388,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "control_all_papers_are_fts_hits": true,
         "control_attach_equals_vec_best_for_all_papers": true,
         "control_every_paper_has_exactly_one_full_token_chunk": true
@@ -1361,8 +1402,8 @@
           "en-probe-harm-counter"
         ],
         "attached_chunk": {
-          "en-probe-gain-target": "37000b22-e1f5-4769-a0da-4b92a9e7f300",
-          "en-probe-harm-counter": "b371c326-5640-41dc-b7b6-a66219e513c9"
+          "en-probe-gain-target": "f4414b71-3180-4b69-9e3a-f9c9da98e924",
+          "en-probe-harm-counter": "925120e8-fd65-4cc8-a5b9-8105e2d831a4"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-target": true,
@@ -1453,7 +1494,10 @@
           "en-probe-crowd-few": 0.013333333333333334
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00018018018018018007
+        "min_paper_score_gap_after": 0.00018018018018018007,
+        "relevant_docs": [
+          "en-probe-gain-target"
+        ]
       }
     },
     "p-control-02": {
@@ -1476,6 +1520,7 @@
         "rule2_term_family_in_at_least_two_documents": true,
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
+        "relevant_doc_matches_goldset": true,
         "control_all_papers_are_fts_hits": true,
         "control_attach_equals_vec_best_for_all_papers": true,
         "control_every_paper_has_exactly_one_full_token_chunk": true
@@ -1489,8 +1534,8 @@
           "de-probe-gain-target"
         ],
         "attached_chunk": {
-          "de-probe-control-pair": "9266853b-3c74-44d1-82c9-5f2ae08cb30a",
-          "de-probe-gain-target": "bc5184bd-84b4-4a4a-9aa3-40d864483b1d"
+          "de-probe-control-pair": "1aa3d6ae-65c6-4efb-826e-3c78a6161952",
+          "de-probe-gain-target": "4c213770-8c10-478e-9f95-8c9e26cdd061"
         },
         "attach_equals_vec_best": {
           "de-probe-control-pair": true,
@@ -1589,7 +1634,10 @@
           "en-probe-gain-decoy": 0.01282051282051282
         },
         "min_paper_score_gap_before": 0.0002070393374741207,
-        "min_paper_score_gap_after": 0.00019561815336463333
+        "min_paper_score_gap_after": 0.00019561815336463333,
+        "relevant_docs": [
+          "de-probe-control-pair"
+        ]
       }
     }
   }

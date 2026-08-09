@@ -47,7 +47,8 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Trefferlisten-Vergleich setzt Tie-Freiheit des Sets voraus -- #792 ist NICHT
   durch einen gepinnten PYTHONHASHSEED zu zaehmen, weil die chunk_id-Schluessel
   selbst UUID4 und pro Lauf neu sind; Tie-Freiheit ist seit dem PR-Review ein
-  rollenunabhaengiger Check in conditions.json). 27 Tests in
+  rollenunabhaengiger Check in conditions.json, ebenso die Bindung des
+  Familienlabels an relevant_chunk_ids). 29 Tests in
   `tests/test_issue_790_probe_goldset.py`. Modell bleibt bewusst
   `intfloat/multilingual-e5-small` (Kontrollierbarkeit der Altwerte, 470 MB
   statt 2,3 GB). `academic_vault/` unveraendert (protected area).
