@@ -18,7 +18,11 @@ from typing import Any
 import pytest
 from scripts.eval.build_retrieval_chunk_goldset import embed_all
 from scripts.eval.run_retrieval_ablation_729 import compare_against
-from scripts.eval.run_retrieval_chunk_goldset import encode_vector
+from scripts.eval.run_retrieval_chunk_goldset import (
+    diverged_metrics,
+    diverged_per_query,
+    encode_vector,
+)
 
 
 class _StubEmbedder:
@@ -404,3 +408,93 @@ def test_compare_against_reports_a_completely_missing_by_case_block() -> None:
     problems = compare_against(fresh, stored)
 
     assert any("by_case" in problem for problem in problems)
+
+
+# ---------------------------------------------------------------------------
+# Fall-Tabellen der gemeinsamen Helfer
+# ---------------------------------------------------------------------------
+# Die Einzeltests oben pruefen jeweils den Weg durch compare_against. Hier
+# stehen die Helfer selbst als Tabelle: jede Zeile ein Defekttyp, damit eine
+# neue Verschaerfung nicht wieder einen Nachbarfall aufreisst, ohne dass es
+# auffaellt. Alle Faelle muessen ein Problem melden -- Falsch-Gruen ist bei
+# einem Gatter der teuerste Fehler.
+_PER_QUERY_DEFECTS = [
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1", "retrieved": ["b"]}],
+        id="anderer-wert",
+    ),
+    pytest.param([{"query_id": "q1", "retrieved": ["a"]}], [], id="zeile-fehlt"),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1", "retrieved": ["a"]}, {"query_id": "q2", "retrieved": ["b"]}],
+        id="zeile-zuviel",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1"}],
+        id="zeile-ohne-feld",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"retrieved": ["a"]}],
+        id="zeile-ohne-query-id",
+    ),
+    pytest.param(
+        [{"query_id": 1, "retrieved": ["a"]}],
+        [{"query_id": 2, "retrieved": ["a"]}],
+        id="numerische-id",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}, {"query_id": "q2", "retrieved": ["b"]}],
+        [{"query_id": "q2", "retrieved": ["b"]}, {"query_id": "q1", "retrieved": ["a"]}],
+        id="umsortiert",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1", "retrieved": ["a"]}, {"query_id": "q1", "retrieved": ["a"]}],
+        id="dublette",
+    ),
+    pytest.param([["a", "b"]], ["voellig anders"], id="fremdformat-beide-seiten"),
+    pytest.param([{"query_id": "q1", "retrieved": ["a"]}], None, id="block-fehlt"),
+    pytest.param([{"query_id": "q1", "retrieved": ["a"]}], {"q1": ["a"]}, id="block-falscher-typ"),
+]
+
+
+@pytest.mark.parametrize(("fresh", "stored"), _PER_QUERY_DEFECTS)
+def test_diverged_per_query_reports_every_defect_class(fresh: Any, stored: Any) -> None:
+    assert diverged_per_query(fresh, stored, "L"), "Falsch-Gruen: kein Problem gemeldet"
+
+
+def test_diverged_per_query_stays_silent_on_identical_blocks() -> None:
+    """Gegenprobe zur Tabelle: der deckungsgleiche Fall darf nichts melden."""
+    rows = [
+        {"query_id": "q1", "retrieved": ["a", "b"]},
+        {"query_id": "q2", "retrieved": ["c"]},
+    ]
+    assert diverged_per_query(rows, json.loads(json.dumps(rows)), "L") == []
+
+
+_METRIC_DEFECTS = [
+    pytest.param({"r": 0.62}, {"r": 0.63}, id="ausserhalb-toleranz"),
+    pytest.param({"r": 0.62}, {"r": "0.62"}, id="string-gespeichert"),
+    pytest.param({"r": "0.62"}, {"r": 0.62}, id="string-frisch"),
+    pytest.param({"r": 0.62}, {"r": None}, id="null-gespeichert"),
+    pytest.param({"r": 0.62}, {"r": float("nan")}, id="nan-gespeichert"),
+    pytest.param({"r": float("nan")}, {"r": float("nan")}, id="nan-beidseitig"),
+    pytest.param({"r": 0.62}, {"r": float("inf")}, id="inf-gespeichert"),
+    pytest.param({"r": 0.62}, {}, id="metrik-fehlt"),
+    pytest.param({}, {"r": 0.62}, id="metrik-nur-gespeichert"),
+    pytest.param({"r": 0.62}, None, id="block-fehlt"),
+    pytest.param({"r": 0.62}, [0.62], id="block-falscher-typ"),
+]
+
+
+@pytest.mark.parametrize(("fresh", "stored"), _METRIC_DEFECTS)
+def test_diverged_metrics_reports_every_defect_class(fresh: Any, stored: Any) -> None:
+    assert diverged_metrics(fresh, stored, "L"), "Falsch-Gruen: kein Problem gemeldet"
+
+
+def test_diverged_metrics_stays_silent_within_tolerance() -> None:
+    """Gegenprobe: Rundungsunterschiede unterhalb der Toleranz sind kein Befund."""
+    assert diverged_metrics({"r": 0.62}, {"r": 0.62 + 1e-12}, "L") == []

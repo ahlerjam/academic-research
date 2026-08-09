@@ -360,10 +360,16 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
             fresh_values = (
                 fresh_arm["overall"] if scope == "overall" else fresh_arm["subsets"][scope]
             )
+            stored_subsets = stored_arm.get("subsets")
+            # Nicht ueber .get("subsets", {}) navigieren: der Default greift
+            # nur bei fehlendem Schluessel, ein gespeichertes null lief in
+            # einen AttributeError, bevor der Helfer ueberhaupt drankam.
             stored_values = (
                 stored_arm.get("overall")
                 if scope == "overall"
-                else stored_arm.get("subsets", {}).get(scope)
+                else stored_subsets.get(scope)
+                if isinstance(stored_subsets, dict)
+                else stored_subsets
             )
             problems += diverged_metrics(
                 fresh_values, stored_values, f"{arm}.{scope}", tolerance=tolerance

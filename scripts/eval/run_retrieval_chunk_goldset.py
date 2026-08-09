@@ -35,6 +35,7 @@ import struct
 import sys
 import tempfile
 from collections.abc import Hashable, Sequence
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -429,6 +430,12 @@ def _index_per_query(rows: Sequence[Any], field: str) -> tuple[dict, list, list]
     Zahl. Nur wenn sie fehlt oder nicht hashbar ist, tritt die Position an
     ihre Stelle; ein Typfilter wuerde den Vergleich fuer solche Zeilen still
     auf einen Positionsvergleich zurueckdrehen.
+
+    Bewusst offen: Werte, die Python gleich hasht (``1`` und ``True``),
+    kollabieren auf denselben Eintrag und erscheinen dann als Dublette statt
+    als Abweichung. Das setzt einen ``per_query``-Block voraus, der Integer-
+    und Boolean-IDs mischt -- den erzeugt keiner der Generatoren, und ein
+    Schluessel aus ``(type, id)`` machte jede Meldung unlesbar.
     """
     index: dict[Any, Any] = {}
     order: list[Any] = []
@@ -440,9 +447,26 @@ def _index_per_query(rows: Sequence[Any], field: str) -> tuple[dict, list, list]
         key = raw_id if usable else f"<Position {position} ohne query_id>"
         if key in index:
             duplicates.append(key)
-        index[key] = row.get(field, _NO_FIELD) if is_object else _NO_FIELD
+        if not is_object:
+            # Keine Zeile im erwarteten Format: den Rohwert selbst als
+            # Vergleichswert nehmen. Ein gemeinsamer Sentinel wuerde zwei
+            # voellig verschiedene Fremdzeilen als deckungsgleich ausweisen.
+            index[key] = row
+        else:
+            index[key] = row.get(field, _NO_FIELD)
         order.append(key)
     return index, order, sorted(set(duplicates), key=repr)
+
+
+def _first_occurrences(order: Sequence[Any]) -> list[Any]:
+    """Reihenfolge ohne Wiederholungen -- Dubletten meldet der Aufrufer separat."""
+    seen: set[Any] = set()
+    unique: list[Any] = []
+    for key in order:
+        if key not in seen:
+            seen.add(key)
+            unique.append(key)
+    return unique
 
 
 def diverged_per_query(
@@ -504,9 +528,12 @@ def diverged_per_query(
             f"{_detail(diverged, fresh_index, stored_index, limit, source)}"
         )
 
+    # Nur die gemeinsamen Schluessel, und jeden nur einmal: eine fehlende oder
+    # doppelte Zeile ist ein eigener Befund und darf nicht zusaetzlich als
+    # Umsortierung erscheinen, die es gar nicht gibt.
     shared = set(fresh_index) & set(stored_index)
-    fresh_shared = [key for key in fresh_order if key in shared]
-    stored_shared = [key for key in stored_order if key in shared]
+    fresh_shared = [key for key in _first_occurrences(fresh_order) if key in shared]
+    stored_shared = [key for key in _first_occurrences(stored_order) if key in shared]
     if fresh_shared != stored_shared:
         problems.append(
             f"{label}: die gemeinsamen Queries stehen in anderer Reihenfolge -- "
@@ -559,28 +586,47 @@ def diverged_metrics(
     tolerance: float = 1e-9,
     source: str = DEFAULT_SOURCE,
 ) -> list[str]:
-    """Metrik-Vergleich mit Toleranz -- und mit Typpruefung vor der Arithmetik.
+    """Metrik-Vergleich mit Toleranz -- ueber die Schluesselvereinigung.
 
-    ``abs(other - value)`` direkt auf den gespeicherten Rohdaten sprengt das
-    Gatter mit einem ``TypeError``, sobald dort etwas anderes als eine Zahl
-    steht (handeditierte Datei, aelterer Export). Der CI-Schritt endet dann
-    mit einem Traceback und ganz ohne Problemliste -- jede andere Abweichung
-    derselben Datei bliebe unentdeckt.
+    Drei Eigenschaften, die ein blankes ``abs(other - value)`` nicht hat:
+
+    * **Symmetrisch.** Verglichen wird die Vereinigung beider Schluessel, wie
+      in :func:`diverged_mapping` und :func:`diverged_per_query`. Nur ueber
+      ``fresh_values`` zu laufen liesse eine Metrik, die es nur im
+      Vergleichsstand gibt (umbenannt, aus ``_aggregate`` entfernt), still
+      weiter altern.
+    * **Typfest auf beiden Seiten.** Steht irgendwo etwas anderes als eine
+      Zahl, wird das gemeldet statt in einen ``TypeError`` zu laufen: die
+      ``main()``-Funktionen fangen nur ``ManifestMismatchError``, der
+      CI-Schritt endete sonst mit Traceback und ganz ohne Problemliste.
+    * **NaN-fest.** ``abs(nan - x) > tolerance`` ist immer False -- eine
+      NaN-Metrik verglich sich damit als gleich mit allem und zertifizierte
+      einen kaputten Report als deckungsgleich. Nur endliche Zahlen gehen in
+      den Toleranzvergleich, alles andere in den exakten.
     """
     if not isinstance(stored_values, dict):
         return [
             f"{label}: in {source} steht hier {type(stored_values).__name__} statt eines Objekts"
         ]
+
+    def _comparable(value: Any) -> bool:
+        return not isinstance(value, bool) and isinstance(value, int | float) and isfinite(value)
+
     problems: list[str] = []
-    for metric, value in fresh_values.items():
-        other = stored_values.get(metric)
-        if isinstance(other, bool) or not isinstance(other, int | float):
+    for metric in sorted(set(fresh_values) | set(stored_values), key=repr):
+        value = fresh_values.get(metric, _ABSENT)
+        other = stored_values.get(metric, _ABSENT)
+        if _comparable(value) and _comparable(other):
+            if abs(other - value) > tolerance:
+                problems.append(f"{label}.{metric}: gemessen {value!r}, in {source} {other!r}")
+        else:
+            # Alles, was nicht auf beiden Seiten eine endliche Zahl ist, ist
+            # hier ein Befund -- auch wenn beide Seiten denselben Unfug
+            # tragen: in einem Metrikblock hat nichts anderes etwas verloren.
             problems.append(
                 f"{label}.{metric}: gemessen {value!r}, in {source} {other!r} "
                 "-- kein vergleichbarer Zahlenwert"
             )
-        elif abs(other - value) > tolerance:
-            problems.append(f"{label}.{metric}: gemessen {value!r}, in {source} {other!r}")
     return problems
 
 

@@ -531,9 +531,17 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
         if old is None:
             problems.append(f"{key}: fehlt in den eingecheckten Rohdaten")
             continue
+        # Nicht ueber .get("subsets", {}) navigieren: der Default greift nur
+        # bei fehlendem Schluessel, ein gespeichertes null lief in einen
+        # AttributeError, bevor der Helfer ueberhaupt drankam.
+        old_subsets = old.get("subsets")
         scopes: list[tuple[str, dict, Any]] = [("overall", fresh["overall"], old.get("overall"))]
         scopes += [
-            (f"subsets.{case}", values, old.get("subsets", {}).get(case))
+            (
+                f"subsets.{case}",
+                values,
+                old_subsets.get(case) if isinstance(old_subsets, dict) else old_subsets,
+            )
             for case, values in fresh["subsets"].items()
         ]
         for scope, fresh_values, old_values in scopes:

@@ -67,6 +67,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     PlaybackEmbedder,
     _populate_vault,
     decode_vector,
+    diverged_metrics,
     diverged_per_query,
 )
 
@@ -120,6 +121,11 @@ REBUILD_HINT = (
 )
 
 CONTROL_TOLERANCE = 1e-9
+
+# Der Vergleichsstand des Kontrolltests ist kein eingecheckter Report, sondern
+# ein zweiter, frisch gerechneter #731-Lauf -- die gemeinsamen Vergleichshelfer
+# benennen ihn ueber ``source`` entsprechend.
+REFERENCE_SOURCE = "der #731-Referenz"
 
 
 def _read_json(path: Path) -> Any:
@@ -404,26 +410,26 @@ def control_check(metadata_report: dict, tolerance: float = CONTROL_TOLERANCE) -
     reference = evaluate_candidate(goldset, vectors, k=DEFAULT_K)
 
     problems: list[str] = []
-    for metric, value in metadata_report["overall"].items():
-        other = reference["overall"][metric]
-        if abs(other - value) > tolerance:
-            problems.append(f"overall.{metric}: gemessen {value!r}, #731-Referenz {other!r}")
+    problems += diverged_metrics(
+        metadata_report["overall"],
+        reference["overall"],
+        "overall",
+        tolerance=tolerance,
+        source=REFERENCE_SOURCE,
+    )
     for case, values in metadata_report["subsets"].items():
-        ref_values = reference["subsets"].get(case)
-        if ref_values is None:
-            problems.append(f"subsets.{case}: fehlt in der #731-Referenz")
-            continue
-        for metric, value in values.items():
-            other = ref_values[metric]
-            if abs(other - value) > tolerance:
-                problems.append(
-                    f"subsets.{case}.{metric}: gemessen {value!r}, #731-Referenz {other!r}"
-                )
+        problems += diverged_metrics(
+            values,
+            reference["subsets"].get(case),
+            f"subsets.{case}",
+            tolerance=tolerance,
+            source=REFERENCE_SOURCE,
+        )
     problems += diverged_per_query(
         metadata_report["per_query"],
         reference["per_query"],
         "per_query",
-        source="der #731-Referenz",
+        source=REFERENCE_SOURCE,
     )
 
     return {
@@ -549,18 +555,23 @@ def compare_against(report: dict, stored: dict, tolerance: float = CONTROL_TOLER
         if old is None:
             problems.append(f"{arm}: fehlt in den eingecheckten Rohdaten")
             continue
-        for metric, value in fresh["overall"].items():
-            other = old.get("overall", {}).get(metric)
-            if other is None or abs(other - value) > tolerance:
-                problems.append(f"{arm}.overall.{metric}: gemessen {value!r}, im Report {other!r}")
+        problems += diverged_metrics(
+            fresh["overall"], old.get("overall"), f"{arm}.overall", tolerance=tolerance
+        )
+        old_subsets = old.get("subsets")
         for case, values in fresh["subsets"].items():
-            old_values = old.get("subsets", {}).get(case, {})
-            for metric, value in values.items():
-                other = old_values.get(metric)
-                if other is None or abs(other - value) > tolerance:
-                    problems.append(
-                        f"{arm}.subsets.{case}.{metric}: gemessen {value!r}, im Report {other!r}"
-                    )
+            problems += diverged_metrics(
+                values,
+                old_subsets.get(case) if isinstance(old_subsets, dict) else old_subsets,
+                f"{arm}.subsets.{case}",
+                tolerance=tolerance,
+            )
+        # Die Trefferlisten gehoeren mit ins Gatter: verschiebt sich die
+        # Rangfolge, waehrend die Mittelwerte innerhalb der Toleranz bleiben
+        # (Permutation gleich relevanter Treffer), dokumentierten die
+        # eingecheckten Rohdaten sonst weiter eine Reihenfolge, die der Code
+        # nicht mehr erzeugt. control_check deckt nur metadata_context ab.
+        problems += diverged_per_query(fresh["per_query"], old.get("per_query"), f"{arm}.per_query")
     if not report["control_check"]["passed"]:
         problems.append("control_check: metadata_context reproduziert #731 nicht mehr")
     return problems
