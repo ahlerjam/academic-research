@@ -28,6 +28,7 @@ lautlos aufloest, waere schlimmer als keins.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,7 @@ from scripts.eval.build_retrieval_chunk_goldset import (
     MAX_PROBE_QUERY_TOKENS,
     dense_paper_ranks,
     load_reuse_index,
+    min_score_gap,
     probe_queries,
 )
 from scripts.eval.run_retrieval_ablation_729 import (
@@ -241,6 +243,59 @@ def test_conditions_file_covers_exactly_the_probe_queries(
     assert conditions["manifest_sha256"] == probe_goldset["meta"]["manifest_sha256"]
 
 
+def test_no_probe_query_has_an_exact_score_tie(conditions: dict) -> None:
+    """Vorbedingung des Replay-Gatters: kein Paper teilt sich mit einem anderen
+    exakt denselben ``rrf_score``.
+
+    Bei einem Gleichstand entscheidet die Iterationsreihenfolge eines ``set``
+    ueber die Rangfolge, und die ist pro Lauf verschieden (#792). Das Gatter
+    ``--check-against`` vergleicht Trefferlisten und wuerde davon sporadisch
+    rot -- ohne dass sich an einer Metrik etwas geaendert haette."""
+    for query_id, entry in conditions["queries"].items():
+        assert entry["checks"]["no_exact_score_tie_before"], query_id
+        assert entry["checks"]["no_exact_score_tie_after"], query_id
+        for field in ("min_paper_score_gap_before", "min_paper_score_gap_after"):
+            gap = entry["measured"][field]
+            assert gap is None or gap > 0.0, (query_id, field, gap)
+
+
+def test_min_score_gap_flags_an_exact_tie() -> None:
+    assert min_score_gap({"a": 0.5, "b": 0.4}) == pytest.approx(0.1)
+    assert min_score_gap({"a": 0.5, "b": 0.5}) == 0.0
+    assert min_score_gap({"a": 0.5}) is None
+    assert min_score_gap({}) is None
+
+
+def test_reuse_index_rejects_a_fixture_from_another_model(tmp_path: Path) -> None:
+    """``--reuse-vectors`` darf keinen Vektor aus einem anderen Vektorraum
+    uebernehmen.
+
+    Text- und ID-Gleichheit allein genuegen nicht: eine bge-m3-Fassung
+    desselben Goldsets (1024d, #732/#710) hat byteweise dieselben
+    ``embedding_text``e. Ohne diese Pruefung entstuende eine ``vectors.json``
+    mit gemischten Dimensionen, die ``verify_manifest`` nicht bemerkt, weil der
+    Manifest-Hash Texte und Metadaten abdeckt, nicht die Vektoren."""
+    source = tmp_path / "vectors.json"
+    source.write_text(json.dumps({"model_id": "BAAI/bge-m3", "chunks": {}, "queries": {}}))
+    (tmp_path / "goldset.json").write_text(
+        json.dumps({"meta": {"model_id": "BAAI/bge-m3", "dim": 1024}, "chunks": [], "queries": []})
+    )
+    with pytest.raises(ValueError, match="bge-m3"):
+        load_reuse_index(source)
+
+
+def test_compare_against_reports_a_missing_baseline_block() -> None:
+    """Rohdaten mit Regressionsanker, Lauf ohne: das muss auffallen, sonst
+    altert die Haelfte der eingecheckten Daten ungeprueft weiter."""
+    stored = {
+        "quality": {"results": {}, "deltas": {}, "deltas_by_case": {}},
+        "baseline": {"quality": {"results": {}, "deltas": {}, "deltas_by_case": {}}},
+    }
+    fresh = {"quality": {"results": {}, "deltas": {}, "deltas_by_case": {}}}
+    problems = compare_against(fresh, stored)
+    assert any(problem.startswith("baseline") for problem in problems)
+
+
 def test_dense_paper_ranks_compress_chunk_ranks_to_paper_ranks() -> None:
     """Der 'vorher'-Arm rankt auf Paper-Ebene: drei Paper mit Bestchunks auf
     den Chunkraengen 1, 4 und 5 sind dort die Paperraenge 1, 2 und 3.
@@ -413,8 +468,18 @@ def test_check_against_detects_a_stale_report() -> None:
 
 
 @pytest.mark.skipif(not LIVE_RESULTS.exists(), reason="Rohdaten des Messlaufs fehlen")
-def test_cli_check_against_exits_zero_on_the_checked_in_results() -> None:
-    """Ende-zu-Ende ueber die CLI -- derselbe Aufruf, den der CI-Job faehrt."""
+@pytest.mark.parametrize("hash_seed", ["0", "524287"])
+def test_cli_check_against_exits_zero_on_the_checked_in_results(hash_seed: str) -> None:
+    """Ende-zu-Ende ueber die CLI -- derselbe Aufruf, den der CI-Job faehrt.
+
+    Zweimal mit unterschiedlichem ``PYTHONHASHSEED``, weil die beiden
+    Paper-Ebene-Arme (``vorher``/``zwischenzustand_a``) ueber ein ``set`` von
+    STABILEN ``paper_id``-Strings fusionieren: dort entscheidet bei einem
+    Gleichstand die Hash-Reihenfolge, die innerhalb eines Prozesses fest,
+    zwischen Prozessen aber seed-abhaengig ist. Ein solcher Gleichstand bliebe
+    in einem einzelnen Prozess unsichtbar und machte den CI-Job sporadisch rot
+    (Folge-Issue #792)."""
+    env = {**os.environ, "PYTHONHASHSEED": hash_seed}
     result = subprocess.run(
         [
             sys.executable,
@@ -434,6 +499,7 @@ def test_cli_check_against_exits_zero_on_the_checked_in_results() -> None:
         capture_output=True,
         text=True,
         cwd=REPO_ROOT,
+        env=env,
     )
     assert result.returncode == 0, result.stderr[-4000:]
 
@@ -453,7 +519,13 @@ def test_ranking_is_reproducible_across_runs(probe_goldset: dict, probe_vectors:
     Glossar-Decoy auf den Raengen 2 und 3 von ``p-gain-02``); die Texte wurden
     daraufhin so nachgezogen, dass er verschwindet. Dieser Test haelt fest,
     dass es dabei bleibt -- er wuerde ein wiedereingefuehrtes Unentschieden
-    hier melden statt als sporadisch rote CI."""
+    hier melden statt als sporadisch rote CI.
+
+    Was er NICHT abdeckt: die beiden Paper-Ebene-Arme fusionieren ueber stabile
+    ``paper_id``-Strings, deren ``set``-Reihenfolge innerhalb eines Prozesses
+    fest ist -- ein Gleichstand dort saehe hier zweimal gleich aus. Dafuer ist
+    ``test_cli_check_against_exits_zero_on_the_checked_in_results`` ueber zwei
+    ``PYTHONHASHSEED``-Werte parametrisiert."""
     first = run_quality_ablation(probe_goldset, probe_vectors, k=10)
     second = run_quality_ablation(probe_goldset, probe_vectors, k=10)
     for state in first["results"]:

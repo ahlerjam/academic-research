@@ -1119,6 +1119,15 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
     _compare_block(report, stored, "")
     if "baseline" in report:
         _compare_block(report["baseline"], stored.get("baseline", {}), "baseline.")
+    elif "baseline" in stored:
+        # Umgekehrter Fall, sonst stillschweigend gruen: die Rohdaten fuehren
+        # einen Regressionsanker, der frische Lauf nicht. Wer
+        # --baseline-goldset/--baseline-vectors aus dem CI-Schritt streicht,
+        # laesst damit die Haelfte der eingecheckten Daten ungeprueft altern.
+        problems.append(
+            "baseline: die eingecheckten Rohdaten fuehren einen Regressionsanker, "
+            "dieser Lauf nicht -- --baseline-goldset/--baseline-vectors fehlen"
+        )
     return problems
 
 

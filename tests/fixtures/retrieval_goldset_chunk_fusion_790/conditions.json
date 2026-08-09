@@ -24,6 +24,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -43,7 +45,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-decoy": null,
-          "en-probe-gain-target": "2b007dbd-ef1c-4ace-b50f-e354275b9574"
+          "en-probe-gain-target": "888004f4-0bdd-4732-8bf5-6c9dd17cb63e"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-decoy": false,
@@ -132,7 +134,9 @@
           "en-telemetry-retention": 0.013513513513513514,
           "en-change-approval": 0.013333333333333334,
           "en-probe-harm-counter": 0.0125
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00018018018018018007
       }
     },
     "p-gain-02": {
@@ -151,6 +155,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -170,7 +176,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-decoy": null,
-          "en-probe-gain-target": "51ec95a6-d9e4-474c-bc3f-db07f4dfb296"
+          "en-probe-gain-target": "f38afe09-d9c1-4eab-981e-0b2a609e8024"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-decoy": false,
@@ -267,7 +273,9 @@
           "de-mitbestimmung-telemetrie": 0.0136986301369863,
           "en-probe-harm-counter": 0.013513513513513514,
           "en-probe-harm-source": 0.013333333333333334
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00018018018018018007
       }
     },
     "p-gain-03": {
@@ -286,6 +294,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -305,7 +315,7 @@
         ],
         "attached_chunk": {
           "de-probe-gain-decoy": null,
-          "de-probe-gain-target": "9e891bc0-3bd5-4158-ab1e-82546ae546bf"
+          "de-probe-gain-target": "dbe58f3f-578a-40f1-b4f6-3b9296ef5e8b"
         },
         "attach_equals_vec_best": {
           "de-probe-gain-decoy": false,
@@ -402,7 +412,9 @@
           "en-access-review": 0.012987012987012988,
           "en-probe-crowd-many": 0.01282051282051282,
           "en-change-approval": 0.0125
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.0001665001665001678
       }
     },
     "p-gain-04": {
@@ -421,6 +433,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -440,7 +454,7 @@
         ],
         "attached_chunk": {
           "de-probe-gain-decoy": null,
-          "de-probe-gain-target": "9e891bc0-3bd5-4158-ab1e-82546ae546bf"
+          "de-probe-gain-target": "dbe58f3f-578a-40f1-b4f6-3b9296ef5e8b"
         },
         "attach_equals_vec_best": {
           "de-probe-gain-decoy": false,
@@ -537,7 +551,9 @@
           "en-access-review": 0.0136986301369863,
           "de-mitbestimmung-telemetrie": 0.013513513513513514,
           "en-change-approval": 0.012987012987012988
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00018511662347278635
       }
     },
     "p-gain-05": {
@@ -556,6 +572,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -575,7 +593,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-lexicon": null,
-          "en-probe-gain-target": "51ec95a6-d9e4-474c-bc3f-db07f4dfb296"
+          "en-probe-gain-target": "f38afe09-d9c1-4eab-981e-0b2a609e8024"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-lexicon": false,
@@ -666,7 +684,9 @@
           "en-probe-gain-decoy": 0.013513513513513514,
           "en-telemetry-retention": 0.013157894736842105,
           "en-pipeline-secrets": 0.012987012987012988
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00017088174982911666
       }
     },
     "p-crowd-01": {
@@ -685,6 +705,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "crowding_crowder_has_enough_chunks": true,
         "crowding_focused_vector_chunk_rank_is_deep": true,
         "crowding_focused_vector_paper_rank_is_high": true
@@ -698,8 +720,8 @@
           "en-probe-crowd-few"
         ],
         "attached_chunk": {
-          "en-probe-crowd-many": "db4400bd-0d8c-4c36-ae97-cff5d9934048",
-          "en-probe-crowd-few": "d7470b5c-020d-41a5-9ffa-9139b619688c"
+          "en-probe-crowd-many": "c00d95d6-f924-484b-a1a6-b7a61f05de45",
+          "en-probe-crowd-few": "367a1bfb-73ae-4bba-9239-0b1e1325708b"
         },
         "attach_equals_vec_best": {
           "en-probe-crowd-many": false,
@@ -786,7 +808,9 @@
           "en-probe-harm-counter": 0.01282051282051282,
           "en-pipeline-secrets": 0.012658227848101266,
           "en-change-approval": 0.0125
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00015822784810126493
       }
     },
     "p-crowd-02": {
@@ -805,6 +829,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "crowding_crowder_has_enough_chunks": true,
         "crowding_focused_vector_chunk_rank_is_deep": true,
         "crowding_focused_vector_paper_rank_is_high": true
@@ -818,8 +844,8 @@
           "en-probe-crowd-few"
         ],
         "attached_chunk": {
-          "en-probe-crowd-many": "e99e6411-833f-4267-a964-b20fff5f7e45",
-          "en-probe-crowd-few": "d7470b5c-020d-41a5-9ffa-9139b619688c"
+          "en-probe-crowd-many": "143e792c-cd81-4ba2-9e7d-c907e1bdf8bf",
+          "en-probe-crowd-few": "367a1bfb-73ae-4bba-9239-0b1e1325708b"
         },
         "attach_equals_vec_best": {
           "en-probe-crowd-many": true,
@@ -906,7 +932,9 @@
           "en-change-approval": 0.012195121951219513,
           "en-probe-gain-decoy": 0.012048192771084338,
           "en-probe-gain-lexicon": 0.011764705882352941
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00014692918013517464
       }
     },
     "p-harm-01": {
@@ -925,6 +953,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -944,7 +974,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "d0f10416-c78e-4ce3-a03e-e4fa47f03844"
+          "en-probe-harm-counter": "6ecae8af-a317-483d-96a7-04db89fcd168"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1033,7 +1063,9 @@
           "en-probe-crowd-many": 0.0136986301369863,
           "en-probe-gain-target": 0.012987012987012988,
           "en-probe-crowd-few": 0.01282051282051282
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.0001665001665001678
       }
     },
     "p-harm-02": {
@@ -1052,6 +1084,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -1071,7 +1105,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "01988d6d-8e19-4645-bb3f-4698259b90e9"
+          "en-probe-harm-counter": "03521681-8b32-4c0c-b4b9-734cc6f537d1"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1160,7 +1194,9 @@
           "en-pipeline-secrets": 0.013888888888888888,
           "en-telemetry-retention": 0.0136986301369863,
           "en-supply-chain": 0.013333333333333334
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.0001902587519025875
       }
     },
     "p-harm-03": {
@@ -1179,6 +1215,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -1198,7 +1236,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "179154a7-900a-4e00-bae6-ee237610e56d"
+          "en-probe-harm-counter": "b6266cfc-0636-476c-b1be-f6632d407295"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1285,7 +1323,9 @@
           "en-access-review": 0.013513513513513514,
           "en-probe-crowd-few": 0.0125,
           "en-incident-response": 0.011764705882352941
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00018511662347278635
       }
     },
     "p-control-01": {
@@ -1306,6 +1346,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "control_all_papers_are_fts_hits": true,
         "control_attach_equals_vec_best_for_all_papers": true,
         "control_every_paper_has_exactly_one_full_token_chunk": true
@@ -1319,8 +1361,8 @@
           "en-probe-harm-counter"
         ],
         "attached_chunk": {
-          "en-probe-gain-target": "af9e4943-401a-4f56-8664-ba0a3da0bbd2",
-          "en-probe-harm-counter": "191163d7-6aab-4d21-a0f3-83e251b964ba"
+          "en-probe-gain-target": "37000b22-e1f5-4769-a0da-4b92a9e7f300",
+          "en-probe-harm-counter": "b371c326-5640-41dc-b7b6-a66219e513c9"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-target": true,
@@ -1409,7 +1451,9 @@
           "en-access-review": 0.0136986301369863,
           "en-pipeline-secrets": 0.013513513513513514,
           "en-probe-crowd-few": 0.013333333333333334
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00018018018018018007
       }
     },
     "p-control-02": {
@@ -1430,6 +1474,8 @@
         "rule1_at_most_four_tokens": true,
         "rule1_no_fts5_syntax_error": true,
         "rule2_term_family_in_at_least_two_documents": true,
+        "no_exact_score_tie_before": true,
+        "no_exact_score_tie_after": true,
         "control_all_papers_are_fts_hits": true,
         "control_attach_equals_vec_best_for_all_papers": true,
         "control_every_paper_has_exactly_one_full_token_chunk": true
@@ -1443,8 +1489,8 @@
           "de-probe-gain-target"
         ],
         "attached_chunk": {
-          "de-probe-control-pair": "990acabf-d2e6-4034-b2ed-f08c6fdb408c",
-          "de-probe-gain-target": "78924b06-53af-4554-9c1e-66fb4cf4584c"
+          "de-probe-control-pair": "9266853b-3c74-44d1-82c9-5f2ae08cb30a",
+          "de-probe-gain-target": "bc5184bd-84b4-4a4a-9aa3-40d864483b1d"
         },
         "attach_equals_vec_best": {
           "de-probe-control-pair": true,
@@ -1541,7 +1587,9 @@
           "en-probe-harm-source": 0.013513513513513514,
           "de-datenschutz-pipeline": 0.013157894736842105,
           "en-probe-gain-decoy": 0.01282051282051282
-        }
+        },
+        "min_paper_score_gap_before": 0.0002070393374741207,
+        "min_paper_score_gap_after": 0.00019561815336463333
       }
     }
   }

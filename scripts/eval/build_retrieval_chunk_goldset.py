@@ -212,6 +212,22 @@ def load_reuse_index(vectors_path: Path) -> dict[str, tuple[str, str]]:
     old_goldset = json.loads(goldset_path.read_text(encoding="utf-8"))
     old_vectors = json.loads(vectors_path.read_text(encoding="utf-8"))
 
+    # Modell der Quelle hart pruefen. Ohne diese Pruefung genuegt Text- und
+    # ID-Gleichheit, um einen Vektor zu uebernehmen -- ein Set aus einem
+    # ANDEREN Vektorraum (etwa die bge-m3-Fassungen aus #732/#710 mit 1024
+    # Dimensionen) haette dieselben ``embedding_text``e und lieferte eine
+    # vectors.json mit gemischten Dimensionen, waehrend ``meta.dim`` die des
+    # neu geladenen Modells meldet. ``verify_manifest`` faende das nicht: es
+    # hasht Texte, Modell-ID und Dimension, nicht die Vektoren selbst.
+    source_model = old_goldset.get("meta", {}).get("model_id") or old_vectors.get("model_id")
+    if source_model != LEGACY_EMBEDDING_MODEL_ID:
+        raise ValueError(
+            f"--reuse-vectors {vectors_path} stammt aus dem Modell {source_model!r}, "
+            f"gebaut wird mit {LEGACY_EMBEDDING_MODEL_ID!r}. Vektoren aus zwei "
+            "Raeumen zu mischen ergibt eine Fixture, die nirgends auffaellt und "
+            "ueberall falsch misst."
+        )
+
     index: dict[str, tuple[str, str]] = {}
     for chunk in old_goldset["chunks"]:
         encoded = old_vectors.get("chunks", {}).get(chunk["chunk_id"])
@@ -418,15 +434,52 @@ def dense_paper_ranks(vec_best_chunk_rank: dict[str, int]) -> dict[str, int]:
     return {paper_id: index + 1 for index, (paper_id, _) in enumerate(ordered)}
 
 
-def _check_common_rules(query: dict, diagnosis: dict) -> dict[str, bool]:
-    """Design-Regeln 1 und 2 -- gelten fuer JEDE Probe-Rolle."""
+def min_score_gap(scores: dict[str, float]) -> float | None:
+    """Kleinster Abstand zwischen zwei benachbarten Paper-Scores einer Rangliste.
+
+    ``None`` bei weniger als zwei Papern. ``0.0`` bedeutet: mindestens zwei
+    Paper tragen exakt denselben Score, ihre Reihenfolge ist damit
+    unbestimmt (Folge-Issue #792).
+    """
+    ordered = sorted(scores.values(), reverse=True)
+    if len(ordered) < 2:
+        return None
+    return min(ordered[i] - ordered[i + 1] for i in range(len(ordered) - 1))
+
+
+def _check_common_rules(
+    query: dict,
+    diagnosis: dict,
+    scores_before: dict[str, float],
+    scores_after: dict[str, float],
+) -> dict[str, bool]:
+    """Design-Regeln 1, 2 und die Tie-Freiheit -- gelten fuer JEDE Probe-Rolle.
+
+    Die Tie-Pruefung ist bewusst rollenunabhaengig und breiter als Regel 6:
+    Regel 6 misst den Abstand an der KIPPSTELLE (``split_doc`` gegen
+    ``coherent_doc``), das Replay-Gatter ``--check-against`` vergleicht aber die
+    komplette Top-``k``-Trefferliste. Der einzige Gleichstand, den dieses Set je
+    hatte, lag zwischen Decoy und Glossar-Decoy -- also gerade NICHT an der
+    Kippstelle, und Regel 6 haette ihn durchgewinkt. Gefunden wurde er damals
+    von Hand; diese beiden Checks finden ihn ab jetzt beim Bauen.
+
+    Grenze, die dabei bleibt: ``scores_before``/``scores_after`` stammen aus den
+    bereits auf ``k`` gekuerzten Trefferlisten. Ein Gleichstand exakt an der
+    Grenze zwischen Rang ``k`` und ``k+1`` ist hier nicht sichtbar; er wuerde
+    die Zusammensetzung der Liste aendern und faellt dann im
+    Reproduzierbarkeitstest auf.
+    """
     text = query["query"]
     tokens = text.split()
+    gap_before = min_score_gap(scores_before)
+    gap_after = min_score_gap(scores_after)
     return {
         "rule1_no_comma": "," not in text,
         "rule1_at_most_four_tokens": 1 <= len(tokens) <= MAX_PROBE_QUERY_TOKENS,
         "rule1_no_fts5_syntax_error": diagnosis["fts5_syntax_error"] is None,
         "rule2_term_family_in_at_least_two_documents": diagnosis["papers_fts_hit_count"] >= 2,
+        "no_exact_score_tie_before": gap_before is None or gap_before > 0.0,
+        "no_exact_score_tie_after": gap_after is None or gap_after > 0.0,
     }
 
 
@@ -576,7 +629,7 @@ def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: i
                 finally:
                     conn.close()
 
-            checks = _check_common_rules(query, diagnosis)
+            checks = _check_common_rules(query, diagnosis, scores_before, scores_after)
             if role in ("gain", "harm"):
                 checks.update(
                     _check_split_pair(
@@ -622,6 +675,8 @@ def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: i
                     "paper_rank_after": ranks_after,
                     "paper_score_before": scores_before,
                     "paper_score_after": scores_after,
+                    "min_paper_score_gap_before": min_score_gap(scores_before),
+                    "min_paper_score_gap_after": min_score_gap(scores_after),
                 },
             }
 
