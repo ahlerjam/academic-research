@@ -298,6 +298,26 @@ def test_relevant_doc_ids_resolve_chunks_to_documents() -> None:
     assert relevant_doc_ids({}, owner) == []
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--write-thresholds", "--skip-thresholds-report"],
+        ["--conditions-out", "irgendwo.json"],
+    ],
+)
+def test_generator_rejects_contradictory_flag_combinations(argv: list[str]) -> None:
+    """Flags, die einander aufheben, sollen abweisen statt still nichts zu tun.
+
+    ``--skip-thresholds-report`` springt vor dem Schwellen-Block heraus, und
+    ``--conditions-out`` schreibt nur, wenn auch geprueft wird. Ohne diese
+    Pruefung endete beides mit Exit 0, ohne die erwartete Datei zu schreiben."""
+    from scripts.eval.build_retrieval_chunk_goldset import main as generator_main
+
+    with pytest.raises(SystemExit) as excinfo:
+        generator_main(argv)
+    assert excinfo.value.code == 2
+
+
 def test_min_score_gap_flags_an_exact_tie() -> None:
     assert min_score_gap({"a": 0.5, "b": 0.4}) == pytest.approx(0.1)
     assert min_score_gap({"a": 0.5, "b": 0.5}) == 0.0

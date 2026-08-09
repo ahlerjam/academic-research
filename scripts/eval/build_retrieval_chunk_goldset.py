@@ -809,6 +809,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+    # Widerspruechliche Kombinationen hart abweisen statt still zu schlucken:
+    # --skip-thresholds-report springt vor dem Schwellen-Block heraus, und
+    # --conditions-out schreibt nur, wenn geprueft wird. Beides waere sonst ein
+    # No-op mit Exit 0 -- dasselbe Muster wie --baseline-goldset/--baseline-vectors
+    # in run_retrieval_ablation_729.py.
+    if args.write_thresholds and args.skip_thresholds_report:
+        parser.error("--write-thresholds und --skip-thresholds-report schliessen sich aus")
+    if args.conditions_out is not None and not args.verify_probe_conditions:
+        parser.error("--conditions-out wirkt nur zusammen mit --verify-probe-conditions")
 
     if os.environ.get("VAULT_E5_LIVE_TEST") != "1":
         print(
