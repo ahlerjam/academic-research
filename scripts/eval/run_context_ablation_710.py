@@ -67,6 +67,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     PlaybackEmbedder,
     _populate_vault,
     decode_vector,
+    diverged_per_query,
 )
 
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "context_sentences_710"
@@ -418,10 +419,12 @@ def control_check(metadata_report: dict, tolerance: float = CONTROL_TOLERANCE) -
                 problems.append(
                     f"subsets.{case}.{metric}: gemessen {value!r}, #731-Referenz {other!r}"
                 )
-    retrieved_fresh = [r["retrieved"] for r in metadata_report["per_query"]]
-    retrieved_ref = [r["retrieved"] for r in reference["per_query"]]
-    if retrieved_fresh != retrieved_ref:
-        problems.append("per_query.retrieved: Rangfolge weicht von der #731-Referenz ab")
+    problems += diverged_per_query(
+        metadata_report["per_query"],
+        reference["per_query"],
+        "per_query",
+        source="der #731-Referenz",
+    )
 
     return {
         "reference": "run_embedding_candidates_731.evaluate_candidate('bge-m3')",

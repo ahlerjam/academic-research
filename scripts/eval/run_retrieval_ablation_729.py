@@ -110,6 +110,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     ManifestMismatchError,
     build_playback_embedder,
     diverged_mapping,
+    diverged_metrics,
     diverged_per_query,
     load_goldset,
     load_vectors,
@@ -1092,18 +1093,14 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
                     f"{prefix}quality.results.{state}: fehlt in den eingecheckten Rohdaten"
                 )
                 continue
-            for metric, value in fresh["overall"].items():
-                other = old.get("overall", {}).get(metric)
-                if other is None or abs(other - value) > tolerance:
-                    problems.append(
-                        f"{prefix}quality.results.{state}.overall.{metric}: gemessen {value!r}, "
-                        f"im Report {other!r}"
-                    )
             scope = f"{prefix}quality.results.{state}"
             problems.extend(
-                diverged_per_query(
-                    fresh["per_query"], old.get("per_query", []), f"{scope}.per_query"
+                diverged_metrics(
+                    fresh["overall"], old.get("overall"), f"{scope}.overall", tolerance=tolerance
                 )
+            )
+            problems.extend(
+                diverged_per_query(fresh["per_query"], old.get("per_query"), f"{scope}.per_query")
             )
             problems.extend(
                 diverged_mapping(fresh["by_case"], old.get("by_case"), f"{scope}.by_case")

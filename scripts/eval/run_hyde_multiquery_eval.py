@@ -56,6 +56,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     _populate_vault,
     build_playback_embedder,
     decode_vector,
+    diverged_metrics,
     diverged_per_query,
     load_goldset,
     load_vectors,
@@ -360,18 +361,15 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
                 fresh_arm["overall"] if scope == "overall" else fresh_arm["subsets"][scope]
             )
             stored_values = (
-                stored_arm.get("overall", {})
+                stored_arm.get("overall")
                 if scope == "overall"
-                else stored_arm.get("subsets", {}).get(scope, {})
+                else stored_arm.get("subsets", {}).get(scope)
             )
-            for metric, value in fresh_values.items():
-                other = stored_values.get(metric)
-                if other is None or abs(other - value) > tolerance:
-                    problems.append(
-                        f"{arm}.{scope}.{metric}: gemessen {value!r}, im Report {other!r}"
-                    )
+            problems += diverged_metrics(
+                fresh_values, stored_values, f"{arm}.{scope}", tolerance=tolerance
+            )
         problems += diverged_per_query(
-            fresh_arm["per_query"], stored_arm.get("per_query", []), f"{arm}.per_query"
+            fresh_arm["per_query"], stored_arm.get("per_query"), f"{arm}.per_query"
         )
     return problems
 
