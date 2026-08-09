@@ -38,7 +38,6 @@ from scripts.eval.build_retrieval_chunk_goldset import (
     MAX_PROBE_QUERY_TOKENS,
     REQUIRED_PROBE_FIELDS,
     dense_paper_ranks,
-    embed_all,
     load_reuse_index,
     min_score_gap,
     probe_queries,
@@ -50,7 +49,7 @@ from scripts.eval.run_retrieval_ablation_729 import (
     run_quality_ablation,
 )
 from scripts.eval.run_retrieval_chunk_goldset import GOLDSET_DIR as BASE_DIR
-from scripts.eval.run_retrieval_chunk_goldset import encode_vector, load_goldset, load_vectors
+from scripts.eval.run_retrieval_chunk_goldset import load_goldset, load_vectors
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROBE_DIR = REPO_ROOT / "tests" / "fixtures" / "retrieval_goldset_chunk_fusion_790"
@@ -364,109 +363,10 @@ def test_reuse_index_rejects_a_fixture_from_another_model(tmp_path: Path) -> Non
         load_reuse_index(source)
 
 
-def test_embed_all_raises_a_clear_error_for_empty_input() -> None:
-    """Xhigh-Review-Fund: leere Chunks *und* Queries duerfen nicht mit einem
-    nackten ``StopIteration`` abbrechen. ``build()`` ruft ``embed_all()`` mit
-    dem Ergebnis von ``build_chunks()``/``build_queries()`` auf, die bei
-    einer leeren/fehlkonfigurierten ``sources.json`` ebenfalls leer sein
-    koennen."""
-    with pytest.raises(ValueError, match="weder Chunks noch Queries"):
-        embed_all([], [], reuse_index={})
-
-
-def test_embed_all_rejects_reused_vectors_with_inconsistent_dimensions() -> None:
-    """Xhigh-Review-Fund: bei voller ``--reuse-vectors``-Abdeckung darf ein
-    beschaedigter/falsch langer Alt-Vektor nicht stillschweigend die
-    Dimension des gesamten Laufs bestimmen."""
-    chunks = [
-        {"chunk_id": "c1", "embedding_text": "passage: eins"},
-        {"chunk_id": "c2", "embedding_text": "passage: zwei"},
-    ]
-    reuse_index = {
-        "c1": ("passage: eins", encode_vector([0.1, 0.2, 0.3])),
-        "c2": ("passage: zwei", encode_vector([0.1, 0.2])),  # falsch lang
-    }
-    with pytest.raises(ValueError, match="widerspruechliche Vektordimensionen"):
-        embed_all(chunks, [], reuse_index=reuse_index)
-
-
-def test_embed_all_reuses_consistent_vectors_without_loading_the_embedder() -> None:
-    chunks = [{"chunk_id": "c1", "embedding_text": "passage: eins"}]
-    queries = [{"query_id": "q1", "query": "query: eins"}]
-    reuse_index = {
-        "c1": ("passage: eins", encode_vector([0.1, 0.2, 0.3])),
-        "q1": ("query: eins", encode_vector([0.4, 0.5, 0.6])),
-    }
-    encoded_chunks, encoded_queries, dim, stats = embed_all(
-        chunks, queries, reuse_index=reuse_index
-    )
-    assert dim == 3
-    assert stats == {
-        "chunks_reused": 1,
-        "chunks_embedded": 0,
-        "queries_reused": 1,
-        "queries_embedded": 0,
-    }
-
-
-def test_compare_against_reports_a_missing_baseline_block() -> None:
-    """Rohdaten mit Regressionsanker, Lauf ohne: das muss auffallen, sonst
-    altert die Haelfte der eingecheckten Daten ungeprueft weiter."""
-    stored = {
-        "quality": {"results": {}, "deltas": {}, "deltas_by_case": {}},
-        "baseline": {"quality": {"results": {}, "deltas": {}, "deltas_by_case": {}}},
-    }
-    fresh = {"quality": {"results": {}, "deltas": {}, "deltas_by_case": {}}}
-    problems = compare_against(fresh, stored)
-    assert any(problem.startswith("baseline") for problem in problems)
-
-
-def test_compare_against_reports_a_missing_diagnostics_block() -> None:
-    """Dieselbe Asymmetrie eine Ebene tiefer: ``--skip-diagnostics`` im
-    CI-Schritt liesse den im Report zitierten Diagnoseblock unbemerkt altern."""
-    empty = {"results": {}, "deltas": {}, "deltas_by_case": {}}
-    stored = {"quality": empty, "diagnostics": {"summary": {"query_count": 38}}}
-    problems = compare_against({"quality": empty}, stored)
-    assert any(problem.startswith("diagnostics") for problem in problems)
-
-
-def test_compare_against_names_the_diverging_query_and_case() -> None:
-    """Xhigh-Review-Fund: ein CI-Diff darf nicht nur melden, DASS eine Query
-    oder ein Case abweicht, sondern muss sagen WELCHE -- sonst ist eine
-    Abweichung unter vielen unveraendert unauffindbaren Queries nicht
-    triagierbar."""
-    fresh = {
-        "quality": {
-            "results": {
-                "nachher": {
-                    "overall": {"recall_at_10": 1.0},
-                    "per_query": [
-                        {"query_id": "q1", "retrieved": ["a", "b"]},
-                        {"query_id": "q2", "retrieved": ["x"]},
-                    ],
-                    "by_case": {
-                        "case1": {"ndcg_at_10": 0.5},
-                        "case2": {"ndcg_at_10": 0.9},
-                    },
-                }
-            },
-            "deltas": {},
-            "deltas_by_case": {},
-        }
-    }
-    stored = json.loads(json.dumps(fresh))
-    stored["quality"]["results"]["nachher"]["per_query"][1]["retrieved"] = ["y"]
-    stored["quality"]["results"]["nachher"]["by_case"]["case2"] = {"ndcg_at_10": 0.1}
-
-    problems = compare_against(fresh, stored)
-
-    retrieved_problem = next(p for p in problems if "per_query.retrieved" in p)
-    assert "q2" in retrieved_problem
-    assert "q1" not in retrieved_problem
-
-    by_case_problem = next(p for p in problems if "by_case" in p)
-    assert "case2" in by_case_problem
-    assert "case1" not in by_case_problem
+# Die fixture-unabhaengigen Unit-Tests zu ``embed_all()`` und
+# ``compare_against()`` stehen in ``tests/test_eval_script_helpers.py``: unter
+# dem modulweiten ``skipif`` dieser Datei haetten sie mit dem naechsten
+# Fixture-Umzug lautlos aufgehoert zu pruefen.
 
 
 def test_dense_paper_ranks_compress_chunk_ranks_to_paper_ranks() -> None:

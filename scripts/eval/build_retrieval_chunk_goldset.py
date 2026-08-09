@@ -52,6 +52,7 @@ import argparse
 import json
 import os
 import sys
+from itertools import chain
 from pathlib import Path
 from typing import Any
 
@@ -66,9 +67,9 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     THRESHOLDS_PATH,
     VECTORS_PATH,
     compute_manifest_sha256,
-    decode_vector,
     encode_vector,
     load_sources,
+    vector_dim,
 )
 
 # Marge zwischen gemessenem Wert und hinterlegter Schwelle. Klein, weil der
@@ -300,20 +301,34 @@ def embed_all(
             encoded_queries[query["query_id"]] = encode_vector(embedder.embed_query(query["query"]))
     elif not encoded_chunks and not encoded_queries:
         raise ValueError("embed_all() erhielt weder Chunks noch Queries -- nichts zu embedden.")
-    else:
+
+    # Dimensionspruefung ueber ALLE Vektoren, wiederverwendete wie frisch
+    # embeddete: der Normalfall von --reuse-vectors ist die Teil-Wieder-
+    # verwendung (Alt-Fixture uebernehmen, nur den Zuwachs neu embedden), und
+    # genau dort stuende ein beschaedigter oder falsch langer Alt-Vektor sonst
+    # ungeprueft neben frischen Vektoren der Modell-Dimension. Auffallen wuerde
+    # das erst weit entfernt beim vec0-Insert: ``verify_manifest`` hasht Texte
+    # und Metadaten, nie die Vektoren selbst.
+    ids_by_dim: dict[int, list[str]] = {}
+    for vector_id, encoded in chain(encoded_chunks.items(), encoded_queries.items()):
+        ids_by_dim.setdefault(vector_dim(encoded), []).append(vector_id)
+    if len(ids_by_dim) > 1:
+        # Die betroffenen IDs mitgeben, nicht nur die Laengen: in einer Fixture
+        # mit ueber 50 Vektoren ist "[383, 384]" allein nicht triagierbar.
+        detail = "; ".join(
+            f"{length}: {sorted(ids)[:5]!r}"
+            + (f" (+{len(ids) - 5} weitere)" if len(ids) > 5 else "")
+            for length, ids in sorted(ids_by_dim.items())
+        )
+        raise ValueError(
+            f"--reuse-vectors liefert widerspruechliche Vektordimensionen {sorted(ids_by_dim)!r} "
+            "-- mindestens ein wiederverwendeter Vektor ist beschaedigt oder stammt aus einem "
+            f"anderen Modellraum. Betroffen ({detail})."
+        )
+    if dim is None:
         # Vollstaendige Wiederverwendung: die Dimension steht in den
         # uebernommenen Vektoren selbst, das Modell muss dafuer nicht laden.
-        # Alle wiederverwendeten Vektoren muessen dieselbe Laenge tragen --
-        # sonst wuerde ein beschaedigter/falsch langer Alt-Vektor still die
-        # falsche Dimension melden.
-        lengths = {len(decode_vector(v)) for v in {**encoded_chunks, **encoded_queries}.values()}
-        if len(lengths) > 1:
-            raise ValueError(
-                f"--reuse-vectors liefert widerspruechliche Vektordimensionen {sorted(lengths)!r} "
-                "-- mindestens ein wiederverwendeter Vektor ist beschaedigt oder stammt aus einem "
-                "anderen Modellraum."
-            )
-        dim = lengths.pop()
+        dim = next(iter(ids_by_dim))
 
     # Reihenfolge an die Eingabe angleichen: die JSON-Fixture soll in
     # Dokument-/Query-Reihenfolge lesbar bleiben, nicht in "erst

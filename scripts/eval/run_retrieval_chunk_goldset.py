@@ -94,6 +94,20 @@ def decode_vector(encoded: str) -> list[float]:
     return list(struct.unpack(f"<{len(blob) // 4}f", blob))
 
 
+def vector_dim(encoded: str) -> int:
+    """Laenge eines kodierten Vektors, ohne ihn zu entpacken.
+
+    float32 little-endian, also vier Byte je Wert. Fuer reine
+    Dimensionspruefungen ueber ganze Fixtures ist das der billige Weg:
+    :func:`decode_vector` allozierte dafuer je Vektor eine Float-Liste, die
+    sofort wieder verworfen wird.
+    """
+    blob = base64.b64decode(encoded)
+    if len(blob) % 4 != 0:
+        raise ValueError(f"Vektor-BLOB hat Laenge {len(blob)} (kein Vielfaches von 4)")
+    return len(blob) // 4
+
+
 def encode_vector(vector: Sequence[float]) -> str:
     """Umkehrung von :func:`decode_vector` (nur vom Generator gebraucht)."""
     return base64.b64encode(struct.pack(f"<{len(vector)}f", *(float(v) for v in vector))).decode(
@@ -355,6 +369,149 @@ def check_thresholds(report: dict, thresholds: dict) -> list[str]:
         else:
             _compare(f"subsets.{case}", measured, limits)
     return violations
+
+
+# ---------------------------------------------------------------------------
+# Report-Vergleich (gemeinsam fuer die compare_against-Funktionen)
+# ---------------------------------------------------------------------------
+# Die --check-against-Gatter in run_retrieval_ablation_729,
+# run_embedding_candidates_731 und run_hyde_multiquery_eval pruefen dieselbe
+# Sache: deckt sich der frische Lauf mit den eingecheckten Rohdaten? Die
+# Vergleichsmechanik liegt deshalb hier, in dem Modul, aus dem ohnehin alle
+# drei importieren -- sonst driften drei Kopien derselben Pruefung
+# auseinander, wie es beim Wechsel vom positionsweisen Listenvergleich auf den
+# schluesselbasierten schon passiert ist.
+_MISSING = object()
+
+
+def _show(value: Any) -> str:
+    return "<fehlt>" if value is _MISSING else repr(value)
+
+
+def _detail(keys: Sequence[Any], fresh: dict, stored: dict, limit: int) -> str:
+    """``<key>: gemessen ..., im Report ...`` fuer die ersten ``limit`` Schluessel.
+
+    Gekappt, weil ein durchgaengig abweichender Report sonst eine Meldung ueber
+    alle Queries erzeugt; die Zahl der uebergangenen Schluessel steht dabei.
+    """
+    shown = ", ".join(
+        f"{key}: gemessen {_show(fresh.get(key, _MISSING))}, "
+        f"im Report {_show(stored.get(key, _MISSING))}"
+        for key in keys[:limit]
+    )
+    if len(keys) > limit:
+        shown += f", ... (+{len(keys) - limit} weitere)"
+    return shown
+
+
+def _index_per_query(
+    rows: Sequence[Any], field: str
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    """``per_query``-Liste als ``query_id -> Wert``, plus Reihenfolge und Dubletten."""
+    index: dict[str, Any] = {}
+    order: list[str] = []
+    duplicates: list[str] = []
+    for position, row in enumerate(rows):
+        is_object = isinstance(row, dict)
+        raw_id = row.get("query_id") if is_object else None
+        # Ohne verwertbare query_id bleibt die Position als Schluessel -- als
+        # str, damit sorted() spaeter nicht ueber gemischte Typen faellt.
+        key = raw_id if isinstance(raw_id, str) else f"<Position {position} ohne query_id>"
+        if key in index:
+            duplicates.append(key)
+        index[key] = row.get(field, _MISSING) if is_object else _MISSING
+        order.append(key)
+    return index, order, sorted(set(duplicates))
+
+
+def diverged_per_query(
+    fresh_rows: Sequence[Any],
+    stored_rows: Any,
+    label: str,
+    *,
+    field: str = "retrieved",
+    limit: int = 3,
+) -> list[str]:
+    """Vergleicht zwei ``per_query``-Bloecke und benennt die abweichende Query.
+
+    Der Vergleich laeuft ueber die ``query_id``, damit die Meldung sagen kann,
+    WELCHE Query abweicht -- ein positionsweiser Listenvergleich meldet nur,
+    DASS irgendwo etwas abweicht, und das ist ohne kompletten lokalen Re-Run
+    nicht triagierbar.
+
+    Reihenfolge und Dubletten fallen dabei nicht unter den Tisch: beides wird
+    separat gemeldet, sonst waere der Schluesselvergleich schwaecher als der
+    Listenvergleich, den er ersetzt.
+
+    Returns:
+        Je Abweichung eine Zeile, jeweils mit ``label`` praefigiert.
+    """
+    if not isinstance(stored_rows, list):
+        return [
+            f"{label}: die eingecheckten Rohdaten fuehren hier "
+            f"{type(stored_rows).__name__} statt einer Liste"
+        ]
+
+    fresh_index, fresh_order, fresh_duplicates = _index_per_query(fresh_rows, field)
+    stored_index, stored_order, stored_duplicates = _index_per_query(stored_rows, field)
+
+    problems: list[str] = []
+    for source, duplicates in (
+        ("im frischen Lauf", fresh_duplicates),
+        ("in den eingecheckten Rohdaten", stored_duplicates),
+    ):
+        if duplicates:
+            problems.append(
+                f"{label}: doppelte query_id {source}: {duplicates!r} -- verglichen wird "
+                "davon nur der letzte Eintrag"
+            )
+
+    diverged = sorted(
+        key
+        for key in set(fresh_index) | set(stored_index)
+        if fresh_index.get(key, _MISSING) != stored_index.get(key, _MISSING)
+    )
+    if diverged:
+        problems.append(
+            f"{label}.{field}: Rangfolge weicht von den Rohdaten ab bei "
+            f"query_id={diverged!r} -- {_detail(diverged, fresh_index, stored_index, limit)}"
+        )
+    elif fresh_order != stored_order:
+        problems.append(
+            f"{label}: gleiche Inhalte, andere Reihenfolge -- gemessen {fresh_order!r}, "
+            f"im Report {stored_order!r}"
+        )
+    return problems
+
+
+def diverged_mapping(fresh_map: dict, stored_map: Any, label: str, *, limit: int = 3) -> list[str]:
+    """Schluesselweiser Vergleich zweier Report-Bloecke (z. B. ``by_case``).
+
+    Faengt die beiden Faelle mit ab, in denen ein blanker
+    Ungleichheitsvergleich zwar unspezifisch, aber wenigstens tragfaehig war:
+    fehlt der Block in den Rohdaten ganz, ist das eine Abweichung -- auch
+    gegenueber einem leeren frischen Block --, und ein fremder Typ wird
+    gemeldet, statt die Set-Operationen in einen ``TypeError`` laufen zu
+    lassen.
+    """
+    if stored_map is None:
+        return [f"{label}: fehlt in den eingecheckten Rohdaten"]
+    if not isinstance(stored_map, dict):
+        return [
+            f"{label}: die eingecheckten Rohdaten fuehren hier "
+            f"{type(stored_map).__name__} statt eines Objekts"
+        ]
+    diverged = sorted(
+        key
+        for key in set(fresh_map) | set(stored_map)
+        if fresh_map.get(key, _MISSING) != stored_map.get(key, _MISSING)
+    )
+    if not diverged:
+        return []
+    return [
+        f"{label}: weicht von den Rohdaten ab bei {diverged!r} -- "
+        f"{_detail(diverged, fresh_map, stored_map, limit)}"
+    ]
 
 
 def main(argv: Sequence[str] | None = None) -> int:

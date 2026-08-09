@@ -109,6 +109,8 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     VECTORS_PATH,
     ManifestMismatchError,
     build_playback_embedder,
+    diverged_mapping,
+    diverged_per_query,
     load_goldset,
     load_vectors,
     verify_manifest,
@@ -1059,7 +1061,10 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
     ``run_hyde_multiquery_eval.compare_against``: gegattert wird nicht die
     QUALITAET (dafuer gibt es hier keine Schwelle), sondern die
     Deckungsgleichheit von Lauf und Report -- sonst altert der Report
-    unbemerkt, sobald jemand am Suchpfad oder an der Fusion dreht.
+    unbemerkt, sobald jemand am Suchpfad oder an der Fusion dreht. Die
+    Vergleichsmechanik teilen sich alle drei ueber
+    :func:`~scripts.eval.run_retrieval_chunk_goldset.diverged_per_query` und
+    :func:`~scripts.eval.run_retrieval_chunk_goldset.diverged_mapping`.
 
     Der Kostenblock (``cost``) bleibt bewusst aussen vor: Latenz und
     Dateigroessen haengen an der Maschine und waeren als Gatter nur eine Quelle
@@ -1094,33 +1099,15 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
                         f"{prefix}quality.results.{state}.overall.{metric}: gemessen {value!r}, "
                         f"im Report {other!r}"
                     )
-            fresh_retrieved = {r["query_id"]: r["retrieved"] for r in fresh["per_query"]}
-            old_retrieved = {
-                r.get("query_id"): r.get("retrieved") for r in old.get("per_query", [])
-            }
-            diverged_queries = sorted(
-                qid
-                for qid in set(fresh_retrieved) | set(old_retrieved)
-                if fresh_retrieved.get(qid) != old_retrieved.get(qid)
-            )
-            if diverged_queries:
-                problems.append(
-                    f"{prefix}quality.results.{state}.per_query.retrieved: Rangfolge weicht "
-                    f"von den Rohdaten ab bei query_id={diverged_queries!r}"
+            scope = f"{prefix}quality.results.{state}"
+            problems.extend(
+                diverged_per_query(
+                    fresh["per_query"], old.get("per_query", []), f"{scope}.per_query"
                 )
-
-            fresh_by_case = fresh["by_case"]
-            old_by_case = old.get("by_case") or {}
-            diverged_cases = sorted(
-                case
-                for case in set(fresh_by_case) | set(old_by_case)
-                if fresh_by_case.get(case) != old_by_case.get(case)
             )
-            if diverged_cases:
-                problems.append(
-                    f"{prefix}quality.results.{state}.by_case: weicht von den Rohdaten ab bei "
-                    f"case={diverged_cases!r}"
-                )
+            problems.extend(
+                diverged_mapping(fresh["by_case"], old.get("by_case"), f"{scope}.by_case")
+            )
         for block in ("deltas", "deltas_by_case"):
             if fresh_quality.get(block) != old_quality.get(block):
                 problems.append(f"{prefix}quality.{block}: gemessen {fresh_quality.get(block)!r}")
