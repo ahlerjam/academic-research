@@ -287,6 +287,10 @@ def embed_all(
 
     encoded_chunks, todo_chunks = _split(chunks, "chunk_id", "embedding_text")
     encoded_queries, todo_queries = _split(queries, "query_id", "query")
+    # Vor dem Embedden festhalten: danach stehen frische und uebernommene
+    # Vektoren im selben Dict, und eine Fehlermeldung, die beide Herkuenfte
+    # nicht auseinanderhaelt, schickt die Triage in die falsche Richtung.
+    reused_ids = set(encoded_chunks) | set(encoded_queries)
 
     dim: int | None = None
     if todo_chunks or todo_queries:
@@ -311,24 +315,46 @@ def embed_all(
     # und Metadaten, nie die Vektoren selbst.
     ids_by_dim: dict[int, list[str]] = {}
     for vector_id, encoded in chain(encoded_chunks.items(), encoded_queries.items()):
-        ids_by_dim.setdefault(vector_dim(encoded), []).append(vector_id)
+        try:
+            length = vector_dim(encoded)
+        except ValueError as exc:  # beschaedigter base64-Blob
+            raise ValueError(f"Vektor {vector_id!r}: {exc}") from exc
+        ids_by_dim.setdefault(length, []).append(vector_id)
+
+    def _origin(vector_id: str) -> str:
+        return "wiederverwendet" if vector_id in reused_ids else "frisch"
+
+    def _affected(ids: list[str]) -> str:
+        shown = sorted(ids)[:5]
+        listing = ", ".join(f"{vid} ({_origin(vid)})" for vid in shown)
+        return listing + (f", +{len(ids) - 5} weitere" if len(ids) > 5 else "")
+
     if len(ids_by_dim) > 1:
         # Die betroffenen IDs mitgeben, nicht nur die Laengen: in einer Fixture
-        # mit ueber 50 Vektoren ist "[383, 384]" allein nicht triagierbar.
+        # mit ueber 50 Vektoren ist "[383, 384]" allein nicht triagierbar. Und
+        # die Herkunft dazu -- die Ursache kann ebenso gut das frisch geladene
+        # Modell sein (geaenderte Ausgabedimension bei gleicher model_id) wie
+        # ein beschaedigter Alt-Vektor.
         detail = "; ".join(
-            f"{length}: {sorted(ids)[:5]!r}"
-            + (f" (+{len(ids) - 5} weitere)" if len(ids) > 5 else "")
-            for length, ids in sorted(ids_by_dim.items())
+            f"{length}: {_affected(ids)}" for length, ids in sorted(ids_by_dim.items())
         )
         raise ValueError(
-            f"--reuse-vectors liefert widerspruechliche Vektordimensionen {sorted(ids_by_dim)!r} "
-            "-- mindestens ein wiederverwendeter Vektor ist beschaedigt oder stammt aus einem "
-            f"anderen Modellraum. Betroffen ({detail})."
+            f"widerspruechliche Vektordimensionen {sorted(ids_by_dim)!r} -- betroffen: {detail}."
         )
     if dim is None:
         # Vollstaendige Wiederverwendung: die Dimension steht in den
         # uebernommenen Vektoren selbst, das Modell muss dafuer nicht laden.
         dim = next(iter(ids_by_dim))
+    elif dim not in ids_by_dim:
+        # Alle Vektoren sind gleich breit, aber anders als das Modell meldet.
+        # embedder.dim geht in meta.dim, vectors.dim UND den Manifest-Hash --
+        # ungeprueft entstuende eine in sich stimmige Fixture, deren
+        # deklarierte Breite nirgends zu den Daten passt.
+        raise ValueError(
+            f"Der Embedder meldet dim={dim}, die erzeugten Vektoren sind aber "
+            f"{next(iter(ids_by_dim))} Werte breit -- meta.dim und der Manifest-Hash waeren "
+            "damit falsch."
+        )
 
     # Reihenfolge an die Eingabe angleichen: die JSON-Fixture soll in
     # Dokument-/Query-Reihenfolge lesbar bleiben, nicht in "erst

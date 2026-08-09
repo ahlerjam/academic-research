@@ -18,7 +18,11 @@ from typing import Any
 import pytest
 from scripts.eval.build_retrieval_chunk_goldset import embed_all
 from scripts.eval.run_retrieval_ablation_729 import compare_against
-from scripts.eval.run_retrieval_chunk_goldset import encode_vector
+from scripts.eval.run_retrieval_chunk_goldset import (
+    diverged_metrics,
+    diverged_per_query,
+    encode_vector,
+)
 
 
 class _StubEmbedder:
@@ -74,6 +78,9 @@ def test_embed_all_rejects_reused_vectors_with_inconsistent_dimensions() -> None
     # Nicht nur DASS, sondern WELCHER Vektor: in einer Fixture mit ueber 50
     # Eintraegen ist die blosse Laengenmenge nicht triagierbar.
     assert "c2" in str(excinfo.value)
+    # Und woher er stammt -- die Ursache kann ebenso das frisch geladene
+    # Modell sein wie ein beschaedigter Alt-Vektor.
+    assert "wiederverwendet" in str(excinfo.value)
 
 
 def test_embed_all_checks_reused_vectors_in_the_incremental_path(
@@ -108,6 +115,43 @@ def test_embed_all_accepts_the_incremental_path_with_consistent_dimensions(
     assert list(encoded_chunks) == ["c1", "c2"]
     assert stats["chunks_reused"] == 1
     assert stats["chunks_embedded"] == 1
+
+
+def test_embed_all_rejects_a_model_whose_output_width_contradicts_its_dim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``embedder.dim`` ist ein vom Backend *gemeldeter* Wert und geht
+    ungeprueft in ``meta.dim``, ``vectors.dim`` und den Manifest-Hash. Liefert
+    das Modell eine andere Breite als es meldet, waere die Fixture in sich
+    stimmig und trotzdem falsch -- auffallen wuerde das erst beim
+    vec0-Insert."""
+    import academic_vault.embedding_model as em
+
+    class _LyingEmbedder(_StubEmbedder):
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return [[0.5, 0.5] for _ in texts]  # 2 statt der gemeldeten 3
+
+    monkeypatch.setattr(em, "embedder_for", lambda *_a, **_kw: _LyingEmbedder(dim=3))
+
+    with pytest.raises(ValueError, match="Der Embedder meldet dim=3"):
+        embed_all([{"chunk_id": "c1", "embedding_text": "passage: neu"}], [], reuse_index={})
+
+
+def test_embed_all_names_the_vector_behind_a_corrupt_blob() -> None:
+    """Ein base64-Blob, dessen Laenge kein Vielfaches von 4 ist, muss mit der
+    betroffenen ID abbrechen -- sonst durchsucht der Operator die
+    ``vectors.json`` von Hand."""
+    chunks = [{"chunk_id": "c1", "embedding_text": "passage: eins"}]
+    reuse_index = {"c1": ("passage: eins", "AAAA")}  # dekodiert zu 3 Byte
+
+    with pytest.raises(ValueError, match="kein Vielfaches von 4") as excinfo:
+        embed_all(chunks, [], reuse_index=reuse_index)
+    assert "c1" in str(excinfo.value)
+
+    # Auch der Fall "gar kein gueltiges base64" (binascii.Error erbt von
+    # ValueError) muss die ID tragen, nicht nur die Byte-Arithmetik.
+    with pytest.raises(ValueError, match="c1") as excinfo:
+        embed_all(chunks, [], reuse_index={"c1": ("passage: eins", "AAAAA")})
 
 
 def test_embed_all_reuses_consistent_vectors_without_loading_the_embedder() -> None:
@@ -221,7 +265,21 @@ def test_compare_against_survives_raw_data_without_query_id() -> None:
 
     problems = compare_against(fresh, stored)
 
-    assert any("q1" in problem for problem in problems)
+    assert "q1" in _only(problems, "quality.results.nachher.per_query.retrieved")
+
+
+def test_compare_against_keeps_comparing_non_string_query_ids_by_key() -> None:
+    """Eine numerische ``query_id`` darf den Vergleich nicht still auf einen
+    Positionsvergleich zurueckdrehen: sonst passiert ein Report, der eine ganz
+    andere Query beschreibt, das Gatter mit Exit 0."""
+    fresh = _report([{"query_id": 1, "retrieved": ["a"]}])
+    stored = _report([{"query_id": 2, "retrieved": ["a"]}])
+
+    problems = compare_against(fresh, stored)
+
+    problem = _only(problems, "quality.results.nachher.per_query.retrieved")
+    assert "1" in problem and "2" in problem
+    assert "ohne query_id" not in problem
 
 
 def test_compare_against_reports_a_reordered_per_query_block() -> None:
@@ -235,6 +293,45 @@ def test_compare_against_reports_a_reordered_per_query_block() -> None:
     problems = compare_against(_report(rows), _report(list(reversed(rows))))
 
     assert any("Reihenfolge" in problem for problem in problems)
+
+
+def test_compare_against_reports_order_and_value_drift_together() -> None:
+    """Die Reihenfolgepruefung darf nicht hinter der Wertpruefung verschwinden:
+    sonst meldet der erste CI-Lauf nur den Wert, der Operator zieht genau den
+    nach, und der zweite Lauf ist wegen der bis dahin verschwiegenen
+    Reihenfolge erneut rot."""
+    fresh = _report(
+        [
+            {"query_id": "q1", "retrieved": ["a"]},
+            {"query_id": "q2", "retrieved": ["b"]},
+        ]
+    )
+    stored = _report(
+        [
+            {"query_id": "q2", "retrieved": ["b"]},
+            {"query_id": "q1", "retrieved": ["ANDERS"]},
+        ]
+    )
+
+    problems = compare_against(fresh, stored)
+
+    assert "q1" in _only(problems, "quality.results.nachher.per_query.retrieved")
+    assert any("Reihenfolge" in problem for problem in problems)
+
+
+def test_compare_against_reports_a_completely_missing_per_query_block() -> None:
+    """Fehlt der Block ganz, gehoert das als eine Zeile gemeldet -- nicht als
+    Dump aller Queries mit ``<Zeile fehlt>``. ``diverged_mapping`` macht das
+    fuer ``by_case`` bereits so."""
+    fresh = _report([{"query_id": "q1", "retrieved": ["a"]}])
+    stored = _report([])
+    del stored["quality"]["results"]["nachher"]["per_query"]
+
+    problems = compare_against(fresh, stored)
+
+    assert _only(problems, "quality.results.nachher.per_query").endswith(
+        "fehlt in den eingecheckten Rohdaten"
+    )
 
 
 def test_compare_against_reports_duplicate_query_ids() -> None:
@@ -255,13 +352,38 @@ def test_compare_against_reports_duplicate_query_ids() -> None:
 
 def test_compare_against_reports_a_stored_entry_without_retrieved() -> None:
     """Ein ueberzaehliger Eintrag ohne ``retrieved`` darf nicht mit einer gar
-    nicht vorhandenen Query verwechselt werden (beide waeren ``None``)."""
+    nicht vorhandenen Query verwechselt werden.
+
+    Die Assertion haengt bewusst an der ``per_query.retrieved``-Meldung: mit
+    einem blossen ``any("q2" in ...)`` war dieser Test schon einmal gruen,
+    weil die (sachlich falsche) Reihenfolge-Meldung die query_id ebenfalls
+    enthielt -- die gepruefte Eigenschaft war damit gar nicht abgedeckt."""
     fresh = _report([{"query_id": "q1", "retrieved": ["a"]}])
     stored = _report([{"query_id": "q1", "retrieved": ["a"]}, {"query_id": "q2"}])
 
     problems = compare_against(fresh, stored)
 
-    assert any("q2" in problem for problem in problems)
+    problem = _only(problems, "quality.results.nachher.per_query.retrieved")
+    assert "q2" in problem
+    # Die beiden Fehlzustaende muessen in der Meldung unterscheidbar sein.
+    assert "<Zeile fehlt>" in problem and "<Zeile ohne dieses Feld>" in problem
+
+
+def test_compare_against_reports_a_non_numeric_stored_metric() -> None:
+    """Steht in den Rohdaten statt einer Zahl ein String (handeditiert,
+    fremder Export), darf ``abs(other - value)`` das Gatter nicht mit einem
+    ``TypeError`` sprengen: ``main()`` faengt nur ``ManifestMismatchError``,
+    der CI-Schritt endete sonst ohne jede Problemliste."""
+    fresh = _report([])
+    fresh["quality"]["results"]["nachher"]["overall"] = {"recall_at_10": 0.62}
+    stored = json.loads(json.dumps(fresh))
+    stored["quality"]["results"]["nachher"]["overall"]["recall_at_10"] = "0.62"
+
+    problems = compare_against(fresh, stored)
+
+    assert "kein vergleichbarer Zahlenwert" in _only(
+        problems, "quality.results.nachher.overall.recall_at_10"
+    )
 
 
 def test_compare_against_reports_a_by_case_block_of_the_wrong_type() -> None:
@@ -286,3 +408,93 @@ def test_compare_against_reports_a_completely_missing_by_case_block() -> None:
     problems = compare_against(fresh, stored)
 
     assert any("by_case" in problem for problem in problems)
+
+
+# ---------------------------------------------------------------------------
+# Fall-Tabellen der gemeinsamen Helfer
+# ---------------------------------------------------------------------------
+# Die Einzeltests oben pruefen jeweils den Weg durch compare_against. Hier
+# stehen die Helfer selbst als Tabelle: jede Zeile ein Defekttyp, damit eine
+# neue Verschaerfung nicht wieder einen Nachbarfall aufreisst, ohne dass es
+# auffaellt. Alle Faelle muessen ein Problem melden -- Falsch-Gruen ist bei
+# einem Gatter der teuerste Fehler.
+_PER_QUERY_DEFECTS = [
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1", "retrieved": ["b"]}],
+        id="anderer-wert",
+    ),
+    pytest.param([{"query_id": "q1", "retrieved": ["a"]}], [], id="zeile-fehlt"),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1", "retrieved": ["a"]}, {"query_id": "q2", "retrieved": ["b"]}],
+        id="zeile-zuviel",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1"}],
+        id="zeile-ohne-feld",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"retrieved": ["a"]}],
+        id="zeile-ohne-query-id",
+    ),
+    pytest.param(
+        [{"query_id": 1, "retrieved": ["a"]}],
+        [{"query_id": 2, "retrieved": ["a"]}],
+        id="numerische-id",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}, {"query_id": "q2", "retrieved": ["b"]}],
+        [{"query_id": "q2", "retrieved": ["b"]}, {"query_id": "q1", "retrieved": ["a"]}],
+        id="umsortiert",
+    ),
+    pytest.param(
+        [{"query_id": "q1", "retrieved": ["a"]}],
+        [{"query_id": "q1", "retrieved": ["a"]}, {"query_id": "q1", "retrieved": ["a"]}],
+        id="dublette",
+    ),
+    pytest.param([["a", "b"]], ["voellig anders"], id="fremdformat-beide-seiten"),
+    pytest.param([{"query_id": "q1", "retrieved": ["a"]}], None, id="block-fehlt"),
+    pytest.param([{"query_id": "q1", "retrieved": ["a"]}], {"q1": ["a"]}, id="block-falscher-typ"),
+]
+
+
+@pytest.mark.parametrize(("fresh", "stored"), _PER_QUERY_DEFECTS)
+def test_diverged_per_query_reports_every_defect_class(fresh: Any, stored: Any) -> None:
+    assert diverged_per_query(fresh, stored, "L"), "Falsch-Gruen: kein Problem gemeldet"
+
+
+def test_diverged_per_query_stays_silent_on_identical_blocks() -> None:
+    """Gegenprobe zur Tabelle: der deckungsgleiche Fall darf nichts melden."""
+    rows = [
+        {"query_id": "q1", "retrieved": ["a", "b"]},
+        {"query_id": "q2", "retrieved": ["c"]},
+    ]
+    assert diverged_per_query(rows, json.loads(json.dumps(rows)), "L") == []
+
+
+_METRIC_DEFECTS = [
+    pytest.param({"r": 0.62}, {"r": 0.63}, id="ausserhalb-toleranz"),
+    pytest.param({"r": 0.62}, {"r": "0.62"}, id="string-gespeichert"),
+    pytest.param({"r": "0.62"}, {"r": 0.62}, id="string-frisch"),
+    pytest.param({"r": 0.62}, {"r": None}, id="null-gespeichert"),
+    pytest.param({"r": 0.62}, {"r": float("nan")}, id="nan-gespeichert"),
+    pytest.param({"r": float("nan")}, {"r": float("nan")}, id="nan-beidseitig"),
+    pytest.param({"r": 0.62}, {"r": float("inf")}, id="inf-gespeichert"),
+    pytest.param({"r": 0.62}, {}, id="metrik-fehlt"),
+    pytest.param({}, {"r": 0.62}, id="metrik-nur-gespeichert"),
+    pytest.param({"r": 0.62}, None, id="block-fehlt"),
+    pytest.param({"r": 0.62}, [0.62], id="block-falscher-typ"),
+]
+
+
+@pytest.mark.parametrize(("fresh", "stored"), _METRIC_DEFECTS)
+def test_diverged_metrics_reports_every_defect_class(fresh: Any, stored: Any) -> None:
+    assert diverged_metrics(fresh, stored, "L"), "Falsch-Gruen: kein Problem gemeldet"
+
+
+def test_diverged_metrics_stays_silent_within_tolerance() -> None:
+    """Gegenprobe: Rundungsunterschiede unterhalb der Toleranz sind kein Befund."""
+    assert diverged_metrics({"r": 0.62}, {"r": 0.62 + 1e-12}, "L") == []

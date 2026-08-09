@@ -45,6 +45,7 @@ from scripts.eval.run_retrieval_chunk_goldset import (  # noqa: E402
     build_playback_embedder,
     compute_manifest_sha256,
     decode_vector,
+    diverged_metrics,
     diverged_per_query,
 )
 
@@ -530,23 +531,24 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
         if old is None:
             problems.append(f"{key}: fehlt in den eingecheckten Rohdaten")
             continue
-        scopes: list[tuple[str, dict, dict]] = [
-            ("overall", fresh["overall"], old.get("overall", {}))
-        ]
+        # Nicht ueber .get("subsets", {}) navigieren: der Default greift nur
+        # bei fehlendem Schluessel, ein gespeichertes null lief in einen
+        # AttributeError, bevor der Helfer ueberhaupt drankam.
+        old_subsets = old.get("subsets")
+        scopes: list[tuple[str, dict, Any]] = [("overall", fresh["overall"], old.get("overall"))]
         scopes += [
-            (f"subsets.{case}", values, old.get("subsets", {}).get(case, {}))
+            (
+                f"subsets.{case}",
+                values,
+                old_subsets.get(case) if isinstance(old_subsets, dict) else old_subsets,
+            )
             for case, values in fresh["subsets"].items()
         ]
         for scope, fresh_values, old_values in scopes:
-            for metric, value in fresh_values.items():
-                other = old_values.get(metric)
-                if other is None or abs(other - value) > tolerance:
-                    problems.append(
-                        f"{key}.{scope}.{metric}: gemessen {value!r}, im Report {other!r}"
-                    )
-        problems += diverged_per_query(
-            fresh["per_query"], old.get("per_query", []), f"{key}.per_query"
-        )
+            problems += diverged_metrics(
+                fresh_values, old_values, f"{key}.{scope}", tolerance=tolerance
+            )
+        problems += diverged_per_query(fresh["per_query"], old.get("per_query"), f"{key}.per_query")
         for field_name in ("dim", "chunk_count", "schema_migration"):
             if fresh[field_name] != old.get(field_name):
                 problems.append(

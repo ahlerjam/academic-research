@@ -34,7 +34,8 @@ import json
 import struct
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Hashable, Sequence
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -375,28 +376,46 @@ def check_thresholds(report: dict, thresholds: dict) -> list[str]:
 # Report-Vergleich (gemeinsam fuer die compare_against-Funktionen)
 # ---------------------------------------------------------------------------
 # Die --check-against-Gatter in run_retrieval_ablation_729,
-# run_embedding_candidates_731 und run_hyde_multiquery_eval pruefen dieselbe
-# Sache: deckt sich der frische Lauf mit den eingecheckten Rohdaten? Die
+# run_embedding_candidates_731, run_hyde_multiquery_eval und die
+# Referenzkontrolle in run_context_ablation_710 pruefen dieselbe Sache: deckt
+# sich der frische Lauf mit einem festgehaltenen Vergleichsstand? Die
 # Vergleichsmechanik liegt deshalb hier, in dem Modul, aus dem ohnehin alle
-# drei importieren -- sonst driften drei Kopien derselben Pruefung
+# vier importieren -- sonst driften vier Kopien derselben Pruefung
 # auseinander, wie es beim Wechsel vom positionsweisen Listenvergleich auf den
 # schluesselbasierten schon passiert ist.
-_MISSING = object()
+#
+# ``source`` benennt den Vergleichsstand im Dativ ("weicht von {source} ab"):
+# fuer die drei --check-against-Gatter sind das die eingecheckten Rohdaten,
+# fuer #710 die frisch berechnete #731-Referenz.
+DEFAULT_SOURCE = "den eingecheckten Rohdaten"
 
 
-def _show(value: Any) -> str:
-    return "<fehlt>" if value is _MISSING else repr(value)
+class _Sentinel:
+    """Fehlzustand mit sprechendem ``repr`` -- taucht so direkt in Meldungen auf."""
+
+    def __init__(self, label: str) -> None:
+        self._label = label
+
+    def __repr__(self) -> str:
+        return self._label
 
 
-def _detail(keys: Sequence[Any], fresh: dict, stored: dict, limit: int) -> str:
-    """``<key>: gemessen ..., im Report ...`` fuer die ersten ``limit`` Schluessel.
+# Zwei getrennte Sentinels, kein gemeinsamer: "die Zeile fehlt ganz" und "die
+# Zeile ist da, fuehrt aber das Feld nicht" sind verschiedene Defekte. Mit
+# einem einzigen Sentinel verglichen sie sich als gleich, und ein
+# ueberzaehliger unvollstaendiger Eintrag rutschte still durch.
+_ABSENT = _Sentinel("<Zeile fehlt>")
+_NO_FIELD = _Sentinel("<Zeile ohne dieses Feld>")
+
+
+def _detail(keys: Sequence[Any], fresh: dict, stored: dict, limit: int, source: str) -> str:
+    """``<key>: gemessen ..., in <source> ...`` fuer die ersten ``limit`` Schluessel.
 
     Gekappt, weil ein durchgaengig abweichender Report sonst eine Meldung ueber
     alle Queries erzeugt; die Zahl der uebergangenen Schluessel steht dabei.
     """
     shown = ", ".join(
-        f"{key}: gemessen {_show(fresh.get(key, _MISSING))}, "
-        f"im Report {_show(stored.get(key, _MISSING))}"
+        f"{key}: gemessen {fresh.get(key, _ABSENT)!r}, in {source} {stored.get(key, _ABSENT)!r}"
         for key in keys[:limit]
     )
     if len(keys) > limit:
@@ -404,24 +423,50 @@ def _detail(keys: Sequence[Any], fresh: dict, stored: dict, limit: int) -> str:
     return shown
 
 
-def _index_per_query(
-    rows: Sequence[Any], field: str
-) -> tuple[dict[str, Any], list[str], list[str]]:
-    """``per_query``-Liste als ``query_id -> Wert``, plus Reihenfolge und Dubletten."""
-    index: dict[str, Any] = {}
-    order: list[str] = []
-    duplicates: list[str] = []
+def _index_per_query(rows: Sequence[Any], field: str) -> tuple[dict, list, list]:
+    """``per_query``-Liste als ``query_id -> Wert``, plus Reihenfolge und Dubletten.
+
+    Die ``query_id`` wird als Schluessel uebernommen, wie sie ist -- auch als
+    Zahl. Nur wenn sie fehlt oder nicht hashbar ist, tritt die Position an
+    ihre Stelle; ein Typfilter wuerde den Vergleich fuer solche Zeilen still
+    auf einen Positionsvergleich zurueckdrehen.
+
+    Bewusst offen: Werte, die Python gleich hasht (``1`` und ``True``),
+    kollabieren auf denselben Eintrag und erscheinen dann als Dublette statt
+    als Abweichung. Das setzt einen ``per_query``-Block voraus, der Integer-
+    und Boolean-IDs mischt -- den erzeugt keiner der Generatoren, und ein
+    Schluessel aus ``(type, id)`` machte jede Meldung unlesbar.
+    """
+    index: dict[Any, Any] = {}
+    order: list[Any] = []
+    duplicates: list[Any] = []
     for position, row in enumerate(rows):
         is_object = isinstance(row, dict)
         raw_id = row.get("query_id") if is_object else None
-        # Ohne verwertbare query_id bleibt die Position als Schluessel -- als
-        # str, damit sorted() spaeter nicht ueber gemischte Typen faellt.
-        key = raw_id if isinstance(raw_id, str) else f"<Position {position} ohne query_id>"
+        usable = raw_id is not None and isinstance(raw_id, Hashable)
+        key = raw_id if usable else f"<Position {position} ohne query_id>"
         if key in index:
             duplicates.append(key)
-        index[key] = row.get(field, _MISSING) if is_object else _MISSING
+        if not is_object:
+            # Keine Zeile im erwarteten Format: den Rohwert selbst als
+            # Vergleichswert nehmen. Ein gemeinsamer Sentinel wuerde zwei
+            # voellig verschiedene Fremdzeilen als deckungsgleich ausweisen.
+            index[key] = row
+        else:
+            index[key] = row.get(field, _NO_FIELD)
         order.append(key)
-    return index, order, sorted(set(duplicates))
+    return index, order, sorted(set(duplicates), key=repr)
+
+
+def _first_occurrences(order: Sequence[Any]) -> list[Any]:
+    """Reihenfolge ohne Wiederholungen -- Dubletten meldet der Aufrufer separat."""
+    seen: set[Any] = set()
+    unique: list[Any] = []
+    for key in order:
+        if key not in seen:
+            seen.add(key)
+            unique.append(key)
+    return unique
 
 
 def diverged_per_query(
@@ -431,6 +476,7 @@ def diverged_per_query(
     *,
     field: str = "retrieved",
     limit: int = 3,
+    source: str = DEFAULT_SOURCE,
 ) -> list[str]:
     """Vergleicht zwei ``per_query``-Bloecke und benennt die abweichende Query.
 
@@ -440,78 +486,148 @@ def diverged_per_query(
     nicht triagierbar.
 
     Reihenfolge und Dubletten fallen dabei nicht unter den Tisch: beides wird
-    separat gemeldet, sonst waere der Schluesselvergleich schwaecher als der
-    Listenvergleich, den er ersetzt.
+    zusaetzlich und unabhaengig gemeldet, sonst waere der Schluesselvergleich
+    schwaecher als der Listenvergleich, den er ersetzt. Die Reihenfolge wird
+    ueber die gemeinsamen Schluessel geprueft, damit eine fehlende Zeile nicht
+    zusaetzlich als Umsortierung erscheint.
 
     Returns:
         Je Abweichung eine Zeile, jeweils mit ``label`` praefigiert.
     """
+    if stored_rows is None:
+        return [f"{label}: fehlt in {source}"]
     if not isinstance(stored_rows, list):
-        return [
-            f"{label}: die eingecheckten Rohdaten fuehren hier "
-            f"{type(stored_rows).__name__} statt einer Liste"
-        ]
+        return [f"{label}: in {source} steht hier {type(stored_rows).__name__} statt einer Liste"]
 
     fresh_index, fresh_order, fresh_duplicates = _index_per_query(fresh_rows, field)
     stored_index, stored_order, stored_duplicates = _index_per_query(stored_rows, field)
 
     problems: list[str] = []
-    for source, duplicates in (
+    for where, duplicates in (
         ("im frischen Lauf", fresh_duplicates),
-        ("in den eingecheckten Rohdaten", stored_duplicates),
+        (f"in {source}", stored_duplicates),
     ):
         if duplicates:
             problems.append(
-                f"{label}: doppelte query_id {source}: {duplicates!r} -- verglichen wird "
+                f"{label}: doppelte query_id {where}: {duplicates!r} -- verglichen wird "
                 "davon nur der letzte Eintrag"
             )
 
     diverged = sorted(
-        key
-        for key in set(fresh_index) | set(stored_index)
-        if fresh_index.get(key, _MISSING) != stored_index.get(key, _MISSING)
+        (
+            key
+            for key in set(fresh_index) | set(stored_index)
+            if fresh_index.get(key, _ABSENT) != stored_index.get(key, _ABSENT)
+        ),
+        key=repr,
     )
     if diverged:
         problems.append(
-            f"{label}.{field}: Rangfolge weicht von den Rohdaten ab bei "
-            f"query_id={diverged!r} -- {_detail(diverged, fresh_index, stored_index, limit)}"
+            f"{label}.{field}: Rangfolge weicht von {source} ab bei "
+            f"query_id={diverged!r} -- "
+            f"{_detail(diverged, fresh_index, stored_index, limit, source)}"
         )
-    elif fresh_order != stored_order:
+
+    # Nur die gemeinsamen Schluessel, und jeden nur einmal: eine fehlende oder
+    # doppelte Zeile ist ein eigener Befund und darf nicht zusaetzlich als
+    # Umsortierung erscheinen, die es gar nicht gibt.
+    shared = set(fresh_index) & set(stored_index)
+    fresh_shared = [key for key in _first_occurrences(fresh_order) if key in shared]
+    stored_shared = [key for key in _first_occurrences(stored_order) if key in shared]
+    if fresh_shared != stored_shared:
         problems.append(
-            f"{label}: gleiche Inhalte, andere Reihenfolge -- gemessen {fresh_order!r}, "
-            f"im Report {stored_order!r}"
+            f"{label}: die gemeinsamen Queries stehen in anderer Reihenfolge -- "
+            f"gemessen {fresh_shared!r}, in {source} {stored_shared!r}"
         )
     return problems
 
 
-def diverged_mapping(fresh_map: dict, stored_map: Any, label: str, *, limit: int = 3) -> list[str]:
+def diverged_mapping(
+    fresh_map: dict,
+    stored_map: Any,
+    label: str,
+    *,
+    limit: int = 3,
+    source: str = DEFAULT_SOURCE,
+) -> list[str]:
     """Schluesselweiser Vergleich zweier Report-Bloecke (z. B. ``by_case``).
 
     Faengt die beiden Faelle mit ab, in denen ein blanker
     Ungleichheitsvergleich zwar unspezifisch, aber wenigstens tragfaehig war:
-    fehlt der Block in den Rohdaten ganz, ist das eine Abweichung -- auch
-    gegenueber einem leeren frischen Block --, und ein fremder Typ wird
-    gemeldet, statt die Set-Operationen in einen ``TypeError`` laufen zu
-    lassen.
+    fehlt der Block ganz, ist das eine Abweichung -- auch gegenueber einem
+    leeren frischen Block --, und ein fremder Typ wird gemeldet, statt die
+    Set-Operationen in einen ``TypeError`` laufen zu lassen.
     """
     if stored_map is None:
-        return [f"{label}: fehlt in den eingecheckten Rohdaten"]
+        return [f"{label}: fehlt in {source}"]
     if not isinstance(stored_map, dict):
-        return [
-            f"{label}: die eingecheckten Rohdaten fuehren hier "
-            f"{type(stored_map).__name__} statt eines Objekts"
-        ]
+        return [f"{label}: in {source} steht hier {type(stored_map).__name__} statt eines Objekts"]
     diverged = sorted(
-        key
-        for key in set(fresh_map) | set(stored_map)
-        if fresh_map.get(key, _MISSING) != stored_map.get(key, _MISSING)
+        (
+            key
+            for key in set(fresh_map) | set(stored_map)
+            if fresh_map.get(key, _ABSENT) != stored_map.get(key, _ABSENT)
+        ),
+        key=repr,
     )
     if not diverged:
         return []
     return [
-        f"{label}: weicht von den Rohdaten ab bei {diverged!r} -- "
-        f"{_detail(diverged, fresh_map, stored_map, limit)}"
+        f"{label}: weicht von {source} ab bei {diverged!r} -- "
+        f"{_detail(diverged, fresh_map, stored_map, limit, source)}"
     ]
+
+
+def diverged_metrics(
+    fresh_values: dict,
+    stored_values: Any,
+    label: str,
+    *,
+    tolerance: float = 1e-9,
+    source: str = DEFAULT_SOURCE,
+) -> list[str]:
+    """Metrik-Vergleich mit Toleranz -- ueber die Schluesselvereinigung.
+
+    Drei Eigenschaften, die ein blankes ``abs(other - value)`` nicht hat:
+
+    * **Symmetrisch.** Verglichen wird die Vereinigung beider Schluessel, wie
+      in :func:`diverged_mapping` und :func:`diverged_per_query`. Nur ueber
+      ``fresh_values`` zu laufen liesse eine Metrik, die es nur im
+      Vergleichsstand gibt (umbenannt, aus ``_aggregate`` entfernt), still
+      weiter altern.
+    * **Typfest auf beiden Seiten.** Steht irgendwo etwas anderes als eine
+      Zahl, wird das gemeldet statt in einen ``TypeError`` zu laufen: die
+      ``main()``-Funktionen fangen nur ``ManifestMismatchError``, der
+      CI-Schritt endete sonst mit Traceback und ganz ohne Problemliste.
+    * **NaN-fest.** ``abs(nan - x) > tolerance`` ist immer False -- eine
+      NaN-Metrik verglich sich damit als gleich mit allem und zertifizierte
+      einen kaputten Report als deckungsgleich. Nur endliche Zahlen gehen in
+      den Toleranzvergleich, alles andere in den exakten.
+    """
+    if not isinstance(stored_values, dict):
+        return [
+            f"{label}: in {source} steht hier {type(stored_values).__name__} statt eines Objekts"
+        ]
+
+    def _comparable(value: Any) -> bool:
+        return not isinstance(value, bool) and isinstance(value, int | float) and isfinite(value)
+
+    problems: list[str] = []
+    for metric in sorted(set(fresh_values) | set(stored_values), key=repr):
+        value = fresh_values.get(metric, _ABSENT)
+        other = stored_values.get(metric, _ABSENT)
+        if _comparable(value) and _comparable(other):
+            if abs(other - value) > tolerance:
+                problems.append(f"{label}.{metric}: gemessen {value!r}, in {source} {other!r}")
+        else:
+            # Alles, was nicht auf beiden Seiten eine endliche Zahl ist, ist
+            # hier ein Befund -- auch wenn beide Seiten denselben Unfug
+            # tragen: in einem Metrikblock hat nichts anderes etwas verloren.
+            problems.append(
+                f"{label}.{metric}: gemessen {value!r}, in {source} {other!r} "
+                "-- kein vergleichbarer Zahlenwert"
+            )
+    return problems
 
 
 def main(argv: Sequence[str] | None = None) -> int:
