@@ -1,0 +1,997 @@
+{
+  "_comment": [
+    "Quelltexte fuer das Probe-Goldset aus Issue #790 (Chunk-Fusion gezielt sichtbar machen).",
+    "Aufbau: die elf Dokumente und 26 Queries des #708-Sets WORTGLEICH uebernommen",
+    "(Regressionsanker, ihre Vektoren werden ueber --reuse-vectors unveraendert",
+    "weiterverwendet), dazu zehn neu geschriebene Dokumente und zwoelf Probe-Queries.",
+    "Die neuen Texte sind vollstaendig selbst geschrieben -- wie beim #708-Set liegt",
+    "bewusst kein fremder Text unter Copyright im Repo, und nur so ist die Kontrolle",
+    "ueber die Zuordnung von Termen zu Chunks ueberhaupt herstellbar.",
+    "Vier Familien, siehe 'probe_role' der Queries:",
+    "  gain     -- das lexikalisch staerkste Paper hat KEIN Chunk mit allen Query-Tokens",
+    "              (Signal-Split, M1), das relevante Paper genau eines, und dieses ist",
+    "              zugleich sein Vektor-Bestchunk. Erwartung: positives Delta.",
+    "  crowding -- ein chunkreiches Dokument besetzt die vorderen Chunk-Raenge (M2).",
+    "              Erwartung: schwacher Effekt, Messung der Effektgroesse.",
+    "  harm     -- dieselbe Konstruktion mit vertauschter Relevanz: das RELEVANTE Paper",
+    "              traegt das gesplittete Signal. Erwartung: negatives Delta.",
+    "  control  -- bei allen beteiligten Papern faellt zugeordnetes Chunk und",
+    "              Vektor-Bestchunk zusammen. Erwartung: Delta exakt 0.",
+    "Geprueft wird das nicht per Zusicherung, sondern mit",
+    "build_retrieval_chunk_goldset.py --verify-probe-conditions (conditions.json)."
+  ],
+  "documents": [
+    {
+      "doc_id": "en-change-approval",
+      "lang": "en",
+      "title": "Change Approval in Regulated Continuous Delivery",
+      "pages": [
+        [
+          1,
+          "1 Introduction\nOrganisations that operate under external supervision inherited their release controls from an era in which software shipped twice a year. A committee met, read a written description of the intended change, and recorded a decision in minutes. That arrangement made sense when a release was a rare and expensive event. It fits badly with a team that merges to the trunk forty times a week, because the committee becomes either a rubber stamp or a queue, and both outcomes destroy the control it was meant to provide. The interesting question is therefore not whether approval should exist, but what an approval is evidence of. A supervisor does not care that a named person clicked a button; the supervisor cares that the change was reviewed by someone other than its author, that the review was recorded, and that the recording cannot be altered after the fact. Each of those properties can be produced by a pipeline more reliably than by a meeting. The remainder of this text describes how the three properties survive the move from a committee to an automated delivery path, and where the translation genuinely fails rather than merely feeling unfamiliar. The failures matter more than the successes, because a control that has been automated badly is harder to notice than one that was never automated at all."
+        ],
+        [
+          2,
+          "2 Segregation Of Duties\nThe oldest of the three properties is the requirement that the person who writes a change must not be the person who releases it. In a manual world this was enforced by handing a deployment package to a separate operations group. In a delivery pipeline the same requirement becomes a rule about identities: the commit is signed by one account, the approving review is recorded against a second account, and the pipeline refuses to promote an artefact whose review and authorship resolve to the same identity. The rule is cheap to state and surprisingly hard to enforce, because identity leaks. A developer who also holds administrative rights on the build system can approve their own work by a route that the pipeline never sees. A shared service account used by three teams collapses three identities into one and silently defeats the check. An emergency access mechanism that grants elevated rights for four hours creates a window in which the rule is suspended and, in most implementations, not recorded. Enforcement therefore depends less on the approval gate itself than on the discipline with which accounts are issued, on whether administrative rights on the build system are treated as production rights, and on whether the exceptional paths leave a trace that anyone reads afterwards."
+        ],
+        [
+          3,
+          "3 Automated Evidence\nAn auditor asked to assess a release process wants to answer a narrow question: for this artefact now running in production, who reviewed it, what did they see, and what tests passed before it moved. A pipeline can answer that question far better than minutes of a meeting, provided the answer is assembled at the moment of promotion rather than reconstructed later. The practical technique is to attach a record to the artefact itself instead of to the pipeline run. Pipeline runs are deleted after ninety days by default in most systems; artefacts outlive them by years. A record that lives beside the artefact and names the source revision, the reviewers, the test results, and the identity of the promoting system remains answerable long after the logs that produced it have rotated away. Reconstruction after the fact is where most implementations quietly fail. A team that can produce the evidence only by querying the build server has not automated the control; it has moved the control into a system whose retention policy nobody chose deliberately. When the question is asked eighteen months later, during an investigation, the honest answer is that the record no longer exists, and the process is judged by that answer rather than by the diligence that went into the original review."
+        ],
+        [
+          4,
+          "4 Emergency Changes\nEvery control regime allows a path for changes that cannot wait, and every such path is where the regime is actually tested. The usual design lets an on-call engineer bypass the approval requirement, with the obligation to obtain a retrospective review within a stated period. In practice two failure modes dominate. The first is volume: when the ordinary path is slow, teams reclassify routine work as urgent, and the exception becomes the norm. A regime in which a fifth of all changes travel the emergency path has not got an emergency path, it has got a second ordinary path with no review. The second failure mode is closure. The retrospective review is created as a ticket, the ticket ages, and no mechanism forces it shut. Counting open retrospective reviews is a better indicator of the health of a release process than counting approvals granted, because the number rises quietly and nobody is accountable for it. A useful rule is to make the emergency path deliberately more expensive in attention rather than in time: it should be fast to invoke and impossible to forget, for instance by blocking the next ordinary release of the same component until the retrospective review has been closed."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-supply-chain",
+      "lang": "en",
+      "title": "Provenance and Component Inventories for Build Artefacts",
+      "pages": [
+        [
+          1,
+          "1 Introduction\nA modern application is assembled rather than written. The proportion of shipped bytes that originate in the repository of the team that ships them is small, often under five per cent, and the remainder arrives through a dependency resolver from registries that the team does not operate and cannot inspect. This changes the nature of the question an operator must answer after a vulnerability is announced. The question is no longer whether the team wrote faulty code; it is whether a particular version of a particular component is present in something currently running, and if so, where. Answering that question by searching source repositories is unreliable, because the resolver may have selected a transitive version that appears in no manifest a human ever wrote. Answering it by scanning production hosts is slow and covers only what is still running, not what shipped last week and was rolled back. The durable answer is an inventory produced by the build itself, at the moment the artefact is created, listing what actually went in. Everything that follows depends on that inventory being generated by the build rather than described by a person, because a description written by a person records intent while a build records fact, and the interesting incidents live exactly in the gap between the two."
+        ],
+        [
+          2,
+          "2 Generating A Component Inventory\nThe inventory must be produced where the resolution happens. A tool that reads the manifest files in the repository reproduces the intent of the developer and misses everything the resolver decided, including version substitutions, platform specific packages, and components vendored into a base image years ago by someone who has since left. A tool that inspects the finished artefact sees what is really there but loses the link back to a source, which is precisely the link an investigation needs. The workable compromise is to instrument the build so that the resolver reports its decisions, and to combine that report with an inspection of the finished artefact, treating a discrepancy between the two as a defect rather than as noise. Discrepancies are common and informative. A component that appears in the artefact but not in the resolver report usually arrived through a base image. A component that appears in the resolver report but not in the artefact usually indicates a build stage that discards files, which means the inventory overstates exposure and will generate work for nothing. Neither case is rare, and both are invisible to a team that generates the inventory from one source only and never compares."
+        ],
+        [
+          3,
+          "3 Signing And Attestation\nAn inventory is only as trustworthy as the path it travelled. If the file can be edited between the build and the consumer, it records a claim rather than a fact, and an attacker who can modify the artefact can modify its inventory to match. The countermeasure is to sign the inventory with a key that the build system holds and the developers do not, and to bind the signature to a digest of the artefact so that the pair cannot be separated and recombined. The hard part is not the cryptography, which is well understood and available in every toolchain, but key custody. A signing key stored in the same system that runs arbitrary build steps supplied by developers is not a key that protects anything, because any build step can read it. Practical designs move the signing operation to a separate service that accepts a digest and returns a signature, records every signature it issues in an append only log, and refuses to sign for repositories it has not been configured to trust. The log matters as much as the signature: it turns the question who signed this into a question that can be answered without trusting the answer given by the artefact itself."
+        ],
+        [
+          4,
+          "4 Consuming Vulnerability Feeds\nWith an inventory in hand, the operator can compare it against public advisories. The comparison is noisier than it sounds. Component names are not standardised across ecosystems, so the same library appears under three spellings and a naive match misses two of them. Version ranges in advisories are frequently wrong at their boundaries and are corrected weeks later, which means a feed consumed once produces a different answer from the same feed consumed twice. And most importantly, the presence of a vulnerable component is not the same as exposure to the vulnerability: the affected function may never be called, or may be reachable only through an interface that is not exposed. A programme that treats every match as an incident generates more work than it can absorb, and the predictable result is that the whole queue is ignored. A programme that treats reachability as the filter is more accurate but far more expensive to run, and the analysis is only as good as the call graph it is based on. The honest position is that inventories tell an operator where to look, not what to fix, and a process built on the opposite assumption will exhaust the people running it within a quarter."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-incident-response",
+      "lang": "en",
+      "title": "Blameless Review of Production Incidents",
+      "pages": [
+        [
+          1,
+          "1 Introduction\nAn outage is an unplanned experiment on a system that nobody understood as well as they believed. The review that follows is worth conducting only if it changes something, and most reviews change nothing because they conclude with a finding that a person made a mistake. That conclusion is almost always true and almost never useful, because the same conditions will produce the same mistake from a different person next quarter. The alternative approach starts from the assumption that everyone involved acted reasonably given the information available to them at the time, and asks what made the wrong action look reasonable. That reframing is not a courtesy extended to the people involved; it is the only framing that produces findings a team can act on, because it directs attention to the signals, defaults, and time pressures that shaped the decision rather than to the decision itself. It is also fragile. A review conducted in this style inside an organisation that later uses its findings in a performance assessment will produce exactly one honest review, and every subsequent one will be written defensively. The technique and the guarantee that surrounds it cannot be separated, and an organisation that adopts the first without the second gets worse information than it had before."
+        ],
+        [
+          2,
+          "2 Detection And Escalation\nMost of the elapsed time in a serious incident is spent before anyone knows there is an incident. Instrumentation typically watches the health of components, which is the thing that is easy to measure, rather than the thing customers experience, which is the thing that matters. A service can report every component healthy while returning errors to a third of requests, because the failing path runs through a dependency whose timeouts are counted as successes. Reducing detection time is therefore mostly a matter of measuring outcomes at the edge rather than health in the middle. Escalation has the opposite problem: it is usually fast enough and far too broad. Twenty people in a call is not twenty times the diagnostic capacity of one, because the coordination cost grows faster than the added insight, and the person who understands the failing component spends the call answering status questions instead of reading logs. Useful escalation practice separates the role of coordinating from the role of investigating, gives the coordinator authority to keep the call small, and makes it explicitly acceptable to declare an incident that turns out to be nothing. The cost of a false alarm is a wasted hour; the cost of hesitating is the entire detection budget."
+        ],
+        [
+          3,
+          "3 Writing The Review\nA review document has two audiences with incompatible needs. The people who were present want a precise timeline they can correct; everyone else wants to know what changed and why they should care. Documents written for the first audience are unreadable to the second, and documents written for the second are distrusted by the first because they smooth over the details in which the actual lesson lives. The workable structure puts a short account of consequence and remedy at the front, the timeline in the middle for those who need it, and the arguments that were considered and rejected at the end. The rejected arguments are the most valuable and the most frequently omitted part. A year later, when someone proposes the fix that was already considered and discarded, the discussion either repeats itself in full or the earlier reasoning is treated as authoritative without anyone checking whether its premises still hold. Recording why an option was rejected, and under what assumption, converts the review from a record of an event into an artefact that keeps paying out. Actions listed without an owner and a date do not survive contact with the next quarter and should be omitted rather than written down, because a list of stale actions teaches the organisation that the list can be ignored."
+        ],
+        [
+          4,
+          "4 Error Budgets\nAn error budget expresses the amount of unreliability a service may accumulate over a period before feature work stops and reliability work takes priority. Its purpose is not measurement; it is the pre-negotiation of a decision that is otherwise made under pressure, badly, by whoever is loudest during the outage. The mechanism works only if three conditions hold. The budget must be derived from something a customer would recognise, or the negotiation is about an arbitrary number and will be renegotiated the moment it becomes inconvenient. The consequence of exhausting it must be automatic, because a consequence that requires a manager to invoke it will not be invoked in the quarter it is most needed. And the period must be long enough that a single bad day does not consume it entirely, since a budget that is always exhausted conveys no information and is quickly ignored. Where these conditions are not met, the budget becomes a reporting artefact: computed monthly, presented in a slide, and unconnected to any decision anyone actually makes. That outcome is worse than having no budget at all, because it consumes the political capital that would have been needed to introduce a real one later."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-infrastructure-drift",
+      "lang": "en",
+      "title": "Declared State Versus Running State",
+      "pages": [
+        [
+          1,
+          "1 Introduction\nWhen the configuration of a system is written down in files and applied by a tool, the files become a claim about the world rather than a description of it. The claim holds only as long as nothing changes the world by another route. Something always does. An engineer resizes a disk during a night shift because the alternative is data loss and the ordinary path takes two hours. A support process adjusts a firewall rule to unblock a customer. An automated remediation script restarts a component with different arguments. Each of these actions is defensible in isolation, and each moves the running system away from what the files describe. The divergence is not a discipline problem to be solved by forbidding manual action, because forbidding it merely relocates the action to a route with no record at all. It is a measurement problem: the organisation needs to know continuously how far apart the two states are, which differences are deliberate, and which appeared without anyone deciding. This text treats the gap as a permanent property of operated systems rather than a defect to be eliminated, and asks what to measure, what to correct automatically, and what to escalate to a human."
+        ],
+        [
+          2,
+          "2 Detecting Divergence\nA comparison between the declared and the running configuration sounds mechanical and is not, because most tools compare only the attributes they know how to set. An attribute that the tool never writes is invisible to it, so a change to that attribute is a difference the comparison will never report. The set of attributes a tool manages is also unstable: it grows with every version upgrade, which means an upgrade can surface hundreds of apparent differences on a system that nobody touched. Teams that meet this for the first time usually respond by suppressing the noise, and suppression rules written in a hurry are rarely revisited, so genuine differences disappear into a filter written eighteen months earlier for an unrelated reason. A comparison is useful only if the result is small enough to read. Achieving that requires deciding in advance which attributes matter, recording the decision somewhere that is reviewed when the tool is upgraded, and treating growth in the number of ignored attributes as a signal in its own right rather than as housekeeping."
+        ],
+        [
+          3,
+          "3 Manual Intervention\nThe cases that matter are those in which someone changed the running system directly and the change was never written back. The record of what happened lives in the memory of one person and evaporates within days. Two months later the configuration is applied again from the files, the undocumented change is reverted, and the original problem returns in a form that nobody connects to its cause. This is the single most common way that operational knowledge is lost, and it is not solved by better documentation habits, because the moment of the change is exactly the moment at which nobody has time to document. What works is making the write-back cheap and immediate: a mechanism that captures the difference at the moment it is created, files it as a proposed edit to the source files, and assigns it to the person who made the change while they still remember why. The proposal does not need to be correct; it needs to exist. A rejected proposal that says someone widened this timeout on a Tuesday preserves more knowledge than a perfect document that was never written."
+        ],
+        [
+          4,
+          "4 Reconciliation Loops\nA reconciliation loop compares the two states continuously and corrects the running system to match the files without waiting for a human. It removes the class of problem described above by making the window between change and correction very short. It also introduces a new one: the loop will faithfully undo an emergency intervention within seconds, which turns a manual fix into a fight between an engineer and a robot at the worst possible moment. Every serious implementation therefore needs a documented, discoverable way to suspend reconciliation for a defined scope and a defined period, and the suspension must expire on its own. Suspensions that do not expire accumulate, and a system with a dozen permanently suspended scopes has quietly reverted to manual operation while continuing to report itself as reconciled. Whether to reconcile automatically is ultimately a judgement about which failure is worse for a given component: the slow erosion of the declared state, or an automated correction applied at a moment when the deviation was the only thing keeping the service alive."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-pipeline-secrets",
+      "lang": "en",
+      "title": "Handling Credentials in Automated Pipelines",
+      "pages": [
+        [
+          1,
+          "1 Introduction\nA build pipeline is an unusually attractive target. It holds the credentials needed to reach every environment the organisation runs, it executes code that changes on every commit, and it is operated by a team whose primary concern is throughput. Anyone who can influence what the pipeline executes can, in most default configurations, read everything it can reach. The traditional defence stores credentials outside the source repository and injects them at run time, which prevents the specific accident of a password committed to version control and prevents very little else, because the injected value is then present in the environment of a process running code that anybody with commit access can modify. Improving on that baseline means reducing what a credential is worth rather than hiding it better: shortening its life, narrowing what it can reach, and making its use observable. Each of the three is independently useful, and the third is the one most often skipped, because it produces no visible improvement until the day it is needed."
+        ],
+        [
+          2,
+          "2 Short Lived Tokens\nThe most effective single change is to stop distributing long lived credentials at all. Instead the pipeline proves its identity to a broker, and the broker issues a token that expires in minutes and is valid only for the resources the specific job needs. A stolen token is then worth almost nothing: by the time it has been exfiltrated and examined, it has expired. The difficulty is entirely in the proof of identity. Whatever the pipeline presents to the broker becomes the new long lived credential, and if that is a static value stored in the pipeline configuration, nothing has been gained beyond an extra step. Sound designs have the broker verify a signed statement issued by the pipeline platform itself, describing the repository, the branch, and the job. Two mistakes recur. The first is accepting the statement without verifying which repository it names, so any project on the same platform can obtain tokens for any other. The second is granting the token the same broad rights the old credential had, which preserves the exposure and merely shortens it."
+        ],
+        [
+          3,
+          "3 Detecting Leaked Credentials\nSome credentials will escape regardless. They appear in build logs, in error messages sent to a monitoring service, in a screenshot pasted into a chat, and in the environment of a process whose crash handler dumps everything it can see. Detection is therefore not an admission of failure but a necessary layer. Scanning source repositories for patterns that look like keys is the well known technique and the weakest one, because it finds only what is committed and only what matches a known shape. Scanning build output is more productive and much less common. The strongest signal is behavioural: a credential used from a network location it has never been used from, or at an hour when the job that owns it never runs, is more likely to be stolen than one that merely looks like a key in a file. Behavioural detection requires that credential use is logged in the first place, with enough detail to establish what normal looks like, which returns to the point that observability has to be built before the incident rather than during it."
+        ],
+        [
+          4,
+          "4 Rotation Under Pressure\nRotation is straightforward in a diagram and difficult at three in the morning. The credential in question is typically consumed by several systems, only some of which are known to the person doing the rotation, and at least one consumer will read it once at start-up and cache it in memory until restarted. Rotating without a period in which both the old and the new value are accepted therefore causes an outage in a component whose dependency on the credential nobody had recorded. The prerequisite for fast rotation is not tooling but an accurate list of consumers, and the only reliable way to obtain that list is to log every use with the identity of the caller and read the log before rotating rather than after. Organisations that discover this during an incident invariably rotate too slowly, because the first rotation attempt breaks something unrelated, confidence collapses, and the remaining work is deferred until a calmer week that does not arrive."
+        ]
+      ]
+    },
+    {
+      "doc_id": "de-datenschutz-pipeline",
+      "lang": "de",
+      "title": "Datenschutz-Folgenabschätzung für automatisierte Auslieferungsstrecken",
+      "pages": [
+        [
+          1,
+          "1 Ausgangslage\nEine Datenschutz-Folgenabschätzung wird üblicherweise für ein fachliches Verfahren geschrieben, nicht für die technische Strecke, über die dieses Verfahren ausgeliefert wird. Solange Software zweimal im Jahr in einem geplanten Fenster in Betrieb ging, war diese Trennung unproblematisch, weil das Verfahren zwischen zwei Abschätzungen stabil blieb. Bei kontinuierlicher Auslieferung ist sie es nicht mehr: Die verarbeiteten Datenkategorien, die Aufbewahrungsdauer und der Kreis der Zugriffsberechtigten ändern sich zwischen zwei Prüfterminen mehrfach, und niemand bemerkt es, weil die Abschätzung an einen Zeitpunkt gebunden ist und die Änderung an einen Vorgang. Der übliche Ausweg besteht darin, die Abschätzung jährlich zu wiederholen. Das erzeugt Aufwand ohne Erkenntnis, denn eine jährliche Prüfung findet die Abweichung im Mittel ein halbes Jahr nach ihrem Entstehen. Sinnvoller ist es, die wenigen Merkmale zu bestimmen, deren Änderung die Abschätzung tatsächlich entwertet, und ausschließlich diese fortlaufend zu beobachten. Der vorliegende Text beschreibt, welche Merkmale das sind, wie sie sich aus dem laufenden Betrieb ablesen lassen, und an welcher Stelle diese Automatisierung an eine Grenze stößt, die man besser benennt als überspielt."
+        ],
+        [
+          2,
+          "2 Auslösende Merkmale\nDrei Änderungen entwerten eine bestehende Abschätzung praktisch immer. Erstens eine neue Datenkategorie: Ein zusätzliches Feld im Formular, das eine Gesundheitsangabe oder eine Gewerkschaftszugehörigkeit aufnimmt, verschiebt die gesamte Bewertung, unabhängig davon, wie klein die Änderung im Quelltext aussieht. Zweitens ein neuer Empfänger: Ein zusätzlicher Dienst, an den Daten übermittelt werden, ist auch dann ein Empfänger, wenn er im selben Rechenzentrum steht und von derselben Abteilung betrieben wird. Drittens eine verlängerte Aufbewahrung, die typischerweise nicht als Entscheidung auftritt, sondern als Nebenwirkung: Ein Protokoll wird zur Fehlersuche vorübergehend länger vorgehalten, und die Übergangslösung überlebt den Anlass um Jahre. Alle drei Merkmale lassen sich an technischen Artefakten ablesen, die ohnehin entstehen, nämlich am Datenbankschema, an den ausgehenden Netzverbindungen und an den konfigurierten Löschfristen. Die Beobachtung dieser drei Artefakte ersetzt die Abschätzung nicht, aber sie beantwortet zuverlässig die Frage, wann eine neue fällig ist."
+        ],
+        [
+          3,
+          "3 Nachweis im laufenden Betrieb\nEine Aufsichtsbehörde interessiert sich weniger für das Dokument als für den Abstand zwischen Dokument und Wirklichkeit. Die entscheidende Frage lautet, ob die zum Prüfzeitpunkt laufende Fassung der Anwendung diejenige ist, für die die Abschätzung geschrieben wurde. Beantworten lässt sich das nur, wenn die Abschätzung auf einen konkreten Stand verweist und dieser Verweis maschinell prüfbar bleibt, also etwa auf einen Auslieferungsstand statt auf eine Versionsnummer, die von Hand gepflegt wird. Handgepflegte Verweise sind nach wenigen Monaten falsch, und zwar nicht aus Nachlässigkeit, sondern weil der Anlass zur Pflege im Arbeitsablauf niemals auftritt. Der zweite, seltener beachtete Punkt betrifft die Aufbewahrung des Nachweises selbst: Prüfungen finden regelmäßig ein bis zwei Jahre nach dem fraglichen Vorgang statt, während die Protokolle der Auslieferungsstrecke nach neunzig Tagen verschwinden. Wer den Nachweis dort ablegt, wo er entsteht, hat ihn zum Zeitpunkt der Prüfung nicht mehr."
+        ],
+        [
+          4,
+          "4 Grenzen der Automatisierung\nDie Beobachtung technischer Artefakte findet Änderungen, sie bewertet sie nicht. Ob ein zusätzliches Feld eine besondere Kategorie personenbezogener Daten aufnimmt, ergibt sich nicht aus seinem Datentyp und häufig nicht einmal aus seinem Namen; ein Freitextfeld mit der Bezeichnung Bemerkung kann alles enthalten. Ebenso wenig lässt sich die Erforderlichkeit einer Verarbeitung technisch feststellen, denn sie ist eine Abwägung und keine Eigenschaft des Systems. Eine Automatisierung, die diesen Unterschied verwischt, richtet Schaden an: Sie erzeugt eine grüne Anzeige, die als Freigabe gelesen wird, obwohl sie lediglich bedeutet, dass keine der drei beobachteten Größen sich geändert hat. Der ehrliche Zuschnitt beschränkt die Automatisierung deshalb auf die Auslösung einer menschlichen Prüfung und verzichtet ausdrücklich darauf, ein Ergebnis zu behaupten. Diese Selbstbeschränkung ist unbequem, weil sie den Aufwand sichtbar lässt, den ein Werkzeug wegzuautomatisieren versprochen hatte."
+        ]
+      ]
+    },
+    {
+      "doc_id": "de-lieferkette-pruefung",
+      "lang": "de",
+      "title": "Prüfpflichten in der Softwarelieferkette",
+      "pages": [
+        [
+          1,
+          "1 Ausgangslage\nWer Software in Verkehr bringt, haftet für ihre Bestandteile, auch für die, die er nicht geschrieben hat. Diese Aussage ist juristisch unstrittig und betrieblich folgenlos geblieben, solange niemand danach gefragt hat, was in einem ausgelieferten Stand eigentlich enthalten ist. Mit den jüngeren regulatorischen Anforderungen an digitale Produkte ändert sich das, denn die Nachweispflicht verschiebt sich von der Sorgfalt bei der Auswahl hin zur Kenntnis des Bestands. Der Unterschied ist erheblich. Sorgfalt bei der Auswahl lässt sich durch eine Richtlinie belegen, die vorschreibt, welche Bezugsquellen zulässig sind. Kenntnis des Bestands lässt sich nur durch eine Aufstellung belegen, die zum Zeitpunkt der Erstellung des Artefakts entsteht und die tatsächlich eingegangenen Bestandteile nennt, einschließlich derjenigen, die niemand bewusst ausgewählt hat. Der vorliegende Text ordnet die betrieblichen Folgen dieser Verschiebung und benennt die Stellen, an denen die üblichen Werkzeuge weniger leisten, als ihre Beschreibungen nahelegen."
+        ],
+        [
+          2,
+          "2 Aufstellung der Bestandteile\nEine Aufstellung, die aus den Abhängigkeitsdateien des Quelltexts gewonnen wird, beschreibt die Absicht der Entwicklerin. Sie enthält nicht, was das Auflösungswerkzeug daraus gemacht hat, und schon gar nicht, was in dem verwendeten Basisabbild seit Jahren mitgeliefert wird. Für die Nachweispflicht ist aber genau der zweite Teil maßgeblich, denn eine Schwachstelle in einer mitgelieferten Bibliothek ist nicht deshalb unbeachtlich, weil sie in keiner Abhängigkeitsdatei steht. Praktisch brauchbar ist deshalb nur eine Aufstellung, die beim Bauen entsteht und das fertige Artefakt zusätzlich untersucht. Weichen beide Wege voneinander ab, ist die Abweichung selbst der interessante Befund und keine Störung, die man wegkonfiguriert. In der Praxis werden Abweichungen fast immer unterdrückt, weil sie zu Beginn zahlreich sind und niemand Zeit hat, sie einzeln zu klären. Diese Unterdrückung ist die häufigste Ursache dafür, dass eine formal vorhandene Aufstellung im Ernstfall keine Frage beantwortet."
+        ],
+        [
+          3,
+          "3 Umgang mit Zulieferern\nBei zugekauften Komponenten endet die eigene Sichtbarkeit an der Vertragsgrenze. Die übliche Reaktion besteht darin, die Aufstellung vertraglich einzufordern. Das ist richtig und reicht nicht, weil die zugelieferte Aufstellung genau die Schwächen des vorigen Abschnitts erben kann, ohne dass es dem Empfänger auffällt. Prüfbar wird sie erst, wenn sie sich gegen das gelieferte Artefakt halten lässt, also mindestens einen Prüfwert des Artefakts nennt und in einer Form vorliegt, die maschinell gegen das Empfangene abgeglichen werden kann. Ebenso wichtig und regelmäßig vergessen ist die Frage der Aktualisierung: Eine Aufstellung beschreibt einen Stand, und ein Zulieferer, der Sicherheitskorrekturen ohne neue Aufstellung nachliefert, hinterlässt beim Empfänger einen Bestand, dessen Beschreibung stillschweigend veraltet ist. Verträge, die eine Aufstellung einmalig bei Lieferung verlangen, erzeugen daher eine Sicherheit, die nach der ersten Korrektur nicht mehr besteht."
+        ],
+        [
+          4,
+          "4 Aussonderung und Ersatz\nJede Fremdkomponente erreicht irgendwann das Ende ihrer Pflege. Der Zeitpunkt ist selten angekündigt und häufig erst im Nachhinein erkennbar, etwa daran, dass eine gemeldete Schwachstelle über Monate offen bleibt. Betrieblich ist das der teuerste Fall der gesamten Lieferkette, weil ein Ersatz nicht als Fehlerbehebung durchgeht, sondern als Vorhaben mit eigenem Aufwand geplant werden muss, und weil er in der Regel dann fällig wird, wenn die betreffende Komponente tief im System verankert ist. Wer den Zeitpunkt nicht beobachtet, erfährt vom Ende der Pflege durch einen Vorfall. Als Frühindikatoren taugen die Zahl der offenen Meldungen, der Abstand zwischen zwei Veröffentlichungen und die Anzahl der Personen mit Schreibrechten am Ursprungsbestand. Keiner dieser Indikatoren ist für sich aussagekräftig, alle drei zusammen sind es meistens, und ihre Beobachtung kostet einen Bruchteil dessen, was ein überraschter Ersatz kostet."
+        ]
+      ]
+    },
+    {
+      "doc_id": "de-mitbestimmung-telemetrie",
+      "lang": "de",
+      "title": "Mitbestimmung bei Telemetrie und Leistungsdaten",
+      "pages": [
+        [
+          1,
+          "1 Ausgangslage\nBetriebliche Mitbestimmung greift, sobald eine technische Einrichtung dazu geeignet ist, das Verhalten oder die Leistung von Beschäftigten zu überwachen. Maßgeblich ist die Eignung, nicht die Absicht: Ob die Auswertung geplant ist, spielt für die Mitbestimmungspflicht keine Rolle. Diese Schwelle ist niedriger, als es Betreiberinnen technischer Systeme gewöhnlich annehmen, und sie wird von Werkzeugen überschritten, die niemand als Überwachungsinstrument bezeichnen würde. Ein Auslieferungswerkzeug protokolliert, wer welche Änderung wann in Betrieb genommen hat. Ein Ticketsystem hält fest, wie lange ein Vorgang bei welcher Person lag. Ein Sammeldienst für Fehlermeldungen ordnet jeden Absturz einem Codeabschnitt und damit mittelbar seiner Autorin zu. In allen drei Fällen entstehen personenbeziehbare Leistungsdaten als Nebenwirkung einer Funktion, die aus anderen Gründen eingeführt wurde, und in allen drei Fällen wird die Mitbestimmung regelmäßig übersehen, weil das Werkzeug in der Beschaffung unter einer anderen Überschrift lief."
+        ],
+        [
+          2,
+          "2 Personenbezug in technischen Protokollen\nDie Behauptung, ein Protokoll sei anonym, hält selten stand. Ein Kürzel ist kein Klarname, aber im Zusammenspiel mit dem Dienstplan ist es einer, und die Zuordnung ist trivial, sobald zwei Quellen nebeneinanderliegen. Auch eine reine Zählung ist personenbeziehbar, wenn die gezählte Einheit klein genug ist: In einem Team von vier Personen identifiziert die Aussage, wer die meisten fehlgeschlagenen Auslieferungen verursacht hat, eine konkrete Person, unabhängig davon, ob ihr Name in der Auswertung steht. Entscheidend ist deshalb nicht, welche Felder erhoben werden, sondern welche Auswertungen aus dem erhobenen Bestand möglich sind. Diese Unterscheidung wird in Betriebsvereinbarungen häufig verfehlt, weil sie Felder aufzählt statt Auswertungen zu begrenzen. Eine Vereinbarung, die die Erhebung eines Zeitstempels erlaubt und die Bildung von Ranglisten untersagt, ist praktisch wirksamer als eine, die den Zeitstempel verbietet und dadurch nebenbei die Fehlersuche unmöglich macht."
+        ],
+        [
+          3,
+          "3 Aufbau einer Vereinbarung\nEine tragfähige Vereinbarung regelt vier Punkte und verzichtet auf alles Weitere. Sie benennt den Zweck der Erhebung so eng, dass eine spätere Zweckänderung als solche auffällt. Sie begrenzt die Aufbewahrungsdauer und benennt die Stelle, die das Löschen technisch durchführt, denn eine Frist ohne benannte Stelle wird nicht eingehalten. Sie legt fest, welche Auswertungen zulässig sind, und formuliert dies als abschließende Aufzählung, nicht als Verbotsliste. Und sie regelt den Zugriff im Ausnahmefall, weil dieser Fall eintritt und andernfalls unter Zeitdruck ohne Regel entschieden wird. Kürze ist hier kein Stilmerkmal, sondern Voraussetzung der Wirksamkeit: Eine Vereinbarung, die jedes Feld eines Protokollformats aufzählt, ist mit der nächsten Version des Werkzeugs überholt und wird dann entweder ignoriert oder blockiert eine Aktualisierung, die aus Sicherheitsgründen nötig wäre."
+        ],
+        [
+          4,
+          "4 Streitfälle im Betrieb\nDie Konflikte entstehen fast nie bei der Einführung, sondern beim ersten Vorfall. Nach einem Ausfall soll geklärt werden, welche Änderung ihn ausgelöst hat, und die Protokolle beantworten diese Frage in einer Genauigkeit, die zugleich eine Personenfrage beantwortet. Wer für diesen Fall keine Regel vereinbart hat, verhandelt sie unter Zeitdruck und im Beisein von Personen, deren Interesse an der Sachaufklärung mit ihrem Interesse am Schutz vor Zuschreibung kollidiert. Bewährt hat sich eine gestufte Regelung: Die Auswertung zur Ursachenklärung ist zulässig, das Ergebnis wird ohne Personenbezug dokumentiert, und eine personenbezogene Auswertung setzt einen gesonderten, begründeten und protokollierten Beschluss voraus. Diese Stufung schützt beide Seiten, weil sie die Sachaufklärung nicht behindert und zugleich verhindert, dass aus einer technischen Untersuchung unbemerkt eine Leistungsbeurteilung wird."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-access-review",
+      "lang": "en",
+      "title": "Periodic Review of Standing Access",
+      "_role": "distractor",
+      "pages": [
+        [
+          1,
+          "1 Introduction\nStanding access accumulates. A person joins a team and receives the rights that team needs, moves to another team and receives a second set, and the first set is never withdrawn because withdrawing it requires someone to notice. After three moves the individual holds a combination of rights that no policy would ever have granted deliberately, and that combination is invisible because each grant was individually justified at the time it was made. The periodic review exists to catch this accumulation. It works by presenting a list of who holds what to a person who is supposed to know whether that is still appropriate, and recording the answer. Almost every implementation of this control fails in the same way, and the failure is worth describing precisely because it is so uniform. The reviewer is shown several hundred entries of the form account, resource, level, is given a deadline, and approves all of them within a few minutes. The record produced is formally complete and evidentially worthless, and the organisation has spent real effort obtaining a signature that means nothing."
+        ],
+        [
+          2,
+          "2 Making The Review Answerable\nThe defect is not laziness on the part of the reviewer; it is that the question asked cannot be answered from the information supplied. A line that says this account may write to that repository does not tell the reviewer whether the person has used the right in the last year, why it was granted, or what would break if it were removed. Supplying those three facts changes the exercise entirely. Usage in particular is decisive: an entry that has not been exercised in twelve months can be proposed for removal by default, with the reviewer confirming exceptions rather than approving the whole list. This inverts the effort so that attention goes to the small set of unusual cases instead of being spread evenly and uselessly across everything. It also requires that access is logged with enough fidelity to distinguish use from non-use, which many systems do not do by default and which is usually the first genuine piece of work in such a programme."
+        ],
+        [
+          3,
+          "3 Removal Without Breakage\nThe objection raised against automatic removal is that it will break something. The objection is correct and is not a reason to abandon the approach; it is a reason to stage it. A withdrawal that first denies the right, keeps the grant recoverable for a fortnight, and produces a clear message when the denial takes effect converts an outage into an inconvenience with a known cause. The dangerous pattern is the opposite one, in which removal is irreversible and therefore avoided, and rights are retained indefinitely on the theory that they might be needed. Shared and service accounts complicate this because their use cannot be attributed to a person, so nothing can be concluded about whether a human still needs them. Those accounts should be treated as a separate and smaller problem with its own owner, rather than being allowed to make the whole review meaningless by sitting in the middle of it unexamined."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-telemetry-retention",
+      "lang": "en",
+      "title": "The Cost of Retaining Telemetry",
+      "_role": "distractor",
+      "pages": [
+        [
+          1,
+          "1 Introduction\nInstrumentation is added on the assumption that more recorded detail is always better, and the assumption holds until the invoice arrives. Retained telemetry has three costs that are usually accounted separately and therefore never compared: storage, which is small and visible; ingestion and indexing, which is large and visible; and the obligation attached to holding the data, which is invisible until an incident or a request makes it concrete. The third cost dominates in the long run and is the one nobody models. A record of every request served, retained for two years, is a liability as well as an asset: it must be secured, it can be compelled, and it will be searched by someone whose purpose differs from the purpose for which it was collected. Deciding what to keep is therefore not a budget exercise but a design decision about what questions the organisation intends to be able to answer, and for how long it intends to remain answerable for them."
+        ],
+        [
+          2,
+          "2 Deciding What To Keep\nA useful discipline is to state, for each stream, the question it exists to answer and the age beyond which the answer stops mattering. Debugging streams answer questions about the last few hours and can be discarded within a week without any loss anyone will notice. Capacity streams answer questions about seasonal shape and need a year, but only in aggregated form, at a resolution far coarser than the raw record. Audit streams answer questions years later and must be retained in full, but they are a tiny fraction of the volume and are usually the only stream with a defensible retention period. Applying this classification typically removes most of the volume and almost none of the value. The reason it is rarely applied is that the classification has to be made per stream by someone who understands the stream, and the effort falls on teams that see no benefit from it, while the cost falls on a central budget nobody defends line by line."
+        ],
+        [
+          3,
+          "3 Deletion That Actually Happens\nA retention period that is written down but not enforced by the storage system itself is a statement of intent. Enforcement fails in familiar ways: an export to a data warehouse that inherits none of the original constraints, a backup that outlives the primary copy by years, and a copy taken during an investigation and left on a working directory afterwards. Each of these is a route by which data survives its own retention rule, and none of them is visible from the system that believes it deleted the record. The workable countermeasure is to enumerate the copies rather than the rules: for each stream, list where it lands, who took the last copy, and what deletes it there. The list is short, it is boring, and its absence is the single best predictor that an organisation which claims a ninety day retention period is in fact holding everything it has ever collected."
+        ]
+      ]
+    },
+    {
+      "doc_id": "de-freigabenachweis-archiv",
+      "lang": "de",
+      "title": "Aufbewahrung von Freigabenachweisen",
+      "_role": "distractor",
+      "pages": [
+        [
+          1,
+          "1 Ausgangslage\nEin Freigabenachweis wird erzeugt, um im Streitfall zu belegen, dass eine Änderung geprüft wurde. Sein Wert bemisst sich deshalb nicht daran, wie sorgfältig er entsteht, sondern daran, ob er zum Zeitpunkt der Frage noch existiert und noch lesbar ist. Beides wird beim Aufbau eines Freigabeverfahrens fast nie mitgedacht, weil die Aufmerksamkeit der Beteiligten dem Vorgang gilt und nicht seinem Nachleben. Typisch ist folgende Lage: Der Nachweis liegt in dem Werkzeug, das die Freigabe verwaltet, dieses Werkzeug wird nach vier Jahren durch ein anderes ersetzt, und die Übernahme der Altdaten unterbleibt, weil sie im Migrationsprojekt keinen Fürsprecher hat. Danach ist der Nachweis nicht gelöscht, sondern unerreichbar, was in der Wirkung dasselbe ist und in der Darstellung nach außen schlechter aussieht, weil niemand erklären kann, wo er geblieben ist."
+        ],
+        [
+          2,
+          "2 Format und Ablageort\nEin Nachweis, der nur im Zusammenspiel mit der Datenbank seines Ursprungswerkzeugs verständlich ist, überlebt dieses Werkzeug nicht. Praktisch bewährt hat sich, den Nachweis beim Entstehen in eine selbsttragende Form zu bringen, die den geprüften Stand, die prüfenden Personen, den Zeitpunkt und das Ergebnis im Klartext nennt, und ihn dort abzulegen, wo die längste Aufbewahrungsfrist des Hauses ohnehin durchgesetzt wird. Das ist selten das Werkzeug, in dem er entsteht. Der zweite, häufiger übersehene Punkt betrifft die Verknüpfung: Ein Nachweis ohne eindeutigen Bezug auf das freigegebene Artefakt beantwortet die eigentliche Frage nicht, denn diese lautet nicht, ob irgendetwas geprüft wurde, sondern ob genau der Stand geprüft wurde, der später in Betrieb ging. Ein Prüfwert des Artefakts im Nachweis kostet nichts und stellt diesen Bezug dauerhaft her."
+        ],
+        [
+          3,
+          "3 Fristen und Aussonderung\nAufbewahrungsfristen für Freigabenachweise werden in der Praxis zu lang angesetzt, weil niemand den Mut hat, eine kürzere zu verantworten, und weil eine zu lange Frist zunächst nichts kostet. Sie kostet später: Jeder aufbewahrte Nachweis ist im Streitfall auch ein Beweismittel gegen das eigene Haus, und ein Bestand, dessen Umfang niemand kennt, lässt sich im Ernstfall weder vollständig vorlegen noch glaubhaft als vollständig bezeichnen. Sinnvoll ist eine Frist, die sich aus der Verjährung der zugrunde liegenden Ansprüche ableitet und nicht aus dem Bauchgefühl der Beteiligten, verbunden mit einer Aussonderung, die tatsächlich stattfindet und protokolliert wird. Eine dokumentierte Aussonderung ist gegenüber einer Aufsicht erheblich besser darstellbar als ein unübersichtlicher Altbestand, in dem sich der gesuchte Nachweis womöglich befindet."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-probe-gain-target",
+      "lang": "en",
+      "_role": "probe-target",
+      "title": "Closing the Record of a Release",
+      "pages": [
+        [
+          1,
+          "1 What A Closed Record Has To Prove\nA release record is closed when nobody can add to it and nobody can quietly remove anything from it. Teams reach for that phrase long before they can say what it means in operational terms, and the gap shows up at the worst possible moment, when an external reviewer asks a narrow question about a change that shipped nine months ago. The useful reframing is to ask what a reader of the record must be able to reconstruct without talking to a single engineer. Three things, in practice: who agreed to the change, which artefact the agreement referred to, and whether the agreement was still valid at the moment that artefact reached production. A signed attestation is worth no more than the trust anchor behind it, and a revocation of that anchor therefore has to invalidate every statement the release quorum accepted on its strength. That sounds like a formality until the first key compromise, at which point it decides whether the team can name the affected releases in an afternoon or spends a fortnight guessing. The first two properties are easy to record and easy to get wrong in subtle ways. The third is the one most teams never model at all, because it forces them to treat an approval as something that can expire or be withdrawn rather than as a permanent fact about the past. Everything that follows in this text is a consequence of taking the third property seriously rather than politely."
+        ],
+        [
+          2,
+          "2 Names That Outlive The People Who Hold Them\nA record written for a reader five years from now cannot contain a person's name as its load-bearing element, and almost every template we inherited did exactly that. The problem is not privacy. The problem is that a name answers a question the reader is not asking. The reader wants to know that a responsibility was held continuously, by somebody, under a description that can be checked against the organisation chart of the time. A name answers none of that, and it degrades silently: three reorganisations later the name resolves to nobody, and the record gives no way to tell whether the responsibility moved or evaporated. In our arrangement the release dossier names a single custodian for the signing material and records the escrow arrangement under which a second party can recover it. Both are role descriptions rather than people. Adopting this convention is cheap in a template and expensive in practice, because it forces the organisation to have an answer for every role at every moment, and the interesting finding of our first year was how often there was no answer at all. Roles that nobody had noticed were vacant turned up in batches, usually around a departure that had been handled as a staffing matter rather than as a change to the control environment. We now treat any role appearing in a record as an item on the leaver checklist, which is administratively dull and has caught four gaps that no review would have found."
+        ],
+        [
+          3,
+          "3 Exceptions That Expire By Construction\nEvery delivery organisation grants exceptions, and every delivery organisation underestimates how long its exceptions live. The mechanism that fails is almost never the granting step, which tends to be well documented and well argued; it is the absence of any step that removes the exception once the reason for it has gone. An exception without an expiry date is a permanent change to the control environment made by someone who believed they were making a temporary one. Recording the intent does not help, because intent is not a scheduled event. The remedy we adopted is mechanical: each waiver carries a sunset date beyond which the pipeline stops honouring it, and the record of the decision carries that date as a first-class field rather than as prose in a comment. The effect on behaviour is larger than the effect on the record. Once the expiry is real, the argument at the point of granting shifts from whether the exception is justified to how long it needs to last, which is a much more productive conversation and one that a reviewer can follow. Teams that adopt the field without adopting the enforcement get the worst of both: a date that everyone reads as advisory and a register that looks tidier than the control environment it describes. The date has to bite, or it is decoration."
+        ],
+        [
+          4,
+          "4 Detecting Edits Nobody Announced\nThe last property is the least glamorous and the one auditors probe first. A record that can be edited without trace is not evidence; it is a narrative that happens to be stored in a database. Most teams already know this and answer it with access control, which is necessary and insufficient. Access control tells you who was permitted to write, not what was actually written and when. The distinction matters because the interesting failures involve permitted writers acting outside the process, not intruders. The construction that closes the gap is append-only storage with an independently verifiable chain over the entries, so that a tamper attempt shows up as a broken link in the ledger rather than as a disagreement between two people's memories. Once the chain exists, the review question becomes cheap to answer and cheap to automate, which is what makes it survive the first quarter after it is introduced. Verification that requires a specialist is verification that stops happening. We run the check on every promotion and on a nightly schedule, and we treat a failure as an incident rather than as a data quality issue, because the two are hard to tell apart from the inside and only one of them has a deadline attached."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-probe-gain-decoy",
+      "lang": "en",
+      "_role": "probe-decoy",
+      "title": "A Survey Of Evidence Practices In Regulated Delivery",
+      "pages": [
+        [
+          1,
+          "1 Approval Bodies And Their Arithmetic\nSurveys of regulated delivery organisations keep rediscovering the same finding: the shape of the approving body matters less than whether its decisions are recorded in a way that outlives the people who made them. A release quorum of two produces the same evidence quality as a release quorum of seven when neither is written down against a specific artefact. Where the quorum size does matter is availability. A quorum that cannot be assembled at three in the morning becomes a quorum that is routinely waived, and the waiver becomes the process. Several of the organisations we surveyed had moved to a standing quorum drawn from a rota precisely to remove that pressure, and reported that the change did more for their evidence quality than any tooling investment of the same year. The dossier those organisations assemble is usually a folder of links rather than a document, which is fine, provided the links resolve later. Attestation practice varies widely. Some teams sign the artefact, some sign a description of the artefact, and a surprising number sign a build log that identifies the artefact only by a timestamp. The distinction is invisible in normal operation and decisive during an investigation. An attestation that cannot be tied to bytes is an opinion with a cryptographic wrapper, and the dossier that contains it inherits that weakness without advertising it."
+        ],
+        [
+          2,
+          "2 Where Keys Actually Live\nReported practice around key storage is more uniform than we expected and less reassuring. Nearly every organisation in the sample uses hardware-backed storage for the signing material of its production pipeline. Rather fewer can say who authorised the last five signatures. The escrow arrangements are where the variation appears. Some organisations hold no escrow at all and accept that a lost key means a re-signed history; others operate a formal escrow with split custody and a documented recovery drill; a third group believes it has an escrow and has never tested it, which in our reading belongs with the first group rather than the second. An untested escrow is a plan, not a control. The dossier for a release rarely mentions any of this, which is itself a finding: the evidence package describes the decision and not the machinery that makes the decision verifiable. When we asked why, the most common answer was that the machinery is considered infrastructure and therefore out of scope for a release record. That answer is defensible when the machinery is stable and indefensible after it changes, and the record gives no way to tell which situation the reader is in. Attestation formats inherit the same problem, since the format is documented somewhere other than the evidence it produces. Custody arrangements deserve a closer look here, because the word covers three different things in the sample. In some houses custody means physical possession of a token, in others it means the authority to request a signature, and in a third group it means accountability for the usage log without either of the first two. An evidence package that records the custody arrangement without saying which of the three it means tells the reader almost nothing, and every package we examined recorded it exactly that way. The recovery drill is the only reliable way to find out which meaning a house actually operates, since the drill forces somebody to produce the material and somebody else to authorise its release, and those two people are named in the drill record whether or not they appear in the procedure. Two houses discovered during a drill that the person holding the material and the person named in the dossier as accountable for it had never spoken. What a dossier ought to carry about custody is short and almost never present: which party physically holds the material, which party may authorise its release, which party reviews the usage log, and where the recovery copy lives. Four lines. We put them to every organisation in the sample as a checklist and not one dossier contained all four, although eleven of the twelve could produce all four answers verbally within a few minutes. The information exists; it is simply held by people rather than by the dossier, which is exactly the arrangement that fails at a handover. A dossier that omits the custody chain is not wrong, it is merely silent, and a reader who cannot tell silence from absence has to treat both the same way."
+        ],
+        [
+          3,
+          "3 The Cost Of Assembling A Package\nTime to assemble an evidence package is the one number that every organisation in the sample could produce, probably because somebody has been asked to produce it under pressure. The spread is wide: from under an hour where the dossier is built continuously to several weeks where it is reconstructed on demand from ticket systems and chat logs. The reconstruction cost is not the interesting part. The interesting part is that reconstructed packages are systematically more flattering than continuously built ones, because reconstruction is a search for supporting material rather than a record of what happened. Nobody in the sample described this as falsification, and we do not either; it is the ordinary bias of a process that only ever runs when someone wants a particular answer. The organisations that had moved to continuous assembly reported a second effect they had not anticipated. Once the dossier is built as a by-product of delivery, the cost of an additional control drops, because the evidence for it already exists. Controls that were rejected as too expensive to demonstrate become cheap, and the attestation coverage grows without a corresponding programme of work. That is the strongest argument for continuous assembly in the whole survey, and it is an argument about economics rather than about compliance."
+        ],
+        [
+          4,
+          "4 Roles That Outlive People\nEvery organisation we surveyed names roles in its policy documents, and most name individuals in practice. The gap is visible in the handover records. Where a named custodian is written into the procedure, the departure of that custodian generates a task; where the procedure names a team, the departure generates nothing and the responsibility quietly diffuses. Several organisations described exactly this diffusion after a reorganisation, and in two cases the custodian role had been vacant for months before anyone noticed, which was discovered only because a routine attestation failed. The dossier again says nothing about any of this. Role continuity is not usually part of an evidence package, although it determines whether the package can be produced at all next year. We think the omission is historical rather than considered. Evidence packages grew out of change records, and change records describe events rather than the standing arrangements that make events reviewable. A custodian who exists on paper and not in the rota is a control that reports itself as healthy. The organisations that had closed this gap did so with a quarterly attestation of role occupancy, which is cheap, unpopular, and the only mechanism in the sample that reliably caught a vacancy before an incident did."
+        ],
+        [
+          5,
+          "5 Withdrawing Trust After The Fact\nThe weakest area in the whole survey is what happens after a trust anchor is compromised. Every organisation could describe a revocation procedure. Fewer than half could describe what the revocation implies for artefacts already in production, and only three had rehearsed it. The procedures we were shown treat revocation as an operation on a key store, which it is, and stop there, which it is not. A revocation is also a statement about the past: it says that a set of signatures made before a certain moment can no longer be relied upon, and it obliges the organisation to enumerate that set. Enumeration is the expensive part and the part nobody budgets for. Where the dossier is continuously assembled the enumeration is a query; where it is reconstructed, the enumeration is a project. One organisation described a revocation drill that took eleven days, of which nine were spent establishing which builds had been signed with the affected material and two were spent doing anything about it. Their conclusion, which we endorse, was that the attestation records had been designed to be produced rather than to be queried, and that this distinction had never surfaced in any review because no review had ever asked a question in that direction."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-probe-gain-lexicon",
+      "lang": "en",
+      "_role": "probe-decoy",
+      "title": "A Short Lexicon Of Delivery Governance Terms",
+      "pages": [
+        [
+          1,
+          "1 Terms Of Custody\nThis lexicon collects the handful of terms that appear in our control documents with a meaning narrower than ordinary usage. It is deliberately short. A glossary that defines everything is read by nobody, and the terms that cause real confusion are few.\nAnchor rotation. The planned replacement of a trust anchor, as distinct from its unplanned withdrawal. Rotation is scheduled, announced and rehearsed; withdrawal is none of those things, and our documents keep the two words apart on purpose because the procedures share almost nothing beyond their first step.\nSunset. A date attached to a decision after which the decision stops taking effect without any further action. A sunset is enforced by the system that honours the decision, never by a reminder. A sunset date that is merely recorded is a note; a sunset date that is enforced is a control, and our documents use the word only in the second sense.\nTrust anchor. The public half of a key pair that a verifier is configured to accept without further evidence. Anchors are the root of every chain of signatures in our environment and are the only material whose compromise invalidates statements retroactively.\nUsage log. The append-only record of every operation performed with a piece of signing material, including operations that failed. The failures matter more than the successes for review purposes, because a pattern of failed attempts is the cheapest available signal of misuse."
+        ],
+        [
+          2,
+          "2 Terms Of Decision\nApproval body. Any group whose agreement is required before an artefact may be promoted. The term covers standing committees and ad hoc pairs equally; the distinction that matters for our purposes is whether membership at the time of the decision is recoverable from the record afterwards.\nEvidence package. The assembled material for a single promotion, addressed to a reader who was not present. A package is complete when that reader can answer the standard questions without asking anyone. Completeness is therefore a property of the reader's questions and not of the number of documents, which is why our template lists questions rather than artefacts.\nLedger. Any append-only store whose entries are linked so that removal or alteration of an entry is detectable. We use the word for the promotion history and for the usage log, and for nothing else, because the term invites metaphor.\nPromotion. The act of making an artefact available in an environment where it affects users. Promotion is the event that evidence is organised around, and the only event whose timing is recorded to the second in our environment.\nStanding decision. A decision that applies to a class of future changes rather than to one change. Standing decisions are the largest single source of drift between the documented and the operated control environment, since they are reviewed on a cadence that nobody owns."
+        ],
+        [
+          3,
+          "3 Terms Of Exception\nCompensating control. A control introduced because a required control cannot be operated, intended to reduce the same risk by another route. Our documents require a compensating control to be named at the moment the gap is accepted, on the grounds that a gap accepted without one is not an exception but an omission.\nDeviation. A single departure from a documented procedure, recorded after the fact. Deviations are counted rather than argued about; a rising count is a signal that the procedure is wrong, not that the operators are.\nRegister. The list of currently effective exceptions. A register is useful only if entries leave it, which is why every entry carries an expiry and why the register is reviewed against the systems it describes rather than against itself.\nWaiver. A documented decision to proceed without a required control for a bounded period, granted by a role with the authority to accept the residual risk. A waiver differs from a deviation in that it is granted before the fact and from a standing decision in that it names one change. Our template refuses to record a waiver without an expiry, an owner and a compensating control, and the refusal is enforced by the form rather than by the reviewer."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-probe-crowd-many",
+      "lang": "en",
+      "_role": "probe-crowder",
+      "title": "A Handbook Of Operating Rhythms For Delivery Teams",
+      "pages": [
+        [
+          1,
+          "1 Why Rhythm Beats Reaction\nA delivery organisation that reacts to every signal at the moment it arrives spends its attention on whatever shouted loudest. A rhythm replaces that with a schedule: the same questions are asked at the same interval, and the answers are compared against the previous round rather than against a mood. The cadence chosen matters less than its stability, but it is not arbitrary. A cadence shorter than the time it takes to act on the previous round produces a queue of unfinished decisions; a cadence longer than the natural lifetime of the signal produces a review of history. Each rhythm in this handbook is described by four things: the interval, the checkpoint that opens it, the tier of the audience that attends, and the escalation path when the checkpoint is not met. Those four fields are enough to run a rhythm and small enough that a team will actually fill them in. Teams that skip the escalation field discover its absence at the first genuine breach, when the checkpoint fails, nobody is named, and the tier that should have heard about it hears about it a fortnight later from a customer. We recommend writing the escalation path before the first run of any new cadence, on the grounds that it is the only field nobody will invent under pressure."
+        ],
+        [
+          2,
+          "2 The Daily Rhythm\nThe daily cadence exists to move work, not to report on it. Its checkpoint is narrow: is anything blocked that was not blocked yesterday, and is anything blocked that has been blocked for more than two days. The first question is about flow and the second is the escalation trigger. A tier one audience, meaning the team itself, handles the first; anything caught by the second leaves the team and reaches the tier above it the same day. Teams resist that escalation because it feels like an admission, which is why the rule is written as a property of the cadence rather than as a judgement about the team. A daily checkpoint that routinely finds nothing is not evidence of health; it is evidence that the checkpoint is measuring something that does not vary at that interval, and the right response is to change the question or lengthen the cadence rather than to keep holding the meeting. We have retired more daily rhythms than we have introduced, and every retirement improved the tier one signal. The rhythm that survives is the one whose checkpoint occasionally fails."
+        ],
+        [
+          3,
+          "3 The Weekly Rhythm\nThe weekly cadence is where a team looks at its own operating data rather than at individual items. Its checkpoint is a small set of measures agreed in advance: lead time, change failure rate, and the age of the oldest unresolved finding. The escalation rule is comparative rather than absolute, because absolute thresholds at a weekly cadence generate noise. If a measure moves against the trend for three consecutive checkpoints, the finding leaves tier one and is presented at the weekly rhythm of the tier above. Three is not a magic number; it is the smallest count that survives a single bad week without triggering, and any organisation adopting this handbook should expect to tune it. The weekly cadence also owns the review of exceptions granted during the previous week, which is the only checkpoint in the handbook that reliably shrinks a backlog rather than describing it. Escalation from this rhythm is rare in practice and heavily used when it happens, and the tier that receives it should treat its arrival as information about the measure rather than about the team."
+        ],
+        [
+          4,
+          "4 The Monthly Rhythm\nAt a monthly cadence the audience widens and the questions become structural. The checkpoint is no longer whether the numbers moved but whether the arrangements that produce the numbers still fit. Which controls were exercised, which were waived, which were quietly not operated at all. That last category is the reason the monthly rhythm exists, since a control that is never exercised produces no signal at any shorter cadence and therefore looks identical to a control that is working. The escalation path from the monthly checkpoint runs to a tier that can change the arrangement rather than merely staff it, which is what distinguishes this rhythm from a longer version of the weekly one. Teams that route monthly escalations to the same tier as weekly ones lose the distinction immediately and usually within two cycles. The monthly cadence is also the right place to review the rhythms themselves, since a handbook of operating rhythms that is never reviewed against its own checkpoint is exactly the failure it warns about elsewhere."
+        ],
+        [
+          5,
+          "5 The Quarterly Rhythm\nThe quarterly cadence is the slowest one we recommend keeping. Its checkpoint is an attested statement rather than a discussion: each named role confirms that the responsibilities recorded against it are still held, still exercised, and still resourced. The escalation path is unusual in that a missing confirmation escalates automatically after a fixed grace period, without anyone deciding to escalate it. This is deliberate. Confirmations are missed for exactly the reasons that make the underlying gap dangerous, so a rhythm that depends on somebody noticing the absence inherits the failure it is meant to catch. The tier that receives these escalations is small and senior, and the volume is low enough that it can be. Organisations that run this rhythm well report that its main product is not the confirmations but the vacancies it surfaces, typically two or three a year, each of which had been invisible at every shorter cadence because no checkpoint at those intervals asked whether the role still had an occupant."
+        ],
+        [
+          6,
+          "6 Rhythms For Incidents\nIncident work has its own cadence, and the common mistake is to run it at the rhythm of the incident rather than at the rhythm of the learning. During an event the checkpoint is short and operational: what changed since the last update, what is being tried now, and what would make us escalate to the next tier. Afterwards the cadence lengthens sharply. The review happens once, the actions enter the weekly rhythm, and the effectiveness of those actions is a question for the monthly checkpoint. Organisations that keep the incident cadence running after the incident ends produce a great deal of documentation and very little change, because the audience that assembled for the event is the wrong tier for the structural questions. The escalation rule during an event should be stated in advance and in terms of elapsed time rather than severity, since severity is disputed exactly when escalation is most needed. A checkpoint every thirty minutes with an automatic escalation at ninety is crude and works."
+        ],
+        [
+          7,
+          "7 Rhythms For Suppliers\nExternal parties are the hardest rhythm to sustain, because the cadence has to survive two organisations' calendars. The checkpoint we use is deliberately asymmetric: the supplier reports against agreed measures at a monthly cadence, and we review against our own record of their behaviour at the same interval, with the two compared rather than merged. Divergence between the two views is the escalation trigger, and it is a better one than any threshold on either view alone, since a supplier whose self-report matches our observation is trustworthy at the level that matters even when the numbers are poor. The tier that owns supplier escalation should include somebody who can end the relationship, or the escalation has no content. Where that is not possible, the honest response is to lower the cadence and stop pretending the rhythm is a control, because a checkpoint whose failure has no consequence trains everyone to file it and move on."
+        ],
+        [
+          8,
+          "8 Escalation Paths In Detail\nAn escalation path is three things and teams routinely write down only the first. The first is the receiving tier, which is easy. The second is the form the escalation takes, which is where most paths quietly fail: an escalation delivered as a line in a weekly summary is not an escalation, it is a mention, and the receiving tier will treat it accordingly. The third is what the receiving tier owes back, and by when. A path without a return commitment produces an escalation that disappears, and a team that has escalated into a void once will not escalate again for a long time. We write all three into every cadence and review the third most carefully, because it is the one that decays first under load. Where a tier cannot commit to a return interval, the honest fix is to move the escalation path to a different tier rather than to accept an open-ended one. The second common defect is a path with more than one receiving tier, usually created with the best of intentions so that nothing gets missed. In practice a checkpoint that escalates to two tiers escalates to neither, since each assumes the other is acting, and the cadence that produced the escalation has no way to detect the gap."
+        ],
+        [
+          9,
+          "9 What To Do When A Rhythm Decays\nEvery cadence decays, and the decay is legible long before anyone admits it. The first sign is attendance drifting to a lower tier. The second is the checkpoint being reported as met without the underlying question being asked. The third is an escalation path that nobody can name from memory. We check for these three at the monthly rhythm and treat any two of them as a decision point rather than a finding. The available responses are to restore the cadence, to change the checkpoint, or to retire the rhythm entirely, and the third is chosen far less often than it should be. A retired rhythm frees attention for the ones that remain; a decayed rhythm consumes attention and produces a record suggesting it did not. Where a rhythm is retired, the escalation path it carried has to be reassigned explicitly, since an orphaned escalation path is the most common way for a tier to lose visibility of a class of problem without any single decision having caused it."
+        ],
+        [
+          10,
+          "10 Rhythms Across Time Zones\nA cadence that assumes everyone is awake at the same hour is a cadence that silently excludes part of the organisation. The checkpoint itself survives translation to an asynchronous form better than the discussion around it does, which suggests the obvious split: the checkpoint is answered in writing before the session, and the session exists only for the items where the written answer was contested. Teams that adopt this report that the tier attending shrinks, which they usually experience as a loss and which we read as the rhythm finding its actual audience. The escalation path needs one adjustment in a distributed setting: the elapsed time before an automatic escalation should be measured in working hours of the receiving tier rather than in wall clock hours, or the cadence quietly punishes whichever region is furthest from the escalation target. We got this wrong for a year and the symptom was a distribution of escalations that tracked geography rather than difficulty, which nobody spotted because nobody had thought to plot it that way."
+        ],
+        [
+          11,
+          "11 Rhythms And The Written Record\nEvery cadence in this handbook produces a record, and the quality of that record decides whether the rhythm can be reviewed at all. The minimum is the date, the attending tier, the checkpoint result and any escalation raised, which is four fields and takes under a minute. Teams that write prose minutes instead produce a record that is pleasant to read and impossible to aggregate, so that the question of whether the checkpoint has been met more often this quarter than last cannot be answered without rereading everything. We have twice migrated from prose to fields and both times the objection was that the fields lose nuance. They do. The nuance was not being read. What the fields buy is the ability to see a cadence decaying before anyone feels it, because a run of met checkpoints with a falling attendance tier is visible in a table and invisible in prose. Where nuance genuinely matters, we keep a free text field and accept that it is read only when an escalation makes somebody go looking."
+        ],
+        [
+          12,
+          "12 Choosing The Interval\nThe interval of a cadence should be derived rather than chosen, and the derivation has two inputs. The first is the time it takes to act on a finding, which sets a floor: a checkpoint that recurs before the previous action can complete produces a queue and an escalation backlog rather than progress. The second is the natural lifetime of the signal, which sets a ceiling: a checkpoint that recurs after the signal has decayed is a history lesson. Most teams pick an interval from habit, discover that it is wrong, and then argue about the tier attending rather than about the interval, because the interval feels fixed once the meeting is in the calendar. We recommend writing both bounds down when the cadence is created and revisiting them at the first review. Where the floor exceeds the ceiling, and it sometimes does, the honest conclusion is that no cadence can carry this signal and that the escalation path has to be triggered by the event itself rather than by a checkpoint."
+        ],
+        [
+          13,
+          "13 When Two Rhythms Collide\nSooner or later two rhythms will claim the same decision, and the collision is usually discovered by an item that fails the checkpoint of one cadence and passes the checkpoint of another in the same week. The instinct is to merge the two rhythms, and it is almost always wrong: the merged cadence inherits the shorter interval and the wider tier, which is the most expensive combination available. The alternative we use is to give the decision to exactly one rhythm and to leave the other with an explicit reference rather than a copy of the question. The reference costs a line in the handbook and removes an entire class of argument about whose escalation path applies. Where the collision is genuine, meaning that two different tiers really do need to decide different aspects of the same item, the fix is to split the decision rather than the rhythm, and to state in the handbook which part belongs to which cadence. We have needed that four times in six years and regretted the merge every time we tried it instead."
+        ],
+        [
+          14,
+          "14 Measuring The Rhythms Themselves\nA handbook of rhythms deserves the treatment it prescribes, so each cadence carries three numbers of its own. The first is attendance against the named tier, expressed as a proportion rather than a headcount so that it survives reorganisation. The second is the share of sessions in which the checkpoint actually failed, which should be neither zero nor most of them; a checkpoint that never fails is not measuring anything, and one that always fails has become a status report. The third is the age of the oldest open escalation raised by that rhythm, which is the only one of the three that reliably provokes action when it grows. We review these at the quarterly cadence and publish them, because a rhythm whose own numbers are private tends to acquire an audience of one. None of the three is a target. Treating any of them as a target produces exactly the behaviour the measure was meant to detect, and we have watched a team drive its checkpoint failure rate to zero in a quarter by narrowing the question until nothing could fail it."
+        ],
+        [
+          15,
+          "15 Starting From Nothing\nAn organisation with no rhythms should not adopt this handbook wholesale. Start with one cadence, the weekly, because it is short enough to correct and long enough to matter. Define its checkpoint narrowly, name the tier that attends, and write the escalation path before the first session. Run it for eight weeks without changing the questions, then review the rhythm itself against the criteria in the previous sections. Only then add a second cadence, and prefer the monthly to the daily, since the daily rhythm is the one most likely to be adopted for the wrong reasons and hardest to retire once it exists. The sequence matters more than the content. A team that has learned to hold one checkpoint honestly will adapt any further rhythm to its situation, and a team that has adopted nine at once will operate none of them, escalate nothing, and conclude that the handbook was written for a larger organisation than theirs. The failure mode we see most often is not an organisation with too few rhythms but one with too many, each running at a cadence nobody derived, feeding an escalation path nobody has tested, in front of a tier that attends out of habit."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-probe-crowd-few",
+      "lang": "en",
+      "_role": "probe-focused",
+      "title": "One Rule For A Change That Stops Moving",
+      "pages": [
+        [
+          1,
+          "1 The Situation\nThis note describes a single rule and the reasoning behind it. The situation it addresses is narrow: a change has been approved, work has started, and then it stops. Not abandoned, not rejected, simply stationary. Somebody is waiting for somebody, and neither of them experiences the wait as a decision. The cost of this state is invisible in almost every reporting arrangement we have encountered, because the item is still open, still assigned, and still described as in progress by whoever last touched it. Nothing in the record distinguishes an item that is being worked on slowly from one that is not being worked on at all, and the person best placed to make that distinction is the person least likely to volunteer it. We spent two years treating this as a culture problem and made no progress whatsoever, which is the main reason this note exists in the form of a rule rather than in the form of advice."
+        ],
+        [
+          2,
+          "2 Why Averages Hide It\nAggregate measures do not catch stationary work, and the reason is arithmetic rather than tooling. A team can have entirely respectable throughput alongside a small number of items that have not moved in six weeks, and the mean will look healthy, because the mean is dominated by the many items that flow normally. Medians are worse, not better, since a stalled minority sits in the tail by construction. What is needed is a count of items above an age limit rather than any measure of central tendency, and that count has to be reported next to the throughput figure rather than in a separate view, or the two are never compared. Once we plotted the two together the pattern was immediate: our stalled count grew steadily through periods when every headline measure improved, and the two series had never appeared on the same page in three years of reporting. The second reason averages hide the problem is organisational rather than arithmetical. Reporting is assembled by the people whose work it describes, and a stalled item is the one thing in a portfolio that nobody wants to name, because naming it invites the question of what has been done about it since the last report. A measure that requires somebody to volunteer bad news is not a measure, it is an invitation, and invitations of this kind are declined with great consistency. We tried three successive reporting templates before accepting that no template would fix this, and that the count had to be derived from the state history rather than entered by hand. Deriving it took an afternoon, which is considerably less time than we had already spent redesigning forms nobody filled in honestly."
+        ],
+        [
+          3,
+          "3 The Rule\nThe rule is one sentence and the rest of this note is commentary on it. When an item has not changed state for twice the cadence of the rhythm that owns it, the checkpoint fails and the escalation moves it to the tier above without anybody deciding to escalate. Twice the cadence rather than a fixed number of days, because the same delay means different things to a team that reviews daily and a team that reviews monthly, and a rule expressed in days has to be retuned every time a rhythm changes. The checkpoint fails rather than the person, because the purpose is to surface the blockage and not to allocate responsibility for it. The escalation is automatic because a manual escalation here requires somebody to declare that they are stuck, which is exactly the declaration that being stuck makes hard to produce."
+        ],
+        [
+          4,
+          "4 Objections We Heard\nThree objections came up in every discussion of this rule and all three are reasonable. The first is that it punishes work which is legitimately waiting on an external party, and it does; our answer is that waiting on an external party is exactly the situation the organisation most needs to see, and that hiding it inside a busy status field serves nobody. The second objection is that the burst of items surfaced in the first weeks will overwhelm whoever receives them, which is true and temporary, and which we handled by declaring an amnesty window in which the receiving group closed rather than investigated. The third objection is the interesting one: that an automatic mechanism removes the judgement of the person closest to the work. It does, deliberately. The judgement being removed is the judgement about whether to tell anyone, not the judgement about the work itself, and the first of those has never in our experience been exercised in the direction of disclosure."
+        ],
+        [
+          5,
+          "5 What It Costs\nThe rule has two costs and we have paid both of them. The first is a burst of escalations in the opening weeks, most of which turn out to concern items that should have been closed rather than items that were genuinely blocked. That burst is the accumulated backlog of unmade decisions becoming visible at once, and it does not repeat. The second cost is permanent and much smaller: the tier above receives a steady trickle of items it did not previously see, and about some of them it can do nothing at all. We considered filtering that trickle and decided against it, because every filter we designed reintroduced the judgement call the rule exists to remove. Somebody who receives an item they cannot act on has learned something real about where their authority ends, and that is not a wasted message even when it feels like one."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-probe-harm-source",
+      "lang": "en",
+      "_role": "probe-relevant-split",
+      "title": "Why An Exception Register Keeps Growing",
+      "pages": [
+        [
+          1,
+          "1 The Shape Of The Problem\nAn exception register that only grows is not the mark of a permissive organisation. It is the mark of an organisation whose removal path is broken, and the two look identical from the outside. Our own register grew for eleven quarters before anybody asked why, and the answer had nothing to do with how entries were granted. Every grant carried a seal from an authorised approver. Every seal was recorded against one named change, and every seal remained verifiable years later, which is more than most of our controls can claim. The granting path was, by any reasonable measure, in good order. What was missing was a steward for each entry after the grant. A steward, in our usage, is the role that owns an entry for its whole life rather than at the moment of its creation, and no such role existed anywhere in the procedure. The grant produced a record, an approver and a seal, and then produced nobody at all whose week contained the question of whether the entry was still needed. Without a steward the register behaved exactly as any list behaves when nothing removes from it: it accumulated. That is the whole finding, and everything below is an attempt to explain why it took eleven quarters to arrive at something so obvious."
+        ],
+        [
+          2,
+          "2 The Review That Never Ran\nWe reconstructed the intended arrangement from the procedure text and found that it named a review roster. The roster was to be drawn from the operating teams, rotated every quarter, and each person on the roster was to examine the entries assigned to them by name. That roster had been populated exactly once, at the time the procedure was written, and never regenerated afterwards. Nobody had removed it. It had simply gone stale, and because the roster lived in a procedure document rather than in a system, its staleness produced no signal anywhere at all. A second reconstruction showed why this mattered more than we had assumed. The entries in the register are not comparable to one another. Some describe an accepted gap of a few weeks. Others describe an architectural exemption that will outlive the current platform, and an exemption of that kind reviewed by somebody without the relevant context produces a confirmation rather than a decision. A confirmation is indistinguishable in the record from a considered judgement to extend, which means that a stale roster does not merely fail to remove entries: it manufactures evidence that each entry was examined. That is a worse outcome than no review at all, and it is the outcome we had."
+        ],
+        [
+          3,
+          "3 The Number That Did Not Fire\nThe register carried a threshold. Above two hundred open entries the procedure required a report to the oversight committee, and the threshold was crossed in the fourth quarter of the second year. The report was produced, read and acknowledged, and the register kept growing. On inspection the threshold was doing no work at all. It triggered a report rather than an action, the report described the count rather than the composition, and a threshold that fires once and then remains permanently exceeded stops being a signal, because every subsequent quarter looks the same as the one before it. What we needed instead was a witness to the removal path rather than to the size of the register. A witness, in the sense used here, is any measurement that would have distinguished a register growing because the organisation genuinely needed more exceptions from a register growing because nothing ever left it. The simplest available witness is the count of entries closed per quarter. That number had been available the entire time. Nobody had ever plotted it, and the threshold on the total count had quietly absorbed all the attention that the removal path should have received. There is a second threshold in the procedure, on the age of an individual entry rather than on the size of the register, and it has the opposite defect. It fires constantly, on roughly a third of the register at any moment, and the volume has trained everyone to dismiss it. A threshold that fires on a third of the population is not a threshold, it is a label, and the governing document that introduced it never said what should happen when it fires. Between a threshold that fires once and one that fires continuously we had achieved complete coverage of the ways a numeric limit can fail to produce an action, which is a distinction the quarterly report never drew because the report counted entries rather than describing what any number was for."
+        ],
+        [
+          4,
+          "4 Who Was Allowed To Decide\nThe oversight committee operated under terms of reference written four years earlier for a much smaller organisation. Those terms gave it the power to receive reports and to request information, and no power at all to close anything. This was not an oversight in the drafting; at the time they were written, entries were closed by the teams that had opened them, and a committee with closing powers would have duplicated that. By the time we looked, the teams that had opened the older entries no longer existed in the same shape, and the terms of reference had never been revisited to account for it. The result is a familiar pattern: a body that meets regularly, is well informed, and cannot act, which over time produces a committee culture of commentary. Two members told us independently that they had assumed somebody else was closing entries, and both cited the regularity of the reporting as the reason for that assumption. A well-run reporting rhythm can substitute, in the minds of everyone involved, for the action the reporting was meant to prompt."
+        ],
+        [
+          5,
+          "5 What We Changed\nThree changes, in the order we made them. First, every entry now names an owner at the moment of grant, and the form refuses the grant if the field is empty. Second, the review rota is generated from the staffing system rather than written into the procedure, so that a departure produces a visible gap in the same place the rota is read. Third, and most consequentially, the charter of the oversight committee was rewritten. The old mandate was to receive the report. The new mandate is to approve the continued existence of every entry older than four quarters, which converts a passive audience into a body that has to make a decision it can be asked about later. Alongside each entry we now present its lineage, meaning the chain of extensions and re-approvals it has accumulated, because an entry with a lineage of eleven extensions is a different object from a fresh one and the register had never shown that difference on the screen where decisions were made. Under the new mandate the committee closed a third of the register in two sittings, which tells us how much of it had been sustained by nothing more than the absence of anybody obliged to ask."
+        ]
+      ]
+    },
+    {
+      "doc_id": "en-probe-harm-counter",
+      "lang": "en",
+      "_role": "probe-distractor-coherent",
+      "title": "Field Notes On Standing Arrangements",
+      "pages": [
+        [
+          1,
+          "1 Notes From A Platform Migration\nThese are working notes rather than a considered position. They were collected during a platform migration and kept because they turned out to be useful long afterwards. They are organised by the order in which the questions arrived rather than by topic, which makes them harder to skim and more honest about the sequence in which we understood things. The first question was about the provenance of the environment we were leaving, and the discussion that followed produced a phrase we kept using for the rest of the year. Somebody observed that the migration record would need a seal, a witness and a lineage before it satisfied anybody, and that we had so far produced only the first of the three. The remark stuck because it was concrete rather than principled. We had signatures on the export and nothing at all that showed who had watched the export happen, or where each item had come from before it entered the environment we were now abandoning. The rest of the migration was organised around closing those two gaps, and the notes that follow are mostly about that work rather than about the migration itself, which was uneventful."
+        ],
+        [
+          2,
+          "2 Staffing The Work\nThe staffing discussion took longer than the technical one and produced less documentation, which is the usual ratio and worth stating plainly. We began with one person who had authority and no reliable supply of hands, and we spent six weeks discovering that this configuration produces a project which is visibly busy and structurally stalled. Work was allocated, meetings happened, and the burndown moved, because a single capable person with a clear brief can always generate motion. What did not happen was any of the work that required two people to be available in the same week, and that turned out to be most of the work that mattered. The second attempt supplied the hands and quietly lost the authority during a reorganisation, at which point everything could be done and nothing could be decided. That configuration is more pleasant to be in and considerably worse to report on, since a team with capacity and no decision rights produces a long list of options and no closed items. Neither failure was legible in the status reporting, because both configurations produce a project that reports progress against a plan, and the plan itself was never the thing that was broken. Our conclusion, reached after those two false starts, was that a migration of this size needs a steward, a roster and a mandate, and that supplying any two of the three produces a project that stalls politely rather than visibly."
+        ],
+        [
+          3,
+          "3 Making The Staffing Visible\nWhat finally worked was writing all three roles into the same document and reviewing them together at the monthly checkpoint, instead of treating staffing as an input to the plan that is settled once and then assumed. The review takes about four minutes when nothing has changed, which is most months, and it has twice caught a departure that would otherwise have surfaced as an unexplained slowdown several weeks later. The mechanism is not sophisticated. Three named things on one page, read aloud, with a yes or no against each. We tried a version with a traffic-light indicator and abandoned it, because the amber state absorbed every case that should have produced a conversation. A binary question is uncomfortable and therefore useful. The second thing that worked was writing down what each role was allowed to decide without asking, which took an afternoon and removed an argument that had been recurring roughly monthly since the project began. Most of the argument turned out to be about two specific decisions, and once those were assigned in writing, neither came back. We have since made this the first deliverable of any migration rather than something produced after the first collision, on the grounds that the collision costs more than the afternoon."
+        ],
+        [
+          4,
+          "4 Arguing About Limits\nThe fourth block of notes concerns a long argument about limits, which we lost at the time and then won on appeal six weeks later. Our claim was that an exemption, a threshold and a charter have to be introduced together, since each one without the other two produces its own predictable pathology. The position was structural rather than defensive, and it was rejected as over-engineering for a migration, which in fairness is what it looked like before there was an example to point at. We dropped the point and moved on. Six weeks later the first standing gap appeared, was accepted informally, and turned out to have no expiry, no size limit and no body responsible for reviewing it. Reintroducing all three at that moment was easy, because the example was in front of everybody and nobody had to be persuaded of anything in the abstract. The lesson we recorded, and the reason these notes exist at all, is that arguments about structure are nearly impossible to win before the first instance and nearly free to win afterwards, so the useful move is to write the position down and wait rather than to keep making the case. Writing it down also settles the question of who predicted what, which is worth more than it sounds when the same argument recurs on the next project with different people. A related note about meeting conduct, which belongs here because it is what actually decided the outcome. The first time we made the argument we made it at the end of a long session, to a room that had already agreed three difficult things and had no appetite for a fourth. The second time we made it in writing, circulated two days ahead, with the concrete example in the first paragraph. Same people, same content, opposite result. We have since stopped treating the timing of a proposal as a detail. Where a proposal is structural rather than operational, it goes out in writing before the session and is never introduced live, and the session is used to decide rather than to understand. Colleagues who read the drafts describe them as dry, which they are; the alternative is a lively discussion that reaches no conclusion and has to be repeated in six weeks."
+        ],
+        [
+          5,
+          "5 Storing The Result\nThe final block is about where the migration record ended up living. We had assumed the destination would be a document store and it turned out to be a relational database, for reasons that were entirely about who maintained what rather than about what the record needed. The consequence took a while to appreciate. A database row can be corrected in place, and correcting in place is exactly what a migration record must never permit, because the value of the record is that it says what was true at the time rather than what is convenient now. The arrangement we settled on writes every entry to an append-only ledger whose links make a tamper attempt visible as a broken chain rather than as an argument between two people's recollections. Two colleagues objected that this was disproportionate for a one-off migration. Both were right about the migration and wrong about the record, which outlived the migration by several years and was consulted three times by parties who had not been present for any of it. The cost of the arrangement was a fortnight of work. The cost of the alternative would have been the credibility of the entire exercise."
+        ]
+      ]
+    },
+    {
+      "doc_id": "de-probe-gain-target",
+      "lang": "de",
+      "_role": "probe-target",
+      "title": "Die geschlossene Nachweiskette einer Freigabe",
+      "pages": [
+        [
+          1,
+          "1 Was eine geschlossene Kette leisten muss\nEine Belegkette heißt geschlossen, wenn sich jeder Schritt vom ausgelieferten Stand rückwärts bis zur ursprünglichen Entscheidung verfolgen lässt, ohne dass dabei jemand befragt werden muss. Das klingt nach einer Selbstverständlichkeit und ist in der Praxis die Ausnahme, weil die Kette an genau den Stellen reißt, an denen niemand ein Interesse daran hat, den Bruch zu bemerken. Ein Freigabequorum trägt nur so lange, wie die dazugehörige Widerrufsfrist noch läuft, und eine Nachweiskette, die diesen Zeitbezug nicht mitführt, belegt lediglich, dass irgendwann zugestimmt wurde. Diese Unterscheidung ist der Kern des gesamten Textes. Wer sie überspringt, baut eine Kette, die formal vollständig aussieht und inhaltlich nichts über den Zeitpunkt der Auslieferung aussagt. Die Erfahrung aus mehreren Prüfungen ist eindeutig: Prüferinnen und Prüfer fragen nicht zuerst danach, ob eine Zustimmung vorliegt, sondern danach, ob sie im Auslieferungsmoment noch gültig war. Wer darauf keine Antwort hat, verliert das Gespräch unabhängig davon, wie sauber der Rest dokumentiert ist. Die folgenden Abschnitte behandeln deshalb nicht die Erzeugung von Belegen, sondern ihre Haltbarkeit."
+        ],
+        [
+          2,
+          "2 Wer die Schlüssel verwahrt\nDer zweite Bruch entsteht bei der Verwahrung des Signaturmaterials. Solange dasselbe Team signiert, betreibt und prüft, ist jede Aussage der Kette eine Selbstauskunft. Die übliche Antwort darauf ist eine organisatorische Trennung, die in kleinen Häusern regelmäßig an der Personaldecke scheitert und dann als Dauerzustand ohne Vermerk weiterläuft. Wo die Trennung nicht durchzuhalten ist, benennt unser Verfahren eine externe Verwahrstelle und verlangt für jede Abweichung von dieser Regel eine befristete Ausnahmegenehmigung mit benannter verantwortlicher Rolle. Damit wird aus einem Dauerzustand wieder ein Vorgang, der irgendwann abläuft und deshalb wieder entschieden werden muss. Der Widerstand gegen diese Konstruktion ist erwartungsgemäß groß, weil sie Arbeit erzeugt, die vorher niemand hatte. Er lässt nach, sobald die erste Prüfung stattgefunden hat, denn dann ist erkennbar, dass die Alternative nicht der bequeme Zustand vorher ist, sondern ein Gespräch, in dem sich das Haus nicht erklären kann. Wichtig ist, dass die Regelung die Rolle benennt und nicht die Person: eine Kette, die auf einen Namen zeigt, bricht mit dem Arbeitsvertrag."
+        ],
+        [
+          3,
+          "3 Woran die Kette verankert ist\nJede Signaturprüfung endet irgendwo bei einem Schlüssel, den die prüfende Seite ohne weiteren Beleg akzeptiert. Dieser Endpunkt entscheidet über die Aussagekraft der gesamten Konstruktion und wird in der Dokumentation regelmäßig ausgelassen, weil er als technische Randbedingung gilt. Ein Vertrauensanker ist deshalb kein Nebenaspekt der Beweiskette, sondern deren Voraussetzung, und sein Austausch entwertet rückwirkend jede Aussage, die auf ihm beruht. Diese Rückwirkung ist der Grund, warum wir den Austausch als eigenen Vorgang mit eigener Vorlaufzeit führen und nicht als Wartungsarbeit. Praktisch heißt das: vor dem Austausch wird ermittelt, welche Stände betroffen sind, und diese Ermittlung wird geübt, bevor sie gebraucht wird. Häuser, die den Austausch nur beschrieben und nie geprobt haben, berichten übereinstimmend von Ermittlungszeiten im Bereich von Wochen, und in allen berichteten Fällen lag der Aufwand nicht im technischen Teil, sondern in der Frage, welche Auslieferung welches Material verwendet hatte."
+        ],
+        [
+          4,
+          "4 Was die Kette nicht leistet\nZum Schluss die Abgrenzung, ohne die der Text falsch gelesen werden kann. Eine geschlossene Kette belegt, dass eine Entscheidung getroffen wurde, von wem, wofür und bis wann. Sie belegt nicht, dass die Entscheidung fachlich richtig war, und sie ersetzt keine inhaltliche Prüfung. Diese Verwechslung tritt vor allem dort auf, wo die Kette gut funktioniert, weil ein sauberer Nachweis eine beruhigende Wirkung entfaltet, die sein Inhalt nicht deckt. Wir haben deshalb in die Berichtsvorlage einen Satz aufgenommen, der genau das festhält, und wir haben erlebt, dass er gelesen wird. Der zweite Grenzfall betrifft Stände, die vor Einführung des Verfahrens ausgeliefert wurden. Für sie existiert keine Kette und wird auch keine nachgebaut, weil ein nachträglich zusammengestellter Nachweis genau die Eigenschaft verliert, um derentwillen er geführt wird. Die ehrliche Auskunft lautet in diesen Fällen, dass der Nachweis fehlt."
+        ]
+      ]
+    },
+    {
+      "doc_id": "de-probe-gain-decoy",
+      "lang": "de",
+      "_role": "probe-decoy",
+      "title": "Übersicht: Nachweisführung in regulierten Auslieferungsstrecken",
+      "pages": [
+        [
+          1,
+          "1 Zustimmungsverfahren im Überblick\nDie Verfahren, mit denen Häuser eine Auslieferung freigeben, unterscheiden sich stärker in der Form als in der Wirkung. Ein Freigabequorum aus zwei Personen erzeugt dieselbe Nachweiskette wie ein Freigabequorum aus sieben, solange beide gegen denselben Stand dokumentiert werden. Wo die Größe wirklich zählt, ist die Verfügbarkeit: Ein Freigabequorum, das nachts nicht zusammenkommt, wird regelmäßig umgangen, und die Umgehung wird zum eigentlichen Verfahren. Mehrere der betrachteten Häuser sind deshalb zu einem Bereitschaftsmodell übergegangen und berichten, dass allein diese Änderung die Nachweiskette mehr verbessert hat als jede Werkzeuganschaffung desselben Jahres. Die Nachweiskette selbst ist in den meisten Häusern eine Sammlung von Verweisen und kein Dokument, was unproblematisch ist, solange die Verweise später noch auflösen. Kaum ein Haus führt die Gültigkeitsdauer einer Zustimmung mit. Gefragt, wie lange eine einmal erteilte Zustimmung trägt, antworteten sieben von zwölf Häusern sinngemäß, dass diese Frage bisher niemand gestellt habe. Das ist bemerkenswert, weil dieselben Häuser den Widerruf einer Zustimmung durchweg als möglich beschreiben und für den Widerruf sogar Vorlagen vorhalten. Eine Zustimmung, die widerrufen werden kann, aber keine hinterlegte Geltungsdauer hat, erzeugt eine Nachweiskette, deren Aussage vom Zeitpunkt der Lektüre abhängt: heute gültig, morgen vielleicht nicht, und aus der Kette selbst ist der Unterschied nicht ablesbar. Zwei Häuser tragen eine Befristung als Freitext im Kommentarfeld, was die Frage beantwortet und maschinell nicht auswertbar bleibt."
+        ],
+        [
+          2,
+          "2 Wo das Signaturmaterial liegt\nBei der Aufbewahrung des Signaturmaterials ist das Bild einheitlicher als erwartet und weniger beruhigend. Fast alle betrachteten Häuser nutzen hardwaregestützte Speicher. Deutlich weniger können benennen, wer die letzten fünf Signaturen veranlasst hat. Eine externe Verwahrstelle ist die Ausnahme und wird meist mit Kosten begründet, seltener mit einer Abwägung. Zwei Häuser unterhalten eine Verwahrstelle und haben die Herausgabe nie geprobt, was wir näher bei der ersten Gruppe einordnen als bei der zweiten: eine ungeprobte Verwahrstelle ist ein Vorhaben und keine Maßnahme. Die Nachweiskette erwähnt diesen Teil der Technik in aller Regel gar nicht, was für sich genommen schon ein Befund ist. Dokumentiert wird die Entscheidung, nicht der Apparat, der die Entscheidung überprüfbar macht. Wo eine Verwahrstelle fehlt, arbeiten die Häuser mit einer dauerhaften Ausnahme vom eigenen Trennungsgebot, und zwar überwiegend ohne dass diese Ausnahme irgendwo als solche geführt würde. Auf Nachfrage wird sie als Übergangslösung beschrieben, in drei Fällen seit mehr als fünf Jahren. Eine befristete Genehmigung mit benannter verantwortlicher Rolle wäre der naheliegende Weg, und keines der befragten Häuser geht ihn: die Genehmigung wird entweder gar nicht erteilt, weil niemand die Frage stellt, oder sie wird unbefristet erteilt, weil die Befristung eine Wiedervorlage erzeugt, die niemand betreuen will. Der Unterschied zwischen einer erteilten und einer nie gestellten Genehmigung ist in der Nachweiskette nicht sichtbar, und beide sehen dort aus wie ein Haus, in dem die Trennung eingehalten wird."
+        ],
+        [
+          3,
+          "3 Aufwand für die Zusammenstellung\nDie Zeit bis zu einer vollständigen Nachweiskette ist die einzige Zahl, die alle befragten Häuser nennen konnten, vermutlich weil sie irgendwann unter Druck genannt werden musste. Die Spanne ist groß und reicht von unter einer Stunde bei laufend geführten Ketten bis zu mehreren Wochen dort, wo die Kette auf Zuruf aus Ticketsystemen und Chatverläufen rekonstruiert wird. Interessant ist nicht der Aufwand, sondern eine systematische Verzerrung: rekonstruierte Ketten fallen durchgängig günstiger aus als laufend geführte, weil die Rekonstruktion eine Suche nach passendem Material ist und keine Aufzeichnung des Geschehenen. Niemand hat das als Fälschung beschrieben, und wir tun es auch nicht. Es ist die normale Schlagseite eines Vorgangs, der nur dann läuft, wenn jemand ein bestimmtes Ergebnis braucht."
+        ],
+        [
+          4,
+          "4 Abweichungen und ihre Verwaltung\nAlle betrachteten Häuser kennen Abweichungen vom eigenen Verfahren, und alle verwalten sie in einer Liste. Die Unterschiede liegen darin, ob Einträge diese Liste wieder verlassen. Wo jede Ausnahmegenehmigung eine Frist trägt und die Frist technisch durchgesetzt wird, bleibt die Liste klein. Wo die Ausnahmegenehmigung nur vermerkt wird, wächst die Liste monoton, und die Nachweiskette wird mit jeder Runde schwerer lesbar, weil sie eine wachsende Zahl von Sonderfällen mitschleppt. Eine Ausnahmegenehmigung ohne Frist ist in unserer Lesart keine Ausnahme, sondern eine unbemerkte Änderung des Regelwerks. Zwei Häuser haben diesen Zusammenhang selbst benannt und ihre Listen daraufhin in einer einzigen Sitzung um mehr als die Hälfte gekürzt, ohne dass danach etwas gefehlt hätte."
+        ],
+        [
+          5,
+          "5 Rücknahme von Vertrauen\nDer schwächste Bereich der gesamten Erhebung ist der Umgang mit einem kompromittierten Schlüssel. Alle Häuser konnten ein Sperrverfahren beschreiben. Weniger als die Hälfte konnte sagen, was die Sperrung für bereits ausgelieferte Stände bedeutet, und nur drei hatten den Fall geprobt. Auffällig ist der Umgang mit Fristen: Eine Widerrufsfrist wird zwar in den Vorlagen geführt, aber in keinem der betrachteten Häuser technisch durchgesetzt, sodass die Widerrufsfrist praktisch eine Aussage über die Absicht bleibt. Die Nachweiskette wird dadurch an ihrer empfindlichsten Stelle unscharf, denn genau hier entscheidet sich, ob eine Zustimmung im Auslieferungsmoment noch getragen hat. Ein Haus berichtete von einer Übung, die elf Tage dauerte, davon neun für die Frage, welche Stände überhaupt betroffen waren."
+        ]
+      ]
+    },
+    {
+      "doc_id": "de-probe-control-pair",
+      "lang": "de",
+      "_role": "probe-control",
+      "title": "Kontrollierte Übergabe von Signaturschlüsseln",
+      "pages": [
+        [
+          1,
+          "1 Der Übergabefall\nDieser Text behandelt einen engen Fall: die geplante Übergabe von Signaturmaterial an eine andere Organisationseinheit, etwa nach einer Umstrukturierung. Der ungeplante Fall, also der Verlust, ist anderswo geregelt und hier ausdrücklich nicht gemeint. Wird ein Vertrauensanker übergeben, muss die Beweiskette diesen Wechsel als eigenen Eintrag führen und nicht als stillschweigende Fortsetzung, weil sonst zwei verschiedene Verantwortliche in derselben Aussage zusammenfallen. Das ist die gesamte Regel; der Rest dieses Textes erklärt, warum sie in der Praxis so häufig verletzt wird. Der Hauptgrund ist banal: Übergaben werden von den abgebenden Personen dokumentiert, und die abgebende Seite hat kein Interesse an einer Zäsur, die den eigenen Abschnitt beendet."
+        ],
+        [
+          2,
+          "2 Was beim Wechsel zu prüfen ist\nDie übernehmende Einheit prüft vor der Annahme drei Dinge. Erstens, ob das Material technisch das ist, was die Dokumentation behauptet, was sich nur durch eine eigene Prüfung und nicht durch eine Bestätigung der abgebenden Seite klären lässt. Zweitens, ob die Nutzungsaufzeichnungen lückenlos vorliegen, denn eine Lücke vor der Übergabe wird nach der Übergabe zum Problem der übernehmenden Seite. Drittens, ob die noch laufenden Fristen bekannt sind, die auf dem Material beruhen. Der dritte Punkt wird am häufigsten übersehen und verursacht die größten Folgekosten, weil eine übernommene Frist ohne Erinnerung genau dann abläuft, wenn niemand mehr für den Vorgang zuständig ist. In unserem Verfahren verweigert die übernehmende Einheit die Annahme, solange einer der drei Punkte offen ist, und diese Verweigerung ist ausdrücklich kein Konflikt, sondern der vorgesehene Ablauf."
+        ],
+        [
+          3,
+          "3 Nach der Übergabe\nNach der Annahme läuft ein Nachlauf von einem Quartal, in dem die abgebende Seite erreichbar bleibt. Dieser Nachlauf ist kein Höflichkeitsversprechen, sondern Bestandteil der Vereinbarung, weil die Fragen, die eine Übergabe aufwirft, erfahrungsgemäß nicht am Übergabetag entstehen, sondern beim ersten Vorgang, der auf altes Material trifft. Am Ende des Nachlaufs wird ein kurzer Vermerk geschrieben, der festhält, welche Fragen aufgetreten sind und ob die Übergabe damit als abgeschlossen gilt. Häuser, die diesen Vermerk weglassen, berichten übereinstimmend, dass Übergaben faktisch nie enden und dass Zuständigkeiten jahrelang unklar bleiben, obwohl formal alles erledigt ist."
+        ]
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q-en-01",
+      "lang": "en",
+      "case": "same-language",
+      "query": "how can a pipeline enforce that the author of a change is not the one who releases it",
+      "anchors": [
+        "the person who writes a change must not be the person who releases it"
+      ]
+    },
+    {
+      "query_id": "q-en-02",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why does evidence about a release disappear before an auditor asks for it",
+      "anchors": [
+        "Pipeline runs are deleted after ninety days by default"
+      ]
+    },
+    {
+      "query_id": "q-en-03",
+      "lang": "en",
+      "case": "same-language",
+      "query": "what goes wrong when too many changes take the emergency route",
+      "anchors": [
+        "teams reclassify routine work as urgent"
+      ]
+    },
+    {
+      "query_id": "q-en-04",
+      "lang": "en",
+      "case": "same-language",
+      "query": "where should the signing key for build artefacts be kept",
+      "anchors": [
+        "A signing key stored in the same system that runs arbitrary build steps"
+      ]
+    },
+    {
+      "query_id": "q-en-05",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why is a vulnerable component in the inventory not the same as being exposed",
+      "anchors": [
+        "the presence of a vulnerable component is not the same as exposure"
+      ]
+    },
+    {
+      "query_id": "q-en-06",
+      "lang": "en",
+      "case": "same-language",
+      "query": "how many people should join an incident call and who coordinates",
+      "anchors": [
+        "Twenty people in a call is not twenty times the diagnostic capacity"
+      ]
+    },
+    {
+      "query_id": "q-en-07",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why do reviews that blame an individual fail to change anything",
+      "anchors": [
+        "conclude with a finding that a person made a mistake"
+      ]
+    },
+    {
+      "query_id": "q-en-08",
+      "lang": "en",
+      "case": "same-language",
+      "query": "conditions under which an error budget actually influences a decision",
+      "anchors": [
+        "The consequence of exhausting it must be automatic"
+      ]
+    },
+    {
+      "query_id": "q-en-09",
+      "lang": "en",
+      "case": "same-language",
+      "query": "risk that an automatic reconciliation undoes an emergency fix",
+      "anchors": [
+        "the loop will faithfully undo an emergency intervention within seconds"
+      ]
+    },
+    {
+      "query_id": "q-en-10",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why does rotating a credential break a component nobody expected",
+      "anchors": [
+        "read it once at start-up and cache it in memory until restarted"
+      ]
+    },
+    {
+      "query_id": "q-en-11",
+      "lang": "en",
+      "case": "same-language",
+      "query": "how does a broker decide whether to hand a short lived token to a job",
+      "anchors": [
+        "have the broker verify a signed statement issued by the pipeline platform"
+      ]
+    },
+    {
+      "query_id": "q-de-01",
+      "lang": "de",
+      "case": "same-language",
+      "query": "welche Änderungen machen eine Datenschutz-Folgenabschätzung ungültig",
+      "anchors": [
+        "Drei Änderungen entwerten eine bestehende Abschätzung praktisch immer"
+      ]
+    },
+    {
+      "query_id": "q-de-02",
+      "lang": "de",
+      "case": "same-language",
+      "query": "warum reicht eine jährliche Wiederholung der Prüfung nicht aus",
+      "anchors": [
+        "eine jährliche Prüfung findet die Abweichung im Mittel ein halbes Jahr nach ihrem Entstehen"
+      ]
+    },
+    {
+      "query_id": "q-de-03",
+      "lang": "de",
+      "case": "same-language",
+      "query": "wann ist ein technisches Protokoll trotz Kürzel personenbeziehbar",
+      "anchors": [
+        "Auch eine reine Zählung ist personenbeziehbar, wenn die gezählte Einheit klein genug ist"
+      ]
+    },
+    {
+      "query_id": "q-de-04",
+      "lang": "de",
+      "case": "same-language",
+      "query": "was muss eine Betriebsvereinbarung zu Auswertungen mindestens regeln",
+      "anchors": [
+        "Eine tragfähige Vereinbarung regelt vier Punkte"
+      ]
+    },
+    {
+      "query_id": "q-de-05",
+      "lang": "de",
+      "case": "same-language",
+      "query": "wie erkennt man früh, dass eine Fremdkomponente nicht mehr gepflegt wird",
+      "anchors": [
+        "Als Frühindikatoren taugen die Zahl der offenen Meldungen"
+      ]
+    },
+    {
+      "query_id": "q-de-06",
+      "lang": "de",
+      "case": "same-language",
+      "query": "warum genügt eine vom Zulieferer gelieferte Stückliste allein nicht",
+      "anchors": [
+        "die zugelieferte Aufstellung genau die Schwächen des vorigen Abschnitts erben kann"
+      ]
+    },
+    {
+      "query_id": "q-de-07",
+      "lang": "de",
+      "case": "same-language",
+      "query": "wer darf nach einem Ausfall personenbezogen auswerten",
+      "anchors": [
+        "eine personenbezogene Auswertung setzt einen gesonderten, begründeten und protokollierten Beschluss voraus"
+      ]
+    },
+    {
+      "query_id": "q-gap-01",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "woran merke ich, dass jemand nachts von Hand am laufenden Rechner etwas umgestellt hat und die abgelegte Beschreibung nicht mehr stimmt",
+      "anchors": [
+        "someone changed the running system directly and the change was never written back"
+      ]
+    },
+    {
+      "query_id": "q-gap-02",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "geklautes Kennwort soll möglichst schnell wertlos werden",
+      "anchors": [
+        "issues a token that expires in minutes and is valid only for the resources"
+      ]
+    },
+    {
+      "query_id": "q-gap-03",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "wie finde ich heraus, welche fremden Bausteine wirklich in meinem fertigen Programm stecken",
+      "anchors": [
+        "The inventory must be produced where the resolution happens"
+      ]
+    },
+    {
+      "query_id": "q-gap-04",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "die Störung fällt viel zu spät auf, obwohl alle Anzeigen grün sind",
+      "anchors": [
+        "report every component healthy while returning errors to a third of requests"
+      ]
+    },
+    {
+      "query_id": "q-gap-05",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "der Vieraugengrundsatz lässt sich umgehen, weil mehrere Leute dasselbe Konto benutzen",
+      "anchors": [
+        "A shared service account used by three teams collapses three identities into one"
+      ]
+    },
+    {
+      "query_id": "q-gap-06",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "nach einer Panne soll aufgeschrieben werden, welche Möglichkeit man verworfen hat und warum",
+      "anchors": [
+        "Recording why an option was rejected, and under what assumption"
+      ]
+    },
+    {
+      "query_id": "q-cross-01",
+      "lang": "en",
+      "case": "cross-language",
+      "query": "works council agreement about logging who deployed what",
+      "anchors": [
+        "Ein Auslieferungswerkzeug protokolliert, wer welche Änderung wann in Betrieb genommen hat"
+      ]
+    },
+    {
+      "query_id": "q-cross-02",
+      "lang": "en",
+      "case": "cross-language",
+      "query": "automated privacy checks can only trigger a human review, not replace it",
+      "anchors": [
+        "beschränkt die Automatisierung deshalb auf die Auslösung einer menschlichen Prüfung"
+      ]
+    },
+    {
+      "query_id": "p-gain-01",
+      "lang": "en",
+      "case": "probe-gain",
+      "probe_role": "gain",
+      "query": "attestation quorum revocation",
+      "probe": {
+        "role": "gain",
+        "split_doc": "en-probe-gain-decoy",
+        "coherent_doc": "en-probe-gain-target",
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "anchors": [
+        "A signed attestation is worth no more than the trust anchor behind it"
+      ]
+    },
+    {
+      "query_id": "p-gain-02",
+      "lang": "en",
+      "case": "probe-gain",
+      "probe_role": "gain",
+      "query": "dossier escrow custodian",
+      "probe": {
+        "role": "gain",
+        "split_doc": "en-probe-gain-decoy",
+        "coherent_doc": "en-probe-gain-target",
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "anchors": [
+        "the release dossier names a single custodian for the signing material"
+      ]
+    },
+    {
+      "query_id": "p-gain-03",
+      "lang": "de",
+      "case": "probe-gain",
+      "probe_role": "gain",
+      "query": "Freigabequorum Nachweiskette Widerrufsfrist",
+      "probe": {
+        "role": "gain",
+        "split_doc": "de-probe-gain-decoy",
+        "coherent_doc": "de-probe-gain-target",
+        "relevant_doc": "de-probe-gain-target"
+      },
+      "anchors": [
+        "Ein Freigabequorum trägt nur so lange, wie die dazugehörige Widerrufsfrist noch läuft"
+      ]
+    },
+    {
+      "query_id": "p-gain-04",
+      "lang": "de",
+      "case": "probe-gain",
+      "probe_role": "gain",
+      "query": "Verwahrstelle Ausnahmegenehmigung",
+      "probe": {
+        "role": "gain",
+        "split_doc": "de-probe-gain-decoy",
+        "coherent_doc": "de-probe-gain-target",
+        "relevant_doc": "de-probe-gain-target"
+      },
+      "anchors": [
+        "benennt unser Verfahren eine externe Verwahrstelle und verlangt für jede Abweichung von dieser Regel eine befristete Ausnahmegenehmigung"
+      ]
+    },
+    {
+      "query_id": "p-gain-05",
+      "lang": "en",
+      "case": "probe-gain",
+      "probe_role": "gain",
+      "query": "waiver sunset",
+      "probe": {
+        "role": "gain",
+        "split_doc": "en-probe-gain-lexicon",
+        "coherent_doc": "en-probe-gain-target",
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "anchors": [
+        "each waiver carries a sunset date beyond which the pipeline stops honouring"
+      ]
+    },
+    {
+      "query_id": "p-crowd-01",
+      "lang": "en",
+      "case": "probe-crowding",
+      "probe_role": "crowding",
+      "query": "cadence checkpoint",
+      "probe": {
+        "role": "crowding",
+        "crowder_doc": "en-probe-crowd-many",
+        "focused_doc": "en-probe-crowd-few",
+        "relevant_doc": "en-probe-crowd-few"
+      },
+      "anchors": [
+        "When an item has not changed state for twice the cadence of the rhythm that owns it"
+      ]
+    },
+    {
+      "query_id": "p-crowd-02",
+      "lang": "en",
+      "case": "probe-crowding",
+      "probe_role": "crowding",
+      "query": "escalation tier",
+      "probe": {
+        "role": "crowding",
+        "crowder_doc": "en-probe-crowd-many",
+        "focused_doc": "en-probe-crowd-few",
+        "relevant_doc": "en-probe-crowd-few"
+      },
+      "anchors": [
+        "the checkpoint fails and the escalation moves it to the tier above without anybody deciding to escalate"
+      ]
+    },
+    {
+      "query_id": "p-harm-01",
+      "lang": "en",
+      "case": "probe-harm",
+      "probe_role": "harm",
+      "query": "seal witness lineage",
+      "probe": {
+        "role": "harm",
+        "split_doc": "en-probe-harm-source",
+        "coherent_doc": "en-probe-harm-counter",
+        "relevant_doc": "en-probe-harm-source"
+      },
+      "anchors": [
+        "a witness to the removal path rather than to the size of the register"
+      ]
+    },
+    {
+      "query_id": "p-harm-02",
+      "lang": "en",
+      "case": "probe-harm",
+      "probe_role": "harm",
+      "query": "steward roster mandate",
+      "probe": {
+        "role": "harm",
+        "split_doc": "en-probe-harm-source",
+        "coherent_doc": "en-probe-harm-counter",
+        "relevant_doc": "en-probe-harm-source"
+      },
+      "anchors": [
+        "What was missing was a steward for each entry after the grant"
+      ]
+    },
+    {
+      "query_id": "p-harm-03",
+      "lang": "en",
+      "case": "probe-harm",
+      "probe_role": "harm",
+      "query": "exemption threshold charter",
+      "probe": {
+        "role": "harm",
+        "split_doc": "en-probe-harm-source",
+        "coherent_doc": "en-probe-harm-counter",
+        "relevant_doc": "en-probe-harm-source"
+      },
+      "anchors": [
+        "The oversight committee operated under terms of reference written four years earlier"
+      ]
+    },
+    {
+      "query_id": "p-control-01",
+      "lang": "en",
+      "case": "probe-control",
+      "probe_role": "control",
+      "query": "tamper ledger",
+      "probe": {
+        "role": "control",
+        "papers": [
+          "en-probe-gain-target",
+          "en-probe-harm-counter"
+        ],
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "anchors": [
+        "a tamper attempt shows up as a broken link in the ledger"
+      ]
+    },
+    {
+      "query_id": "p-control-02",
+      "lang": "de",
+      "case": "probe-control",
+      "probe_role": "control",
+      "query": "Vertrauensanker Beweiskette",
+      "probe": {
+        "role": "control",
+        "papers": [
+          "de-probe-gain-target",
+          "de-probe-control-pair"
+        ],
+        "relevant_doc": "de-probe-control-pair"
+      },
+      "anchors": [
+        "Wird ein Vertrauensanker übergeben, muss die Beweiskette diesen Wechsel als eigenen Eintrag führen"
+      ]
+    }
+  ]
+}

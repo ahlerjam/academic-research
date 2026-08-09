@@ -338,6 +338,12 @@ Chunk-Lookup) und
 (nichtdeterministischer Tie-Break in `reciprocal_rank_fusion` bei exakt
 gleichem `rrf_score`).
 
+**Eingelöst in [#790](2026-08-09-chunk-fusion-goldset-790.md):** Das dort
+gebaute Probe-Goldset erzeugt genau solche Queries und zeigt den Effekt, den
+dieser Lauf nicht zeigen konnte — in beide Richtungen (Familie A +0,3691
+nDCG@10, Familie C betragsgleich negativ). Der Nullbefund hier bleibt richtig;
+er war eine Aussage über dieses Goldset, nicht über den Mechanismus.
+
 Diagnoseblock, Zahlen und Tests: `scripts/eval/run_retrieval_ablation_729.py`
 (`diagnose_query`/`run_diagnostics`, `--goldset`/`--vectors`-Flags, Aggregation
 je `case`) und `tests/test_issue_789_fts_diagnosis.py`. Vollständige

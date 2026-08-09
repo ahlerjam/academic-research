@@ -1,0 +1,1554 @@
+{
+  "_comment": "Geprueft mit build_retrieval_chunk_goldset.py --verify-probe-conditions gegen die echten Produktionsfunktionen (server.search_papers, server._attach_chunk_to_fts_hit, server._vec0_search). 'conditions_met' sagt, ob die Konstruktion haelt -- NICHT, ob das gemessene Delta positiv ausfaellt.",
+  "issue": 790,
+  "k": 10,
+  "model_id": "intfloat/multilingual-e5-small",
+  "manifest_sha256": "ead4f9a76589152d94090bccfd3f02ef9eaf7b9c13fd05b7604e48048daac1a8",
+  "query_count": 12,
+  "queries_with_conditions_met": 12,
+  "violating_queries": [],
+  "queries": {
+    "p-gain-01": {
+      "probe_role": "gain",
+      "case": "probe-gain",
+      "query": "attestation quorum revocation",
+      "probe": {
+        "role": "gain",
+        "split_doc": "en-probe-gain-decoy",
+        "coherent_doc": "en-probe-gain-target",
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-gain-decoy",
+          "en-probe-gain-target"
+        ],
+        "attached_chunk": {
+          "en-probe-gain-decoy": null,
+          "en-probe-gain-target": "b9315478-7a45-4e2b-9288-d6e50156256f"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-gain-decoy": false,
+          "en-probe-gain-target": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-gain-decoy": 1,
+          "en-probe-gain-target": 4,
+          "en-supply-chain": 5,
+          "en-probe-gain-lexicon": 6,
+          "en-access-review": 7,
+          "en-infrastructure-drift": 9,
+          "en-probe-harm-source": 11,
+          "en-telemetry-retention": 15,
+          "en-change-approval": 16,
+          "en-probe-harm-counter": 20,
+          "en-incident-response": 23,
+          "en-probe-crowd-many": 24,
+          "en-probe-crowd-few": 26,
+          "en-pipeline-secrets": 37
+        },
+        "vec_paper_rank": {
+          "en-probe-gain-decoy": 1,
+          "en-probe-gain-target": 2,
+          "en-supply-chain": 3,
+          "en-probe-gain-lexicon": 4,
+          "en-access-review": 5,
+          "en-infrastructure-drift": 6,
+          "en-probe-harm-source": 7,
+          "en-telemetry-retention": 8,
+          "en-change-approval": 9,
+          "en-probe-harm-counter": 10,
+          "en-incident-response": 11,
+          "en-probe-crowd-many": 12,
+          "en-probe-crowd-few": 13,
+          "en-pipeline-secrets": 14
+        },
+        "full_token_chunk_count": {
+          "en-probe-gain-decoy": 0,
+          "en-probe-gain-target": 1
+        },
+        "paper_rank_before": {
+          "en-probe-gain-decoy": 1,
+          "en-probe-gain-target": 2,
+          "en-supply-chain": 3,
+          "en-probe-gain-lexicon": 4,
+          "en-access-review": 5,
+          "en-infrastructure-drift": 6,
+          "en-probe-harm-source": 7,
+          "en-telemetry-retention": 8,
+          "en-change-approval": 9,
+          "en-probe-harm-counter": 10
+        },
+        "paper_rank_after": {
+          "en-probe-gain-target": 1,
+          "en-probe-gain-decoy": 2,
+          "en-supply-chain": 3,
+          "en-probe-gain-lexicon": 4,
+          "en-access-review": 5,
+          "en-infrastructure-drift": 6,
+          "en-probe-harm-source": 7,
+          "en-telemetry-retention": 8,
+          "en-change-approval": 9,
+          "en-probe-harm-counter": 10
+        },
+        "paper_score_before": {
+          "en-probe-gain-decoy": 0.03278688524590164,
+          "en-probe-gain-target": 0.03225806451612903,
+          "en-supply-chain": 0.015873015873015872,
+          "en-probe-gain-lexicon": 0.015625,
+          "en-access-review": 0.015384615384615385,
+          "en-infrastructure-drift": 0.015151515151515152,
+          "en-probe-harm-source": 0.014925373134328358,
+          "en-telemetry-retention": 0.014705882352941176,
+          "en-change-approval": 0.014492753623188406,
+          "en-probe-harm-counter": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-gain-target": 0.031754032258064516,
+          "en-probe-gain-decoy": 0.01639344262295082,
+          "en-supply-chain": 0.015384615384615385,
+          "en-probe-gain-lexicon": 0.015151515151515152,
+          "en-access-review": 0.014925373134328358,
+          "en-infrastructure-drift": 0.014492753623188406,
+          "en-probe-harm-source": 0.014084507042253521,
+          "en-telemetry-retention": 0.013333333333333334,
+          "en-change-approval": 0.013157894736842105,
+          "en-probe-harm-counter": 0.0125
+        }
+      }
+    },
+    "p-gain-02": {
+      "probe_role": "gain",
+      "case": "probe-gain",
+      "query": "dossier escrow custodian",
+      "probe": {
+        "role": "gain",
+        "split_doc": "en-probe-gain-decoy",
+        "coherent_doc": "en-probe-gain-target",
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-gain-decoy",
+          "en-probe-gain-target"
+        ],
+        "attached_chunk": {
+          "en-probe-gain-decoy": null,
+          "en-probe-gain-target": "7a36f68e-ec0b-4098-8387-afda1bcf3e28"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-gain-decoy": false,
+          "en-probe-gain-target": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-gain-lexicon": 1,
+          "en-probe-gain-decoy": 2,
+          "en-probe-gain-target": 4,
+          "en-incident-response": 7,
+          "en-supply-chain": 9,
+          "en-change-approval": 10,
+          "en-telemetry-retention": 11,
+          "de-mitbestimmung-telemetrie": 12,
+          "en-probe-harm-counter": 13,
+          "en-probe-harm-source": 14,
+          "en-pipeline-secrets": 16,
+          "en-infrastructure-drift": 19,
+          "en-access-review": 21,
+          "en-probe-crowd-few": 25,
+          "de-probe-gain-target": 31,
+          "de-freigabenachweis-archiv": 32,
+          "en-probe-crowd-many": 34,
+          "de-lieferkette-pruefung": 36
+        },
+        "vec_paper_rank": {
+          "en-probe-gain-lexicon": 1,
+          "en-probe-gain-decoy": 2,
+          "en-probe-gain-target": 3,
+          "en-incident-response": 4,
+          "en-supply-chain": 5,
+          "en-change-approval": 6,
+          "en-telemetry-retention": 7,
+          "de-mitbestimmung-telemetrie": 8,
+          "en-probe-harm-counter": 9,
+          "en-probe-harm-source": 10,
+          "en-pipeline-secrets": 11,
+          "en-infrastructure-drift": 12,
+          "en-access-review": 13,
+          "en-probe-crowd-few": 14,
+          "de-probe-gain-target": 15,
+          "de-freigabenachweis-archiv": 16,
+          "en-probe-crowd-many": 17,
+          "de-lieferkette-pruefung": 18
+        },
+        "full_token_chunk_count": {
+          "en-probe-gain-decoy": 0,
+          "en-probe-gain-target": 1
+        },
+        "paper_rank_before": {
+          "en-probe-gain-decoy": 1,
+          "en-probe-gain-target": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-incident-response": 4,
+          "en-supply-chain": 5,
+          "en-change-approval": 6,
+          "en-telemetry-retention": 7,
+          "de-mitbestimmung-telemetrie": 8,
+          "en-probe-harm-counter": 9,
+          "en-probe-harm-source": 10
+        },
+        "paper_rank_after": {
+          "en-probe-gain-target": 1,
+          "en-probe-gain-decoy": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-incident-response": 4,
+          "en-supply-chain": 5,
+          "en-change-approval": 6,
+          "en-telemetry-retention": 7,
+          "de-mitbestimmung-telemetrie": 8,
+          "en-probe-harm-counter": 9,
+          "en-probe-harm-source": 10
+        },
+        "paper_score_before": {
+          "en-probe-gain-decoy": 0.03252247488101534,
+          "en-probe-gain-target": 0.03200204813108039,
+          "en-probe-gain-lexicon": 0.01639344262295082,
+          "en-incident-response": 0.015625,
+          "en-supply-chain": 0.015384615384615385,
+          "en-change-approval": 0.015151515151515152,
+          "en-telemetry-retention": 0.014925373134328358,
+          "de-mitbestimmung-telemetrie": 0.014705882352941176,
+          "en-probe-harm-counter": 0.014492753623188406,
+          "en-probe-harm-source": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-gain-target": 0.031754032258064516,
+          "en-probe-gain-decoy": 0.01639344262295082,
+          "en-probe-gain-lexicon": 0.01639344262295082,
+          "en-incident-response": 0.014925373134328358,
+          "en-supply-chain": 0.014492753623188406,
+          "en-change-approval": 0.014285714285714285,
+          "en-telemetry-retention": 0.014084507042253521,
+          "de-mitbestimmung-telemetrie": 0.013888888888888888,
+          "en-probe-harm-counter": 0.0136986301369863,
+          "en-probe-harm-source": 0.013513513513513514
+        }
+      }
+    },
+    "p-gain-03": {
+      "probe_role": "gain",
+      "case": "probe-gain",
+      "query": "Freigabequorum Nachweiskette Widerrufsfrist",
+      "probe": {
+        "role": "gain",
+        "split_doc": "de-probe-gain-decoy",
+        "coherent_doc": "de-probe-gain-target",
+        "relevant_doc": "de-probe-gain-target"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "de-probe-gain-decoy",
+          "de-probe-gain-target"
+        ],
+        "attached_chunk": {
+          "de-probe-gain-decoy": null,
+          "de-probe-gain-target": "55dceb41-9b26-4525-908b-b2e7767f8635"
+        },
+        "attach_equals_vec_best": {
+          "de-probe-gain-decoy": false,
+          "de-probe-gain-target": true
+        },
+        "vec_best_chunk_rank": {
+          "de-probe-gain-decoy": 1,
+          "de-probe-gain-target": 2,
+          "de-freigabenachweis-archiv": 5,
+          "de-probe-control-pair": 8,
+          "de-datenschutz-pipeline": 10,
+          "de-lieferkette-pruefung": 13,
+          "en-probe-gain-decoy": 16,
+          "en-access-review": 17,
+          "en-probe-crowd-many": 18,
+          "en-change-approval": 20,
+          "en-probe-harm-source": 21,
+          "en-telemetry-retention": 22,
+          "en-probe-gain-target": 23,
+          "en-probe-gain-lexicon": 26,
+          "en-probe-harm-counter": 28,
+          "en-probe-crowd-few": 32,
+          "en-supply-chain": 35,
+          "de-mitbestimmung-telemetrie": 38,
+          "en-infrastructure-drift": 40
+        },
+        "vec_paper_rank": {
+          "de-probe-gain-decoy": 1,
+          "de-probe-gain-target": 2,
+          "de-freigabenachweis-archiv": 3,
+          "de-probe-control-pair": 4,
+          "de-datenschutz-pipeline": 5,
+          "de-lieferkette-pruefung": 6,
+          "en-probe-gain-decoy": 7,
+          "en-access-review": 8,
+          "en-probe-crowd-many": 9,
+          "en-change-approval": 10,
+          "en-probe-harm-source": 11,
+          "en-telemetry-retention": 12,
+          "en-probe-gain-target": 13,
+          "en-probe-gain-lexicon": 14,
+          "en-probe-harm-counter": 15,
+          "en-probe-crowd-few": 16,
+          "en-supply-chain": 17,
+          "de-mitbestimmung-telemetrie": 18,
+          "en-infrastructure-drift": 19
+        },
+        "full_token_chunk_count": {
+          "de-probe-gain-decoy": 0,
+          "de-probe-gain-target": 1
+        },
+        "paper_rank_before": {
+          "de-probe-gain-decoy": 1,
+          "de-probe-gain-target": 2,
+          "de-freigabenachweis-archiv": 3,
+          "de-probe-control-pair": 4,
+          "de-datenschutz-pipeline": 5,
+          "de-lieferkette-pruefung": 6,
+          "en-probe-gain-decoy": 7,
+          "en-access-review": 8,
+          "en-probe-crowd-many": 9,
+          "en-change-approval": 10
+        },
+        "paper_rank_after": {
+          "de-probe-gain-target": 1,
+          "de-probe-gain-decoy": 2,
+          "de-freigabenachweis-archiv": 3,
+          "de-probe-control-pair": 4,
+          "de-datenschutz-pipeline": 5,
+          "de-lieferkette-pruefung": 6,
+          "en-probe-gain-decoy": 7,
+          "en-access-review": 8,
+          "en-probe-crowd-many": 9,
+          "en-change-approval": 10
+        },
+        "paper_score_before": {
+          "de-probe-gain-decoy": 0.03278688524590164,
+          "de-probe-gain-target": 0.03225806451612903,
+          "de-freigabenachweis-archiv": 0.015873015873015872,
+          "de-probe-control-pair": 0.015625,
+          "de-datenschutz-pipeline": 0.015384615384615385,
+          "de-lieferkette-pruefung": 0.015151515151515152,
+          "en-probe-gain-decoy": 0.014925373134328358,
+          "en-access-review": 0.014705882352941176,
+          "en-probe-crowd-many": 0.014492753623188406,
+          "en-change-approval": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "de-probe-gain-target": 0.03225806451612903,
+          "de-probe-gain-decoy": 0.01639344262295082,
+          "de-freigabenachweis-archiv": 0.015384615384615385,
+          "de-probe-control-pair": 0.014705882352941176,
+          "de-datenschutz-pipeline": 0.014285714285714285,
+          "de-lieferkette-pruefung": 0.0136986301369863,
+          "en-probe-gain-decoy": 0.013157894736842105,
+          "en-access-review": 0.012987012987012988,
+          "en-probe-crowd-many": 0.01282051282051282,
+          "en-change-approval": 0.0125
+        }
+      }
+    },
+    "p-gain-04": {
+      "probe_role": "gain",
+      "case": "probe-gain",
+      "query": "Verwahrstelle Ausnahmegenehmigung",
+      "probe": {
+        "role": "gain",
+        "split_doc": "de-probe-gain-decoy",
+        "coherent_doc": "de-probe-gain-target",
+        "relevant_doc": "de-probe-gain-target"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "de-probe-gain-decoy",
+          "de-probe-gain-target"
+        ],
+        "attached_chunk": {
+          "de-probe-gain-decoy": null,
+          "de-probe-gain-target": "55dceb41-9b26-4525-908b-b2e7767f8635"
+        },
+        "attach_equals_vec_best": {
+          "de-probe-gain-decoy": false,
+          "de-probe-gain-target": true
+        },
+        "vec_best_chunk_rank": {
+          "de-probe-gain-decoy": 1,
+          "de-probe-gain-target": 2,
+          "de-freigabenachweis-archiv": 4,
+          "de-lieferkette-pruefung": 8,
+          "de-probe-control-pair": 10,
+          "en-probe-gain-lexicon": 11,
+          "de-datenschutz-pipeline": 12,
+          "en-access-review": 13,
+          "de-mitbestimmung-telemetrie": 14,
+          "en-change-approval": 17,
+          "en-infrastructure-drift": 22,
+          "en-probe-harm-source": 23,
+          "en-probe-gain-target": 26,
+          "en-probe-harm-counter": 27,
+          "en-supply-chain": 28,
+          "en-probe-crowd-few": 29,
+          "en-probe-gain-decoy": 32,
+          "en-telemetry-retention": 33,
+          "en-incident-response": 40
+        },
+        "vec_paper_rank": {
+          "de-probe-gain-decoy": 1,
+          "de-probe-gain-target": 2,
+          "de-freigabenachweis-archiv": 3,
+          "de-lieferkette-pruefung": 4,
+          "de-probe-control-pair": 5,
+          "en-probe-gain-lexicon": 6,
+          "de-datenschutz-pipeline": 7,
+          "en-access-review": 8,
+          "de-mitbestimmung-telemetrie": 9,
+          "en-change-approval": 10,
+          "en-infrastructure-drift": 11,
+          "en-probe-harm-source": 12,
+          "en-probe-gain-target": 13,
+          "en-probe-harm-counter": 14,
+          "en-supply-chain": 15,
+          "en-probe-crowd-few": 16,
+          "en-probe-gain-decoy": 17,
+          "en-telemetry-retention": 18,
+          "en-incident-response": 19
+        },
+        "full_token_chunk_count": {
+          "de-probe-gain-decoy": 0,
+          "de-probe-gain-target": 1
+        },
+        "paper_rank_before": {
+          "de-probe-gain-decoy": 1,
+          "de-probe-gain-target": 2,
+          "de-freigabenachweis-archiv": 3,
+          "de-lieferkette-pruefung": 4,
+          "de-probe-control-pair": 5,
+          "en-probe-gain-lexicon": 6,
+          "de-datenschutz-pipeline": 7,
+          "en-access-review": 8,
+          "de-mitbestimmung-telemetrie": 9,
+          "en-change-approval": 10
+        },
+        "paper_rank_after": {
+          "de-probe-gain-target": 1,
+          "de-probe-gain-decoy": 2,
+          "de-freigabenachweis-archiv": 3,
+          "de-lieferkette-pruefung": 4,
+          "de-probe-control-pair": 5,
+          "en-probe-gain-lexicon": 6,
+          "de-datenschutz-pipeline": 7,
+          "en-access-review": 8,
+          "de-mitbestimmung-telemetrie": 9,
+          "en-change-approval": 10
+        },
+        "paper_score_before": {
+          "de-probe-gain-decoy": 0.03278688524590164,
+          "de-probe-gain-target": 0.03225806451612903,
+          "de-freigabenachweis-archiv": 0.015873015873015872,
+          "de-lieferkette-pruefung": 0.015625,
+          "de-probe-control-pair": 0.015384615384615385,
+          "en-probe-gain-lexicon": 0.015151515151515152,
+          "de-datenschutz-pipeline": 0.014925373134328358,
+          "en-access-review": 0.014705882352941176,
+          "de-mitbestimmung-telemetrie": 0.014492753623188406,
+          "en-change-approval": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "de-probe-gain-target": 0.03225806451612903,
+          "de-probe-gain-decoy": 0.01639344262295082,
+          "de-freigabenachweis-archiv": 0.015625,
+          "de-lieferkette-pruefung": 0.014705882352941176,
+          "de-probe-control-pair": 0.014285714285714285,
+          "en-probe-gain-lexicon": 0.014084507042253521,
+          "de-datenschutz-pipeline": 0.013888888888888888,
+          "en-access-review": 0.0136986301369863,
+          "de-mitbestimmung-telemetrie": 0.013513513513513514,
+          "en-change-approval": 0.012987012987012988
+        }
+      }
+    },
+    "p-gain-05": {
+      "probe_role": "gain",
+      "case": "probe-gain",
+      "query": "waiver sunset",
+      "probe": {
+        "role": "gain",
+        "split_doc": "en-probe-gain-lexicon",
+        "coherent_doc": "en-probe-gain-target",
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-gain-lexicon",
+          "en-probe-gain-target"
+        ],
+        "attached_chunk": {
+          "en-probe-gain-lexicon": null,
+          "en-probe-gain-target": "7a36f68e-ec0b-4098-8387-afda1bcf3e28"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-gain-lexicon": false,
+          "en-probe-gain-target": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-gain-lexicon": 1,
+          "en-probe-crowd-few": 3,
+          "en-infrastructure-drift": 6,
+          "en-probe-crowd-many": 8,
+          "en-probe-gain-target": 9,
+          "en-supply-chain": 12,
+          "en-probe-harm-counter": 13,
+          "en-probe-gain-decoy": 14,
+          "en-telemetry-retention": 16,
+          "en-pipeline-secrets": 17,
+          "de-probe-gain-decoy": 22,
+          "en-probe-harm-source": 30,
+          "de-probe-gain-target": 34,
+          "en-incident-response": 36,
+          "en-access-review": 37,
+          "de-lieferkette-pruefung": 40
+        },
+        "vec_paper_rank": {
+          "en-probe-gain-lexicon": 1,
+          "en-probe-crowd-few": 2,
+          "en-infrastructure-drift": 3,
+          "en-probe-crowd-many": 4,
+          "en-probe-gain-target": 5,
+          "en-supply-chain": 6,
+          "en-probe-harm-counter": 7,
+          "en-probe-gain-decoy": 8,
+          "en-telemetry-retention": 9,
+          "en-pipeline-secrets": 10,
+          "de-probe-gain-decoy": 11,
+          "en-probe-harm-source": 12,
+          "de-probe-gain-target": 13,
+          "en-incident-response": 14,
+          "en-access-review": 15,
+          "de-lieferkette-pruefung": 16
+        },
+        "full_token_chunk_count": {
+          "en-probe-gain-lexicon": 0,
+          "en-probe-gain-target": 1
+        },
+        "paper_rank_before": {
+          "en-probe-gain-lexicon": 1,
+          "en-probe-gain-target": 2,
+          "en-probe-crowd-few": 3,
+          "en-infrastructure-drift": 4,
+          "en-probe-crowd-many": 5,
+          "en-supply-chain": 6,
+          "en-probe-harm-counter": 7,
+          "en-probe-gain-decoy": 8,
+          "en-telemetry-retention": 9,
+          "en-pipeline-secrets": 10
+        },
+        "paper_rank_after": {
+          "en-probe-gain-target": 1,
+          "en-probe-gain-lexicon": 2,
+          "en-probe-crowd-few": 3,
+          "en-infrastructure-drift": 4,
+          "en-probe-crowd-many": 5,
+          "en-supply-chain": 6,
+          "en-probe-harm-counter": 7,
+          "en-probe-gain-decoy": 8,
+          "en-telemetry-retention": 9,
+          "en-pipeline-secrets": 10
+        },
+        "paper_score_before": {
+          "en-probe-gain-lexicon": 0.03278688524590164,
+          "en-probe-gain-target": 0.0315136476426799,
+          "en-probe-crowd-few": 0.016129032258064516,
+          "en-infrastructure-drift": 0.015873015873015872,
+          "en-probe-crowd-many": 0.015625,
+          "en-supply-chain": 0.015151515151515152,
+          "en-probe-harm-counter": 0.014925373134328358,
+          "en-probe-gain-decoy": 0.014705882352941176,
+          "en-telemetry-retention": 0.014492753623188406,
+          "en-pipeline-secrets": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-gain-target": 0.030621785881252923,
+          "en-probe-gain-lexicon": 0.01639344262295082,
+          "en-probe-crowd-few": 0.015873015873015872,
+          "en-infrastructure-drift": 0.015151515151515152,
+          "en-probe-crowd-many": 0.014705882352941176,
+          "en-supply-chain": 0.013888888888888888,
+          "en-probe-harm-counter": 0.0136986301369863,
+          "en-probe-gain-decoy": 0.013513513513513514,
+          "en-telemetry-retention": 0.013157894736842105,
+          "en-pipeline-secrets": 0.012987012987012988
+        }
+      }
+    },
+    "p-crowd-01": {
+      "probe_role": "crowding",
+      "case": "probe-crowding",
+      "query": "cadence checkpoint",
+      "probe": {
+        "role": "crowding",
+        "crowder_doc": "en-probe-crowd-many",
+        "focused_doc": "en-probe-crowd-few",
+        "relevant_doc": "en-probe-crowd-few"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "crowding_crowder_has_enough_chunks": true,
+        "crowding_focused_vector_chunk_rank_is_deep": true,
+        "crowding_focused_vector_paper_rank_is_high": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-crowd-many",
+          "en-probe-crowd-few"
+        ],
+        "attached_chunk": {
+          "en-probe-crowd-many": "fa131702-e41c-4b3f-a608-cda29f37f71a",
+          "en-probe-crowd-few": "8ffcfdb6-d59e-46c6-a184-10d0bfdd7992"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-crowd-many": false,
+          "en-probe-crowd-few": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 10,
+          "en-incident-response": 11,
+          "en-probe-gain-lexicon": 12,
+          "en-probe-gain-target": 13,
+          "en-supply-chain": 16,
+          "en-telemetry-retention": 17,
+          "en-probe-harm-counter": 18,
+          "en-probe-gain-decoy": 19,
+          "en-pipeline-secrets": 20,
+          "en-change-approval": 22,
+          "en-probe-harm-source": 24,
+          "en-infrastructure-drift": 32
+        },
+        "vec_paper_rank": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 2,
+          "en-incident-response": 3,
+          "en-probe-gain-lexicon": 4,
+          "en-probe-gain-target": 5,
+          "en-supply-chain": 6,
+          "en-telemetry-retention": 7,
+          "en-probe-harm-counter": 8,
+          "en-probe-gain-decoy": 9,
+          "en-pipeline-secrets": 10,
+          "en-change-approval": 11,
+          "en-probe-harm-source": 12,
+          "en-infrastructure-drift": 13
+        },
+        "full_token_chunk_count": {
+          "en-probe-crowd-few": 1,
+          "en-probe-crowd-many": 10
+        },
+        "paper_rank_before": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 2,
+          "en-incident-response": 3,
+          "en-probe-gain-lexicon": 4,
+          "en-probe-gain-target": 5,
+          "en-supply-chain": 6,
+          "en-telemetry-retention": 7,
+          "en-probe-harm-counter": 8,
+          "en-probe-gain-decoy": 9,
+          "en-pipeline-secrets": 10
+        },
+        "paper_rank_after": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 2,
+          "en-incident-response": 3,
+          "en-probe-gain-lexicon": 4,
+          "en-probe-gain-target": 5,
+          "en-supply-chain": 6,
+          "en-telemetry-retention": 7,
+          "en-probe-harm-counter": 8,
+          "en-probe-gain-decoy": 9,
+          "en-pipeline-secrets": 10
+        },
+        "paper_score_before": {
+          "en-probe-crowd-many": 0.03278688524590164,
+          "en-probe-crowd-few": 0.03225806451612903,
+          "en-incident-response": 0.015873015873015872,
+          "en-probe-gain-lexicon": 0.015625,
+          "en-probe-gain-target": 0.015384615384615385,
+          "en-supply-chain": 0.015151515151515152,
+          "en-telemetry-retention": 0.014925373134328358,
+          "en-probe-harm-counter": 0.014705882352941176,
+          "en-probe-gain-decoy": 0.014492753623188406,
+          "en-pipeline-secrets": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-crowd-many": 0.03177805800756621,
+          "en-probe-crowd-few": 0.0304147465437788,
+          "en-incident-response": 0.014084507042253521,
+          "en-probe-gain-lexicon": 0.013888888888888888,
+          "en-probe-gain-target": 0.0136986301369863,
+          "en-supply-chain": 0.013157894736842105,
+          "en-telemetry-retention": 0.012987012987012988,
+          "en-probe-harm-counter": 0.01282051282051282,
+          "en-probe-gain-decoy": 0.012658227848101266,
+          "en-pipeline-secrets": 0.0125
+        }
+      }
+    },
+    "p-crowd-02": {
+      "probe_role": "crowding",
+      "case": "probe-crowding",
+      "query": "escalation tier",
+      "probe": {
+        "role": "crowding",
+        "crowder_doc": "en-probe-crowd-many",
+        "focused_doc": "en-probe-crowd-few",
+        "relevant_doc": "en-probe-crowd-few"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "crowding_crowder_has_enough_chunks": true,
+        "crowding_focused_vector_chunk_rank_is_deep": true,
+        "crowding_focused_vector_paper_rank_is_high": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-crowd-many",
+          "en-probe-crowd-few"
+        ],
+        "attached_chunk": {
+          "en-probe-crowd-many": "23e1026d-17cf-496a-ad81-ee7a77b6c308",
+          "en-probe-crowd-few": "8ffcfdb6-d59e-46c6-a184-10d0bfdd7992"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-crowd-many": true,
+          "en-probe-crowd-few": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 7,
+          "en-incident-response": 8,
+          "en-probe-harm-counter": 15,
+          "en-probe-harm-source": 18,
+          "en-telemetry-retention": 19,
+          "en-probe-gain-target": 20,
+          "en-probe-gain-lexicon": 22,
+          "en-change-approval": 23,
+          "en-probe-gain-decoy": 24,
+          "en-pipeline-secrets": 30,
+          "en-access-review": 31,
+          "en-infrastructure-drift": 33
+        },
+        "vec_paper_rank": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 2,
+          "en-incident-response": 3,
+          "en-probe-harm-counter": 4,
+          "en-probe-harm-source": 5,
+          "en-telemetry-retention": 6,
+          "en-probe-gain-target": 7,
+          "en-probe-gain-lexicon": 8,
+          "en-change-approval": 9,
+          "en-probe-gain-decoy": 10,
+          "en-pipeline-secrets": 11,
+          "en-access-review": 12,
+          "en-infrastructure-drift": 13
+        },
+        "full_token_chunk_count": {
+          "en-probe-crowd-few": 1,
+          "en-probe-crowd-many": 10
+        },
+        "paper_rank_before": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 2,
+          "en-incident-response": 3,
+          "en-probe-harm-counter": 4,
+          "en-probe-harm-source": 5,
+          "en-telemetry-retention": 6,
+          "en-probe-gain-target": 7,
+          "en-probe-gain-lexicon": 8,
+          "en-change-approval": 9,
+          "en-probe-gain-decoy": 10
+        },
+        "paper_rank_after": {
+          "en-probe-crowd-many": 1,
+          "en-probe-crowd-few": 2,
+          "en-incident-response": 3,
+          "en-probe-harm-counter": 4,
+          "en-probe-harm-source": 5,
+          "en-telemetry-retention": 6,
+          "en-probe-gain-target": 7,
+          "en-probe-gain-lexicon": 8,
+          "en-change-approval": 9,
+          "en-probe-gain-decoy": 10
+        },
+        "paper_score_before": {
+          "en-probe-crowd-many": 0.03278688524590164,
+          "en-probe-crowd-few": 0.03225806451612903,
+          "en-incident-response": 0.015873015873015872,
+          "en-probe-harm-counter": 0.015625,
+          "en-probe-harm-source": 0.015384615384615385,
+          "en-telemetry-retention": 0.015151515151515152,
+          "en-probe-gain-target": 0.014925373134328358,
+          "en-probe-gain-lexicon": 0.014705882352941176,
+          "en-change-approval": 0.014492753623188406,
+          "en-probe-gain-decoy": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-crowd-many": 0.03278688524590164,
+          "en-probe-crowd-few": 0.031054405392392875,
+          "en-incident-response": 0.014705882352941176,
+          "en-probe-harm-counter": 0.013333333333333334,
+          "en-probe-harm-source": 0.01282051282051282,
+          "en-telemetry-retention": 0.012658227848101266,
+          "en-probe-gain-target": 0.0125,
+          "en-probe-gain-lexicon": 0.012195121951219513,
+          "en-change-approval": 0.012048192771084338,
+          "en-probe-gain-decoy": 0.011904761904761904
+        }
+      }
+    },
+    "p-harm-01": {
+      "probe_role": "harm",
+      "case": "probe-harm",
+      "query": "seal witness lineage",
+      "probe": {
+        "role": "harm",
+        "split_doc": "en-probe-harm-source",
+        "coherent_doc": "en-probe-harm-counter",
+        "relevant_doc": "en-probe-harm-source"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-harm-source",
+          "en-probe-harm-counter"
+        ],
+        "attached_chunk": {
+          "en-probe-harm-source": null,
+          "en-probe-harm-counter": "d1bb1473-3638-4fba-a5d7-a3c62cd676e2"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-harm-source": false,
+          "en-probe-harm-counter": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-pipeline-secrets": 4,
+          "en-change-approval": 5,
+          "en-incident-response": 8,
+          "en-probe-gain-decoy": 9,
+          "en-supply-chain": 12,
+          "en-probe-crowd-many": 13,
+          "en-probe-gain-target": 17,
+          "en-probe-crowd-few": 18,
+          "en-infrastructure-drift": 25,
+          "en-probe-gain-lexicon": 26,
+          "en-telemetry-retention": 28,
+          "en-access-review": 37
+        },
+        "vec_paper_rank": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-pipeline-secrets": 3,
+          "en-change-approval": 4,
+          "en-incident-response": 5,
+          "en-probe-gain-decoy": 6,
+          "en-supply-chain": 7,
+          "en-probe-crowd-many": 8,
+          "en-probe-gain-target": 9,
+          "en-probe-crowd-few": 10,
+          "en-infrastructure-drift": 11,
+          "en-probe-gain-lexicon": 12,
+          "en-telemetry-retention": 13,
+          "en-access-review": 14
+        },
+        "full_token_chunk_count": {
+          "en-probe-harm-counter": 1,
+          "en-probe-harm-source": 0
+        },
+        "paper_rank_before": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-pipeline-secrets": 3,
+          "en-change-approval": 4,
+          "en-incident-response": 5,
+          "en-probe-gain-decoy": 6,
+          "en-supply-chain": 7,
+          "en-probe-crowd-many": 8,
+          "en-probe-gain-target": 9,
+          "en-probe-crowd-few": 10
+        },
+        "paper_rank_after": {
+          "en-probe-harm-counter": 1,
+          "en-probe-harm-source": 2,
+          "en-pipeline-secrets": 3,
+          "en-change-approval": 4,
+          "en-incident-response": 5,
+          "en-probe-gain-decoy": 6,
+          "en-supply-chain": 7,
+          "en-probe-crowd-many": 8,
+          "en-probe-gain-target": 9,
+          "en-probe-crowd-few": 10
+        },
+        "paper_score_before": {
+          "en-probe-harm-source": 0.03278688524590164,
+          "en-probe-harm-counter": 0.03225806451612903,
+          "en-pipeline-secrets": 0.015873015873015872,
+          "en-change-approval": 0.015625,
+          "en-incident-response": 0.015384615384615385,
+          "en-probe-gain-decoy": 0.015151515151515152,
+          "en-supply-chain": 0.014925373134328358,
+          "en-probe-crowd-many": 0.014705882352941176,
+          "en-probe-gain-target": 0.014492753623188406,
+          "en-probe-crowd-few": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-harm-counter": 0.03225806451612903,
+          "en-probe-harm-source": 0.01639344262295082,
+          "en-pipeline-secrets": 0.015625,
+          "en-change-approval": 0.015384615384615385,
+          "en-incident-response": 0.014705882352941176,
+          "en-probe-gain-decoy": 0.014492753623188406,
+          "en-supply-chain": 0.013888888888888888,
+          "en-probe-crowd-many": 0.0136986301369863,
+          "en-probe-gain-target": 0.012987012987012988,
+          "en-probe-crowd-few": 0.01282051282051282
+        }
+      }
+    },
+    "p-harm-02": {
+      "probe_role": "harm",
+      "case": "probe-harm",
+      "query": "steward roster mandate",
+      "probe": {
+        "role": "harm",
+        "split_doc": "en-probe-harm-source",
+        "coherent_doc": "en-probe-harm-counter",
+        "relevant_doc": "en-probe-harm-source"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-harm-source",
+          "en-probe-harm-counter"
+        ],
+        "attached_chunk": {
+          "en-probe-harm-source": null,
+          "en-probe-harm-counter": "16ab6e2e-d0ac-4fac-bb5a-a592b39fa3a5"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-harm-source": false,
+          "en-probe-harm-counter": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-change-approval": 4,
+          "en-probe-crowd-few": 5,
+          "en-probe-gain-decoy": 6,
+          "en-probe-gain-target": 9,
+          "en-probe-gain-lexicon": 10,
+          "en-probe-crowd-many": 12,
+          "en-pipeline-secrets": 13,
+          "en-telemetry-retention": 14,
+          "en-supply-chain": 16,
+          "en-access-review": 18,
+          "en-incident-response": 33,
+          "en-infrastructure-drift": 38
+        },
+        "vec_paper_rank": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-change-approval": 3,
+          "en-probe-crowd-few": 4,
+          "en-probe-gain-decoy": 5,
+          "en-probe-gain-target": 6,
+          "en-probe-gain-lexicon": 7,
+          "en-probe-crowd-many": 8,
+          "en-pipeline-secrets": 9,
+          "en-telemetry-retention": 10,
+          "en-supply-chain": 11,
+          "en-access-review": 12,
+          "en-incident-response": 13,
+          "en-infrastructure-drift": 14
+        },
+        "full_token_chunk_count": {
+          "en-probe-harm-counter": 1,
+          "en-probe-harm-source": 0
+        },
+        "paper_rank_before": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-change-approval": 3,
+          "en-probe-crowd-few": 4,
+          "en-probe-gain-decoy": 5,
+          "en-probe-gain-target": 6,
+          "en-probe-gain-lexicon": 7,
+          "en-probe-crowd-many": 8,
+          "en-pipeline-secrets": 9,
+          "en-telemetry-retention": 10
+        },
+        "paper_rank_after": {
+          "en-probe-harm-counter": 1,
+          "en-probe-harm-source": 2,
+          "en-change-approval": 3,
+          "en-probe-crowd-few": 4,
+          "en-probe-gain-decoy": 5,
+          "en-probe-gain-target": 6,
+          "en-probe-gain-lexicon": 7,
+          "en-probe-crowd-many": 8,
+          "en-pipeline-secrets": 9,
+          "en-telemetry-retention": 10
+        },
+        "paper_score_before": {
+          "en-probe-harm-source": 0.03278688524590164,
+          "en-probe-harm-counter": 0.03225806451612903,
+          "en-change-approval": 0.015873015873015872,
+          "en-probe-crowd-few": 0.015625,
+          "en-probe-gain-decoy": 0.015384615384615385,
+          "en-probe-gain-target": 0.015151515151515152,
+          "en-probe-gain-lexicon": 0.014925373134328358,
+          "en-probe-crowd-many": 0.014705882352941176,
+          "en-pipeline-secrets": 0.014492753623188406,
+          "en-telemetry-retention": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-harm-counter": 0.03225806451612903,
+          "en-probe-harm-source": 0.01639344262295082,
+          "en-change-approval": 0.015625,
+          "en-probe-crowd-few": 0.015384615384615385,
+          "en-probe-gain-decoy": 0.015151515151515152,
+          "en-probe-gain-target": 0.014492753623188406,
+          "en-probe-gain-lexicon": 0.014285714285714285,
+          "en-probe-crowd-many": 0.013888888888888888,
+          "en-pipeline-secrets": 0.0136986301369863,
+          "en-telemetry-retention": 0.013513513513513514
+        }
+      }
+    },
+    "p-harm-03": {
+      "probe_role": "harm",
+      "case": "probe-harm",
+      "query": "exemption threshold charter",
+      "probe": {
+        "role": "harm",
+        "split_doc": "en-probe-harm-source",
+        "coherent_doc": "en-probe-harm-counter",
+        "relevant_doc": "en-probe-harm-source"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "rule3_split_doc_has_no_full_token_chunk": true,
+        "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
+        "rule4_coherent_chunk_is_vector_best_chunk": true,
+        "rule5_split_doc_lexically_at_least_as_strong": true,
+        "rule5_split_doc_vector_paper_rank_at_most_2": true,
+        "rule6_score_gap_before_above_threshold": true,
+        "rule6_score_gap_after_above_threshold": true,
+        "role_matches_relevance_direction": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-harm-source",
+          "en-probe-harm-counter"
+        ],
+        "attached_chunk": {
+          "en-probe-harm-source": null,
+          "en-probe-harm-counter": "73e26902-1be3-4aa9-b900-d88469d36610"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-harm-source": false,
+          "en-probe-harm-counter": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-probe-crowd-many": 8,
+          "en-probe-gain-decoy": 11,
+          "en-telemetry-retention": 12,
+          "en-probe-gain-target": 13,
+          "en-access-review": 14,
+          "en-probe-crowd-few": 19,
+          "en-incident-response": 25,
+          "en-change-approval": 30,
+          "en-pipeline-secrets": 37,
+          "en-supply-chain": 39
+        },
+        "vec_paper_rank": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-probe-crowd-many": 4,
+          "en-probe-gain-decoy": 5,
+          "en-telemetry-retention": 6,
+          "en-probe-gain-target": 7,
+          "en-access-review": 8,
+          "en-probe-crowd-few": 9,
+          "en-incident-response": 10,
+          "en-change-approval": 11,
+          "en-pipeline-secrets": 12,
+          "en-supply-chain": 13
+        },
+        "full_token_chunk_count": {
+          "en-probe-harm-counter": 1,
+          "en-probe-harm-source": 0
+        },
+        "paper_rank_before": {
+          "en-probe-harm-source": 1,
+          "en-probe-harm-counter": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-probe-crowd-many": 4,
+          "en-probe-gain-decoy": 5,
+          "en-telemetry-retention": 6,
+          "en-probe-gain-target": 7,
+          "en-access-review": 8,
+          "en-probe-crowd-few": 9,
+          "en-incident-response": 10
+        },
+        "paper_rank_after": {
+          "en-probe-harm-counter": 1,
+          "en-probe-harm-source": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-probe-crowd-many": 4,
+          "en-probe-gain-decoy": 5,
+          "en-telemetry-retention": 6,
+          "en-probe-gain-target": 7,
+          "en-access-review": 8,
+          "en-probe-crowd-few": 9,
+          "en-incident-response": 10
+        },
+        "paper_score_before": {
+          "en-probe-harm-source": 0.03278688524590164,
+          "en-probe-harm-counter": 0.03225806451612903,
+          "en-probe-gain-lexicon": 0.015873015873015872,
+          "en-probe-crowd-many": 0.015625,
+          "en-probe-gain-decoy": 0.015384615384615385,
+          "en-telemetry-retention": 0.015151515151515152,
+          "en-probe-gain-target": 0.014925373134328358,
+          "en-access-review": 0.014705882352941176,
+          "en-probe-crowd-few": 0.014492753623188406,
+          "en-incident-response": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-harm-counter": 0.03225806451612903,
+          "en-probe-harm-source": 0.01639344262295082,
+          "en-probe-gain-lexicon": 0.015873015873015872,
+          "en-probe-crowd-many": 0.014705882352941176,
+          "en-probe-gain-decoy": 0.014084507042253521,
+          "en-telemetry-retention": 0.013888888888888888,
+          "en-probe-gain-target": 0.0136986301369863,
+          "en-access-review": 0.013513513513513514,
+          "en-probe-crowd-few": 0.012658227848101266,
+          "en-incident-response": 0.011764705882352941
+        }
+      }
+    },
+    "p-control-01": {
+      "probe_role": "control",
+      "case": "probe-control",
+      "query": "tamper ledger",
+      "probe": {
+        "role": "control",
+        "papers": [
+          "en-probe-gain-target",
+          "en-probe-harm-counter"
+        ],
+        "relevant_doc": "en-probe-gain-target"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "control_all_papers_are_fts_hits": true,
+        "control_attach_equals_vec_best_for_all_papers": true,
+        "control_every_paper_has_exactly_one_full_token_chunk": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "en-probe-gain-target",
+          "en-probe-harm-counter"
+        ],
+        "attached_chunk": {
+          "en-probe-gain-target": "b239b7b2-5161-4a51-924c-59ea56cdabc8",
+          "en-probe-harm-counter": "7d316e7a-3ced-4110-9954-b76f82a23b6f"
+        },
+        "attach_equals_vec_best": {
+          "en-probe-gain-target": true,
+          "en-probe-harm-counter": true
+        },
+        "vec_best_chunk_rank": {
+          "en-probe-gain-target": 1,
+          "en-probe-gain-lexicon": 2,
+          "en-probe-harm-counter": 3,
+          "en-probe-gain-decoy": 6,
+          "en-telemetry-retention": 7,
+          "en-change-approval": 10,
+          "en-probe-harm-source": 11,
+          "en-access-review": 12,
+          "en-pipeline-secrets": 13,
+          "en-probe-crowd-few": 14,
+          "en-supply-chain": 25,
+          "en-incident-response": 29,
+          "en-probe-crowd-many": 31,
+          "en-infrastructure-drift": 35
+        },
+        "vec_paper_rank": {
+          "en-probe-gain-target": 1,
+          "en-probe-gain-lexicon": 2,
+          "en-probe-harm-counter": 3,
+          "en-probe-gain-decoy": 4,
+          "en-telemetry-retention": 5,
+          "en-change-approval": 6,
+          "en-probe-harm-source": 7,
+          "en-access-review": 8,
+          "en-pipeline-secrets": 9,
+          "en-probe-crowd-few": 10,
+          "en-supply-chain": 11,
+          "en-incident-response": 12,
+          "en-probe-crowd-many": 13,
+          "en-infrastructure-drift": 14
+        },
+        "full_token_chunk_count": {
+          "en-probe-gain-target": 1,
+          "en-probe-harm-counter": 1
+        },
+        "paper_rank_before": {
+          "en-probe-gain-target": 1,
+          "en-probe-harm-counter": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-probe-gain-decoy": 4,
+          "en-telemetry-retention": 5,
+          "en-change-approval": 6,
+          "en-probe-harm-source": 7,
+          "en-access-review": 8,
+          "en-pipeline-secrets": 9,
+          "en-probe-crowd-few": 10
+        },
+        "paper_rank_after": {
+          "en-probe-gain-target": 1,
+          "en-probe-harm-counter": 2,
+          "en-probe-gain-lexicon": 3,
+          "en-probe-gain-decoy": 4,
+          "en-telemetry-retention": 5,
+          "en-change-approval": 6,
+          "en-probe-harm-source": 7,
+          "en-access-review": 8,
+          "en-pipeline-secrets": 9,
+          "en-probe-crowd-few": 10
+        },
+        "paper_score_before": {
+          "en-probe-gain-target": 0.03278688524590164,
+          "en-probe-harm-counter": 0.03200204813108039,
+          "en-probe-gain-lexicon": 0.016129032258064516,
+          "en-probe-gain-decoy": 0.015625,
+          "en-telemetry-retention": 0.015384615384615385,
+          "en-change-approval": 0.015151515151515152,
+          "en-probe-harm-source": 0.014925373134328358,
+          "en-access-review": 0.014705882352941176,
+          "en-pipeline-secrets": 0.014492753623188406,
+          "en-probe-crowd-few": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "en-probe-gain-target": 0.03278688524590164,
+          "en-probe-harm-counter": 0.03200204813108039,
+          "en-probe-gain-lexicon": 0.016129032258064516,
+          "en-probe-gain-decoy": 0.015151515151515152,
+          "en-telemetry-retention": 0.014925373134328358,
+          "en-change-approval": 0.014285714285714285,
+          "en-probe-harm-source": 0.014084507042253521,
+          "en-access-review": 0.013888888888888888,
+          "en-pipeline-secrets": 0.0136986301369863,
+          "en-probe-crowd-few": 0.013513513513513514
+        }
+      }
+    },
+    "p-control-02": {
+      "probe_role": "control",
+      "case": "probe-control",
+      "query": "Vertrauensanker Beweiskette",
+      "probe": {
+        "role": "control",
+        "papers": [
+          "de-probe-gain-target",
+          "de-probe-control-pair"
+        ],
+        "relevant_doc": "de-probe-control-pair"
+      },
+      "conditions_met": true,
+      "checks": {
+        "rule1_no_comma": true,
+        "rule1_at_most_four_tokens": true,
+        "rule1_no_fts5_syntax_error": true,
+        "rule2_term_family_in_at_least_two_documents": true,
+        "control_all_papers_are_fts_hits": true,
+        "control_attach_equals_vec_best_for_all_papers": true,
+        "control_every_paper_has_exactly_one_full_token_chunk": true
+      },
+      "violations": [],
+      "measured": {
+        "papers_fts_hit_count": 2,
+        "papers_trgm_hit_count": 0,
+        "fts_ranking": [
+          "de-probe-control-pair",
+          "de-probe-gain-target"
+        ],
+        "attached_chunk": {
+          "de-probe-control-pair": "cf1e0b8d-f1dc-42de-868d-d781c8afe243",
+          "de-probe-gain-target": "08e58f62-da0c-4e25-b1ae-8c5e227da212"
+        },
+        "attach_equals_vec_best": {
+          "de-probe-control-pair": true,
+          "de-probe-gain-target": true
+        },
+        "vec_best_chunk_rank": {
+          "de-probe-gain-target": 1,
+          "de-probe-gain-decoy": 2,
+          "de-probe-control-pair": 5,
+          "de-freigabenachweis-archiv": 8,
+          "de-mitbestimmung-telemetrie": 9,
+          "en-pipeline-secrets": 11,
+          "de-lieferkette-pruefung": 12,
+          "en-probe-harm-source": 14,
+          "en-probe-gain-decoy": 16,
+          "de-datenschutz-pipeline": 17,
+          "en-probe-gain-lexicon": 21,
+          "en-probe-gain-target": 29,
+          "en-supply-chain": 30,
+          "en-change-approval": 31,
+          "en-incident-response": 33,
+          "en-access-review": 35,
+          "en-probe-crowd-few": 37,
+          "en-probe-crowd-many": 40
+        },
+        "vec_paper_rank": {
+          "de-probe-gain-target": 1,
+          "de-probe-gain-decoy": 2,
+          "de-probe-control-pair": 3,
+          "de-freigabenachweis-archiv": 4,
+          "de-mitbestimmung-telemetrie": 5,
+          "en-pipeline-secrets": 6,
+          "de-lieferkette-pruefung": 7,
+          "en-probe-harm-source": 8,
+          "en-probe-gain-decoy": 9,
+          "de-datenschutz-pipeline": 10,
+          "en-probe-gain-lexicon": 11,
+          "en-probe-gain-target": 12,
+          "en-supply-chain": 13,
+          "en-change-approval": 14,
+          "en-incident-response": 15,
+          "en-access-review": 16,
+          "en-probe-crowd-few": 17,
+          "en-probe-crowd-many": 18
+        },
+        "full_token_chunk_count": {
+          "de-probe-control-pair": 1,
+          "de-probe-gain-target": 1
+        },
+        "paper_rank_before": {
+          "de-probe-gain-target": 1,
+          "de-probe-control-pair": 2,
+          "de-probe-gain-decoy": 3,
+          "de-freigabenachweis-archiv": 4,
+          "de-mitbestimmung-telemetrie": 5,
+          "en-pipeline-secrets": 6,
+          "de-lieferkette-pruefung": 7,
+          "en-probe-harm-source": 8,
+          "en-probe-gain-decoy": 9,
+          "de-datenschutz-pipeline": 10
+        },
+        "paper_rank_after": {
+          "de-probe-gain-target": 1,
+          "de-probe-control-pair": 2,
+          "de-probe-gain-decoy": 3,
+          "de-freigabenachweis-archiv": 4,
+          "de-mitbestimmung-telemetrie": 5,
+          "en-pipeline-secrets": 6,
+          "de-lieferkette-pruefung": 7,
+          "en-probe-harm-source": 8,
+          "en-probe-gain-decoy": 9,
+          "de-datenschutz-pipeline": 10
+        },
+        "paper_score_before": {
+          "de-probe-gain-target": 0.03252247488101534,
+          "de-probe-control-pair": 0.032266458495966696,
+          "de-probe-gain-decoy": 0.016129032258064516,
+          "de-freigabenachweis-archiv": 0.015625,
+          "de-mitbestimmung-telemetrie": 0.015384615384615385,
+          "en-pipeline-secrets": 0.015151515151515152,
+          "de-lieferkette-pruefung": 0.014925373134328358,
+          "en-probe-harm-source": 0.014705882352941176,
+          "en-probe-gain-decoy": 0.014492753623188406,
+          "de-datenschutz-pipeline": 0.014285714285714285
+        },
+        "paper_score_after": {
+          "de-probe-gain-target": 0.03252247488101534,
+          "de-probe-control-pair": 0.03177805800756621,
+          "de-probe-gain-decoy": 0.016129032258064516,
+          "de-freigabenachweis-archiv": 0.014705882352941176,
+          "de-mitbestimmung-telemetrie": 0.014492753623188406,
+          "en-pipeline-secrets": 0.014084507042253521,
+          "de-lieferkette-pruefung": 0.013888888888888888,
+          "en-probe-harm-source": 0.013513513513513514,
+          "en-probe-gain-decoy": 0.013157894736842105,
+          "de-datenschutz-pipeline": 0.012987012987012988
+        }
+      }
+    }
+  }
+}
