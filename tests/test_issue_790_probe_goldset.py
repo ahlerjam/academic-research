@@ -273,6 +273,24 @@ def test_declared_relevant_doc_matches_the_goldset_relevance(conditions: dict) -
         assert entry["measured"]["relevant_docs"] == [entry["probe"]["relevant_doc"]], query_id
 
 
+def test_declared_relevant_doc_matches_the_live_goldset(probe_goldset: dict) -> None:
+    """Dieselbe Bindung, aber aus ``goldset.json`` nachgerechnet statt aus
+    ``conditions.json`` gelesen.
+
+    Notwendig, weil ``manifest_sha256`` bauartbedingt nur ``embedding_text``,
+    Query-Text, Modell-ID und Dimension abdeckt -- die ``anchors`` und die
+    daraus abgeleiteten ``relevant_chunk_ids`` stehen NICHT im Hash. Wer nur
+    einen Anker praeziser formuliert, sodass er auf einen Chunk des
+    Decoy-Dokuments faellt, laesst Texte und Hash unveraendert; die
+    eingecheckte ``conditions.json`` saehe weiterhin gueltig aus. Dieser Test
+    laeuft ohne Ablation und ohne Live-Embedding und schliesst genau die
+    Luecke."""
+    chunk_owner = {c["chunk_id"]: c["doc_id"] for c in probe_goldset["chunks"]}
+    for query in probe_queries(probe_goldset):
+        declared = query["probe"]["relevant_doc"]
+        assert relevant_doc_ids(query, chunk_owner) == [declared], query["query_id"]
+
+
 def test_relevant_doc_ids_resolve_chunks_to_documents() -> None:
     owner = {"a#0": "doc-a", "a#1": "doc-a", "b#0": "doc-b"}
     assert relevant_doc_ids({"relevant_chunk_ids": ["a#0", "a#1"]}, owner) == ["doc-a"]
