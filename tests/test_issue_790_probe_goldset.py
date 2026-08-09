@@ -36,6 +36,7 @@ from pathlib import Path
 import pytest
 from scripts.eval.build_retrieval_chunk_goldset import (
     MAX_PROBE_QUERY_TOKENS,
+    REQUIRED_PROBE_FIELDS,
     dense_paper_ranks,
     load_reuse_index,
     min_score_gap,
@@ -296,6 +297,25 @@ def test_relevant_doc_ids_resolve_chunks_to_documents() -> None:
     assert relevant_doc_ids({"relevant_chunk_ids": ["a#0", "a#1"]}, owner) == ["doc-a"]
     assert relevant_doc_ids({"relevant_chunk_ids": ["b#0", "a#0"]}, owner) == ["doc-a", "doc-b"]
     assert relevant_doc_ids({}, owner) == []
+
+
+def test_every_probe_block_carries_the_fields_its_role_needs(probe_goldset: dict) -> None:
+    """Ein vergessenes Feld im ``probe``-Block soll als verletzte Vorbedingung
+    auffallen, nicht als ``KeyError`` mitten im Lauf.
+
+    Der Task-AC verlangt Exit 3 mit Klarnamen der verletzenden Query UND eine
+    geschriebene ``conditions.json`` -- beides gaebe es nicht, wenn der
+    Generator vorher abstuerzte."""
+    for query in probe_queries(probe_goldset):
+        required = REQUIRED_PROBE_FIELDS[query["probe_role"]]
+        missing = [field for field in required if not query["probe"].get(field)]
+        assert missing == [], (query["query_id"], missing)
+
+
+def test_conditions_record_the_probe_block_completeness(conditions: dict) -> None:
+    for query_id, entry in conditions["queries"].items():
+        assert entry["checks"]["probe_block_is_complete"], query_id
+        assert entry["measured"]["missing_probe_fields"] == [], query_id
 
 
 @pytest.mark.parametrize(

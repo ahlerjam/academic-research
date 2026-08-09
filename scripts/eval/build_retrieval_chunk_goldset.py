@@ -92,6 +92,17 @@ LEGACY_EMBEDDING_MODEL_ID = "intfloat/multilingual-e5-small"
 # 'control' den Fall, in dem gar nichts passieren darf.
 PROBE_ROLES = ("gain", "harm", "crowding", "control")
 
+# Pflichtfelder des ``probe``-Blocks je Rolle. Ohne diese Tabelle wuerde eine
+# Query mit vergessenem oder vertipptem Feld den Generator mit einem KeyError
+# abbrechen -- statt, wie zugesagt, mit Exit 3, dem Klarnamen der Query und
+# einer geschriebenen conditions.json, die genau das benennt.
+REQUIRED_PROBE_FIELDS: dict[str, tuple[str, ...]] = {
+    "gain": ("split_doc", "coherent_doc", "relevant_doc"),
+    "harm": ("split_doc", "coherent_doc", "relevant_doc"),
+    "crowding": ("crowder_doc", "focused_doc", "relevant_doc"),
+    "control": ("papers", "relevant_doc"),
+}
+
 # Obergrenze fuer die Tokenzahl einer Probe-Query (Design-Regel 1 aus #790):
 # ``papers_fts`` MATCH verknuepft Tokens implizit mit AND -- jedes zusaetzliche
 # Token senkt die Trefferwahrscheinlichkeit multiplikativ, und genau daran ist
@@ -662,24 +673,31 @@ def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: i
             checks = _check_common_rules(
                 query, diagnosis, scores_before, scores_after, relevant_docs
             )
-            if role in ("gain", "harm"):
+            if role not in REQUIRED_PROBE_FIELDS:
+                raise ProbeConditionError(
+                    f"Query {query['query_id']}: unbekannte probe_role {role!r} "
+                    f"(erlaubt: {', '.join(PROBE_ROLES)})"
+                )
+
+            # Vollstaendigkeit des probe-Blocks als regulaerer Check, nicht als
+            # Ausnahme: ein vergessenes Feld landet damit in 'violations' und
+            # in der geschriebenen conditions.json, statt den Lauf mit einem
+            # KeyError abzubrechen, bevor die Datei ueberhaupt entsteht.
+            missing = [field for field in REQUIRED_PROBE_FIELDS[role] if not probe.get(field)]
+            checks["probe_block_is_complete"] = not missing
+
+            if not missing and role in ("gain", "harm"):
                 checks.update(
                     _check_split_pair(
                         probe, diagnosis, full_token_chunks, scores_before, scores_after
                     )
                 )
-                relevant = probe.get("relevant_doc")
                 expected = probe["coherent_doc"] if role == "gain" else probe["split_doc"]
-                checks["role_matches_relevance_direction"] = relevant == expected
-            elif role == "control":
+                checks["role_matches_relevance_direction"] = probe["relevant_doc"] == expected
+            elif not missing and role == "control":
                 checks.update(_check_control(probe, diagnosis, full_token_chunks))
-            elif role == "crowding":
+            elif not missing and role == "crowding":
                 checks.update(_check_crowding(probe, diagnosis, chunk_counts))
-            else:
-                raise ProbeConditionError(
-                    f"Query {query['query_id']}: unbekannte probe_role {role!r} "
-                    f"(erlaubt: {', '.join(PROBE_ROLES)})"
-                )
 
             results[query["query_id"]] = {
                 "probe_role": role,
@@ -713,6 +731,7 @@ def verify_probe_conditions(goldset: dict, vectors: dict[str, list[float]], k: i
                     # Relevanz des Goldsets, gegen die probe['relevant_doc']
                     # gehalten wird.
                     "relevant_docs": relevant_docs,
+                    "missing_probe_fields": missing,
                 },
             }
 

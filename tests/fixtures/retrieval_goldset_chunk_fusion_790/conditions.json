@@ -27,6 +27,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -46,7 +47,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-decoy": null,
-          "en-probe-gain-target": "ba0d0e4d-3edc-4140-bfa0-6a543463ffc7"
+          "en-probe-gain-target": "8a7df5a8-dbc6-4377-89a6-a5269fb309cb"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-decoy": false,
@@ -140,7 +141,8 @@
         "min_paper_score_gap_after": 0.00018018018018018007,
         "relevant_docs": [
           "en-probe-gain-target"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-gain-02": {
@@ -162,6 +164,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -181,7 +184,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-decoy": null,
-          "en-probe-gain-target": "74fd3b68-bd48-4c81-94cb-ce358d6c063c"
+          "en-probe-gain-target": "32eb71b6-bfe0-41bf-a655-0f7af0d3e19c"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-decoy": false,
@@ -283,7 +286,8 @@
         "min_paper_score_gap_after": 0.00018018018018018007,
         "relevant_docs": [
           "en-probe-gain-target"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-gain-03": {
@@ -305,6 +309,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -324,7 +329,7 @@
         ],
         "attached_chunk": {
           "de-probe-gain-decoy": null,
-          "de-probe-gain-target": "f7184d5d-adbd-44bb-a449-0b117345a8fc"
+          "de-probe-gain-target": "3df58b8d-b1e4-48d3-ab61-c240b13548de"
         },
         "attach_equals_vec_best": {
           "de-probe-gain-decoy": false,
@@ -426,7 +431,8 @@
         "min_paper_score_gap_after": 0.0001665001665001678,
         "relevant_docs": [
           "de-probe-gain-target"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-gain-04": {
@@ -448,6 +454,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -467,7 +474,7 @@
         ],
         "attached_chunk": {
           "de-probe-gain-decoy": null,
-          "de-probe-gain-target": "f7184d5d-adbd-44bb-a449-0b117345a8fc"
+          "de-probe-gain-target": "3df58b8d-b1e4-48d3-ab61-c240b13548de"
         },
         "attach_equals_vec_best": {
           "de-probe-gain-decoy": false,
@@ -569,7 +576,8 @@
         "min_paper_score_gap_after": 0.00018511662347278635,
         "relevant_docs": [
           "de-probe-gain-target"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-gain-05": {
@@ -591,6 +599,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -610,7 +619,7 @@
         ],
         "attached_chunk": {
           "en-probe-gain-lexicon": null,
-          "en-probe-gain-target": "74fd3b68-bd48-4c81-94cb-ce358d6c063c"
+          "en-probe-gain-target": "32eb71b6-bfe0-41bf-a655-0f7af0d3e19c"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-lexicon": false,
@@ -706,7 +715,8 @@
         "min_paper_score_gap_after": 0.00017088174982911666,
         "relevant_docs": [
           "en-probe-gain-target"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-crowd-01": {
@@ -728,6 +738,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "crowding_crowder_has_enough_chunks": true,
         "crowding_focused_vector_chunk_rank_is_deep": true,
         "crowding_focused_vector_paper_rank_is_high": true
@@ -741,8 +752,8 @@
           "en-probe-crowd-few"
         ],
         "attached_chunk": {
-          "en-probe-crowd-many": "f43ab0e2-89f5-451a-ac2a-6d478419c1c0",
-          "en-probe-crowd-few": "8ac37bef-8f7c-4a43-93a5-a59a0adf814b"
+          "en-probe-crowd-many": "341367fb-c4fd-4458-8e3e-b74890b5a2c7",
+          "en-probe-crowd-few": "edc45930-3164-4f9a-88a3-3e079815d604"
         },
         "attach_equals_vec_best": {
           "en-probe-crowd-many": false,
@@ -834,7 +845,8 @@
         "min_paper_score_gap_after": 0.00015822784810126493,
         "relevant_docs": [
           "en-probe-crowd-few"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-crowd-02": {
@@ -856,6 +868,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "crowding_crowder_has_enough_chunks": true,
         "crowding_focused_vector_chunk_rank_is_deep": true,
         "crowding_focused_vector_paper_rank_is_high": true
@@ -869,8 +882,8 @@
           "en-probe-crowd-few"
         ],
         "attached_chunk": {
-          "en-probe-crowd-many": "d164058f-6c35-430f-bcf9-28dd321d0479",
-          "en-probe-crowd-few": "8ac37bef-8f7c-4a43-93a5-a59a0adf814b"
+          "en-probe-crowd-many": "a47be4fa-eba8-46a1-9eb5-30e719c3d97a",
+          "en-probe-crowd-few": "edc45930-3164-4f9a-88a3-3e079815d604"
         },
         "attach_equals_vec_best": {
           "en-probe-crowd-many": true,
@@ -962,7 +975,8 @@
         "min_paper_score_gap_after": 0.00014692918013517464,
         "relevant_docs": [
           "en-probe-crowd-few"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-harm-01": {
@@ -984,6 +998,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -1003,7 +1018,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "9023443e-92fb-4636-b16a-f3cbda82f4d9"
+          "en-probe-harm-counter": "2fea8476-d190-4b28-849e-cb898b0a2678"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1097,7 +1112,8 @@
         "min_paper_score_gap_after": 0.0001665001665001678,
         "relevant_docs": [
           "en-probe-harm-source"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-harm-02": {
@@ -1119,6 +1135,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -1138,7 +1155,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "c1375003-beed-4568-8148-6506b1010c9e"
+          "en-probe-harm-counter": "5f1dda1b-e9bf-47d0-9f33-9c1d40ee61c6"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1232,7 +1249,8 @@
         "min_paper_score_gap_after": 0.0001902587519025875,
         "relevant_docs": [
           "en-probe-harm-source"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-harm-03": {
@@ -1254,6 +1272,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "rule3_split_doc_has_no_full_token_chunk": true,
         "rule4_coherent_doc_has_exactly_one_full_token_chunk": true,
         "rule4_coherent_chunk_is_vector_best_chunk": true,
@@ -1273,7 +1292,7 @@
         ],
         "attached_chunk": {
           "en-probe-harm-source": null,
-          "en-probe-harm-counter": "ec83941d-a395-4c9b-9f34-fcc63dab55b4"
+          "en-probe-harm-counter": "b0556eba-7734-4160-93c9-4fda2dd4b3d9"
         },
         "attach_equals_vec_best": {
           "en-probe-harm-source": false,
@@ -1365,7 +1384,8 @@
         "min_paper_score_gap_after": 0.00018511662347278635,
         "relevant_docs": [
           "en-probe-harm-source"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-control-01": {
@@ -1389,6 +1409,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "control_all_papers_are_fts_hits": true,
         "control_attach_equals_vec_best_for_all_papers": true,
         "control_every_paper_has_exactly_one_full_token_chunk": true
@@ -1402,8 +1423,8 @@
           "en-probe-harm-counter"
         ],
         "attached_chunk": {
-          "en-probe-gain-target": "f4414b71-3180-4b69-9e3a-f9c9da98e924",
-          "en-probe-harm-counter": "925120e8-fd65-4cc8-a5b9-8105e2d831a4"
+          "en-probe-gain-target": "5cf35702-e109-4c61-84da-3f7b6c452f28",
+          "en-probe-harm-counter": "fdda255a-51c5-4340-8f02-1a8a60097a56"
         },
         "attach_equals_vec_best": {
           "en-probe-gain-target": true,
@@ -1497,7 +1518,8 @@
         "min_paper_score_gap_after": 0.00018018018018018007,
         "relevant_docs": [
           "en-probe-gain-target"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     },
     "p-control-02": {
@@ -1521,6 +1543,7 @@
         "no_exact_score_tie_before": true,
         "no_exact_score_tie_after": true,
         "relevant_doc_matches_goldset": true,
+        "probe_block_is_complete": true,
         "control_all_papers_are_fts_hits": true,
         "control_attach_equals_vec_best_for_all_papers": true,
         "control_every_paper_has_exactly_one_full_token_chunk": true
@@ -1534,8 +1557,8 @@
           "de-probe-gain-target"
         ],
         "attached_chunk": {
-          "de-probe-control-pair": "1aa3d6ae-65c6-4efb-826e-3c78a6161952",
-          "de-probe-gain-target": "4c213770-8c10-478e-9f95-8c9e26cdd061"
+          "de-probe-control-pair": "2b8f5681-4101-405d-ae2c-8bd52722e93c",
+          "de-probe-gain-target": "1f611ff6-6a44-46ed-84d0-d081a2692a17"
         },
         "attach_equals_vec_best": {
           "de-probe-control-pair": true,
@@ -1637,7 +1660,8 @@
         "min_paper_score_gap_after": 0.00019561815336463333,
         "relevant_docs": [
           "de-probe-control-pair"
-        ]
+        ],
+        "missing_probe_fields": []
       }
     }
   }
