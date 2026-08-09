@@ -317,6 +317,15 @@ def test_compare_against_reports_a_missing_baseline_block() -> None:
     assert any(problem.startswith("baseline") for problem in problems)
 
 
+def test_compare_against_reports_a_missing_diagnostics_block() -> None:
+    """Dieselbe Asymmetrie eine Ebene tiefer: ``--skip-diagnostics`` im
+    CI-Schritt liesse den im Report zitierten Diagnoseblock unbemerkt altern."""
+    empty = {"results": {}, "deltas": {}, "deltas_by_case": {}}
+    stored = {"quality": empty, "diagnostics": {"summary": {"query_count": 38}}}
+    problems = compare_against({"quality": empty}, stored)
+    assert any(problem.startswith("diagnostics") for problem in problems)
+
+
 def test_dense_paper_ranks_compress_chunk_ranks_to_paper_ranks() -> None:
     """Der 'vorher'-Arm rankt auf Paper-Ebene: drei Paper mit Bestchunks auf
     den Chunkraengen 1, 4 und 5 sind dort die Paperraenge 1, 2 und 3.

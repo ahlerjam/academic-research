@@ -1115,6 +1115,14 @@ def compare_against(report: dict, stored: dict, tolerance: float = 1e-9) -> list
                 problems.append(
                     f"{prefix}diagnostics.summary: weicht von den eingecheckten Rohdaten ab"
                 )
+        elif "diagnostics" in old_block:
+            # Dieselbe Asymmetrie wie beim baseline-Block unten: laesst jemand
+            # --skip-diagnostics in den CI-Schritt einlaufen, altert der im
+            # Report zitierte Diagnoseblock ab da unbemerkt weiter.
+            problems.append(
+                f"{prefix}diagnostics: die eingecheckten Rohdaten fuehren einen "
+                "Diagnoseblock, dieser Lauf nicht -- --skip-diagnostics ist gesetzt"
+            )
 
     _compare_block(report, stored, "")
     if "baseline" in report:
