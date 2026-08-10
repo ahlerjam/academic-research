@@ -578,6 +578,46 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Fixed
 
+- **Trigger-Recall `humanizer-de`/`title-generator`: Mess-Harness gehaertet
+  statt Beschreibung/Goldset geraten (#825).** Live-Diagnose (echte
+  `claude`-CLI-Aufrufe, `claude-haiku-4-5`, volle Rohausgabe je Fehlschlag
+  protokolliert statt nur das geparste erste Token) zeigte: 4 von 6
+  beobachteten Missern bei `humanizer-de`/`style-evaluator` waren gar keine
+  Dispatch-Entscheidungen, sondern Rueckfragen nach dem zu bearbeitenden Text
+  ("Ich braeuchte den Text, um ihn zu pruefen ...") -- das Modell beantwortete
+  den Klassifikations-Prompt als Assistent an den Nutzer, weil der zu
+  klassifizierende Text als gewoehnliche User-Nachricht einging. Fix:
+  `TRIGGER_SYSTEM_TEMPLATE` kapselt den Prompt jetzt in `<user_prompt>`-Tags
+  mit expliziter Anweisung, ihn nicht zu beantworten und keine Rueckfrage zu
+  stellen. Die Trefferbedingung (`_classify(p, skill) == skill`,
+  `split()[0]`) blieb wortgleich, die Aenderung gilt fuer alle 45 Skills
+  gleich (Recall und FPR) -- Beleg fuer Haertung statt Aufweichung: die FPR
+  blieb ueber acht nachgemessene Skills bei 0/10 unveraendert. Ein zuvor
+  erwogener Dispatcher-Output-Parser mit Mengen-Fallback wurde wieder
+  zurueckgebaut, weil er `test_should_trigger_recall` strukturell gelockert
+  haette (Fallback kann nur zusaetzliche Treffer erzeugen, nie welche
+  entfernen). Daneben: `title-generator`s `description` um zwei fehlende
+  Trigger-Phrasen ergaenzt ("Untertitel fuer Kapitel X", "Titel schaerfen");
+  `humanizer-de`s Abgrenzungssatz zu `style-evaluator` an den Anfang der
+  `description` gezogen (der Dispatcher-Klassifikator kuerzt jede Beschreibung
+  hart auf 500 Rohzeichen, der Satz fiel vorher komplett heraus);
+  `style-evaluator` gibt den KI-Bezug ab ("KI-Erkennung" als Trigger entfernt)
+  und verweist fuer jede KI-bezogene Pruefung auf `humanizer-de` -- ein
+  Zwischenstand hatte stattdessen versucht, zwei KI-Detektions-Prompts in
+  `style-evaluator`s `should_trigger`-Goldset zu verschieben, was dessen
+  Recall live auf 58 % (7/12) gedrueckt haette und vom `coordinator`-Gate zu
+  Recht als P1 blockiert wurde; die Verschiebung ist zurueckgenommen (beide
+  Goldsets wieder 10/10 `should_trigger`). Volle Nachmessung ueber alle acht
+  betroffenen Skills (die drei Zielskills plus fuenf zuvor bestehende, damit
+  der Gewinn nicht durch Verdraengung erkauft ist), ein Lauf, kein
+  Wiederholen bis gruen: `humanizer-de` Recall 9/10 (90 %) FPR 0/10,
+  `style-evaluator` Recall 9/10 (90 %) FPR 0/10, `title-generator` Recall
+  10/10 FPR 0/10, `literature-excel`/`notebook-bundle`/`reading-list-import`/
+  `slide-export` je 10/10 (bzw. `preregistration` 7/7) Recall, FPR 0/10
+  (bzw. 0/7) -- alle acht ueber der 85-%-Recall- bzw. unter der 10-%-FPR-
+  Schwelle. Details, Rohausgaben und die Herleitung der Abgrenzung:
+  `docs/evals/2026-08-11-humanizer-style-evaluator-boundary-825.md` (loest
+  den Zwischenstand aus Issue #837 ab, dort geschlossen).
 - **`_attach_chunk_to_fts_hit` liefert bei fehlgeschlagenem Chunk-Lookup den
   Text des vektoriell besten Chunks statt eines pauschalen Abstracts (#791,
   Folge-Issue aus #789).** Schlug der lexikalische `chunk_fts`-Lookup fehl

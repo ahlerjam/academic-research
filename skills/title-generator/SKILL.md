@@ -1,6 +1,6 @@
 ---
 name: title-generator
-description: Use this skill when the user needs a thesis title proposal. Triggers on "Titel vorschlagen", "Titelvorschläge / Titelvorschlaege", "Arbeitstitel", "Thesis title", "thesis title proposal", "Untertitel bitte", or when submission requires a final title. Schlägt Arbeitstitel vor; Für Abstract, Keywords und Zusammenfassung → `abstract-generator`.
+description: Use this skill when the user needs a thesis title/subtitle proposal or wants an existing title sharpened. Triggers on "Titel vorschlagen", "Titelvorschläge / Titelvorschlaege", "Arbeitstitel", "Thesis title", "Untertitel bitte", "Untertitel für Kapitel X", "Titel schärfer formulieren", "Titel schärfen". Für den Kapiteltext selbst → `chapter-writer`; für die Forschungsfrage schärfen → `research-question-refiner`; für Abstract/Keywords → `abstract-generator`.
 license: MIT
 allowed-tools:
   - Read
@@ -22,7 +22,10 @@ Basiert auf `./writing_state.md` (fertiger Text) und `./academic_context.md`
 
 ## Abgrenzung
 
-Schlägt den finalen Arbeitstitel vor (deskriptiv, These, Frage).
+Schlägt den finalen Arbeitstitel vor (deskriptiv, These, Frage) — auch einen
+Untertitel für ein einzelnes Kapitel und das Schärfen eines bestehenden Titels.
+Für den Kapiteltext selbst (nicht dessen Titel) → `chapter-writer`.
+Für das Schärfen der Forschungsfrage (nicht des Titels) → `research-question-refiner`.
 Für Abstract, Keywords, Management Summary → `abstract-generator`.
 
 ## Few-Shot-Beispiele (Titelstile)
