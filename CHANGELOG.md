@@ -10,6 +10,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Reranker-Ablation misst den Beitrag des aktiven `bge-reranker-v2-m3`
+  (#804):** #722 hatte den Reranker-Beitrag per Leave-one-out beziffert
+  (+0,0000 Recall@10, +0,0107 nDCG@10, +0,0144 MRR), beide Nicht-Null-Werte
+  unter dem 0,02-Rauschband aus #708, ohne Signifikanzaussage. Neues
+  Skriptpaar `scripts/eval/build_reranker_ablation_804.py` (live, laedt den
+  echten lokalen Reranker) / `run_reranker_ablation_804.py` (hermetisch,
+  `--check-against`) misst auf dem #708-Chunk-Goldset "aus" (RRF-Reihenfolge)
+  gegen "an" (`rerank_score`-Reihenfolge) auf denselben, ueber die echten
+  Produktionsfunktionen fusionierten Kandidaten. Gepaarter Bootstrap (10 000
+  Resamples, Seed 804) zeigt fuer keine der drei Metriken einen von Null
+  unterscheidbaren Effekt (Report:
+  `docs/evals/2026-08-10-reranker-ablation-804.md`). Latenz/Peak-RSS je
+  Bedingung in getrenntem Subprozess (RSS-Isolation). Kein Eingriff am
+  Produktivpfad -- das Issue misst, es entscheidet nichts.
 - **Probe-Goldset macht den Chunk-Fusions-Effekt sichtbar (#790, 711-B,
   Nachfolger von #789):** #789 hatte belegt, WARUM der #729-Lauf einen
   Nullbefund lieferte -- bei leerer FTS-Trefferliste sind Paper- und
