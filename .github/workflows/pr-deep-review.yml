@@ -97,7 +97,10 @@ jobs:
         run: |
           BASE_SHA="$(git merge-base "origin/${BASE_REF}" HEAD)"
           git diff "$BASE_SHA" HEAD > "$RUNNER_TEMP/diff.patch"
-          # Truncate >200KB
+          # Truncate >200KB for what the reviewers actually read (context
+          # budget). diff.patch itself stays full and unsanitized — the
+          # review cache below hashes THAT file, not the truncated/sanitized
+          # one, so a change past the 200KB mark still busts the cache (#817).
           head -c 204800 "$RUNNER_TEMP/diff.patch" > "$RUNNER_TEMP/diff.bounded.patch"
           python3 .github/scripts/flowkit_review/sanitize_cli.py "$RUNNER_TEMP/diff.bounded.patch"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
@@ -119,11 +122,18 @@ jobs:
           # reviewers would burn tokens for the same verdict. cache_check.py is
           # conservative: any anomaly means "miss" (full review), never
           # green-without-review.
+          #
+          # Hash the FULL diff (diff.patch), not the 200KB-truncated one
+          # (diff.bounded.patch) handed to the reviewers below (#817). Large
+          # eval/fixture files in this repo routinely fill the first 200KB of
+          # a diff by themselves; hashing the bounded diff made a follow-up
+          # commit that only touches files past that mark look byte-identical
+          # to the cache even though the PR head changed.
           gh api "repos/$REPO/issues/$PR/comments" --paginate \
             --jq '[.[] | select(.body | contains("<!-- flowkit-review:v1 -->"))] | .[0].body // ""' \
             > "$RUNNER_TEMP/previous-comment.md" || printf '' > "$RUNNER_TEMP/previous-comment.md"
           python3 .github/scripts/flowkit_review/cache_check.py \
-            --diff "$RUNNER_TEMP/diff.bounded.patch" \
+            --diff "$RUNNER_TEMP/diff.patch" \
             --previous "$RUNNER_TEMP/previous-comment.md" \
             --findings-out "$RUNNER_TEMP/cached-findings.json" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
