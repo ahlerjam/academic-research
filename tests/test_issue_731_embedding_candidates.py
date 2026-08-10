@@ -171,7 +171,13 @@ def test_download_size_matches_the_730_order_of_magnitude() -> None:
         "qwen3-1024": 1.3,
         "bge-m3": 2.4,
         "e5-large": 2.3,
+        "arctic-l-v2-1024": 2.4,
+        "arctic-l-v2-256": 2.4,
     }
+    assert set(expected_gb) == set(CANDIDATES), (
+        "expected_gb deckt nicht alle Kandidaten ab — ein neuer Kandidat "
+        "(#801-Muster) wuerde sonst stillschweigend ungeprueft bleiben."
+    )
     for key, upper in expected_gb.items():
         gb = LIVE_RESULTS["candidates"][key]["download_bytes"] / 1e9
         assert 0.0 < gb <= upper, f"{key}: Download-Groesse {gb:.2f} GB passt nicht zu #730"
@@ -221,11 +227,17 @@ def test_report_names_the_migration_price_for_every_candidate() -> None:
         if line.startswith("| `") and ("Migration" in line or "migration" in line)
     ]
     for key in CANDIDATES:
-        required = LIVE_RESULTS["candidates"][key]["schema_migration"]["required"]
+        entry = LIVE_RESULTS["candidates"][key]
+        required = entry["schema_migration"]["required"]
         row = next((line for line in migration_rows if f"`{key}`" in line), None)
         assert row is not None, f"{key}: keine Zeile in der Migrationstabelle"
         if required:
-            assert "FLOAT[384] → FLOAT[1024]" in row, f"{key}: DDL-Aenderung nicht benannt"
+            # Das Migrationsziel ist die tatsaechliche Dimension des Kandidaten,
+            # nicht pauschal 1024 — arctic-l-v2-256 (#801) migriert z. B. nach
+            # FLOAT[256], nicht FLOAT[1024].
+            assert f"FLOAT[384] → FLOAT[{entry['dim']}]" in row, (
+                f"{key}: DDL-Aenderung nicht benannt"
+            )
             assert "Neuindizierung" in row, f"{key}: Neuindizierung nicht benannt"
         else:
             assert "keine Migration" in row, f"{key}: als migrationsfrei nicht ausgewiesen"

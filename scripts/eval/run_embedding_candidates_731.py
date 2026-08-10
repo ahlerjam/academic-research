@@ -165,6 +165,40 @@ CANDIDATES: dict[str, CandidateConfig] = {
             "Modellkarte von multilingual-e5-large ausdruecklich bestaetigt."
         ),
     ),
+    "arctic-l-v2-1024": CandidateConfig(
+        key="arctic-l-v2-1024",
+        model_id="Snowflake/snowflake-arctic-embed-l-v2.0",
+        truncate_dim=None,
+        query_prompt_name="query",
+        prompting_note=(
+            "Wie qwen3-*: sentence-transformers-Prompt statt Praefix-String. "
+            "config_sentence_transformers.json des Modells hinterlegt "
+            "prompts={'query': 'query: '} — encode(..., prompt_name='query') "
+            "haengt 'query: ' NUR fuer Queries an; das Code-Beispiel der "
+            "Modellkarte embedded Dokumente ohne jedes Praefix "
+            "('document_embeddings = model.encode(documents)'). Ein manuell "
+            "gesetzter passage_prefix waere hier kein Betriebspfad. Native "
+            "Dimension (config.json: hidden_size=1024)."
+        ),
+    ),
+    "arctic-l-v2-256": CandidateConfig(
+        key="arctic-l-v2-256",
+        model_id="Snowflake/snowflake-arctic-embed-l-v2.0",
+        truncate_dim=256,
+        query_prompt_name="query",
+        prompting_note=(
+            "Wie arctic-l-v2-1024, aber truncate_dim=256 — NICHT 384. Die "
+            "Modellkarte sichert ausdruecklich nur 256 Dimensionen als "
+            "MRL-Punkt zu ('like our v1.5 model, the MRL for this model is "
+            "256 dimensions', bestaetigt durch config.json: "
+            "matryoshka_dimensions=[256]). 384 wird an keiner Stelle der "
+            "Modellkarte als Trunkierungsziel genannt oder gemessen — ein "
+            "truncate_dim=384 waere ein geratener, vom Anbieter nicht "
+            "belegter Schnitt und wird deshalb bewusst NICHT gebaut (#801). "
+            "Diese Variante misst stattdessen den tatsaechlich zugesicherten "
+            "MRL-Punkt, auch wenn er kein 384d-Aequivalent zu qwen3-384 ist."
+        ),
+    ),
 }
 
 
