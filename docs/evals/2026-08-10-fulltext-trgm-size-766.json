@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "issue": 766,
+    "generator": "scripts/eval/measure_fulltext_trgm_size_766.py",
+    "growth_threshold_pct": 100.0,
+    "note": "Bedingung 1 (Groesse) wird hier gemessen. Bedingung 2 (Nutzen) ist mit dem heutigen #708-Goldset laut #789 strukturell nicht pruefbar (1/60 papers_fts-, 0/60 papers_trgm-Treffer) -- siehe docs/evals/2026-08-10-fulltext-trgm-size-766.md."
+  },
+  "paper_fulltext": {
+    "table": "paper_fulltext",
+    "n_rows": 40,
+    "baseline_bytes": 16547840,
+    "with_trgm_bytes": 32112640,
+    "growth_pct": 94.06,
+    "condition_1_size_ok": true
+  },
+  "notes": {
+    "table": "notes",
+    "n_rows": 80,
+    "baseline_bytes": 5267456,
+    "with_trgm_bytes": 6262784,
+    "growth_pct": 18.9,
+    "condition_1_size_ok": true
+  }
+}
