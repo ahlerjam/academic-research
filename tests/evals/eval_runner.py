@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -141,14 +142,42 @@ def _log_model_used(mode: str, model: str) -> None:
     print(f"[eval_runner] mode={mode} model={model}", file=sys.stderr)
 
 
-def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
+def _run_claude_cli(
+    system: str,
+    user: str,
+    model: str,
+    *,
+    cwd: str | Path | None = None,
+    allowed_tools: str | None = None,
+    mcp_config: str | Path | None = None,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Ruft ``claude --print`` als Subprozess auf, liefert das geparste JSON.
 
-    Muster analog ``evals/sparring-partner/record.py``: keine Tools
-    (``--allowedTools ""``), keine Projekt-/User-Settings
-    (``--setting-sources ""``), damit die Umgebung des Ausfuehrungsrechners
-    nicht in die Antwort einfaerbt. ``--output-format json`` liefert u.a.
-    ``result``, ``is_error``, ``usage`` und ``stop_reason`` in einer Antwort.
+    Muster analog ``evals/sparring-partner/record.py``: keine Projekt-/
+    User-Settings (``--setting-sources ""``), damit die Umgebung des
+    Ausfuehrungsrechners nicht in die Antwort einfaerbt. ``--output-format
+    json`` liefert u.a. ``result``, ``is_error``, ``usage`` und
+    ``stop_reason`` in einer Antwort.
+
+    Vier Achsen sind ueber Issue #830 (Eval-Sitzungsprofile) konfigurierbar
+    statt fest verdrahtet -- Default fuer jede Achse ist das bisherige
+    ``bare``-Verhalten (Rueckwaertskompatibilitaet):
+
+    - ``cwd``: Arbeitsverzeichnis des Subprozesses. ``None`` (Default)
+      laesst den Aufrufer erben (unveraendertes Verhalten -- vorher wurde
+      ``cwd`` gar nicht gesetzt). Eine Suite mit eigenem Fixture-Verzeichnis
+      gibt hier ihr eigenes Verzeichnis an, damit Fixtures anderer Suiten
+      nicht sichtbar sind (siehe ``tests/evals/test_session_profiles.py``).
+    - ``allowed_tools``: Wert fuer ``--allowedTools``. ``None`` faellt auf
+      ``""`` zurueck (bisheriges ``bare``-Verhalten: keine Tools).
+    - ``mcp_config``: Pfad zu einer MCP-Config-Datei. Wird nur gesetzt,
+      wenn angegeben -- dann zusaetzlich ``--mcp-config <pfad>
+      --strict-mcp-config``, Vorbild der Live-Nachweis in
+      ``docs/evals/2026-08-09-context-enrichment-710.md``.
+    - ``env``: Umgebungsvariablen fuer den Subprozess (z. B.
+      ``VAULT_DB_PATH`` fuer das ``vault``-Profil). ``None`` erbt die
+      Prozessumgebung (unveraendertes ``subprocess.run``-Verhalten).
 
     Bekannte Luecke (Issue #631, AC6, weiterhin gueltig nach #716): die CLI
     kennt kein ``--temperature``-Flag (lt. ``claude --help``) -- ein
@@ -160,26 +189,32 @@ def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
             oder ``is_error: true`` in der Antwort (Auth-/Rate-Limit-/
             API-Fehler) -- unterscheidbar von einer regulaeren Antwort.
     """
+    command = [
+        "claude",
+        "--print",
+        "--model",
+        model,
+        "--output-format",
+        "json",
+        "--system-prompt",
+        system,
+        "--allowedTools",
+        allowed_tools if allowed_tools is not None else "",
+        "--setting-sources",
+        "",
+    ]
+    if mcp_config is not None:
+        command += ["--mcp-config", str(mcp_config), "--strict-mcp-config"]
+    command.append(user)
+
     try:
         result = subprocess.run(
-            [
-                "claude",
-                "--print",
-                "--model",
-                model,
-                "--output-format",
-                "json",
-                "--system-prompt",
-                system,
-                "--allowedTools",
-                "",
-                "--setting-sources",
-                "",
-                user,
-            ],
+            command,
             capture_output=True,
             text=True,
             timeout=CLI_TIMEOUT_SECONDS,
+            cwd=str(cwd) if cwd is not None else None,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         raise ClaudeCliError(f"claude --print Timeout nach {CLI_TIMEOUT_SECONDS}s") from exc
@@ -204,10 +239,32 @@ def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
     return parsed
 
 
-def call_claude(system: str, user: str, model: str = "claude-sonnet-4-6") -> str:
-    """Ruft Claude ueber die claude-CLI (OAuth-Session) auf, sonst Skip (Issue #716)."""
+def call_claude(
+    system: str,
+    user: str,
+    model: str = "claude-sonnet-4-6",
+    *,
+    cwd: str | Path | None = None,
+    allowed_tools: str | None = None,
+    mcp_config: str | Path | None = None,
+    env: dict[str, str] | None = None,
+) -> str:
+    """Ruft Claude ueber die claude-CLI (OAuth-Session) auf, sonst Skip (Issue #716).
+
+    ``cwd``/``allowed_tools``/``mcp_config``/``env`` reichen die vier
+    Sitzungsachsen aus Issue #830 durch -- siehe ``_run_claude_cli`` und
+    ``profile_for()``. Ohne Angabe identisch zum bisherigen ``bare``-Verhalten.
+    """
     if claude_cli_available():
-        parsed = _run_claude_cli(system, user, model)
+        parsed = _run_claude_cli(
+            system,
+            user,
+            model,
+            cwd=cwd,
+            allowed_tools=allowed_tools,
+            mcp_config=mcp_config,
+            env=env,
+        )
         _log_model_used("cli", model)
         return str(parsed.get("result", ""))
     pytest.skip("claude-CLI nicht verfuegbar - Eval uebersprungen")
@@ -295,6 +352,11 @@ def call_claude_with_tokens(
     system: str,
     user: str,
     model: str = "claude-sonnet-4-6",
+    *,
+    cwd: str | Path | None = None,
+    allowed_tools: str | None = None,
+    mcp_config: str | Path | None = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[str, int, int]:
     """Ruft Claude auf und gibt (text, tokens_in, tokens_out) zurueck.
 
@@ -302,10 +364,19 @@ def call_claude_with_tokens(
     ``usage``-Feld aus ``claude --print --output-format json`` traegt
     input_tokens/output_tokens fuer genau diesen Aufruf (ohne die interne,
     session-weite Cache-Erstellung des Agenten-Scaffolds mitzuzaehlen).
-    Ohne CLI: pytest.skip().
+    Ohne CLI: pytest.skip(). ``cwd``/``allowed_tools``/``mcp_config``/``env``
+    wie bei ``call_claude`` (Issue #830).
     """
     if claude_cli_available():
-        parsed = _run_claude_cli(system, user, model)
+        parsed = _run_claude_cli(
+            system,
+            user,
+            model,
+            cwd=cwd,
+            allowed_tools=allowed_tools,
+            mcp_config=mcp_config,
+            env=env,
+        )
         _log_model_used("cli", model)
         text = str(parsed.get("result", ""))
         usage = parsed.get("usage") or {}
@@ -343,3 +414,191 @@ def _jsonpath_check(obj: Any, expected: dict[str, Any]) -> bool:
     if check.startswith("equals:"):
         return str(current) == check.split(":", 1)[1]
     raise ValueError(f"Unbekannter check: {check}")
+
+
+# ---------------------------------------------------------------------------
+# Eval-Sitzungsprofile (Issue #830).
+#
+# Vier Achsen (cwd, allowed_tools, mcp_config, env; siehe _run_claude_cli)
+# werden zu einer kleinen Zahl benannter Profile gebuendelt, statt sie je
+# Suite frei zu kombinieren -- ausfuehrlich begruendet in
+# docs/evals/STRATEGY.md, Abschnitt "Sitzungsprofile". Diese Tabelle ist die
+# eine Stelle, an der ein Profil seine Achsenwerte definiert; sie enthaelt
+# bewusst keine Fixture-Pfade (die sind Sache der jeweiligen Suite/Fixture,
+# Issue #823/#824) -- nur die Policy je Achse.
+# ---------------------------------------------------------------------------
+
+SESSION_PROFILES: dict[str, dict[str, Any]] = {
+    "bare": {
+        "allowed_tools": "",
+        "needs_cwd": False,
+        "needs_mcp": False,
+    },
+    "context-fs": {
+        "allowed_tools": "Read",
+        "needs_cwd": True,
+        "needs_mcp": False,
+    },
+    "vault": {
+        "allowed_tools": "mcp__academic-vault__*,Read",
+        "needs_cwd": True,
+        "needs_mcp": True,
+    },
+    "net-excluded": {
+        "allowed_tools": None,
+        "needs_cwd": False,
+        "needs_mcp": False,
+    },
+}
+
+# Komponente (evals/-Verzeichnisname) -> Profilname. Deckungsgleich mit
+# eval_dirs() aus tests/evals/test_eval_strategy.py; ein Coverage-Test in
+# tests/evals/test_session_profiles.py haelt das gegen das Dateisystem.
+#
+# Herleitung (dokumentiert, nicht erraten -- siehe STRATEGY.md fuer die
+# ausformulierte Begruendung je Gruppe):
+# - "vault": Skill ruft laut SKILL.md/evals.json direkt vault_*-MCP-Tools auf.
+# - "context-fs": Skill laedt skills/_common/preamble.md (das die
+#   Vorbedingung "academic_context.md/literature_state.md vorhanden" stellt)
+#   oder referenziert academic_context.md/writing_state.md sonst direkt.
+# - "bare": weder noch -- entweder eine offene Aufgabe ohne Referenzloesung
+#   (advisor, research-question-refiner, ...) oder eine Suite, die
+#   eval_runner.call_claude gar nicht aufruft (reine Schema-/Netz-Tests wie
+#   fetch/oa-fetchers, oder ein rein offline messender metric-Runner).
+COMPONENT_PROFILES: dict[str, str] = {
+    # vault -- direkter vault_*-MCP-Tool-Aufruf im Skill bzw. in den Evals.
+    "anchor-paper-survey": "vault",
+    "chapter-writer": "vault",
+    "citation-extraction": "vault",
+    "material-passport": "vault",
+    "quote-extractor": "vault",
+    "reading-notes": "vault",
+    "word-export": "vault",
+    # context-fs -- laedt skills/_common/preamble.md oder referenziert
+    # academic_context.md/literature_state.md/writing_state.md direkt.
+    "abstract-generator": "context-fs",
+    "academic-context": "context-fs",
+    "advisor": "context-fs",
+    "ai-disclosure": "context-fs",
+    "bibliography-auditor": "context-fs",
+    "book-handler": "context-fs",
+    "citation-style-import": "context-fs",
+    "cluster-visualizer": "context-fs",
+    "conference-poster": "context-fs",
+    "data-management-plan": "context-fs",
+    "defense-prep": "context-fs",
+    "extraction-matrix": "context-fs",
+    "github-repo-research": "context-fs",
+    "grant-proposal": "context-fs",
+    "humanizer-de": "context-fs",
+    "instrument-design": "context-fs",
+    "latex-export": "context-fs",
+    "latex-layout-auditor": "context-fs",
+    "literature-excel": "context-fs",
+    "literature-gap-analysis": "context-fs",
+    "methodology-advisor": "context-fs",
+    "notebook-bundle": "context-fs",
+    "parallel-screening": "context-fs",
+    "peer-review": "context-fs",
+    "plagiarism-check": "context-fs",
+    "preregistration": "context-fs",
+    "prisma-flow": "context-fs",
+    "qualitative-coding": "context-fs",
+    "quantitative-analysis": "context-fs",
+    "query-generator": "context-fs",
+    "reading-list-import": "context-fs",
+    "research-question-refiner": "context-fs",
+    "reviewer-response": "context-fs",
+    "slide-export": "context-fs",
+    "source-quality-audit": "context-fs",
+    "style-evaluator": "context-fs",
+    "submission-checker": "context-fs",
+    "title-generator": "context-fs",
+    "topic-brainstorm": "context-fs",
+    "zotero-import": "context-fs",
+    # bare -- offene Aufgabe ohne Referenzloesung, ODER ruft call_claude gar
+    # nicht auf (reiner Schema-/Netz-Test bzw. rein offline messender Runner).
+    "524-nli-prefilter": "bare",
+    "auto-download": "bare",
+    "fetch": "bare",
+    "figure-verifier": "bare",
+    "free-archive-fetchers": "bare",
+    "generic-fetcher": "bare",
+    "humanizer-de-pipeline": "bare",
+    "oa-fetchers": "bare",
+    "publisher-fetchers": "bare",
+    "quality-reviewer": "bare",
+    "sparring-partner": "bare",
+    "verbatim-guard": "bare",
+}
+
+
+def profile_for(component: str) -> str:
+    """Liefert den Profilnamen fuer eine ``evals/``-Komponente (Issue #830).
+
+    Raises:
+        KeyError: Komponente ist weder in COMPONENT_PROFILES noch ist die
+            fehlende Zuordnung beabsichtigt -- kein Fall bleibt stillschweigend
+            unzugeordnet (AC1).
+    """
+    try:
+        return COMPONENT_PROFILES[component]
+    except KeyError as exc:
+        raise KeyError(
+            f"Kein Sitzungsprofil fuer Komponente {component!r} hinterlegt "
+            f"(Issue #830) -- COMPONENT_PROFILES in eval_runner.py ergaenzen."
+        ) from exc
+
+
+def call_claude_for_component(
+    component: str,
+    system: str,
+    user: str,
+    model: str = "claude-sonnet-4-6",
+    *,
+    cwd: str | Path | None = None,
+    mcp_config: str | Path | None = None,
+    env: dict[str, str] | None = None,
+) -> str:
+    """Ruft ``call_claude`` mit dem per ``profile_for(component)`` bestimmten Profil auf.
+
+    Die Callsite-Anbindung aus Issue #830 (Task 5): ``allowed_tools`` kommt
+    ab hier aus ``SESSION_PROFILES[profile_for(component)]`` statt dass jede
+    Suite den Wert selbst (oder implizit den ``bare``-Default) verdrahtet.
+    Eine Suite mit unbekannter Komponente (Tippfehler, fehlender
+    ``COMPONENT_PROFILES``-Eintrag) faellt nicht still auf ``bare`` zurueck,
+    sondern erbt den ``KeyError`` aus ``profile_for()`` (AC1).
+
+    ``cwd``/``mcp_config`` sind optionale Overrides. Profile, die laut
+    ``needs_cwd`` ein Fixture-Verzeichnis erfordern, bekommen automatisch
+    ein leeres Temp-Dir als cwd, falls die Callsite kein eigenes cwd stellt.
+    Das verhindert den Root-Leak (cwd=None zeigt sonst auf den Repo-Root und
+    macht Skill-Dateien/Eval-Erwartungen fuer die without_skill-Kontrollgruppe
+    sichtbar), ohne ``allowed_tools`` zu verwerfen -- die Werkzeugfreigabe aus
+    ``SESSION_PROFILES`` ist die Kernzusage dieses Profils und muss auch vor
+    Landung der Fixture-Integration (#823/#824) im CLI-Aufruf ankommen.
+    ``mcp_config`` bleibt bewusst unangetastet: faellt es weg, laeuft der
+    Aufruf ohne funktionierende MCP-Tools -- das ist kein Sicherheitsleck wie
+    beim cwd, sondern der erwartete Zwischenstand vor #824.
+    """
+    profile = profile_for(component)
+    profile_config = SESSION_PROFILES[profile]
+    allowed_tools = profile_config["allowed_tools"]
+
+    # Wenn das Profil ein eigenes cwd braucht, aber keins gestellt wurde,
+    # nutzen wir ein leeres Temp-Dir als Fallback. Das verhindert, dass
+    # cwd=None auf den Repo-Root zeigt und die Kontrollgruppe verfaelscht --
+    # ohne allowed_tools zu verwerfen (Regression-Fix zu #830).
+    effective_cwd = cwd
+    if profile_config["needs_cwd"] and cwd is None:
+        effective_cwd = tempfile.mkdtemp()
+
+    return call_claude(
+        system,
+        user,
+        model,
+        cwd=effective_cwd,
+        allowed_tools=allowed_tools,
+        mcp_config=mcp_config,
+        env=env,
+    )
