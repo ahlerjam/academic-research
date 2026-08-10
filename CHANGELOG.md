@@ -528,6 +528,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Fixed
 
+- **Trigger-Recall `humanizer-de`/`title-generator` behoben, Trigger-Kollision
+  mit `style-evaluator` gemessen und ohne Goldset-Manipulation aufgeloest
+  (#825).** Live-Diagnose (echte `claude`-CLI-Aufrufe, `claude-haiku-4-5`)
+  zeigte fuer `title-generator` zwei fehlende Trigger-Phrasen
+  ("Untertitel fuer Kapitel X", "Titel schaerfen") und fuer `humanizer-de`
+  eine falsche Abgrenzungsaussage in der `description` ("reine Detektion ohne
+  Eingriff -> style-evaluator"), obwohl KI-Detektions-Prompts im Repo-Goldset
+  seit jeher `humanizer-de` zugeordnet sind. Ein Zwischenstand hatte
+  stattdessen versucht, die zwei betroffenen Prompts in `style-evaluator`s
+  `should_trigger`-Goldset zu verschieben -- das druecke dessen Recall live
+  auf 58 % (7/12), ohne erneuten Beleg, und wurde vom `coordinator`-Gate als
+  P1 blockiert. Fix: beide Goldsets (`evals/humanizer-de`,
+  `evals/style-evaluator`) auf 10/10 `should_trigger` zurueckgesetzt,
+  `skills/humanizer-de/SKILL.md`s `description` praezisiert (KI-bezogene
+  Pruef-/Audit-Prompts gehoeren zu `humanizer-de`, auch ohne Ueberarbeitung).
+  Zusaetzlich gehaerteter Dispatcher-Output-Parser in
+  `tests/evals/test_triggers.py::_parse_dispatcher_output` -- eine
+  geschwaetzige, aber eindeutige Modellantwort zaehlt jetzt korrekt als
+  Treffer, zwei oder mehr genannte Skill-Namen bleiben strikt ein Fehlschlag.
+  Belegt (`uv run pytest tests/evals/test_triggers.py::test_should_trigger_recall`
+  bzw. `::test_should_not_trigger_fpr`, je `-p no:randomly`): humanizer-de
+  Recall 10/10 = 100 %, FPR 0/10 = 0 %; title-generator Recall 9/10 = 90 %;
+  style-evaluator Recall 9/10 = 90 %, FPR 0/10 = 0 %. Die verworfene
+  Goldset-Verschiebung ist als Entscheidung in Issue #837 dokumentiert.
 - **`_attach_chunk_to_fts_hit` liefert bei fehlgeschlagenem Chunk-Lookup den
   Text des vektoriell besten Chunks statt eines pauschalen Abstracts (#791,
   Folge-Issue aus #789).** Schlug der lexikalische `chunk_fts`-Lookup fehl
