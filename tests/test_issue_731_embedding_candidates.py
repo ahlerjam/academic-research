@@ -135,9 +135,9 @@ def test_baseline_candidate_reproduces_the_708_numbers(report: dict) -> None:
     dann sind auch alle Kandidatenzahlen wertlos.
     """
     overall = report["candidates"][BASELINE_KEY]["overall"]
-    assert overall["recall_at_10"] == pytest.approx(0.7692, abs=5e-4)
-    assert overall["ndcg_at_10"] == pytest.approx(0.6651, abs=5e-4)
-    assert overall["mrr"] == pytest.approx(0.6314, abs=5e-4)
+    assert overall["recall_at_10"] == pytest.approx(0.8167, abs=5e-4)
+    assert overall["ndcg_at_10"] == pytest.approx(0.7097, abs=5e-4)
+    assert overall["mrr"] == pytest.approx(0.6764, abs=5e-4)
 
 
 # ---------------------------------------------------------------------------
@@ -268,10 +268,10 @@ def test_paired_bootstrap_is_deterministic() -> None:
 
 
 def test_report_states_the_resolution_limit_of_the_goldset(report: dict) -> None:
-    """AC5: Der Report benennt, was 26 Queries ueberhaupt aufloesen koennen."""
-    assert report["significance"]["query_count"] == 26
+    """AC5: Der Report benennt, was die Queries ueberhaupt aufloesen koennen."""
+    assert report["significance"]["query_count"] == 60
     assert "Auflösungsgrenze" in DOC_TEXT
-    assert re.search(r"0,03[0-9]", DOC_TEXT), "Auflösungsgrenze je Query fehlt im Report"
+    assert re.search(r"0,016[0-9]", DOC_TEXT), "Auflösungsgrenze je Query fehlt im Report"
 
 
 def test_chunk_count_per_candidate_is_reported(report: dict) -> None:

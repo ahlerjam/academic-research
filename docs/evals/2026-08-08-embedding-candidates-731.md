@@ -5,10 +5,11 @@
 
 [← Doku-Übersicht](../README.md)
 
-**Datum:** 2026-08-08
+**Datum:** 2026-08-08, Zahlen aktualisiert 2026-08-10 auf dem in [#800](2026-08-10-chunk-goldset-widening-800.md)
+verbreiterten Goldset (26 → 60 Queries, 11 → 21 Dokumente)
 **Komponente:** `academic_vault` (Retrieval-Pfad; **kein** Eingriff im
 produktiven Code — aller Code dieses Laufs liegt unter `scripts/eval/`)
-**Goldset:** Chunk-Goldset aus [#708](retrieval-chunk-goldset-708.md), 26 Queries
+**Goldset:** Chunk-Goldset aus [#708](retrieval-chunk-goldset-708.md), 60 Queries seit [#800](2026-08-10-chunk-goldset-widening-800.md)
 **Rohdaten:** [`2026-08-08-embedding-candidates-731-live-results.json`](2026-08-08-embedding-candidates-731-live-results.json)
 
 ## Fragestellung
@@ -21,7 +22,8 @@ Embedding-Input, Ranking über `VaultDB.knn_chunks`), und Download-Größe sowie
 CPU-Zeit stehen gleichrangig neben der Trefferqualität.
 
 Der Report **entscheidet nichts**. Die Wechselentscheidung ist ausdrücklich
-Sache eines Folge-Issues; hier stehen nur die Zahlen und ihre Belastbarkeit.
+Sache eines Folge-Issues ([#732](2026-08-08-embedding-model-decision-732.md));
+hier stehen nur die Zahlen und ihre Belastbarkeit.
 
 ## Messaufbau
 
@@ -32,7 +34,7 @@ Sache eines Folge-Issues; hier stehen nur die Zahlen und ihre Belastbarkeit.
 | Gerät | **CPU** (`device="cpu"` explizit gesetzt); CUDA nicht verfügbar, MPS verfügbar, aber **nicht genutzt** |
 | Generator (live) | `scripts/eval/build_embedding_candidates_731.py` (env-gated `VAULT_E5_LIVE_TEST=1`) |
 | Auswertung (hermetisch) | `scripts/eval/run_embedding_candidates_731.py` — kein Netz, kein Modell |
-| Signifikanz | gepaarter Bootstrap über die 26 Queries, 10 000 Resamples, Seed 731, 95-%-Perzentilintervall |
+| Signifikanz | gepaarter Bootstrap über die 60 Queries, 10 000 Resamples, Seed 731, 95-%-Perzentilintervall |
 
 Der Generator misst Modell-Downloads und CPU-Inferenz; die Metriken entstehen
 im hermetischen Lauf aus den eingecheckten Vektoren. Der CI-Job
@@ -41,32 +43,35 @@ Zahl ab, wird die Pipeline rot, statt dass der Report unbemerkt altert.
 
 ## Ergebnis je Kandidat
 
-Zahlen über alle 26 Queries, `k = 10`:
+Zahlen über alle 60 Queries, `k = 10`:
 
 | Kandidat | Modell | Dim | Chunks | Recall@10 | nDCG@10 | MRR |
 |---|---|---|---|---|---|---|
-| `e5-small` *(Baseline)* | `intfloat/multilingual-e5-small` | 384 | 30 | 0,7692 | 0,6651 | 0,6314 |
-| `qwen3-384` | `Qwen/Qwen3-Embedding-0.6B`, `truncate_dim=384` | 384 | 28 | 0,9615 | **0,8241** | **0,7923** |
-| `qwen3-1024` | `Qwen/Qwen3-Embedding-0.6B`, nativ | 1024 | 28 | 0,9231 | 0,7859 | 0,7420 |
-| `bge-m3` | `BAAI/bge-m3` | 1024 | 30 | **0,9808** | 0,8137 | 0,7660 |
-| `e5-large` | `intfloat/multilingual-e5-large` | 1024 | 30 | 0,9231 | 0,7413 | 0,6979 |
+| `e5-small` *(Baseline)* | `intfloat/multilingual-e5-small` | 384 | 61 | 0,8167 | 0,7097 | 0,6764 |
+| `qwen3-384` | `Qwen/Qwen3-Embedding-0.6B`, `truncate_dim=384` | 384 | 59 | 0,9000 | 0,7936 | 0,7656 |
+| `qwen3-1024` | `Qwen/Qwen3-Embedding-0.6B`, nativ | 1024 | 59 | 0,9000 | **0,8380** | **0,8200** |
+| `bge-m3` | `BAAI/bge-m3` | 1024 | 61 | **0,9750** | 0,8104 | 0,7621 |
+| `e5-large` | `intfloat/multilingual-e5-large` | 1024 | 61 | 0,8667 | 0,6995 | 0,6561 |
 
 Je Teilmenge (nDCG@10 / MRR):
 
 | Kandidat | same-language | language-gap | cross-language |
 |---|---|---|---|
-| `e5-small` | 0,9170 / 0,8889 | 0,1311 / 0,0694 | 0,0000 / 0,0000 |
-| `qwen3-384` | 0,9101 / 0,9167 | 0,6021 / 0,4750 | 0,7153 / 0,6250 |
-| `qwen3-1024` | 0,9167 / 0,9074 | 0,4056 / 0,2708 | 0,7500 / 0,6667 |
-| `bge-m3` | 0,8955 / 0,8796 | 0,5675 / 0,4306 | 0,8155 / 0,7500 |
-| `e5-large` | 0,8719 / 0,8534 | 0,5966 / 0,4639 | 0,0000 / 0,0000 |
+| `e5-small` | 0,9212 / 0,8974 | 0,2725 / 0,1994 | 0,2000 / 0,2000 |
+| `qwen3-384` | 0,9098 / 0,8984 | 0,4511 / 0,3643 | 0,8000 / 0,8000 |
+| `qwen3-1024` | 0,9615 / 0,9593 | 0,4661 / 0,4090 | 0,8667 / 0,8286 |
+| `bge-m3` | 0,9285 / 0,9122 | 0,5361 / 0,4223 | 0,6097 / 0,4833 |
+| `e5-large` | 0,8492 / 0,8185 | 0,5108 / 0,4147 | 0,0000 / 0,0000 |
 
 Der gesamte Abstand entsteht **nicht** im gleichsprachigen Fall — dort liegen
-alle fünf Kandidaten zwischen 0,87 und 0,92 nDCG. Er entsteht an der
+alle fünf Kandidaten zwischen 0,85 und 0,96 nDCG. Er entsteht an der
 Sprachlücke: `e5-small` fällt bei einer deutschen Query auf einen englischen
-Beleg auf 0,13 nDCG, und im cross-language-Fall (Query in der einen Sprache,
-Antwort ausschließlich in der anderen) auf glatt 0. `e5-large` teilt diese
-Schwäche im cross-language-Fall, obwohl es die Sprachlücke sonst schließt.
+Beleg auf 0,27 nDCG. Bei `cross-language` (Query in der einen Sprache, Antwort
+ausschließlich in der anderen) trennen sich die Kandidaten am deutlichsten:
+`qwen3-1024` und `qwen3-384` liegen bei 0,87 respektive 0,80 nDCG,
+`e5-small`/`bge-m3` dazwischen, und `e5-large` bleibt bei glatt 0 — dieselbe
+Schwäche wie im 26er-Set, jetzt aber über 5 statt 2 Queries gemessen und damit
+kein Einzelfall mehr.
 
 ## Hardware-Seite: Download und CPU-Zeit
 
@@ -75,22 +80,24 @@ Batch — AC3 fragt nach der Zeit *je Chunk*), zwei Warmläufe vorab verworfen:
 
 | Kandidat | Download | Indexierung p50 | p95 | Suchlatenz p50 | p95 | Vault mit 200 Papern¹ |
 |---|---|---|---|---|---|---|
-| `e5-small` | 0,49 GB | **27,1 ms** | 30,0 ms | 5,848 ms | 6,247 ms | ≈ 2 min |
-| `qwen3-384` | 1,21 GB | 2232,8 ms | 2423,7 ms | 5,970 ms | 6,973 ms | ≈ 2 h 45 min |
-| `qwen3-1024` | 1,21 GB | 2368,4 ms | 2617,2 ms | 6,514 ms | 9,241 ms | ≈ 2 h 55 min |
-| `bge-m3` | 2,29 GB | 168,6 ms | 176,2 ms | 6,259 ms | 7,485 ms | ≈ 12 min |
-| `e5-large` | 2,26 GB | 173,5 ms | 180,3 ms | 6,500 ms | 7,060 ms | ≈ 13 min |
+| `e5-small` | 0,49 GB | **26,3 ms** | 29,7 ms | 2,791 ms | 3,467 ms | ≈ 2 min |
+| `qwen3-384` | 1,21 GB | 2351,6 ms | 2501,7 ms | 2,579 ms | 2,824 ms | ≈ 2 h 52 min |
+| `qwen3-1024` | 1,21 GB | 2378,4 ms | 2515,3 ms | 5,437 ms | 6,006 ms | ≈ 2 h 54 min |
+| `bge-m3` | 2,29 GB | 170,9 ms | 186,8 ms | 5,441 ms | 6,507 ms | ≈ 13 min |
+| `e5-large` | 2,26 GB | 168,6 ms | 181,1 ms | 5,546 ms | 6,077 ms | ≈ 12 min |
 
-¹ Überschlag mit 22 Chunks je Paper (Mittel dieses Goldsets, 30 Chunks aus
-sechs Dokumenten hochgerechnet auf typische Volltexte) — kein gemessener Wert,
+¹ Überschlag mit 22 Chunks je Paper (Mittel dieses Goldsets, 61 Chunks aus 21
+Dokumenten hochgerechnet auf typische Volltexte) — kein gemessener Wert,
 sondern eine Größenordnung.
 
 Der Größenunterschied ist die eigentliche Nachricht dieses Laufs:
-**Qwen3-Embedding-0.6B rechnet auf CPU rund 80-mal so lange je Chunk wie
+**Qwen3-Embedding-0.6B rechnet auf CPU rund 90-mal so lange je Chunk wie
 `e5-small` und rund 14-mal so lange wie BGE-M3.** Das deckt sich mit der
-Vormessung aus dem Issue-Body (≈ 2146 ms/Chunk am 2026-08-06). Die Suchlatenz
-trennt die Kandidaten dagegen nicht: sie liegt bei allen fünf zwischen 5,8 und
-6,5 ms und wird vom SQLite-Pfad dominiert, nicht von der Dimension.
+Vormessung aus dem Issue-Body (≈ 2146 ms/Chunk am 2026-08-06) und mit dem
+2026-08-08-Lauf auf dem kleineren Goldset. Die Suchlatenz trennt die
+Kandidaten dagegen kaum: sie liegt zwischen 2,6 und 5,5 ms und hängt vor allem
+an der Vektordimension (1024d ruft mehr Distanzberechnungen auf als 384d),
+nicht am Modell selbst.
 
 Die Download-Größen sind hier als aufgelöster HuggingFace-Snapshot gemessen
 (ohne die optionale ONNX-Variante, doppelt vorgehaltene Gewichte einmal
@@ -114,13 +121,16 @@ Neuindizierung aller Bestands-Vaults.
 | `e5-large` | 1024 | ja | Schema-Migration FLOAT[384] → FLOAT[1024] plus vollständige Neuindizierung aller Bestands-Vaults | [#730](embedding-truncatability-730.md): Kürzung auf 384d **nicht belegt** |
 
 Der Vergleich `qwen3-384` gegen `qwen3-1024` beziffert, was die Kürzung
-kostet — und die Antwort ist bemerkenswert: sie kostet **nichts**. Die
-gekürzte 384d-Variante liegt auf diesem Goldset in allen drei Metriken
-*über* der nativen (nDCG 0,8241 gegen 0,7859), im Wesentlichen aus einem
-besseren language-gap-Verhalten. Der einzige migrationsfreie Kandidat ist
-damit zugleich der beste gemessene. Bei 26 Queries ist dieser Binnenabstand
-allerdings nicht von Rauschen zu trennen (siehe unten) — die belastbare
-Aussage lautet: die Kürzung auf 384d verschlechtert hier **nicht** messbar.
+kostet — die Antwort bleibt: **fast nichts**. Recall@10 ist auf diesem Set für
+beide Varianten identisch (0,9000), nDCG/MRR liegen bei der nativen 1024d-Fassung
+leicht vorn (0,8380 gegen 0,7936), vor allem aus einem besseren
+cross-language-Verhalten (0,87 gegen 0,80 nDCG). Der einzige migrationsfreie
+Kandidat bleibt damit nahe am besten gemessenen, ohne ihn hier ganz zu
+erreichen — anders als im 26er-Set, wo die 384d-Kürzung die 1024d-Variante
+noch übertraf. Bei 60 statt 26 Queries ist dieser kleine Rückstand eher
+belastbar (siehe Auflösungsgrenze unten), aber nicht groß: die belastbare
+Aussage bleibt, dass die Kürzung auf 384d hier **keinen praktisch relevanten**
+Nachteil erzeugt.
 
 ## Trägt der Abstand?
 
@@ -130,31 +140,42 @@ der erste Messwert vorlag): ein Abstand zur Baseline trägt genau dann, wenn das
 
 | Kandidat | Recall@10 | nDCG@10 | MRR |
 |---|---|---|---|
-| `qwen3-384` | +0,1923 [+0,0000; +0,3846] — trägt nicht | +0,1589 [+0,0149; +0,3021] — **trägt** | +0,1609 [+0,0147; +0,3051] — **trägt** |
-| `qwen3-1024` | +0,1538 [+0,0000; +0,3462] — trägt nicht | +0,1208 [−0,0107; +0,2511] — trägt nicht | +0,1106 [−0,0256; +0,2404] — trägt nicht |
-| `bge-m3` | +0,2115 [+0,0577; +0,3846] — **trägt** | +0,1485 [+0,0137; +0,2883] — **trägt** | +0,1346 [−0,0096; +0,2788] — trägt nicht |
-| `e5-large` | +0,1538 [+0,0385; +0,3077] — **trägt** | +0,0762 [−0,0270; +0,1911] — trägt nicht | +0,0665 [−0,0479; +0,1885] — trägt nicht |
+| `qwen3-384` | +0,0833 [−0,0167; +0,1833] — trägt nicht | +0,0839 [+0,0051; +0,1704] — **trägt** | +0,0892 [+0,0053; +0,1789] — **trägt** |
+| `qwen3-1024` | +0,0833 [−0,0167; +0,2000] — trägt nicht | +0,1282 [+0,0491; +0,2128] — **trägt** | +0,1437 [+0,0620; +0,2322] — **trägt** |
+| `bge-m3` | +0,1583 [+0,0583; +0,2667] — **trägt** | +0,1006 [+0,0244; +0,1798] — **trägt** | +0,0858 [+0,0004; +0,1697] — **trägt** |
+| `e5-large` | +0,0500 [−0,0333; +0,1333] — trägt nicht | −0,0102 [−0,0834; +0,0610] — trägt nicht | −0,0203 [−0,1030; +0,0606] — trägt nicht |
 
-Was das heißt: **Jeder** der vier Kandidaten liegt der Punktschätzung nach
-über der Baseline, aber nur `qwen3-384` und `bge-m3` halten das in mehr als
-einer Metrik gegen die Streuung. Untereinander trennt der Lauf die Kandidaten
-nicht — die Intervalle überlappen durchgehend.
+Was das heißt: `qwen3-384`, `qwen3-1024` und `bge-m3` tragen jetzt **jeweils in
+allen drei Metriken außer Recall@10** signifikant gegenüber der Baseline — mit
+60 statt 26 Queries ist das eine deutlich breitere Bestätigung als im
+Vorgängerlauf, in dem nur `qwen3-384` und `bge-m3` in mehr als einer Metrik
+trugen. `e5-large` bleibt der einzige Kandidat, der auf keiner Metrik
+signifikant über der Baseline liegt — bei nDCG/MRR ist der Punktschätzer sogar
+leicht negativ, getragen vom vollständigen cross-language-Ausfall oben.
+Recall@10 trägt bei keinem Kandidaten signifikant, weil `e5-small` in
+`same-language` bereits bei 1,0 sättigt und der Unterschied fast vollständig
+aus `language-gap`/`cross-language` kommt, wo die Stichprobe (14 bzw.
+5 Queries) am kleinsten ist.
 
 ### Auflösungsgrenze
 
-26 Queries. Eine einzelne Query entspricht damit **0,038 Recall** — jeder
-Unterschied unterhalb dieser Größenordnung ist eine Artefakt-Zahl, keine
-Messung. Die beobachteten Abstände zur Baseline liegen mit 0,07 bis 0,21
-darüber, die Abstände der Kandidaten *untereinander* (0,02 bis 0,04) jedoch
-genau darauf oder darunter. Für die Frage „ist ein Wechsel besser als der
-Status quo?" reicht dieses Goldset; für die Frage „welcher der vier ist der
-beste?" reicht es **nicht**.
+60 Queries. Eine einzelne Query entspricht damit **0,0167 Recall** — eine
+Verbesserung um den Faktor 2,3 gegenüber dem 26er-Set (0,038). Die
+beobachteten Abstände zur Baseline liegen zwischen 0,05 und 0,16 (Recall@10)
+bzw. bis 0,14 (MRR), deutlich über dieser Auflösung; die Abstände der
+Kandidaten *untereinander* (z. B. `qwen3-1024` gegen `bge-m3`: 0,03 nDCG)
+liegen weiterhin nahe an der Auflösungsgrenze oder knapp darüber. Für die
+Frage „ist ein Wechsel besser als der Status quo?" ist die Antwort mit diesem
+Set klarer als vorher (drei von vier Kandidaten tragen jetzt in zwei von drei
+Metriken); für die Frage „welcher der vier ist der beste?" bleibt der Lauf
+ohne paarweisen Kandidat-gegen-Kandidat-Bootstrap ungenau — dieser Report
+testet nur gegen die Baseline, nicht Kandidaten gegeneinander.
 
 ## Grenzen dieses Laufs
 
 1. **Unterschiedliche Chunkzahl je Kandidat.** Jeder Kandidat chunkt mit
    seinem eigenen Tokenizer, so wie er es im Betrieb täte. Qwen3 kommt damit
-   auf 28 Chunks, die übrigen auf 30. Der Korpus, gegen den gesucht wird, ist
+   auf 59 Chunks, die übrigen auf 61. Der Korpus, gegen den gesucht wird, ist
    je Kandidat also nicht identisch. Ein Kontrolllauf auf eingefrorenen
    e5-Chunkgrenzen, der Chunking- und Embedding-Effekt trennt, steht **aus**
    und ist als Folgearbeit vorgemerkt. Die Richtung: ein kleinerer Korpus
@@ -169,7 +190,7 @@ beste?" reicht es **nicht**.
    Dokumente. Ein aufgezwungenes `passage: ` hätte die Fremdmodelle künstlich
    schlechter aussehen lassen. Das Prompting steht je Kandidat als Feld
    `prompting` in den Rohdaten.
-3. **Synthetisches Goldset.** Die sechs Quelldokumente aus #708 sind für den
+3. **Synthetisches Goldset.** Die 21 Quelldokumente aus #708/#800 sind für den
    Zweck geschrieben, nicht aus einer echten Bibliothek gezogen. Absolutwerte
    sind deshalb nicht auf einen realen Vault übertragbar; die *Rangfolge* ist
    die Aussage.
@@ -177,6 +198,10 @@ beste?" reicht es **nicht**.
    x86 ohne die Apple-Silicon-Matrixeinheiten dürften die Abstände zwischen
    den Modellen anders ausfallen; die Größenordnung „Qwen3 ist zwei
    Zehnerpotenzen teurer als e5-small" wird davon nicht berührt.
+5. **Kein paarweiser Kandidatenvergleich.** Der Bootstrap ist gepaart gegen
+   die Baseline `e5-small`, nicht Kandidat gegen Kandidat. Aussagen wie
+   „`qwen3-1024` schlägt `bge-m3`" sind Punktschätzungen ohne eigenes
+   Unsicherheitsintervall.
 
 ## Reproduktion
 
