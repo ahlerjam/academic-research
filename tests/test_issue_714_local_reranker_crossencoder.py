@@ -1,11 +1,12 @@
-"""Regressionstests fuer Issue #714: lokaler Reranker ueber CrossEncoder, Default-aktiv.
+"""Regressionstests fuer Issue #714: lokaler Reranker ueber CrossEncoder.
 
 Vorher lud `_load_local_reranker_backend` `FlagEmbedding.FlagReranker` -- ein
 Paket, das bewusst kein uv-Extra war (erzwingt `transformers<5.0`), weshalb der
 lokale Reranker aus #376 in der Praxis nie lief. Seit #714 laedt dieselbe
 Funktion `sentence_transformers.CrossEncoder` -- bereits Hard-Dependency
-(#372) -- und der Reranker ist per Default aktiv statt manuelles Opt-in zu
-verlangen.
+(#372). Der Reranker war ab #714 per Default aktiv; seit #807 (Beschluss
+#806, gestuetzt auf die #804-Nullmessung) ist der Default wieder AUS, ueber
+`ACADEMIC_RESEARCH_RERANKER_ENABLED`/Config/Argument bleibt er einschaltbar.
 """
 
 from pathlib import Path
@@ -62,15 +63,37 @@ def test_load_local_reranker_backend_uses_crossencoder():
 
 
 # ---------------------------------------------------------------------------
-# AC3: Reranking per Default aktiv, ueber VAULT_RERANK_LOCAL_DISABLE abschaltbar
+# AC3: Reranking ueber CrossEncoder, per kanonischem Schalter/Argument
+# einschaltbar (Default seit #807: AUS -- siehe test_issue_719 fuer den
+# Vorrang-Beweis, hier nur das beobachtbare CrossEncoder-Verhalten je Stand).
 # ---------------------------------------------------------------------------
 
 
-class TestLocalRerankerDefaultActive:
-    def test_apply_reranker_uses_local_backend_by_default(self, monkeypatch):
-        """Ohne Disable-Schalter greift der lokale Reranker (AC3)."""
+class TestLocalRerankerToggle:
+    def test_apply_reranker_stays_off_by_default(self, monkeypatch):
+        """Ohne gesetzten Schalter laedt apply_reranker() kein lokales Backend (#807)."""
         from academic_vault.retrieval import apply_reranker
 
+        monkeypatch.delenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", raising=False)
+        monkeypatch.delenv("VAULT_RERANK_LOCAL_DISABLE", raising=False)
+
+        candidates = [
+            {"paper_id": "p001", "text": "Unrelated snippet.", "rrf_score": 0.02},
+            {"paper_id": "p002", "text": "Highly relevant snippet.", "rrf_score": 0.015},
+        ]
+
+        with patch("academic_vault.retrieval._get_local_reranker") as mock_get_local:
+            result = apply_reranker(query="test query", candidates=candidates)
+
+        mock_get_local.assert_not_called()
+        assert all(entry["reranked"] is False for entry in result)
+        assert all(entry["reranker"] == "none" for entry in result)
+
+    def test_apply_reranker_uses_local_backend_when_explicitly_enabled(self, monkeypatch):
+        """Mit gesetztem kanonischen Schalter greift der lokale Reranker (AC3)."""
+        from academic_vault.retrieval import apply_reranker
+
+        monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
         monkeypatch.delenv("VAULT_RERANK_LOCAL_DISABLE", raising=False)
 
         candidates = [

@@ -101,15 +101,32 @@ def test_resolve_bool_switch_unrecognized_env_value_falls_through(tmp_path, monk
 
 
 @pytest.mark.parametrize(
-    "resolver, env_var, config_key",
+    "resolver, env_var, config_key, expected_default",
     [
-        (resolve_embedding_enabled, "ACADEMIC_RESEARCH_EMBEDDING_ENABLED", "embedding_enabled"),
-        (resolve_reranker_enabled, "ACADEMIC_RESEARCH_RERANKER_ENABLED", "reranker_enabled"),
-        (resolve_nli_prefilter_enabled, "ACADEMIC_RESEARCH_NLI_PREFILTER", "nli_prefilter_enabled"),
+        (
+            resolve_embedding_enabled,
+            "ACADEMIC_RESEARCH_EMBEDDING_ENABLED",
+            "embedding_enabled",
+            True,
+        ),
+        (
+            # Default seit #807 False (Beschluss #806 / #804-Nullmessung) --
+            # die Vorrangkette selbst bleibt unveraendert (#719 tabu).
+            resolve_reranker_enabled,
+            "ACADEMIC_RESEARCH_RERANKER_ENABLED",
+            "reranker_enabled",
+            False,
+        ),
+        (
+            resolve_nli_prefilter_enabled,
+            "ACADEMIC_RESEARCH_NLI_PREFILTER",
+            "nli_prefilter_enabled",
+            True,
+        ),
     ],
 )
 def test_all_three_resolvers_share_the_same_precedence(
-    resolver, env_var, config_key, tmp_path, monkeypatch
+    resolver, env_var, config_key, expected_default, tmp_path, monkeypatch
 ):
     """AC2: derselbe Vorrang, je Ebene, identisch fuer alle drei Resolver."""
     for name in (
@@ -138,9 +155,9 @@ def test_all_three_resolvers_share_the_same_precedence(
     config_false.write_text(json.dumps({config_key: False}), encoding="utf-8")
     assert resolver(config_path=config_false) is False
 
-    # Ebene 4: Default, wenn nichts greift.
+    # Ebene 4: Default, wenn nichts greift (je Resolver eigener Sollwert).
     missing_config = tmp_path / "missing.json"
-    assert resolver(config_path=missing_config) is True
+    assert resolver(config_path=missing_config) is expected_default
 
 
 # ---------------------------------------------------------------------------
@@ -171,20 +188,23 @@ def test_reranker_alias_env_var_still_works(tmp_path, monkeypatch):
     assert resolve_reranker_enabled(config_path=missing_config) is False
 
 
-def test_reranker_alias_env_var_absent_keeps_default_on(tmp_path, monkeypatch):
+def test_reranker_alias_env_var_absent_keeps_default_off(tmp_path, monkeypatch):
+    """Ohne Alias/Env/Config bleibt der Reranker aus (#807: Default False,
+    Beschluss #806 gestuetzt auf die #804-Nullmessung)."""
     monkeypatch.delenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", raising=False)
     monkeypatch.delenv("VAULT_RERANK_LOCAL_DISABLE", raising=False)
     missing_config = tmp_path / "missing.json"
-    assert resolve_reranker_enabled(config_path=missing_config) is True
+    assert resolve_reranker_enabled(config_path=missing_config) is False
 
 
-def test_repo_default_config_has_new_switches_enabled():
-    """Auslieferungsstand: beide neuen Schalter AN (kein Verhaltenswechsel)."""
+def test_repo_default_config_has_switches_at_their_current_defaults():
+    """Auslieferungsstand: embedding AN (kein Verhaltenswechsel), reranker AUS
+    seit #807 (Beschluss #806)."""
     from academic_vault.nli_prefilter import DEFAULT_CONFIG_PATH
 
     data = json.loads(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
     assert data["embedding_enabled"] is True
-    assert data["reranker_enabled"] is True
+    assert data["reranker_enabled"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +217,7 @@ def test_disabling_embedding_leaves_reranker_and_nli_unaffected(monkeypatch):
     # aber get_embedder() sollte weiterhin versuchen, das Modell zu laden
     # (der Schalter wird nur in _auto_embed_enabled() und _vec0_search() geprueft).
     assert resolve_embedding_enabled(explicit=False) is False
-    assert resolve_reranker_enabled() is True
+    assert resolve_reranker_enabled() is False  # Default seit #807
     assert resolve_nli_prefilter_enabled() is True
 
 
@@ -211,9 +231,15 @@ def test_disabling_reranker_leaves_embedding_and_nli_unaffected(monkeypatch, fak
     )()
     monkeypatch.setattr(retrieval, "_get_local_reranker", lambda *a, **kw: mock_reranker)
 
-    # Default (nichts gesetzt): lokaler Fallback greift.
-    result = apply_reranker("devops governance", candidates)
-    assert result[0]["reranker"] == "local-bge"
+    # Default (nichts gesetzt): Reranker bleibt seit #807 aus.
+    result_default = apply_reranker("devops governance", candidates)
+    assert result_default[0]["reranked"] is False
+    assert result_default[0]["reranker"] == "none"
+
+    # Explizit eingeschaltet: lokaler Fallback greift.
+    monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
+    result_on = apply_reranker("devops governance", candidates)
+    assert result_on[0]["reranker"] == "local-bge"
 
     monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "0")
     result_off = apply_reranker("devops governance", candidates)
@@ -244,7 +270,7 @@ def test_disabling_nli_leaves_embedding_and_reranker_unaffected(monkeypatch):
     assert result["suspicious"] == []
 
     assert resolve_embedding_enabled() is True
-    assert resolve_reranker_enabled() is True
+    assert resolve_reranker_enabled() is False  # Default seit #807
 
 
 # ---------------------------------------------------------------------------

@@ -67,11 +67,16 @@ _CLOUD_KEYS = ("VOYAGE_API_KEY", "COHERE_API_KEY")
 
 
 class _CloudKeyGuard:
-    """Entfernt Cloud-Reranker-Keys aus der Umgebung, laesst den lokalen Fallback aktiv."""
+    """Entfernt Cloud-Reranker-Keys aus der Umgebung, erzwingt den lokalen
+    Fallback AKTIV -- unabhaengig vom Produktivdefault (seit #807 AUS), denn
+    #804 misst genau den Reranker-Beitrag, nicht den jeweils aktuellen
+    Default-Zustand."""
 
     def __enter__(self) -> _CloudKeyGuard:
         self._prior: dict[str, str | None] = {k: os.environ.pop(k, None) for k in _CLOUD_KEYS}
         self._prior_disable = os.environ.pop("VAULT_RERANK_LOCAL_DISABLE", None)
+        self._prior_enabled = os.environ.get("ACADEMIC_RESEARCH_RERANKER_ENABLED")
+        os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = "1"
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -80,6 +85,10 @@ class _CloudKeyGuard:
                 os.environ[key] = value
         if self._prior_disable is not None:
             os.environ["VAULT_RERANK_LOCAL_DISABLE"] = self._prior_disable
+        if self._prior_enabled is None:
+            os.environ.pop("ACADEMIC_RESEARCH_RERANKER_ENABLED", None)
+        else:
+            os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = self._prior_enabled
 
 
 def _sha256(text: str) -> str:
@@ -269,6 +278,31 @@ def _percentiles(values: list[float]) -> dict[str, float]:
     }
 
 
+def _apply_condition_env(condition: str) -> None:
+    """Setzt (bzw. raeumt) die Reranker-Env-Variablen fuer eine Kostenmessungs-
+    Bedingung -- ausgelagert, damit sich die Zuordnung Bedingung -> Env-Zustand
+    isoliert testen laesst (Review-Fund an PR #831).
+
+    "aus" misst seit #807 den ECHTEN Produktivpfad OHNE gesetzten Schalter:
+    weder der Alias ``VAULT_RERANK_LOCAL_DISABLE`` (#714) noch der kanonische
+    Schalter ``ACADEMIC_RESEARCH_RERANKER_ENABLED`` (#719) werden gesetzt --
+    ``resolve_reranker_enabled()`` faellt dann auf den Code-/Config-Default
+    zurueck (seit #807 ``False``). Vorher setzte diese Stelle den Alias
+    explizit und mass damit den Alias-Disable-Pfad statt des Default-Pfads,
+    was der Behauptung "ohne gesetzten Schalter" in PR-Text und
+    Verifikations-Report widersprach.
+
+    "an" setzt weiterhin explizit den kanonischen Schalter, weil der
+    Produktivdefault seit #807 AUS ist -- ohne das wuerde "an" trotz
+    Alias-Pop den neuen Default treffen und zweimal "aus" messen.
+    """
+    os.environ.pop("VAULT_RERANK_LOCAL_DISABLE", None)
+    if condition == "aus":
+        os.environ.pop("ACADEMIC_RESEARCH_RERANKER_ENABLED", None)
+    else:
+        os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = "1"
+
+
 def run_cost_condition(condition: str, db_path: str, goldset: dict, vectors: dict, k: int) -> dict:
     """Misst Latenz + Peak-RSS EINER Bedingung ueber den echten Suchpfad
     ``server.search_papers(rerank=True)``. Wird als eigener Subprozess aufgerufen
@@ -278,10 +312,7 @@ def run_cost_condition(condition: str, db_path: str, goldset: dict, vectors: dic
 
     embedder = build_playback_embedder(goldset, vectors)
     with _hermetic_env(embedder), _CloudKeyGuard():
-        if condition == "aus":
-            os.environ["VAULT_RERANK_LOCAL_DISABLE"] = "1"
-        else:
-            os.environ.pop("VAULT_RERANK_LOCAL_DISABLE", None)
+        _apply_condition_env(condition)
 
         import sqlite3
 

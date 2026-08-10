@@ -13,10 +13,12 @@ RRF-Formel: score(d) = 1/(k + rank_vec(d)) + 1/(k + rank_fts(d))
 Standard-Konstante k=60 nach Cormack et al. 2009.
 
 Reranker (#715, vormals Voyage/Cohere/lokal-Prioritaetskette aus #376): der
-lokale ``BAAI/bge-reranker-v2-m3``-Fallback (per Default aktiv, seit #714
-ueber ``sentence_transformers.CrossEncoder`` statt FlagEmbedding geladen --
-ueber ``VAULT_RERANK_LOCAL_DISABLE`` abschaltbar) ist der einzige verbleibende
-Weg. Kein stiller ``except Exception: pass``: jede Fehlstufe loggt eine
+lokale ``BAAI/bge-reranker-v2-m3``-Fallback (per Default AUS seit #807 --
+die #804-Nullmessung fand auf 60 Queries keinen von Null trennbaren Beitrag
+bei 3058 ms statt 17 ms Suchlatenz --, seit #714 ueber
+``sentence_transformers.CrossEncoder`` statt FlagEmbedding geladen, ueber
+``ACADEMIC_RESEARCH_RERANKER_ENABLED``/Config/Argument weiterhin einschaltbar)
+ist der einzige verbleibende Weg. Kein stiller ``except Exception: pass``: jede Fehlstufe loggt eine
 WARNING und das zurueckgegebene Kandidaten-Dict traegt ``reranked`` (bool) +
 ``reranker`` (str) als sichtbaren Beleg statt eines verschleierten Fallbacks.
 """
@@ -41,11 +43,11 @@ _HTML_MARK_RE = re.compile(r"</?b>")
 LOCAL_RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
 ENV_LOCAL_RERANKER_MODEL = "VAULT_RERANK_LOCAL_MODEL"
 
-# Opt-out fuer den per-Default-aktiven lokalen Reranker (#714): jeder
-# Wahrheitswert ausser "" schaltet ihn ab, analog dem Muster anderer
-# Boolean-Env-Schalter im Repo (Praesenz-Check, kein "1"-Spezialfall).
-# Bleibt seit #719 als Alias-Sonderfall neben dem kanonischen Schalter
-# erhalten -- siehe resolve_reranker_enabled().
+# Opt-out-Alias fuer den lokalen Reranker (#714, seit #807 per Default
+# bereits AUS): jeder Wahrheitswert ausser "" schaltet ihn ab, analog dem
+# Muster anderer Boolean-Env-Schalter im Repo (Praesenz-Check, kein
+# "1"-Spezialfall). Bleibt seit #719 als Alias-Sonderfall neben dem
+# kanonischen Schalter erhalten -- siehe resolve_reranker_enabled().
 ENV_LOCAL_RERANKER_DISABLE = "VAULT_RERANK_LOCAL_DISABLE"
 
 # ---------------------------------------------------------------------------
@@ -57,7 +59,11 @@ ENV_LOCAL_RERANKER_DISABLE = "VAULT_RERANK_LOCAL_DISABLE"
 #: Cloud-Keys unabhaengig von diesem Schalter nutzbar.
 ENV_RERANKER_ENABLED = "ACADEMIC_RESEARCH_RERANKER_ENABLED"
 CONFIG_KEY_RERANKER = "reranker_enabled"
-DEFAULT_RERANKER_ENABLED = True
+#: Seit #807 AUS (Beschluss #806, gestuetzt auf die #804-Nullmessung: auf 60
+#: Queries in keiner Metrik von Null trennbarer Beitrag bei 3058 ms statt
+#: 17 ms Suchlatenz und 901 MB statt 74 MB Peak-RSS je Suche). Ueber Argument,
+#: Env oder Config weiterhin einschaltbar -- siehe resolve_reranker_enabled().
+DEFAULT_RERANKER_ENABLED = False
 
 
 def resolve_reranker_enabled(
@@ -67,7 +73,7 @@ def resolve_reranker_enabled(
     """Schalter fuer den lokalen ``bge-reranker-v2-m3``-Fallback (Issue #719).
 
     Vorrang: Argument > Env > ``config/parallel_agents.json`` (Schluessel
-    ``reranker_enabled``) > Default ``True``. Betrifft NUR den lokalen
+    ``reranker_enabled``) > Default ``False`` (seit #807). Betrifft NUR den lokalen
     Fallback -- Voyage/Cohere sind Cloud-Dienste, kein lokales Modell, und
     Reranking als Feature bleibt darueber unabhaengig von diesem Schalter
     nutzbar (sonst wuerde "abschaltbar, ohne dass eine andere Komponente
@@ -372,10 +378,10 @@ def apply_reranker(
             entry["text"] = _HTML_MARK_RE.sub("", text)
         enriched.append(entry)
 
-    # Seit #714 ist der lokale Reranker per Default aktiv (kein FlagEmbedding
-    # mehr noetig) -- resolve_reranker_enabled() (#719) schaltet ihn ab
-    # (kanonischer Schalter oder Alias VAULT_RERANK_LOCAL_DISABLE), geprueft
-    # VOR dem Laden des Backends, damit kein Modell geladen wird.
+    # Seit #807 ist der lokale Reranker per Default AUS --
+    # resolve_reranker_enabled() (#719) schaltet ihn bei Bedarf EIN
+    # (kanonischer Schalter, Config-Schluessel oder Argument), geprueft
+    # VOR dem Laden des Backends, damit ohne Zutun kein Modell geladen wird.
     local_enabled = resolve_reranker_enabled()
     if not local_enabled:
         logger.info(
