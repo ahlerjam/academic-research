@@ -11,6 +11,7 @@ from tests.evals.eval_runner import (
     load_eval_file,
     load_skill_content,
 )
+from tests.evals.vault_fixture import SEED_PAPERS, VaultSession, build_vault_session
 
 
 @pytest.fixture
@@ -29,129 +30,31 @@ def eval_loader():
 
 
 # ---------------------------------------------------------------------------
+# Test-Vault (echt, Issue #824)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def vault_session(tmp_path) -> VaultSession:
+    """Wegwerf-Vault + MCP-Config + cwd fuer das ``vault``-Sitzungsprofil (#824).
+
+    Je Testfunktion eine eigene SQLite-Datei: ``academic_vault/server.py``
+    friert ``_DEFAULT_DB`` beim Import ein (ein Serverprozess = eine DB), eine
+    Umschaltung innerhalb einer Sitzung gibt es nicht.
+    """
+    return build_vault_session(tmp_path / "vault-session")
+
+
+# ---------------------------------------------------------------------------
 # MockVault — in-memory dict-stub
 # Simuliert vault.add_quote / find_quotes / get_quote / ensure_file
 # ohne echten Vault-DB oder API-Key.
 # ---------------------------------------------------------------------------
 
-_FAKE_PAPERS = {
-    "devops2022": {
-        "paper_id": "devops2022",
-        "title": "DevOps Governance Frameworks",
-        "doi": "10.1109/MS.2022.1234567",
-        "pdf_path": "/fake/devops2022.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Governance frameworks ensure DevOps compliance across distributed teams.",
-                "pdf_page": 3,
-                "section": "Introduction",
-            },
-            {
-                "verbatim": "Policy definition and shared accountability are central to DevOps governance.",
-                "pdf_page": 5,
-                "section": "Results",
-            },
-        ],
-    },
-    "zerotrust2024": {
-        "paper_id": "zerotrust2024",
-        "title": "Zero Trust Networks",
-        "doi": "10.1109/MS.2024.9876543",
-        "pdf_path": "/fake/zerotrust2024.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Zero trust assumes no implicit trust in any access request.",
-                "pdf_page": 1,
-                "section": "Abstract",
-            },
-        ],
-    },
-    "mlops_scan_only": {
-        "paper_id": "mlops_scan_only",
-        "title": "Machine Learning Ops",
-        "doi": None,
-        "pdf_path": "/fake/mlops_scan.pdf",
-        "_seed_quotes": [],  # Simuliert OCR-fail / kein verwertbarer Text
-    },
-    "agile2023": {
-        "paper_id": "agile2023",
-        "title": "Agile at Scale",
-        "doi": "10.1109/MS.2023.1122334",
-        "pdf_path": "/fake/agile2023.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Scaled agile frameworks coordinate multiple teams through quarterly planning.",
-                "pdf_page": 2,
-                "section": "Introduction",
-            },
-        ],
-    },
-    "quantum2021": {
-        "paper_id": "quantum2021",
-        "title": "Quantum Computing",
-        "doi": None,
-        "pdf_path": "/fake/quantum2021.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Lorem ipsum dolor sit amet.",
-                "pdf_page": 1,
-                "section": "Body",
-            },
-        ],
-    },
-    "mayring2022": {
-        "paper_id": "mayring2022",
-        "title": "Qualitative Inhaltsanalyse nach Mayring",
-        "doi": None,
-        "pdf_path": "/fake/mayring2022.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Qualitative Inhaltsanalyse ermoeglicht systematische Textinterpretation.",
-                "pdf_page": 12,
-                "section": "Methode",
-            },
-        ],
-    },
-    "smith2023": {
-        "paper_id": "smith2023",
-        "title": "DevOps Governance",
-        "doi": "10.1109/MS.2023.1234567",
-        "pdf_path": "/fake/smith2023.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Smith (2023) zeigt, dass DevOps Governance Incidents signifikant reduziert.",
-                "pdf_page": 42,
-                "section": "Results",
-            },
-        ],
-    },
-    "mueller2021": {
-        "paper_id": "mueller2021",
-        "title": "Agile Entscheidungsfindung",
-        "doi": "10.1109/MS.2021.7654321",
-        "pdf_path": "/fake/mueller2021.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Mueller (2021) beschreibt agile Entscheidungsprozesse in verteilten Teams.",
-                "pdf_page": 7,
-                "section": "Discussion",
-            },
-        ],
-    },
-    "tanaka2024": {
-        "paper_id": "tanaka2024",
-        "title": "Machine Learning Ops",
-        "doi": None,
-        "pdf_path": "/fake/tanaka2024.pdf",
-        "_seed_quotes": [
-            {
-                "verbatim": "Tanaka (2024) definiert MLOps als Disziplin zur Produktivierung von ML-Modellen.",
-                "pdf_page": 3,
-                "section": "Introduction",
-            },
-        ],
-    },
-}
+# Eine Quelle fuer Mock und echte Test-Vault (Issue #824): vorher lagen die
+# Fake-Papers nur hier, ein Live-Fall gegen die geseedete DB haette andere
+# Daten gesehen als der Mock-Test daneben.
+_FAKE_PAPERS = SEED_PAPERS
 
 
 class MockVault:

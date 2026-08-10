@@ -179,6 +179,36 @@ jobs:
             echo "**eval-results.xml wurde nicht erzeugt -- Lauf ist vorzeitig abgebrochen.**" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Skip-Inventar gegen den Lauf pruefen (Issue #824)
+        # Der bestehende Zaehl-Guard (tests/evals/test_eval_strategy.py::
+        # test_skip_count_matches_real_pytest_run) schaltet sich ab, sobald die
+        # claude-CLI verfuegbar ist -- also genau hier. Ein neuer Dauer-Skip
+        # bliebe damit unsichtbar (Muster Issue #470: "taeuschend gruen, 0 real
+        # geprueft, N geskippt"). Dieser Schritt haelt die tatsaechliche
+        # Skip-Menge der vault-abhaengigen Suiten gegen das dokumentierte
+        # Inventar in tests/evals/skip_inventory.py und faerbt den Lauf rot,
+        # sobald sie sich in eine der beiden Richtungen aendert.
+        if: always()
+        run: |
+          set -o pipefail
+          if [ ! -f eval-results.xml ]; then
+            echo "eval-results.xml fehlt -- Skip-Inventar nicht pruefbar (Lauf vorzeitig abgebrochen)."
+            exit 0
+          fi
+          {
+            echo
+            echo "### Skip-Inventar (Issue #824)"
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          uv run python scripts/dev/check_eval_skip_inventory.py eval-results.xml 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          status=${PIPESTATUS[0]}
+          set -e
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
       - name: Fehlschlaege als Issue melden (nur geplanter Lauf, dedupliziert)
         # Nur der geplante Lauf meldet automatisch -- ein manueller
         # workflow_dispatch-Lauf (z.B. gezielter Nachvollzug eines bekannten

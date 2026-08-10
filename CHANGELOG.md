@@ -10,6 +10,34 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Test-Vault im CI an die Eval-Sitzung gebunden statt vault-abhaengige
+  Faelle stillzulegen (#824):** `tests/evals/vault_fixture.py` baut je
+  Testfunktion eine Wegwerf-Vault (`VaultDB` + `init_schema()`, geseedet aus
+  denselben `SEED_PAPERS`, aus denen auch der `MockVault` seine Fake-Papers
+  zieht), erzeugt daneben PDF-Fixtures mit echtem Text-Layer (stdlib-only)
+  und schreibt eine MCP-Config mit genau einem Server (`academic-vault`,
+  `sys.executable -m academic_vault.server`, `VAULT_DB_PATH` im `env`-Block).
+  `test_quote_extractor_evals.py`/`test_chapter_writer_evals.py` reichen
+  `cwd`/`mcp_config` an `call_claude_for_component()` durch -- die
+  Fixture-Seite, auf die #830 verwies. Belegt durch einen tatsaechlichen
+  Lauf (`docs/evals/2026-08-10-vault-mcp-evals-824.md`): der Agent hat in
+  der Wegwerf-DB zwei Zitate mit `extraction_method="local-verbatim"`
+  hinterlassen, also `vault.get_paper` -> `Read` -> `vault.add_quote` inkl.
+  serverseitiger Verbatim-Pruefung durchlaufen; `--allowedTools
+  mcp__academic-vault__*,Read` genuegt, `--permission-mode
+  bypassPermissions` ist nicht noetig (`permission_denials: []`). Kein Netz,
+  kein API-Schluessel, kein Zugriff auf die Operator-Vault.
+- **Skip-Inventar mit Guard fuer die Eval-Suiten (#824):** Jeder bewusste
+  Skip traegt eine maschinell erkennbare Begruendung (`eval-skip:` -Praefix)
+  und steht namentlich in `tests/evals/skip_inventory.py`;
+  `scripts/dev/check_eval_skip_inventory.py` (verdrahtet in
+  `.github/workflows/eval-behavior.yml`) faerbt den Lauf rot, sobald ein
+  Skip dazukommt **oder** ein inventarisierter wegfaellt. Noetig, weil der
+  bestehende Zaehl-Guard (`test_skip_count_matches_real_pytest_run`) sich
+  bei vorhandener claude-CLI selbst abschaltet -- also genau im geplanten
+  Lauf, in dem ein Dauer-Skip entstuende (#470-Muster). `qe-04` bleibt als
+  einziger Fall `net-excluded` uebersprungen, begruendet in
+  `docs/evals/STRATEGY.md`.
 - **Context-FS-Fixture behebt Fehlanzeigen fuer fehlende Kontextdateien in
   Verhaltens-Evals (#823):** `ab-01`/`ab-02`, `ac-03`, `mt-01` und `pc-02`
   scheiterten im Lauf vom 2026-08-10, weil `eval_runner._run_claude_cli`
@@ -540,6 +568,13 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   Auditor weiter — er ist an die neue Severity-Stufe aktuell nicht
   angebunden, das ist an dieser Stelle explizit dokumentiert statt
   stillschweigend übersprungen.
+
+### Changed
+
+- **`scripts/dev/summarize_eval_junit.py` listet uebersprungene Faelle
+  namentlich mit Grund (#824)** statt sie nur zu zaehlen -- ein Dauer-Skip
+  ist damit im Step-Summary sichtbar und verschwindet nicht hinter
+  "uebersprungen: N".
 
 ### Fixed
 

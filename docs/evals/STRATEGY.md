@@ -512,8 +512,81 @@ Statt die Achsen je Suite frei zu kombinieren, bündelt `eval_runner.py`
 
 Die konkreten Achsenwerte für `cwd`/`mcp_config` (Fixture-Pfad, Test-Vault-
 Pfad) sind Sache der jeweiligen Suite bzw. Fixture — das ist Umsetzungsdetail
-von #823 (`context-fs`-Fixtures) und #824 (Vault-MCP-Anbindung), nicht dieses
-Issues. #830 liefert nur die Achsen, auf die #823/#824 zeigen.
+von #823 (`context-fs`-Fixtures) und #824 (Vault-MCP-Anbindung), nicht von
+#830. #830 liefert nur die Achsen, auf die #823/#824 zeigen. Die
+Fixture-Seite des `vault`-Profils steht seit #824 (nächster Abschnitt); die
+des `context-fs`-Profils bleibt offen (#823).
+
+### Fixture-Seite des `vault`-Profils (#824)
+
+`tests/evals/vault_fixture.py` liefert, was das Profil braucht — die
+pytest-Fixture `vault_session` (in `tests/evals/conftest.py`) gibt es je
+**Testfunktion** frisch heraus:
+
+| Baustein | Umsetzung |
+| --- | --- |
+| Datenbank | `VaultDB(<tmp>/vault-session/vault.db).init_schema()`, geseedet aus `SEED_PAPERS` — dieselbe Tabelle, aus der auch der in-memory `MockVault` seine Fake-Papers zieht (vorher zwei getrennte Datenstände) |
+| PDFs | zur Laufzeit erzeugte PDF-1.4-Dateien mit echtem Text-Layer (stdlib-only, Muster `tests/fixtures/verbatim/create_fixtures.py`), im selben Wegwerf-Verzeichnis; `papers.pdf_path` zeigt auf die Kopie dort |
+| MCP-Config | genau ein Server `academic-vault`: `command = sys.executable`, `args = ["-m", "academic_vault.server"]`, `env = {PYTHONPATH: <repo>, VAULT_DB_PATH: <tmp>/…/vault.db}` |
+| `cwd` | dasselbe Wegwerf-Verzeichnis — der Agent liest das PDF über einen Pfad **innerhalb** seines Arbeitsverzeichnisses |
+| `env`-Achse | bleibt `None`. `VAULT_DB_PATH` steht nur im `env`-Block der MCP-Config; `subprocess.run(env={…})` hätte `PATH`/`HOME`/`CLAUDE_CODE_OAUTH_TOKEN` aus der Sitzung entfernt |
+
+Zwei Entwurfsentscheidungen, die nicht offensichtlich sind:
+
+- **PDFs zur Laufzeit statt eingecheckt.** Der Schreibpfad `vault.add_quote`
+  (`extraction_method="local-verbatim"`, #512) prüft fail-closed gegen den
+  lokalen PDF-Volltext. Läge das PDF als Binärdatei im Repo, könnte eine
+  Änderung an den Seed-Zitaten still an ihm vorbeigehen und den Fall
+  unbemerkt unbestehbar machen. Erzeugt wird das PDF aus genau dem Text, der
+  auch in der Datenbank steht.
+- **Titel in Zeile 1.** `agents/quote-extractor.md` setzt
+  `possible_pdf_mismatch: true` (und blockiert dann die Persistenz), wenn
+  weniger als drei Titelwörter mit mindestens vier Zeichen in den ersten 200
+  Zeichen des PDFs stehen. Ein Fixture ohne Titel in Zeile 1 ließe `qe-01`
+  **trotz korrekter Bindung** durchfallen. Guard:
+  `test_fixture_pdf_has_text_layer_with_title_first`.
+
+Belegt ist die Bindung durch einen tatsächlichen Lauf, nicht durch Annahme:
+[`2026-08-10-vault-mcp-evals-824.md`](2026-08-10-vault-mcp-evals-824.md)
+(Rohdaten daneben als `…-live-results.json`, reproduzierbar über
+`scripts/eval/probe_vault_mcp_binding_824.py`). Ergebnis in einem Satz: der
+Agent hat in der Wegwerf-Datenbank zwei Zitate mit
+`extraction_method="local-verbatim"` hinterlassen — das geht nur über
+`vault.get_paper` → `Read` → `vault.add_quote` mit bestandener
+serverseitiger Verbatim-Prüfung. `--allowedTools mcp__academic-vault__*,Read`
+genügt dafür; `--permission-mode bypassPermissions` (wie in
+`measure_context_enrichment_710.py`) ist **nicht** nötig, `permission_denials`
+war leer. Kosten: ~103 s und ~0,16 USD je vault-gebundenem Fall.
+
+### Skip-Inventar und sein Guard (#824)
+
+Ein Skip ist erst dann eine Entscheidung, wenn er benannt, begründet und
+überwacht ist. Der bestehende Zähl-Guard leistet das nicht:
+`tests/evals/test_eval_strategy.py::test_skip_count_matches_real_pytest_run`
+**deaktiviert sich selbst, sobald die claude-CLI verfügbar ist** — also
+genau im geplanten OAuth-Lauf, in dem ein neuer Dauer-Skip entstünde. Ein
+grüner Lauf mit stillen Dauer-Skips meldete damit nie wieder etwas: exakt
+das Muster, das #470 schon einmal behoben hat.
+
+Deshalb seit #824, invers dazu (greift **mit** CLI):
+
+- Jeder bewusste Skip in `test_quote_extractor_evals.py` /
+  `test_chapter_writer_evals.py` trägt eine maschinell erkennbare Begründung
+  mit dem Präfix `eval-skip:` (`mode-mismatch` bzw. `net-excluded`).
+- `tests/evals/skip_inventory.py` listet jeden davon namentlich (Node-ID →
+  Grund → Begründungsverweis).
+- `scripts/dev/check_eval_skip_inventory.py` hält die JUnit-XML des Laufs
+  dagegen und meldet **beide** Richtungen als Befund: ein nicht
+  inventarisierter Skip ebenso wie ein inventarisierter, der nicht mehr
+  auftritt. Verdrahtet in `.github/workflows/eval-behavior.yml` (Schritt
+  „Skip-Inventar gegen den Lauf pruefen", `if: always()`).
+- Skips ohne das Präfix (fehlende CLI, fehlende `evals.json`) bewertet der
+  Guard nicht — sonst wäre er im CLI-losen `pytest tests/`-Lauf von `ci.yml`
+  dauerhaft rot.
+- `scripts/dev/summarize_eval_junit.py` listet übersprungene Fälle im
+  Step-Summary **namentlich mit Grund** statt nur als Zahl. Wer
+  „übersprungen: 12" liest, sieht sonst nicht, dass die Kernfunktion
+  darunter liegt.
 
 ### Zuordnung je Komponente
 
@@ -575,10 +648,12 @@ liefert die `context-fs`-Seite (`tests/evals/fixtures/context_fs/`,
 `eval_runner.CONTEXT_FS_DIR`) ihren Fixture-Pfad: `test_rest_evals.py` und
 `test_abstract_generator_evals.py` reichen ihn als `cwd=`-Override an
 `call_claude_for_component()` durch (ausser ein Case setzt `"cwd": "none"`).
-Die Vault-Testdatenbank (#824) steht noch aus — `chapter-writer`/
-`quote_extractor` bleiben bis dahin bei `mcp_config=None`, ohne dass sich
-`call_claude_for_component()` oder `SESSION_PROFILES` dafür ändern müssen.
-Getestet in `tests/evals/test_session_profiles.py`
+Mit #824 liefert die Vault-Testdatenbank (`tests/evals/vault_fixture.py`,
+`vault_session`-Fixture) den `cwd`/`mcp_config`-Wert für das `vault`-Profil:
+`test_chapter_writer_evals.py`/`test_quote_extractor_evals.py` reichen beide
+als Override an `call_claude_for_component()` durch, ohne dass sich diese
+Funktion oder `SESSION_PROFILES` dafür ändern musste. Getestet in
+`tests/evals/test_session_profiles.py`
 (`test_call_claude_for_component_*`, gemockter `call_claude`, kein Live-Call).
 
 ### Entscheidung für die zehn Widerspruchsfälle aus dem 2026-08-10-Lauf
@@ -612,6 +687,14 @@ Eine Ausnahme bleibt bewusst unzugeordnet: `quote-extractor`s `qe-04`
 (Live-Abruf einer Quelle) — das ist außerhalb dessen, was ein Session-Profil
 (Tools/`cwd`/MCP/Env) beheben kann. Diese Fallgruppe bleibt dokumentiert
 übersprungen (`net-excluded`, s. o.), keine stillschweigende Lücke.
+
+Umgesetzt mit #824: `qe-04` überspringt sich in **beiden** Modi mit der
+maschinell erkennbaren Begründung `eval-skip:net-excluded …` und steht
+namentlich in `tests/evals/skip_inventory.py`. Die Alternative — Netz-Egress
+in Evals freigeben — wurde verworfen, weil ein Live-Abruf den Fall
+nichtdeterministisch machte: er misst dann die Verfügbarkeit einer fremden
+Quelle mit, nicht das Verhalten des Agenten. Die übrigen vier
+`quote-extractor`-Fälle laufen seit #824 echt gegen die Test-Vault.
 
 ### Doku-Drift-Guard
 
