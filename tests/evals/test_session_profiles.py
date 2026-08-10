@@ -290,12 +290,19 @@ def test_only_vault_profile_needs_mcp() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_call_claude_for_component_passes_profile_allowed_tools_through() -> None:
+def test_call_claude_for_component_passes_profile_allowed_tools_through(tmp_path: Path) -> None:
     """call_claude_for_component('chapter-writer', ...) muss das vault-Profil ziehen.
 
     chapter-writer ist in COMPONENT_PROFILES als 'vault' hinterlegt --
     allowed_tools muss also SESSION_PROFILES['vault']['allowed_tools'] sein,
     nicht der bisherige feste Leerstring.
+
+    Seit dem Root-Leak-Fix zu #830 gilt das nur, wenn die Sitzung die vom
+    Profil verlangten Achsen auch mitbringt: ohne ``cwd``/``mcp_config``
+    faellt die Funktion bewusst auf den bare-Default zurueck (eigener Test
+    unten). Die Fixture, die beides liefert, kam mit #824 --
+    ``tests/evals/vault_fixture.py``; hier genuegen Platzhalterpfade, weil
+    der Aufruf gemockt ist.
     """
     captured: dict[str, Any] = {}
 
@@ -306,10 +313,39 @@ def test_call_claude_for_component_passes_profile_allowed_tools_through() -> Non
         return "ok"
 
     with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
-        result = call_claude_for_component("chapter-writer", "sys", "user")
+        result = call_claude_for_component(
+            "chapter-writer",
+            "sys",
+            "user",
+            cwd=tmp_path,
+            mcp_config=tmp_path / "mcp_config.json",
+        )
 
     assert result == "ok"
     assert captured["allowed_tools"] == SESSION_PROFILES["vault"]["allowed_tools"]
+
+
+def test_call_claude_for_component_vault_without_fixture_falls_back_to_bare() -> None:
+    """Ohne cwd/mcp_config bleibt das vault-Profil werkzeuglos (Root-Leak-Fix zu #830).
+
+    Sonst zeigte ``cwd=None`` auf den Repo-Root und der Agent haette den
+    gesamten Quellbaum als Ressource -- die Kontrollgruppe ``without_skill``
+    waere damit nicht mehr skillfrei.
+    """
+    captured: dict[str, Any] = {}
+
+    def fake_call_claude(
+        system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs: Any
+    ) -> str:
+        captured.update(kwargs)
+        return "ok"
+
+    with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
+        call_claude_for_component("chapter-writer", "sys", "user")
+
+    assert captured["allowed_tools"] is None
+    assert captured["cwd"] is None
+    assert captured["mcp_config"] is None
 
 
 def test_call_claude_for_component_bare_profile_keeps_no_tools() -> None:
