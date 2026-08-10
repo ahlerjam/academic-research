@@ -12,6 +12,11 @@ from tests.evals.eval_runner import (
     check_expected,
     load_agent_content,
 )
+from tests.evals.skip_inventory import (
+    NET_EXCLUDED_CASES,
+    mode_mismatch_reason,
+    net_excluded_reason,
+)
 
 _EVALS_PATH: Path = EVALS_ROOT / "quote-extractor" / "evals.json"
 pytestmark = [
@@ -26,11 +31,19 @@ EVALS: dict = json.loads(_EVALS_PATH.read_text()) if _EVALS_PATH.exists() else {
 
 @pytest.mark.parametrize("prompt", EVALS["prompts"], ids=lambda p: p["id"])
 @pytest.mark.parametrize("mode", ["with_skill", "without_skill"])
-def test_quote_extractor_eval(prompt, mode):
+def test_quote_extractor_eval(prompt, mode, vault_session):
     if prompt["mode"] not in ("both", mode):
-        pytest.skip(f"Prompt {prompt['id']} nicht fuer Mode {mode}")
+        pytest.skip(mode_mismatch_reason(prompt["id"], mode))
+    if prompt["id"] in NET_EXCLUDED_CASES:
+        pytest.skip(net_excluded_reason(prompt["id"]))
     system = load_agent_content("quote-extractor") if mode == "with_skill" else ""
-    output = call_claude_for_component("quote-extractor", system=system, user=prompt["input"])
+    output = call_claude_for_component(
+        "quote-extractor",
+        system=system,
+        user=prompt["input"],
+        cwd=vault_session.root,
+        mcp_config=vault_session.mcp_config_path,
+    )
     assert check_expected(output, prompt["expected"]), (
         f"[{mode}] {prompt['id']}: expected={prompt['expected']} actual={output[:200]}"
     )
