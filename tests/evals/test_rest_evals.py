@@ -5,6 +5,7 @@ import json
 import pytest
 
 from tests.evals.eval_runner import (
+    CONTEXT_FS_DIR,
     EVALS_ROOT,
     call_claude_for_component,
     check_expected,
@@ -26,6 +27,15 @@ REST_SKILLS = [
     "submission-checker",
 ]
 REST_AGENTS = ["query-generator"]
+
+# Alle REST_SKILLS + REST_AGENTS sind in eval_runner.COMPONENT_PROFILES als
+# "context-fs" hinterlegt (Issue #830) -- sie laden das gemeinsame Preamble
+# (skills/_common/preamble.md) und setzen ./academic_context.md +
+# ./literature_state.md voraus (Issue #823). call_claude_for_component
+# liefert allowed_tools="Read" bereits automatisch ueber das Profil; die
+# Fixture selbst (cwd=CONTEXT_FS_DIR) kommt als Override von hier, sofern
+# der Case nicht explizit "cwd": "none" setzt (Negativfall: Vorbedingung
+# bewusst ohne Kontextdateien pruefen).
 
 
 def _collect_prompts() -> list[tuple[str, dict]]:
@@ -56,7 +66,8 @@ def test_rest_eval(component, prompt, mode):
         system = load_skill_content(component) if mode == "with_skill" else ""
     else:
         system = load_agent_content(component) if mode == "with_skill" else ""
-    output = call_claude_for_component(component, system=system, user=prompt["input"])
+    cwd = CONTEXT_FS_DIR if prompt.get("cwd") != "none" else None
+    output = call_claude_for_component(component, system=system, user=prompt["input"], cwd=cwd)
     assert check_expected(output, prompt["expected"]), (
         f"[{component}/{mode}] {prompt['id']}: expected={prompt['expected']} actual={output[:200]}"
     )

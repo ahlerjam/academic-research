@@ -47,6 +47,13 @@ Quality-Evals pro Skill oder Agent, nach Cookbook-Pattern `skill-creator`.
 - `prompts[].expected.path`: JSONPath zum geprueften Feld (bei Typ `json_field`)
 - `prompts[].expected.check`: `"exists"` | `"non_empty"` | `"equals:<wert>"` (bei Typ `json_field`)
 - `prompts[].mode`: `"with_skill"` | `"without_skill"` | `"both"`
+- `prompts[].cwd` (optional): nur `"none"` definiert — schaltet die
+  `context-fs`-Fixture (`tests/evals/fixtures/context_fs/`, Issue #823) fuer
+  genau diesen Case explizit ab, obwohl die Komponente sie sonst per
+  `cwd=CONTEXT_FS_DIR` bekommt. Fuer Negativfaelle, die die ehrliche
+  Vorbedingungs-Meldung ohne Kontextdateien pruefen (Muster:
+  `plagiarism-check`s `pc-03`). Ohne dieses Feld bekommen alle Cases der
+  betroffenen Komponente die Fixture.
 
 ## `evals/<component>/trigger_evals.json`
 
