@@ -17,13 +17,41 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   fehlende Vorbedingung (`./academic_context.md`, `./literature_state.md`),
   die Evals werteten das als Fehlschlag. Neue Fixture
   `tests/evals/fixtures/context_fs/` (DevOps Governance in KMU, drei
-  Dateien inkl. `literature_state.md`) in einem suiteneigenen Verzeichnis;
-  `_run_claude_cli`/`call_claude`/`call_claude_with_tokens` kennen die
-  optionalen Achsen `cwd`/`allowed_tools`, `test_rest_evals.py` und
-  `test_abstract_generator_evals.py` reichen sie fuer die betroffenen
-  `context-fs`-Skills durch. Neuer Negativfall `pc-03`
-  (`evals/plagiarism-check/evals.json`, `"cwd": "none"`) haelt den
-  Vorbedingungs-Ehrlichkeitscheck ohne Fixture weiterhin fest.
+  Dateien inkl. `literature_state.md`) in einem suiteneigenen Verzeichnis
+  (`eval_runner.CONTEXT_FS_DIR`). Baut auf den Eval-Sitzungsprofilen aus
+  #830 auf statt einer eigenen `cwd`-Achse daneben: `test_rest_evals.py`
+  und `test_abstract_generator_evals.py` reichen `CONTEXT_FS_DIR` als
+  `cwd`-Override an `call_claude_for_component()` durch, das Profil
+  `context-fs` liefert `allowed_tools="Read"` bereits automatisch. Neuer
+  Negativfall `pc-03` (`evals/plagiarism-check/evals.json`, `"cwd": "none"`)
+  haelt den Vorbedingungs-Ehrlichkeitscheck ohne Fixture weiterhin fest.
+- **Eval-Sitzungsprofile loesen den Tool-vs-Preamble-Widerspruch (#830):**
+  Der Lauf vom 2026-08-10 (Run 31369626618) meldete 16 von 139 Fehlschlaegen;
+  elf davon gingen auf denselben Widerspruch zurueck -- `_run_claude_cli`
+  startete jede Sitzung werkzeuglos (`--allowedTools ""`) und ohne `cwd`,
+  waehrend fast jeder Skill laut `skills/_common/preamble.md` Read-Zugriff
+  auf `academic_context.md` voraussetzt bzw. (bei sieben Suiten) direkt
+  Vault-MCP-Tools aufruft. Vier Achsen (`cwd`, `allowed_tools`, `mcp_config`,
+  `env`) sind jetzt an `_run_claude_cli`/`call_claude`/
+  `call_claude_with_tokens` konfigurierbar statt fest verdrahtet (Default =
+  bisheriges Verhalten), gebuendelt zu drei benannten Profilen (`bare`,
+  `context-fs`, `vault`) plus einer dokumentierten Nicht-Zuordnung
+  (`net-excluded`, fuer den einzelnen netzabhaengigen Fall `quote-extractor
+  qe-04`). `eval_runner.COMPONENT_PROFILES` ordnet allen 59
+  `evals/`-Komponenten genau ein Profil zu, gehalten durch
+  `tests/evals/test_session_profiles.py` (Coverage-Guard plus ein Test, der
+  belegt, dass eine Fixture im `cwd` einer Suite fuer eine andere mit
+  anderem `cwd` unsichtbar bleibt). Details und die Herleitung je Gruppe in
+  `docs/evals/STRATEGY.md`, Abschnitt "Sitzungsprofile". Neu:
+  `eval_runner.call_claude_for_component()` verbindet `profile_for()`/
+  `SESSION_PROFILES` jetzt mit einem tatsaechlichen Aufruf -- die sechs
+  betroffenen Suiten (`test_rest_evals.py` fuer `academic-context`/
+  `methodology-advisor`/`plagiarism-check`, `test_abstract_generator_evals.py`,
+  `test_chapter_writer_evals.py`, `test_quote_extractor_evals.py`) rufen
+  darueber `call_claude` statt `allowed_tools` implizit auf `bare` zu
+  belassen; `cwd`/`mcp_config` bleiben optionale Overrides, bis die
+  tatsaechliche Fixture-Seite (Kontextdateien, Vault-Testdatenbank) via
+  #823/#824 landet.
 - **Reranker-Ablation misst den Beitrag des aktiven `bge-reranker-v2-m3`
   (#804):** #722 hatte den Reranker-Beitrag per Leave-one-out beziffert
   (+0,0000 Recall@10, +0,0107 nDCG@10, +0,0144 MRR), beide Nicht-Null-Werte

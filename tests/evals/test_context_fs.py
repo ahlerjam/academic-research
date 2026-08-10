@@ -1,14 +1,18 @@
 """Tests fuer die Context-FS-Fixture (Issue #823).
 
-Deckt die drei ACs, die ohne Live-CLI-Aufruf hermetisch pruefbar sind:
+Deckt die ACs, die ohne Live-CLI-Aufruf hermetisch pruefbar sind und nicht
+bereits generisch durch ``tests/evals/test_session_profiles.py`` (Issue
+#830) abgedeckt sind. Die generische Weiterleitung von ``cwd``/
+``allowed_tools`` an ``subprocess.run`` sowie die Profil-Zuordnung je
+Komponente sind dort getestet -- hier geht es ausschliesslich um die
+Fixture selbst:
 
-- AC1 (teilweise): die Fixture-Dateien existieren und enthalten die
-  Schluesselbegriffe, die die betroffenen Eval-Erwartungen (ab-01, ab-02,
-  ac-03, mt-01, pc-02) brauchen -- inkl. ``literature_state.md``, die eine
-  erste Fassung des Issues uebersehen hatte.
+- AC1: die Fixture-Dateien existieren und enthalten die Schluesselbegriffe,
+  die die betroffenen Eval-Erwartungen (ab-01, ab-02, ac-03, mt-01, pc-02)
+  brauchen -- inkl. ``literature_state.md``, die eine erste Fassung des
+  Issues uebersehen hatte.
 - AC2: die Fixture liegt in einem suiteneigenen Verzeichnis und ist fuer
-  einen Aufruf mit einem anderen ``cwd`` nicht sichtbar; ``_run_claude_cli``
-  reicht ``cwd``/``allowed_tools`` tatsaechlich an den Subprozess durch.
+  einen Aufruf mit einem anderen ``cwd`` nicht sichtbar.
 - AC3: mindestens ein Eval-Fall bleibt bewusst ohne Fixture-``cwd`` --
   s. ``test_ac3_negative_case_without_cwd_exists``.
 
@@ -20,7 +24,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
+from unittest.mock import patch
 
 from tests.evals import eval_runner
 from tests.evals.eval_runner import CONTEXT_FS_DIR
@@ -84,103 +89,11 @@ def test_literature_state_contains_pc02_source_sentence():
 
 
 # ---------------------------------------------------------------------------
-# AC2: cwd/allowed_tools werden tatsaechlich an den Subprozess durchgereicht,
-# und die Fixture ist fuer ein anderes cwd unsichtbar.
+# AC2: die Fixture ist fuer ein anderes cwd unsichtbar, und
+# call_claude_for_component() reicht CONTEXT_FS_DIR tatsaechlich als cwd
+# durch (die generische cwd-/allowed_tools-Weiterleitung an subprocess.run
+# selbst ist in test_session_profiles.py getestet).
 # ---------------------------------------------------------------------------
-
-
-def _fake_subprocess_run_ok():
-    def _run(cmd, **kwargs):
-        payload = {"is_error": False, "result": "OK", "usage": {}}
-        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
-
-    return _run, {}
-
-
-def test_run_claude_cli_passes_cwd_to_subprocess(monkeypatch):
-    calls: list[dict] = []
-
-    def _run(cmd, **kwargs):
-        calls.append(kwargs)
-        payload = {"is_error": False, "result": "OK", "usage": {}}
-        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
-
-    monkeypatch.setattr(eval_runner.subprocess, "run", _run)
-
-    eval_runner._run_claude_cli("sys", "user", "claude-sonnet-4-6", cwd=CONTEXT_FS_DIR)
-
-    assert calls[0]["cwd"] == CONTEXT_FS_DIR
-
-
-def test_run_claude_cli_defaults_to_no_cwd(monkeypatch):
-    """Rueckwaertskompatibilitaet: ohne cwd-Argument bleibt das heutige
-    Verhalten (kein cwd im subprocess.run-Aufruf, also Prozess-cwd des
-    Testlaufs)."""
-    calls: list[dict] = []
-
-    def _run(cmd, **kwargs):
-        calls.append(kwargs)
-        payload = {"is_error": False, "result": "OK", "usage": {}}
-        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
-
-    monkeypatch.setattr(eval_runner.subprocess, "run", _run)
-
-    eval_runner._run_claude_cli("sys", "user", "claude-sonnet-4-6")
-
-    assert calls[0].get("cwd") is None
-
-
-def test_run_claude_cli_passes_allowed_tools(monkeypatch):
-    captured_cmd: list[list[str]] = []
-
-    def _run(cmd, **kwargs):
-        captured_cmd.append(cmd)
-        payload = {"is_error": False, "result": "OK", "usage": {}}
-        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
-
-    monkeypatch.setattr(eval_runner.subprocess, "run", _run)
-
-    eval_runner._run_claude_cli(
-        "sys", "user", "claude-sonnet-4-6", cwd=CONTEXT_FS_DIR, allowed_tools=["Read"]
-    )
-
-    cmd = captured_cmd[0]
-    assert cmd[cmd.index("--allowedTools") + 1] == "Read"
-
-
-def test_run_claude_cli_default_allowed_tools_is_empty(monkeypatch):
-    """Ohne allowed_tools bleibt das heutige Verhalten: keine Tools
-    (--allowedTools "")."""
-    captured_cmd: list[list[str]] = []
-
-    def _run(cmd, **kwargs):
-        captured_cmd.append(cmd)
-        payload = {"is_error": False, "result": "OK", "usage": {}}
-        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
-
-    monkeypatch.setattr(eval_runner.subprocess, "run", _run)
-
-    eval_runner._run_claude_cli("sys", "user", "claude-sonnet-4-6")
-
-    cmd = captured_cmd[0]
-    assert cmd[cmd.index("--allowedTools") + 1] == ""
-
-
-def test_call_claude_forwards_cwd_and_allowed_tools(monkeypatch):
-    monkeypatch.setattr(eval_runner, "claude_cli_available", lambda: True)
-    seen: dict = {}
-
-    def _fake_run_claude_cli(system, user, model, *, cwd=None, allowed_tools=None):
-        seen["cwd"] = cwd
-        seen["allowed_tools"] = allowed_tools
-        return {"result": "OK", "usage": {}}
-
-    monkeypatch.setattr(eval_runner, "_run_claude_cli", _fake_run_claude_cli)
-
-    eval_runner.call_claude("sys", "user", cwd=CONTEXT_FS_DIR, allowed_tools=["Read"])
-
-    assert seen["cwd"] == CONTEXT_FS_DIR
-    assert seen["allowed_tools"] == ["Read"]
 
 
 def test_fixture_dir_is_invisible_to_a_call_with_different_cwd(tmp_path):
@@ -190,6 +103,26 @@ def test_fixture_dir_is_invisible_to_a_call_with_different_cwd(tmp_path):
     assert tmp_path != CONTEXT_FS_DIR
     for name in FIXTURE_FILES:
         assert not (tmp_path / name).exists()
+
+
+def test_call_claude_for_component_forwards_context_fs_dir_as_cwd_override():
+    """test_rest_evals.py/test_abstract_generator_evals.py reichen
+    CONTEXT_FS_DIR als cwd-Override an call_claude_for_component() durch
+    (Issue #823 auf Basis der #830-Profile) -- kein separater
+    cwd/allowed_tools-Mechanismus daneben."""
+    captured: dict[str, Any] = {}
+
+    def fake_call_claude(
+        system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs: Any
+    ) -> str:
+        captured.update(kwargs)
+        return "ok"
+
+    with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
+        eval_runner.call_claude_for_component("academic-context", "sys", "user", cwd=CONTEXT_FS_DIR)
+
+    assert captured["cwd"] == CONTEXT_FS_DIR
+    assert captured["allowed_tools"] == eval_runner.SESSION_PROFILES["context-fs"]["allowed_tools"]
 
 
 # ---------------------------------------------------------------------------

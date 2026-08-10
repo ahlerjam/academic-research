@@ -430,20 +430,23 @@ inhaltliche Ausgabe erwarteten.
 Fix: `tests/evals/fixtures/context_fs/` enthält drei realistische Dateien
 (`academic_context.md`, `literature_state.md`, `writing_state.md`, Thema
 DevOps Governance in KMU) in einem suiteneigenen Verzeichnis
-(`eval_runner.CONTEXT_FS_DIR`). `_run_claude_cli`/`call_claude`/
-`call_claude_with_tokens` kennen seither die optionalen Achsen `cwd` und
-`allowed_tools`; `test_rest_evals.py` und `test_abstract_generator_evals.py`
-reichen `cwd=CONTEXT_FS_DIR, allowed_tools=["Read"]` für die betroffenen
-`context-fs`-Skills durch. Ein Case kann sich per `"cwd": "none"` im
-`evals.json`-Prompt bewusst dagegen entscheiden — Negativfall `pc-03` prüft
-weiterhin, dass die fehlende Vorbedingung ehrlich gemeldet wird, wenn die
-Fixture fehlt.
+(`eval_runner.CONTEXT_FS_DIR`). #823 baut dafür bewusst nicht auf einer
+eigenen `cwd`/Tool-Achse auf, sondern auf den Eval-Sitzungsprofilen aus
+#830 (Abschnitt "Sitzungsprofile" unten): die betroffenen Skills sind dort
+bereits als `context-fs`-Profil hinterlegt und bekommen `allowed_tools="Read"`
+automatisch über `call_claude_for_component()`. `test_rest_evals.py` und
+`test_abstract_generator_evals.py` reichen lediglich noch den fehlenden
+Baustein durch — `cwd=CONTEXT_FS_DIR` als Override an
+`call_claude_for_component()` —, statt einen zweiten, zum Profil-Mechanismus
+parallelen Weg zu bauen. Ein Case kann sich per `"cwd": "none"` im
+`evals.json`-Prompt bewusst gegen die Fixture entscheiden (die Suite ruft
+dann `call_claude_for_component()` ohne `cwd`-Override; das `context-fs`-
+Profil erzeugt automatisch ein leeres, isoliertes Fallback-Verzeichnis statt
+den Repo-Root zu erben) — Negativfall `pc-03` prüft so weiterhin, dass die
+fehlende Vorbedingung ehrlich gemeldet wird, wenn die Fixture fehlt.
 
 Bewusst offen gelassen (Out of Scope laut Issue): die Vault-MCP-Testdatenbank
-(#824) und die grundsätzliche Frage, welche Suite mit welchen Werkzeugen
-läuft (#830) — #823 liefert davon nur die `cwd`-Achse, die `allowed_tools`-
-Achse kam als notwendige Ergänzung dazu, weil `cwd` ohne Lesezugriff wirkungslos
-bliebe.
+(#824) — #823 liefert nur die `context-fs`-Fixture, keine `vault`-Testdaten.
 
 ## Alt-Issue #55
 
@@ -454,6 +457,162 @@ hochgebracht werden. Der Grund für den damaligen Abbruch ist derselbe, der oben
 im Abschnitt API-Budget steht: ohne bereitgestelltes Budget gibt es keinen
 Baseline-Lauf.
 
+## Sitzungsprofile (Issue #830)
+
+### Warum
+
+Der Lauf vom 2026-08-10 (Run 31369626618) meldete 16 von 139 Fällen als
+Fehlschlag. Zehn davon gehen auf denselben, tieferliegenden Widerspruch
+zurück: die Evals injizieren `SKILL.md` bzw. eine Agent-Definition als
+System-Prompt in eine Sitzung, die per `--allowedTools "" --setting-sources
+""` ausdrücklich werkzeuglos gestartet wird (`_run_claude_cli`) — während
+genau diese Skills laut `skills/_common/preamble.md` (das praktisch jeder
+Skill lädt) Read-Zugriff auf `./academic_context.md` und `./literature_state.md`
+voraussetzen, ein Teil zusätzlich Vault-MCP-Tools direkt aufruft. Der Skill
+tut daraufhin das Richtige — er meldet die fehlende Vorbedingung und bricht
+ab —, die Eval wertet das als Fehlschlag, weil sie inhaltliche Ausgabe
+erwartet. Gemessen wird damit die Lücke zwischen dem, was der Skill braucht,
+und dem, was die Sitzung ihm gibt, nicht sein Verhalten. Ein zweiter, davon
+unabhängiger Befund: `_run_claude_cli` setzte kein `cwd` — jede Fixture, die
+eine Suite im Repo-Root ablegt, war damit für alle anderen Suiten sichtbar.
+
+### Die vier Achsen
+
+`_run_claude_cli` (und die Wrapper `call_claude`/`call_claude_with_tokens`)
+nehmen seit Issue #830 vier optionale Achsen entgegen, statt sie fest zu
+verdrahten. Ohne Angabe verhält sich jede Achse wie vor #830 (Rückwärts­
+kompatibilität):
+
+| Achse | Bedeutung | Default (unverändert) |
+| --- | --- | --- |
+| `cwd` | Arbeitsverzeichnis des `claude`-Subprozesses | `None` → erbt das Aufrufer-`cwd` (vorher wurde `cwd` gar nicht gesetzt) |
+| `allowed_tools` | Wert für `--allowedTools` | `None` → `""` (keine Tools) |
+| `mcp_config` | Pfad zu einer MCP-Config-Datei | `None` → kein `--mcp-config`/`--strict-mcp-config` |
+| `env` | Umgebungsvariablen des Subprozesses | `None` → erbt die Prozessumgebung |
+
+### Die vier Profile
+
+Statt die Achsen je Suite frei zu kombinieren, bündelt `eval_runner.py`
+(`SESSION_PROFILES`) sie zu vier benannten Profilen:
+
+| Profil | `allowed_tools` | `cwd` | MCP | Für Suiten, deren Skill … |
+| --- | --- | --- | --- | --- |
+| `bare` (= Verhalten vor #830) | `""` | Aufrufer-`cwd` | keins | eine offene Aufgabe ohne Referenzlösung stellt (`advisor`, `methodology-advisor`, `research-question-refiner`, `title-generator`, `topic-brainstorm`, `peer-review`, …) — Werkzeuge wären hier ein Confound, kein fehlendes Vermögen; **oder** `eval_runner.call_claude` gar nicht aufruft (reine Schema-/Netz-Tests wie `fetch`/`oa-fetchers`/`publisher-fetchers`, oder ein rein offline messender `metric`-Runner wie `auto-download`/`verbatim-guard`) — das Profil ist dort Formsache. |
+| `context-fs` | `Read` | suiteneigenes Fixture-Verzeichnis mit `academic_context.md`/`literature_state.md`/`writing_state.md` | keins | `skills/_common/preamble.md` lädt (Vorbedingung: Kontextdateien vorhanden) oder `academic_context.md`/`writing_state.md` sonst direkt referenziert. |
+| `vault` | `mcp__academic-vault__*,Read` | suiteneigenes Verzeichnis | `academic-vault`-Server gegen eine Test-Vault-Datenbank (`env["VAULT_DB_PATH"]`) | laut `SKILL.md`/Evals-Prompt direkt `vault_*`-MCP-Tools aufruft. |
+| `net-excluded` | — | — | — | Netz-Egress voraussetzt. Kein Profil im engeren Sinn (keine Komponente ist ihm als Ganzes zugeordnet), sondern eine dokumentierte Nicht-Zuordnung für einzelne Fälle innerhalb einer Suite — siehe `quote-extractor`/`qe-04` unten. |
+
+Die konkreten Achsenwerte für `cwd`/`mcp_config` (Fixture-Pfad, Test-Vault-
+Pfad) sind Sache der jeweiligen Suite bzw. Fixture — das ist Umsetzungsdetail
+von #823 (`context-fs`-Fixtures) und #824 (Vault-MCP-Anbindung), nicht dieses
+Issues. #830 liefert nur die Achsen, auf die #823/#824 zeigen.
+
+### Zuordnung je Komponente
+
+`eval_runner.COMPONENT_PROFILES` ordnet jeder `evals/`-Komponente genau ein
+Profil zu (Coverage-Test: `tests/evals/test_session_profiles.py::
+test_every_eval_component_has_exactly_one_session_profile`). Die Herleitung
+folgt einem festen Kriterium statt einer Einzelfallentscheidung:
+
+- **`vault`**: `SKILL.md` bzw. die Evals-Datei ruft `vault_*`-MCP-Tools
+  direkt auf — `anchor-paper-survey`, `chapter-writer`, `citation-extraction`,
+  `material-passport`, `quote-extractor`, `reading-notes`, `word-export`.
+- **`context-fs`**: `SKILL.md` lädt `skills/_common/preamble.md` (das die
+  Kontextdatei-Vorbedingung stellt) oder referenziert `academic_context.md`
+  direkt. Das trifft auf die überwiegende Mehrheit der `structural`-Suiten
+  zu — genau der im "Warum"-Abschnitt beschriebene Befund, dass die
+  werkzeuglose `bare`-Sitzung der eigentliche Widerspruch war, nicht eine
+  Ausnahme: `abstract-generator`, `academic-context`, `advisor`,
+  `ai-disclosure`, `bibliography-auditor`, `book-handler`,
+  `citation-style-import`, `cluster-visualizer`, `conference-poster`,
+  `data-management-plan`, `defense-prep`, `extraction-matrix`,
+  `github-repo-research`, `grant-proposal`, `humanizer-de`,
+  `instrument-design`, `latex-export`, `latex-layout-auditor`,
+  `literature-excel`, `literature-gap-analysis`, `methodology-advisor`,
+  `notebook-bundle`, `parallel-screening`, `peer-review`, `plagiarism-check`,
+  `preregistration`, `prisma-flow`, `qualitative-coding`,
+  `quantitative-analysis`, `query-generator` (Agent, referenziert
+  `academic_context.md` optional für die Query-Optimierung),
+  `reading-list-import`, `research-question-refiner`, `reviewer-response`,
+  `slide-export`, `source-quality-audit`, `style-evaluator`,
+  `submission-checker`, `title-generator`, `topic-brainstorm`,
+  `zotero-import`.
+- **`bare`**: weder noch. Zwei Unterfälle: (a) eine offene Aufgabe ohne
+  Referenzlösung, deren `SKILL.md`/Agent-Definition keine Kontextdatei-
+  Vorbedingung stellt (`query-generator` s. o. ist Grenzfall und liegt bei
+  `context-fs`; echte `bare`-Fälle hier sind Suiten, die weder Preamble noch
+  Vault-Tools referenzieren) — praktisch: `quality-reviewer` (Agent, urteilt
+  über eingefügten Manuskripttext, keine Dateiabhängigkeit) und
+  `sparring-partner` (Material wird laut `STRATEGY.md`-Zeile oben inline im
+  Prompt übergeben, das Tooling war im Aufnahmelauf bewusst abgeschaltet);
+  (b) die Suite ruft `eval_runner.call_claude`/`call_claude_with_tokens` gar
+  nicht auf — `524-nli-prefilter`, `auto-download`, `fetch`,
+  `figure-verifier`, `free-archive-fetchers`, `generic-fetcher`,
+  `humanizer-de-pipeline`, `oa-fetchers`, `publisher-fetchers`,
+  `verbatim-guard`.
+
+### Callsite-Anbindung
+
+`SESSION_PROFILES`/`profile_for()` wären ohne einen tatsächlichen Aufrufer
+nur eine Tabelle ohne Wirkung. `eval_runner.call_claude_for_component(component,
+system, user, ...)` schließt diese Lücke: sie zieht `allowed_tools` aus
+`SESSION_PROFILES[profile_for(component)]` statt es implizit bei `""`
+(`bare`) zu belassen, und reicht optionale `cwd`/`mcp_config`-Overrides
+unverändert durch. Die sechs Suiten der Widerspruchstabelle oben rufen
+darüber statt über das rohe `call_claude` auf: `test_rest_evals.py`
+(`academic-context`, `methodology-advisor`, `plagiarism-check` sowie alle
+weiteren `REST_SKILLS`/`REST_AGENTS`), `test_abstract_generator_evals.py`,
+`test_chapter_writer_evals.py`, `test_quote_extractor_evals.py`. Mit #823
+liefert die `context-fs`-Seite (`tests/evals/fixtures/context_fs/`,
+`eval_runner.CONTEXT_FS_DIR`) ihren Fixture-Pfad: `test_rest_evals.py` und
+`test_abstract_generator_evals.py` reichen ihn als `cwd=`-Override an
+`call_claude_for_component()` durch (ausser ein Case setzt `"cwd": "none"`).
+Die Vault-Testdatenbank (#824) steht noch aus — `chapter-writer`/
+`quote_extractor` bleiben bis dahin bei `mcp_config=None`, ohne dass sich
+`call_claude_for_component()` oder `SESSION_PROFILES` dafür ändern müssen.
+Getestet in `tests/evals/test_session_profiles.py`
+(`test_call_claude_for_component_*`, gemockter `call_claude`, kein Live-Call).
+
+### Entscheidung für die zehn Widerspruchsfälle aus dem 2026-08-10-Lauf
+
+Verifiziert gegen die echten Fehlschläge des Laufs (`gh run view 31369626618
+--log-failed`, 16 failed insgesamt): elf der sechzehn Fehlschläge sind exakt
+diese zehn Fälle plus deren `without_skill`-Gegenprobe, wo vorhanden —
+`ab-01`/`ab-02` (`with_skill`) + `ab-01` (`without_skill`), `ac-03`, `mt-01`,
+`pc-02`, `cw-04`, `qe-01`/`qe-02` (`with_skill`) + `qe-04` (`with_skill` und
+`without_skill`). Die übrigen fünf Fehlschläge des Laufs
+(`submission-checker sc-02`, `quality-reviewer qr-04`, Trigger-Recall
+`humanizer-de`/`title-generator`) sind **nicht** dieser Widerspruch —
+inhaltliche Bewertungsfragen, außerhalb des Scopes von #830 (#826).
+
+Für jede der fünf betroffenen Komponenten, deren Skill Werkzeuge voraussetzt,
+die ihr bisheriges (faktisches `bare`-)Profil nicht gab, gilt jetzt:
+**Profil erweitert**, nicht Erwartung angepasst — die Fehlschläge waren ein
+Umgebungsdefekt, kein Qualitätsdefekt.
+
+| Betroffene Komponente | Fall(e) | Neues Profil | Umsetzung der Fixture-Seite |
+| --- | --- | --- | --- |
+| `abstract-generator` | `ab-01`, `ab-02` | `context-fs` | #823 |
+| `academic-context` | `ac-03` | `context-fs` | #823 |
+| `plagiarism-check` | `pc-02` | `context-fs` | #823 |
+| `methodology-advisor` | `mt-01` | `context-fs` | #823 |
+| `chapter-writer` | `cw-04` | `vault` | #824 |
+| `quote-extractor` | `qe-01`, `qe-02` | `vault` | #824 |
+
+Eine Ausnahme bleibt bewusst unzugeordnet: `quote-extractor`s `qe-04`
+(`with_skill` **und** `without_skill`) setzt echten Netz-Egress voraus
+(Live-Abruf einer Quelle) — das ist außerhalb dessen, was ein Session-Profil
+(Tools/`cwd`/MCP/Env) beheben kann. Diese Fallgruppe bleibt dokumentiert
+übersprungen (`net-excluded`, s. o.), keine stillschweigende Lücke.
+
+### Doku-Drift-Guard
+
+`tests/evals/test_session_profiles.py` hält `COMPONENT_PROFILES` gegen den
+Dateisystembestand (`evals/`-Verzeichnisse) per Set-Gleichheit — eine neue
+`evals/`-Komponente ohne Profil-Eintrag fällt durch, ebenso ein verwaister
+Eintrag für ein gelöschtes Verzeichnis. Ein zweiter Test hält
+`SESSION_PROFILES` auf genau die vier hier benannten Profile fest.
+
 ## Wann diese Datei zu ändern ist
 
 - **Neues Verzeichnis unter `evals/`** → Zeile ergänzen, sonst schlägt
@@ -462,3 +621,6 @@ Baseline-Lauf.
 - **Eval-Definition entfernt** → Status `removed`, Verzeichnis löschen.
 - **Operator stellt Budget bereit** → Abschnitt API-Budget aktualisieren und die
   betroffenen Zeilen neu bewerten.
+- **Neue `evals/`-Komponente** → zusätzlich zur Statustabellen-Zeile einen
+  Eintrag in `eval_runner.COMPONENT_PROFILES` (Issue #830) ergänzen, sonst
+  schlägt `test_every_eval_component_has_exactly_one_session_profile` fehl.
