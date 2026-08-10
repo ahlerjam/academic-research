@@ -28,8 +28,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from scripts.dev.summarize_eval_junit import summarize
+
 from tests.evals import eval_runner
 from tests.evals.eval_runner import SESSION_PROFILES
 from tests.evals.skip_inventory import (
@@ -339,11 +339,39 @@ def test_check_skip_inventory_flags_additional_skip(tmp_path):
 
 
 def test_check_skip_inventory_flags_missing_skip(tmp_path):
-    """AC3: laeuft ein inventarisierter Fall wieder echt, muss der Eintrag weg."""
+    """AC3: laeuft ein inventarisierter Fall wieder echt, muss der Eintrag weg.
+
+    Die uebrigen Faelle der Suite bleiben in der XML -- die Suite lief also,
+    nur dieser eine Fall fehlt. Das ist ein echter Regressionsbefund, kein
+    gefilterter Lauf (siehe Test unten), und muss weiterhin anschlagen.
+    """
     cases = _inventory_cases()[1:]
     problems = check_skip_inventory(_write_xml(tmp_path, cases))
     assert len(problems) == 1
     assert "Inventarisierter Skip fehlt im Lauf" in problems[0]
+
+
+def test_check_skip_inventory_ignores_missing_skips_for_suite_not_run(tmp_path):
+    """P1-Review-Finding zu .github/workflows/eval-behavior.yml:205 (Issue #824).
+
+    Ein gefilterter workflow_dispatch-Lauf (``component: chapter_writer``
+    bzw. ``component: quote_extractor``, ``pytest -k "${FILTER}"``) fuehrt
+    nur eine der beiden GOVERNED_SUITES aus -- die andere taucht in der
+    JUnit-XML ueberhaupt nicht auf (kein einziges Testcase-Element, weder
+    bestanden noch uebersprungen). Das darf keinen Befund erzeugen: die Suite
+    ist nicht fehlgeschlagen, sie war schlicht nicht Teil des Laufs.
+    """
+    cases = [c for c in _inventory_cases() if "test_chapter_writer_evals" not in c[0]]
+    assert any("test_quote_extractor_evals" in c[0] for c in cases), (
+        "Testaufbau fehlerhaft: quote-extractor-Faelle muessen in der Fixture bleiben, "
+        "sonst waere die gesamte GOVERNED_SUITES-Menge nicht im Lauf und der Test "
+        "ueberpruefte gar nichts."
+    )
+    problems = check_skip_inventory(_write_xml(tmp_path, cases))
+    assert problems == [], (
+        f"Ein Filter-Lauf ohne chapter-writer-Suite darf deren inventarisierte Skips "
+        f"nicht als fehlend melden: {problems}"
+    )
 
 
 def test_check_skip_inventory_flags_changed_reason(tmp_path):

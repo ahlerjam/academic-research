@@ -143,6 +143,29 @@ def parse_skipped(junit_path: Path) -> dict[str, str]:
     return skipped
 
 
+def _present_governed_suites(junit_path: Path) -> set[str]:
+    """Liefert die ``GOVERNED_SUITES``-Eintraege, die im Lauf ueberhaupt Testcases haben.
+
+    Ein gefilterter Lauf (``workflow_dispatch`` mit ``component``-Input, z.B.
+    ``pytest -k "quote_extractor"``) fuehrt nur eine Teilmenge der Suiten aus
+    -- die JUnit-XML enthaelt fuer die nicht ausgewaehlten Suiten dann gar
+    keine Testcases, weder bestanden noch uebersprungen. Das ist kein Befund
+    fuer die Richtung "inventarisierter Skip fehlt im Lauf" (Issue #824,
+    P1-Review-Finding zu .github/workflows/eval-behavior.yml:205): die Suite
+    ist nicht fehlgeschlagen, sie war schlicht nicht Teil des Laufs.
+    """
+    root = ET.parse(junit_path).getroot()
+    suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
+    present: set[str] = set()
+    for suite in suites:
+        for case in suite.findall("testcase"):
+            node_id = _node_id(case.get("classname", ""), case.get("name", ""))
+            for governed in GOVERNED_SUITES:
+                if node_id.startswith(governed):
+                    present.add(governed)
+    return present
+
+
 def check_skip_inventory(junit_path: Path) -> list[str]:
     """Haelt die Skip-Menge eines echten Laufs gegen ``SKIP_INVENTORY``.
 
@@ -150,6 +173,12 @@ def check_skip_inventory(junit_path: Path) -> list[str]:
     Meldung mit ``eval-skip:`` beginnt -- Umgebungs-Skips (fehlende CLI,
     fehlende evals.json) bleiben aussen vor, sonst waere der Guard im
     CLI-losen Lauf dauerhaft rot.
+
+    Die Richtung "inventarisierter Skip fehlt im Lauf" wird nur fuer Suiten
+    geprueft, die im Lauf ueberhaupt Testcases haben (``_present_governed_
+    suites``) -- ein gefilterter ``workflow_dispatch``-Lauf (``component``-
+    Input) fuehrt sonst faelschlich zu vier bzw. sechs Befunden fuer die
+    Suite, die er gar nicht ausgewaehlt hat.
 
     Returns:
         Liste der Befunde (leer = Skip-Menge entspricht dem Inventar).
@@ -159,6 +188,7 @@ def check_skip_inventory(junit_path: Path) -> list[str]:
         for node_id, message in parse_skipped(junit_path).items()
         if node_id.startswith(GOVERNED_SUITES) and message.startswith(EVAL_SKIP_PREFIX)
     }
+    present_suites = _present_governed_suites(junit_path)
     problems: list[str] = []
     for node_id in sorted(set(actual) - set(SKIP_INVENTORY)):
         problems.append(
@@ -167,6 +197,8 @@ def check_skip_inventory(junit_path: Path) -> list[str]:
             f"mit Begruendung eintragen (Issue #824)."
         )
     for node_id in sorted(set(SKIP_INVENTORY) - set(actual)):
+        if not any(node_id.startswith(governed) for governed in present_suites):
+            continue
         problems.append(
             f"Inventarisierter Skip fehlt im Lauf: {node_id}. Wenn der Fall jetzt "
             f"echt laeuft, gehoert der Eintrag aus tests/evals/skip_inventory.py "
