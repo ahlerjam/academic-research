@@ -48,6 +48,7 @@ danach höchstens den passenden Report.
 | [`2026-08-08-context-ablation-710-live-results.json`](2026-08-08-context-ablation-710-live-results.json) | Rohdaten des Vier-Arme-Laufs (alle Arme, per Query, inklusive Deltas und Kontrolltest-Block) |
 | [`2026-08-09-context-enrichment-710.md`](2026-08-09-context-enrichment-710.md) | Reale Kostenmessung des Kontextsatz-Schreibwegs (#783/#784): der echte `chunk-context-writer`-Agent über `claude -p`, gegen den echten MCP-Server, 11 Goldset-Dokumente plus ein reales Paper mit 27 Chunks — Tokens/Kosten/Latenz aus echten `usage`-Feldern, Re-Embedding-Latenz je Einzeltext, Beobachtung zum Batch-/Turn-Verhalten bei großen Papers (#784, Epic #710) |
 | [`2026-08-09-context-enrichment-710-live-results.json`](2026-08-09-context-enrichment-710-live-results.json) | Rohdaten des Kostenlaufs (alle 12 Sitzungen, Tokens/Kosten/Dauer je Paper, Post-Zustand je Chunk, Re-Embedding-Latenzblock) |
+| [`reranker-candidates-803.md`](reranker-candidates-803.md) | Belegte Reranker-Kandidaten als Alternativen zu `bge-reranker-v2-m3`: Lizenz, Parameterzahl, Downloadgröße, Sprachabdeckung, Eingabeschema und Backbone je Kandidat, `sentence_transformers.CrossEncoder`-Ladbarkeit mit dem gepinnten `transformers==5.14.1` geprüft, `jina-reranker-v2-base-multilingual` an CC-BY-NC-4.0-Lizenz ausgeschlossen (#803) |
 
 ## Konvention
 
