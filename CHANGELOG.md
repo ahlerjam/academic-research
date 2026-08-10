@@ -10,6 +10,21 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Context-FS-Fixture behebt Fehlanzeigen fuer fehlende Kontextdateien in
+  Verhaltens-Evals (#823):** `ab-01`/`ab-02`, `ac-03`, `mt-01` und `pc-02`
+  scheiterten im Lauf vom 2026-08-10, weil `eval_runner._run_claude_cli`
+  ohne `cwd` und ohne Tool-Zugriff lief -- die Skills meldeten korrekt die
+  fehlende Vorbedingung (`./academic_context.md`, `./literature_state.md`),
+  die Evals werteten das als Fehlschlag. Neue Fixture
+  `tests/evals/fixtures/context_fs/` (DevOps Governance in KMU, drei
+  Dateien inkl. `literature_state.md`) in einem suiteneigenen Verzeichnis
+  (`eval_runner.CONTEXT_FS_DIR`). Baut auf den Eval-Sitzungsprofilen aus
+  #830 auf statt einer eigenen `cwd`-Achse daneben: `test_rest_evals.py`
+  und `test_abstract_generator_evals.py` reichen `CONTEXT_FS_DIR` als
+  `cwd`-Override an `call_claude_for_component()` durch, das Profil
+  `context-fs` liefert `allowed_tools="Read"` bereits automatisch. Neuer
+  Negativfall `pc-03` (`evals/plagiarism-check/evals.json`, `"cwd": "none"`)
+  haelt den Vorbedingungs-Ehrlichkeitscheck ohne Fixture weiterhin fest.
 - **Eval-Sitzungsprofile loesen den Tool-vs-Preamble-Widerspruch (#830):**
   Der Lauf vom 2026-08-10 (Run 31369626618) meldete 16 von 139 Fehlschlaegen;
   elf davon gingen auf denselben Widerspruch zurueck -- `_run_claude_cli`

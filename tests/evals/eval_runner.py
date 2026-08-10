@@ -32,6 +32,16 @@ SKILLS_ROOT = Path(__file__).parent.parent.parent / "skills"
 AGENTS_ROOT = Path(__file__).parent.parent.parent / "agents"
 BASELINES_ROOT = Path(__file__).parent.parent / "baselines"
 
+# Suiteneigenes Arbeitsverzeichnis fuer die "context-fs"-Fixture (Issue #823):
+# academic_context.md, literature_state.md, writing_state.md, thematisch an
+# DevOps Governance in KMU ausgerichtet. Wird ueber das "context-fs"-Profil
+# (Issue #830, SESSION_PROFILES) als cwd= an call_claude_for_component
+# durchgereicht -- nicht im Repo-Root abgelegt, damit sie fuer andere Suiten
+# unsichtbar bleibt. SESSION_PROFILES enthaelt bewusst keinen Fixture-Pfad
+# (das ist Sache der jeweiligen Suite/Fixture), diese Konstante schliesst die
+# Luecke fuer die context-fs-Suiten.
+CONTEXT_FS_DIR = Path(__file__).parent / "fixtures" / "context_fs"
+
 # Harter Deckel fuer einen einzelnen CLI-Subprozess-Aufruf (Issue #631).
 # Grosszuegig wie evals/sparring-partner/record.py, damit ein haengender
 # Aufruf nicht den ganzen Testlauf blockiert.
