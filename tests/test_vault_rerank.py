@@ -233,6 +233,88 @@ class TestReciprocalRankFusion:
         fused = reciprocal_rank_fusion(vec_results, fts_results, k=60, top_n=5)
         assert len(fused) == 5
 
+    def test_rrf_fusion_tie_break_is_deterministic_across_hashseeds(self):
+        """Bei exakt gleichem rrf_score entscheidet chunk_id, nicht Hash-Randomisierung (#792).
+
+        Regression: vorher iterierte reciprocal_rank_fusion ueber
+        ``set(vec_ranks) | set(fts_ranks)``. Die Iterationsreihenfolge eines
+        ``set`` mit str-Schluesseln haengt von PYTHONHASHSEED ab; list.sort()
+        ist zwar stabil, faellt bei echten Score-Gleichstaenden aber auf
+        genau diese hash-abhaengige Eingabereihenfolge zurueck. Dieser Test
+        belegt subprozess-uebergreifend (zwei unterschiedliche
+        PYTHONHASHSEED-Werte), dass das Ergebnis reproduzierbar ist.
+        """
+        import json
+        import subprocess
+        import sys
+
+        # c-zzz landet auf Rang 1 in vec0, c-aaa auf Rang 1 in FTS5 -- beide
+        # nur in je einer Quelle, exakt gleicher rrf_score (1/(60+1)),
+        # reiner Tie-Break-Fall.
+        script = """
+import json
+from academic_vault.retrieval import reciprocal_rank_fusion
+
+vec_results = [{"chunk_id": "c-zzz", "paper_id": "p-zzz"}]
+fts_results = [{"chunk_id": "c-aaa", "paper_id": "p-aaa"}]
+fused = reciprocal_rank_fusion(vec_results, fts_results, k=60)
+print(json.dumps([r["chunk_id"] for r in fused]))
+"""
+
+        def run_with_seed(seed: str) -> list[str]:
+            env = {**os.environ, "PYTHONHASHSEED": seed}
+            result = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                check=True,
+                env=env,
+                cwd=str(Path(__file__).parent.parent),
+            )
+            return json.loads(result.stdout.strip())
+
+        order_seed0 = run_with_seed("0")
+        order_seed42 = run_with_seed("42")
+
+        assert order_seed0 == order_seed42, (
+            "Ausgabereihenfolge bei Score-Gleichstand darf nicht von PYTHONHASHSEED abhaengen"
+        )
+        # Tie-Break-Kriterium: chunk_id alphabetisch aufsteigend unter den
+        # gleichauf liegenden Eintraegen (c-aaa vor c-zzz).
+        assert order_seed0.index("c-aaa") < order_seed0.index("c-zzz")
+
+    def test_rrf_fusion_tie_break_ignores_input_order(self):
+        """Tie-Break sortiert nach chunk_id, nicht nach Eingabereihenfolge (#792).
+
+        c-zzz und c-aaa erscheinen je einmal in vec_results (Rang 1) und
+        einmal in fts_results (Rang 1) -- exakt derselbe rrf_score fuer
+        beide, unabhaengig davon, in welcher Reihenfolge sie in den beiden
+        Quelllisten stehen.
+        """
+        from academic_vault.retrieval import reciprocal_rank_fusion
+
+        vec_results_a = [{"chunk_id": "c-zzz", "paper_id": "p-zzz"}]
+        fts_results_a = [{"chunk_id": "c-aaa", "paper_id": "p-aaa"}]
+
+        vec_results_b = [{"chunk_id": "c-aaa", "paper_id": "p-aaa"}]
+        fts_results_b = [{"chunk_id": "c-zzz", "paper_id": "p-zzz"}]
+
+        fused_a = reciprocal_rank_fusion(vec_results_a, fts_results_a, k=60)
+        fused_b = reciprocal_rank_fusion(vec_results_b, fts_results_b, k=60)
+
+        order_a = [r["chunk_id"] for r in fused_a]
+        order_b = [r["chunk_id"] for r in fused_b]
+
+        assert fused_a[0]["rrf_score"] == fused_a[1]["rrf_score"], (
+            "Vorbedingung: echter Gleichstand"
+        )
+        assert order_a == order_b, (
+            "Eingabereihenfolge darf das Ergebnis bei Ties nicht beeinflussen"
+        )
+        assert order_a.index("c-aaa") < order_a.index("c-zzz"), (
+            "Bei gleichem rrf_score entscheidet chunk_id alphabetisch"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Tests: Paper-Aggregation NACH Fusion+Reranking (Issue #727)

@@ -243,11 +243,15 @@ def reciprocal_rank_fusion(
         top_n: Maximale Anzahl zurueckgegebener Ergebnisse. None = alle.
 
     Returns:
-        Kombinierte Liste, absteigend nach rrf_score sortiert.
+        Kombinierte Liste, absteigend nach rrf_score sortiert. Bei exakt
+        gleichem rrf_score entscheidet 'chunk_id' (aufsteigend) als
+        sekundaerer, deterministischer Tie-Break -- ohne diesen haengt die
+        Reihenfolge von Pythons Hash-Randomisierung ueber die set-Iteration
+        von chunk_ids ab und kann zwischen Prozessen variieren (#792).
     """
     vec_ranks: dict[str, int] = {r["chunk_id"]: idx + 1 for idx, r in enumerate(vec_results)}
     fts_ranks: dict[str, int] = {r["chunk_id"]: idx + 1 for idx, r in enumerate(fts_results)}
-    all_chunk_ids = set(vec_ranks.keys()) | set(fts_ranks.keys())
+    all_chunk_ids = sorted(set(vec_ranks.keys()) | set(fts_ranks.keys()))
 
     # Metadaten BEIDER Quellen zusammenfuehren statt einander verdraengen zu
     # lassen: vec0 liefert distance, FTS5 den dokumentierten 'score' und das
@@ -269,7 +273,9 @@ def reciprocal_rank_fusion(
         )
         fused.append(entry)
 
-    fused.sort(key=lambda x: x["rrf_score"], reverse=True)
+    # Score absteigend, chunk_id (Tie-Break) aufsteigend -- daher negierter
+    # Score statt reverse=True (das wuerde auch chunk_id umkehren).
+    fused.sort(key=lambda x: (-x["rrf_score"], x["chunk_id"]))
 
     if top_n is not None:
         fused = fused[:top_n]
