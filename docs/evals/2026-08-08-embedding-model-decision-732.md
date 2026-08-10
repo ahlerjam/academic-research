@@ -262,3 +262,98 @@ Nicht ohne neue Daten (Out-of-Scope-Regel aus #732 selbst), aber konkret:
 
 Ohne eines dieser Signale bleibt die Frage geschlossen — das ist der Zweck
 dieses Vermerks (AC4/AC5 aus #732).
+
+## Fortschreibung (#801): Snowflake Arctic-Embed L v2.0 — bestätigt die Entscheidung
+
+**Datum:** 2026-08-10. Prüft den ersten Auslöser aus dem Abschnitt oben gegen
+einen konkreten neuen Kandidaten: Snowflake Arctic-Embed L v2.0
+(`Snowflake/snowflake-arctic-embed-l-v2.0`), gemessen auf dem seit
+[#800](2026-08-10-chunk-goldset-widening-800.md) auf 60 Queries verbreiterten
+Goldset. Alle Zahlen: [`2026-08-08-embedding-candidates-731.md`](2026-08-08-embedding-candidates-731.md),
+Lizenz-/Truncation-Beleg: [`embedding-truncatability-730.md`](embedding-truncatability-730.md#snowflake-arctic-embed-l-v20-seit-801).
+
+### Zwei Korrekturen zum Ausgangspunkt dieser Prüfung
+
+1. **Vergleichsmaßstab ist heute 1024d, nicht 384d.** Der erste Auslöser oben
+   ist am Stand vor #732 formuliert. Produktiv läuft seit dieser Entscheidung
+   bereits `BAAI/bge-m3` mit 1024d — Arctic-Embed L v2.0 misst nativ
+   ebenfalls 1024d. Ein Wechsel von `bge-m3` auf Arctic bräuchte damit
+   **keine Schema-Migration**, nur einen Reindex — deutlich billiger, als der
+   #801-Issue-Text unterstellt (der von einer Migration wie 2026-08 ausging).
+2. **Backbone-Überschneidung.** Arctic-Embed L v2.0 baut laut Modellkarte auf
+   `BAAI/bge-m3-retromae` auf. Alle drei produktiven lokalen Modelle des
+   Plugins teilen damit denselben Backbone: Embedder (`BAAI/bge-m3`),
+   NLI-Scorer (`MoritzLaurer/bge-m3-zeroshot-v2.0`), Reranker
+   (`BAAI/bge-reranker-v2-m3`). Kein Ausschlussgrund, aber eine Schwäche im
+   gemeinsamen Backbone träfe alle drei Stufen gleichzeitig, ohne dass eine
+   die andere korrigieren könnte — eine Erwägung, die bei einem
+   Backbone-fremden Kandidaten nicht bestünde.
+
+### Erfüllt Arctic den ersten Auslöser?
+
+Der Auslöser verlangt wörtlich: „`qwen3-384`s Qualitätsprofil (nDCG/MRR-
+Sieger) mit einer CPU-Indexierungszeit in der Größenordnung von `bge-m3`
+(< 200 ms/Chunk)". Zerlegt in seine zwei Bedingungen:
+
+| Bedingung | Erfüllt? | Beleg |
+|---|---|---|
+| CPU-Indexierzeit < 200 ms/Chunk | **Ja** | `arctic-l-v2-1024`: 185,2 ms/Chunk p50 (gemessen unter Kontention, s. u.; korrigierter Schätzwert ≈ 173 ms) — in `bge-m3`s Klasse (170,9 ms), nicht in Qwen3s (2352–4836 ms) |
+| Qualitätsprofil wie der aktuelle nDCG/MRR-Sieger | **Nein** | Aktueller Sieger auf dem 60er-Set ist `qwen3-1024` (nDCG 0,8380, MRR 0,8200), nicht mehr `qwen3-384` wie bei #732. `arctic-l-v2-1024` liegt bei nDCG 0,8236 / MRR 0,7767 leicht darunter, und der gepaarte Bootstrap `arctic-l-v2-1024` vs. `qwen3-1024` trägt bei nDCG/MRR **nicht** (nDCG: −0,0144 [−0,0812; +0,0519]; MRR: −0,0434 [−0,1235; +0,0338]) — der Rückstand ist also nicht signifikant, aber auch kein Vorsprung |
+
+**Beide Bedingungen zusammen sind damit nicht erfüllt.** Arctic erreicht die
+CPU-Kostenklasse von `bge-m3`, aber nicht nachweisbar das Qualitätsprofil des
+aktuellen nDCG/MRR-Siegers — es erreicht stattdessen das Qualitätsprofil von
+`bge-m3` selbst: der gepaarte Bootstrap `arctic-l-v2-1024` vs. `bge-m3` trägt
+in **keiner** der drei Metriken (Recall: +0,0083 [−0,0417; +0,0583]; nDCG:
++0,0133 [−0,0467; +0,0761]; MRR: +0,0145 [−0,0624; +0,0934]) — die beiden
+Kandidaten sind auf diesem 60er-Set statistisch **nicht unterscheidbar**,
+trotz eines durchweg leicht positiven Punktschätzers für Arctic.
+
+`arctic-l-v2-256` (der einzige vom Anbieter tatsächlich zugesicherte
+MRL-Punkt, siehe unten) liegt in Qualität und Zeit im selben Bild: gegen
+`bge-m3` ebenfalls nicht signifikant unterscheidbar (Recall: −0,0083; nDCG:
++0,0013; MRR: +0,0068, alle CIs schließen die Null ein).
+
+### Die 384d-Frage: nicht das, was der #801-Issue-Text erwartete
+
+Der #801-Issue-Text erwartet eine Prüfung, ob 384d „vom Anbieter zugesichert"
+ist — analog zu Qwen3. Die Modellkarte sagt hier explizit **256d**, nicht
+384d zu (`config.json`: `"matryoshka_dimensions": [256]`; Fließtext: „like
+our v1.5 model, the MRL for this model is 256 dimensions"). Eine
+384d-Variante wurde deshalb bewusst **nicht** gebaut — das wäre ein geratener
+Trunkierungspunkt ohne Herstellerbeleg gewesen, exakt die Falle, die #730 und
+#731 an anderer Stelle vermeiden. Selbst der tatsächlich zugesicherte
+256d-Punkt ändert am Bild oben nichts: `arctic-l-v2-256` bleibt gegenüber
+`bge-m3` statistisch nicht unterscheidbar, und 256d ist ohnehin kein
+migrationsfreier Pfad gegenüber dem heutigen 1024d-Produktivstand — anders,
+als es eine echte 384d-Zusicherung (mit `chunk_vectors` weiterhin bei
+maximal 1024d) hätte sein können.
+
+### Eine offene Unsicherheit: Kontention
+
+`arctic-l-v2-1024`/`arctic-l-v2-256` wurden an einem Tag mit zwei parallel
+laufenden Hintergrund-Runnern gemessen (`load average` 6–11 auf 12 Kernen);
+`bge-m3`, `e5-large`, `e5-small` und beide Qwen3-Varianten liefen zuvor auf
+einer freien Maschine. Eine Gegenmessung von `bge-m3` unter der Arctic-Last
+ergab +7 % gegenüber dem eingecheckten Wert — die 185,2 ms/Chunk oben sind
+also eine leichte Obergrenze, kein Bestwert. Das ändert am qualitativen
+Befund nichts (170–207 ms bleibt eine andere Größenordnung als 2352–4836 ms),
+schärft aber nicht den knappen Vorsprung gegenüber `bge-m3` — der ohnehin
+nicht signifikant trägt. Eine unbelastete Nachmessung steht aus und würde
+diesen Punkt nur präzisieren, nicht die Schlussfolgerung ändern.
+
+### Entscheidung: bestätigt, keine Neubewertung
+
+Arctic-Embed L v2.0 löst den ersten in #732 benannten Auslöser **nicht**
+aus. Es ist ein dritter Kandidat, der wie `bge-m3` bei niedriger CPU-Kosten
+über der Baseline signifikant trägt (sogar in allen drei Metriken statt nur
+zwei) — aber es unterscheidet sich von `bge-m3` selbst nicht signifikant, in
+keine Richtung. Die #732-Pointe bleibt unverändert: Es gibt weiterhin keine
+belastbare Qualitätsdifferenz zwischen den migrationsgünstigen 1024d-
+Kandidaten, und `bge-m3` bleibt der bereits produktive, bereits erprobte
+unter ihnen (Migrationsprobe AC3, siehe oben) — ein Wechsel zu Arctic hätte
+keinen gemessenen Vorteil, nur den Aufwand eines Reindex ohne Qualitätsgewinn.
+**Diese Fortschreibung bestätigt die #732-Entscheidung, sie löst keine
+Neubewertung aus** — fällig wäre eine erneute Prüfung nur bei einem der
+übrigen in #732 benannten Signale (Late Chunking, GPU als Zielhardware) oder einem
+Kandidaten, der `bge-m3` tatsächlich signifikant schlägt, nicht nur trifft.
