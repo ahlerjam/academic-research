@@ -74,14 +74,16 @@ downloadbar — Zugriffsstufe pro Treffer aktiv pruefen.
   `reason: "Zugriffsstufe: Borrow/CDL — kein PDF-Export"`
 - Item ohne Datei-Liste (nur Metadaten) → `metadata_only` mit
   `reason: "Zugriffsstufe: nur Metadaten"`
-- **HTTP 401 beim Download** → derselbe `metadata_only`-Ausgang wie CDL, mit
-  `reason: "Zugriffsstufe: Borrow/CDL — HTTP 401, kein PDF-Export"`. Das ist
-  der real gemessene Fehlerpfad (belegt in
+- **HTTP 401 oder 403 beim Download** → derselbe `metadata_only`-Ausgang wie
+  CDL, mit `reason: "Zugriffsstufe: Borrow/CDL — HTTP <Statuscode>, kein
+  PDF-Export"`. Das ist der real gemessene Fehlerpfad (belegt in
   `evals/free-archive-fetchers/live-verification.json`, Lauf `fa-02`,
   `access_control_counter_example`): ein CDL-Item listet sein PDF sichtbar auf,
-  gibt es beim Zugriff aber nicht heraus. NICHT als Rate-Limit und nicht als
-  `no_match` melden — und den Download nicht wiederholen, 401 ist eine
-  Rechteentscheidung, keine Stoerung.
+  gibt es beim Zugriff aber nicht heraus. archive.org hat den konkreten
+  Statuscode fuer denselben Fehlerpfad bereits einmal gewechselt (401 →
+  403, Issue #799) — beide zaehlen als dieselbe Rechteentscheidung. NICHT als
+  Rate-Limit und nicht als `no_match` melden — und den Download nicht
+  wiederholen, das ist eine Rechteentscheidung, keine Stoerung.
 - HTTP 429 / Rate-Limit beim Zugriff: NICHT als `no_match` fehldeuten.
   `reason` muss Statuscode + Retry-Hinweis enthalten, z. B.
   `"HTTP 429 — Rate-Limit, Retry empfohlen nach Wartezeit"`
@@ -155,5 +157,6 @@ CAPTCHA erkannt:
   nicht die erste im Listing. Eine Variante mit dem Format "ACS Encrypted PDF"
   (Dateiname endet auf `_encrypted.pdf`) ist DRM-geschuetzt und nie das Ziel
 - Ein gesperrtes Item kann sein PDF trotzdem im Listing zeigen — der Beweis
-  faellt erst beim Zugriff (HTTP 401). Vorher `access-restricted-item` pruefen
+  faellt erst beim Zugriff (HTTP 401 oder 403). Vorher `access-restricted-item`
+  pruefen
 - Rate-Limiting bei vielen Downloads kurz hintereinander — 2-3 Sekunden Pause

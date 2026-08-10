@@ -188,7 +188,13 @@ def test_internet_archive_run_proves_access_control_with_a_counter_example():
     schlicht die Abwesenheit jeder Zugriffskontrolle.
     """
     counter = _runs()["fa-02"]["access_control_counter_example"]
-    assert counter["http_status"] == 401
+    assert 401 in counter["http_status_allowed"]
+    assert 403 in counter["http_status_allowed"], (
+        "archive.org hat den Statuscode fuer diesen Fehlerpfad bereits einmal "
+        "gewechselt (Issue #799) — 'http_status_allowed' muss beide real "
+        "beobachteten Werte fuehren, nicht nur den urspruenglichen."
+    )
+    assert counter["http_status_last_observed"] in counter["http_status_allowed"]
     assert counter["identifier"] != _runs()["fa-02"]["item"]["identifier"]
     assert counter["signals"]["access-restricted-item"] == "true"
 
