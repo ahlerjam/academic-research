@@ -278,6 +278,31 @@ def _percentiles(values: list[float]) -> dict[str, float]:
     }
 
 
+def _apply_condition_env(condition: str) -> None:
+    """Setzt (bzw. raeumt) die Reranker-Env-Variablen fuer eine Kostenmessungs-
+    Bedingung -- ausgelagert, damit sich die Zuordnung Bedingung -> Env-Zustand
+    isoliert testen laesst (Review-Fund an PR #831).
+
+    "aus" misst seit #807 den ECHTEN Produktivpfad OHNE gesetzten Schalter:
+    weder der Alias ``VAULT_RERANK_LOCAL_DISABLE`` (#714) noch der kanonische
+    Schalter ``ACADEMIC_RESEARCH_RERANKER_ENABLED`` (#719) werden gesetzt --
+    ``resolve_reranker_enabled()`` faellt dann auf den Code-/Config-Default
+    zurueck (seit #807 ``False``). Vorher setzte diese Stelle den Alias
+    explizit und mass damit den Alias-Disable-Pfad statt des Default-Pfads,
+    was der Behauptung "ohne gesetzten Schalter" in PR-Text und
+    Verifikations-Report widersprach.
+
+    "an" setzt weiterhin explizit den kanonischen Schalter, weil der
+    Produktivdefault seit #807 AUS ist -- ohne das wuerde "an" trotz
+    Alias-Pop den neuen Default treffen und zweimal "aus" messen.
+    """
+    os.environ.pop("VAULT_RERANK_LOCAL_DISABLE", None)
+    if condition == "aus":
+        os.environ.pop("ACADEMIC_RESEARCH_RERANKER_ENABLED", None)
+    else:
+        os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = "1"
+
+
 def run_cost_condition(condition: str, db_path: str, goldset: dict, vectors: dict, k: int) -> dict:
     """Misst Latenz + Peak-RSS EINER Bedingung ueber den echten Suchpfad
     ``server.search_papers(rerank=True)``. Wird als eigener Subprozess aufgerufen
@@ -287,15 +312,7 @@ def run_cost_condition(condition: str, db_path: str, goldset: dict, vectors: dic
 
     embedder = build_playback_embedder(goldset, vectors)
     with _hermetic_env(embedder), _CloudKeyGuard():
-        if condition == "aus":
-            os.environ["VAULT_RERANK_LOCAL_DISABLE"] = "1"
-            os.environ.pop("ACADEMIC_RESEARCH_RERANKER_ENABLED", None)
-        else:
-            os.environ.pop("VAULT_RERANK_LOCAL_DISABLE", None)
-            # Seit #807 ist der Produktivdefault AUS -- die "an"-Bedingung
-            # muss den kanonischen Schalter explizit setzen, sonst greift
-            # trotz Alias-Pop der neue Default und misst "aus" zweimal.
-            os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = "1"
+        _apply_condition_env(condition)
 
         import sqlite3
 

@@ -33,12 +33,24 @@ setzen `ACADEMIC_RESEARCH_RERANKER_ENABLED=1` explizit, weil sie den
 Reranker-Beitrag unabhängig vom jeweils aktuellen Produktivdefault messen
 sollen — Anpassung an `_CloudKeyGuard`/`run_cost_condition` im selben PR.)
 
+> **Korrektur (Folge-Review an PR #831):** Der erste Lauf hinter dieser
+> Behauptung setzte in `run_cost_condition()` für `condition == "aus"`
+> tatsächlich noch `VAULT_RERANK_LOCAL_DISABLE=1` und maß damit den
+> Alias-Disable-Pfad (#714) statt des echten No-Switch-Default-Pfads — die
+> Methodenbeschreibung oben war zum Zeitpunkt der ersten Fassung falsch.
+> `_apply_condition_env()` setzt seither für "aus" **keine** der beiden
+> Reranker-Env-Variablen mehr; die "aus"-Zahlen unten stammen aus einem
+> erneuten Lauf mit diesem korrigierten Code (Peak-RSS/Suchlatenz praktisch
+> unverändert gegenüber dem ersten — erwartbar, da `resolve_reranker_enabled()`
+> in beiden Fällen `False` liefert, aber jetzt tatsächlich über den
+> Default-Zweig statt über den Alias).
+
 ## Ergebnis: Produktivpfad landet auf "aus"-Niveau
 
 | Bedingung | Suchlatenz p50 | Suchlatenz p95 | Peak-RSS |
 |---|---|---|---|
 | #804 "aus" (Schalter explizit gesetzt, VOR #807) | 17,2 ms | 35,2 ms | 74,3 MB |
-| #807 Produktivpfad (kein Schalter gesetzt, NACH #807) | 7,3 ms | 9,4 ms | 71,2 MB |
+| #807 Produktivpfad (kein Schalter gesetzt, NACH #807) | 7,2 ms | 11,7 ms | 71,2 MB |
 | Referenz #804 "an" (Reranker aktiv) | 3057,5 ms | 3542,7 ms | 900,7 MB |
 
 Die Nachmessung liegt im selben Größenbereich wie die #804-"aus"-Zahlen
