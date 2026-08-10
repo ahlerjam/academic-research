@@ -179,6 +179,8 @@ dem alten #708-Textstand aufbaut. Nachgezogen wurden:
 | #708-Schwellen | `run_retrieval_chunk_goldset.py --check-thresholds` | grün, neue Schwellen (siehe oben) |
 | #790-Replay (Probe-Goldset + #708-Baseline) | `run_retrieval_ablation_729.py --check-against …790-live-results.json` | grün, Rohdaten neu erzeugt |
 | #731-Kandidatenvergleich | `run_embedding_candidates_731.py --check-against …731-live-results.json` | grün, alle 5 Kandidaten neu erzeugt |
+| #729-Ablationstest (direkt) | `tests/test_issue_729_chunk_fusion_ablation.py` | grün, hartkodierter Baseline-Wert aktualisiert |
+| #789-FTS-Diagnose | `tests/test_issue_789_fts_diagnosis.py` | grün, hartkodierte Query-/Trefferzahlen aktualisiert |
 
 Details je Gatter, mit den tatsächlich ausgeführten Kommandos, stehen im
 Abschluss-Report der Umsetzung (PR-Beschreibung / Commit-Historie auf
@@ -201,6 +203,17 @@ Hyde+Multi-Query über alle 60 Queries) gefolgt von
 `VAULT_E5_LIVE_TEST=1 build_hyde_multiquery_fixture.py --stage vectors` — ein
 Live-Lauf anderer Art als der reine Vektor-Rebuild dieses Issues, deshalb hier
 bewusst nicht mitgezogen. Siehe Abschluss-Report für den Status dieses Gates.
+
+Dieselbe Lücke betrifft `scripts/eval/run_context_ablation_710.py` (#710/#785):
+seine Fixture (`tests/fixtures/context_ablation_710/sentences.json`) trägt
+modellgeschriebene Kontextsätze für die 11 alten #708-Dokumente und kennt die
+10 neuen #800-Dokumente nicht. Der Rebuild braucht
+`VAULT_CONTEXT_LIVE_TRANSFORM=1` (echte `claude`-CLI-Aufrufe, einer je
+Dokument statt je Query — günstiger als #733, aber derselbe Live-Lauf-Typ)
+gefolgt von `VAULT_E5_LIVE_TEST=1`. Ebenfalls nicht Teil dieses Issues und
+nicht mitgezogen; betroffen sind `tests/test_issue_710_context_ablation.py`
+(Manifest-Mismatch) — kein CI-Job aus `retrieval-goldset` hängt daran, wohl
+aber der allgemeine `python-tests`-Job über `pytest tests/`.
 
 ## Grenzen
 
