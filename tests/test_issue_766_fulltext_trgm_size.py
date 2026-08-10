@@ -92,7 +92,8 @@ class TestGenerateNote:
         target = int(NOTE_MIN_KB * 1024)
         text = generate_note(seed=5, target_bytes=target)
         size = len(text.encode("utf-8"))
-        assert size >= target * 0.5  # Notizen sind kurz, ein Satz kann bereits ueberschiessen
+        # Notizen sind kurz, ein Satz kann bereits überschießen; Toleranz breiter als bei Volltexten.
+        assert target <= size <= target * 2.0
 
     def test_notiz_bleibt_klein(self):
         """Notizen sind deutlich kleiner als Volltexte (Issue-Body-Schaetzung)."""

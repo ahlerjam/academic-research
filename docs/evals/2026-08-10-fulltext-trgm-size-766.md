@@ -42,12 +42,10 @@ Text würde den Trigram-Zuwachs künstlich niedrig ausfallen lassen, weil SQLite
 von Textredundanz profitiert.
 
 - **`paper_fulltext`:** 40 synthetische Paper, Volltextgröße pro Paper deterministisch
-  zwischen 50–200 KB (Issue-Body-Schätzung), je Paper über den echten `add_paper()`-Weg
-  eingefügt (löst damit auch den produktiven Embedding-Ingest aus — die Baseline ist
-  folglich eine **realistische** Vault-Größe inklusive Chunk-Vektoren, nicht nur
-  Rohtext). Die Trigram-Variante hängt eine eigene `fts5(tokenize='trigram')`-Tabelle
-  über `paper_fulltext.text` an derselben DB an (Kopie, kein Rebuild) und misst erneut
-  nach `VACUUM`.
+  zwischen 50–200 KB (Issue-Body-Schätzung), je Paper über den echten Schreibpfad eingefügt
+  (`server.add_paper`, danach `VaultDB.set_fulltext`). Die Trigram-Variante hängt eine eigene
+  `fts5(tokenize='trigram')`-Tabelle über `paper_fulltext.text` an derselben DB an (Kopie,
+  kein Rebuild) und misst erneut nach `VACUUM`.
 - **`notes`:** 80 synthetische Notizen (0,5–5 KB, eigene Schätzung — deutlich kleiner als
   Volltexte), analog gemessen über eine `notes_trgm`-Tabelle.
 
@@ -55,17 +53,16 @@ von Textredundanz profitiert.
 100 %) — der Volltext-Wert liegt allerdings **knapp** unter der Schwelle, nicht
 „deutlich darunter". Der Kommentar vom 2026-08-10 nennt „deutlich unter 100 %
 Zuwachs" als Auslöser, die Nutzenfrage neu zu stellen — 94 % erfüllt dieses Kriterium
-nicht. Zwei Gründe, warum der Wert nicht 1:1 mit dem reinen Text-Overhead des
+nicht. Ein Grund, warum der Wert nicht 1:1 mit dem reinen Text-Overhead des
 Trigram-Tokenizers vergleichbar ist:
 
-1. Die Baseline enthält bereits Chunk-Embeddings (der produktive `add_paper()`-Pfad
-   embedded automatisch), die einen erheblichen, vom Trigram-Index unabhängigen Anteil
-   der Baseline-Größe stellen. Das drückt den *relativen* Zuwachs nach unten, verglichen
-   mit einer Text-only-Baseline — macht die Zahl aber realistischer für einen echten
-   Vault, in dem Embeddings ohnehin vorhanden sind.
-2. Bei kleineren/frischeren Vaults (wenige Paper, noch keine Embeddings) wäre der
-   relative Zuwachs deutlich höher, da der Trigram-Index dann einen größeren Anteil der
-   Gesamtgröße ausmacht.
+1. Die Baseline enthält **keine** Chunk-Embeddings für den Volltext (die
+   `VaultDB.set_fulltext()` wird nach `add_paper()` aufgerufen, zu einem Zeitpunkt, in
+   dem der Ingest-Pfad seine Embedding-Berechnung bereits abgeschlossen hat — und stößt
+   keinen neuen Embedding-Ingest an). Die 16.547.840 Bytes sind daher praktisch
+   Text-only (~5 MB Rohtext plus SQLite-FTS5-Index), ohne erhebliche zusätzliche
+   Vektor-Overhead. Das macht die Zahl konservativ für einen Vektor-haltigen Vault, aber
+   auch für die reine Textsuchbarkeit aussagekräftig.
 
 ## Bedingung 2 (Nutzen) — nicht neu erhoben, sondern referenziert
 
@@ -100,6 +97,17 @@ Tabellen zu erbringen. Das ist laut Issue-Kommentar ein **vollständiges Ergebni
 Lücke: „nicht auf dieser Datenlage entscheidbar, und der Preis allein trägt ihn nicht"
 (zutreffend für `notes`, wo der Preis niedrig ist, ohne dass das etwas am fehlenden
 Nutzenbeleg ändert).
+
+**Einordnung: `notes` (18,90 %)** — Die Baseline für die Notizen-Messung enthält 80
+synthetische Notizen mit durchschnittlich 0,5–5 KB pro Notiz (insgesamt ~220 KB
+Notiztext). Das absolute Trigram-Delta beträgt 995.328 Bytes — bezogen auf die indizierte
+Textmenge kostet der Trigram-Index damit rund das **4,5-fache** des indizierten Textes
+(995 KB Index auf ~220 KB Text), nicht die gemessenen 19 %. Der Prozentwert wird von den
+notizenlosen Systemtabellen (Vault-Metadaten, Papier-Records usw.) dominiert und gibt daher
+ein zu niedriges Bild des tatsächlichen Text-zu-Index-Verhältnisses in einem notizenbasierten
+Vault ab. Das macht die Zahl für die Entscheidung konservativ (im schlimmsten Fall höher als
+gemessen), ändert aber an der Grundlage nichts: ohne Bedingung 2 (Nutzen) bleibt die
+Entscheidung negativ.
 
 **Konsequenz für AC4** (Migration/Backfill/`_REQUIRED_MIGRATION_TABLES`): **nicht
 ausgelöst**. Schema, `migrate.py` und `db.py` bleiben unverändert — eine
