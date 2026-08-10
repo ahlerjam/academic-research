@@ -307,12 +307,12 @@ def check_expected(output: str, expected: dict[str, Any]) -> bool:
     """
     t = expected.get("type")
     rejects = _as_patterns(expected.get("reject"))
-    if t in {"substring", "regex"} and any(re.search(r, output) for r in rejects):
+    if t in {"substring", "regex"} and any(re.search(r, output, re.DOTALL) for r in rejects):
         return False
     if t == "substring":
         return all(v in output for v in _as_patterns(expected["value"]))
     if t == "regex":
-        return all(re.search(v, output) for v in _as_patterns(expected["value"]))
+        return all(re.search(v, output, re.DOTALL) for v in _as_patterns(expected["value"]))
     if rejects:
         raise ValueError(f"expected.reject wird fuer type={t!r} nicht unterstuetzt")
     if t == "json_field":
