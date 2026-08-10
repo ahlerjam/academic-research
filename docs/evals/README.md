@@ -50,6 +50,7 @@ danach höchstens den passenden Report.
 | [`2026-08-09-context-enrichment-710-live-results.json`](2026-08-09-context-enrichment-710-live-results.json) | Rohdaten des Kostenlaufs (alle 12 Sitzungen, Tokens/Kosten/Dauer je Paper, Post-Zustand je Chunk, Re-Embedding-Latenzblock) |
 | [`2026-08-10-reranker-ablation-804.md`](2026-08-10-reranker-ablation-804.md) | Trägt der aktive `BAAI/bge-reranker-v2-m3`? Echte Produktionsfusion (RRF über `chunk_fts`+Vektor) auf dem #708-Chunk-Goldset, "aus" (RRF-Reihenfolge) gegen "an" (`rerank_score`-Reihenfolge) auf denselben fusionierten Kandidaten, gepaarter Bootstrap, Latenz/Peak-RSS je Bedingung in getrenntem Subprozess — Nullbefund als explizit zulässiges Ergebnis (#804) |
 | [`2026-08-10-reranker-ablation-804-live-results.json`](2026-08-10-reranker-ablation-804-live-results.json) | Rohdaten des Ablationslaufs (beide Bedingungen, per Query, inklusive Kosten-Block) — vom CI-Job `retrieval-goldset` gegen einen frischen Lauf geprüft |
+| [`reranker-candidates-803.md`](reranker-candidates-803.md) | Belegte Reranker-Kandidaten als Alternativen zu `bge-reranker-v2-m3`: Lizenz, Parameterzahl, Downloadgröße, Sprachabdeckung, Eingabeschema und Backbone je Kandidat, `sentence_transformers.CrossEncoder`-Ladbarkeit mit dem gepinnten `transformers==5.14.1` geprüft, `jina-reranker-v2-base-multilingual` an CC-BY-NC-4.0-Lizenz ausgeschlossen (#803) |
 
 ## Konvention
 
