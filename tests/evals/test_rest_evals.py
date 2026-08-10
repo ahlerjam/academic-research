@@ -6,7 +6,7 @@ import pytest
 
 from tests.evals.eval_runner import (
     EVALS_ROOT,
-    call_claude,
+    call_claude_for_component,
     check_expected,
     load_agent_content,
     load_skill_content,
@@ -56,7 +56,7 @@ def test_rest_eval(component, prompt, mode):
         system = load_skill_content(component) if mode == "with_skill" else ""
     else:
         system = load_agent_content(component) if mode == "with_skill" else ""
-    output = call_claude(system=system, user=prompt["input"])
+    output = call_claude_for_component(component, system=system, user=prompt["input"])
     assert check_expected(output, prompt["expected"]), (
         f"[{component}/{mode}] {prompt['id']}: expected={prompt['expected']} actual={output[:200]}"
     )
