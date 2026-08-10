@@ -203,14 +203,24 @@ def test_internet_archive_redirects_to_an_assigned_node():
     )
 
 
-def test_internet_archive_restricted_item_answers_401():
-    """Die Gegenprobe: bei einem CDL-Titel gibt dieselbe URL-Form kein PDF her."""
+def test_internet_archive_restricted_item_is_refused():
+    """Die Gegenprobe: bei einem CDL-Titel gibt dieselbe URL-Form kein PDF her.
+
+    Geprueft wird eine Menge zulaessiger Abweisungs-Codes (401, 403), kein
+    einzelner fest verdrahteter Wert — archive.org hat den konkreten Code fuer
+    denselben CDL-Fehlerpfad zwischen den Aufzeichnungen bereits einmal
+    gewechselt (Issue #799). Fuer die Aussage dieses Tests ist gleichgueltig,
+    welcher der beiden Codes es im Einzelfall ist: beide belegen eine
+    Zugriffskontrolle. Was zaehlt, ist einzig, dass die Anfrage abgewiesen wird
+    und kein PDF liefert.
+    """
     counter = _run("fa-02")["access_control_counter_example"]
     status, _, body, _ = _fetch(counter["url"])
-    assert status == counter["http_status"], (
-        f"Das gesperrte Item antwortet mit {status} statt "
-        f"{counter['http_status']}. Damit waere offen, ob der Erfolg beim freien "
-        f"Item eine Eigenschaft dieses Items ist oder nur die Abwesenheit jeder "
+    allowed = counter["http_status_allowed"]
+    assert status in allowed, (
+        f"Das gesperrte Item antwortet mit {status}, zulaessig waeren "
+        f"{allowed}. Damit waere offen, ob der Erfolg beim freien Item eine "
+        f"Eigenschaft dieses Items ist oder nur die Abwesenheit jeder "
         f"Zugriffskontrolle."
     )
     assert not body.startswith(b"%PDF-")

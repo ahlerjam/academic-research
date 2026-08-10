@@ -110,8 +110,11 @@
           "collection_contains": "inlibrary"
         },
         "url": "https://archive.org/download/prideprejudice00austrich/prideprejudice00austrich.pdf",
-        "http_status": 401,
-        "note": "Gleich geformte Download-URL, Controlled-Digital-Lending-Item: HTTP 401 statt PDF. Der Dateiliste dieses Items liegt zusaetzlich eine Variante mit format 'ACS Encrypted PDF' bei. Damit ist 401 der reale Fehlerpfad des Agenten — nicht 429 und nicht ein fehlender Download-Link."
+        "http_status_allowed": [401, 403],
+        "http_status_allowed_reason": "archive.org hat zwischen den beiden Aufzeichnungen den Statuscode fuer denselben CDL-Fehlerpfad gewechselt: 401 am 2026-07-31, 403 am 2026-08-10 (Issue #799, Live-Lauf im woechentlichen Workflow). Fuer die Gegenprobe zaehlt nicht die konkrete Zahl, sondern dass der Zugriff abgewiesen wird und kein PDF herausgeht — ein einzelner fest verdrahteter Code waere beim naechsten Anbieterwechsel wieder falsch.",
+        "http_status_last_observed": 403,
+        "http_status_last_observed_at": "2026-08-10",
+        "note": "Gleich geformte Download-URL, Controlled-Digital-Lending-Item: der Zugriff wird abgewiesen (401 oder 403) statt eines PDF. Der Dateiliste dieses Items liegt zusaetzlich eine Variante mit format 'ACS Encrypted PDF' bei. Damit ist die Abweisung der reale Fehlerpfad des Agenten — nicht 429 und nicht ein fehlender Download-Link."
       },
       "volatile_fields_excluded": {
         "fields": ["CDN-Hostname des 302-Ziels"],
