@@ -133,10 +133,11 @@ def test_empty_fts_order_equivalence_holds_for_randomized_chunk_layouts() -> Non
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(not GOLDSET_PATH.exists(), reason="#708-Fixture nicht vorhanden")
 def test_708_goldset_lexical_side_is_structurally_dead() -> None:
-    """Nur 1 von 26 Queries erzielt ueberhaupt einen ``papers_fts``-Treffer,
-    0 bei ``papers_trgm`` -- Zahl statt Prosa (die Ursache, die die "Korpus zu
-    klein"-Diagnose im #729-Report korrigiert). Ausgeschriebene Saetze mit
-    implizitem AND ueber alle Tokens sind die strukturelle Ursache: FTS5-MATCH
+    """Nur 1 von 60 Queries (26 vor #800) erzielt ueberhaupt einen
+    ``papers_fts``-Treffer, 0 bei ``papers_trgm`` -- Zahl statt Prosa (die
+    Ursache, die die "Korpus zu klein"-Diagnose im #729-Report korrigiert).
+    Ausgeschriebene Saetze mit implizitem AND ueber alle Tokens sind die
+    strukturelle Ursache: FTS5-MATCH
     ohne OR-Operator verlangt jedes Token im indizierten Feld."""
     goldset = load_goldset()
     vectors = dict(load_vectors())
@@ -174,7 +175,7 @@ def test_708_goldset_lexical_side_is_structurally_dead() -> None:
         finally:
             conn.close()
 
-    assert len(goldset["queries"]) == 26
+    assert len(goldset["queries"]) == 60
     assert exact_hit_queries == 1
     assert trigram_hit_queries == 0
 
@@ -324,18 +325,21 @@ def test_diagnose_query_min_score_gap_is_positive_for_distinct_vec_ranks(
 # run_diagnostics: Ende-zu-Ende gegen das echte #708-Goldset
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(not GOLDSET_PATH.exists(), reason="#708-Fixture nicht vorhanden")
-def test_run_diagnostics_confirms_25_of_26_queries_have_no_fts_hit() -> None:
+def test_run_diagnostics_confirms_almost_all_queries_have_no_fts_hit() -> None:
     """AC: "Der Diagnoseblock laeuft gegen das bestehende #708-Set und
-    bestaetigt numerisch, dass die FTS-Seite bei 25/26 Queries leer bleibt."""
+    bestaetigt numerisch, dass die FTS-Seite bei fast allen Queries leer
+    bleibt" (25 von 26 vor #800, 59 von 60 seit #800 -- die eine treffende
+    Query ist unveraendert ``q-en-01``, siehe
+    ``test_708_goldset_lexical_side_is_structurally_dead``)."""
     goldset = load_goldset()
     vectors = dict(load_vectors())
     report = run_diagnostics(goldset, vectors, k=10)
 
-    assert report["summary"]["query_count"] == 26
+    assert report["summary"]["query_count"] == 60
     assert report["summary"]["queries_with_any_fts_hit"] == 1
     assert report["summary"]["queries_with_papers_trgm_hit"] == 0
     empty_count = report["summary"]["query_count"] - report["summary"]["queries_with_any_fts_hit"]
-    assert empty_count == 25
+    assert empty_count == 59
     assert set(report["summary"]["by_case"].keys()) == {
         "cross-language",
         "language-gap",
