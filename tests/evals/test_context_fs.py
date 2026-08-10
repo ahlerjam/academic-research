@@ -96,13 +96,50 @@ def test_literature_state_contains_pc02_source_sentence():
 # ---------------------------------------------------------------------------
 
 
+REPO_ROOT = Path(__file__).parent.parent.parent
+
+
 def test_fixture_dir_is_invisible_to_a_call_with_different_cwd(tmp_path):
-    """Isolationsbeweis (AC2): ein Fall, der mit einem leeren tmp_path
-    arbeitet, sieht keine der drei Fixture-Dateien -- die Fixture leakt
-    nicht ins Repo-Root oder in andere Suiten."""
+    """Isolationsbeweis (AC2): weder der Repo-Root noch ein beliebiges
+    andere Arbeitsverzeichnis sehen die Fixture-Dateien -- sie leben
+    ausschliesslich unter CONTEXT_FS_DIR.
+
+    Ein Test, der nur ``tmp_path`` prueft, kann nie fehlschlagen (pytest
+    liefert dafuer per Konstruktion immer ein frisches, leeres Verzeichnis)
+    -- der eigentlich gefaehrdete Ort ist der Repo-Root, in den eine
+    Fixture faelschlich gelegt werden koennte (genau der Leak, den Issue
+    #823 verbietet). Deshalb wird hier zusaetzlich gegen REPO_ROOT geprueft.
+    """
     assert tmp_path != CONTEXT_FS_DIR
+    assert REPO_ROOT != CONTEXT_FS_DIR
     for name in FIXTURE_FILES:
         assert not (tmp_path / name).exists()
+        assert not (REPO_ROOT / name).exists(), (
+            f"Fixture-Datei {name} liegt im Repo-Root -- Leak in andere Eval-Suiten"
+        )
+        assert (CONTEXT_FS_DIR / name).is_file()
+
+
+def test_bare_profile_component_gets_no_context_fs_cwd_override():
+    """Gegenprobe: eine 'bare'-Komponente bekommt CONTEXT_FS_DIR nicht
+
+    automatisch als cwd -- das context-fs-Fixture ist nur fuer Suiten
+    gedacht, deren Skill die Vorbedingung tatsaechlich stellt (Issue #823),
+    nicht fuer alle Aufrufe pauschal.
+    """
+    captured: dict[str, Any] = {}
+
+    def fake_call_claude(
+        system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs: Any
+    ) -> str:
+        captured.update(kwargs)
+        return "ok"
+
+    assert eval_runner.profile_for("fetch") == "bare"
+    with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
+        eval_runner.call_claude_for_component("fetch", "sys", "user")
+
+    assert captured.get("cwd") != CONTEXT_FS_DIR
 
 
 def test_call_claude_for_component_forwards_context_fs_dir_as_cwd_override():
@@ -134,7 +171,13 @@ def test_call_claude_for_component_forwards_context_fs_dir_as_cwd_override():
 def test_ac3_negative_case_without_cwd_exists():
     """Mindestens ein Case in einer der betroffenen evals.json-Dateien
     prueft weiterhin explizit die Vorbedingungs-Meldung ohne Kontextdateien
-    (Muster wie instrument-design/id-02)."""
+    (Muster wie instrument-design/id-02).
+
+    Der Case muss dafuer tatsaechlich ``"cwd": "none"`` tragen -- sonst
+    bekaeme er die context-fs-Fixture trotzdem und der Negativfall waere
+    tot, obwohl der Erwartungswert-String (der allein hier geprueft wird)
+    unveraendert bliebe.
+    """
     candidates = [
         eval_runner.EVALS_ROOT / "academic-context" / "evals.json",
         eval_runner.EVALS_ROOT / "methodology-advisor" / "evals.json",
@@ -147,6 +190,8 @@ def test_ac3_negative_case_without_cwd_exists():
             continue
         data = json.loads(path.read_text())
         for prompt in data.get("prompts", []):
+            if prompt.get("cwd") != "none":
+                continue
             expected = prompt.get("expected", {})
             value = expected.get("value", "")
             values = value if isinstance(value, list) else [value]
@@ -159,6 +204,7 @@ def test_ac3_negative_case_without_cwd_exists():
                         "fehlt",
                         "Vorbedingung",
                         "academic-context",
+                        "academic_context",
                     )
                 )
                 for v in values
