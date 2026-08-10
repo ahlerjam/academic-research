@@ -1,0 +1,109 @@
+{
+  "issue": 824,
+  "generated_at": "2026-08-10T20:35:19+0200",
+  "variants": [
+    {
+      "label": "profil-flags-only",
+      "permission_mode": null,
+      "model": "claude-sonnet-4-6",
+      "returncode": 0,
+      "stderr_tail": "",
+      "duration_ms": 103267.24,
+      "allowed_tools": "mcp__academic-vault__*,Read",
+      "cwd_was_tmp": true,
+      "db_quotes_total": 4,
+      "db_quotes_written_by_agent": [
+        {
+          "quote_id": "368fe145-29eb-4cd5-9e9f-625337d711dd",
+          "verbatim": "Governance frameworks ensure DevOps compliance across distributed teams.",
+          "extraction_method": "local-verbatim",
+          "pdf_page": 1
+        },
+        {
+          "quote_id": "23eac8ae-36c2-46d5-8e3d-61fb8376b25c",
+          "verbatim": "Audit trails make DevOps governance decisions reviewable after each release.",
+          "extraction_method": "local-verbatim",
+          "pdf_page": 1
+        }
+      ],
+      "binding_proven": true,
+      "envelope": {
+        "is_error": false,
+        "duration_api_ms": 48681,
+        "num_turns": 9,
+        "stop_reason": "end_turn",
+        "session_id": "f186e824-1be8-4413-a9a3-d14d3bd6b8e5",
+        "total_cost_usd": 0.15852299999999997,
+        "usage": {
+          "input_tokens": 12,
+          "cache_creation_input_tokens": 12609,
+          "cache_read_input_tokens": 135860,
+          "output_tokens": 2760,
+          "server_tool_use": {
+            "web_search_requests": 0,
+            "web_fetch_requests": 0
+          },
+          "service_tier": "standard",
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 12609,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "inference_geo": "not_available",
+          "iterations": [
+            {
+              "input_tokens": 1,
+              "output_tokens": 770,
+              "cache_read_input_tokens": 26629,
+              "cache_creation_input_tokens": 795,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 795
+              },
+              "type": "message"
+            }
+          ],
+          "speed": "standard"
+        },
+        "modelUsage": {
+          "claude-haiku-4-5-20251001": {
+            "inputTokens": 595,
+            "outputTokens": 16,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 0.000675,
+            "contextWindow": 200000,
+            "maxOutputTokens": 32000,
+            "canonicalModel": "claude-haiku-4-5",
+            "provider": "firstParty"
+          },
+          "claude-sonnet-4-6": {
+            "inputTokens": 12,
+            "outputTokens": 2760,
+            "cacheReadInputTokens": 135860,
+            "cacheCreationInputTokens": 12609,
+            "webSearchRequests": 0,
+            "costUSD": 0.157848,
+            "contextWindow": 200000,
+            "maxOutputTokens": 32000,
+            "canonicalModel": "claude-sonnet-4-6",
+            "provider": "firstParty"
+          }
+        },
+        "permission_denials": [],
+        "terminal_reason": "completed",
+        "fast_mode_state": "off",
+        "fast_mode_disabled_reason": "sdk_opt_in_required",
+        "subtype": "success",
+        "api_error_status": null,
+        "result": "Both quotes persisted successfully. Here is the final output:\n\n```json\n{\n  \"quotes\": [\n    {\n      \"text\": \"Governance frameworks ensure DevOps compliance across distributed teams.\",\n      \"page\": 1,\n      \"section\": \"Abstract\",\n      \"word_count\": 10,\n      \"relevance_score\": 0.97,\n      \"reasoning\": \"Directly defines the purpose of governance frameworks in a DevOps context — core claim for the research query.\",\n      \"context_before\": \"DevOps Governance Frameworks\",\n      \"context_after\": \"Policy definition and shared accountability are central to DevOps governance.\",\n      \"vault_quote_id\": \"368fe145-29eb-4cd5-9e9f-625337d711dd\"\n    },\n    {\n      \"text\": \"Audit trails make DevOps governance decisions reviewable after each release.\",\n      \"page\": 1,\n      \"section\": \"Abstract\",\n      \"word_count\": 11,\n      \"relevance_score\": 0.93,\n      \"reasoning\": \"Addresses traceability/auditability as a key property of DevOps governance — distinct angle from quote 1.\",\n      \"context_before\": \"Policy definition and shared accountability are central to DevOps governance.\",\n      \"context_after\": null,\n      \"vault_quote_id\": \"23eac8ae-36c2-46d5-8e3d-61fb8376b25c\"\n    }\n  ],\n  \"total_quotes_extracted\": 2,\n  \"extraction_quality\": \"high\",\n  \"possible_pdf_mismatch\": false,\n  \"warnings\": []\n}\n```\n\n---\n\n**Summary:**\n\n| # | Quote (verbatim) | Words | Verify | Vault ID |\n|---|---|---|---|---|\n| 1 | *\"Governance frameworks ensure DevOps compliance across distributed teams.\"* | 10 | `exact` / ratio 1.0 | `368fe145` |\n| 2 | *\"Audit trails make DevOps governance decisions reviewable after each release.\"* | 11 | `exact` / ratio 1.0 | `23eac8ae` |\n\n- **PDF-Mismatch:** none — all 3 title words matched in first 200 chars ✅  \n- **Extraction quality:** `high` — clean text layer, 2 strong, topically distinct quotes retrieved and server-verified fail-closed via `local-verbatim`.",
+        "ttft_ms": 4970,
+        "ttft_stream_ms": 2009,
+        "time_to_request_ms": 13,
+        "type": "result",
+        "duration_ms": 99008,
+        "uuid": "ce2e10f7-3ba5-4e74-b8a1-453c182b892e"
+      }
+    }
+  ]
+}

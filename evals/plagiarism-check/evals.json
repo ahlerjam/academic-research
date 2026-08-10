@@ -3,6 +3,7 @@
   "component_type": "skill",
   "prompts": [
     {"id": "pc-01", "input": "Vergleiche meinen Text X mit Quelle Y und berechne N-Gramm-Overlap.", "expected": {"type": "substring", "value": "Overlap"}, "mode": "with_skill"},
-    {"id": "pc-02", "input": "Ist dieser Satz zu quellennah: 'Die Governance erfolgt durch definierte Policies'?", "expected": {"type": "regex", "value": "(quellennah|paraphras)"}, "mode": "both"}
+    {"id": "pc-02", "input": "Ist dieser Satz zu quellennah: 'Die Governance erfolgt durch definierte Policies'?", "expected": {"type": "regex", "value": "(quellennah|paraphras)"}, "mode": "both"},
+    {"id": "pc-03", "input": "Ist dieser Satz zu quellennah: 'Die Governance erfolgt durch definierte Policies'?", "expected": {"type": "regex", "value": "(academic_context\\.md|literature_state\\.md|Kontext-Datei\\w* (fehl|nicht)|nicht vorhanden|Vorbedingung nicht erf)"}, "mode": "with_skill", "cwd": "none"}
   ]
 }
