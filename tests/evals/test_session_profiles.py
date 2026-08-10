@@ -312,6 +312,35 @@ def test_call_claude_for_component_passes_profile_allowed_tools_through() -> Non
     assert captured["allowed_tools"] == SESSION_PROFILES["vault"]["allowed_tools"]
 
 
+def test_call_claude_for_component_uses_isolated_temp_dir_when_needs_cwd_has_no_override() -> None:
+    """Regressionsschutz fuer den Root-Leak-Fix: cwd=None darf bei needs_cwd
+
+    nicht unveraendert an call_claude durchgereicht werden -- sonst zeigt
+    cwd=None auf den Repo-Root und die without_skill-Kontrollgruppe sieht
+    Skill-Dateien/Eval-Erwartungen. Gleichzeitig darf das den Test oben nicht
+    unterlaufen: allowed_tools muss trotzdem das Profil widerspiegeln, statt
+    (wie in einer frueheren Fassung) auf None zu fallen.
+    """
+    captured: dict[str, Any] = {}
+
+    def fake_call_claude(
+        system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs: Any
+    ) -> str:
+        captured.update(kwargs)
+        return "ok"
+
+    with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
+        call_claude_for_component("chapter-writer", "sys", "user")
+
+    used_cwd = captured["cwd"]
+    assert used_cwd is not None, "needs_cwd=True darf cwd=None nicht unveraendert durchreichen."
+    repo_root = Path(__file__).parent.parent.parent.resolve()
+    assert Path(used_cwd).resolve() != repo_root, "Fallback-cwd darf nicht der Repo-Root sein."
+    assert Path(used_cwd).is_dir()
+    assert list(Path(used_cwd).iterdir()) == [], "Fallback-cwd muss leer sein (kein Fixture-Leak)."
+    assert captured["allowed_tools"] == SESSION_PROFILES["vault"]["allowed_tools"]
+
+
 def test_call_claude_for_component_bare_profile_keeps_no_tools() -> None:
     """'fetch' ist als 'bare' hinterlegt -- allowed_tools bleibt '' (--allowedTools '')."""
     captured: dict[str, Any] = {}
