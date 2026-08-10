@@ -38,7 +38,15 @@ LLM-Qualität gemessen.
 **Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
 tests/evals/ -q` ohne installierte `claude`-CLI im PATH — `claude_cli_available()`
 gatet den Guard zusätzlich, Issue #631; der frühere parallele
-`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `346 passed, 195 skipped`.
+`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `346 passed, 197 skipped`.
+Die Skip-Zahl ist mit #823 von 195 auf 197 gestiegen, weil der neue
+Negativfall `pc-03` (`evals/plagiarism-check/evals.json`, `cwd: "none"`)
+genau zwei zusätzliche Skips erzeugt: einen Mode-Filter-Skip in
+`test_rest_evals.py` (`without_skill`) und einen CLI-Gate-Skip in
+`eval_runner.call_claude` (`with_skill`). Beide belegt durch einen echten
+Lauf mit aus dem `PATH` entfernter `claude`-CLI, je einmal auf `main`
+(`426 passed, 195 skipped`) und auf dem Branch (`436 passed, 197 skipped`);
+keine bestehende Prüfung wurde stillgelegt.
 Seit #390 sind weitere Suiten dazugekommen (u. a.
 #524, #626, #628, #630, #721); die Skip-Zahl ist gegenüber dem #390-Snapshot
 gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
