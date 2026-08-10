@@ -4,10 +4,18 @@ Every merge makes the gate update the remaining open PR branches
 (``git merge origin/main`` + push) — a ``synchronize`` event that re-triggers
 the full deep review although the PR's diff against its merge base is
 byte-identical when main touched disjoint files. This module compares the
-sha256 of the current bounded diff with the ``diffHash`` stored in the
-previous sticky comment's embedded JSON. On a hit the stored findings are
-re-emitted so the gate re-applies the SAME verdict without spending a single
-model token.
+sha256 of the current diff with the ``diffHash`` stored in the previous
+sticky comment's embedded JSON. On a hit the stored findings are re-emitted
+so the gate re-applies the SAME verdict without spending a single model
+token.
+
+The caller MUST pass the full, untruncated diff here — not the ~200KB-bounded
+copy handed to the LLM reviewers for their context budget (see
+``pr-deep-review.yml``'s "Bounded diff + sanitize" step). Hashing the bounded
+copy made this cache blind to any change past the 200KB mark: large eval/
+fixture files routinely fill the first 200KB of a diff by themselves, so a
+follow-up commit touching only files past that point looked byte-identical
+to the cache even though the PR head had moved (#817).
 
 Conservative by design — any anomaly is a MISS (full review runs):
 missing comment, missing/mismatched hash, malformed JSON, findings that
@@ -19,7 +27,7 @@ differs and a real re-review runs — exactly when it is warranted.
 Output (stdout, ``$GITHUB_OUTPUT`` format)::
 
     cache_hit=true|false
-    diff_hash=<sha256 of the current bounded diff>
+    diff_hash=<sha256 of the full (untruncated) diff>
 """
 
 from __future__ import annotations
@@ -74,8 +82,13 @@ def check(diff_path: Path, previous_path: Path) -> tuple[bool, str, dict[str, An
 
 
 def _cli() -> int:
-    parser = argparse.ArgumentParser(description="Review-cache check on the bounded diff.")
-    parser.add_argument("--diff", type=Path, required=True)
+    parser = argparse.ArgumentParser(description="Review-cache check on the full PR diff.")
+    parser.add_argument(
+        "--diff",
+        type=Path,
+        required=True,
+        help="Full, untruncated diff (NOT the ~200KB-bounded copy sent to reviewers).",
+    )
     parser.add_argument("--previous", type=Path, required=True)
     parser.add_argument(
         "--findings-out",
