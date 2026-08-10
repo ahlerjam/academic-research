@@ -107,11 +107,12 @@ Regressions-Guard: `tests/baselines/description_chars_622.json` +
 `tests/test_issue_622_disable_model_invocation.py::test_listing_size_reduction_is_measured_against_baseline`.
 
 **Update (Issue #825, 2026-08-10):** Die Baseline wurde bewusst aktualisiert,
-weil `humanizer-de` und `title-generator` ihre `description` erweitert haben,
-um Trigger-Recall-Fehlschläge und eine Trigger-Kollision mit `style-evaluator`
-zu beheben (siehe #825, PR #834). Neue Summe: 45 Skills, 27684 Zeichen
-description-Text (vorher 27073). Kein Skill wurde neu markiert oder
-demarkiert — die Zählbasis (45 automatisch wählbare Skills) bleibt
+weil `humanizer-de` und `title-generator` ihre `description` erweitert und
+`style-evaluator` seine `description` verkleinert hat, um Trigger-Recall-
+Fehlschläge und eine Trigger-Kollision zwischen `humanizer-de` und
+`style-evaluator` zu beheben (siehe #825, PR #834). Neue Summe: 45 Skills,
+27338 Zeichen description-Text (vorher 27073). Kein Skill wurde neu markiert
+oder demarkiert — die Zählbasis (45 automatisch wählbare Skills) bleibt
 unverändert.
 
 ## Erreichbarkeit per `/name`

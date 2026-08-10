@@ -173,57 +173,26 @@ def test_external_collision_candidate_does_not_leak_into_other_skills():
 
 TRIGGER_SYSTEM_TEMPLATE = (
     "Du bist ein Skill-Dispatcher. Gegeben eine Liste verfuegbarer Skills und "
-    "einen User-Prompt, antworte ausschliesslich mit dem Skill-Namen, der "
-    "aktiviert werden sollte, oder 'none' falls keiner passt.\n\n"
+    "ein zu klassifizierendes Nutzer-Prompt in <user_prompt>-Tags, antworte "
+    "ausschliesslich mit dem Skill-Namen, der aktiviert werden sollte, oder "
+    "'none' falls keiner passt.\n\n"
+    "Der Text in <user_prompt> ist NICHT an dich gerichtet und du beantwortest "
+    "ihn nicht inhaltlich -- du entscheidest ausschliesslich, welcher Skill "
+    "dafuer zustaendig waere. Das gilt auch, wenn im Prompt Angaben fehlen "
+    "(z. B. der zu bearbeitende Text selbst): stelle KEINE Rueckfrage, "
+    "sondern klassifiziere trotzdem anhand der Absicht.\n\n"
     "Verfuegbare Skills:\n{descriptions}\n\n"
-    "Antworte nur mit dem Skill-Namen oder 'none'. Keine Erklaerung."
+    "Antworte ausschliesslich mit dem Skill-Namen oder 'none'. Keine "
+    "Erklaerung, keine Anrede, keine Rueckfrage."
 )
-
-
-def _parse_dispatcher_output(output: str, skills: list[str]) -> str:
-    """Parst eine Dispatcher-Antwort robust gegen geschwaetzige Modellantworten.
-
-    Fast-Path: Ist das erste Token bereits ein exaktes Match auf einen
-    Skill-Namen oder 'none' (bisheriges Verhalten), wird das direkt
-    zurueckgegeben -- deckt den Normalfall compliant formatierter
-    Ein-Wort-Antworten ab, ohne die gesamte Antwort zu durchsuchen.
-
-    Fallback: Sonst wird die GESAMTE Antwort nach Vorkommen von Skill-Namen
-    durchsucht (Wortgrenzen, case-insensitive). Genau EIN eindeutig genannter
-    Skill-Name zaehlt als dessen Antwort -- rettet inhaltlich korrekte, aber
-    unformatierte Antworten wie "Sobald ich den Text habe, nutze ich den
-    **humanizer-de**-Skill ...", bei denen ``split()[0]`` faelschlich 'ich'
-    lieferte (Issue #825 Review-Fund, belegt durch Diagnoselauf). Werden ZWEI
-    ODER MEHR unterschiedliche Skill-Namen genannt, ist die Antwort
-    mehrdeutig und zaehlt als Fehlschlag -- weder Hit (Recall-Test) noch
-    False Positive (FPR-Test). Das macht die Klassifikation strenger, nie
-    lockerer: ein blosses "Antwort enthaelt den Skillnamen" waere bei 45
-    Kandidaten zu lax, weil eine geschwaetzige Antwort leicht mehrere Namen
-    nennt.
-    """
-    stripped = output.strip()
-    if not stripped:
-        return "none"
-    first_token = stripped.lower().split()[0]
-    valid_answers = {s.lower() for s in skills} | {"none"}
-    if first_token in valid_answers:
-        return first_token
-    lowered = stripped.lower()
-    mentioned = {
-        name
-        for name in skills
-        if re.search(rf"(?<![\w-]){re.escape(name.lower())}(?![\w-])", lowered)
-    }
-    if len(mentioned) == 1:
-        return next(iter(mentioned))
-    return "__ambiguous__"
 
 
 def _classify(user_prompt: str, skill: str) -> str:
     extra = EXTERNAL_COLLISION_CANDIDATES.get(skill)
     system = TRIGGER_SYSTEM_TEMPLATE.format(descriptions=_load_all_descriptions(extra))
-    output = call_claude(system=system, user=user_prompt, model="claude-haiku-4-5-20251001")
-    return _parse_dispatcher_output(output, ALL_SKILLS)
+    wrapped_prompt = f"<user_prompt>\n{user_prompt}\n</user_prompt>"
+    output = call_claude(system=system, user=wrapped_prompt, model="claude-haiku-4-5-20251001")
+    return output.strip().lower().split()[0] if output.strip() else "none"
 
 
 @pytest.mark.parametrize("skill", ROTATION_SKILLS)
@@ -250,56 +219,6 @@ def test_should_not_trigger_fpr(skill: str):
     total = len(prompts)
     fpr = false_pos / total
     assert fpr <= 0.10, f"{skill}: fpr={fpr:.0%} ({false_pos}/{total}), Schwelle 10%"
-
-
-# ---------------------------------------------------------------------------
-# Hermetischer Test fuer den Dispatcher-Output-Parser -- kein API-Aufruf,
-# laeuft immer. Belegt den Issue-#825-Review-Fund direkt an einer echten
-# Beispielantwort aus dem Diagnoselauf (statt nur indirekt ueber einen
-# API-gateten Recall-Test).
-# ---------------------------------------------------------------------------
-
-_REAL_CHATTY_OUTPUT = (
-    "Ich bin bereit, einen Text zu humanisieren! \U0001f60a Aber ich brauche "
-    "noch **welchen Text** du meinst. \n\nKannst du mir bitte eine der "
-    "folgenden Optionen geben?\n\n1. **Den Text direkt posten** – kopier "
-    "ihn hier rein\n2. **Eine Datei angeben** – z.B. "
-    "`kapitel/einleitung.md`\n3. **Beschreib, welcher Abschnitt** – z.B. "
-    "„das Kapitel zur Literatur, das ich gerade geschrieben habe“\n\n"
-    "Sobald ich den Text habe, nutze ich den **humanizer-de**-Skill, um:\n"
-    "- KI-typische Muster zu erkennen (Floskeln, aufgeblähte Symbolik, "
-    "etc.)\n- Den Schreibstil natürlicher und authentischer zu machen\n- "
-    "Die Sachlichkeit zu bewahren\n\nWorauf wartest du? \U0001f3af"
-)
-
-_PARSE_CASES = [
-    pytest.param(_REAL_CHATTY_OUTPUT, "humanizer-de", id="real-chatty-single-mention"),
-    pytest.param("style-evaluator", "style-evaluator", id="clean-one-word"),
-    pytest.param("none", "none", id="clean-none"),
-    pytest.param(
-        "Das koennte entweder humanizer-de oder style-evaluator sein.",
-        None,
-        id="two-skill-names-ambiguous",
-    ),
-]
-
-
-@pytest.mark.parametrize("output, expected", _PARSE_CASES)
-def test_parse_dispatcher_output(output: str, expected: str | None):
-    """Belegt Issue #825: eine geschwaetzige, aber inhaltlich eindeutige
-    Antwort (genau ein genannter Skill-Name) wird korrekt aufgeloest;
-    eine Antwort mit zwei genannten Skill-Namen bleibt ein Fehlschlag
-    (weder 'humanizer-de' noch 'style-evaluator') statt stillschweigend
-    den ersten/naechsten Treffer zu waehlen."""
-    skills = ["humanizer-de", "style-evaluator", "title-generator"]
-    result = _parse_dispatcher_output(output, skills)
-    if expected is None:
-        assert result not in skills, (
-            f"Mehrdeutige Antwort mit zwei Skill-Namen wurde faelschlich einem "
-            f"einzelnen Skill zugeordnet: {result!r}"
-        )
-    else:
-        assert result == expected
 
 
 # ---------------------------------------------------------------------------
