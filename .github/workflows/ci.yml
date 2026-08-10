@@ -289,6 +289,16 @@ jobs:
             --skip-cost \
             --check-against docs/evals/2026-08-09-chunk-fusion-goldset-790-live-results.json \
             > /dev/null
+      # Reranker-Ablation (#804): traegt der aktive bge-reranker-v2-m3? Dieselbe
+      # Logik wie bei den drei Laeufen oben -- der Live-Generator laedt den
+      # lokalen Reranker und rechnet CPU-Inferenz, hier laeuft nur der Replay
+      # ueber die eingecheckten fusionierten Kandidaten samt rerank_score,
+      # gegattert gegen die Rohdaten des Messlaufs (Latenz/Peak-RSS ausgenommen).
+      - name: Reranker-Ablation gegen die eingecheckten Rohdaten fahren
+        run: |
+          uv run python scripts/eval/run_reranker_ablation_804.py \
+            --check-against docs/evals/2026-08-10-reranker-ablation-804-live-results.json \
+            > /dev/null
       - name: Metriken, Hermetik und Schwellen-Meta pruefen
         run: |
           uv run pytest -p no:cacheprovider -q \
@@ -296,4 +306,5 @@ jobs:
             tests/test_issue_708_retrieval_chunk_goldset.py \
             tests/test_issue_733_hyde_multiquery.py \
             tests/test_issue_731_embedding_candidates.py \
-            tests/test_issue_790_probe_goldset.py
+            tests/test_issue_790_probe_goldset.py \
+            tests/test_issue_804_reranker_ablation.py

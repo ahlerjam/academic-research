@@ -1,0 +1,27 @@
+{
+  "aus": {
+    "search_ms": {
+      "p50": 17.183,
+      "p95": 35.201,
+      "mean": 16.343,
+      "n": 60
+    },
+    "peak_rss_kb": 76080
+  },
+  "an": {
+    "search_ms": {
+      "p50": 3057.505,
+      "p95": 3542.7,
+      "mean": 2107.017,
+      "n": 60
+    },
+    "peak_rss_kb": 922336
+  },
+  "hardware": {
+    "cpu": "Apple M4 Pro",
+    "cpu_cores": 12,
+    "ram_gb": 25.8,
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.13"
+  }
+}
