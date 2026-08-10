@@ -499,6 +499,37 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   angebunden, das ist an dieser Stelle explizit dokumentiert statt
   stillschweigend übersprungen.
 
+### Fixed
+
+- **`_attach_chunk_to_fts_hit` liefert bei fehlgeschlagenem Chunk-Lookup den
+  Text des vektoriell besten Chunks statt eines pauschalen Abstracts (#791,
+  Folge-Issue aus #789).** Schlug der lexikalische `chunk_fts`-Lookup fehl
+  (kein Chunk des Papers enthaelt die Suchbegriffe woertlich -- strukturell
+  haeufig, FTS5 `unicode61` stemmt nicht), sprang
+  `academic_vault/server.py::_attach_chunk_to_fts_hit` bislang direkt auf den
+  synthetischen Schluessel `fts-paper::<pid>` ohne `text`; der Reranker bekam
+  seinen Text erst ueber `_fill_missing_reranker_text` (Abstract- bzw.
+  Erster-Chunk-Fallback, #702) und die Ausgabe gar keine Fundstelle (#728).
+  Fix: `search_papers` zieht die vec0-Beschaffung (inkl. Multi-Query-Fusion,
+  #734) vor den FTS-Chunk-Attach und reicht ein
+  `paper_id -> bester Vektor-Chunk`-Dict als neuen optionalen Parameter an
+  `_attach_chunk_to_fts_hit` durch, das dort `text`, `section_title`,
+  `page_start` und `page_end` liefert -- ohne zusaetzlichen DB-Roundtrip.
+- Der Fusionsschluessel bleibt dabei bewusst der synthetische
+  `fts-paper::<pid>`. Uebernaehme der lexikalische Kandidat die `chunk_id`
+  des Vektor-Chunks, stuende derselbe Schluessel in beiden Rangdicts von
+  `reciprocal_rank_fusion` und bekaeme einen kombinierten RRF-Rang -- eine
+  chunk-level Ko-Okkurrenz, die es gerade nicht gibt. Am #790-Probe-Goldset
+  gemessen hebt genau das den Beitrag von #727 vollstaendig auf
+  (`chunk_fusion_beitrag` faellt auf 0, ein Dokument mit ueber mehrere Chunks
+  verstreuten Suchbegriffen ueberholt wieder das Dokument, das sie in einem
+  Chunk traegt). Der Vektor-Fallback liefert daher Inhalt, nicht Rang;
+  `attach_equals_vec_best` in
+  `scripts/eval/run_retrieval_ablation_729.py::diagnose_query` bleibt fuer
+  diesen Fall unveraendert `False`. Ohne Vektor-Chunk (Embedding
+  deaktiviert, Backend fehlt, Paper ganz ungechunkt) bleibt es beim
+  bisherigen Verhalten -- keine Regression.
+
 ### Removed
 
 - **Cloud-Reranker Voyage und Cohere ersatzlos entfernt (#715).**
