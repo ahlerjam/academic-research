@@ -611,12 +611,16 @@ def diagnose_query(db_path: str, query: str, k: int = DEFAULT_K) -> dict:
       chunk-level ``server._vec0_search`` -- Paper-Rang ist der Rang des
       ERSTEN (naechsten) Chunks je Paper, Chunk-Rang je einzelnem Chunk.
     - ``attach_equals_vec_best``: je Paper-ID, ob der von
-      ``_attach_chunk_to_fts_hit`` zugeordnete Chunk mit dem vektoriell
-      besten Chunk desselben Papers uebereinstimmt. Seit dem #791-Fix ist das
-      auch bei fehlgeschlagenem lexikalischem Chunk-Lookup i.d.R. ``True``
-      (Vektor-Fallback statt synthetischem Schluessel); ``False`` bleibt nur
-      dann, wenn auch kein Vektor-Chunk fuer das Paper existiert -- dann
-      bleibt ``attached_chunk[pid]`` ``None`` (synthetischer Schluessel).
+      ``_attach_chunk_to_fts_hit`` als FUSIONSSCHLUESSEL zugeordnete Chunk mit
+      dem vektoriell besten Chunk desselben Papers uebereinstimmt -- also ob
+      derselbe Chunk aus beiden Quellen kommt und den kombinierten RRF-Rang
+      bekommt. Bleibt bei fehlgeschlagenem lexikalischem Chunk-Lookup auch
+      nach dem #791-Fix ``False``: der Fix uebernimmt dort Text und Fundstelle
+      des Vektor-Chunks, aber bewusst nicht dessen ``chunk_id`` (sonst
+      entstuende eine chunk-level Ko-Okkurrenz, die es nicht gibt -- siehe
+      ``server._attach_chunk_to_fts_hit``). ``False`` heisst hier also
+      unveraendert: kein Hybrid-Rang fuer diesen Chunk, nicht "kein
+      Chunk-Text".
     - ``min_score_gap_at_k``: kleinster Abstand zwischen zwei aufeinander-
       folgenden ``rrf_score``-Werten in den fusionierten Top-``k`` -- nahe 0
       markiert einen Tie, Vorbedingung fuer Folge-Issue 2 (nichtdeterministischer
@@ -675,9 +679,12 @@ def diagnose_query(db_path: str, query: str, k: int = DEFAULT_K) -> dict:
 
         # Vec0-Beschaffung VOR dem FTS-Chunk-Attach (Issue #791, spiegelt die
         # Reihenfolge in server.search_papers): 'best_chunk_per_paper' dient
-        # gleichzeitig als 'vec_best_by_paper'-Fallback fuer
+        # gleichzeitig als 'vec_best_by_paper'-Inhaltsfallback fuer
         # _attach_chunk_to_fts_hit, damit diese Diagnose exakt den reparierten
         # Produktionspfad nachrechnet statt eines Vor-#791-Zwischenstands.
+        # Auf 'attached_chunk'/'attach_equals_vec_best' wirkt sich das NICHT
+        # aus -- der Fusionsschluessel bleibt bei fehlgeschlagenem Lookup der
+        # synthetische, nur Text/Fundstelle kommen aus dem Vektor-Chunk.
         vec_results = _server._vec0_search(db_path, query, k=k)
         best_chunk_per_paper: dict[str, dict] = {}
         for idx, r in enumerate(vec_results):

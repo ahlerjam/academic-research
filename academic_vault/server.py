@@ -1178,17 +1178,30 @@ def _attach_chunk_to_fts_hit(
 
     Schlaegt der lexikalische Lookup fehl (kein Chunk des Papers enthaelt die
     Suchbegriffe woertlich -- strukturell haeufig, FTS5 ``unicode61`` stemmt
-    nicht, siehe #789), faellt die Funktion seit Issue #791 auf den
-    vektoriell besten Chunk desselben Papers zurueck (``vec_best_by_paper``,
-    vom Aufrufer aus der bereits berechneten ``_vec0_search``-Liste
-    gebaut) -- inklusive 'text' und Fundstelle. Das erhaelt den Hybrid-Bonus
-    (FTS-Metadaten + inhaltlich passender Chunk-Text) auch bei
-    fehlgeschlagenem lexikalischem Chunk-Lookup. Nur wenn auch kein
-    Vektor-Chunk fuer das Paper existiert (Embedding deaktiviert, Backend
-    fehlt, Paper ganz ungechunkt, oder ``vec_best_by_paper`` nicht
-    uebergeben) bleibt 'text' unbesetzt -- ein synthetischer
-    Fallback-Schluessel haelt den Kandidaten trotzdem eindeutig fuer die
-    Fusion; ``_fill_missing_reranker_text`` liefert danach den bisherigen
+    nicht, siehe #789), uebernimmt die Funktion seit Issue #791 'text' und
+    Fundstelle vom vektoriell besten Chunk desselben Papers
+    (``vec_best_by_paper``, vom Aufrufer aus der bereits berechneten
+    ``_vec0_search``-Liste gebaut). Damit sieht der Reranker den inhaltlich
+    passenden Chunk statt des Abstract-/Erster-Chunk-Fallbacks aus
+    ``_fill_missing_reranker_text`` (#702), und die Ausgabe traegt dessen
+    Fundstelle (#728) -- der in #791 gemeldete Verlust.
+
+    Der Fusionsschluessel bleibt dabei bewusst der synthetische
+    ``fts-paper::<pid>``, NICHT die 'chunk_id' des Vektor-Chunks.
+    ``reciprocal_rank_fusion`` schluesselt seit #727 auf 'chunk_id': liefe der
+    lexikalische Kandidat unter der Vektor-'chunk_id' ein, stuende derselbe
+    Schluessel in BEIDEN Rangdicts und bekaeme einen kombinierten RRF-Rang --
+    eine chunk-level Ko-Okkurrenz, die es gerade nicht gibt (der Lookup ist ja
+    fehlgeschlagen). Gemessen am #790-Probe-Goldset hebt genau das den Beitrag
+    von #727 vollstaendig auf: ein Dokument, dessen Suchbegriffe ueber mehrere
+    Chunks verteilt sind, ueberholt damit wieder das Dokument, das sie in
+    EINEM Chunk traegt (``chunk_fusion_beitrag`` faellt auf 0). Der Rang bleibt
+    deshalb einseitig; nur der Inhalt kommt aus dem Vektor-Chunk.
+
+    Nur wenn auch kein Vektor-Chunk fuer das Paper existiert (Embedding
+    deaktiviert, Backend fehlt, Paper ganz ungechunkt, oder
+    ``vec_best_by_paper`` nicht uebergeben) bleibt 'text' unbesetzt --
+    ``_fill_missing_reranker_text`` liefert danach den bisherigen
     Abstract-/Erster-Chunk-Fallback (#702). Der synthetische Schluessel
     kollidiert nicht mit echten Chunk-IDs (UUID4, siehe
     ``VaultDB.add_chunk_embedding``).
@@ -1201,14 +1214,15 @@ def _attach_chunk_to_fts_hit(
         query: Sanitierte FTS5-Query (dieselbe, mit der ``papers_fts``
             durchsucht wurde).
         vec_best_by_paper: Optionales 'paper_id -> bester Vektor-Chunk'-Dict
-            (Eintrag im ``_vec0_search``-Format: 'chunk_id', 'text',
-            'section_title', 'page_start', 'page_end'), fuer den Fallback bei
+            (Eintrag im ``_vec0_search``-Format: 'text', 'section_title',
+            'page_start', 'page_end' -- 'chunk_id' wird bewusst NICHT
+            uebernommen, siehe oben), fuer den Inhalts-Fallback bei
             fehlgeschlagenem lexikalischem Lookup (Issue #791). ``None``
-            (Default) erhaelt das alte Verhalten -- direkter Sprung auf den
-            synthetischen Schluessel.
+            (Default) erhaelt das Verhalten vor #791 -- synthetischer
+            Schluessel ohne 'text'.
 
     Returns:
-        Kopie von ``entry``, ergaenzt um 'chunk_id' und ggf. 'text'.
+        Kopie von ``entry``, ergaenzt um 'chunk_id' und ggf. 'text'/Fundstelle.
     """
     entry = dict(entry)
     paper_id = entry["paper_id"]
@@ -1238,18 +1252,18 @@ def _attach_chunk_to_fts_hit(
             pass
         return entry
 
+    # Der Fusionsschluessel bleibt synthetisch -- siehe Docstring: der
+    # Vektor-Fallback liefert Inhalt, nicht Rang.
+    entry["chunk_id"] = f"fts-paper::{paper_id}"
     vec_best = (vec_best_by_paper or {}).get(paper_id)
     if vec_best is not None:
         # Vektor-Fallback (Issue #791): die vec0-Eintraege tragen bereits
         # 'text'/'section_title'/'page_start'/'page_end' aus dem
         # knn_chunks()-Roundtrip -- kein weiterer DB-Lookup noetig.
-        entry["chunk_id"] = vec_best["chunk_id"]
         entry["text"] = vec_best.get("text")
         entry["section_title"] = vec_best.get("section_title")
         entry["page_start"] = vec_best.get("page_start")
         entry["page_end"] = vec_best.get("page_end")
-    else:
-        entry["chunk_id"] = f"fts-paper::{paper_id}"
     return entry
 
 
