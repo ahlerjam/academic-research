@@ -568,18 +568,25 @@ def call_claude_for_component(
     ``COMPONENT_PROFILES``-Eintrag) faellt nicht still auf ``bare`` zurueck,
     sondern erbt den ``KeyError`` aus ``profile_for()`` (AC1).
 
-    ``cwd``/``mcp_config`` bleiben optionale Overrides und werden unveraendert
-    durchgereicht: die Profile ``context-fs``/``vault`` verlangen laut
-    ``needs_cwd``/``needs_mcp`` eigentlich beide, aber die Fixture-Seite
-    (Kontextdateien unter ``evals/<suite>/fixtures/``, Vault-Testdatenbank)
-    liefern erst #823/#824 -- bis dahin bleibt der Default ``None``, sodass
-    sich fuer eine Suite ohne eigene Fixture nur ``allowed_tools`` gegenueber
-    dem bisherigen ``bare``-Verhalten aendert. Sobald #823/#824 landen, kann
-    die jeweilige Suite ihr Fixture-``cwd``/ihre Vault-Config hier durchreichen,
-    ohne dass sich diese Funktion oder die Profiltabelle noch aendern muss.
+    ``cwd``/``mcp_config`` sind optionale Overrides. Profiles, die laut
+    ``needs_cwd``/``needs_mcp`` ein Fixture-Verzeichnis/Vault-Config erfordern,
+    fallen auf den ``bare``-Default zurueck (allowed_tools=None), wenn diese
+    Parameter ``None`` bleiben -- so wird die Kontrollgruppe ``without_skill``
+    tatsaechlich skill-frei, ohne dass der Repo-Root als Default-cwd sich zur
+    Ressourcenquelle wird (Regression-Fix zu #830).
     """
     profile = profile_for(component)
-    allowed_tools = SESSION_PROFILES[profile]["allowed_tools"]
+    profile_config = SESSION_PROFILES[profile]
+    allowed_tools = profile_config["allowed_tools"]
+
+    # Wenn das Profil ein eigenes cwd braucht, aber keins gestellt wurde,
+    # fallen wir auf den bare-Default zurueck (allowed_tools = None).
+    # Das verhindert den Root-Leak, bei dem cwd=None auf den Repo-Root zeigt.
+    if profile_config["needs_cwd"] and cwd is None:
+        allowed_tools = None
+    if profile_config["needs_mcp"] and mcp_config is None:
+        allowed_tools = None
+
     return call_claude(
         system,
         user,
