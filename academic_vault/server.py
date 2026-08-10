@@ -1031,19 +1031,6 @@ def search_papers(
     from .query_expansion import expand_query, resolve_query_expansion_enabled
     from .retrieval import apply_reranker, reciprocal_rank_fusion
 
-    # Chunk-Zuordnung fuer die lexikalische Seite (Issue #727): jeder
-    # paper-level FTS5-Treffer bekommt ueber chunk_fts (#726) seinen
-    # best-passenden Chunk zugeordnet, damit reciprocal_rank_fusion() auf
-    # 'chunk_id' (statt 'paper_id') schluesseln kann -- die chunkgenaue
-    # Praezision der Vektorsuche geht damit nicht mehr vor der Fusion
-    # verloren (vorher: _vec0_search deduplizierte VOR der Fusion).
-    _ensure_schema_for_read(db_path)
-    conn = VaultDB._open(db_path)
-    try:
-        fts_chunk_results = [_attach_chunk_to_fts_hit(conn, r, query) for r in fts_results]
-    finally:
-        conn.close()
-
     # Der Vektorpfad bekommt die UNSANITIERTE Query: das FTS5-Sanitizing
     # entfernt Bindestriche und Operator-Keywords und verfaelscht damit die
     # Semantik, auf die das Embedding-Modell reagiert.
@@ -1056,6 +1043,14 @@ def search_papers(
     # unveraenderten Query und genau einem _vec0_search-Aufruf -- die Suche
     # darf daran nie scheitern. 'queries_used' auf jedem Ergebnis macht
     # sichtbar, wonach tatsaechlich gesucht wurde.
+    #
+    # Vorgezogen VOR den FTS-Chunk-Attach (Issue #791): der weiter unten
+    # gebaute 'paper_id -> bester Vektor-Chunk'-Dict braucht die (fusionierte)
+    # vec0-Liste, um dem lexikalischen Attach einen Fallback auf den
+    # vektoriell besten Chunk zu geben, statt bei fehlgeschlagenem
+    # chunk_fts-Lookup direkt auf den synthetischen Schluessel
+    # 'fts-paper::<pid>' zurueckzufallen (und damit den Hybrid-Bonus zu
+    # verlieren).
     queries_used = [raw_query]
     if resolve_query_expansion_enabled():
         variants, expansion_error = expand_query(raw_query)
@@ -1072,6 +1067,33 @@ def search_papers(
         vec_results = _fuse_multi_query_vec_results(vec_lists)
     else:
         vec_results = _vec0_search(db_path, raw_query, k=k)
+
+    # 'paper_id -> bester Vektor-Chunk' (Issue #791): vec_results ist bereits
+    # nach Relevanz sortiert (Distanz aufsteigend bzw. RRF-fusionierter Rang
+    # bei Multi-Query), daher liefert das erste Vorkommen je paper_id den
+    # vektoriell besten Chunk -- analog zum bestehenden
+    # chunk_data.setdefault-Muster in _fuse_multi_query_vec_results.
+    vec_best_by_paper: dict[str, dict] = {}
+    for r in vec_results:
+        vec_best_by_paper.setdefault(r["paper_id"], r)
+
+    # Chunk-Zuordnung fuer die lexikalische Seite (Issue #727): jeder
+    # paper-level FTS5-Treffer bekommt ueber chunk_fts (#726) seinen
+    # best-passenden Chunk zugeordnet, damit reciprocal_rank_fusion() auf
+    # 'chunk_id' (statt 'paper_id') schluesseln kann -- die chunkgenaue
+    # Praezision der Vektorsuche geht damit nicht mehr vor der Fusion
+    # verloren (vorher: _vec0_search deduplizierte VOR der Fusion).
+    # vec_best_by_paper (Issue #791) haelt den Hybrid-Bonus auch dann,
+    # wenn der lexikalische chunk_fts-Lookup fehlschlaegt.
+    _ensure_schema_for_read(db_path)
+    conn = VaultDB._open(db_path)
+    try:
+        fts_chunk_results = [
+            _attach_chunk_to_fts_hit(conn, r, query, vec_best_by_paper=vec_best_by_paper)
+            for r in fts_results
+        ]
+    finally:
+        conn.close()
 
     # top_n=k*4 (Decklung der Reranker-Kandidaten, #727, P1-Performance):
     # Mehrere Chunks desselben Papers duerfen die Fusion getrennt durchlaufen,
@@ -1140,7 +1162,12 @@ def _fuse_multi_query_vec_results(vec_lists: list[list[dict]]) -> list[dict]:
     return [chunk_data[chunk_id] for chunk_id, _ in fused_order if chunk_id in chunk_data]
 
 
-def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) -> dict:
+def _attach_chunk_to_fts_hit(
+    conn: sqlite3.Connection,
+    entry: dict,
+    query: str,
+    vec_best_by_paper: dict[str, dict] | None = None,
+) -> dict:
     """Ordnet einem paper-level FTS5-Treffer seinen best-passenden Chunk zu (Issue #727).
 
     Sucht ueber ``chunk_fts`` (#726, echter chunk-level FTS5-Index) den
@@ -1149,12 +1176,21 @@ def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) 
     und der Reranker echten, zur Query passenden Chunk-Text statt eines
     pauschalen Abstracts sieht.
 
-    Ohne passenden Chunk (Paper noch nicht gechunkt, oder kein vorhandener
-    Chunk enthaelt die Suchbegriffe) bleibt 'text' unbesetzt -- ein
-    synthetischer Fallback-Schluessel haelt den Kandidaten trotzdem eindeutig
-    fuer die Fusion; ``_fill_missing_reranker_text`` liefert danach den
-    bisherigen Abstract-/Erster-Chunk-Fallback (#702). Der synthetische
-    Schluessel kollidiert nicht mit echten Chunk-IDs (UUID4, siehe
+    Schlaegt der lexikalische Lookup fehl (kein Chunk des Papers enthaelt die
+    Suchbegriffe woertlich -- strukturell haeufig, FTS5 ``unicode61`` stemmt
+    nicht, siehe #789), faellt die Funktion seit Issue #791 auf den
+    vektoriell besten Chunk desselben Papers zurueck (``vec_best_by_paper``,
+    vom Aufrufer aus der bereits berechneten ``_vec0_search``-Liste
+    gebaut) -- inklusive 'text' und Fundstelle. Das erhaelt den Hybrid-Bonus
+    (FTS-Metadaten + inhaltlich passender Chunk-Text) auch bei
+    fehlgeschlagenem lexikalischem Chunk-Lookup. Nur wenn auch kein
+    Vektor-Chunk fuer das Paper existiert (Embedding deaktiviert, Backend
+    fehlt, Paper ganz ungechunkt, oder ``vec_best_by_paper`` nicht
+    uebergeben) bleibt 'text' unbesetzt -- ein synthetischer
+    Fallback-Schluessel haelt den Kandidaten trotzdem eindeutig fuer die
+    Fusion; ``_fill_missing_reranker_text`` liefert danach den bisherigen
+    Abstract-/Erster-Chunk-Fallback (#702). Der synthetische Schluessel
+    kollidiert nicht mit echten Chunk-IDs (UUID4, siehe
     ``VaultDB.add_chunk_embedding``).
 
     Args:
@@ -1164,6 +1200,12 @@ def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) 
             (traegt mindestens 'paper_id').
         query: Sanitierte FTS5-Query (dieselbe, mit der ``papers_fts``
             durchsucht wurde).
+        vec_best_by_paper: Optionales 'paper_id -> bester Vektor-Chunk'-Dict
+            (Eintrag im ``_vec0_search``-Format: 'chunk_id', 'text',
+            'section_title', 'page_start', 'page_end'), fuer den Fallback bei
+            fehlgeschlagenem lexikalischem Lookup (Issue #791). ``None``
+            (Default) erhaelt das alte Verhalten -- direkter Sprung auf den
+            synthetischen Schluessel.
 
     Returns:
         Kopie von ``entry``, ergaenzt um 'chunk_id' und ggf. 'text'.
@@ -1194,6 +1236,18 @@ def _attach_chunk_to_fts_hit(conn: sqlite3.Connection, entry: dict, query: str) 
             # v13-Datenbank: chunk_embeddings existiert, Spalten aber noch nicht.
             # Lokation bleibt ungesetzt -- dokumentiertes Verhalten fuer Bestaende.
             pass
+        return entry
+
+    vec_best = (vec_best_by_paper or {}).get(paper_id)
+    if vec_best is not None:
+        # Vektor-Fallback (Issue #791): die vec0-Eintraege tragen bereits
+        # 'text'/'section_title'/'page_start'/'page_end' aus dem
+        # knn_chunks()-Roundtrip -- kein weiterer DB-Lookup noetig.
+        entry["chunk_id"] = vec_best["chunk_id"]
+        entry["text"] = vec_best.get("text")
+        entry["section_title"] = vec_best.get("section_title")
+        entry["page_start"] = vec_best.get("page_start")
+        entry["page_end"] = vec_best.get("page_end")
     else:
         entry["chunk_id"] = f"fts-paper::{paper_id}"
     return entry

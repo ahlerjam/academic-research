@@ -485,6 +485,30 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   angebunden, das ist an dieser Stelle explizit dokumentiert statt
   stillschweigend übersprungen.
 
+### Fixed
+
+- **`_attach_chunk_to_fts_hit` verliert nicht mehr den Hybrid-Bonus bei
+  fehlgeschlagenem Chunk-Lookup (#791, Folge-Issue aus #789).** Schlug der
+  lexikalische `chunk_fts`-Lookup fehl (kein Chunk des Papers enthaelt die
+  Suchbegriffe woertlich -- strukturell haeufig, FTS5 `unicode61` stemmt
+  nicht), fiel `academic_vault/server.py::_attach_chunk_to_fts_hit` bislang
+  auf den synthetischen Schluessel `fts-paper::<pid>` zurueck und verlor
+  damit jede Chunk-Zuordnung; `reciprocal_rank_fusion` sah den Kandidaten
+  ohne echten `chunk_id`/`text`. Fix: `search_papers` zieht die
+  vec0-Beschaffung (inkl. Multi-Query-Fusion, #734) vor den FTS-Chunk-Attach
+  und reicht ein `paper_id -> bester Vektor-Chunk`-Dict als neuen optionalen
+  Parameter an `_attach_chunk_to_fts_hit` durch; dessen Else-Zweig nutzt
+  diesen Vektor-Bestchunk (inkl. `text`/Fundstelle) statt direkt auf den
+  synthetischen Schluessel zu springen. Trifft derselbe Chunk sowohl den
+  FTS-Fallback als auch die eigene vec0-Liste, erscheint er in der Fusion
+  unter einer `chunk_id` in beiden Rank-Dicts und bekommt dadurch den
+  Hybrid-Bonus (kombinierter RRF-Rang). Nur wenn auch kein Vektor-Chunk fuer
+  das Paper existiert (Embedding deaktiviert, Backend fehlt, Paper ganz
+  ungechunkt), bleibt der synthetische Schluessel als letzte Stufe erhalten
+  -- keine Regression. `scripts/eval/run_retrieval_ablation_729.py::diagnose_query`
+  spiegelt den Fix: `attach_equals_vec_best` wird fuer den reparierten Fall
+  `True` statt `False`.
+
 ### Removed
 
 - **Cloud-Reranker Voyage und Cohere ersatzlos entfernt (#715).**
