@@ -614,21 +614,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ManifestMismatchError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(json.dumps(report, indent=2, ensure_ascii=False))
 
-    if args.check_against is None:
+    try:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+
+        if args.check_against is None:
+            return 0
+
+        problems = compare_against(report, _read_json(args.check_against))
+        if problems:
+            print(
+                "Embedding-Kandidaten (#731): Lauf und eingecheckte Rohdaten weichen ab\n  "
+                + "\n  ".join(problems),
+                file=sys.stderr,
+            )
+            return 1
+        print("Embedding-Kandidaten (#731): Lauf deckt sich mit den Rohdaten.", file=sys.stderr)
         return 0
-
-    problems = compare_against(report, _read_json(args.check_against))
-    if problems:
-        print(
-            "Embedding-Kandidaten (#731): Lauf und eingecheckte Rohdaten weichen ab\n  "
-            + "\n  ".join(problems),
-            file=sys.stderr,
-        )
-        return 1
-    print("Embedding-Kandidaten (#731): Lauf deckt sich mit den Rohdaten.", file=sys.stderr)
-    return 0
+    except Exception as exc:
+        # Aeusserster Fang: ManifestMismatchError ist oben bereits spezifisch
+        # behandelt (#798).
+        print(f"Embedding-Kandidaten (#731): unerwarteter Fehler: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

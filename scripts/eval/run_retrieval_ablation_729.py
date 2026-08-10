@@ -1210,50 +1210,58 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    vectors_raw = load_vectors(args.vectors)
-    vectors: dict[str, list[float]] = dict(vectors_raw)
+    try:
+        vectors_raw = load_vectors(args.vectors)
+        vectors: dict[str, list[float]] = dict(vectors_raw)
 
-    quality = run_quality_ablation(goldset, vectors, k=args.k)
-    report: dict = {"goldset": str(args.goldset), "quality": quality}
-    if not args.skip_diagnostics:
-        report["diagnostics"] = run_diagnostics(goldset, vectors, k=args.k)
-
-    if args.baseline_goldset is not None:
-        baseline_goldset = load_goldset(args.baseline_goldset)
-        try:
-            verify_manifest(baseline_goldset)
-        except ManifestMismatchError as exc:
-            print(str(exc), file=sys.stderr)
-            return 2
-        baseline_vectors = dict(load_vectors(args.baseline_vectors))
-        baseline: dict = {
-            "goldset": str(args.baseline_goldset),
-            "quality": run_quality_ablation(baseline_goldset, baseline_vectors, k=args.k),
-        }
+        quality = run_quality_ablation(goldset, vectors, k=args.k)
+        report: dict = {"goldset": str(args.goldset), "quality": quality}
         if not args.skip_diagnostics:
-            baseline["diagnostics"] = run_diagnostics(baseline_goldset, baseline_vectors, k=args.k)
-        report["baseline"] = baseline
+            report["diagnostics"] = run_diagnostics(goldset, vectors, k=args.k)
 
-    if not args.skip_cost:
-        report["cost"] = run_cost_measurement()
+        if args.baseline_goldset is not None:
+            baseline_goldset = load_goldset(args.baseline_goldset)
+            try:
+                verify_manifest(baseline_goldset)
+            except ManifestMismatchError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+            baseline_vectors = dict(load_vectors(args.baseline_vectors))
+            baseline: dict = {
+                "goldset": str(args.baseline_goldset),
+                "quality": run_quality_ablation(baseline_goldset, baseline_vectors, k=args.k),
+            }
+            if not args.skip_diagnostics:
+                baseline["diagnostics"] = run_diagnostics(
+                    baseline_goldset, baseline_vectors, k=args.k
+                )
+            report["baseline"] = baseline
 
-    text = json.dumps(report, indent=2, ensure_ascii=False)
-    print(text)
-    if args.out:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(text + "\n", encoding="utf-8")
-        print(f"Report geschrieben: {args.out}", file=sys.stderr)
+        if not args.skip_cost:
+            report["cost"] = run_cost_measurement()
 
-    if args.check_against is not None:
-        stored = json.loads(args.check_against.read_text(encoding="utf-8"))
-        problems = compare_against(report, stored)
-        if problems:
-            print(f"Lauf und {args.check_against} laufen auseinander:", file=sys.stderr)
-            for problem in problems:
-                print(f"  - {problem}", file=sys.stderr)
-            return 1
-        print(f"Deckungsgleich mit {args.check_against}.", file=sys.stderr)
-    return 0
+        text = json.dumps(report, indent=2, ensure_ascii=False)
+        print(text)
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(text + "\n", encoding="utf-8")
+            print(f"Report geschrieben: {args.out}", file=sys.stderr)
+
+        if args.check_against is not None:
+            stored = json.loads(args.check_against.read_text(encoding="utf-8"))
+            problems = compare_against(report, stored)
+            if problems:
+                print(f"Lauf und {args.check_against} laufen auseinander:", file=sys.stderr)
+                for problem in problems:
+                    print(f"  - {problem}", file=sys.stderr)
+                return 1
+            print(f"Deckungsgleich mit {args.check_against}.", file=sys.stderr)
+        return 0
+    except Exception as exc:
+        # Aeusserster Fang: beide ManifestMismatchError-Stellen (Haupt- und
+        # Baseline-Goldset) sind oben bereits spezifisch behandelt (#798).
+        print(f"Retrieval-Ablation (#729): unerwarteter Fehler: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
