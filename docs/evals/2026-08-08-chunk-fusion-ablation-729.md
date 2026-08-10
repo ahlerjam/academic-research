@@ -2,10 +2,22 @@
 
 > **Historisches Dokument.** Momentaufnahme eines einzelnen Laufs, nicht der
 > aktuelle Stand.
+>
+> **Datenstand 2026-08-10 (#800).** Das #708-Goldset wurde von 26 auf 60
+> Queries (30 auf 61 Chunks) verbreitert. Der Report unten beschreibt weiterhin
+> ausschließlich den ursprünglichen 26-Query/30-Chunk-Lauf vom 2026-08-08 und
+> ist nicht auf den breiteren Stand nachgezogen — die Tabellen (0,7308
+> Recall@10 für „vorher") und die eingecheckte
+> `2026-08-08-chunk-fusion-ablation-729-live-results.json` gelten
+> ausschließlich für diesen historischen 26-Query-Lauf. Der aktuell erwartete
+> Wert auf dem #800-verbreiterten Goldset ist 0,5667 Recall@10 für „vorher"
+> (`tests/test_issue_729_chunk_fusion_ablation.py::test_run_quality_ablation_matches_pre_708_baseline_values`,
+> gegen die eingecheckte #708-Fixture nachgerechnet, kein eigener Report).
 
 [← Doku-Übersicht](../README.md) · [← Evals-Übersicht](README.md)
 
-**Stand:** 2026-08-08 · **Goldset:** Chunk-Goldset aus [#708](retrieval-chunk-goldset-708.md),
+**Stand:** 2026-08-08 (historischer Referenzlauf, siehe Datenstands-Hinweis
+oben) · **Goldset:** Chunk-Goldset aus [#708](retrieval-chunk-goldset-708.md),
 11 Paper / 30 Chunks / 26 Queries · **Kosten-Korpus:** 60 synthetische Paper / 194 Chunks
 **Rohdaten:** [`2026-08-08-chunk-fusion-ablation-729-live-results.json`](2026-08-08-chunk-fusion-ablation-729-live-results.json)
 (einziger, durchgängiger Lauf — Tabellen unten und JSON stammen aus demselben Aufruf)

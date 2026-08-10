@@ -181,6 +181,7 @@ dem alten #708-Textstand aufbaut. Nachgezogen wurden:
 | #731-Kandidatenvergleich | `run_embedding_candidates_731.py --check-against …731-live-results.json` | grün, alle 5 Kandidaten neu erzeugt |
 | #729-Ablationstest (direkt) | `tests/test_issue_729_chunk_fusion_ablation.py` | grün, hartkodierter Baseline-Wert aktualisiert |
 | #789-FTS-Diagnose | `tests/test_issue_789_fts_diagnosis.py` | grün, hartkodierte Query-/Trefferzahlen aktualisiert |
+| #733-HyDE/Multi-Query | `run_hyde_multiquery_eval.py --check-against …733-live-results.json` | grün, Fixture neu erzeugt (120 CLI-Aufrufe, siehe unten) |
 
 Details je Gatter, mit den tatsächlich ausgeführten Kommandos, stehen im
 Abschluss-Report der Umsetzung (PR-Beschreibung / Commit-Historie auf
@@ -195,25 +196,43 @@ Momentaufnahme des damaligen Laufs.
 
 `scripts/eval/run_hyde_multiquery_eval.py` (#733) lädt das #708-Goldset über
 denselben Default-Pfad und ist **nicht** Teil dieses Issues, hängt aber am
-selben CI-Job (`retrieval-goldset`). Seine Fixture
-(`tests/fixtures/hyde_multiquery_733/transforms.json`) kennt nur die
-ursprünglichen 26 Query-IDs; die 34 neuen Queries fehlen darin. Das erfordert
-`VAULT_HYDE_LIVE_TRANSFORM=1` (echte `claude`-CLI-Aufrufe, ~120 Stück für
-Hyde+Multi-Query über alle 60 Queries) gefolgt von
-`VAULT_E5_LIVE_TEST=1 build_hyde_multiquery_fixture.py --stage vectors` — ein
-Live-Lauf anderer Art als der reine Vektor-Rebuild dieses Issues, deshalb hier
-bewusst nicht mitgezogen. Siehe Abschluss-Report für den Status dieses Gates.
+selben CI-Job (`retrieval-goldset`). Der CI-Job ruft das Skript direkt auf,
+nicht über pytest — ein bloßer Test-Skip hätte das Gatter deshalb nicht
+gerettet. Seine Fixture (`tests/fixtures/hyde_multiquery_733/transforms.json`)
+kannte zunächst nur die ursprünglichen 26 Query-IDs und brach mit
+`KeyError: 'q-en-12'` ab. Das ist inzwischen behoben: Commit `02749ec` hat die
+Fixture vollständig neu erzeugt (`VAULT_HYDE_LIVE_TRANSFORM=1`, 120 echte
+`claude`-CLI-Aufrufe für Hyde+Multi-Query über alle 60 Queries, danach
+`VAULT_E5_LIVE_TEST=1 build_hyde_multiquery_fixture.py --stage vectors` für
+300 Vektoren). Report und Rohdaten
+(`docs/evals/2026-08-07-hyde-multiquery-733.md`,
+`…733-live-results.json`) sind auf den neuen 60-Query-Lauf gezogen, alle vier
+Gatter des CI-Jobs grün. **Issue #808** (das genau diesen Fixture-Rebuild
+forderte) ist damit durch diesen PR bereits erledigt — wer es jetzt noch
+aufgreift, würde die Fixture ein zweites Mal für ~120 CLI-Aufrufe bauen, ohne
+dass sich am Ergebnis etwas ändert. Das Issue selbst bleibt bis zur
+Operator-Bestätigung offen.
 
-Dieselbe Lücke betrifft `scripts/eval/run_context_ablation_710.py` (#710/#785):
-seine Fixture (`tests/fixtures/context_ablation_710/sentences.json`) trägt
-modellgeschriebene Kontextsätze für die 11 alten #708-Dokumente und kennt die
-10 neuen #800-Dokumente nicht. Der Rebuild braucht
-`VAULT_CONTEXT_LIVE_TRANSFORM=1` (echte `claude`-CLI-Aufrufe, einer je
-Dokument statt je Query — günstiger als #733, aber derselbe Live-Lauf-Typ)
-gefolgt von `VAULT_E5_LIVE_TEST=1`. Ebenfalls nicht Teil dieses Issues und
-nicht mitgezogen; betroffen sind `tests/test_issue_710_context_ablation.py`
-(Manifest-Mismatch) — kein CI-Job aus `retrieval-goldset` hängt daran, wohl
-aber der allgemeine `python-tests`-Job über `pytest tests/`.
+Dieselbe Lücke betraf `scripts/eval/run_context_ablation_710.py` (#710/#785):
+seine Fixture (`tests/fixtures/context_sentences_710/sentences.json`) trug
+modellgeschriebene Kontextsätze für die 11 alten #708-Dokumente und kannte die
+10 neuen #800-Dokumente nicht. Ebenfalls nicht Teil dieses Issues gewesen;
+betroffen war `tests/test_issue_710_context_ablation.py` (Manifest-Mismatch)
+— kein CI-Job aus `retrieval-goldset` hängt daran, wohl aber der allgemeine
+`python-tests`-Job über `pytest tests/`. **Das ist inzwischen behoben (#809):**
+die Fixture wurde vollständig neu erzeugt (21 echte `claude`-CLI-Aufrufe für
+`VAULT_CONTEXT_LIVE_TRANSFORM=1 build_context_sentences_710.py --stage
+sentences`, danach `VAULT_E5_LIVE_TEST=1 --stage vectors`), die eingecheckten
+Rohdaten (`docs/evals/2026-08-08-context-ablation-710-live-results.json`) neu
+gerechnet und Report sowie zwei fixture-gebundene Test-Erwartungen
+(`language-gap`/`cross-language`-Teilmengengrößen) auf den 60-Query-Stand
+gezogen — alle 43 Tests in `tests/test_issue_710_context_ablation.py` grün.
+**Befund gedreht:** der auf 26 Queries signifikante Vorteil von
+`model_context` gegenüber `metadata_context` trägt auf 60 Queries in keiner
+Teilmenge und im Gesamtmittel nicht mehr (Details:
+[`2026-08-08-context-ablation-710.md`](2026-08-08-context-ablation-710.md)).
+Der produktive Schreibweg (#783/#784) ist davon unberührt, da bereits gebaut
+und in Betrieb.
 
 ## Grenzen
 

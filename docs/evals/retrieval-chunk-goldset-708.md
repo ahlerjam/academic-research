@@ -3,10 +3,19 @@
 > **Historisches Dokument.** Momentaufnahme eines einzelnen Laufs, nicht der
 > aktuelle Stand. Der Sollzustand steht in [`STRATEGY.md`](STRATEGY.md); die
 > laufend geprüfte Fassung der Zahlen ist `thresholds.json` neben dem Goldset.
+>
+> **Datenstand 2026-08-10 (#800).** Das Goldset wurde von 26 auf 60 Queries
+> (30 auf 61 Chunks) verbreitert; `thresholds.json` und `goldset.json` tragen
+> seither die neuen Zahlen. Der Report unten beschreibt weiterhin
+> ausschließlich den ursprünglichen 26-Query/30-Chunk-Lauf vom 2026-08-07 — er
+> ist nicht auf den breiteren Stand nachgezogen. Die aktuellen Zahlen (60
+> Queries, 61 Chunks) stehen in
+> [`2026-08-10-chunk-goldset-widening-800.md`](2026-08-10-chunk-goldset-widening-800.md).
 
 [← Doku-Übersicht](../README.md) · [← Evals-Übersicht](README.md)
 
-**Stand:** 2026-08-07 · **Modell:** `intfloat/multilingual-e5-small` (384d) ·
+**Stand:** 2026-08-07 (historischer Referenzlauf, siehe Datenstands-Hinweis
+oben) · **Modell:** `intfloat/multilingual-e5-small` (384d) ·
 **Korpus:** 30 Chunks aus 11 synthetischen Volltexten · **Queries:** 26
 
 Dieses Set misst die Retrieval-Strecke, die tatsächlich betrieben wird:

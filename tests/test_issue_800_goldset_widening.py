@@ -43,6 +43,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GOLDSET_DIR = REPO_ROOT / "tests" / "fixtures" / "retrieval_goldset_chunks_708"
 SOURCES_PATH = GOLDSET_DIR / "sources.json"
+REPORT_PATH = REPO_ROOT / "docs" / "evals" / "2026-08-10-chunk-goldset-widening-800.md"
 
 # Referenzwerte des 26er-Sets aus #708 (siehe
 # docs/evals/retrieval-chunk-goldset-708.md, "Queries"-Absatz).
@@ -314,7 +315,13 @@ class TestCorpusKeepsUpWithQueries:
         )
 
     def test_resolution_per_query_is_reported_correctly(self, sources: dict) -> None:
-        """1/n Recall-Punkte je Query -- die Kennzahl, die der #800-Report nennen muss."""
+        """1/n Recall-Punkte je Query -- die Kennzahl, die der #800-Report nennen muss.
+
+        Rechnet nicht nur die beiden Werte gegeneinander (das leistet schon
+        ``test_query_count_reaches_the_800_target`` implizit), sondern liest
+        den tatsaechlichen Report und prueft, dass er die korrekt gerundete
+        neue UND alte Aufloesung nennt -- sonst waere der Reportinhalt selbst
+        ungeprueft."""
         n = len(sources["queries"])
         resolution = 1.0 / n
         old_resolution = 1.0 / OLD_QUERY_COUNT
@@ -322,3 +329,14 @@ class TestCorpusKeepsUpWithQueries:
             "die Aufloesung muss sich gegenueber #708 verbessert haben"
         )
         assert resolution <= 1.0 / MIN_QUERY_COUNT + 1e-9
+
+        report_text = REPORT_PATH.read_text(encoding="utf-8")
+        new_formatted = f"{resolution:.4f}".replace(".", ",")
+        old_formatted = f"{old_resolution:.4f}".replace(".", ",")
+        assert new_formatted in report_text, (
+            f"neue Aufloesung {new_formatted} (1/{n}) fehlt im #800-Report"
+        )
+        assert old_formatted in report_text, (
+            f"alte #708-Aufloesung {old_formatted} (1/{OLD_QUERY_COUNT}) fehlt im "
+            "#800-Report zum Vergleich"
+        )

@@ -126,9 +126,14 @@ def test_old_vectors_are_reused_byte_for_byte(probe_goldset: dict) -> None:
     auszusagen."""
     old_vectors = _read(BASE_DIR / "vectors.json")
     new_vectors = _read(PROBE_VECTORS)
+    old_goldset = load_goldset(BASE_DIR / "goldset.json")
 
-    assert len(old_vectors["chunks"]) > 0
-    assert len(old_vectors["queries"]) > 0
+    assert len(old_vectors["chunks"]) == len(old_goldset["chunks"]), (
+        "alle Chunk-Vektoren der #708-Fixture muessen vorliegen, nicht nur irgendwelche"
+    )
+    assert len(old_vectors["queries"]) == len(old_goldset["queries"]), (
+        "alle Query-Vektoren der #708-Fixture muessen vorliegen, nicht nur irgendwelche"
+    )
     for chunk_id, encoded in old_vectors["chunks"].items():
         assert new_vectors["chunks"][chunk_id] == encoded, chunk_id
     for query_id, encoded in old_vectors["queries"].items():
@@ -400,7 +405,8 @@ def test_old_26_queries_keep_a_delta_of_exactly_zero(ablation: dict) -> None:
     Fusionsvarianten ordnungsgleich (#789). Ein Delta ungleich 0 hier waere
     ein Befund ueber den Suchpfad, kein Befund ueber das neue Goldset."""
     old_ids = {q["query_id"] for q in _read(BASE_DIR / "sources.json")["queries"]}
-    assert len(old_ids) >= 26
+    expected_old_query_count = len(load_goldset(BASE_DIR / "goldset.json")["queries"])
+    assert len(old_ids) == expected_old_query_count
     for query_id in sorted(old_ids):
         for metric in ("recall_at_10", "ndcg_at_10", "reciprocal_rank"):
             assert _per_query_delta(ablation, query_id, metric) == 0.0, (query_id, metric)
