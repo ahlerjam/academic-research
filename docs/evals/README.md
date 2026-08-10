@@ -48,6 +48,8 @@ danach höchstens den passenden Report.
 | [`2026-08-08-context-ablation-710-live-results.json`](2026-08-08-context-ablation-710-live-results.json) | Rohdaten des Vier-Arme-Laufs (alle Arme, per Query, inklusive Deltas und Kontrolltest-Block) |
 | [`2026-08-09-context-enrichment-710.md`](2026-08-09-context-enrichment-710.md) | Reale Kostenmessung des Kontextsatz-Schreibwegs (#783/#784): der echte `chunk-context-writer`-Agent über `claude -p`, gegen den echten MCP-Server, 11 Goldset-Dokumente plus ein reales Paper mit 27 Chunks — Tokens/Kosten/Latenz aus echten `usage`-Feldern, Re-Embedding-Latenz je Einzeltext, Beobachtung zum Batch-/Turn-Verhalten bei großen Papers (#784, Epic #710) |
 | [`2026-08-09-context-enrichment-710-live-results.json`](2026-08-09-context-enrichment-710-live-results.json) | Rohdaten des Kostenlaufs (alle 12 Sitzungen, Tokens/Kosten/Dauer je Paper, Post-Zustand je Chunk, Re-Embedding-Latenzblock) |
+| [`2026-08-10-reranker-ablation-804.md`](2026-08-10-reranker-ablation-804.md) | Trägt der aktive `BAAI/bge-reranker-v2-m3`? Echte Produktionsfusion (RRF über `chunk_fts`+Vektor) auf dem #708-Chunk-Goldset, "aus" (RRF-Reihenfolge) gegen "an" (`rerank_score`-Reihenfolge) auf denselben fusionierten Kandidaten, gepaarter Bootstrap, Latenz/Peak-RSS je Bedingung in getrenntem Subprozess — Nullbefund als explizit zulässiges Ergebnis (#804) |
+| [`2026-08-10-reranker-ablation-804-live-results.json`](2026-08-10-reranker-ablation-804-live-results.json) | Rohdaten des Ablationslaufs (beide Bedingungen, per Query, inklusive Kosten-Block) — vom CI-Job `retrieval-goldset` gegen einen frischen Lauf geprüft |
 
 ## Konvention
 
