@@ -611,11 +611,16 @@ def diagnose_query(db_path: str, query: str, k: int = DEFAULT_K) -> dict:
       chunk-level ``server._vec0_search`` -- Paper-Rang ist der Rang des
       ERSTEN (naechsten) Chunks je Paper, Chunk-Rang je einzelnem Chunk.
     - ``attach_equals_vec_best``: je Paper-ID, ob der von
-      ``_attach_chunk_to_fts_hit`` zugeordnete Chunk mit dem vektoriell
-      besten Chunk desselben Papers uebereinstimmt -- Vorbedingung fuer
-      Folge-Issue 1 (bei fehlgeschlagenem Chunk-Lookup faellt die Zuordnung
-      auf den synthetischen Schluessel zurueck statt auf den Vektor-Bestchunk,
-      das kostet den Hybrid-Bonus).
+      ``_attach_chunk_to_fts_hit`` als FUSIONSSCHLUESSEL zugeordnete Chunk mit
+      dem vektoriell besten Chunk desselben Papers uebereinstimmt -- also ob
+      derselbe Chunk aus beiden Quellen kommt und den kombinierten RRF-Rang
+      bekommt. Bleibt bei fehlgeschlagenem lexikalischem Chunk-Lookup auch
+      nach dem #791-Fix ``False``: der Fix uebernimmt dort Text und Fundstelle
+      des Vektor-Chunks, aber bewusst nicht dessen ``chunk_id`` (sonst
+      entstuende eine chunk-level Ko-Okkurrenz, die es nicht gibt -- siehe
+      ``server._attach_chunk_to_fts_hit``). ``False`` heisst hier also
+      unveraendert: kein Hybrid-Rang fuer diesen Chunk, nicht "kein
+      Chunk-Text".
     - ``min_score_gap_at_k``: kleinster Abstand zwischen zwei aufeinander-
       folgenden ``rrf_score``-Werten in den fusionierten Top-``k`` -- nahe 0
       markiert einen Tie, Vorbedingung fuer Folge-Issue 2 (nichtdeterministischer
@@ -655,6 +660,11 @@ def diagnose_query(db_path: str, query: str, k: int = DEFAULT_K) -> dict:
             exact = _server._fts_exact_hits(conn, sanitized, None, k)
             trigram_rows = _server._fts_trigram_hits(conn, sanitized, None, k)
         except sqlite3.OperationalError as exc:
+            # Fruehausstieg VOR der vec0-Beschaffung (bewusst, unveraendert seit
+            # #789): ein Query-Syntaxdefekt soll 'vec_paper_rank'/'vec_chunk_rank'
+            # nicht befuellen -- die Diagnose bricht denselben lexikalischen
+            # Fehler nach, den auch server.search_papers fuer diese Query
+            # geworfen haette, bevor der vec0-Pfad ueberhaupt zum Zug kaeme.
             result["fts5_syntax_error"] = str(exc)
             return result
 
@@ -667,9 +677,28 @@ def diagnose_query(db_path: str, query: str, k: int = DEFAULT_K) -> dict:
         result["fts_hit_count"] = len(fts_results)
         result["fts_ranking"] = [r["paper_id"] for r in fts_results]
 
+        # Vec0-Beschaffung VOR dem FTS-Chunk-Attach (Issue #791, spiegelt die
+        # Reihenfolge in server.search_papers): 'best_chunk_per_paper' dient
+        # gleichzeitig als 'vec_best_by_paper'-Inhaltsfallback fuer
+        # _attach_chunk_to_fts_hit, damit diese Diagnose exakt den reparierten
+        # Produktionspfad nachrechnet statt eines Vor-#791-Zwischenstands.
+        # Auf 'attached_chunk'/'attach_equals_vec_best' wirkt sich das NICHT
+        # aus -- der Fusionsschluessel bleibt bei fehlgeschlagenem Lookup der
+        # synthetische, nur Text/Fundstelle kommen aus dem Vektor-Chunk.
+        vec_results = _server._vec0_search(db_path, query, k=k)
+        best_chunk_per_paper: dict[str, dict] = {}
+        for idx, r in enumerate(vec_results):
+            pid, cid = r["paper_id"], r["chunk_id"]
+            result["vec_chunk_rank"][cid] = idx + 1
+            if pid not in result["vec_paper_rank"]:
+                result["vec_paper_rank"][pid] = idx + 1
+                best_chunk_per_paper[pid] = r
+
         fts_chunk_results = []
         for r in fts_results:
-            attached = _server._attach_chunk_to_fts_hit(conn, r, sanitized)
+            attached = _server._attach_chunk_to_fts_hit(
+                conn, r, sanitized, vec_best_by_paper=best_chunk_per_paper
+            )
             chunk_id = attached["chunk_id"]
             is_synthetic = chunk_id.startswith("fts-paper::")
             result["attached_chunk"][attached["paper_id"]] = None if is_synthetic else chunk_id
@@ -677,19 +706,11 @@ def diagnose_query(db_path: str, query: str, k: int = DEFAULT_K) -> dict:
     finally:
         conn.close()
 
-    vec_results = _server._vec0_search(db_path, query, k=k)
-    best_chunk_per_paper: dict[str, str] = {}
-    for idx, r in enumerate(vec_results):
-        pid, cid = r["paper_id"], r["chunk_id"]
-        result["vec_chunk_rank"][cid] = idx + 1
-        if pid not in result["vec_paper_rank"]:
-            result["vec_paper_rank"][pid] = idx + 1
-            best_chunk_per_paper[pid] = cid
-
     for pid, attached_cid in result["attached_chunk"].items():
         best = best_chunk_per_paper.get(pid)
+        best_chunk_id = best["chunk_id"] if best is not None else None
         result["attach_equals_vec_best"][pid] = (
-            attached_cid is not None and best is not None and attached_cid == best
+            attached_cid is not None and best_chunk_id is not None and attached_cid == best_chunk_id
         )
 
     fused = reciprocal_rank_fusion(vec_results, fts_chunk_results, k=60, top_n=k)
