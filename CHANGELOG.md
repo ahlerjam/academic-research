@@ -10,6 +10,25 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Eval-Sitzungsprofile loesen den Tool-vs-Preamble-Widerspruch (#830):**
+  Der Lauf vom 2026-08-10 (Run 31369626618) meldete 16 von 139 Fehlschlaegen;
+  elf davon gingen auf denselben Widerspruch zurueck -- `_run_claude_cli`
+  startete jede Sitzung werkzeuglos (`--allowedTools ""`) und ohne `cwd`,
+  waehrend fast jeder Skill laut `skills/_common/preamble.md` Read-Zugriff
+  auf `academic_context.md` voraussetzt bzw. (bei sieben Suiten) direkt
+  Vault-MCP-Tools aufruft. Vier Achsen (`cwd`, `allowed_tools`, `mcp_config`,
+  `env`) sind jetzt an `_run_claude_cli`/`call_claude`/
+  `call_claude_with_tokens` konfigurierbar statt fest verdrahtet (Default =
+  bisheriges Verhalten), gebuendelt zu drei benannten Profilen (`bare`,
+  `context-fs`, `vault`) plus einer dokumentierten Nicht-Zuordnung
+  (`net-excluded`, fuer den einzelnen netzabhaengigen Fall `quote-extractor
+  qe-04`). `eval_runner.COMPONENT_PROFILES` ordnet allen 59
+  `evals/`-Komponenten genau ein Profil zu, gehalten durch
+  `tests/evals/test_session_profiles.py` (Coverage-Guard plus ein Test, der
+  belegt, dass eine Fixture im `cwd` einer Suite fuer eine andere mit
+  anderem `cwd` unsichtbar bleibt). Details und die Herleitung je Gruppe in
+  `docs/evals/STRATEGY.md`, Abschnitt "Sitzungsprofile". Die tatsaechliche
+  Fixture-Seite (Kontextdateien, Vault-Testdatenbank) bleibt #823/#824.
 - **Reranker-Ablation misst den Beitrag des aktiven `bge-reranker-v2-m3`
   (#804):** #722 hatte den Reranker-Beitrag per Leave-one-out beziffert
   (+0,0000 Recall@10, +0,0107 nDCG@10, +0,0144 MRR), beide Nicht-Null-Werte
