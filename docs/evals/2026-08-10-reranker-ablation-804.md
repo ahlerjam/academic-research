@@ -45,12 +45,16 @@ altert.
 
 ## Ergebnis
 
-Zahlen über alle 60 Queries, `k = 10`:
+Zahlen über alle 60 Queries, `k = 10` — Qualitätsmetriken und Kosten (Suchlatenz,
+Peak-RSS) in derselben Tabelle, weil beide Seiten zusammen gelesen werden müssen:
+ein Reranker, der Latenz/RSS kostet, aber keinen belegbaren Qualitätsgewinn bringt,
+ist nur im direkten Nebeneinander beider Werte erkennbar. Messhardware: Apple M4
+Pro, 12 Kerne, 25,8 GB RAM, macOS-26.5.2-arm64, Python 3.12.13.
 
-| Bedingung | Recall@10 | nDCG@10 | MRR |
-|---|---|---|---|
-| `aus` (RRF-Reihenfolge, aktueller Betriebszustand seit #729) | 0,8167 | 0,7097 | 0,6764 |
-| `an` (nach `rerank_score` sortiert) | 0,7917 | 0,7190 | 0,6970 |
+| Bedingung | Recall@10 | nDCG@10 | MRR | Suchlatenz p50 | Suchlatenz p95 | Peak-RSS |
+|---|---|---|---|---|---|---|
+| `aus` (RRF-Reihenfolge, aktueller Betriebszustand seit #729) | 0,8167 | 0,7097 | 0,6764 | 17,2 ms | 35,2 ms | 74,3 MB |
+| `an` (nach `rerank_score` sortiert) | 0,7917 | 0,7190 | 0,6970 | 3057,5 ms | 3542,7 ms | 900,7 MB |
 
 Gepaarter Bootstrap, Delta = `an` minus `aus`:
 
@@ -72,16 +76,10 @@ Konfidenzaussage: keiner der drei Abstände ist von Null zu unterscheiden.
 
 ## Kosten
 
-Messhardware: Apple M4 Pro, 12 Kerne, 25,8 GB RAM, macOS-26.5.2-arm64, Python 3.12.13.
-
-| Bedingung | Suchlatenz p50 | Suchlatenz p95 | Peak-RSS |
-|---|---|---|---|
-| `aus` | 17,2 ms | 35,2 ms | 74,3 MB |
-| `an` | 3057,5 ms | 3542,7 ms | 900,7 MB |
-
 Der aktive Reranker kostet auf diesem Goldset rund **3 s zusätzliche
-Suchlatenz** und **rund 826 MB zusätzliches Peak-RSS** je Suche — bei einem
-Effekt, der sich laut obigem Bootstrap nicht vom Rauschen trennen lässt.
+Suchlatenz** und **rund 826 MB zusätzliches Peak-RSS** je Suche (Zahlen in
+der Tabelle unter „Ergebnis" oben) — bei einem Effekt, der sich laut obigem
+Bootstrap nicht vom Rauschen trennen lässt.
 
 Gemessen über den echten Suchpfad `server.search_papers(rerank=True)`, je
 Bedingung in einem **eigenen Subprozess** (RSS-Isolation — `ru_maxrss` ist

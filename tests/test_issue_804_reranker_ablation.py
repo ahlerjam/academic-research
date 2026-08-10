@@ -137,6 +137,21 @@ def test_check_against_ignores_cost_fields(report: dict) -> None:
     assert compare_against(report, mutated) == []
 
 
+def test_quality_and_cost_metrics_share_the_same_markdown_table() -> None:
+    """AC3 woertlich: Suchlatenz/Peak-RSS stehen in DERSELBEN Tabelle wie
+    Recall@10/nDCG@10/MRR -- nicht nur im selben PR-Beschreibungstext
+    zusammengefasst, sondern im Report-Artefakt selbst."""
+    header_lines = [
+        line
+        for line in DOC_TEXT.splitlines()
+        if line.strip().startswith("|") and "Bedingung" in line and "Recall@10" in line
+    ]
+    assert header_lines, "Keine Tabellen-Kopfzeile mit Bedingung/Recall@10 in der Doku gefunden"
+    for header in header_lines:
+        assert "Suchlatenz" in header, f"Kopfzeile ohne Suchlatenz-Spalte: {header!r}"
+        assert "Peak-RSS" in header, f"Kopfzeile ohne Peak-RSS-Spalte: {header!r}"
+
+
 # ---------------------------------------------------------------------------
 # AC4 -- hermetischer --check-against-Lauf deckungsgleich, kein Modell in CI
 # ---------------------------------------------------------------------------
