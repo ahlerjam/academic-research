@@ -17,8 +17,8 @@ Die Tests hier pruefen drei Dinge getrennt:
    Vorbedingungen, jede ``control``-Query hat ``attach_equals_vec_best`` fuer
    alle beteiligten Paper.
 3. **Die Messung faellt so aus wie vorhergesagt** -- Familie A positiv,
-   Familie C negativ, Familie D exakt 0, und die 26 Altqueries im
-   erweiterten Korpus weiterhin exakt 0 (Invarianztest).
+   Familie C negativ, Familie D exakt 0, und die #708-Altqueries (26 vor #800,
+   60 seit #800) im erweiterten Korpus weiterhin exakt 0 (Invarianztest).
 
 Punkt 3 ist bewusst als Test formuliert und nicht nur als Reportzahl: ein
 Probe-Goldset, dessen Effekt sich beim naechsten Umbau des Suchpfads
@@ -114,24 +114,28 @@ def test_old_queries_are_word_for_word_identical_to_the_708_sources() -> None:
 
 
 def test_old_vectors_are_reused_byte_for_byte(probe_goldset: dict) -> None:
-    """Task-AC: die 30 Alt-Chunk- und 26 Alt-Query-Vektoren im neuen
-    ``vectors.json`` sind byteweise identisch zum #708-Set.
+    """Task-AC: die Alt-Chunk- und Alt-Query-Vektoren des #708-Sets (26 vor,
+    60 seit #800) sind im neuen ``vectors.json`` byteweise identisch.
 
     Verglichen wird die base64-Kodierung selbst, nicht der dekodierte
     Float-Vektor: ein neu berechneter Vektor kann in der letzten Stelle
-    abweichen, ohne dass ein Toleranzvergleich das je meldete."""
+    abweichen, ohne dass ein Toleranzvergleich das je meldete. Die erwarteten
+    Zaehlwerte kommen bewusst aus der aktuellen #708-Fixture statt aus
+    eingefrorenen Literalen -- sonst bricht dieser Test bei jeder kuenftigen
+    Goldset-Verbreiterung erneut, ohne selbst etwas ueber die Reuse-Garantie
+    auszusagen."""
     old_vectors = _read(BASE_DIR / "vectors.json")
     new_vectors = _read(PROBE_VECTORS)
 
-    assert len(old_vectors["chunks"]) == 30
-    assert len(old_vectors["queries"]) == 26
+    assert len(old_vectors["chunks"]) > 0
+    assert len(old_vectors["queries"]) > 0
     for chunk_id, encoded in old_vectors["chunks"].items():
         assert new_vectors["chunks"][chunk_id] == encoded, chunk_id
     for query_id, encoded in old_vectors["queries"].items():
         assert new_vectors["queries"][query_id] == encoded, query_id
     # ... und der Zuwachs ist tatsaechlich neu, nicht etwa aus Versehen leer.
     assert len(new_vectors["chunks"]) > len(old_vectors["chunks"])
-    assert len(new_vectors["queries"]) == 38
+    assert len(new_vectors["queries"]) == len(old_vectors["queries"]) + 12
 
 
 def test_reuse_index_matches_id_and_text(tmp_path: Path) -> None:
@@ -388,15 +392,15 @@ def _per_query_delta(ablation: dict, query_id: str, metric: str) -> float:
 
 
 def test_old_26_queries_keep_a_delta_of_exactly_zero(ablation: dict) -> None:
-    """Task-AC: das Delta ueber die 26 Altqueries ist im erweiterten Set exakt
-    0 -- Invarianztest gegen den groesseren Korpus.
+    """Task-AC: das Delta ueber die #708-Altqueries (26 vor #800, 60 seit #800)
+    ist im erweiterten Set exakt 0 -- Invarianztest gegen den groesseren Korpus.
 
     Die Altqueries sind ausgeschriebene Saetze; ihre lexikalische Seite bleibt
-    auch bei 21 statt 11 Papern leer, und bei leerer FTS-Liste sind beide
+    auch bei 31 statt 21 Papern leer, und bei leerer FTS-Liste sind beide
     Fusionsvarianten ordnungsgleich (#789). Ein Delta ungleich 0 hier waere
     ein Befund ueber den Suchpfad, kein Befund ueber das neue Goldset."""
     old_ids = {q["query_id"] for q in _read(BASE_DIR / "sources.json")["queries"]}
-    assert len(old_ids) == 26
+    assert len(old_ids) >= 26
     for query_id in sorted(old_ids):
         for metric in ("recall_at_10", "ndcg_at_10", "reciprocal_rank"):
             assert _per_query_delta(ablation, query_id, metric) == 0.0, (query_id, metric)
@@ -451,9 +455,9 @@ def test_family_d_confirms_a_delta_of_exactly_zero(ablation: dict, conditions: d
 
 
 def test_deltas_by_case_separates_the_four_families(ablation: dict) -> None:
-    """Ein Gesamtmittel ueber 38 Queries verduennt einen Effekt, der bauartbedingt
-    nur an 12 davon auftreten kann -- und Gewinn- und Schadensfaelle heben sich
-    darin teilweise gegenseitig auf."""
+    """Ein Gesamtmittel ueber alle Queries (72 seit #800) verduennt einen Effekt,
+    der bauartbedingt nur an den 12 Probe-Queries auftreten kann -- und Gewinn-
+    und Schadensfaelle heben sich darin teilweise gegenseitig auf."""
     by_case = ablation["deltas_by_case"]
     assert {"probe-gain", "probe-harm", "probe-control", "probe-crowding"} <= set(by_case)
     assert by_case["probe-gain"]["chunk_fusion_beitrag"]["ndcg_at_10"] > 0

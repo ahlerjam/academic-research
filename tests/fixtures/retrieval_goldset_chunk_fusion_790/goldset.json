@@ -6,7 +6,7 @@
     "passage_prefix": "passage: ",
     "query_prefix": "query: ",
     "generator": "scripts/eval/build_retrieval_chunk_goldset.py",
-    "manifest_sha256": "c86783ee711f664498cf3e019631d83c476cf93263fcdfb919caed64d5db8e96"
+    "manifest_sha256": "4fabc823b70d15c4e7dbcf03602acf7d4d2991fda68efe35d048627f74b764e5"
   },
   "documents": [
     {
@@ -63,6 +63,56 @@
       "doc_id": "de-freigabenachweis-archiv",
       "lang": "de",
       "title": "Aufbewahrung von Freigabenachweisen"
+    },
+    {
+      "doc_id": "en-feature-flag-governance",
+      "lang": "en",
+      "title": "Governing Feature Flags in Continuous Delivery"
+    },
+    {
+      "doc_id": "en-capacity-forecasting",
+      "lang": "en",
+      "title": "Capacity Forecasting for Autoscaled Services"
+    },
+    {
+      "doc_id": "en-onboarding-access",
+      "lang": "en",
+      "title": "Provisioning Access for New Engineers"
+    },
+    {
+      "doc_id": "en-vendor-risk",
+      "lang": "en",
+      "title": "Assessing Operational Risk in Managed Cloud Services"
+    },
+    {
+      "doc_id": "en-runbook-quality",
+      "lang": "en",
+      "title": "What Makes a Runbook Usable During an Incident"
+    },
+    {
+      "doc_id": "en-training-metrics",
+      "lang": "en",
+      "title": "Measuring the Effect of Engineering Training Programmes"
+    },
+    {
+      "doc_id": "de-cloud-auftragsverarbeitung",
+      "lang": "de",
+      "title": "Auftragsverarbeitung bei Cloud-Diensten"
+    },
+    {
+      "doc_id": "de-notfallwiederherstellung",
+      "lang": "de",
+      "title": "Notfallwiederherstellung und Wiederanlaufplanung"
+    },
+    {
+      "doc_id": "de-zugriffskonzept",
+      "lang": "de",
+      "title": "Rollenbasiertes Zugriffskonzept in verteilten Teams"
+    },
+    {
+      "doc_id": "de-schulungsnachweis",
+      "lang": "de",
+      "title": "Nachweis von Sicherheitsschulungen"
     },
     {
       "doc_id": "en-probe-gain-target",
@@ -505,6 +555,409 @@
       "page_end": 3,
       "section_title": "1 Ausgangslage",
       "word_count": 121
+    },
+    {
+      "chunk_id": "en-feature-flag-governance#0",
+      "doc_id": "en-feature-flag-governance",
+      "lang": "en",
+      "chunk_index": 0,
+      "chunk_text": "1 Introduction A feature flag turns a deployment into two separate decisions: shipping the code and exposing it to users. That separation is valuable exactly because it lets a team deploy on its own schedule and release on the business's schedule, and the value is real enough that flags have spread from a niche technique into the default way most changes reach production. The cost of that spread is rarely priced in at the point of adoption. Each flag is trivial to add and easy to forget, and a codebase that has shipped this way for two years typically carries several hundred of them, most guarding branches that were merged and confirmed working many releases ago. The flag itself becomes technical debt with a peculiar property: unlike an unused function, it does not sit still. Every flag is a live conditional evaluated on every request, and every combination of flags that a team has not explicitly tested is a code path that exists in production despite nobody having chosen it. The remainder of this text is not an argument against feature flags, which remain the least disruptive way to decouple the two decisions; it is an account of the three places where the technique degrades if nobody manages it deliberately: the flag's lifecycle, who is allowed to change its state, and whether a change to that state leaves any trace. 2 Flag Lifecycle And Stale Debt A flag is created to answer a question that has a shelf life: is this feature safe to expose, and to whom. Once the answer is settled, keeping the flag alive answers nothing further and only adds a branch that every future reader of the code must reason about. The trouble is that removing a flag is optional work with no deadline attached, while adding one is mandatory work with a release attached, so the two accumulate at very different rates. A team that reviews its flag inventory only when someone happens to notice an old one will find that the noticing happens roughly never, because a working flag produces no symptom that",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0). 1 Introduction A feature flag turns a deployment into two separate decisions: shipping the code and exposing it to users. That separation is valuable exactly because it lets a team deploy on its own schedule and release on the business's schedule, and the value is real enough that flags have spread from a niche technique into the default way most changes reach production. The cost of that spread is rarely priced in at the point of adoption. Each flag is trivial to add and easy to forget, and a codebase that has shipped this way for two years typically carries several hundred of them, most guarding branches that were merged and confirmed working many releases ago. The flag itself becomes technical debt with a peculiar property: unlike an unused function, it does not sit still. Every flag is a live conditional evaluated on every request, and every combination of flags that a team has not explicitly tested is a code path that exists in production despite nobody having chosen it. The remainder of this text is not an argument against feature flags, which remain the least disruptive way to decouple the two decisions; it is an account of the three places where the technique degrades if nobody manages it deliberately: the flag's lifecycle, who is allowed to change its state, and whether a change to that state leaves any trace. 2 Flag Lifecycle And Stale Debt A flag is created to answer a question that has a shelf life: is this feature safe to expose, and to whom. Once the answer is settled, keeping the flag alive answers nothing further and only adds a branch that every future reader of the code must reason about. The trouble is that removing a flag is optional work with no deadline attached, while adding one is mandatory work with a release attached, so the two accumulate at very different rates. A team that reviews its flag inventory only when someone happens to notice an old one will find that the noticing happens roughly never, because a working flag produces no symptom that",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Introduction",
+      "word_count": 349
+    },
+    {
+      "chunk_id": "en-feature-flag-governance#1",
+      "doc_id": "en-feature-flag-governance",
+      "lang": "en",
+      "chunk_index": 1,
+      "chunk_text": "with a release attached, so the two accumulate at very different rates. A team that reviews its flag inventory only when someone happens to notice an old one will find that the noticing happens roughly never, because a working flag produces no symptom that draws attention to it. The workable fix treats every flag as carrying an expected retirement date at creation time, not as an afterthought bolted on later. A flag with no assigned owner and no expiry is flagged by tooling as stale after a fixed number of weeks, and the stale list is reviewed on a cadence independent of any single team's workload, because leaving the review to individual initiative reproduces the exact failure the process exists to prevent. Some flags are permanent by design, typically ones that gate a genuine operational kill switch rather than a rollout, and those need a different label from the outset so the stale-flag sweep does not flag them for removal by mistake. 3 Access And Blast Radius Not every flag deserves the same set of hands on its switch. A flag that changes the colour of a button and a flag that changes which payment processor handles a transaction are both, mechanically, a boolean read at request time, but the second one can move real money in the wrong direction within seconds of being flipped. Treating both as equally sensitive either locks down harmless flags until nobody bothers to use the system, or leaves dangerous flags reachable by anyone with a login, and most organisations that have not thought about this default to the second failure because it is the one that causes no friction until the day it causes an incident. A workable design classifies flags by blast radius at creation, not by guessing at review time, and ties the classification to who may change the flag's state in each environment: engineers can flip a cosmetic flag in production without review, but a payment-routing or authentication-related flag requires a second approver and a change record, mirroring the segregation of duties that governs any other production",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Flag Lifecycle And Stale Debt\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Flag Lifecycle And Stale Debt\" (Seite 2-3, Chunk 1). with a release attached, so the two accumulate at very different rates. A team that reviews its flag inventory only when someone happens to notice an old one will find that the noticing happens roughly never, because a working flag produces no symptom that draws attention to it. The workable fix treats every flag as carrying an expected retirement date at creation time, not as an afterthought bolted on later. A flag with no assigned owner and no expiry is flagged by tooling as stale after a fixed number of weeks, and the stale list is reviewed on a cadence independent of any single team's workload, because leaving the review to individual initiative reproduces the exact failure the process exists to prevent. Some flags are permanent by design, typically ones that gate a genuine operational kill switch rather than a rollout, and those need a different label from the outset so the stale-flag sweep does not flag them for removal by mistake. 3 Access And Blast Radius Not every flag deserves the same set of hands on its switch. A flag that changes the colour of a button and a flag that changes which payment processor handles a transaction are both, mechanically, a boolean read at request time, but the second one can move real money in the wrong direction within seconds of being flipped. Treating both as equally sensitive either locks down harmless flags until nobody bothers to use the system, or leaves dangerous flags reachable by anyone with a login, and most organisations that have not thought about this default to the second failure because it is the one that causes no friction until the day it causes an incident. A workable design classifies flags by blast radius at creation, not by guessing at review time, and ties the classification to who may change the flag's state in each environment: engineers can flip a cosmetic flag in production without review, but a payment-routing or authentication-related flag requires a second approver and a change record, mirroring the segregation of duties that governs any other production",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "2 Flag Lifecycle And Stale Debt",
+      "word_count": 346
+    },
+    {
+      "chunk_id": "en-feature-flag-governance#2",
+      "doc_id": "en-feature-flag-governance",
+      "lang": "en",
+      "chunk_index": 2,
+      "chunk_text": "who may change the flag's state in each environment: engineers can flip a cosmetic flag in production without review, but a payment-routing or authentication-related flag requires a second approver and a change record, mirroring the segregation of duties that governs any other production change. The classification also decides how fast a flag rolls out; a low blast radius flag can go to one hundred per cent of traffic in one step, while a high blast radius flag is required to pass through defined percentage stages with an automatic halt if error rates move. 4 Auditing Flag Changes An incident review that ends with 'someone toggled a flag last Tuesday and nobody remembers why' is a more common failure than an incident caused by the code the flag was guarding. The flag system itself is rarely instrumented as carefully as the deployment pipeline that shipped the code behind it, even though a flag change reaches production immediately and without the review a code change would have gone through. Every flag change needs a record naming who changed it, when, what the previous and new states were, and ideally a linked reason, and that record has to live somewhere with a longer retention than the flag service's own operational logs, because the moment it is needed is usually well after the flag has been forgotten. Attaching the record to the flag definition itself, rather than to a separate change log that nobody thinks to consult, keeps the evidence discoverable months later by anyone who opens the flag to see why it is set the way it is. Teams that build this discipline in from the start find that it also solves a second, unrelated problem: a flag whose change history shows no activity for a year is exactly the stale flag that the lifecycle process in the previous section is meant to catch, so the two records reinforce rather than duplicate each other.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 Access And Blast Radius\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 Access And Blast Radius\" (Seite 3-4, Chunk 2). who may change the flag's state in each environment: engineers can flip a cosmetic flag in production without review, but a payment-routing or authentication-related flag requires a second approver and a change record, mirroring the segregation of duties that governs any other production change. The classification also decides how fast a flag rolls out; a low blast radius flag can go to one hundred per cent of traffic in one step, while a high blast radius flag is required to pass through defined percentage stages with an automatic halt if error rates move. 4 Auditing Flag Changes An incident review that ends with 'someone toggled a flag last Tuesday and nobody remembers why' is a more common failure than an incident caused by the code the flag was guarding. The flag system itself is rarely instrumented as carefully as the deployment pipeline that shipped the code behind it, even though a flag change reaches production immediately and without the review a code change would have gone through. Every flag change needs a record naming who changed it, when, what the previous and new states were, and ideally a linked reason, and that record has to live somewhere with a longer retention than the flag service's own operational logs, because the moment it is needed is usually well after the flag has been forgotten. Attaching the record to the flag definition itself, rather than to a separate change log that nobody thinks to consult, keeps the evidence discoverable months later by anyone who opens the flag to see why it is set the way it is. Teams that build this discipline in from the start find that it also solves a second, unrelated problem: a flag whose change history shows no activity for a year is exactly the stale flag that the lifecycle process in the previous section is meant to catch, so the two records reinforce rather than duplicate each other.",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "3 Access And Blast Radius",
+      "word_count": 321
+    },
+    {
+      "chunk_id": "en-capacity-forecasting#0",
+      "doc_id": "en-capacity-forecasting",
+      "lang": "en",
+      "chunk_index": 0,
+      "chunk_text": "1 Introduction Autoscaling gives a system the ability to react to load it did not predict, and that capability is often mistaken for a reason to stop predicting load altogether. The mistake is understandable, because autoscaling removes the most visible symptom of poor forecasting: a service that falls over during a spike. What it does not remove is the set of commitments that have to be made before the spike arrives, commitments that a reactive mechanism has no way to satisfy on its own. A reserved instance discount is negotiated months ahead and priced on a minimum commitment; a change to a database's instance class needs a maintenance window scheduled in advance; a provider's default account quota is a hard ceiling that autoscaling will hit and stop at, silently, however elastic the compute layer beneath it looks on a dashboard. None of these constraints move at the speed autoscaling operates on, and each of them is invisible until the day it binds. A team that has never forecast anything discovers the gap only when a launch outgrows the quota nobody checked, and by then the fix is a support ticket with a lead time measured in days, arriving in the middle of the event it was supposed to protect. Forecasting capacity is therefore not a competing discipline to autoscaling, it is the layer above it that autoscaling depends on without ever being able to provide for itself. 2 Seasonality And Event Load The load a service carries is rarely one signal; it is at least two, mixed together and easy to mistake for each other. Organic growth is the slow, compounding increase that comes from more customers using the product in the ordinary course of business, and it is well behaved: this week looks like last week plus a small percentage, and a simple trend line captures most of it. Event load is different in kind, not degree. A marketing campaign, a public holiday with a known shopping pattern, or a competitor's outage sending its users elsewhere all produce a spike that has nothing to",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0). 1 Introduction Autoscaling gives a system the ability to react to load it did not predict, and that capability is often mistaken for a reason to stop predicting load altogether. The mistake is understandable, because autoscaling removes the most visible symptom of poor forecasting: a service that falls over during a spike. What it does not remove is the set of commitments that have to be made before the spike arrives, commitments that a reactive mechanism has no way to satisfy on its own. A reserved instance discount is negotiated months ahead and priced on a minimum commitment; a change to a database's instance class needs a maintenance window scheduled in advance; a provider's default account quota is a hard ceiling that autoscaling will hit and stop at, silently, however elastic the compute layer beneath it looks on a dashboard. None of these constraints move at the speed autoscaling operates on, and each of them is invisible until the day it binds. A team that has never forecast anything discovers the gap only when a launch outgrows the quota nobody checked, and by then the fix is a support ticket with a lead time measured in days, arriving in the middle of the event it was supposed to protect. Forecasting capacity is therefore not a competing discipline to autoscaling, it is the layer above it that autoscaling depends on without ever being able to provide for itself. 2 Seasonality And Event Load The load a service carries is rarely one signal; it is at least two, mixed together and easy to mistake for each other. Organic growth is the slow, compounding increase that comes from more customers using the product in the ordinary course of business, and it is well behaved: this week looks like last week plus a small percentage, and a simple trend line captures most of it. Event load is different in kind, not degree. A marketing campaign, a public holiday with a known shopping pattern, or a competitor's outage sending its users elsewhere all produce a spike that has nothing to",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Introduction",
+      "word_count": 345
+    },
+    {
+      "chunk_id": "en-capacity-forecasting#1",
+      "doc_id": "en-capacity-forecasting",
+      "lang": "en",
+      "chunk_index": 1,
+      "chunk_text": "a simple trend line captures most of it. Event load is different in kind, not degree. A marketing campaign, a public holiday with a known shopping pattern, or a competitor's outage sending its users elsewhere all produce a spike that has nothing to do with the trend line and everything to do with a specific date. Forecasting that fits a single curve to both signals will systematically get the calendar wrong: it smooths through the events it should have flagged, and it inflates the everyday baseline trying to accommodate spikes that a smoother would treat as noise. A workable forecast keeps a base trend model for organic growth and a separate calendar of known events, each with its own expected multiplier drawn from how similar events behaved in the past, and sums the two rather than trying to make one model explain everything at once. The calendar is the part that decays fastest if nobody maintains it: a marketing team that stops sharing its campaign schedule with the platform team quietly turns every future campaign into an unplanned event again. 3 Quota As A Hidden Ceiling Every cloud account carries default limits that exist to protect the provider from a runaway account, not to protect a customer from its own success, and autoscaling configuration inherits those limits whether anyone reads the fine print or not. A service can be configured to add compute nodes without bound and still stop scaling at a fixed number, because the underlying account has never asked for a quota increase on the resource that actually constrains it, which is frequently not compute at all but something further down the stack: the number of connections a managed database will accept, the rate of API calls a downstream provider allows, or the number of IP addresses available in a subnet. These ceilings share an unfortunate property: nothing in a typical dashboard distinguishes 'scaling stopped because load fell' from 'scaling stopped because the ceiling was hit', and the two look identical until someone checks the account limits directly. Requesting a",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Seasonality And Event Load\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Seasonality And Event Load\" (Seite 2-3, Chunk 1). a simple trend line captures most of it. Event load is different in kind, not degree. A marketing campaign, a public holiday with a known shopping pattern, or a competitor's outage sending its users elsewhere all produce a spike that has nothing to do with the trend line and everything to do with a specific date. Forecasting that fits a single curve to both signals will systematically get the calendar wrong: it smooths through the events it should have flagged, and it inflates the everyday baseline trying to accommodate spikes that a smoother would treat as noise. A workable forecast keeps a base trend model for organic growth and a separate calendar of known events, each with its own expected multiplier drawn from how similar events behaved in the past, and sums the two rather than trying to make one model explain everything at once. The calendar is the part that decays fastest if nobody maintains it: a marketing team that stops sharing its campaign schedule with the platform team quietly turns every future campaign into an unplanned event again. 3 Quota As A Hidden Ceiling Every cloud account carries default limits that exist to protect the provider from a runaway account, not to protect a customer from its own success, and autoscaling configuration inherits those limits whether anyone reads the fine print or not. A service can be configured to add compute nodes without bound and still stop scaling at a fixed number, because the underlying account has never asked for a quota increase on the resource that actually constrains it, which is frequently not compute at all but something further down the stack: the number of connections a managed database will accept, the rate of API calls a downstream provider allows, or the number of IP addresses available in a subnet. These ceilings share an unfortunate property: nothing in a typical dashboard distinguishes 'scaling stopped because load fell' from 'scaling stopped because the ceiling was hit', and the two look identical until someone checks the account limits directly. Requesting a",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "2 Seasonality And Event Load",
+      "word_count": 342
+    },
+    {
+      "chunk_id": "en-capacity-forecasting#2",
+      "doc_id": "en-capacity-forecasting",
+      "lang": "en",
+      "chunk_index": 2,
+      "chunk_text": "available in a subnet. These ceilings share an unfortunate property: nothing in a typical dashboard distinguishes 'scaling stopped because load fell' from 'scaling stopped because the ceiling was hit', and the two look identical until someone checks the account limits directly. Requesting a quota increase is usually simple, but providers process it on their own schedule, commonly days, and an increase requested in the middle of an incident arrives too late to help that incident. The only defence is to enumerate every ceiling a forecasted peak would approach, not just the compute one, and request headroom on all of them before the peak, as a standing item in the same review that produces the forecast. 4 Forecast Error And Its Cost A forecast presented as a single number invites a single, usually wrong, decision: provision to exactly that number and call the exercise complete. Every forecasting method has an error distribution, and the width of that distribution matters more than its centre, because the two directions of error cost differently. Under-provisioning against a forecast that turns out low produces an outage, with a cost that includes lost revenue, incident response time, and a reputational cost that rarely shows up in the same spreadsheet as the infrastructure bill. Over-provisioning produces a bill that is merely larger than it needed to be, an outcome that is unpleasant in a budget review and invisible everywhere else. Given that asymmetry, a forecast that is honest about its own uncertainty should be read as a range and provisioned toward its upper end for anything that cannot scale reactively fast enough to cover the gap, while anything that can scale fast enough within seconds can safely target the centre of the range and rely on autoscaling for the rest. Confusing the two categories, provisioning reactively-scalable compute to the pessimistic edge and provisioning a slow-to-change database tier to the optimistic centre, wastes money on the wrong resource while",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 Quota As A Hidden Ceiling\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 Quota As A Hidden Ceiling\" (Seite 3-4, Chunk 2). available in a subnet. These ceilings share an unfortunate property: nothing in a typical dashboard distinguishes 'scaling stopped because load fell' from 'scaling stopped because the ceiling was hit', and the two look identical until someone checks the account limits directly. Requesting a quota increase is usually simple, but providers process it on their own schedule, commonly days, and an increase requested in the middle of an incident arrives too late to help that incident. The only defence is to enumerate every ceiling a forecasted peak would approach, not just the compute one, and request headroom on all of them before the peak, as a standing item in the same review that produces the forecast. 4 Forecast Error And Its Cost A forecast presented as a single number invites a single, usually wrong, decision: provision to exactly that number and call the exercise complete. Every forecasting method has an error distribution, and the width of that distribution matters more than its centre, because the two directions of error cost differently. Under-provisioning against a forecast that turns out low produces an outage, with a cost that includes lost revenue, incident response time, and a reputational cost that rarely shows up in the same spreadsheet as the infrastructure bill. Over-provisioning produces a bill that is merely larger than it needed to be, an outcome that is unpleasant in a budget review and invisible everywhere else. Given that asymmetry, a forecast that is honest about its own uncertainty should be read as a range and provisioned toward its upper end for anything that cannot scale reactively fast enough to cover the gap, while anything that can scale fast enough within seconds can safely target the centre of the range and rely on autoscaling for the rest. Confusing the two categories, provisioning reactively-scalable compute to the pessimistic edge and provisioning a slow-to-change database tier to the optimistic centre, wastes money on the wrong resource while",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "3 Quota As A Hidden Ceiling",
+      "word_count": 321
+    },
+    {
+      "chunk_id": "en-capacity-forecasting#3",
+      "doc_id": "en-capacity-forecasting",
+      "lang": "en",
+      "chunk_index": 3,
+      "chunk_text": "the centre of the range and rely on autoscaling for the rest. Confusing the two categories, provisioning reactively-scalable compute to the pessimistic edge and provisioning a slow-to-change database tier to the optimistic centre, wastes money on the wrong resource while leaving the actual bottleneck exposed, which is a more common failure than getting the raw forecast number wrong in the first place.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"4 Forecast Error And Its Cost\" (Seite 4-4, Chunk 3).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"4 Forecast Error And Its Cost\" (Seite 4-4, Chunk 3). the centre of the range and rely on autoscaling for the rest. Confusing the two categories, provisioning reactively-scalable compute to the pessimistic edge and provisioning a slow-to-change database tier to the optimistic centre, wastes money on the wrong resource while leaving the actual bottleneck exposed, which is a more common failure than getting the raw forecast number wrong in the first place.",
+      "page_start": 4,
+      "page_end": 4,
+      "section_title": "4 Forecast Error And Its Cost",
+      "word_count": 62
+    },
+    {
+      "chunk_id": "en-onboarding-access#0",
+      "doc_id": "en-onboarding-access",
+      "lang": "en",
+      "chunk_index": 0,
+      "chunk_text": "1 Introduction A new engineer's first week is supposed to be about the product, the team, and the codebase, and in most organisations it is instead about the twenty-odd systems that engineer needs a login for and does not yet have one. Each of those systems has its own request process, owned by a different team, with its own approval chain and its own idea of what a reasonable turnaround time is. The predictable result is a person who is technically employed but functionally unable to contribute for the first several days, filling the gap with reading documentation that assumes access they do not have, because nobody owns the end-to-end experience of getting a new hire from zero to productive. The opposite failure is just as common and much harder to notice: a manager under pressure to unblock a new report requests access to everything that might conceivably be needed, gets it approved because approvers are reluctant to be the reason someone sits idle, and the new hire starts their career holding rights to systems they will never touch. Both failures share a root cause, which is that access provisioning is treated as a collection of independent requests rather than as a single onboarding journey with its own owner and its own measurable outcome. 2 Standard Bundles Instead Of Ad Hoc Grants The fix that scales is to stop granting access one system at a time and start granting it in bundles defined by role, assembled once by the people who actually understand what each role needs and reused for every hire in that role afterwards. A backend engineer joining a particular team needs the source repository, the deployment pipeline for that team's services, the staging environment, and read access to the production logs relevant to those services; none of that changes from one backend hire to the next, so there is no reason to rebuild the request from scratch every time. Building the bundle is real work the first time, because it forces someone to actually decide what the role needs rather than approving whatever was asked",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0). 1 Introduction A new engineer's first week is supposed to be about the product, the team, and the codebase, and in most organisations it is instead about the twenty-odd systems that engineer needs a login for and does not yet have one. Each of those systems has its own request process, owned by a different team, with its own approval chain and its own idea of what a reasonable turnaround time is. The predictable result is a person who is technically employed but functionally unable to contribute for the first several days, filling the gap with reading documentation that assumes access they do not have, because nobody owns the end-to-end experience of getting a new hire from zero to productive. The opposite failure is just as common and much harder to notice: a manager under pressure to unblock a new report requests access to everything that might conceivably be needed, gets it approved because approvers are reluctant to be the reason someone sits idle, and the new hire starts their career holding rights to systems they will never touch. Both failures share a root cause, which is that access provisioning is treated as a collection of independent requests rather than as a single onboarding journey with its own owner and its own measurable outcome. 2 Standard Bundles Instead Of Ad Hoc Grants The fix that scales is to stop granting access one system at a time and start granting it in bundles defined by role, assembled once by the people who actually understand what each role needs and reused for every hire in that role afterwards. A backend engineer joining a particular team needs the source repository, the deployment pipeline for that team's services, the staging environment, and read access to the production logs relevant to those services; none of that changes from one backend hire to the next, so there is no reason to rebuild the request from scratch every time. Building the bundle is real work the first time, because it forces someone to actually decide what the role needs rather than approving whatever was asked",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Introduction",
+      "word_count": 348
+    },
+    {
+      "chunk_id": "en-onboarding-access#1",
+      "doc_id": "en-onboarding-access",
+      "lang": "en",
+      "chunk_index": 1,
+      "chunk_text": "backend hire to the next, so there is no reason to rebuild the request from scratch every time. Building the bundle is real work the first time, because it forces someone to actually decide what the role needs rather than approving whatever was asked for last time, but that cost is paid once per role rather than once per hire. The bundle also becomes the natural place to encode the boundary a role should not cross: if the backend bundle does not include billing system access, a request for billing access on top of the bundle is now a visible exception that someone has to justify, rather than an invisible extra line in a form nobody reads carefully. Roles drift over time as systems change, so a bundle needs a named owner who revisits it, not a one-time definition that quietly falls out of date while new hires keep inheriting it unchanged. 3 Time To Productive Access As A Metric Most onboarding programmes measure the wrong thing: whether the paperwork was completed by day one, rather than whether the new hire could do anything useful with the accounts that paperwork created. Time to productive access is a better measure because it is defined by an actual task, for example merging a small first change into the team's codebase, and it counts every hour between the hire's start date and the moment every prerequisite for that task is in place. Measuring this exposes bottlenecks that a checklist hides completely: a checklist marked complete says nothing about whether the third-party single sign-on provider actually finished provisioning the account, which frequently lags the internal system that requested it by a day or more. Teams that start tracking time to productive access are usually surprised by where the delay concentrates, and it is rarely the step anyone would have guessed from memory; a request that looks instant from the requester's side can sit in an approval queue for two days before anyone opens it, and nobody notices because the requester assumes",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Standard Bundles Instead Of Ad Hoc Grants\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Standard Bundles Instead Of Ad Hoc Grants\" (Seite 2-3, Chunk 1). backend hire to the next, so there is no reason to rebuild the request from scratch every time. Building the bundle is real work the first time, because it forces someone to actually decide what the role needs rather than approving whatever was asked for last time, but that cost is paid once per role rather than once per hire. The bundle also becomes the natural place to encode the boundary a role should not cross: if the backend bundle does not include billing system access, a request for billing access on top of the bundle is now a visible exception that someone has to justify, rather than an invisible extra line in a form nobody reads carefully. Roles drift over time as systems change, so a bundle needs a named owner who revisits it, not a one-time definition that quietly falls out of date while new hires keep inheriting it unchanged. 3 Time To Productive Access As A Metric Most onboarding programmes measure the wrong thing: whether the paperwork was completed by day one, rather than whether the new hire could do anything useful with the accounts that paperwork created. Time to productive access is a better measure because it is defined by an actual task, for example merging a small first change into the team's codebase, and it counts every hour between the hire's start date and the moment every prerequisite for that task is in place. Measuring this exposes bottlenecks that a checklist hides completely: a checklist marked complete says nothing about whether the third-party single sign-on provider actually finished provisioning the account, which frequently lags the internal system that requested it by a day or more. Teams that start tracking time to productive access are usually surprised by where the delay concentrates, and it is rarely the step anyone would have guessed from memory; a request that looks instant from the requester's side can sit in an approval queue for two days before anyone opens it, and nobody notices because the requester assumes",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "2 Standard Bundles Instead Of Ad Hoc Grants",
+      "word_count": 337
+    },
+    {
+      "chunk_id": "en-onboarding-access#2",
+      "doc_id": "en-onboarding-access",
+      "lang": "en",
+      "chunk_index": 2,
+      "chunk_text": "concentrates, and it is rarely the step anyone would have guessed from memory; a request that looks instant from the requester's side can sit in an approval queue for two days before anyone opens it, and nobody notices because the requester assumes it is still processing rather than simply waiting. The metric only earns its keep if someone is accountable for shortening it, because a number that is measured but not owned by anyone tends to stay flat indefinitely, reported in a slide and acted on by nobody. 4 The Manager Approval Bottleneck The single most common bottleneck in the whole chain is the manager approval step, and the reason is not that managers are careless but that approving access requests is never the most urgent item on a manager's list on any given day, so it loses to everything else until it becomes urgent by virtue of being three weeks overdue. A request that requires a manager's explicit approval before it can proceed inherits that manager's calendar as an involuntary dependency, and a manager who is travelling or deep in a release is a dependency that does not respond for days. New hires and their peers learn to route around this quickly, asking a colleague who already has the needed access to do the work on their behalf, or sharing credentials informally, both of which defeat the entire purpose of having an approval step while leaving the paper trail looking clean. The more durable fix narrows what actually requires a person's judgement: access that follows directly from an already-approved role bundle should be granted automatically without waiting on anyone, and a manager's attention should be reserved for the genuine exceptions, the requests that fall outside a bundle and therefore need an actual decision. Reserving scarce approval time for genuine decisions, instead of spending it rubber-stamping requests a policy could already answer, is what keeps the approval step from becoming the very bottleneck it was meant to prevent.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 Time To Productive Access As A Metric\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 Time To Productive Access As A Metric\" (Seite 3-4, Chunk 2). concentrates, and it is rarely the step anyone would have guessed from memory; a request that looks instant from the requester's side can sit in an approval queue for two days before anyone opens it, and nobody notices because the requester assumes it is still processing rather than simply waiting. The metric only earns its keep if someone is accountable for shortening it, because a number that is measured but not owned by anyone tends to stay flat indefinitely, reported in a slide and acted on by nobody. 4 The Manager Approval Bottleneck The single most common bottleneck in the whole chain is the manager approval step, and the reason is not that managers are careless but that approving access requests is never the most urgent item on a manager's list on any given day, so it loses to everything else until it becomes urgent by virtue of being three weeks overdue. A request that requires a manager's explicit approval before it can proceed inherits that manager's calendar as an involuntary dependency, and a manager who is travelling or deep in a release is a dependency that does not respond for days. New hires and their peers learn to route around this quickly, asking a colleague who already has the needed access to do the work on their behalf, or sharing credentials informally, both of which defeat the entire purpose of having an approval step while leaving the paper trail looking clean. The more durable fix narrows what actually requires a person's judgement: access that follows directly from an already-approved role bundle should be granted automatically without waiting on anyone, and a manager's attention should be reserved for the genuine exceptions, the requests that fall outside a bundle and therefore need an actual decision. Reserving scarce approval time for genuine decisions, instead of spending it rubber-stamping requests a policy could already answer, is what keeps the approval step from becoming the very bottleneck it was meant to prevent.",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "3 Time To Productive Access As A Metric",
+      "word_count": 328
+    },
+    {
+      "chunk_id": "en-vendor-risk#0",
+      "doc_id": "en-vendor-risk",
+      "lang": "en",
+      "chunk_index": 0,
+      "chunk_text": "1 Introduction Adopting a managed service is often described internally as removing operational risk, and that description is only half true in a way that matters a great deal when something goes wrong. What a managed service genuinely removes is operational work: nobody on the buying team is paged when the vendor's database needs a failover, nobody patches the underlying operating system, nobody staffs an on-call rotation for infrastructure the vendor now owns. What it does not remove is accountability. When the vendor's service degrades and a customer-facing feature stops working, the buying organisation's customers do not care that the failure originated three layers down in a system they have never heard of; they experience the buying organisation's product as broken, and the buying organisation carries the reputational and often contractual consequence regardless of where the fault actually sits. Treating a vendor selection as though it ends the buying organisation's exposure to that class of failure produces a team with no plan for the day the vendor does fail, because nobody thought a plan was necessary once the work had been outsourced. The realistic framing is that a vendor decision moves who does the operational work without moving who answers for the outcome, and every subsequent decision, including how much redundancy to build around the vendor, should follow from that framing rather than from the more comfortable one. 2 Reading A Vendor's Status Page History Every serious vendor publishes a status page, and every status page understates the vendor's actual incident history in the same predictable direction: minor degradations that fall short of a formal declared outage tend not to appear at all, and the threshold for declaring an outage is set by the vendor, who has every incentive to set it conservatively. Reading a status page as a complete incident log therefore understates risk systematically, not randomly, and a buying team that relies on it alone will be surprised by problems a more careful reading would have anticipated. The more useful signal is the pattern across",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0). 1 Introduction Adopting a managed service is often described internally as removing operational risk, and that description is only half true in a way that matters a great deal when something goes wrong. What a managed service genuinely removes is operational work: nobody on the buying team is paged when the vendor's database needs a failover, nobody patches the underlying operating system, nobody staffs an on-call rotation for infrastructure the vendor now owns. What it does not remove is accountability. When the vendor's service degrades and a customer-facing feature stops working, the buying organisation's customers do not care that the failure originated three layers down in a system they have never heard of; they experience the buying organisation's product as broken, and the buying organisation carries the reputational and often contractual consequence regardless of where the fault actually sits. Treating a vendor selection as though it ends the buying organisation's exposure to that class of failure produces a team with no plan for the day the vendor does fail, because nobody thought a plan was necessary once the work had been outsourced. The realistic framing is that a vendor decision moves who does the operational work without moving who answers for the outcome, and every subsequent decision, including how much redundancy to build around the vendor, should follow from that framing rather than from the more comfortable one. 2 Reading A Vendor's Status Page History Every serious vendor publishes a status page, and every status page understates the vendor's actual incident history in the same predictable direction: minor degradations that fall short of a formal declared outage tend not to appear at all, and the threshold for declaring an outage is set by the vendor, who has every incentive to set it conservatively. Reading a status page as a complete incident log therefore understates risk systematically, not randomly, and a buying team that relies on it alone will be surprised by problems a more careful reading would have anticipated. The more useful signal is the pattern across",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Introduction",
+      "word_count": 337
+    },
+    {
+      "chunk_id": "en-vendor-risk#1",
+      "doc_id": "en-vendor-risk",
+      "lang": "en",
+      "chunk_index": 1,
+      "chunk_text": "status page as a complete incident log therefore understates risk systematically, not randomly, and a buying team that relies on it alone will be surprised by problems a more careful reading would have anticipated. The more useful signal is the pattern across many months rather than any single entry: does the vendor experience one clearly explained incident with a public retrospective every few months, or does it accumulate short, unexplained degradations that never individually cross the bar for a formal write-up but together describe a system under chronic strain. The second pattern is a far worse predictor of future reliability than the first, because an organisation that writes clear retrospectives is demonstrably capable of diagnosing its own failures, while one that never explains anything either does not understand its own failures or does not think its customers are owed an explanation, and neither is reassuring. Procurement processes that ask only for an uptime percentage in a sales conversation miss this distinction entirely, because the percentage the vendor quotes and the pattern visible in its own incident history rarely tell the same story. 3 The Concentration Risk Of A Single Region A vendor decision is frequently made at the level of the vendor and never revisited at the level of the specific region within that vendor's infrastructure, and that omission hides a concentration risk that a services agreement will not mention because it is not the vendor's job to point it out. An application that stores its primary data in a single region of a single vendor has exactly one thing standing between it and an extended outage, a regional failure of that vendor, and the fact that the vendor is large and reputable says nothing about the independence of that one region from the rest of the vendor's infrastructure; large vendors have had region-wide outages, and a customer concentrated in the affected region experiences the same outage regardless of the vendor's overall scale. Multi-region deployment within a single vendor addresses part of the exposure but not all of it, because a sufficiently broad failure, a billing system fault that suspends an",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 2-3, Chunk 1). status page as a complete incident log therefore understates risk systematically, not randomly, and a buying team that relies on it alone will be surprised by problems a more careful reading would have anticipated. The more useful signal is the pattern across many months rather than any single entry: does the vendor experience one clearly explained incident with a public retrospective every few months, or does it accumulate short, unexplained degradations that never individually cross the bar for a formal write-up but together describe a system under chronic strain. The second pattern is a far worse predictor of future reliability than the first, because an organisation that writes clear retrospectives is demonstrably capable of diagnosing its own failures, while one that never explains anything either does not understand its own failures or does not think its customers are owed an explanation, and neither is reassuring. Procurement processes that ask only for an uptime percentage in a sales conversation miss this distinction entirely, because the percentage the vendor quotes and the pattern visible in its own incident history rarely tell the same story. 3 The Concentration Risk Of A Single Region A vendor decision is frequently made at the level of the vendor and never revisited at the level of the specific region within that vendor's infrastructure, and that omission hides a concentration risk that a services agreement will not mention because it is not the vendor's job to point it out. An application that stores its primary data in a single region of a single vendor has exactly one thing standing between it and an extended outage, a regional failure of that vendor, and the fact that the vendor is large and reputable says nothing about the independence of that one region from the rest of the vendor's infrastructure; large vendors have had region-wide outages, and a customer concentrated in the affected region experiences the same outage regardless of the vendor's overall scale. Multi-region deployment within a single vendor addresses part of the exposure but not all of it, because a sufficiently broad failure, a billing system fault that suspends an",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "1 Introduction",
+      "word_count": 351
+    },
+    {
+      "chunk_id": "en-vendor-risk#2",
+      "doc_id": "en-vendor-risk",
+      "lang": "en",
+      "chunk_index": 2,
+      "chunk_text": "customer concentrated in the affected region experiences the same outage regardless of the vendor's overall scale. Multi-region deployment within a single vendor addresses part of the exposure but not all of it, because a sufficiently broad failure, a billing system fault that suspends an account, a control-plane bug that touches every region simultaneously, or simply a vendor-wide policy change, does not respect regional boundaries at all. The honest question a buying organisation should answer before committing, and revisit periodically afterward, is not whether the vendor is reliable in the abstract but what the specific, enumerated set of failure modes is that would take down every region of this vendor at once, and whether the cost of protecting against that set is proportionate to how much the business actually depends on continuous availability. 4 Exit Cost As Part Of The Decision The cost of leaving a vendor is almost never assessed at the point of signing, because the point of signing is a moment of optimism about the relationship and asking how it might end feels like planning for a divorce during the engagement. That instinct is understandable and expensive, because exit cost tends to be far higher than anyone estimates once data, workflows, and staff habits have accumulated around a vendor for several years, and a vendor with a difficult exit path has every incentive to let that cost grow quietly rather than draw attention to it. The practical questions are specific rather than philosophical: in what format can the buying organisation's data be exported, does that format preserve everything a migration would need or only a lossy summary, how long does an export actually take at the buying organisation's real data volume rather than a demonstration dataset, and what does the vendor's contract say about data access during a dispute, when the incentive to cooperate is at its weakest. Answering these questions before signing costs an afternoon and changes nothing about the deal in most cases, because most vendors turn out to have reasonable answers when asked directly. Answering them for the first time during an actual attempt to",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 The Concentration Risk Of A Single Region\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 The Concentration Risk Of A Single Region\" (Seite 3-4, Chunk 2). customer concentrated in the affected region experiences the same outage regardless of the vendor's overall scale. Multi-region deployment within a single vendor addresses part of the exposure but not all of it, because a sufficiently broad failure, a billing system fault that suspends an account, a control-plane bug that touches every region simultaneously, or simply a vendor-wide policy change, does not respect regional boundaries at all. The honest question a buying organisation should answer before committing, and revisit periodically afterward, is not whether the vendor is reliable in the abstract but what the specific, enumerated set of failure modes is that would take down every region of this vendor at once, and whether the cost of protecting against that set is proportionate to how much the business actually depends on continuous availability. 4 Exit Cost As Part Of The Decision The cost of leaving a vendor is almost never assessed at the point of signing, because the point of signing is a moment of optimism about the relationship and asking how it might end feels like planning for a divorce during the engagement. That instinct is understandable and expensive, because exit cost tends to be far higher than anyone estimates once data, workflows, and staff habits have accumulated around a vendor for several years, and a vendor with a difficult exit path has every incentive to let that cost grow quietly rather than draw attention to it. The practical questions are specific rather than philosophical: in what format can the buying organisation's data be exported, does that format preserve everything a migration would need or only a lossy summary, how long does an export actually take at the buying organisation's real data volume rather than a demonstration dataset, and what does the vendor's contract say about data access during a dispute, when the incentive to cooperate is at its weakest. Answering these questions before signing costs an afternoon and changes nothing about the deal in most cases, because most vendors turn out to have reasonable answers when asked directly. Answering them for the first time during an actual attempt to",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "3 The Concentration Risk Of A Single Region",
+      "word_count": 350
+    },
+    {
+      "chunk_id": "en-vendor-risk#3",
+      "doc_id": "en-vendor-risk",
+      "lang": "en",
+      "chunk_index": 3,
+      "chunk_text": "is at its weakest. Answering these questions before signing costs an afternoon and changes nothing about the deal in most cases, because most vendors turn out to have reasonable answers when asked directly. Answering them for the first time during an actual attempt to leave, under time pressure and often under a broken relationship, costs a great deal more, and by then the answers are whatever they happen to be rather than something the buying organisation had any leverage to negotiate.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"4 Exit Cost As Part Of The Decision\" (Seite 4-4, Chunk 3).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"4 Exit Cost As Part Of The Decision\" (Seite 4-4, Chunk 3). is at its weakest. Answering these questions before signing costs an afternoon and changes nothing about the deal in most cases, because most vendors turn out to have reasonable answers when asked directly. Answering them for the first time during an actual attempt to leave, under time pressure and often under a broken relationship, costs a great deal more, and by then the answers are whatever they happen to be rather than something the buying organisation had any leverage to negotiate.",
+      "page_start": 4,
+      "page_end": 4,
+      "section_title": "4 Exit Cost As Part Of The Decision",
+      "word_count": 81
+    },
+    {
+      "chunk_id": "en-runbook-quality#0",
+      "doc_id": "en-runbook-quality",
+      "lang": "en",
+      "chunk_index": 0,
+      "chunk_text": "1 Introduction A runbook is written by someone who is calm, has time to check every claim, and is not personally responsible for the outage currently costing the business money every minute it continues. It is read, if it is read at all, by someone whose hands are less steady, whose attention is split across a chat channel, a dashboard, and a growing queue of people asking for an update, and who has perhaps ninety seconds of patience before giving up on the document and trying something improvised instead. These are two extremely different reading conditions, and a document optimised for the first tells you almost nothing about how it will perform under the second. Most runbooks are technically accurate and operationally useless at the same time, because accuracy was the only property anyone checked before publishing them, and accuracy is necessary but nowhere close to sufficient for a document meant to be followed by someone under acute stress. The uncomfortable test a runbook should pass before anyone trusts it is not whether an expert reading calmly can find every step correct, but whether the least experienced person on the rotation, paged at three in the morning with no context beyond the alert, can execute it start to finish without needing to ask a single clarifying question in the incident channel. 2 The Difference Between Documentation And A Runbook Documentation and a runbook answer different questions and are frequently written as though they answer the same one. Documentation explains how a system works, why it was built that way, and what trade-offs its design reflects, and its natural audience is someone with time to read a paragraph, form a mental model, and ask a follow-up question if something is unclear. A runbook answers a narrower and more urgent question: given that a specific symptom is occurring right now, what is the exact sequence of commands or clicks that resolves it, in an order that does not require the reader to first understand why the sequence works. Conflating the two produces a document that opens with two paragraphs of",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0). 1 Introduction A runbook is written by someone who is calm, has time to check every claim, and is not personally responsible for the outage currently costing the business money every minute it continues. It is read, if it is read at all, by someone whose hands are less steady, whose attention is split across a chat channel, a dashboard, and a growing queue of people asking for an update, and who has perhaps ninety seconds of patience before giving up on the document and trying something improvised instead. These are two extremely different reading conditions, and a document optimised for the first tells you almost nothing about how it will perform under the second. Most runbooks are technically accurate and operationally useless at the same time, because accuracy was the only property anyone checked before publishing them, and accuracy is necessary but nowhere close to sufficient for a document meant to be followed by someone under acute stress. The uncomfortable test a runbook should pass before anyone trusts it is not whether an expert reading calmly can find every step correct, but whether the least experienced person on the rotation, paged at three in the morning with no context beyond the alert, can execute it start to finish without needing to ask a single clarifying question in the incident channel. 2 The Difference Between Documentation And A Runbook Documentation and a runbook answer different questions and are frequently written as though they answer the same one. Documentation explains how a system works, why it was built that way, and what trade-offs its design reflects, and its natural audience is someone with time to read a paragraph, form a mental model, and ask a follow-up question if something is unclear. A runbook answers a narrower and more urgent question: given that a specific symptom is occurring right now, what is the exact sequence of commands or clicks that resolves it, in an order that does not require the reader to first understand why the sequence works. Conflating the two produces a document that opens with two paragraphs of",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Introduction",
+      "word_count": 348
+    },
+    {
+      "chunk_id": "en-runbook-quality#1",
+      "doc_id": "en-runbook-quality",
+      "lang": "en",
+      "chunk_index": 1,
+      "chunk_text": "is occurring right now, what is the exact sequence of commands or clicks that resolves it, in an order that does not require the reader to first understand why the sequence works. Conflating the two produces a document that opens with two paragraphs of architectural background before reaching the first actionable step, background that is genuinely valuable to a new engineer studying the system on a quiet Tuesday afternoon and genuinely in the way of an on-call engineer at three in the morning who already knows, or does not currently care, why the system is built the way it is and only wants to know what to type. The fix is not to delete the background, which has its own value, but to separate it physically: a runbook that begins with numbered, executable steps and links out to the explanatory documentation for anyone who wants the why after the incident is resolved, rather than before. 3 Steps That Assume A Working System A surprising number of runbooks fail during an actual incident for a reason that has nothing to do with the accuracy of their steps: step three tells the reader to open a dashboard that lives behind the very authentication service that is currently down, or to run a script that lives on a deployment server the incident has made unreachable, or to check a log aggregator that ingests from the same pipeline that just failed and is therefore itself producing nothing useful. The runbook was tested, if it was tested at all, in a healthy system, where every dependency it silently assumes was working happened to be working, and nobody noticed the assumption because nothing exercised it. The realistic failure modes of the system the runbook is meant to help with are exactly the conditions in which some of its own dependencies are also likely to be unavailable, and a runbook that has not been deliberately checked against that overlap will discover the gap for the first time during the incident it was supposed to shorten. A workable discipline is to annotate each step with what it depends on,",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 The Difference Between Documentation And A Runbook\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 The Difference Between Documentation And A Runbook\" (Seite 2-3, Chunk 1). is occurring right now, what is the exact sequence of commands or clicks that resolves it, in an order that does not require the reader to first understand why the sequence works. Conflating the two produces a document that opens with two paragraphs of architectural background before reaching the first actionable step, background that is genuinely valuable to a new engineer studying the system on a quiet Tuesday afternoon and genuinely in the way of an on-call engineer at three in the morning who already knows, or does not currently care, why the system is built the way it is and only wants to know what to type. The fix is not to delete the background, which has its own value, but to separate it physically: a runbook that begins with numbered, executable steps and links out to the explanatory documentation for anyone who wants the why after the incident is resolved, rather than before. 3 Steps That Assume A Working System A surprising number of runbooks fail during an actual incident for a reason that has nothing to do with the accuracy of their steps: step three tells the reader to open a dashboard that lives behind the very authentication service that is currently down, or to run a script that lives on a deployment server the incident has made unreachable, or to check a log aggregator that ingests from the same pipeline that just failed and is therefore itself producing nothing useful. The runbook was tested, if it was tested at all, in a healthy system, where every dependency it silently assumes was working happened to be working, and nobody noticed the assumption because nothing exercised it. The realistic failure modes of the system the runbook is meant to help with are exactly the conditions in which some of its own dependencies are also likely to be unavailable, and a runbook that has not been deliberately checked against that overlap will discover the gap for the first time during the incident it was supposed to shorten. A workable discipline is to annotate each step with what it depends on,",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "2 The Difference Between Documentation And A Runbook",
+      "word_count": 351
+    },
+    {
+      "chunk_id": "en-runbook-quality#2",
+      "doc_id": "en-runbook-quality",
+      "lang": "en",
+      "chunk_index": 2,
+      "chunk_text": "to be unavailable, and a runbook that has not been deliberately checked against that overlap will discover the gap for the first time during the incident it was supposed to shorten. A workable discipline is to annotate each step with what it depends on, and to periodically ask, for the failure scenarios the runbook exists to cover, whether those dependencies would plausibly be available; where the answer is no, the runbook needs an alternate path that does not route through the thing that is expected to be broken. 4 Keeping A Runbook From Rotting A runbook that is correct on the day it is written begins decaying the moment the system it describes changes underneath it, and systems change constantly while runbooks, once written, are rarely revisited unless someone happens to use one and notices it is wrong. That noticing is an unreliable maintenance mechanism, because it only happens during an incident, which is the worst possible time to discover that step four references a dashboard that was retired eight months ago, and the discovery adds delay to the very incident the runbook was meant to shorten. A more reliable approach assigns explicit ownership to every runbook, tied to the service it covers rather than to the individual who happened to write it, so that ownership survives that person changing teams, and schedules a periodic exercise where someone who did not write the runbook actually attempts to follow it against a real or simulated version of the failure it addresses. A runbook nobody has successfully followed end to end in the last six months is a runbook nobody can vouch for, regardless of how confident it looks on the page, and treating staleness as a property to be actively tested rather than passively assumed away is the only way most organisations discover the gap before an incident does it for them.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 Steps That Assume A Working System\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 Steps That Assume A Working System\" (Seite 3-4, Chunk 2). to be unavailable, and a runbook that has not been deliberately checked against that overlap will discover the gap for the first time during the incident it was supposed to shorten. A workable discipline is to annotate each step with what it depends on, and to periodically ask, for the failure scenarios the runbook exists to cover, whether those dependencies would plausibly be available; where the answer is no, the runbook needs an alternate path that does not route through the thing that is expected to be broken. 4 Keeping A Runbook From Rotting A runbook that is correct on the day it is written begins decaying the moment the system it describes changes underneath it, and systems change constantly while runbooks, once written, are rarely revisited unless someone happens to use one and notices it is wrong. That noticing is an unreliable maintenance mechanism, because it only happens during an incident, which is the worst possible time to discover that step four references a dashboard that was retired eight months ago, and the discovery adds delay to the very incident the runbook was meant to shorten. A more reliable approach assigns explicit ownership to every runbook, tied to the service it covers rather than to the individual who happened to write it, so that ownership survives that person changing teams, and schedules a periodic exercise where someone who did not write the runbook actually attempts to follow it against a real or simulated version of the failure it addresses. A runbook nobody has successfully followed end to end in the last six months is a runbook nobody can vouch for, regardless of how confident it looks on the page, and treating staleness as a property to be actively tested rather than passively assumed away is the only way most organisations discover the gap before an incident does it for them.",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "3 Steps That Assume A Working System",
+      "word_count": 311
+    },
+    {
+      "chunk_id": "en-training-metrics#0",
+      "doc_id": "en-training-metrics",
+      "lang": "en",
+      "chunk_index": 0,
+      "chunk_text": "1 Introduction Corporate training budgets are approved on the strength of a need that is easy to state and a benefit that is hard to measure, and the gap between the two is routinely papered over with a single number: how many people completed the course. Completion is trivial to capture, because a learning platform logs it automatically, and it is almost entirely uninformative about whether the training changed anything a person actually does at work afterward. An engineer can complete a course on secure coding practices, click through every module, pass the multiple-choice quiz at the end, and write exactly the same vulnerable pattern in production code the following week, and the training programme's dashboard will still report full completion and call the initiative a success. This is not a failure of the training content specifically, though weak content certainly makes it worse; it is a structural property of measuring the easiest available signal instead of the one that actually matters, and it persists because completion is cheap to report upward while behavioural change is expensive and slow to observe, and organisations under quarterly reporting pressure gravitate toward the cheap number almost by default. 2 Completion Rate Is Not An Outcome The distance between attending a session and applying what it taught is larger than most training programmes are willing to admit, and the psychology behind the gap is well understood outside the training function even where it is ignored inside it. A person sitting through a presentation forms a shallow, recognition-level familiarity with the material, sufficient to answer a quiz written to test recognition, and entirely insufficient to reliably apply the material under the different, more demanding conditions of actual work, where the relevant moment arrives days or weeks later, embedded in an unrelated task, with no cue reminding the person that this is the situation the training was about. Retention without deliberate reinforcement decays quickly, and a single training session with no follow-up, no spaced repetition, and no opportunity to apply the material in a low-stakes setting shortly after learning it produces exactly the",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Introduction\" (Seite 1-2, Chunk 0). 1 Introduction Corporate training budgets are approved on the strength of a need that is easy to state and a benefit that is hard to measure, and the gap between the two is routinely papered over with a single number: how many people completed the course. Completion is trivial to capture, because a learning platform logs it automatically, and it is almost entirely uninformative about whether the training changed anything a person actually does at work afterward. An engineer can complete a course on secure coding practices, click through every module, pass the multiple-choice quiz at the end, and write exactly the same vulnerable pattern in production code the following week, and the training programme's dashboard will still report full completion and call the initiative a success. This is not a failure of the training content specifically, though weak content certainly makes it worse; it is a structural property of measuring the easiest available signal instead of the one that actually matters, and it persists because completion is cheap to report upward while behavioural change is expensive and slow to observe, and organisations under quarterly reporting pressure gravitate toward the cheap number almost by default. 2 Completion Rate Is Not An Outcome The distance between attending a session and applying what it taught is larger than most training programmes are willing to admit, and the psychology behind the gap is well understood outside the training function even where it is ignored inside it. A person sitting through a presentation forms a shallow, recognition-level familiarity with the material, sufficient to answer a quiz written to test recognition, and entirely insufficient to reliably apply the material under the different, more demanding conditions of actual work, where the relevant moment arrives days or weeks later, embedded in an unrelated task, with no cue reminding the person that this is the situation the training was about. Retention without deliberate reinforcement decays quickly, and a single training session with no follow-up, no spaced repetition, and no opportunity to apply the material in a low-stakes setting shortly after learning it produces exactly the",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Introduction",
+      "word_count": 347
+    },
+    {
+      "chunk_id": "en-training-metrics#1",
+      "doc_id": "en-training-metrics",
+      "lang": "en",
+      "chunk_index": 1,
+      "chunk_text": "this is the situation the training was about. Retention without deliberate reinforcement decays quickly, and a single training session with no follow-up, no spaced repetition, and no opportunity to apply the material in a low-stakes setting shortly after learning it produces exactly the pattern organisations observe and then fail to explain: strong quiz scores immediately after the session and no measurable change in behaviour a month later. Programmes that build in a second, shorter touchpoint two or three weeks after the initial session, specifically designed to have the learner apply the material to a real example from their own work, see materially better retention than programmes that treat the single session as the entire intervention. 3 A Believable Proxy Metric A believable measure of training effectiveness has to look past the training event itself and into the work the trained people actually did afterward, which is harder to instrument but far more honest than anything a quiz can offer. For a course on writing safer database migrations, the proxy that matters is not the quiz score but the rate of migration-related incidents among engineers who completed the course, measured over the months following training and compared against their own rate before training and against a comparable group who has not yet taken it. This kind of proxy is noisy, because any individual engineer's incident rate is influenced by many things besides training, but the noise averages out reasonably well across a large enough cohort, and a training programme that genuinely changes behaviour should show up as a real, if modest, difference in that averaged signal, while one that only changes quiz scores should show none. Building this kind of measurement takes deliberate coordination between the team that runs training and the team that already tracks incidents and changes for other reasons, and the coordination cost is exactly why most organisations settle for completion counts instead: the honest metric is available in the data they already collect, but nobody has connected the two systems, and connecting them is unglamorous work that no single team is accountable for",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Completion Rate Is Not An Outcome\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Completion Rate Is Not An Outcome\" (Seite 2-3, Chunk 1). this is the situation the training was about. Retention without deliberate reinforcement decays quickly, and a single training session with no follow-up, no spaced repetition, and no opportunity to apply the material in a low-stakes setting shortly after learning it produces exactly the pattern organisations observe and then fail to explain: strong quiz scores immediately after the session and no measurable change in behaviour a month later. Programmes that build in a second, shorter touchpoint two or three weeks after the initial session, specifically designed to have the learner apply the material to a real example from their own work, see materially better retention than programmes that treat the single session as the entire intervention. 3 A Believable Proxy Metric A believable measure of training effectiveness has to look past the training event itself and into the work the trained people actually did afterward, which is harder to instrument but far more honest than anything a quiz can offer. For a course on writing safer database migrations, the proxy that matters is not the quiz score but the rate of migration-related incidents among engineers who completed the course, measured over the months following training and compared against their own rate before training and against a comparable group who has not yet taken it. This kind of proxy is noisy, because any individual engineer's incident rate is influenced by many things besides training, but the noise averages out reasonably well across a large enough cohort, and a training programme that genuinely changes behaviour should show up as a real, if modest, difference in that averaged signal, while one that only changes quiz scores should show none. Building this kind of measurement takes deliberate coordination between the team that runs training and the team that already tracks incidents and changes for other reasons, and the coordination cost is exactly why most organisations settle for completion counts instead: the honest metric is available in the data they already collect, but nobody has connected the two systems, and connecting them is unglamorous work that no single team is accountable for",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "2 Completion Rate Is Not An Outcome",
+      "word_count": 346
+    },
+    {
+      "chunk_id": "en-training-metrics#2",
+      "doc_id": "en-training-metrics",
+      "lang": "en",
+      "chunk_index": 2,
+      "chunk_text": "coordination cost is exactly why most organisations settle for completion counts instead: the honest metric is available in the data they already collect, but nobody has connected the two systems, and connecting them is unglamorous work that no single team is accountable for doing.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 A Believable Proxy Metric\" (Seite 3-3, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 A Believable Proxy Metric\" (Seite 3-3, Chunk 2). coordination cost is exactly why most organisations settle for completion counts instead: the honest metric is available in the data they already collect, but nobody has connected the two systems, and connecting them is unglamorous work that no single team is accountable for doing.",
+      "page_start": 3,
+      "page_end": 3,
+      "section_title": "3 A Believable Proxy Metric",
+      "word_count": 44
+    },
+    {
+      "chunk_id": "de-cloud-auftragsverarbeitung#0",
+      "doc_id": "de-cloud-auftragsverarbeitung",
+      "lang": "de",
+      "chunk_index": 0,
+      "chunk_text": "1 Ausgangslage Wer personenbezogene Daten von einem Cloud-Anbieter verarbeiten lässt, bleibt datenschutzrechtlich verantwortliche Stelle, auch wenn der Anbieter die technische Ausführung vollständig übernimmt. Diese Verantwortung lässt sich vertraglich nicht abwälzen, sie lässt sich lediglich durch einen Auftragsverarbeitungsvertrag strukturieren, der festlegt, welche Verarbeitungen der Anbieter im Namen der verantwortlichen Stelle vornehmen darf und welche nicht. In der Praxis wird dieser Vertrag oft als reine Formalität behandelt, ein Dokument, das zu Beginn der Geschäftsbeziehung unterschrieben und danach nie wieder angesehen wird, obwohl sich die tatsächliche Verarbeitung im Laufe der Zusammenarbeit häufig verändert. Ein Anbieter, der zu Beginn nur Speicherung anbot, ergänzt sein Angebot später um automatisierte Auswertung, um Empfehlungsfunktionen oder um einen Chatbot, der auf denselben Daten trainiert wird, und keine dieser Erweiterungen ist automatisch durch den ursprünglichen Vertrag gedeckt. Die verantwortliche Stelle, die solche Erweiterungen nicht aktiv verfolgt, entdeckt die Lücke typischerweise erst, wenn eine Aufsichtsbehörde oder ein Kunde danach fragt, und zu diesem Zeitpunkt lässt sich die fehlende Vertragsgrundlage nicht rückwirkend heilen. 2 Unterauftragsverarbeiter Kaum ein Cloud-Anbieter erbringt seine Leistung vollständig mit eigener Infrastruktur; fast immer stehen weitere Unternehmen dahinter, die Rechenzentren betreiben, Zahlungen abwickeln oder spezialisierte Auswertungen liefern, und jedes davon ist ein Unterauftragsverarbeiter im Sinne der Verordnung. Die verantwortliche Stelle muss diese Kette kennen, nicht weil sie mit jedem einzelnen Glied einen eigenen Vertrag schließen müsste, sondern weil ihre eigene Zusicherung gegenüber Betroffenen nur so weit trägt, wie sie tatsächlich weiß, wer die Daten am Ende in Händen hält. Ein Hauptanbieter, der neue Unterauftragsverarbeiter einbindet, ohne die verantwortliche Stelle vorab zu informieren, verschiebt eine Entscheidung, die eigentlich bei der verantwortlichen Stelle liegen müsste, in eine reine Kenntnisnahme im Nachhinein. Vertraglich üblich und praktisch wirksam ist eine Regelung, die neue Unterauftragsverarbeiter vorab",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0). 1 Ausgangslage Wer personenbezogene Daten von einem Cloud-Anbieter verarbeiten lässt, bleibt datenschutzrechtlich verantwortliche Stelle, auch wenn der Anbieter die technische Ausführung vollständig übernimmt. Diese Verantwortung lässt sich vertraglich nicht abwälzen, sie lässt sich lediglich durch einen Auftragsverarbeitungsvertrag strukturieren, der festlegt, welche Verarbeitungen der Anbieter im Namen der verantwortlichen Stelle vornehmen darf und welche nicht. In der Praxis wird dieser Vertrag oft als reine Formalität behandelt, ein Dokument, das zu Beginn der Geschäftsbeziehung unterschrieben und danach nie wieder angesehen wird, obwohl sich die tatsächliche Verarbeitung im Laufe der Zusammenarbeit häufig verändert. Ein Anbieter, der zu Beginn nur Speicherung anbot, ergänzt sein Angebot später um automatisierte Auswertung, um Empfehlungsfunktionen oder um einen Chatbot, der auf denselben Daten trainiert wird, und keine dieser Erweiterungen ist automatisch durch den ursprünglichen Vertrag gedeckt. Die verantwortliche Stelle, die solche Erweiterungen nicht aktiv verfolgt, entdeckt die Lücke typischerweise erst, wenn eine Aufsichtsbehörde oder ein Kunde danach fragt, und zu diesem Zeitpunkt lässt sich die fehlende Vertragsgrundlage nicht rückwirkend heilen. 2 Unterauftragsverarbeiter Kaum ein Cloud-Anbieter erbringt seine Leistung vollständig mit eigener Infrastruktur; fast immer stehen weitere Unternehmen dahinter, die Rechenzentren betreiben, Zahlungen abwickeln oder spezialisierte Auswertungen liefern, und jedes davon ist ein Unterauftragsverarbeiter im Sinne der Verordnung. Die verantwortliche Stelle muss diese Kette kennen, nicht weil sie mit jedem einzelnen Glied einen eigenen Vertrag schließen müsste, sondern weil ihre eigene Zusicherung gegenüber Betroffenen nur so weit trägt, wie sie tatsächlich weiß, wer die Daten am Ende in Händen hält. Ein Hauptanbieter, der neue Unterauftragsverarbeiter einbindet, ohne die verantwortliche Stelle vorab zu informieren, verschiebt eine Entscheidung, die eigentlich bei der verantwortlichen Stelle liegen müsste, in eine reine Kenntnisnahme im Nachhinein. Vertraglich üblich und praktisch wirksam ist eine Regelung, die neue Unterauftragsverarbeiter vorab",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Ausgangslage",
+      "word_count": 283
+    },
+    {
+      "chunk_id": "de-cloud-auftragsverarbeitung#1",
+      "doc_id": "de-cloud-auftragsverarbeitung",
+      "lang": "de",
+      "chunk_index": 1,
+      "chunk_text": "die verantwortliche Stelle vorab zu informieren, verschiebt eine Entscheidung, die eigentlich bei der verantwortlichen Stelle liegen müsste, in eine reine Kenntnisnahme im Nachhinein. Vertraglich üblich und praktisch wirksam ist eine Regelung, die neue Unterauftragsverarbeiter vorab ankündigt und der verantwortlichen Stelle ein Widerspruchsrecht einräumt, verbunden mit einer Frist, innerhalb derer der Widerspruch tatsächlich noch etwas bewirken kann. Eine Ankündigung, die erst nach der bereits erfolgten Anbindung verschickt wird, erfüllt den Wortlaut der Klausel und verfehlt ihren Zweck vollständig, weil zu diesem Zeitpunkt keine reale Entscheidungsmöglichkeit mehr besteht. 3 Speicherort Und Transfermechanismen Wo Daten physisch liegen, entscheidet mit darüber, welches Recht auf sie zugreifen kann, unabhängig davon, welches Recht der Vertrag zwischen den Parteien für anwendbar erklärt. Ein Anbieter, der seine Serverstandorte selbst nicht offenlegt oder sie sich vertraglich vorbehält, jederzeit ohne Ankündigung zu verlagern, entzieht der verantwortlichen Stelle genau die Information, die sie für ihre eigene Risikobewertung braucht. Wo Daten die Europäische Union verlassen, tritt zusätzlich die Frage nach dem Transfermechanismus hinzu, und ein Verweis auf Standardvertragsklauseln allein beantwortet diese Frage nicht vollständig, denn die Klauseln setzen voraus, dass im Zielland tatsächlich ein Schutzniveau erreichbar ist, das sie nicht durch bloßen Vertragstext ersetzen können. Eine verantwortliche Stelle, die Standardvertragsklauseln unterschreibt und die tatsächliche Rechtslage im Zielland nie prüft, verlässt sich auf ein Dokument, dessen Wirksamkeit von einer Prüfung abhängt, die sie ausdrücklich nie durchgeführt hat. Praktisch bewährt hat sich, den Speicherort als festen Vertragsbestandteil zu vereinbaren, dessen Änderung eine gesonderte Zustimmung erfordert, statt ihn dem allgemeinen Ermessen des Anbieters zu überlassen. 4 Kontrollrechte Statt Vertrauen Ein Auftragsverarbeitungsvertrag, der der verantwortlichen Stelle ein Kontrollrecht einräumt, ist nur so viel wert wie die Bereitschaft und die Fähigkeit der verantwortlichen Stelle, dieses",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Unterauftragsverarbeiter\" (Seite 2-4, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Unterauftragsverarbeiter\" (Seite 2-4, Chunk 1). die verantwortliche Stelle vorab zu informieren, verschiebt eine Entscheidung, die eigentlich bei der verantwortlichen Stelle liegen müsste, in eine reine Kenntnisnahme im Nachhinein. Vertraglich üblich und praktisch wirksam ist eine Regelung, die neue Unterauftragsverarbeiter vorab ankündigt und der verantwortlichen Stelle ein Widerspruchsrecht einräumt, verbunden mit einer Frist, innerhalb derer der Widerspruch tatsächlich noch etwas bewirken kann. Eine Ankündigung, die erst nach der bereits erfolgten Anbindung verschickt wird, erfüllt den Wortlaut der Klausel und verfehlt ihren Zweck vollständig, weil zu diesem Zeitpunkt keine reale Entscheidungsmöglichkeit mehr besteht. 3 Speicherort Und Transfermechanismen Wo Daten physisch liegen, entscheidet mit darüber, welches Recht auf sie zugreifen kann, unabhängig davon, welches Recht der Vertrag zwischen den Parteien für anwendbar erklärt. Ein Anbieter, der seine Serverstandorte selbst nicht offenlegt oder sie sich vertraglich vorbehält, jederzeit ohne Ankündigung zu verlagern, entzieht der verantwortlichen Stelle genau die Information, die sie für ihre eigene Risikobewertung braucht. Wo Daten die Europäische Union verlassen, tritt zusätzlich die Frage nach dem Transfermechanismus hinzu, und ein Verweis auf Standardvertragsklauseln allein beantwortet diese Frage nicht vollständig, denn die Klauseln setzen voraus, dass im Zielland tatsächlich ein Schutzniveau erreichbar ist, das sie nicht durch bloßen Vertragstext ersetzen können. Eine verantwortliche Stelle, die Standardvertragsklauseln unterschreibt und die tatsächliche Rechtslage im Zielland nie prüft, verlässt sich auf ein Dokument, dessen Wirksamkeit von einer Prüfung abhängt, die sie ausdrücklich nie durchgeführt hat. Praktisch bewährt hat sich, den Speicherort als festen Vertragsbestandteil zu vereinbaren, dessen Änderung eine gesonderte Zustimmung erfordert, statt ihn dem allgemeinen Ermessen des Anbieters zu überlassen. 4 Kontrollrechte Statt Vertrauen Ein Auftragsverarbeitungsvertrag, der der verantwortlichen Stelle ein Kontrollrecht einräumt, ist nur so viel wert wie die Bereitschaft und die Fähigkeit der verantwortlichen Stelle, dieses",
+      "page_start": 2,
+      "page_end": 4,
+      "section_title": "2 Unterauftragsverarbeiter",
+      "word_count": 278
+    },
+    {
+      "chunk_id": "de-cloud-auftragsverarbeitung#2",
+      "doc_id": "de-cloud-auftragsverarbeitung",
+      "lang": "de",
+      "chunk_index": 2,
+      "chunk_text": "dem allgemeinen Ermessen des Anbieters zu überlassen. 4 Kontrollrechte Statt Vertrauen Ein Auftragsverarbeitungsvertrag, der der verantwortlichen Stelle ein Kontrollrecht einräumt, ist nur so viel wert wie die Bereitschaft und die Fähigkeit der verantwortlichen Stelle, dieses Recht tatsächlich auszuüben. Die meisten Verträge sehen ein Prüfungsrecht vor Ort oder die Vorlage von Nachweisen vor, und die meisten verantwortlichen Stellen nutzen dieses Recht in der gesamten Vertragslaufzeit kein einziges Mal, weil eine eigene Prüfung Personal, Fachwissen und Zeit bindet, die für das Tagesgeschäft ohnehin knapp sind. Der Anbieter weiß das, und ein Kontrollrecht, das erfahrungsgemäß niemals ausgeübt wird, entfaltet keine disziplinierende Wirkung auf sein tatsächliches Verhalten, selbst wenn es im Vertrag großzügig formuliert ist. Ein pragmatischer Ausweg besteht darin, sich nicht auf eigene Prüfungen zu verlassen, sondern auf unabhängige Zertifizierungen zu setzen, die der Anbieter regelmäßig erneuern muss, verbunden mit der vertraglichen Pflicht, den zugrunde liegenden Prüfbericht auf Anfrage tatsächlich vorzulegen und nicht nur das Vorhandensein eines Siegels zu behaupten. Der entscheidende Unterschied liegt darin, ob eine verantwortliche Stelle sich mit dem Versprechen einer Kontrolle zufriedengibt oder mit dem Nachweis, dass die Kontrolle tatsächlich stattgefunden hat, und nur der zweite Fall verdient die Bezeichnung Kontrolle.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 Speicherort Und Transfermechanismen\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 Speicherort Und Transfermechanismen\" (Seite 3-4, Chunk 2). dem allgemeinen Ermessen des Anbieters zu überlassen. 4 Kontrollrechte Statt Vertrauen Ein Auftragsverarbeitungsvertrag, der der verantwortlichen Stelle ein Kontrollrecht einräumt, ist nur so viel wert wie die Bereitschaft und die Fähigkeit der verantwortlichen Stelle, dieses Recht tatsächlich auszuüben. Die meisten Verträge sehen ein Prüfungsrecht vor Ort oder die Vorlage von Nachweisen vor, und die meisten verantwortlichen Stellen nutzen dieses Recht in der gesamten Vertragslaufzeit kein einziges Mal, weil eine eigene Prüfung Personal, Fachwissen und Zeit bindet, die für das Tagesgeschäft ohnehin knapp sind. Der Anbieter weiß das, und ein Kontrollrecht, das erfahrungsgemäß niemals ausgeübt wird, entfaltet keine disziplinierende Wirkung auf sein tatsächliches Verhalten, selbst wenn es im Vertrag großzügig formuliert ist. Ein pragmatischer Ausweg besteht darin, sich nicht auf eigene Prüfungen zu verlassen, sondern auf unabhängige Zertifizierungen zu setzen, die der Anbieter regelmäßig erneuern muss, verbunden mit der vertraglichen Pflicht, den zugrunde liegenden Prüfbericht auf Anfrage tatsächlich vorzulegen und nicht nur das Vorhandensein eines Siegels zu behaupten. Der entscheidende Unterschied liegt darin, ob eine verantwortliche Stelle sich mit dem Versprechen einer Kontrolle zufriedengibt oder mit dem Nachweis, dass die Kontrolle tatsächlich stattgefunden hat, und nur der zweite Fall verdient die Bezeichnung Kontrolle.",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "3 Speicherort Und Transfermechanismen",
+      "word_count": 192
+    },
+    {
+      "chunk_id": "de-notfallwiederherstellung#0",
+      "doc_id": "de-notfallwiederherstellung",
+      "lang": "de",
+      "chunk_index": 0,
+      "chunk_text": "1 Ausgangslage Ein Notfallwiederherstellungsplan, der in einem Ordner liegt und einmal im Jahr bei einer Zertifizierung vorgezeigt wird, beantwortet eine andere Frage als die, die im Ernstfall gestellt wird. Der Ordner beantwortet die Frage, ob ein Plan existiert; der Ernstfall stellt die Frage, ob die Person, die um drei Uhr nachts telefonisch erreicht wird, in der Lage ist, diesen Plan unter Zeitdruck und mit unvollständigen Informationen tatsächlich auszuführen. Diese zweite Frage hat mit dem Dokument selbst wenig zu tun und viel mit der Person, die es liest, mit ihrer Vertrautheit mit den beschriebenen Schritten und damit, ob die im Plan vorausgesetzten Werkzeuge zum Zeitpunkt der Ausführung überhaupt erreichbar sind. Ein Plan, der niemals unter realistischen Bedingungen durchgespielt wurde, ist im besten Fall eine Absichtserklärung und im schlechtesten Fall eine Quelle falscher Sicherheit, die dazu führt, dass niemand eine bessere Vorbereitung für nötig hält, weil ja formal ein Plan existiert. Der entscheidende Unterschied zwischen einer Organisation, die im Ernstfall tatsächlich wiederherstellt, und einer, die es nicht schafft, liegt selten im Papier, sondern fast immer darin, ob die Übung vorher stattgefunden hat. 2 Wiederanlaufzeit Versus Datenverlust Zwei Kennzahlen bestimmen, wie ein Wiederanlauf aussehen muss, und beide werden in der Praxis oft festgelegt, ohne dass jemand die tatsächlichen Kosten dahinter versteht. Die Wiederanlaufzeit gibt an, wie lange ein Dienst maximal ausfallen darf, bevor er wieder verfügbar sein muss; der maximal tolerierte Datenverlust gibt an, wie viel an zuletzt verarbeiteten Daten im schlimmsten Fall verloren gehen darf. Ein Fachbereich, der beide Werte auf nahezu null setzt, weil das aus seiner Sicht offensichtlich das Beste wäre, unterschätzt fast immer, was diese Forderung technisch und finanziell tatsächlich bedeutet: eine Wiederanlaufzeit von wenigen Minuten verlangt eine ständig warmgehaltene, redundante Umgebung, die permanent Geld kostet, unabhängig davon, ob je ein Ausfall eintritt. Ein Datenverlust von praktisch null verlangt eine synchrone Replikation, die selbst die",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0). 1 Ausgangslage Ein Notfallwiederherstellungsplan, der in einem Ordner liegt und einmal im Jahr bei einer Zertifizierung vorgezeigt wird, beantwortet eine andere Frage als die, die im Ernstfall gestellt wird. Der Ordner beantwortet die Frage, ob ein Plan existiert; der Ernstfall stellt die Frage, ob die Person, die um drei Uhr nachts telefonisch erreicht wird, in der Lage ist, diesen Plan unter Zeitdruck und mit unvollständigen Informationen tatsächlich auszuführen. Diese zweite Frage hat mit dem Dokument selbst wenig zu tun und viel mit der Person, die es liest, mit ihrer Vertrautheit mit den beschriebenen Schritten und damit, ob die im Plan vorausgesetzten Werkzeuge zum Zeitpunkt der Ausführung überhaupt erreichbar sind. Ein Plan, der niemals unter realistischen Bedingungen durchgespielt wurde, ist im besten Fall eine Absichtserklärung und im schlechtesten Fall eine Quelle falscher Sicherheit, die dazu führt, dass niemand eine bessere Vorbereitung für nötig hält, weil ja formal ein Plan existiert. Der entscheidende Unterschied zwischen einer Organisation, die im Ernstfall tatsächlich wiederherstellt, und einer, die es nicht schafft, liegt selten im Papier, sondern fast immer darin, ob die Übung vorher stattgefunden hat. 2 Wiederanlaufzeit Versus Datenverlust Zwei Kennzahlen bestimmen, wie ein Wiederanlauf aussehen muss, und beide werden in der Praxis oft festgelegt, ohne dass jemand die tatsächlichen Kosten dahinter versteht. Die Wiederanlaufzeit gibt an, wie lange ein Dienst maximal ausfallen darf, bevor er wieder verfügbar sein muss; der maximal tolerierte Datenverlust gibt an, wie viel an zuletzt verarbeiteten Daten im schlimmsten Fall verloren gehen darf. Ein Fachbereich, der beide Werte auf nahezu null setzt, weil das aus seiner Sicht offensichtlich das Beste wäre, unterschätzt fast immer, was diese Forderung technisch und finanziell tatsächlich bedeutet: eine Wiederanlaufzeit von wenigen Minuten verlangt eine ständig warmgehaltene, redundante Umgebung, die permanent Geld kostet, unabhängig davon, ob je ein Ausfall eintritt. Ein Datenverlust von praktisch null verlangt eine synchrone Replikation, die selbst die",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Ausgangslage",
+      "word_count": 306
+    },
+    {
+      "chunk_id": "de-notfallwiederherstellung#1",
+      "doc_id": "de-notfallwiederherstellung",
+      "lang": "de",
+      "chunk_index": 1,
+      "chunk_text": "und finanziell tatsächlich bedeutet: eine Wiederanlaufzeit von wenigen Minuten verlangt eine ständig warmgehaltene, redundante Umgebung, die permanent Geld kostet, unabhängig davon, ob je ein Ausfall eintritt. Ein Datenverlust von praktisch null verlangt eine synchrone Replikation, die selbst die Schreibgeschwindigkeit des Systems im Normalbetrieb spürbar verlangsamen kann, weil jede Schreiboperation erst dann als abgeschlossen gilt, wenn sie an einem zweiten, entfernten Ort bestätigt wurde. Die richtige Antwort ist selten die technisch maximale, sondern diejenige, die die tatsächlichen finanziellen Folgen eines Ausfalls dieser Dauer und dieses Datenverlusts nüchtern gegen die laufenden Kosten der geforderten Absicherung abwägt, eine Abwägung, die nur stattfinden kann, wenn beide Seiten in derselben Einheit, nämlich Geld, ausgedrückt werden. 3 Der Failover, Der Nie Geuebt Wurde Ein Failover-Mechanismus, der seit seiner Einrichtung nie tatsächlich ausgelöst wurde, ist eine der am wenigsten geprüften Komponenten eines gesamten Systems, obwohl er genau in dem Moment funktionieren muss, in dem alles andere bereits versagt hat. Konfigurationsdrift betrifft einen ungeübten Failover besonders hart, weil sich die Primärumgebung im Laufe der Zeit weiterentwickelt, während die Ausweichumgebung, die nur im Ernstfall aktiviert wird, unbemerkt zurückbleibt, mit einer älteren Softwareversion, veralteten Zugangsdaten oder einer Netzwerkkonfiguration, die seit dem letzten Test nicht mehr zur restlichen Infrastruktur passt. Der Moment, an dem diese Abweichung auffällt, ist ausgerechnet der Moment, in dem der Failover tatsächlich gebraucht wird, und dann verwandelt sich eine geplante Ausweichmaßnahme in eine zweite, unabhängige Störung, die zusätzlich zur eigentlichen Ursache gelöst werden muss. Regelmäßige, tatsächlich vollzogene Failover-Übungen, bei denen echter Verkehr für eine begrenzte Zeit über die Ausweichumgebung läuft, sind der einzige verlässliche Weg, diese Drift rechtzeitig zu entdecken, weil jede rein dokumentierte oder simulierte",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Wiederanlaufzeit Versus Datenverlust\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Wiederanlaufzeit Versus Datenverlust\" (Seite 2-3, Chunk 1). und finanziell tatsächlich bedeutet: eine Wiederanlaufzeit von wenigen Minuten verlangt eine ständig warmgehaltene, redundante Umgebung, die permanent Geld kostet, unabhängig davon, ob je ein Ausfall eintritt. Ein Datenverlust von praktisch null verlangt eine synchrone Replikation, die selbst die Schreibgeschwindigkeit des Systems im Normalbetrieb spürbar verlangsamen kann, weil jede Schreiboperation erst dann als abgeschlossen gilt, wenn sie an einem zweiten, entfernten Ort bestätigt wurde. Die richtige Antwort ist selten die technisch maximale, sondern diejenige, die die tatsächlichen finanziellen Folgen eines Ausfalls dieser Dauer und dieses Datenverlusts nüchtern gegen die laufenden Kosten der geforderten Absicherung abwägt, eine Abwägung, die nur stattfinden kann, wenn beide Seiten in derselben Einheit, nämlich Geld, ausgedrückt werden. 3 Der Failover, Der Nie Geuebt Wurde Ein Failover-Mechanismus, der seit seiner Einrichtung nie tatsächlich ausgelöst wurde, ist eine der am wenigsten geprüften Komponenten eines gesamten Systems, obwohl er genau in dem Moment funktionieren muss, in dem alles andere bereits versagt hat. Konfigurationsdrift betrifft einen ungeübten Failover besonders hart, weil sich die Primärumgebung im Laufe der Zeit weiterentwickelt, während die Ausweichumgebung, die nur im Ernstfall aktiviert wird, unbemerkt zurückbleibt, mit einer älteren Softwareversion, veralteten Zugangsdaten oder einer Netzwerkkonfiguration, die seit dem letzten Test nicht mehr zur restlichen Infrastruktur passt. Der Moment, an dem diese Abweichung auffällt, ist ausgerechnet der Moment, in dem der Failover tatsächlich gebraucht wird, und dann verwandelt sich eine geplante Ausweichmaßnahme in eine zweite, unabhängige Störung, die zusätzlich zur eigentlichen Ursache gelöst werden muss. Regelmäßige, tatsächlich vollzogene Failover-Übungen, bei denen echter Verkehr für eine begrenzte Zeit über die Ausweichumgebung läuft, sind der einzige verlässliche Weg, diese Drift rechtzeitig zu entdecken, weil jede rein dokumentierte oder simulierte",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "2 Wiederanlaufzeit Versus Datenverlust",
+      "word_count": 269
+    },
+    {
+      "chunk_id": "de-notfallwiederherstellung#2",
+      "doc_id": "de-notfallwiederherstellung",
+      "lang": "de",
+      "chunk_index": 2,
+      "chunk_text": "werden muss. Regelmäßige, tatsächlich vollzogene Failover-Übungen, bei denen echter Verkehr für eine begrenzte Zeit über die Ausweichumgebung läuft, sind der einzige verlässliche Weg, diese Drift rechtzeitig zu entdecken, weil jede rein dokumentierte oder simulierte Übung genau die Abweichungen übersieht, die eine echte Umschaltung zutage fördert. 4 Abhaengigkeiten Ausserhalb Des Eigenen Rechenzentrums Ein Wiederanlaufplan, der ausschließlich das eigene Rechenzentrum oder die eigene Cloud-Region betrachtet, übersieht regelmäßig eine Reihe von Abhängigkeiten, die außerhalb dieser Grenze liegen und trotzdem über Erfolg oder Misserfolg des Wiederanlaufs entscheiden. Der Namensdienst, über den Kundinnen und Kunden die Anwendung überhaupt erst erreichen, liegt häufig bei einem externen Betreiber, dessen eigene Verfügbarkeit der Wiederanlaufplan stillschweigend voraussetzt, ohne sie je geprüft zu haben. Die Stelle, die digitale Zertifikate ausstellt oder erneuert, ist ein weiterer externer Bestandteil, und ein abgelaufenes Zertifikat kann eine ansonsten technisch perfekt funktionierende Ausweichumgebung für Endnutzerinnen und Endnutzer vollständig unbrauchbar machen. Auch Authentifizierungsdienste eines Drittanbieters, über die sich Mitarbeitende oder Kundschaft anmelden, fallen in dieselbe Kategorie: Ist der Drittanbieter selbst von einer großflächigen Störung betroffen, hilft die perfekteste eigene Wiederherstellung nichts, weil niemand sich anmelden kann. Ein vollständiger Wiederanlaufplan muss diese externen Abhängigkeiten einzeln auflisten und für jede die Frage beantworten, was geschieht, wenn genau diese Abhängigkeit im Ernstfall selbst nicht verfügbar ist, statt stillschweigend anzunehmen, dass alles außerhalb der eigenen Systemgrenze zuverlässig funktioniert.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Wiederanlaufzeit Versus Datenverlust\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Wiederanlaufzeit Versus Datenverlust\" (Seite 3-4, Chunk 2). werden muss. Regelmäßige, tatsächlich vollzogene Failover-Übungen, bei denen echter Verkehr für eine begrenzte Zeit über die Ausweichumgebung läuft, sind der einzige verlässliche Weg, diese Drift rechtzeitig zu entdecken, weil jede rein dokumentierte oder simulierte Übung genau die Abweichungen übersieht, die eine echte Umschaltung zutage fördert. 4 Abhaengigkeiten Ausserhalb Des Eigenen Rechenzentrums Ein Wiederanlaufplan, der ausschließlich das eigene Rechenzentrum oder die eigene Cloud-Region betrachtet, übersieht regelmäßig eine Reihe von Abhängigkeiten, die außerhalb dieser Grenze liegen und trotzdem über Erfolg oder Misserfolg des Wiederanlaufs entscheiden. Der Namensdienst, über den Kundinnen und Kunden die Anwendung überhaupt erst erreichen, liegt häufig bei einem externen Betreiber, dessen eigene Verfügbarkeit der Wiederanlaufplan stillschweigend voraussetzt, ohne sie je geprüft zu haben. Die Stelle, die digitale Zertifikate ausstellt oder erneuert, ist ein weiterer externer Bestandteil, und ein abgelaufenes Zertifikat kann eine ansonsten technisch perfekt funktionierende Ausweichumgebung für Endnutzerinnen und Endnutzer vollständig unbrauchbar machen. Auch Authentifizierungsdienste eines Drittanbieters, über die sich Mitarbeitende oder Kundschaft anmelden, fallen in dieselbe Kategorie: Ist der Drittanbieter selbst von einer großflächigen Störung betroffen, hilft die perfekteste eigene Wiederherstellung nichts, weil niemand sich anmelden kann. Ein vollständiger Wiederanlaufplan muss diese externen Abhängigkeiten einzeln auflisten und für jede die Frage beantworten, was geschieht, wenn genau diese Abhängigkeit im Ernstfall selbst nicht verfügbar ist, statt stillschweigend anzunehmen, dass alles außerhalb der eigenen Systemgrenze zuverlässig funktioniert.",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "2 Wiederanlaufzeit Versus Datenverlust",
+      "word_count": 218
+    },
+    {
+      "chunk_id": "de-zugriffskonzept#0",
+      "doc_id": "de-zugriffskonzept",
+      "lang": "de",
+      "chunk_index": 0,
+      "chunk_text": "1 Ausgangslage In einem verteilten Team, das über mehrere Standorte und rechtlich selbstständige Tochtergesellschaften verteilt ist, entstehen Zugriffsrechte selten aus einer einzigen, konsistenten Entscheidung, sondern aus vielen kleinen, lokal getroffenen Entscheidungen, die sich gegenseitig nie sehen. Ein Standort vergibt Zugriff auf ein gemeinsames System großzügig, weil die dortige Führungskraft schnelle Ergebnisse will, ein anderer Standort vergibt denselben Zugriff restriktiv, weil dort ein anderes Sicherheitsverständnis herrscht, und beide Entscheidungen betreffen dasselbe System, ohne dass irgendjemand die Widersprüchlichkeit zwischen ihnen bemerkt. Mit der Zeit entsteht ein Flickenteppich, in dem die tatsächliche Berechtigungslage einer Person weniger von ihrer Rolle abhängt als davon, an welchem Standort und zu welchem Zeitpunkt sie eingestellt wurde und welche Führungskraft zu diesem Zeitpunkt gerade Anfragen genehmigt hat. Dieser Flickenteppich lässt sich nicht durch strengere Formulare beheben, weil das Formular nicht das Problem ist; das Problem ist das Fehlen einer einzigen Stelle, die für die Konsistenz der Zugriffslogik über alle Standorte hinweg tatsächlich verantwortlich ist und diese Verantwortung auch durchsetzen kann. 2 Rollen Statt Einzelfreigaben Ein rollenbasiertes Konzept löst dieses Problem, indem es die Frage, wer worauf zugreifen darf, von der Frage trennt, wer welche Person konkret ist. Definiert wird nicht, dass eine bestimmte Kollegin Zugriff auf ein bestimmtes System hat, sondern dass die Rolle, die diese Kollegin gerade ausfüllt, mit einem festgelegten Satz an Berechtigungen verbunden ist, und die Kollegin erbt diese Berechtigungen automatisch, solange sie die Rolle innehat, und verliert sie automatisch, sobald sie die Rolle nicht mehr innehat. Der entscheidende Vorteil zeigt sich nicht bei der Vergabe, die auch im alten System einigermaßen funktioniert hat, sondern beim Entzug: Eine Person, die eine Rolle wechselt, verliert die alten Berechtigungen automatisch als Nebeneffekt des Rollenwechsels, statt dass jemand aktiv daran denken muss,",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0). 1 Ausgangslage In einem verteilten Team, das über mehrere Standorte und rechtlich selbstständige Tochtergesellschaften verteilt ist, entstehen Zugriffsrechte selten aus einer einzigen, konsistenten Entscheidung, sondern aus vielen kleinen, lokal getroffenen Entscheidungen, die sich gegenseitig nie sehen. Ein Standort vergibt Zugriff auf ein gemeinsames System großzügig, weil die dortige Führungskraft schnelle Ergebnisse will, ein anderer Standort vergibt denselben Zugriff restriktiv, weil dort ein anderes Sicherheitsverständnis herrscht, und beide Entscheidungen betreffen dasselbe System, ohne dass irgendjemand die Widersprüchlichkeit zwischen ihnen bemerkt. Mit der Zeit entsteht ein Flickenteppich, in dem die tatsächliche Berechtigungslage einer Person weniger von ihrer Rolle abhängt als davon, an welchem Standort und zu welchem Zeitpunkt sie eingestellt wurde und welche Führungskraft zu diesem Zeitpunkt gerade Anfragen genehmigt hat. Dieser Flickenteppich lässt sich nicht durch strengere Formulare beheben, weil das Formular nicht das Problem ist; das Problem ist das Fehlen einer einzigen Stelle, die für die Konsistenz der Zugriffslogik über alle Standorte hinweg tatsächlich verantwortlich ist und diese Verantwortung auch durchsetzen kann. 2 Rollen Statt Einzelfreigaben Ein rollenbasiertes Konzept löst dieses Problem, indem es die Frage, wer worauf zugreifen darf, von der Frage trennt, wer welche Person konkret ist. Definiert wird nicht, dass eine bestimmte Kollegin Zugriff auf ein bestimmtes System hat, sondern dass die Rolle, die diese Kollegin gerade ausfüllt, mit einem festgelegten Satz an Berechtigungen verbunden ist, und die Kollegin erbt diese Berechtigungen automatisch, solange sie die Rolle innehat, und verliert sie automatisch, sobald sie die Rolle nicht mehr innehat. Der entscheidende Vorteil zeigt sich nicht bei der Vergabe, die auch im alten System einigermaßen funktioniert hat, sondern beim Entzug: Eine Person, die eine Rolle wechselt, verliert die alten Berechtigungen automatisch als Nebeneffekt des Rollenwechsels, statt dass jemand aktiv daran denken muss,",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Ausgangslage",
+      "word_count": 284
+    },
+    {
+      "chunk_id": "de-zugriffskonzept#1",
+      "doc_id": "de-zugriffskonzept",
+      "lang": "de",
+      "chunk_index": 1,
+      "chunk_text": "bei der Vergabe, die auch im alten System einigermaßen funktioniert hat, sondern beim Entzug: Eine Person, die eine Rolle wechselt, verliert die alten Berechtigungen automatisch als Nebeneffekt des Rollenwechsels, statt dass jemand aktiv daran denken muss, sie einzeln zu widerrufen, und genau dieses aktive Denken war in der Praxis der Schritt, der zuverlässig vergessen wurde. Die Einführung eines Rollenkonzepts ist selbst mit erheblichem Aufwand verbunden, weil zunächst jede tatsächlich benötigte Kombination aus Berechtigungen für jede real existierende Rolle sauber erhoben werden muss, aber dieser Aufwand fällt einmalig an, während der Nutzen bei jedem künftigen Rollenwechsel erneut anfällt. 3 Vertretungsregelungen Vertretungsregelungen sind eine der häufigsten Quellen dauerhaft überzogener Zugriffsrechte, weil eine Vertretung fast immer als dringend und vorübergehend beginnt und fast nie als dringend und vorübergehend endet. Eine Kollegin, die während des Urlaubs einer anderen Person deren Freigaben ausüben muss, erhält dafür üblicherweise deren vollständige Berechtigungen, weil eine feingranulare Vertretungsrolle niemand rechtzeitig vorbereitet hat, und nach der Rückkehr der ursprünglichen Person wird der Entzug dieser Vertretungsrechte in aller Regel vergessen, weil kein Ereignis mehr existiert, das ihn auslöst. Nach mehreren Jahren und mehreren solcher Vertretungen sammelt sich in vielen Organisationen eine stille Klasse von Personen an, deren tatsächliche Berechtigungen weit über das hinausgehen, was ihre aktuelle Rolle vorsehen würde, ohne dass diese Diskrepanz irgendwo sichtbar dokumentiert ist. Eine tragfähige Lösung koppelt jede Vertretung von vornherein an ein festes Ablaufdatum, das technisch durchgesetzt wird und nicht von der Erinnerung einer Person abhängt, und macht eine Verlängerung zu einer bewussten, erneut zu begründenden Entscheidung statt zu einem stillschweigenden Normalzustand. 4 Regelmaessige Rezertifizierung Die regelmäßige Rezertifizierung soll genau die Fälle auffangen, die durch Rollenwechsel und Vertretungen dennoch durchrutschen, indem",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Rollen Statt Einzelfreigaben\" (Seite 2-4, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Rollen Statt Einzelfreigaben\" (Seite 2-4, Chunk 1). bei der Vergabe, die auch im alten System einigermaßen funktioniert hat, sondern beim Entzug: Eine Person, die eine Rolle wechselt, verliert die alten Berechtigungen automatisch als Nebeneffekt des Rollenwechsels, statt dass jemand aktiv daran denken muss, sie einzeln zu widerrufen, und genau dieses aktive Denken war in der Praxis der Schritt, der zuverlässig vergessen wurde. Die Einführung eines Rollenkonzepts ist selbst mit erheblichem Aufwand verbunden, weil zunächst jede tatsächlich benötigte Kombination aus Berechtigungen für jede real existierende Rolle sauber erhoben werden muss, aber dieser Aufwand fällt einmalig an, während der Nutzen bei jedem künftigen Rollenwechsel erneut anfällt. 3 Vertretungsregelungen Vertretungsregelungen sind eine der häufigsten Quellen dauerhaft überzogener Zugriffsrechte, weil eine Vertretung fast immer als dringend und vorübergehend beginnt und fast nie als dringend und vorübergehend endet. Eine Kollegin, die während des Urlaubs einer anderen Person deren Freigaben ausüben muss, erhält dafür üblicherweise deren vollständige Berechtigungen, weil eine feingranulare Vertretungsrolle niemand rechtzeitig vorbereitet hat, und nach der Rückkehr der ursprünglichen Person wird der Entzug dieser Vertretungsrechte in aller Regel vergessen, weil kein Ereignis mehr existiert, das ihn auslöst. Nach mehreren Jahren und mehreren solcher Vertretungen sammelt sich in vielen Organisationen eine stille Klasse von Personen an, deren tatsächliche Berechtigungen weit über das hinausgehen, was ihre aktuelle Rolle vorsehen würde, ohne dass diese Diskrepanz irgendwo sichtbar dokumentiert ist. Eine tragfähige Lösung koppelt jede Vertretung von vornherein an ein festes Ablaufdatum, das technisch durchgesetzt wird und nicht von der Erinnerung einer Person abhängt, und macht eine Verlängerung zu einer bewussten, erneut zu begründenden Entscheidung statt zu einem stillschweigenden Normalzustand. 4 Regelmaessige Rezertifizierung Die regelmäßige Rezertifizierung soll genau die Fälle auffangen, die durch Rollenwechsel und Vertretungen dennoch durchrutschen, indem",
+      "page_start": 2,
+      "page_end": 4,
+      "section_title": "2 Rollen Statt Einzelfreigaben",
+      "word_count": 275
+    },
+    {
+      "chunk_id": "de-zugriffskonzept#2",
+      "doc_id": "de-zugriffskonzept",
+      "lang": "de",
+      "chunk_index": 2,
+      "chunk_text": "macht eine Verlängerung zu einer bewussten, erneut zu begründenden Entscheidung statt zu einem stillschweigenden Normalzustand. 4 Regelmaessige Rezertifizierung Die regelmäßige Rezertifizierung soll genau die Fälle auffangen, die durch Rollenwechsel und Vertretungen dennoch durchrutschen, indem eine vorgesetzte Person periodisch bestätigt, dass die bestehenden Berechtigungen einer untergebenen Person weiterhin sachlich gerechtfertigt sind. In der Praxis scheitert dieser Mechanismus regelmäßig an seiner eigenen Form: Wird einer Führungskraft eine Liste von vierhundert Zeilen vorgelegt, mit der Bitte, jede einzelne zu bestätigen oder zu widerrufen, bestätigt sie in den allermeisten Fällen die gesamte Liste in wenigen Minuten, ohne eine einzige Zeile tatsächlich geprüft zu haben, weil eine echte Prüfung dieses Umfangs schlicht nicht in die verfügbare Zeit passt. Das Ergebnis ist ein formal vollständig dokumentierter Rezertifizierungsprozess, der inhaltlich nichts geprüft hat und trotzdem als Nachweis ordnungsgemäßer Kontrolle in jeder Prüfung auftaucht. Wirksamer ist eine Rezertifizierung, die von vornherein nur eine kleine, auffällige Teilmenge vorlegt, etwa Berechtigungen, die seit über einem Jahr nicht genutzt wurden oder die nicht zur aktuellen Rolle der Person passen, weil eine überschaubare Liste tatsächlich gelesen wird und eine überwältigende Liste garantiert nicht.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"3 Vertretungsregelungen\" (Seite 3-4, Chunk 2).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"3 Vertretungsregelungen\" (Seite 3-4, Chunk 2). macht eine Verlängerung zu einer bewussten, erneut zu begründenden Entscheidung statt zu einem stillschweigenden Normalzustand. 4 Regelmaessige Rezertifizierung Die regelmäßige Rezertifizierung soll genau die Fälle auffangen, die durch Rollenwechsel und Vertretungen dennoch durchrutschen, indem eine vorgesetzte Person periodisch bestätigt, dass die bestehenden Berechtigungen einer untergebenen Person weiterhin sachlich gerechtfertigt sind. In der Praxis scheitert dieser Mechanismus regelmäßig an seiner eigenen Form: Wird einer Führungskraft eine Liste von vierhundert Zeilen vorgelegt, mit der Bitte, jede einzelne zu bestätigen oder zu widerrufen, bestätigt sie in den allermeisten Fällen die gesamte Liste in wenigen Minuten, ohne eine einzige Zeile tatsächlich geprüft zu haben, weil eine echte Prüfung dieses Umfangs schlicht nicht in die verfügbare Zeit passt. Das Ergebnis ist ein formal vollständig dokumentierter Rezertifizierungsprozess, der inhaltlich nichts geprüft hat und trotzdem als Nachweis ordnungsgemäßer Kontrolle in jeder Prüfung auftaucht. Wirksamer ist eine Rezertifizierung, die von vornherein nur eine kleine, auffällige Teilmenge vorlegt, etwa Berechtigungen, die seit über einem Jahr nicht genutzt wurden oder die nicht zur aktuellen Rolle der Person passen, weil eine überschaubare Liste tatsächlich gelesen wird und eine überwältigende Liste garantiert nicht.",
+      "page_start": 3,
+      "page_end": 4,
+      "section_title": "3 Vertretungsregelungen",
+      "word_count": 181
+    },
+    {
+      "chunk_id": "de-schulungsnachweis#0",
+      "doc_id": "de-schulungsnachweis",
+      "lang": "de",
+      "chunk_index": 0,
+      "chunk_text": "1 Ausgangslage Ein Unternehmen, das seine Beschäftigten zu regelmäßigen Sicherheitsschulungen verpflichtet, verlangt üblicherweise auch einen Nachweis über die Teilnahme, sei es für eine interne Revision oder für eine externe Zertifizierung, die genau diesen Nachweis als Kriterium vorsieht. Der Nachweis selbst besteht meist aus einer automatisch generierten Bescheinigung, die den Namen der Person, den Titel der Schulung und das Datum des Abschlusses nennt, und diese drei Angaben beantworten zuverlässig genau eine Frage: dass die Person die Schulung irgendwann formal abgeschlossen hat. Sie beantworten keine der Fragen, die eine Aufsichtsbehörde oder ein Kunde im Streitfall tatsächlich stellen würde, etwa ob die vermittelten Inhalte zu diesem Zeitpunkt noch aktuell waren, ob die Person die Inhalte tatsächlich verstanden hat, oder ob das erworbene Wissen im Arbeitsalltag überhaupt angewendet wird. Diese Lücke zwischen dem, was der Nachweis dokumentiert, und dem, was ein Nachweis über Sicherheitsschulungen eigentlich belegen soll, bleibt in den meisten Organisationen unbemerkt, weil das Vorhandensein des Dokuments selbst schon als ausreichende Antwort gilt. 2 Was Ein Nachweis Tatsaechlich Belegt Eine Bescheinigung, die allein die Teilnahme belegt, sagt nichts darüber aus, wie die Teilnahme tatsächlich verlief. Ein Mitarbeiter kann eine Schulung im Hintergrund geöffnet lassen, während er sich mit anderen Aufgaben beschäftigt, und am Ende einen kurzen Abschlusstest bestehen, dessen Fragen so einfach formuliert sind, dass sie auch ohne inhaltliches Verständnis durch reines Ausschlussverfahren zu lösen sind. Formal entsteht dieselbe Bescheinigung wie bei einer Person, die die Schulung aufmerksam durchgearbeitet hat, und aus dem Dokument selbst lässt sich der Unterschied zwischen beiden Fällen nicht mehr rekonstruieren. Ein aussagekräftigerer Nachweis würde nicht nur den Abschluss, sondern auch Anhaltspunkte für tatsächliches Verständnis festhalten, etwa das Ergebnis eines anspruchsvolleren, praxisnahen Tests oder eine spätere, unangekündigte Überprüfung anhand einer realistischen Situation, doch ein solcher Nachweis ist aufwendiger zu erstellen und wird deshalb in der Praxis selten verlangt, obwohl er die eigentlich interessierende Frage tatsächlich beantworten",
+      "context_sentence": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"1 Ausgangslage\" (Seite 1-2, Chunk 0). 1 Ausgangslage Ein Unternehmen, das seine Beschäftigten zu regelmäßigen Sicherheitsschulungen verpflichtet, verlangt üblicherweise auch einen Nachweis über die Teilnahme, sei es für eine interne Revision oder für eine externe Zertifizierung, die genau diesen Nachweis als Kriterium vorsieht. Der Nachweis selbst besteht meist aus einer automatisch generierten Bescheinigung, die den Namen der Person, den Titel der Schulung und das Datum des Abschlusses nennt, und diese drei Angaben beantworten zuverlässig genau eine Frage: dass die Person die Schulung irgendwann formal abgeschlossen hat. Sie beantworten keine der Fragen, die eine Aufsichtsbehörde oder ein Kunde im Streitfall tatsächlich stellen würde, etwa ob die vermittelten Inhalte zu diesem Zeitpunkt noch aktuell waren, ob die Person die Inhalte tatsächlich verstanden hat, oder ob das erworbene Wissen im Arbeitsalltag überhaupt angewendet wird. Diese Lücke zwischen dem, was der Nachweis dokumentiert, und dem, was ein Nachweis über Sicherheitsschulungen eigentlich belegen soll, bleibt in den meisten Organisationen unbemerkt, weil das Vorhandensein des Dokuments selbst schon als ausreichende Antwort gilt. 2 Was Ein Nachweis Tatsaechlich Belegt Eine Bescheinigung, die allein die Teilnahme belegt, sagt nichts darüber aus, wie die Teilnahme tatsächlich verlief. Ein Mitarbeiter kann eine Schulung im Hintergrund geöffnet lassen, während er sich mit anderen Aufgaben beschäftigt, und am Ende einen kurzen Abschlusstest bestehen, dessen Fragen so einfach formuliert sind, dass sie auch ohne inhaltliches Verständnis durch reines Ausschlussverfahren zu lösen sind. Formal entsteht dieselbe Bescheinigung wie bei einer Person, die die Schulung aufmerksam durchgearbeitet hat, und aus dem Dokument selbst lässt sich der Unterschied zwischen beiden Fällen nicht mehr rekonstruieren. Ein aussagekräftigerer Nachweis würde nicht nur den Abschluss, sondern auch Anhaltspunkte für tatsächliches Verständnis festhalten, etwa das Ergebnis eines anspruchsvolleren, praxisnahen Tests oder eine spätere, unangekündigte Überprüfung anhand einer realistischen Situation, doch ein solcher Nachweis ist aufwendiger zu erstellen und wird deshalb in der Praxis selten verlangt, obwohl er die eigentlich interessierende Frage tatsächlich beantworten",
+      "page_start": 1,
+      "page_end": 2,
+      "section_title": "1 Ausgangslage",
+      "word_count": 307
+    },
+    {
+      "chunk_id": "de-schulungsnachweis#1",
+      "doc_id": "de-schulungsnachweis",
+      "lang": "de",
+      "chunk_index": 1,
+      "chunk_text": "Ergebnis eines anspruchsvolleren, praxisnahen Tests oder eine spätere, unangekündigte Überprüfung anhand einer realistischen Situation, doch ein solcher Nachweis ist aufwendiger zu erstellen und wird deshalb in der Praxis selten verlangt, obwohl er die eigentlich interessierende Frage tatsächlich beantworten würde. 3 Aufbewahrung Der Nachweise Nachweise über Sicherheitsschulungen unterliegen in vielen Organisationen keiner eigenen, durchdachten Aufbewahrungsregel, sondern verbleiben schlicht so lange im jeweiligen Schulungssystem, wie dieses System betrieben wird, was in der Praxis meist deutlich länger ist, als der Nachweis irgendeinen Zweck erfüllt, und gelegentlich auch deutlich kürzer, wenn das System ohne Rücksicht auf laufende Aufbewahrungspflichten abgeschaltet oder abgelöst wird. Ein Wechsel des Schulungsanbieters, der in einer wachsenden Organisation regelmäßig vorkommt, führt in der Praxis häufig dazu, dass die historischen Nachweise nicht in das neue System übernommen werden, weil die Migration alter Teilnahmedaten im Projekt keine Priorität hat und niemand explizit dafür verantwortlich ist. Wird Jahre später ein Nachweis für eine bestimmte Schulung zu einem bestimmten Zeitpunkt benötigt, existiert er dann häufig nicht mehr, obwohl die Schulung selbst nachweislich durchgeführt wurde, und die Organisation steht ohne Beleg da, obwohl der zugrunde liegende Sachverhalt zutreffend war.",
+      "context_sentence": "Dieser Abschnitt stammt aus \"2 Was Ein Nachweis Tatsaechlich Belegt\" (Seite 2-3, Chunk 1).",
+      "embedding_text": "Dieser Abschnitt stammt aus \"2 Was Ein Nachweis Tatsaechlich Belegt\" (Seite 2-3, Chunk 1). Ergebnis eines anspruchsvolleren, praxisnahen Tests oder eine spätere, unangekündigte Überprüfung anhand einer realistischen Situation, doch ein solcher Nachweis ist aufwendiger zu erstellen und wird deshalb in der Praxis selten verlangt, obwohl er die eigentlich interessierende Frage tatsächlich beantworten würde. 3 Aufbewahrung Der Nachweise Nachweise über Sicherheitsschulungen unterliegen in vielen Organisationen keiner eigenen, durchdachten Aufbewahrungsregel, sondern verbleiben schlicht so lange im jeweiligen Schulungssystem, wie dieses System betrieben wird, was in der Praxis meist deutlich länger ist, als der Nachweis irgendeinen Zweck erfüllt, und gelegentlich auch deutlich kürzer, wenn das System ohne Rücksicht auf laufende Aufbewahrungspflichten abgeschaltet oder abgelöst wird. Ein Wechsel des Schulungsanbieters, der in einer wachsenden Organisation regelmäßig vorkommt, führt in der Praxis häufig dazu, dass die historischen Nachweise nicht in das neue System übernommen werden, weil die Migration alter Teilnahmedaten im Projekt keine Priorität hat und niemand explizit dafür verantwortlich ist. Wird Jahre später ein Nachweis für eine bestimmte Schulung zu einem bestimmten Zeitpunkt benötigt, existiert er dann häufig nicht mehr, obwohl die Schulung selbst nachweislich durchgeführt wurde, und die Organisation steht ohne Beleg da, obwohl der zugrunde liegende Sachverhalt zutreffend war.",
+      "page_start": 2,
+      "page_end": 3,
+      "section_title": "2 Was Ein Nachweis Tatsaechlich Belegt",
+      "word_count": 183
     },
     {
       "chunk_id": "en-probe-gain-target#0",
@@ -1355,6 +1808,419 @@
       ],
       "relevant_chunk_ids": [
         "de-datenschutz-pipeline#2"
+      ]
+    },
+    {
+      "query_id": "q-en-12",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why does the number of feature flags in a codebase keep growing",
+      "anchors": [
+        "Each flag is trivial to add and easy to forget"
+      ],
+      "relevant_chunk_ids": [
+        "en-feature-flag-governance#0"
+      ]
+    },
+    {
+      "query_id": "q-en-13",
+      "lang": "en",
+      "case": "same-language",
+      "query": "which feature flags should need a second approver before they can be changed",
+      "anchors": [
+        "a payment-routing or authentication-related flag requires a second approver and a change record"
+      ],
+      "relevant_chunk_ids": [
+        "en-feature-flag-governance#1",
+        "en-feature-flag-governance#2"
+      ]
+    },
+    {
+      "query_id": "q-en-14",
+      "lang": "en",
+      "case": "same-language",
+      "query": "what should a feature flag change record capture",
+      "anchors": [
+        "who changed it, when, what the previous and new states were"
+      ],
+      "relevant_chunk_ids": [
+        "en-feature-flag-governance#2"
+      ]
+    },
+    {
+      "query_id": "q-en-15",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why can autoscaling silently stop working even though the system still has traffic to handle",
+      "anchors": [
+        "a provider's default account quota is a hard ceiling that autoscaling will hit and stop at"
+      ],
+      "relevant_chunk_ids": [
+        "en-capacity-forecasting#0"
+      ]
+    },
+    {
+      "query_id": "q-en-16",
+      "lang": "en",
+      "case": "same-language",
+      "query": "how should a capacity forecast separate normal growth from one-off marketing spikes",
+      "anchors": [
+        "A workable forecast keeps a base trend model for organic growth and a separate calendar of known events"
+      ],
+      "relevant_chunk_ids": [
+        "en-capacity-forecasting#1"
+      ]
+    },
+    {
+      "query_id": "q-en-17",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why should capacity planning use a range instead of a single predicted number",
+      "anchors": [
+        "a forecast that is honest about its own uncertainty should be read as a range and provisioned toward its upper end"
+      ],
+      "relevant_chunk_ids": [
+        "en-capacity-forecasting#2"
+      ]
+    },
+    {
+      "query_id": "q-en-18",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why should new-hire access be granted in role bundles instead of one system at a time",
+      "anchors": [
+        "The fix that scales is to stop granting access one system at a time and start granting it in bundles defined by role"
+      ],
+      "relevant_chunk_ids": [
+        "en-onboarding-access#0"
+      ]
+    },
+    {
+      "query_id": "q-en-19",
+      "lang": "en",
+      "case": "same-language",
+      "query": "what makes time to productive access a better onboarding metric than a completed checklist",
+      "anchors": [
+        "Time to productive access is a better measure because it is defined by an actual task"
+      ],
+      "relevant_chunk_ids": [
+        "en-onboarding-access#1"
+      ]
+    },
+    {
+      "query_id": "q-en-20",
+      "lang": "en",
+      "case": "same-language",
+      "query": "how can manager approval stop being the bottleneck for routine access requests",
+      "anchors": [
+        "access that follows directly from an already-approved role bundle should be granted automatically without waiting on anyone"
+      ],
+      "relevant_chunk_ids": [
+        "en-onboarding-access#2"
+      ]
+    },
+    {
+      "query_id": "q-en-21",
+      "lang": "en",
+      "case": "same-language",
+      "query": "does outsourcing to a managed service also outsource who is accountable when it fails",
+      "anchors": [
+        "a vendor decision moves who does the operational work without moving who answers for the outcome"
+      ],
+      "relevant_chunk_ids": [
+        "en-vendor-risk#0"
+      ]
+    },
+    {
+      "query_id": "q-en-22",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why does a vendor's status page understate how often something actually goes wrong",
+      "anchors": [
+        "minor degradations that fall short of a formal declared outage tend not to appear at all"
+      ],
+      "relevant_chunk_ids": [
+        "en-vendor-risk#0"
+      ]
+    },
+    {
+      "query_id": "q-en-23",
+      "lang": "en",
+      "case": "same-language",
+      "query": "is relying on one cloud region still risky even with a large, reputable vendor",
+      "anchors": [
+        "large vendors have had region-wide outages, and a customer concentrated in the affected region experiences the same outage regardless of the vendor's overall scale"
+      ],
+      "relevant_chunk_ids": [
+        "en-vendor-risk#1"
+      ]
+    },
+    {
+      "query_id": "q-en-24",
+      "lang": "en",
+      "case": "same-language",
+      "query": "what test should a runbook pass before an on-call team trusts it",
+      "anchors": [
+        "whether the least experienced person on the rotation, paged at three in the morning with no context beyond the alert, can execute it start to finish"
+      ],
+      "relevant_chunk_ids": [
+        "en-runbook-quality#0"
+      ]
+    },
+    {
+      "query_id": "q-en-25",
+      "lang": "en",
+      "case": "same-language",
+      "query": "why might a runbook's own steps be unreachable during the incident it is meant to fix",
+      "anchors": [
+        "step three tells the reader to open a dashboard that lives behind the very authentication service that is currently down"
+      ],
+      "relevant_chunk_ids": [
+        "en-runbook-quality#1"
+      ]
+    },
+    {
+      "query_id": "q-de-08",
+      "lang": "de",
+      "case": "same-language",
+      "query": "muss ein Auftragsverarbeitungsvertrag angepasst werden, wenn der Cloud-Anbieter neue Funktionen ergänzt",
+      "anchors": [
+        "keine dieser Erweiterungen ist automatisch durch den ursprünglichen Vertrag gedeckt"
+      ],
+      "relevant_chunk_ids": [
+        "de-cloud-auftragsverarbeitung#0"
+      ]
+    },
+    {
+      "query_id": "q-de-09",
+      "lang": "de",
+      "case": "same-language",
+      "query": "warum reicht eine nachträgliche Information über neue Unterauftragsverarbeiter nicht aus",
+      "anchors": [
+        "Eine Ankündigung, die erst nach der bereits erfolgten Anbindung verschickt wird, erfüllt den Wortlaut der Klausel und verfehlt ihren Zweck vollständig"
+      ],
+      "relevant_chunk_ids": [
+        "de-cloud-auftragsverarbeitung#1"
+      ]
+    },
+    {
+      "query_id": "q-de-10",
+      "lang": "de",
+      "case": "same-language",
+      "query": "warum nützt ein vertragliches Prüfungsrecht wenig, wenn es niemand wahrnimmt",
+      "anchors": [
+        "ein Kontrollrecht, das erfahrungsgemäß niemals ausgeübt wird, entfaltet keine disziplinierende Wirkung auf sein tatsächliches Verhalten"
+      ],
+      "relevant_chunk_ids": [
+        "de-cloud-auftragsverarbeitung#2"
+      ]
+    },
+    {
+      "query_id": "q-de-11",
+      "lang": "de",
+      "case": "same-language",
+      "query": "worauf kommt es bei einem Notfallplan wirklich an, wenn er nachts um drei ausgeführt werden muss",
+      "anchors": [
+        "ob die Person, die um drei Uhr nachts telefonisch erreicht wird, in der Lage ist, diesen Plan unter Zeitdruck und mit unvollständigen Informationen tatsächlich auszuführen"
+      ],
+      "relevant_chunk_ids": [
+        "de-notfallwiederherstellung#0"
+      ]
+    },
+    {
+      "query_id": "q-de-12",
+      "lang": "de",
+      "case": "same-language",
+      "query": "warum kostet eine sehr kurze Wiederanlaufzeit dauerhaft Geld und nicht nur im Ernstfall",
+      "anchors": [
+        "eine Wiederanlaufzeit von wenigen Minuten verlangt eine ständig warmgehaltene, redundante Umgebung, die permanent Geld kostet"
+      ],
+      "relevant_chunk_ids": [
+        "de-notfallwiederherstellung#0",
+        "de-notfallwiederherstellung#1"
+      ]
+    },
+    {
+      "query_id": "q-de-13",
+      "lang": "de",
+      "case": "same-language",
+      "query": "wie findet man heraus, ob ein Failover-Mechanismus im Ernstfall tatsächlich funktionieren würde",
+      "anchors": [
+        "Regelmäßige, tatsächlich vollzogene Failover-Übungen, bei denen echter Verkehr für eine begrenzte Zeit über die Ausweichumgebung läuft, sind der einzige verlässliche Weg, diese Drift rechtzeitig zu entdecken"
+      ],
+      "relevant_chunk_ids": [
+        "de-notfallwiederherstellung#1",
+        "de-notfallwiederherstellung#2"
+      ]
+    },
+    {
+      "query_id": "q-de-14",
+      "lang": "de",
+      "case": "same-language",
+      "query": "warum bekommen zwei Personen mit derselben Rolle an unterschiedlichen Standorten unterschiedliche Zugriffsrechte",
+      "anchors": [
+        "die tatsächliche Berechtigungslage einer Person weniger von ihrer Rolle abhängt als davon, an welchem Standort und zu welchem Zeitpunkt sie eingestellt wurde"
+      ],
+      "relevant_chunk_ids": [
+        "de-zugriffskonzept#0"
+      ]
+    },
+    {
+      "query_id": "q-de-15",
+      "lang": "de",
+      "case": "same-language",
+      "query": "was passiert mit alten Berechtigungen, wenn jemand innerhalb der Firma die Rolle wechselt",
+      "anchors": [
+        "Eine Person, die eine Rolle wechselt, verliert die alten Berechtigungen automatisch als Nebeneffekt des Rollenwechsels"
+      ],
+      "relevant_chunk_ids": [
+        "de-zugriffskonzept#0",
+        "de-zugriffskonzept#1"
+      ]
+    },
+    {
+      "query_id": "q-de-16",
+      "lang": "de",
+      "case": "same-language",
+      "query": "warum ist eine sehr lange Rezertifizierungsliste in der Praxis wirkungslos",
+      "anchors": [
+        "bestätigt sie in den allermeisten Fällen die gesamte Liste in wenigen Minuten, ohne eine einzige Zeile tatsächlich geprüft zu haben"
+      ],
+      "relevant_chunk_ids": [
+        "de-zugriffskonzept#2"
+      ]
+    },
+    {
+      "query_id": "q-gap-07",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "warum bleibt ein alter Schalter im Programm liegen, den niemand mehr abschaltet, obwohl ihn keiner mehr braucht",
+      "anchors": [
+        "removing a flag is optional work with no deadline attached, while adding one is mandatory work with a release attached"
+      ],
+      "relevant_chunk_ids": [
+        "en-feature-flag-governance#0"
+      ]
+    },
+    {
+      "query_id": "q-gap-08",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "das System skaliert einfach nicht mehr weiter, obwohl noch viele Anfragen reinkommen, und im Diagramm sieht alles normal aus",
+      "anchors": [
+        "nothing in a typical dashboard distinguishes 'scaling stopped because load fell' from 'scaling stopped because the ceiling was hit'"
+      ],
+      "relevant_chunk_ids": [
+        "en-capacity-forecasting#1",
+        "en-capacity-forecasting#2"
+      ]
+    },
+    {
+      "query_id": "q-gap-09",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "die neue Kollegin sitzt in der ersten Woche nur rum, weil sie sich in keins von den Werkzeugen einloggen kann",
+      "anchors": [
+        "a person who is technically employed but functionally unable to contribute for the first several days"
+      ],
+      "relevant_chunk_ids": [
+        "en-onboarding-access#0"
+      ]
+    },
+    {
+      "query_id": "q-gap-10",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "wie schwer es ist, von einem Anbieter wieder wegzukommen, wird meistens erst geprüft, wenn man schon kündigen will",
+      "anchors": [
+        "a vendor with a difficult exit path has every incentive to let that cost grow quietly rather than draw attention to it"
+      ],
+      "relevant_chunk_ids": [
+        "en-vendor-risk#2"
+      ]
+    },
+    {
+      "query_id": "q-gap-11",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "eine Anleitung, die seit Monaten keiner mehr wirklich durchgetestet hat, würde ich im Ernstfall nicht mehr vertrauen",
+      "anchors": [
+        "A runbook nobody has successfully followed end to end in the last six months is a runbook nobody can vouch for"
+      ],
+      "relevant_chunk_ids": [
+        "en-runbook-quality#2"
+      ]
+    },
+    {
+      "query_id": "q-gap-12",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "ein Freigabegremium, das bei jeder kleinen Änderung mitreden muss, wird entweder zum Abnicker oder zum Flaschenhals",
+      "anchors": [
+        "the committee becomes either a rubber stamp or a queue, and both outcomes destroy the control it was meant to provide"
+      ],
+      "relevant_chunk_ids": [
+        "en-change-approval#0"
+      ]
+    },
+    {
+      "query_id": "q-gap-13",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "es kann sein, dass eine Bibliothek mitgeliefert wird, die in keiner von Menschen gepflegten Liste auftaucht",
+      "anchors": [
+        "the resolver may have selected a transitive version that appears in no manifest a human ever wrote"
+      ],
+      "relevant_chunk_ids": [
+        "en-supply-chain#0"
+      ]
+    },
+    {
+      "query_id": "q-gap-14",
+      "lang": "de",
+      "case": "language-gap",
+      "query": "wenn ein Topf jeden Monat sowieso restlos leer ist, sagt das am Ende gar nichts mehr aus",
+      "anchors": [
+        "a budget that is always exhausted conveys no information and is quickly ignored"
+      ],
+      "relevant_chunk_ids": [
+        "en-incident-response#2"
+      ]
+    },
+    {
+      "query_id": "q-cross-03",
+      "lang": "en",
+      "case": "cross-language",
+      "query": "standard contract clauses alone do not guarantee real protection abroad",
+      "anchors": [
+        "die Klauseln setzen voraus, dass im Zielland tatsächlich ein Schutzniveau erreichbar ist, das sie nicht durch bloßen Vertragstext ersetzen können"
+      ],
+      "relevant_chunk_ids": [
+        "de-cloud-auftragsverarbeitung#1"
+      ]
+    },
+    {
+      "query_id": "q-cross-04",
+      "lang": "en",
+      "case": "cross-language",
+      "query": "an expired certificate can quietly break an otherwise working standby environment",
+      "anchors": [
+        "ein abgelaufenes Zertifikat kann eine ansonsten technisch perfekt funktionierende Ausweichumgebung für Endnutzerinnen und Endnutzer vollständig unbrauchbar machen"
+      ],
+      "relevant_chunk_ids": [
+        "de-notfallwiederherstellung#2"
+      ]
+    },
+    {
+      "query_id": "q-cross-05",
+      "lang": "en",
+      "case": "cross-language",
+      "query": "covering for a colleague on leave often grants full access, not a limited stand-in role",
+      "anchors": [
+        "Eine Kollegin, die während des Urlaubs einer anderen Person deren Freigaben ausüben muss, erhält dafür üblicherweise deren vollständige Berechtigungen"
+      ],
+      "relevant_chunk_ids": [
+        "de-zugriffskonzept#1"
       ]
     },
     {
