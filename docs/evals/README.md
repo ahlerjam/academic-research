@@ -54,6 +54,8 @@ danach höchstens den passenden Report.
 | [`2026-08-10-reranker-decision-806.md`](2026-08-10-reranker-decision-806.md) | Entscheidung aus den #804-Zahlen: Reranker per Default abschalten (`DEFAULT_RERANKER_ENABLED = False`), Latenz/Peak-RSS als dauerhafte Kosten gegen den Nullbefund gewichtet, „bleiben" und „wechseln" (#803, keine Messung) verworfen, konkrete Revisionsauslöser inkl. lexikalischer Flanke aus #789 (#806) |
 | [`2026-08-10-reranker-default-off-807-verification.md`](2026-08-10-reranker-default-off-807-verification.md) | Nachmessung nach dem Vollzug von #806: Produktivpfad ohne gesetzten Schalter liegt bei Latenz/Peak-RSS auf dem Niveau der #804-„aus"-Bedingung — Beleg statt Zusicherung (#807) |
 | [`2026-08-10-reranker-ablation-807-postchange-live-results.json`](2026-08-10-reranker-ablation-807-postchange-live-results.json) | Rohdaten der Nachmessung (beide Bedingungen, per Query, inklusive Kosten-Block) |
+| [`2026-08-10-fulltext-trgm-size-766.md`](2026-08-10-fulltext-trgm-size-766.md) | Größenmessung eines Trigram-Index über `paper_fulltext.text`/`notes.text` an einem synthetischen 40-Paper/80-Notizen-Bestand (Volltext +94,06 %, Notizen +18,90 %) — Entscheidungsregel aus dem Issue-Kommentar angewandt: Bedingung 2 (Nutzen) mit dem #708-Goldset laut #789 strukturell nicht prüfbar, daher kein Index für beide Tabellen, AC4 nicht ausgelöst (#766) |
+| [`2026-08-10-fulltext-trgm-size-766.json`](2026-08-10-fulltext-trgm-size-766.json) | Rohdaten des Messlaufs (Vorher-/Nachher-Bytes je Tabelle) |
 
 ## Konvention
 
