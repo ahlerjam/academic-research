@@ -256,15 +256,19 @@ class TestVaultSearchWithRerank:
 
         assert isinstance(results, list)
 
-    def test_search_papers_rerank_true_uses_local_reranker(self, tmp_path):
+    def test_search_papers_rerank_true_uses_local_reranker(self, tmp_path, monkeypatch):
         """search_papers mit rerank=True nutzt den lokalen Reranker-Fallback (#376; #715).
 
         Der lokale bge-reranker-v2-m3 wird gemockt, damit dieser Test kein
         echtes Modell laedt (die autouse-Fixture in conftest.py blockt das
         Backend zwar ohnehin, aber ein expliziter Mock macht das erwartete
         Reranking-Ergebnis fuer diesen Test deterministisch und dokumentiert
-        die Erwartung an der Stelle, wo sie gebraucht wird).
+        die Erwartung an der Stelle, wo sie gebraucht wird). Reranker seit
+        #807 per Default aus -- hier explizit eingeschaltet, sonst greift
+        der gemockte lokale Pfad nie.
         """
+        monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
+
         db_path = _make_db(tmp_path)
         _add_paper(db_path, "p001", "Hybrid Retrieval", "BM25 and dense retrieval combined.")
 

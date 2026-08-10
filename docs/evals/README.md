@@ -52,6 +52,8 @@ danach höchstens den passenden Report.
 | [`2026-08-10-reranker-ablation-804-live-results.json`](2026-08-10-reranker-ablation-804-live-results.json) | Rohdaten des Ablationslaufs (beide Bedingungen, per Query, inklusive Kosten-Block) — vom CI-Job `retrieval-goldset` gegen einen frischen Lauf geprüft |
 | [`reranker-candidates-803.md`](reranker-candidates-803.md) | Belegte Reranker-Kandidaten als Alternativen zu `bge-reranker-v2-m3`: Lizenz, Parameterzahl, Downloadgröße, Sprachabdeckung, Eingabeschema und Backbone je Kandidat, `sentence_transformers.CrossEncoder`-Ladbarkeit mit dem gepinnten `transformers==5.14.1` geprüft, `jina-reranker-v2-base-multilingual` an CC-BY-NC-4.0-Lizenz ausgeschlossen (#803) |
 | [`2026-08-10-reranker-decision-806.md`](2026-08-10-reranker-decision-806.md) | Entscheidung aus den #804-Zahlen: Reranker per Default abschalten (`DEFAULT_RERANKER_ENABLED = False`), Latenz/Peak-RSS als dauerhafte Kosten gegen den Nullbefund gewichtet, „bleiben" und „wechseln" (#803, keine Messung) verworfen, konkrete Revisionsauslöser inkl. lexikalischer Flanke aus #789 (#806) |
+| [`2026-08-10-reranker-default-off-807-verification.md`](2026-08-10-reranker-default-off-807-verification.md) | Nachmessung nach dem Vollzug von #806: Produktivpfad ohne gesetzten Schalter liegt bei Latenz/Peak-RSS auf dem Niveau der #804-„aus"-Bedingung — Beleg statt Zusicherung (#807) |
+| [`2026-08-10-reranker-ablation-807-postchange-live-results.json`](2026-08-10-reranker-ablation-807-postchange-live-results.json) | Rohdaten der Nachmessung (beide Bedingungen, per Query, inklusive Kosten-Block) |
 
 ## Konvention
 

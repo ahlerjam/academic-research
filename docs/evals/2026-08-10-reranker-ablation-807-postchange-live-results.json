@@ -1,0 +1,2399 @@
+{
+  "issue": 804,
+  "k": 10,
+  "query_count": 60,
+  "reranker_model_id": "BAAI/bge-reranker-v2-m3",
+  "significance": {
+    "method": "paired bootstrap, percentile CI",
+    "resamples": 10000,
+    "seed": 804,
+    "confidence": 0.95,
+    "rule": "Ein Abstand zwischen 'an' und 'aus' traegt genau dann, wenn das 95-%-Intervall der gepaarten Bootstrap-Differenz (10 000 Resamples, Seed 804, ueber die Queries gepaart) die Null nicht enthaelt."
+  },
+  "results": {
+    "aus": {
+      "condition": "aus",
+      "query_count": 60,
+      "overall": {
+        "recall_at_10": 0.8166666666666667,
+        "ndcg_at_10": 0.7097355704663009,
+        "mrr": 0.6763888888888889
+      },
+      "subsets": {
+        "cross-language": {
+          "recall_at_10": 0.2,
+          "ndcg_at_10": 0.2,
+          "mrr": 0.2
+        },
+        "language-gap": {
+          "recall_at_10": 0.5,
+          "ndcg_at_10": 0.27249113310136625,
+          "mrr": 0.1994047619047619
+        },
+        "same-language": {
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9212014235258276,
+          "mrr": 0.8973577235772358
+        }
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#0",
+            "en-telemetry-retention#1",
+            "en-feature-flag-governance#2",
+            "en-supply-chain#0",
+            "en-onboarding-access#0",
+            "en-vendor-risk#0",
+            "en-pipeline-secrets#1",
+            "en-infrastructure-drift#1"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved": [
+            "en-telemetry-retention#0",
+            "en-onboarding-access#0",
+            "en-change-approval#1",
+            "en-access-review#0",
+            "en-access-review#1",
+            "en-onboarding-access#2",
+            "en-vendor-risk#0",
+            "en-telemetry-retention#1",
+            "en-incident-response#1",
+            "en-change-approval#0"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-incident-response#2",
+            "en-infrastructure-drift#1",
+            "en-capacity-forecasting#3",
+            "en-infrastructure-drift#0",
+            "en-capacity-forecasting#0",
+            "en-capacity-forecasting#2",
+            "en-feature-flag-governance#2",
+            "en-onboarding-access#0",
+            "en-vendor-risk#0"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain#1",
+            "en-change-approval#1",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#0",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-telemetry-retention#0",
+            "en-feature-flag-governance#1",
+            "en-feature-flag-governance#0",
+            "en-supply-chain#2"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain#2",
+            "en-supply-chain#1",
+            "en-supply-chain#0",
+            "en-vendor-risk#1",
+            "en-vendor-risk#0",
+            "en-incident-response#0",
+            "en-capacity-forecasting#0",
+            "en-pipeline-secrets#1",
+            "en-onboarding-access#0",
+            "en-vendor-risk#2"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6934264036172708,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-training-metrics#2",
+            "en-incident-response#0",
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-training-metrics#1",
+            "en-vendor-risk#1",
+            "en-vendor-risk#2",
+            "en-capacity-forecasting#2",
+            "en-feature-flag-governance#2",
+            "en-onboarding-access#0"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-access-review#1",
+            "en-incident-response#0",
+            "en-vendor-risk#0",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "en-runbook-quality#2",
+            "en-runbook-quality#0",
+            "en-access-review#0",
+            "en-change-approval#2",
+            "en-onboarding-access#0"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response#2",
+            "en-change-approval#2",
+            "en-incident-response#1",
+            "en-capacity-forecasting#2",
+            "en-incident-response#0",
+            "en-vendor-risk#0",
+            "en-capacity-forecasting#3",
+            "en-telemetry-retention#0",
+            "en-training-metrics#0",
+            "en-vendor-risk#1"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5706417189553201,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-vendor-risk#1",
+            "en-infrastructure-drift#1",
+            "en-infrastructure-drift#2",
+            "en-access-review#1",
+            "en-vendor-risk#2",
+            "en-incident-response#2",
+            "en-capacity-forecasting#3",
+            "en-vendor-risk#0",
+            "en-capacity-forecasting#2"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#2",
+            "en-onboarding-access#0",
+            "en-runbook-quality#2",
+            "en-pipeline-secrets#0",
+            "en-training-metrics#0",
+            "en-access-review#1",
+            "en-incident-response#0",
+            "en-infrastructure-drift#1",
+            "en-telemetry-retention#1"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-onboarding-access#0",
+            "en-runbook-quality#2",
+            "en-onboarding-access#1",
+            "en-vendor-risk#0",
+            "en-onboarding-access#2",
+            "en-vendor-risk#1",
+            "en-vendor-risk#2",
+            "en-runbook-quality#1"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline#0",
+            "de-cloud-auftragsverarbeitung#0",
+            "de-notfallwiederherstellung#2",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-feature-flag-governance#2",
+            "de-lieferkette-pruefung#1",
+            "de-zugriffskonzept#2",
+            "de-cloud-auftragsverarbeitung#1"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.31546487678572877,
+          "reciprocal_rank": 0.125,
+          "retrieved": [
+            "de-zugriffskonzept#2",
+            "de-notfallwiederherstellung#0",
+            "de-schulungsnachweis#1",
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "de-datenschutz-pipeline#1",
+            "de-zugriffskonzept#1",
+            "de-datenschutz-pipeline#0",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-schulungsnachweis#0"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#0",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#1",
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-cloud-auftragsverarbeitung#0",
+            "en-runbook-quality#2",
+            "de-lieferkette-pruefung#0",
+            "de-cloud-auftragsverarbeitung#1"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-datenschutz-pipeline#1",
+            "de-freigabenachweis-archiv#0",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-mitbestimmung-telemetrie#2",
+            "de-cloud-auftragsverarbeitung#0",
+            "de-zugriffskonzept#2",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#0"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "de-datenschutz-pipeline#1",
+            "de-notfallwiederherstellung#1",
+            "en-infrastructure-drift#0",
+            "de-freigabenachweis-archiv#0",
+            "en-change-approval#0",
+            "de-datenschutz-pipeline#2",
+            "de-datenschutz-pipeline#0",
+            "en-training-metrics#0"
+          ]
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-zugriffskonzept#0",
+            "de-cloud-auftragsverarbeitung#2",
+            "en-vendor-risk#0",
+            "en-onboarding-access#0",
+            "de-cloud-auftragsverarbeitung#0"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.8772153153380493,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#2",
+            "de-cloud-auftragsverarbeitung#0",
+            "de-datenschutz-pipeline#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-datenschutz-pipeline#1",
+            "de-freigabenachweis-archiv#0",
+            "de-freigabenachweis-archiv#1",
+            "de-lieferkette-pruefung#0",
+            "de-schulungsnachweis#0",
+            "de-notfallwiederherstellung#0"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-runbook-quality#1",
+            "de-notfallwiederherstellung#1",
+            "en-telemetry-retention#1",
+            "en-runbook-quality#2",
+            "de-lieferkette-pruefung#2",
+            "de-notfallwiederherstellung#0",
+            "de-freigabenachweis-archiv#0",
+            "en-capacity-forecasting#3",
+            "de-notfallwiederherstellung#2",
+            "en-pipeline-secrets#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#1",
+            "de-notfallwiederherstellung#0",
+            "de-freigabenachweis-archiv#0",
+            "en-access-review#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-lieferkette-pruefung#0",
+            "de-notfallwiederherstellung#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-lieferkette-pruefung#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.43067655807339306,
+          "reciprocal_rank": 0.25,
+          "retrieved": [
+            "de-freigabenachweis-archiv#0",
+            "de-lieferkette-pruefung#2",
+            "de-lieferkette-pruefung#0",
+            "en-supply-chain#0",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#1",
+            "en-supply-chain#1",
+            "en-change-approval#1",
+            "de-datenschutz-pipeline#1",
+            "en-onboarding-access#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "en-vendor-risk#1",
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#1",
+            "de-notfallwiederherstellung#0",
+            "de-datenschutz-pipeline#0",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-access-review#1",
+            "de-zugriffskonzept#0",
+            "de-notfallwiederherstellung#2",
+            "en-training-metrics#2",
+            "de-mitbestimmung-telemetrie#1",
+            "de-cloud-auftragsverarbeitung#0",
+            "de-notfallwiederherstellung#1",
+            "en-onboarding-access#0",
+            "en-runbook-quality#2",
+            "en-pipeline-secrets#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.31546487678572877,
+          "reciprocal_rank": 0.125,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#1",
+            "en-access-review#1",
+            "de-freigabenachweis-archiv#0",
+            "de-notfallwiederherstellung#0",
+            "de-zugriffskonzept#1",
+            "en-infrastructure-drift#2",
+            "de-datenschutz-pipeline#1",
+            "en-incident-response#1",
+            "de-notfallwiederherstellung#1",
+            "de-schulungsnachweis#1"
+          ]
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-onboarding-access#0",
+            "en-feature-flag-governance#2",
+            "en-change-approval#1",
+            "en-runbook-quality#1",
+            "en-change-approval#0",
+            "en-supply-chain#1",
+            "en-supply-chain#0",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "en-onboarding-access#1"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-access-review#1",
+            "en-change-approval#1",
+            "en-change-approval#2",
+            "en-runbook-quality#1",
+            "en-training-metrics#0",
+            "en-infrastructure-drift#1",
+            "en-capacity-forecasting#3",
+            "en-runbook-quality#0",
+            "en-feature-flag-governance#2"
+          ]
+        },
+        {
+          "query_id": "q-en-12",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-feature-flag-governance#0",
+            "en-feature-flag-governance#2",
+            "en-feature-flag-governance#1",
+            "en-capacity-forecasting#1",
+            "en-onboarding-access#0",
+            "en-pipeline-secrets#0",
+            "en-capacity-forecasting#2",
+            "en-capacity-forecasting#0",
+            "en-supply-chain#0",
+            "en-vendor-risk#0"
+          ]
+        },
+        {
+          "query_id": "q-en-13",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-feature-flag-governance#2",
+            "en-feature-flag-governance#1",
+            "en-feature-flag-governance#0",
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-access-review#1",
+            "en-onboarding-access#1",
+            "en-onboarding-access#0",
+            "en-change-approval#0",
+            "en-onboarding-access#2"
+          ]
+        },
+        {
+          "query_id": "q-en-14",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-feature-flag-governance#2",
+            "en-feature-flag-governance#0",
+            "en-feature-flag-governance#1",
+            "en-infrastructure-drift#1",
+            "en-supply-chain#1",
+            "en-change-approval#0",
+            "en-vendor-risk#0",
+            "en-change-approval#2",
+            "en-capacity-forecasting#0",
+            "en-telemetry-retention#0"
+          ]
+        },
+        {
+          "query_id": "q-en-15",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-capacity-forecasting#0",
+            "en-capacity-forecasting#1",
+            "en-vendor-risk#1",
+            "en-runbook-quality#2",
+            "en-onboarding-access#0",
+            "en-runbook-quality#1",
+            "en-feature-flag-governance#1",
+            "en-feature-flag-governance#0",
+            "en-onboarding-access#1",
+            "en-vendor-risk#0"
+          ]
+        },
+        {
+          "query_id": "q-en-16",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-capacity-forecasting#0",
+            "en-capacity-forecasting#1",
+            "en-capacity-forecasting#2",
+            "en-vendor-risk#1",
+            "en-capacity-forecasting#3",
+            "en-vendor-risk#0",
+            "en-training-metrics#0",
+            "en-incident-response#2",
+            "en-vendor-risk#2",
+            "en-onboarding-access#1"
+          ]
+        },
+        {
+          "query_id": "q-en-17",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-capacity-forecasting#2",
+            "en-capacity-forecasting#0",
+            "en-training-metrics#0",
+            "en-capacity-forecasting#1",
+            "en-capacity-forecasting#3",
+            "en-incident-response#0",
+            "en-vendor-risk#1",
+            "en-runbook-quality#0",
+            "en-training-metrics#1",
+            "en-vendor-risk#0"
+          ]
+        },
+        {
+          "query_id": "q-en-18",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-onboarding-access#0",
+            "en-onboarding-access#1",
+            "en-onboarding-access#2",
+            "en-access-review#0",
+            "en-access-review#1",
+            "en-infrastructure-drift#1",
+            "en-vendor-risk#2",
+            "en-supply-chain#0",
+            "en-infrastructure-drift#0",
+            "en-vendor-risk#0"
+          ]
+        },
+        {
+          "query_id": "q-en-19",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-onboarding-access#1",
+            "en-onboarding-access#0",
+            "en-onboarding-access#2",
+            "en-telemetry-retention#1",
+            "en-training-metrics#0",
+            "en-capacity-forecasting#2",
+            "en-training-metrics#1",
+            "en-telemetry-retention#0",
+            "en-training-metrics#2",
+            "en-capacity-forecasting#0"
+          ]
+        },
+        {
+          "query_id": "q-en-20",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-onboarding-access#2",
+            "en-onboarding-access#0",
+            "en-onboarding-access#1",
+            "en-access-review#1",
+            "en-access-review#0",
+            "en-vendor-risk#0",
+            "en-vendor-risk#2",
+            "en-runbook-quality#0",
+            "en-change-approval#1",
+            "en-training-metrics#0"
+          ]
+        },
+        {
+          "query_id": "q-en-21",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-vendor-risk#0",
+            "en-vendor-risk#1",
+            "en-incident-response#0",
+            "en-access-review#1",
+            "en-runbook-quality#2",
+            "en-runbook-quality#1",
+            "en-onboarding-access#0",
+            "en-change-approval#0",
+            "en-vendor-risk#2",
+            "en-capacity-forecasting#0"
+          ]
+        },
+        {
+          "query_id": "q-en-22",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-vendor-risk#0",
+            "en-vendor-risk#1",
+            "en-vendor-risk#2",
+            "en-onboarding-access#0",
+            "en-supply-chain#0",
+            "en-vendor-risk#3",
+            "en-incident-response#0",
+            "en-capacity-forecasting#0",
+            "en-incident-response#2",
+            "en-onboarding-access#1"
+          ]
+        },
+        {
+          "query_id": "q-en-23",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-vendor-risk#1",
+            "en-vendor-risk#2",
+            "en-vendor-risk#0",
+            "en-capacity-forecasting#1",
+            "en-onboarding-access#0",
+            "en-capacity-forecasting#2",
+            "en-capacity-forecasting#3",
+            "en-supply-chain#2",
+            "en-vendor-risk#3",
+            "en-capacity-forecasting#0"
+          ]
+        },
+        {
+          "query_id": "q-en-24",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-runbook-quality#0",
+            "en-runbook-quality#1",
+            "en-runbook-quality#2",
+            "en-change-approval#2",
+            "en-onboarding-access#1",
+            "en-vendor-risk#0",
+            "en-onboarding-access#0",
+            "en-supply-chain#2",
+            "en-feature-flag-governance#0",
+            "en-incident-response#0"
+          ]
+        },
+        {
+          "query_id": "q-en-25",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-runbook-quality#1",
+            "en-runbook-quality#2",
+            "en-runbook-quality#0",
+            "en-access-review#1",
+            "en-vendor-risk#0",
+            "en-onboarding-access#0",
+            "en-infrastructure-drift#1",
+            "en-incident-response#0",
+            "en-infrastructure-drift#0",
+            "en-incident-response#1"
+          ]
+        },
+        {
+          "query_id": "q-de-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#0",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#1",
+            "de-datenschutz-pipeline#0",
+            "de-notfallwiederherstellung#2",
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#1",
+            "en-feature-flag-governance#2"
+          ]
+        },
+        {
+          "query_id": "q-de-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#0",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-schulungsnachweis#1",
+            "de-freigabenachweis-archiv#0",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#0",
+            "de-lieferkette-pruefung#1",
+            "de-schulungsnachweis#0",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-notfallwiederherstellung#2"
+          ]
+        },
+        {
+          "query_id": "q-de-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#2",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-schulungsnachweis#1",
+            "de-mitbestimmung-telemetrie#1",
+            "en-onboarding-access#0",
+            "en-access-review#0",
+            "de-zugriffskonzept#2",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#1",
+            "de-freigabenachweis-archiv#0"
+          ]
+        },
+        {
+          "query_id": "q-de-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#0",
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "de-schulungsnachweis#0",
+            "en-incident-response#0",
+            "en-change-approval#2",
+            "de-mitbestimmung-telemetrie#1",
+            "de-datenschutz-pipeline#1",
+            "de-zugriffskonzept#2",
+            "en-runbook-quality#2"
+          ]
+        },
+        {
+          "query_id": "q-de-12",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#0",
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "en-incident-response#1",
+            "en-infrastructure-drift#2",
+            "en-vendor-risk#2",
+            "en-incident-response#2",
+            "en-vendor-risk#1",
+            "de-zugriffskonzept#1",
+            "de-schulungsnachweis#1"
+          ]
+        },
+        {
+          "query_id": "q-de-13",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9197207891481876,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#0",
+            "de-notfallwiederherstellung#2",
+            "en-vendor-risk#0",
+            "de-lieferkette-pruefung#1",
+            "en-pipeline-secrets#2",
+            "en-change-approval#2",
+            "en-runbook-quality#2",
+            "en-vendor-risk#1",
+            "de-zugriffskonzept#0"
+          ]
+        },
+        {
+          "query_id": "q-de-14",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-zugriffskonzept#0",
+            "de-zugriffskonzept#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "en-change-approval#0",
+            "en-onboarding-access#0",
+            "de-lieferkette-pruefung#0",
+            "de-cloud-auftragsverarbeitung#0",
+            "en-access-review#0",
+            "de-notfallwiederherstellung#0",
+            "de-lieferkette-pruefung#2"
+          ]
+        },
+        {
+          "query_id": "q-de-15",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-zugriffskonzept#1",
+            "de-zugriffskonzept#0",
+            "de-zugriffskonzept#2",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-freigabenachweis-archiv#0",
+            "de-datenschutz-pipeline#1",
+            "de-schulungsnachweis#1",
+            "en-change-approval#0",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-mitbestimmung-telemetrie#0"
+          ]
+        },
+        {
+          "query_id": "q-de-16",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-zugriffskonzept#2",
+            "de-notfallwiederherstellung#2",
+            "de-notfallwiederherstellung#0",
+            "de-zugriffskonzept#1",
+            "de-notfallwiederherstellung#1",
+            "en-telemetry-retention#1",
+            "de-datenschutz-pipeline#1",
+            "en-change-approval#2",
+            "en-incident-response#1",
+            "de-mitbestimmung-telemetrie#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-07",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3562071871080222,
+          "reciprocal_rank": 0.16666666666666666,
+          "retrieved": [
+            "de-notfallwiederherstellung#1",
+            "en-pipeline-secrets#2",
+            "en-onboarding-access#0",
+            "en-telemetry-retention#1",
+            "en-capacity-forecasting#1",
+            "en-feature-flag-governance#0",
+            "de-lieferkette-pruefung#1",
+            "en-onboarding-access#1",
+            "de-notfallwiederherstellung#0",
+            "de-freigabenachweis-archiv#0"
+          ]
+        },
+        {
+          "query_id": "q-gap-08",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6509209298071326,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-capacity-forecasting#3",
+            "en-capacity-forecasting#1",
+            "en-vendor-risk#1",
+            "en-capacity-forecasting#2",
+            "de-datenschutz-pipeline#0",
+            "en-training-metrics#0",
+            "de-lieferkette-pruefung#2",
+            "en-training-metrics#1",
+            "en-vendor-risk#2",
+            "en-onboarding-access#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-09",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-onboarding-access#0",
+            "en-pipeline-secrets#2",
+            "en-training-metrics#0",
+            "en-runbook-quality#2",
+            "en-telemetry-retention#1",
+            "en-access-review#0",
+            "en-training-metrics#1",
+            "en-onboarding-access#2",
+            "de-zugriffskonzept#0",
+            "en-runbook-quality#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-10",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "de-notfallwiederherstellung#1",
+            "en-vendor-risk#2",
+            "de-notfallwiederherstellung#2",
+            "en-vendor-risk#3",
+            "en-vendor-risk#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "en-access-review#1",
+            "en-pipeline-secrets#2",
+            "en-onboarding-access#0"
+          ]
+        },
+        {
+          "query_id": "q-gap-11",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.43067655807339306,
+          "reciprocal_rank": 0.25,
+          "retrieved": [
+            "en-infrastructure-drift#2",
+            "de-zugriffskonzept#2",
+            "en-pipeline-secrets#2",
+            "en-runbook-quality#2",
+            "de-notfallwiederherstellung#0",
+            "de-notfallwiederherstellung#2",
+            "en-training-metrics#1",
+            "de-notfallwiederherstellung#1",
+            "en-capacity-forecasting#2",
+            "de-zugriffskonzept#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-12",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-zugriffskonzept#0",
+            "de-zugriffskonzept#1",
+            "en-telemetry-retention#1",
+            "en-feature-flag-governance#2",
+            "en-change-approval#2",
+            "de-zugriffskonzept#2",
+            "en-access-review#1",
+            "en-feature-flag-governance#0",
+            "en-feature-flag-governance#1",
+            "en-pipeline-secrets#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-13",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#2",
+            "de-zugriffskonzept#2",
+            "en-telemetry-retention#1",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#0",
+            "de-lieferkette-pruefung#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-zugriffskonzept#0",
+            "de-schulungsnachweis#1",
+            "en-training-metrics#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-14",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-telemetry-retention#1",
+            "en-capacity-forecasting#1",
+            "en-runbook-quality#2",
+            "de-zugriffskonzept#2",
+            "de-notfallwiederherstellung#1",
+            "en-onboarding-access#2",
+            "en-capacity-forecasting#0",
+            "en-training-metrics#1",
+            "en-vendor-risk#2",
+            "en-access-review#0"
+          ]
+        },
+        {
+          "query_id": "q-cross-03",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#1",
+            "en-vendor-risk#2",
+            "en-vendor-risk#1",
+            "en-access-review#1",
+            "en-change-approval#2",
+            "en-onboarding-access#0",
+            "en-vendor-risk#0",
+            "en-access-review#0",
+            "en-feature-flag-governance#1",
+            "en-change-approval#0"
+          ]
+        },
+        {
+          "query_id": "q-cross-04",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-telemetry-retention#1",
+            "en-access-review#1",
+            "en-feature-flag-governance#1",
+            "en-runbook-quality#2",
+            "en-change-approval#0",
+            "en-pipeline-secrets#0",
+            "en-vendor-risk#1",
+            "en-runbook-quality#1",
+            "en-vendor-risk#2",
+            "en-supply-chain#2"
+          ]
+        },
+        {
+          "query_id": "q-cross-05",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-vendor-risk#2",
+            "en-access-review#0",
+            "en-onboarding-access#0",
+            "en-onboarding-access#2",
+            "en-vendor-risk#1",
+            "en-vendor-risk#3",
+            "en-onboarding-access#1",
+            "en-training-metrics#0",
+            "en-telemetry-retention#1",
+            "en-access-review#1"
+          ]
+        }
+      ]
+    },
+    "an": {
+      "condition": "an",
+      "query_count": 60,
+      "overall": {
+        "recall_at_10": 0.7916666666666666,
+        "ndcg_at_10": 0.7190175569210261,
+        "mrr": 0.6969841269841269
+      },
+      "subsets": {
+        "cross-language": {
+          "recall_at_10": 0.4,
+          "ndcg_at_10": 0.4,
+          "mrr": 0.4
+        },
+        "language-gap": {
+          "recall_at_10": 0.32142857142857145,
+          "ndcg_at_10": 0.13678077294384708,
+          "mrr": 0.08401360544217687
+        },
+        "same-language": {
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.9567346974157978,
+          "mrr": 0.9425087108013938
+        }
+      },
+      "per_query": [
+        {
+          "query_id": "q-en-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-pipeline-secrets#0",
+            "en-feature-flag-governance#2",
+            "en-telemetry-retention#1",
+            "en-pipeline-secrets#1",
+            "en-runbook-quality#1",
+            "en-change-approval#2",
+            "en-feature-flag-governance#0",
+            "en-infrastructure-drift#1"
+          ]
+        },
+        {
+          "query_id": "q-en-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval#1",
+            "en-change-approval#2",
+            "de-datenschutz-pipeline#1",
+            "en-feature-flag-governance#0",
+            "en-change-approval#0",
+            "en-feature-flag-governance#2",
+            "en-onboarding-access#2",
+            "en-telemetry-retention#0",
+            "en-telemetry-retention#1",
+            "en-runbook-quality#2"
+          ]
+        },
+        {
+          "query_id": "q-en-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-change-approval#2",
+            "en-infrastructure-drift#2",
+            "en-runbook-quality#2",
+            "en-training-metrics#1",
+            "en-capacity-forecasting#3",
+            "en-incident-response#2",
+            "en-infrastructure-drift#1",
+            "en-incident-response#1",
+            "en-runbook-quality#1",
+            "en-telemetry-retention#1"
+          ]
+        },
+        {
+          "query_id": "q-en-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain#1",
+            "en-change-approval#1",
+            "de-datenschutz-pipeline#1",
+            "en-supply-chain#0",
+            "en-change-approval#0",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "de-freigabenachweis-archiv#0",
+            "en-incident-response#2",
+            "de-lieferkette-pruefung#1"
+          ]
+        },
+        {
+          "query_id": "q-en-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-supply-chain#2",
+            "en-supply-chain#1",
+            "en-supply-chain#0",
+            "de-lieferkette-pruefung#1",
+            "en-feature-flag-governance#0",
+            "en-feature-flag-governance#1",
+            "en-pipeline-secrets#1",
+            "de-lieferkette-pruefung#2",
+            "en-vendor-risk#1",
+            "en-capacity-forecasting#3"
+          ]
+        },
+        {
+          "query_id": "q-en-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response#1",
+            "en-incident-response#0",
+            "en-training-metrics#1",
+            "en-runbook-quality#1",
+            "en-supply-chain#2",
+            "en-vendor-risk#0",
+            "en-pipeline-secrets#1",
+            "en-change-approval#2",
+            "en-runbook-quality#2",
+            "en-runbook-quality#0"
+          ]
+        },
+        {
+          "query_id": "q-en-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response#0",
+            "en-feature-flag-governance#2",
+            "en-feature-flag-governance#1",
+            "en-change-approval#2",
+            "en-incident-response#1",
+            "en-access-review#0",
+            "en-training-metrics#1",
+            "en-change-approval#1",
+            "en-access-review#1",
+            "en-training-metrics#0"
+          ]
+        },
+        {
+          "query_id": "q-en-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-incident-response#2",
+            "en-incident-response#1",
+            "en-capacity-forecasting#2",
+            "en-telemetry-retention#1",
+            "en-telemetry-retention#0",
+            "en-change-approval#2",
+            "en-vendor-risk#2",
+            "en-runbook-quality#1",
+            "en-training-metrics#1",
+            "en-infrastructure-drift#2"
+          ]
+        },
+        {
+          "query_id": "q-en-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-infrastructure-drift#2",
+            "en-infrastructure-drift#1",
+            "en-incident-response#2",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-runbook-quality#1",
+            "en-access-review#1",
+            "en-vendor-risk#1",
+            "en-incident-response#1",
+            "en-supply-chain#2"
+          ]
+        },
+        {
+          "query_id": "q-en-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#2",
+            "en-runbook-quality#2",
+            "en-change-approval#2",
+            "en-onboarding-access#2",
+            "en-vendor-risk#0",
+            "en-infrastructure-drift#2",
+            "en-change-approval#1",
+            "en-runbook-quality#1",
+            "en-infrastructure-drift#0"
+          ]
+        },
+        {
+          "query_id": "q-en-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-pipeline-secrets#0",
+            "en-pipeline-secrets#1",
+            "en-vendor-risk#2",
+            "en-onboarding-access#1",
+            "en-vendor-risk#0",
+            "en-onboarding-access#2",
+            "en-supply-chain#1",
+            "en-incident-response#2",
+            "en-vendor-risk#1",
+            "en-vendor-risk#3"
+          ]
+        },
+        {
+          "query_id": "q-de-01",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-datenschutz-pipeline#0",
+            "de-datenschutz-pipeline#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-mitbestimmung-telemetrie#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-schulungsnachweis#1",
+            "de-zugriffskonzept#2",
+            "de-cloud-auftragsverarbeitung#0",
+            "en-change-approval#2",
+            "de-notfallwiederherstellung#1"
+          ]
+        },
+        {
+          "query_id": "q-de-02",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "de-zugriffskonzept#2",
+            "de-datenschutz-pipeline#0",
+            "de-datenschutz-pipeline#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-lieferkette-pruefung#1",
+            "de-schulungsnachweis#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "de-mitbestimmung-telemetrie#2"
+          ]
+        },
+        {
+          "query_id": "q-de-03",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-datenschutz-pipeline#1",
+            "de-datenschutz-pipeline#0",
+            "de-zugriffskonzept#2",
+            "de-zugriffskonzept#1",
+            "de-datenschutz-pipeline#2",
+            "de-freigabenachweis-archiv#1",
+            "de-notfallwiederherstellung#2"
+          ]
+        },
+        {
+          "query_id": "q-de-04",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#1",
+            "de-mitbestimmung-telemetrie#0",
+            "de-mitbestimmung-telemetrie#2",
+            "de-cloud-auftragsverarbeitung#0",
+            "de-lieferkette-pruefung#1",
+            "de-datenschutz-pipeline#1",
+            "de-schulungsnachweis#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-zugriffskonzept#1",
+            "de-cloud-auftragsverarbeitung#1"
+          ]
+        },
+        {
+          "query_id": "q-de-05",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "de-datenschutz-pipeline#1",
+            "de-notfallwiederherstellung#2",
+            "de-notfallwiederherstellung#1",
+            "de-datenschutz-pipeline#0",
+            "en-supply-chain#2",
+            "de-zugriffskonzept#1",
+            "de-lieferkette-pruefung#0",
+            "de-cloud-auftragsverarbeitung#1"
+          ]
+        },
+        {
+          "query_id": "q-de-06",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-zugriffskonzept#2",
+            "de-datenschutz-pipeline#1",
+            "de-datenschutz-pipeline#2",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-notfallwiederherstellung#2",
+            "de-lieferkette-pruefung#0",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-notfallwiederherstellung#1",
+            "de-schulungsnachweis#1"
+          ]
+        },
+        {
+          "query_id": "q-de-07",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-mitbestimmung-telemetrie#0",
+            "de-cloud-auftragsverarbeitung#0",
+            "de-datenschutz-pipeline#1",
+            "de-notfallwiederherstellung#2",
+            "de-notfallwiederherstellung#1",
+            "en-access-review#1",
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-01",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-datenschutz-pipeline#1",
+            "de-datenschutz-pipeline#0",
+            "de-lieferkette-pruefung#1",
+            "de-datenschutz-pipeline#2",
+            "de-notfallwiederherstellung#2",
+            "de-notfallwiederherstellung#1",
+            "en-runbook-quality#2",
+            "de-lieferkette-pruefung#2",
+            "de-lieferkette-pruefung#0",
+            "de-freigabenachweis-archiv#0"
+          ]
+        },
+        {
+          "query_id": "q-gap-02",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-datenschutz-pipeline#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-zugriffskonzept#2",
+            "de-notfallwiederherstellung#1",
+            "de-freigabenachweis-archiv#1",
+            "de-notfallwiederherstellung#2",
+            "de-lieferkette-pruefung#1",
+            "en-pipeline-secrets#2",
+            "de-cloud-auftragsverarbeitung#2",
+            "en-incident-response#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-03",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#0",
+            "de-notfallwiederherstellung#2",
+            "de-lieferkette-pruefung#1",
+            "de-datenschutz-pipeline#1",
+            "en-supply-chain#2",
+            "en-supply-chain#1",
+            "de-datenschutz-pipeline#0",
+            "de-datenschutz-pipeline#2",
+            "en-access-review#1",
+            "en-runbook-quality#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-04",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-datenschutz-pipeline#2",
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-pipeline-secrets#2",
+            "en-infrastructure-drift#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-05",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#2",
+            "en-access-review#1",
+            "de-zugriffskonzept#1",
+            "de-zugriffskonzept#2",
+            "de-notfallwiederherstellung#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-mitbestimmung-telemetrie#1",
+            "en-capacity-forecasting#1",
+            "en-telemetry-retention#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-06",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-mitbestimmung-telemetrie#1",
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "de-datenschutz-pipeline#1",
+            "en-runbook-quality#1",
+            "de-lieferkette-pruefung#1",
+            "en-infrastructure-drift#2",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-freigabenachweis-archiv#1",
+            "de-schulungsnachweis#1"
+          ]
+        },
+        {
+          "query_id": "q-cross-01",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-feature-flag-governance#2",
+            "en-vendor-risk#2",
+            "en-runbook-quality#1",
+            "en-change-approval#1",
+            "en-vendor-risk#1",
+            "en-feature-flag-governance#0",
+            "en-pipeline-secrets#2",
+            "en-incident-response#1",
+            "en-onboarding-access#0",
+            "en-vendor-risk#0"
+          ]
+        },
+        {
+          "query_id": "q-cross-02",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-access-review#1",
+            "en-change-approval#1",
+            "de-mitbestimmung-telemetrie#2",
+            "en-incident-response#1",
+            "en-change-approval#2",
+            "en-infrastructure-drift#1",
+            "en-feature-flag-governance#2",
+            "en-supply-chain#1",
+            "en-access-review#0",
+            "en-infrastructure-drift#2"
+          ]
+        },
+        {
+          "query_id": "q-en-12",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-feature-flag-governance#0",
+            "en-feature-flag-governance#1",
+            "en-feature-flag-governance#2",
+            "en-onboarding-access#1",
+            "en-incident-response#1",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-incident-response#2",
+            "en-infrastructure-drift#0",
+            "de-datenschutz-pipeline#1"
+          ]
+        },
+        {
+          "query_id": "q-en-13",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-feature-flag-governance#1",
+            "en-feature-flag-governance#2",
+            "en-feature-flag-governance#0",
+            "en-change-approval#2",
+            "en-incident-response#2",
+            "en-incident-response#1",
+            "en-onboarding-access#2",
+            "en-change-approval#0",
+            "en-change-approval#1",
+            "en-infrastructure-drift#1"
+          ]
+        },
+        {
+          "query_id": "q-en-14",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-feature-flag-governance#2",
+            "en-feature-flag-governance#1",
+            "en-feature-flag-governance#0",
+            "en-infrastructure-drift#1",
+            "en-change-approval#2",
+            "en-training-metrics#1",
+            "en-incident-response#2",
+            "en-incident-response#1",
+            "en-runbook-quality#2",
+            "en-telemetry-retention#1"
+          ]
+        },
+        {
+          "query_id": "q-en-15",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "en-capacity-forecasting#1",
+            "en-capacity-forecasting#0",
+            "en-infrastructure-drift#2",
+            "en-capacity-forecasting#3",
+            "en-runbook-quality#1",
+            "en-capacity-forecasting#2",
+            "en-change-approval#1",
+            "en-change-approval#2",
+            "en-incident-response#2",
+            "en-pipeline-secrets#2"
+          ]
+        },
+        {
+          "query_id": "q-en-16",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3333333333333333,
+          "reciprocal_rank": 0.14285714285714285,
+          "retrieved": [
+            "en-capacity-forecasting#0",
+            "en-capacity-forecasting#2",
+            "en-capacity-forecasting#3",
+            "en-incident-response#1",
+            "en-incident-response#2",
+            "en-telemetry-retention#0",
+            "en-capacity-forecasting#1",
+            "en-incident-response#0",
+            "en-vendor-risk#2",
+            "en-vendor-risk#1"
+          ]
+        },
+        {
+          "query_id": "q-en-17",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-capacity-forecasting#2",
+            "en-capacity-forecasting#3",
+            "en-incident-response#2",
+            "en-training-metrics#2",
+            "en-capacity-forecasting#0",
+            "en-incident-response#1",
+            "en-training-metrics#0",
+            "en-supply-chain#2",
+            "en-telemetry-retention#0",
+            "en-training-metrics#1"
+          ]
+        },
+        {
+          "query_id": "q-en-18",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-onboarding-access#0",
+            "en-onboarding-access#1",
+            "en-onboarding-access#2",
+            "de-zugriffskonzept#1",
+            "en-access-review#0",
+            "en-access-review#1",
+            "en-change-approval#2",
+            "en-vendor-risk#2",
+            "en-pipeline-secrets#1",
+            "en-change-approval#1"
+          ]
+        },
+        {
+          "query_id": "q-en-19",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-onboarding-access#1",
+            "en-training-metrics#1",
+            "en-training-metrics#2",
+            "en-onboarding-access#0",
+            "en-onboarding-access#2",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-incident-response#2",
+            "en-training-metrics#0",
+            "en-incident-response#1"
+          ]
+        },
+        {
+          "query_id": "q-en-20",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-onboarding-access#2",
+            "en-onboarding-access#0",
+            "en-onboarding-access#1",
+            "en-change-approval#2",
+            "en-incident-response#2",
+            "en-capacity-forecasting#3",
+            "en-feature-flag-governance#1",
+            "en-change-approval#1",
+            "en-access-review#0",
+            "en-access-review#1"
+          ]
+        },
+        {
+          "query_id": "q-en-21",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-vendor-risk#0",
+            "en-change-approval#2",
+            "en-runbook-quality#2",
+            "en-incident-response#1",
+            "de-notfallwiederherstellung#1",
+            "en-vendor-risk#1",
+            "en-onboarding-access#2",
+            "de-notfallwiederherstellung#2",
+            "en-incident-response#2",
+            "en-change-approval#1"
+          ]
+        },
+        {
+          "query_id": "q-en-22",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-vendor-risk#0",
+            "en-vendor-risk#1",
+            "en-vendor-risk#3",
+            "en-vendor-risk#2",
+            "en-telemetry-retention#1",
+            "en-incident-response#2",
+            "en-runbook-quality#2",
+            "de-lieferkette-pruefung#1",
+            "en-runbook-quality#1",
+            "en-incident-response#1"
+          ]
+        },
+        {
+          "query_id": "q-en-23",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-vendor-risk#1",
+            "de-notfallwiederherstellung#2",
+            "en-vendor-risk#2",
+            "en-vendor-risk#0",
+            "en-capacity-forecasting#1",
+            "de-cloud-auftragsverarbeitung#0",
+            "en-capacity-forecasting#2",
+            "en-capacity-forecasting#3",
+            "en-vendor-risk#3",
+            "en-access-review#1"
+          ]
+        },
+        {
+          "query_id": "q-en-24",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-runbook-quality#0",
+            "en-runbook-quality#1",
+            "en-runbook-quality#2",
+            "en-change-approval#2",
+            "en-change-approval#1",
+            "en-vendor-risk#0",
+            "en-supply-chain#2",
+            "en-supply-chain#1",
+            "en-incident-response#0",
+            "en-training-metrics#1"
+          ]
+        },
+        {
+          "query_id": "q-en-25",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "en-runbook-quality#1",
+            "en-runbook-quality#2",
+            "en-supply-chain#2",
+            "en-runbook-quality#0",
+            "en-onboarding-access#2",
+            "en-infrastructure-drift#2",
+            "en-pipeline-secrets#1",
+            "en-incident-response#1",
+            "en-pipeline-secrets#2",
+            "en-feature-flag-governance#2"
+          ]
+        },
+        {
+          "query_id": "q-de-08",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#0",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-notfallwiederherstellung#2",
+            "de-lieferkette-pruefung#1",
+            "en-capacity-forecasting#1",
+            "de-datenschutz-pipeline#1",
+            "de-notfallwiederherstellung#1",
+            "en-vendor-risk#2",
+            "de-datenschutz-pipeline#0"
+          ]
+        },
+        {
+          "query_id": "q-de-09",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.6309297535714575,
+          "reciprocal_rank": 0.5,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#0",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-lieferkette-pruefung#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-datenschutz-pipeline#1",
+            "de-schulungsnachweis#1",
+            "de-notfallwiederherstellung#2",
+            "de-zugriffskonzept#2",
+            "de-zugriffskonzept#1",
+            "de-freigabenachweis-archiv#1"
+          ]
+        },
+        {
+          "query_id": "q-de-10",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#2",
+            "de-lieferkette-pruefung#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-notfallwiederherstellung#2",
+            "de-zugriffskonzept#2",
+            "de-datenschutz-pipeline#1",
+            "de-schulungsnachweis#1",
+            "de-mitbestimmung-telemetrie#2",
+            "de-zugriffskonzept#1",
+            "de-lieferkette-pruefung#2"
+          ]
+        },
+        {
+          "query_id": "q-de-11",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#0",
+            "de-notfallwiederherstellung#2",
+            "de-notfallwiederherstellung#1",
+            "en-incident-response#2",
+            "en-change-approval#2",
+            "en-infrastructure-drift#2",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#1",
+            "en-runbook-quality#2",
+            "de-mitbestimmung-telemetrie#1"
+          ]
+        },
+        {
+          "query_id": "q-de-12",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#0",
+            "de-notfallwiederherstellung#2",
+            "de-freigabenachweis-archiv#1",
+            "de-lieferkette-pruefung#1",
+            "en-change-approval#2",
+            "en-infrastructure-drift#2",
+            "de-freigabenachweis-archiv#0",
+            "de-zugriffskonzept#1",
+            "en-vendor-risk#3"
+          ]
+        },
+        {
+          "query_id": "q-de-13",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "en-change-approval#2",
+            "en-runbook-quality#2",
+            "en-runbook-quality#1",
+            "en-infrastructure-drift#2",
+            "de-notfallwiederherstellung#0",
+            "de-lieferkette-pruefung#1",
+            "en-vendor-risk#0",
+            "de-cloud-auftragsverarbeitung#1"
+          ]
+        },
+        {
+          "query_id": "q-de-14",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-zugriffskonzept#0",
+            "de-zugriffskonzept#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-zugriffskonzept#2",
+            "de-lieferkette-pruefung#2",
+            "en-onboarding-access#0",
+            "de-mitbestimmung-telemetrie#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "en-onboarding-access#1",
+            "de-notfallwiederherstellung#1"
+          ]
+        },
+        {
+          "query_id": "q-de-15",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-zugriffskonzept#1",
+            "de-zugriffskonzept#0",
+            "de-zugriffskonzept#2",
+            "de-schulungsnachweis#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "de-datenschutz-pipeline#1",
+            "en-pipeline-secrets#2",
+            "de-notfallwiederherstellung#2",
+            "de-cloud-auftragsverarbeitung#0",
+            "de-cloud-auftragsverarbeitung#2"
+          ]
+        },
+        {
+          "query_id": "q-de-16",
+          "case": "same-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-zugriffskonzept#2",
+            "de-zugriffskonzept#1",
+            "de-schulungsnachweis#1",
+            "de-notfallwiederherstellung#2",
+            "de-lieferkette-pruefung#1",
+            "de-cloud-auftragsverarbeitung#2",
+            "en-telemetry-retention#1",
+            "de-freigabenachweis-archiv#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-change-approval#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-07",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-schulungsnachweis#1",
+            "de-notfallwiederherstellung#2",
+            "de-lieferkette-pruefung#1",
+            "de-notfallwiederherstellung#1",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#2",
+            "en-infrastructure-drift#2",
+            "de-zugriffskonzept#1",
+            "en-telemetry-retention#1",
+            "en-pipeline-secrets#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-08",
+          "case": "language-gap",
+          "recall_at_10": 0.5,
+          "ndcg_at_10": 0.2640681225725909,
+          "reciprocal_rank": 0.25,
+          "retrieved": [
+            "de-notfallwiederherstellung#1",
+            "de-datenschutz-pipeline#1",
+            "en-pipeline-secrets#1",
+            "en-capacity-forecasting#1",
+            "de-lieferkette-pruefung#1",
+            "de-lieferkette-pruefung#2",
+            "en-runbook-quality#2",
+            "de-schulungsnachweis#1",
+            "en-capacity-forecasting#3",
+            "en-infrastructure-drift#2"
+          ]
+        },
+        {
+          "query_id": "q-gap-09",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.5,
+          "reciprocal_rank": 0.3333333333333333,
+          "retrieved": [
+            "de-zugriffskonzept#1",
+            "de-zugriffskonzept#0",
+            "en-onboarding-access#0",
+            "de-mitbestimmung-telemetrie#1",
+            "en-onboarding-access#1",
+            "en-pipeline-secrets#2",
+            "de-datenschutz-pipeline#1",
+            "de-notfallwiederherstellung#2",
+            "en-onboarding-access#2",
+            "de-cloud-auftragsverarbeitung#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-10",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.43067655807339306,
+          "reciprocal_rank": 0.25,
+          "retrieved": [
+            "en-vendor-risk#3",
+            "de-notfallwiederherstellung#2",
+            "de-cloud-auftragsverarbeitung#1",
+            "en-vendor-risk#2",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-schulungsnachweis#1",
+            "de-lieferkette-pruefung#1",
+            "en-access-review#1",
+            "de-datenschutz-pipeline#1",
+            "de-notfallwiederherstellung#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-11",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.3333333333333333,
+          "reciprocal_rank": 0.14285714285714285,
+          "retrieved": [
+            "de-notfallwiederherstellung#2",
+            "de-cloud-auftragsverarbeitung#2",
+            "de-schulungsnachweis#1",
+            "de-datenschutz-pipeline#1",
+            "de-zugriffskonzept#2",
+            "de-notfallwiederherstellung#1",
+            "en-runbook-quality#2",
+            "en-change-approval#2",
+            "de-lieferkette-pruefung#1",
+            "en-runbook-quality#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-12",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-datenschutz-pipeline#2",
+            "de-zugriffskonzept#1",
+            "de-mitbestimmung-telemetrie#1",
+            "de-freigabenachweis-archiv#0",
+            "en-change-approval#2",
+            "de-zugriffskonzept#2",
+            "de-notfallwiederherstellung#1",
+            "de-notfallwiederherstellung#2",
+            "de-datenschutz-pipeline#0",
+            "en-training-metrics#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-13",
+          "case": "language-gap",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "de-lieferkette-pruefung#0",
+            "de-datenschutz-pipeline#1",
+            "en-supply-chain#2",
+            "de-lieferkette-pruefung#1",
+            "de-zugriffskonzept#2",
+            "de-lieferkette-pruefung#2",
+            "en-access-review#1",
+            "de-datenschutz-pipeline#2",
+            "en-telemetry-retention#1",
+            "de-zugriffskonzept#1"
+          ]
+        },
+        {
+          "query_id": "q-gap-14",
+          "case": "language-gap",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 0.38685280723454163,
+          "reciprocal_rank": 0.2,
+          "retrieved": [
+            "de-lieferkette-pruefung#1",
+            "de-datenschutz-pipeline#1",
+            "de-lieferkette-pruefung#2",
+            "en-runbook-quality#2",
+            "en-incident-response#2",
+            "de-notfallwiederherstellung#2",
+            "en-training-metrics#1",
+            "en-infrastructure-drift#2",
+            "de-zugriffskonzept#1",
+            "de-notfallwiederherstellung#1"
+          ]
+        },
+        {
+          "query_id": "q-cross-03",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-cloud-auftragsverarbeitung#1",
+            "en-incident-response#2",
+            "en-vendor-risk#2",
+            "en-supply-chain#1",
+            "en-telemetry-retention#1",
+            "de-lieferkette-pruefung#1",
+            "en-runbook-quality#2",
+            "en-vendor-risk#3",
+            "en-vendor-risk#1",
+            "en-change-approval#1"
+          ]
+        },
+        {
+          "query_id": "q-cross-04",
+          "case": "cross-language",
+          "recall_at_10": 1.0,
+          "ndcg_at_10": 1.0,
+          "reciprocal_rank": 1.0,
+          "retrieved": [
+            "de-notfallwiederherstellung#2",
+            "en-change-approval#1",
+            "en-change-approval#2",
+            "en-infrastructure-drift#2",
+            "en-pipeline-secrets#1",
+            "en-pipeline-secrets#0",
+            "en-vendor-risk#2",
+            "en-access-review#1",
+            "en-runbook-quality#1",
+            "de-notfallwiederherstellung#1"
+          ]
+        },
+        {
+          "query_id": "q-cross-05",
+          "case": "cross-language",
+          "recall_at_10": 0.0,
+          "ndcg_at_10": 0.0,
+          "reciprocal_rank": 0.0,
+          "retrieved": [
+            "en-onboarding-access#2",
+            "en-onboarding-access#0",
+            "en-onboarding-access#1",
+            "en-access-review#0",
+            "en-incident-response#1",
+            "en-vendor-risk#3",
+            "en-vendor-risk#2",
+            "en-access-review#1",
+            "de-cloud-auftragsverarbeitung#1",
+            "en-pipeline-secrets#1"
+          ]
+        }
+      ]
+    }
+  },
+  "deltas": {
+    "recall_at_10": {
+      "delta": -0.025,
+      "ci_low": -0.1,
+      "ci_high": 0.05,
+      "carries": false
+    },
+    "ndcg_at_10": {
+      "delta": 0.009282,
+      "ci_low": -0.045167,
+      "ci_high": 0.07037,
+      "carries": false
+    },
+    "mrr": {
+      "delta": 0.020595,
+      "ci_low": -0.03996,
+      "ci_high": 0.087222,
+      "carries": false
+    }
+  },
+  "verdict": "Der aktive Reranker hat im heutigen Zustand KEINEN vom Rauschen trennbaren Effekt auf Recall@10, nDCG@10 oder MRR -- fuer keine der drei Metriken schliesst das 95-%-Intervall der gepaarten Bootstrap-Differenz die Null aus.",
+  "cost": {
+    "aus": {
+      "search_ms": {
+        "p50": 7.299,
+        "p95": 9.381,
+        "mean": 5.782,
+        "n": 60
+      },
+      "peak_rss_kb": 72896
+    },
+    "an": {
+      "search_ms": {
+        "p50": 2514.001,
+        "p95": 2678.303,
+        "mean": 1686.306,
+        "n": 60
+      },
+      "peak_rss_kb": 916128
+    },
+    "hardware": {
+      "cpu": "Apple M4 Pro",
+      "cpu_cores": 12,
+      "ram_gb": 25.8,
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "python": "3.12.13"
+    }
+  }
+}

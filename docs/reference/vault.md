@@ -26,9 +26,13 @@ im [Quickstart-Protokoll](../quickstart-protocol.md#5-halluzinationsschutz-verba
 ## Lokale Modelle: Schalter im Überblick
 
 Der Vault lädt bis zu drei lokale Modelle: das Embedding-Modell (Vektor-Suche),
-den lokalen Reranker-Fallback und den NLI-Zitatscan. Alle drei sind **per
-Default aktiv** und lassen sich einzeln abschalten — jeder Schalter folgt seit
-Issue #719 demselben Vorrang, ausgewertet vom gemeinsamen Resolver
+den lokalen Reranker-Fallback und den NLI-Zitatscan. Embedding und NLI-Zitatscan
+sind **per Default aktiv**; der lokale Reranker ist seit #807 **per Default
+aus** (Beschluss #806, gestützt auf die #804-Nullmessung: auf 60 Queries in
+keiner Metrik von Null trennbarer Beitrag bei 3058 ms statt 17 ms Suchlatenz
+und 901 MB statt 74 MB Peak-RSS je Suche). Alle drei lassen sich einzeln
+umschalten — jeder Schalter folgt seit Issue #719 demselben Vorrang,
+ausgewertet vom gemeinsamen Resolver
 `academic_vault.config_switches.resolve_bool_switch()`:
 
 **Argument > Umgebungsvariable > `config/parallel_agents.json` > Default**
@@ -41,7 +45,8 @@ ausschließlich den Auto-Ingest in `vault.add_paper()` (wie vor #719 seit
 #372); die seit #719 neu gegatete Vektor-Suche (`vault.search()`) reagiert
 NICHT auf diesen Alt-Namen, nur auf den kanonischen Schalter
 `ACADEMIC_RESEARCH_EMBEDDING_ENABLED` bzw. `config/parallel_agents.json`.
-Mit dem kanonischen Schalter aller drei Komponenten auf "aus" laufen
+Mit dem kanonischen Schalter aller drei Komponenten auf "aus" (Reranker ist
+das ohne weiteres Zutun bereits seit #807) laufen
 `vault.add_paper()`/`vault.search()` als reine FTS5-Stichwortsuche, ohne
 dass ein einziges Modell geladen oder heruntergeladen wird — das gilt für
 diese automatischen Pfade, nicht für explizite Aufrufe wie
@@ -51,7 +56,7 @@ Modell bewusst und unabhängig vom Schalter laden.
 | Komponente | Config-Schlüssel | Default | Wirkung bei `false` | Plattenbedarf | Laufzeitkosten |
 |---|---|---|---|---|---|
 | Embedding-Modell (`BAAI/bge-m3`, seit #732) | `embedding_enabled` | `true` | `vault.add_paper()`/`vault.search()` laufen FTS5-only, `chunk_embeddings` bleibt leer. | ~2,27 GB (Modellgewichte) | Ingest: ~169 ms/Chunk auf CPU (Apple M4 Pro, gemessen #731); Suche: eine Query-Embedding-Berechnung (~130–170 ms auf CPU) plus SQLite-KNN (<10 ms). |
-| Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | `true` | RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`); seit #715 gibt es keinen weiteren Reranking-Weg (Voyage/Cohere ersatzlos entfernt). | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße) | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU. |
+| Lokaler Reranker (`BAAI/bge-reranker-v2-m3`) | `reranker_enabled` | **`false`** (seit #807; zuvor `true`) | Standardzustand: RRF-Reihenfolge bleibt unverändert (`reranked=False`, `reranker="none"`), ohne dass ein Modell geladen wird; bei `true` (Env/Config/Argument) läuft der Reranker wie unten beschrieben — seit #715 der einzige Reranking-Weg (Voyage/Cohere ersatzlos entfernt). | ~2,4 GB (0,6 Mrd. Parameter, F32 — Schätzung, HF nennt keine Dateigröße), nur bei manueller Aktivierung | ~48 ms/Paar auf CPU, ~26 ms/Paar auf MPS (gemessen 2026-08-06, s. u.); bei ~20 Kandidaten also ~1 s/Suche auf CPU — nur bei manueller Aktivierung. |
 | NLI-Zitatscan (`MoritzLaurer/bge-m3-zeroshot-v2.0`) | `nli_prefilter_enabled` | `true` | Der `nli-quote-scan.mjs`-Hook tut nichts — weder Anstoß noch Abholung, kein Zitat wird bewertet oder gemeldet. | ~1,3 GB (0,6 Mrd. Parameter, F16 — Schätzung, HF nennt keine Dateigröße) | ~0,127 s/Zitat auf CPU zzgl. 1,6 s einmaligem Modell-Laden je Worker-Start (gemessen, s. `docs/reference/hooks.md`). |
 | Query-Umformung (Multi-Query, #734) | `query_expansion_enabled` | **`false`** | `vault.search(..., rerank=True)` sucht mit der unveränderten Query (ein `_vec0_search`-Aufruf statt vier) — Default ist AN für die drei Modelle oben, aber AUS für dieses Verfahren (Begründung s. u.). | kein zusätzliches Modell (nutzt die eingeloggte `claude`-CLI-Sitzung, kein Download) | ≈ 6,8 s/Suche (gemessen, s. Abschnitt „Query-Umformung" unten) — nur bei `rerank=True` UND aktivem Schalter. |
 
@@ -300,12 +305,17 @@ RRF-Reihenfolge unverändert. Jeder Kandidat trägt danach `reranked` (bool)
 und `reranker` (`"local-bge"`/`"none"`) — sichtbarer Beleg statt stillem
 Fallback.
 
-Der lokale Fallback läuft **per Default aktiv** und lädt das Modell seit #714
-über `sentence_transformers.CrossEncoder` — `sentence-transformers` ist
-ohnehin Hard-Dependency (Embedding-Pipeline, siehe oben), kein zusätzliches
-Paket und kein manueller Installationsschritt nötig (vorher: `FlagEmbedding`,
-das `transformers<5.0` erzwang und deshalb nie standardmäßig installiert
-war). Mit `VAULT_RERANK_LOCAL_DISABLE` lässt er sich abschalten.
+Der lokale Fallback läuft **per Default aus** (seit #807, Beschluss #806:
+die #804-Nullmessung fand auf 60 Queries keinen von Null trennbaren
+Qualitätsbeitrag bei 3058 ms statt 17 ms Suchlatenz je Suche). Bei
+Bedarf über `ACADEMIC_RESEARCH_RERANKER_ENABLED`/`reranker_enabled`/Argument
+einschaltbar; das Modell lädt dann seit #714 über
+`sentence_transformers.CrossEncoder` — `sentence-transformers` ist ohnehin
+Hard-Dependency (Embedding-Pipeline, siehe oben), kein zusätzliches Paket und
+kein manueller Installationsschritt nötig (vorher: `FlagEmbedding`, das
+`transformers<5.0` erzwang und deshalb nie standardmäßig installiert war).
+`VAULT_RERANK_LOCAL_DISABLE` bleibt als Alias mit abweichender
+Präsenz-Semantik erhalten (siehe Tabelle unten).
 
 Gemessen am 2026-08-06 auf Apple M4 Pro, 16 Query-Dokument-Paare,
 `max_length=512`:
@@ -324,7 +334,7 @@ wird `False` und eine `WARNING` landet im Log — kein Absturz.
 
 | Env-Variable | Default | Wirkung |
 |---|---|---|
-| `ACADEMIC_RESEARCH_RERANKER_ENABLED` | `1` (nicht gesetzt) | Kanonischer Schalter (#719). `0` schaltet den Reranker ab (`reranked=False`, `reranker="none"`), ohne das Modell zu laden — seit #715 der einzige Reranking-Weg. Ebenfalls per `"reranker_enabled": false` in `config/parallel_agents.json` setzbar. |
+| `ACADEMIC_RESEARCH_RERANKER_ENABLED` | `0` (nicht gesetzt, seit #807) | Kanonischer Schalter (#719). `1` schaltet den Reranker EIN — seit #715 der einzige Reranking-Weg. Ohne gesetzten Wert (Default) bleibt `reranked=False`, `reranker="none"`, ohne dass das Modell geladen wird. Ebenfalls per `"reranker_enabled": true` in `config/parallel_agents.json` einschaltbar. |
 | `VAULT_RERANK_LOCAL_DISABLE` | nicht gesetzt | Alt-Name (#714), bleibt als Alias erhalten — ABWEICHENDE Semantik: ein reines Präsenz-Flag, jeder gesetzte Wert (auch `"0"`) schaltet ab, kein truthy/falsy-Parsing. Gesetzt, gewinnt er über `ACADEMIC_RESEARCH_RERANKER_ENABLED`. |
 | `VAULT_RERANK_LOCAL_MODEL` | `BAAI/bge-reranker-v2-m3` | Alternatives Reranker-Modell. |
 | `VAULT_RERANK_LOCAL_CACHE` | `~/.academic-research/models` | Ablageort der Reranker-Gewichte (gleiches Verzeichnis wie Embedding-/NLI-Modell). |

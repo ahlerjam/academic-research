@@ -67,11 +67,16 @@ _CLOUD_KEYS = ("VOYAGE_API_KEY", "COHERE_API_KEY")
 
 
 class _CloudKeyGuard:
-    """Entfernt Cloud-Reranker-Keys aus der Umgebung, laesst den lokalen Fallback aktiv."""
+    """Entfernt Cloud-Reranker-Keys aus der Umgebung, erzwingt den lokalen
+    Fallback AKTIV -- unabhaengig vom Produktivdefault (seit #807 AUS), denn
+    #804 misst genau den Reranker-Beitrag, nicht den jeweils aktuellen
+    Default-Zustand."""
 
     def __enter__(self) -> _CloudKeyGuard:
         self._prior: dict[str, str | None] = {k: os.environ.pop(k, None) for k in _CLOUD_KEYS}
         self._prior_disable = os.environ.pop("VAULT_RERANK_LOCAL_DISABLE", None)
+        self._prior_enabled = os.environ.get("ACADEMIC_RESEARCH_RERANKER_ENABLED")
+        os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = "1"
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -80,6 +85,10 @@ class _CloudKeyGuard:
                 os.environ[key] = value
         if self._prior_disable is not None:
             os.environ["VAULT_RERANK_LOCAL_DISABLE"] = self._prior_disable
+        if self._prior_enabled is None:
+            os.environ.pop("ACADEMIC_RESEARCH_RERANKER_ENABLED", None)
+        else:
+            os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = self._prior_enabled
 
 
 def _sha256(text: str) -> str:
@@ -280,8 +289,13 @@ def run_cost_condition(condition: str, db_path: str, goldset: dict, vectors: dic
     with _hermetic_env(embedder), _CloudKeyGuard():
         if condition == "aus":
             os.environ["VAULT_RERANK_LOCAL_DISABLE"] = "1"
+            os.environ.pop("ACADEMIC_RESEARCH_RERANKER_ENABLED", None)
         else:
             os.environ.pop("VAULT_RERANK_LOCAL_DISABLE", None)
+            # Seit #807 ist der Produktivdefault AUS -- die "an"-Bedingung
+            # muss den kanonischen Schalter explizit setzen, sonst greift
+            # trotz Alias-Pop der neue Default und misst "aus" zweimal.
+            os.environ["ACADEMIC_RESEARCH_RERANKER_ENABLED"] = "1"
 
         import sqlite3
 

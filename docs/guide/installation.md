@@ -27,6 +27,14 @@ jedes Modell lädt einzeln beim ersten Gebrauch nach, mit einer Meldung der jewe
 Downloadgröße direkt davor. Ohne die Modelle bleibt der Vektor-Index leer bzw. Reranking
 und Zitatscan laufen degradiert — die Volltextsuche (FTS5) funktioniert in jedem Fall.
 
+**Reranker seit #807 per Default aus.** Der lokale Reranker (`bge-reranker-v2-m3`,
+Zeile unten) wird bei einer Suche ohne gesetzten Schalter nicht mehr geladen — die
+#804-Nullmessung fand auf 60 Queries keinen von Null trennbaren Qualitätsbeitrag bei
+3058 ms statt 17 ms Suchlatenz je Suche (Beschluss #806). Wird er über
+`ACADEMIC_RESEARCH_RERANKER_ENABLED`/`reranker_enabled` in
+`config/parallel_agents.json` manuell eingeschaltet, gelten Platzbedarf und
+Peak-RSS aus der Tabelle unten unverändert.
+
 **Nach einem Abbruch** setzt der nächste Lauf fort, statt neu zu beginnen: fertige
 Modelle werden übersprungen, und innerhalb eines angefangenen Modells bleiben die bereits
 vollständigen Dateien im Cache. Nur die eine Datei, die im Moment des Abbruchs übertragen

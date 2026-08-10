@@ -455,13 +455,17 @@ class TestAggregateChunksToPapers:
 class TestRerankerIntegration:
     """Tests fuer den lokalen Reranker in apply_reranker (#715, vormals Cloud-Kette #376)."""
 
-    def test_rerank_uses_local_bge(self):
+    def test_rerank_uses_local_bge(self, monkeypatch):
         """apply_reranker() nutzt den lokalen bge-reranker-v2-m3-Fallback (#376, AC2; #715).
 
         Gemockt wird nur das Backend (`_get_local_reranker`), damit der Test
-        ohne Modell-Download deterministisch bleibt.
+        ohne Modell-Download deterministisch bleibt. Reranker seit #807 per
+        Default aus -- fuer diesen Test (der die tatsaechliche Rerank-
+        Ausfuehrung prueft) explizit eingeschaltet.
         """
         from academic_vault.retrieval import apply_reranker
+
+        monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
 
         candidates = [
             {"paper_id": "p001", "text": "Unrelated snippet.", "rrf_score": 0.02},
@@ -480,15 +484,19 @@ class TestRerankerIntegration:
         assert all(r["reranked"] is True for r in result)
         assert all(r["reranker"] == "local-bge" for r in result)
 
-    def test_rerank_fallback_when_no_reranker_available_returns_unranked(self, caplog):
+    def test_rerank_fallback_when_no_reranker_available_returns_unranked(self, caplog, monkeypatch):
         """Kein lokales Backend verfuegbar -> unveraenderte RRF-Reihenfolge (Fixrunde #422; #715).
 
         Bewusst KEIN Patch von `_get_local_reranker`: die autouse-Fixture
         `block_real_local_reranker_backend` (tests/conftest.py) blockiert das
         echte Backend bereits -- genau das Verhalten, das ein Backend-Ladefehler
-        in der Praxis erzeugt.
+        in der Praxis erzeugt. Reranker seit #807 per Default aus -- hier
+        explizit eingeschaltet, sonst greift der neue Default-Pfad ("deaktiviert
+        via Schalter") statt des hier zu pruefenden Backend-Ladefehlerpfads.
         """
         from academic_vault.retrieval import apply_reranker
+
+        monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
 
         candidates = [
             {"paper_id": "p001", "text": "Unrelated snippet.", "rrf_score": 0.02},
@@ -530,6 +538,11 @@ class TestRerankerIntegration:
 
         mock_reranker = MagicMock()
         mock_reranker.predict.return_value = [0.1, 0.9]
+
+        # Reranker seit #807 per Default aus -- fuer diesen Test (der die
+        # tatsaechliche Rerank-Ausfuehrung prueft, nicht den Default-Schalter)
+        # explizit einschalten.
+        monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
 
         with patch("academic_vault.retrieval._get_local_reranker", return_value=mock_reranker):
             monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
@@ -618,13 +631,17 @@ class TestRerankerIntegration:
 class TestRerankerFallbackStructure:
     """Regressionstests fuer #233: Fallback liefert enriched-Struktur (inkl. text)."""
 
-    def test_fallback_no_api_key_returns_text_field(self):
+    def test_fallback_no_api_key_returns_text_field(self, monkeypatch):
         """Ohne Reranker-Key muss jeder Kandidat ein text-Feld haben (#233).
 
         Seit #376 greift ohne Cloud-Key der lokale bge-reranker-v2-m3-Fallback
         -- gemockt, damit der Test ohne Modell-Download deterministisch bleibt.
+        Reranker seit #807 per Default aus -- hier explizit eingeschaltet,
+        damit der gemockte lokale Pfad tatsaechlich durchlaufen wird.
         """
         from academic_vault.retrieval import apply_reranker
+
+        monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
 
         # Kandidaten OHNE text-Feld (wie aus RRF-Fusion)
         candidates = [
@@ -645,9 +662,15 @@ class TestRerankerFallbackStructure:
         assert by_id["p001"]["text"] == "Transformer networks."
         assert by_id["p002"]["text"] == "Convolutional networks."
 
-    def test_local_bge_exception_returns_text_field(self):
-        """Wenn der lokale Reranker eine Exception wirft, muss der Fallback enriched liefern (#233)."""
+    def test_local_bge_exception_returns_text_field(self, monkeypatch):
+        """Wenn der lokale Reranker eine Exception wirft, muss der Fallback enriched liefern (#233).
+
+        Reranker seit #807 per Default aus -- hier explizit eingeschaltet,
+        damit der gemockte Ausnahmefall den lokalen Pfad ueberhaupt erreicht.
+        """
         from academic_vault.retrieval import apply_reranker
+
+        monkeypatch.setenv("ACADEMIC_RESEARCH_RERANKER_ENABLED", "1")
 
         candidates = [
             {"paper_id": "p001", "snippet": "Dense retrieval.", "rrf_score": 0.02},
