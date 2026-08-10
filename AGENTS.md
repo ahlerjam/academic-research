@@ -60,6 +60,19 @@ ist das Merge-Gate (Required Check, sobald Branch-Protection aktiv). Benötigt
 Repo-Secret `CLAUDE_CODE_OAUTH_TOKEN` (Operator-Pflege); ohne Secret laufen die
 Reviewer-Jobs rot.
 
+Review-Cache, bekannte Grenze (#817): Der Cache-Schlüssel ist der sha256 der
+**ersten 200 KB** des Diffs (`head -c 204800`, `pr-deep-review.yml`; Prüfung in
+`.github/scripts/flowkit_review/cache_check.py`). Eval-Rohdaten und
+Vektor-Fixtures unter `docs/evals/` und `tests/fixtures/` füllen diese Grenze
+als einzelne Datei aus. Ändert ein Folge-Commit nur Dateien dahinter, meldet
+der Cache einen Treffer, die Reviewer laufen nicht, und der `coordinator`
+wendet die Befunde des **vorigen** Stands erneut an — ein bereits behobener P1
+blockiert dann weiter. Erkennbar an `cache_check: HIT` im `prep`-Log bei
+gleichzeitig übersprungenen Reviewer-Jobs. Bis #817 gefixt ist: einen Commit
+nachschieben, der eine Datei früh im Diff berührt (alphabetisch vor
+`docs/`), statt das Override-Label zu setzen — Ersteres holt das Review nach,
+Letzteres überspringt es.
+
 Fork-PRs: Die Pipeline triggert auf `pull_request` (nicht `pull_request_target`).
 Das ist Absicht — Forks bekommen so keine Secrets. Folge davon: Bei PRs aus
 einem Fork steht `CLAUDE_CODE_OAUTH_TOKEN` nicht zur Verfügung, die
