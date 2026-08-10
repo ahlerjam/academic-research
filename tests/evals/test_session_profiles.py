@@ -28,6 +28,7 @@ from tests.evals.eval_runner import (
     SESSION_PROFILES,
     ClaudeCliError,
     _run_claude_cli,
+    call_claude_for_component,
     profile_for,
 )
 
@@ -280,3 +281,73 @@ def test_only_vault_profile_needs_mcp() -> None:
     assert SESSION_PROFILES["vault"]["needs_mcp"] is True
     for name in ("bare", "context-fs", "net-excluded"):
         assert SESSION_PROFILES[name]["needs_mcp"] is False
+
+
+# ---------------------------------------------------------------------------
+# Callsite-Anbindung: profile_for()/SESSION_PROFILES muessen einen
+# tatsaechlichen call_claude-Aufruf steuern, nicht nur als Tabelle
+# herumliegen (Issue #830, Task 5).
+# ---------------------------------------------------------------------------
+
+
+def test_call_claude_for_component_passes_profile_allowed_tools_through() -> None:
+    """call_claude_for_component('chapter-writer', ...) muss das vault-Profil ziehen.
+
+    chapter-writer ist in COMPONENT_PROFILES als 'vault' hinterlegt --
+    allowed_tools muss also SESSION_PROFILES['vault']['allowed_tools'] sein,
+    nicht der bisherige feste Leerstring.
+    """
+    captured: dict[str, Any] = {}
+
+    def fake_call_claude(
+        system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs: Any
+    ) -> str:
+        captured.update(kwargs)
+        return "ok"
+
+    with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
+        result = call_claude_for_component("chapter-writer", "sys", "user")
+
+    assert result == "ok"
+    assert captured["allowed_tools"] == SESSION_PROFILES["vault"]["allowed_tools"]
+
+
+def test_call_claude_for_component_bare_profile_keeps_no_tools() -> None:
+    """'fetch' ist als 'bare' hinterlegt -- allowed_tools bleibt '' (--allowedTools '')."""
+    captured: dict[str, Any] = {}
+
+    def fake_call_claude(
+        system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs: Any
+    ) -> str:
+        captured.update(kwargs)
+        return "ok"
+
+    with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
+        call_claude_for_component("fetch", "sys", "user")
+
+    assert captured["allowed_tools"] == SESSION_PROFILES["bare"]["allowed_tools"] == ""
+
+
+def test_call_claude_for_component_forwards_cwd_and_mcp_config_overrides(tmp_path: Path) -> None:
+    """Optionale cwd/mcp_config-Overrides (kuenftige Fixtures aus #823/#824) werden durchgereicht."""
+    captured: dict[str, Any] = {}
+
+    def fake_call_claude(
+        system: str, user: str, model: str = "claude-sonnet-4-6", **kwargs: Any
+    ) -> str:
+        captured.update(kwargs)
+        return "ok"
+
+    with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
+        call_claude_for_component(
+            "academic-context", "sys", "user", cwd=tmp_path, mcp_config="/tmp/mcp.json"
+        )
+
+    assert captured["cwd"] == tmp_path
+    assert captured["mcp_config"] == "/tmp/mcp.json"
+
+
+def test_call_claude_for_component_unknown_component_raises() -> None:
+    """Kein stiller Fallback -- profile_for() feuert unveraendert (AC1)."""
+    with pytest.raises(KeyError):
+        call_claude_for_component("does-not-exist-as-a-component", "sys", "user")

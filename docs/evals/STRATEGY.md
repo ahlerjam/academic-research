@@ -518,6 +518,27 @@ folgt einem festen Kriterium statt einer Einzelfallentscheidung:
   `humanizer-de-pipeline`, `oa-fetchers`, `publisher-fetchers`,
   `verbatim-guard`.
 
+### Callsite-Anbindung
+
+`SESSION_PROFILES`/`profile_for()` wären ohne einen tatsächlichen Aufrufer
+nur eine Tabelle ohne Wirkung. `eval_runner.call_claude_for_component(component,
+system, user, ...)` schließt diese Lücke: sie zieht `allowed_tools` aus
+`SESSION_PROFILES[profile_for(component)]` statt es implizit bei `""`
+(`bare`) zu belassen, und reicht optionale `cwd`/`mcp_config`-Overrides
+unverändert durch. Die sechs Suiten der Widerspruchstabelle oben rufen
+darüber statt über das rohe `call_claude` auf: `test_rest_evals.py`
+(`academic-context`, `methodology-advisor`, `plagiarism-check`),
+`test_abstract_generator_evals.py`, `test_chapter_writer_evals.py`,
+`test_quote_extractor_evals.py`. Da die Fixture-Seite (Kontextdateien,
+Vault-Testdatenbank) erst mit #823/#824 landet, bleibt `cwd`/`mcp_config`
+für diese Suiten vorerst `None` — nur `allowed_tools` ändert sich bereits
+gegenüber dem alten `bare`-Default. Sobald #823/#824 die Fixture-Pfade
+liefern, reicht die jeweilige Suite sie als `cwd=`/`mcp_config=`-Override an
+`call_claude_for_component()` durch, ohne dass sich diese Funktion oder
+`SESSION_PROFILES` ändern muss. Getestet in
+`tests/evals/test_session_profiles.py`
+(`test_call_claude_for_component_*`, gemockter `call_claude`, kein Live-Call).
+
 ### Entscheidung für die zehn Widerspruchsfälle aus dem 2026-08-10-Lauf
 
 Verifiziert gegen die echten Fehlschläge des Laufs (`gh run view 31369626618

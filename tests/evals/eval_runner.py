@@ -547,3 +547,45 @@ def profile_for(component: str) -> str:
             f"Kein Sitzungsprofil fuer Komponente {component!r} hinterlegt "
             f"(Issue #830) -- COMPONENT_PROFILES in eval_runner.py ergaenzen."
         ) from exc
+
+
+def call_claude_for_component(
+    component: str,
+    system: str,
+    user: str,
+    model: str = "claude-sonnet-4-6",
+    *,
+    cwd: str | Path | None = None,
+    mcp_config: str | Path | None = None,
+    env: dict[str, str] | None = None,
+) -> str:
+    """Ruft ``call_claude`` mit dem per ``profile_for(component)`` bestimmten Profil auf.
+
+    Die Callsite-Anbindung aus Issue #830 (Task 5): ``allowed_tools`` kommt
+    ab hier aus ``SESSION_PROFILES[profile_for(component)]`` statt dass jede
+    Suite den Wert selbst (oder implizit den ``bare``-Default) verdrahtet.
+    Eine Suite mit unbekannter Komponente (Tippfehler, fehlender
+    ``COMPONENT_PROFILES``-Eintrag) faellt nicht still auf ``bare`` zurueck,
+    sondern erbt den ``KeyError`` aus ``profile_for()`` (AC1).
+
+    ``cwd``/``mcp_config`` bleiben optionale Overrides und werden unveraendert
+    durchgereicht: die Profile ``context-fs``/``vault`` verlangen laut
+    ``needs_cwd``/``needs_mcp`` eigentlich beide, aber die Fixture-Seite
+    (Kontextdateien unter ``evals/<suite>/fixtures/``, Vault-Testdatenbank)
+    liefern erst #823/#824 -- bis dahin bleibt der Default ``None``, sodass
+    sich fuer eine Suite ohne eigene Fixture nur ``allowed_tools`` gegenueber
+    dem bisherigen ``bare``-Verhalten aendert. Sobald #823/#824 landen, kann
+    die jeweilige Suite ihr Fixture-``cwd``/ihre Vault-Config hier durchreichen,
+    ohne dass sich diese Funktion oder die Profiltabelle noch aendern muss.
+    """
+    profile = profile_for(component)
+    allowed_tools = SESSION_PROFILES[profile]["allowed_tools"]
+    return call_claude(
+        system,
+        user,
+        model,
+        cwd=cwd,
+        allowed_tools=allowed_tools,
+        mcp_config=mcp_config,
+        env=env,
+    )

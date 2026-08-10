@@ -7,7 +7,7 @@ import pytest
 
 from tests.evals.eval_runner import (
     EVALS_ROOT,
-    call_claude,
+    call_claude_for_component,
     check_expected,
     load_skill_content,
 )
@@ -29,7 +29,7 @@ def test_abstract_generator_eval(prompt, mode):
     if prompt["mode"] not in ("both", mode):
         pytest.skip(f"Prompt {prompt['id']} nicht fuer Mode {mode}")
     system = load_skill_content("abstract-generator") if mode == "with_skill" else ""
-    output = call_claude(system=system, user=prompt["input"])
+    output = call_claude_for_component("abstract-generator", system=system, user=prompt["input"])
     assert check_expected(output, prompt["expected"]), (
         f"[{mode}] {prompt['id']}: expected={prompt['expected']} actual={output[:200]}"
     )

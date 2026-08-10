@@ -27,8 +27,16 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `tests/evals/test_session_profiles.py` (Coverage-Guard plus ein Test, der
   belegt, dass eine Fixture im `cwd` einer Suite fuer eine andere mit
   anderem `cwd` unsichtbar bleibt). Details und die Herleitung je Gruppe in
-  `docs/evals/STRATEGY.md`, Abschnitt "Sitzungsprofile". Die tatsaechliche
-  Fixture-Seite (Kontextdateien, Vault-Testdatenbank) bleibt #823/#824.
+  `docs/evals/STRATEGY.md`, Abschnitt "Sitzungsprofile". Neu:
+  `eval_runner.call_claude_for_component()` verbindet `profile_for()`/
+  `SESSION_PROFILES` jetzt mit einem tatsaechlichen Aufruf -- die sechs
+  betroffenen Suiten (`test_rest_evals.py` fuer `academic-context`/
+  `methodology-advisor`/`plagiarism-check`, `test_abstract_generator_evals.py`,
+  `test_chapter_writer_evals.py`, `test_quote_extractor_evals.py`) rufen
+  darueber `call_claude` statt `allowed_tools` implizit auf `bare` zu
+  belassen; `cwd`/`mcp_config` bleiben optionale Overrides, bis die
+  tatsaechliche Fixture-Seite (Kontextdateien, Vault-Testdatenbank) via
+  #823/#824 landet.
 - **Reranker-Ablation misst den Beitrag des aktiven `bge-reranker-v2-m3`
   (#804):** #722 hatte den Reranker-Beitrag per Leave-one-out beziffert
   (+0,0000 Recall@10, +0,0107 nDCG@10, +0,0144 MRR), beide Nicht-Null-Werte
