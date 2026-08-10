@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,16 @@ EVALS_ROOT = Path(__file__).parent.parent.parent / "evals"
 SKILLS_ROOT = Path(__file__).parent.parent.parent / "skills"
 AGENTS_ROOT = Path(__file__).parent.parent.parent / "agents"
 BASELINES_ROOT = Path(__file__).parent.parent / "baselines"
+
+# Suiteneigenes Arbeitsverzeichnis fuer die "context-fs"-Fixture (Issue #823):
+# academic_context.md, literature_state.md, writing_state.md, thematisch an
+# DevOps Governance in KMU ausgerichtet. Wird ueber das "context-fs"-Profil
+# (Issue #830, SESSION_PROFILES) als cwd= an call_claude_for_component
+# durchgereicht -- nicht im Repo-Root abgelegt, damit sie fuer andere Suiten
+# unsichtbar bleibt. SESSION_PROFILES enthaelt bewusst keinen Fixture-Pfad
+# (das ist Sache der jeweiligen Suite/Fixture), diese Konstante schliesst die
+# Luecke fuer die context-fs-Suiten.
+CONTEXT_FS_DIR = Path(__file__).parent / "fixtures" / "context_fs"
 
 # Harter Deckel fuer einen einzelnen CLI-Subprozess-Aufruf (Issue #631).
 # Grosszuegig wie evals/sparring-partner/record.py, damit ein haengender
@@ -568,30 +579,35 @@ def call_claude_for_component(
     ``COMPONENT_PROFILES``-Eintrag) faellt nicht still auf ``bare`` zurueck,
     sondern erbt den ``KeyError`` aus ``profile_for()`` (AC1).
 
-    ``cwd``/``mcp_config`` sind optionale Overrides. Profiles, die laut
-    ``needs_cwd``/``needs_mcp`` ein Fixture-Verzeichnis/Vault-Config erfordern,
-    fallen auf den ``bare``-Default zurueck (allowed_tools=None), wenn diese
-    Parameter ``None`` bleiben -- so wird die Kontrollgruppe ``without_skill``
-    tatsaechlich skill-frei, ohne dass der Repo-Root als Default-cwd sich zur
-    Ressourcenquelle wird (Regression-Fix zu #830).
+    ``cwd``/``mcp_config`` sind optionale Overrides. Profile, die laut
+    ``needs_cwd`` ein Fixture-Verzeichnis erfordern, bekommen automatisch
+    ein leeres Temp-Dir als cwd, falls die Callsite kein eigenes cwd stellt.
+    Das verhindert den Root-Leak (cwd=None zeigt sonst auf den Repo-Root und
+    macht Skill-Dateien/Eval-Erwartungen fuer die without_skill-Kontrollgruppe
+    sichtbar), ohne ``allowed_tools`` zu verwerfen -- die Werkzeugfreigabe aus
+    ``SESSION_PROFILES`` ist die Kernzusage dieses Profils und muss auch vor
+    Landung der Fixture-Integration (#823/#824) im CLI-Aufruf ankommen.
+    ``mcp_config`` bleibt bewusst unangetastet: faellt es weg, laeuft der
+    Aufruf ohne funktionierende MCP-Tools -- das ist kein Sicherheitsleck wie
+    beim cwd, sondern der erwartete Zwischenstand vor #824.
     """
     profile = profile_for(component)
     profile_config = SESSION_PROFILES[profile]
     allowed_tools = profile_config["allowed_tools"]
 
     # Wenn das Profil ein eigenes cwd braucht, aber keins gestellt wurde,
-    # fallen wir auf den bare-Default zurueck (allowed_tools = None).
-    # Das verhindert den Root-Leak, bei dem cwd=None auf den Repo-Root zeigt.
+    # nutzen wir ein leeres Temp-Dir als Fallback. Das verhindert, dass
+    # cwd=None auf den Repo-Root zeigt und die Kontrollgruppe verfaelscht --
+    # ohne allowed_tools zu verwerfen (Regression-Fix zu #830).
+    effective_cwd = cwd
     if profile_config["needs_cwd"] and cwd is None:
-        allowed_tools = None
-    if profile_config["needs_mcp"] and mcp_config is None:
-        allowed_tools = None
+        effective_cwd = tempfile.mkdtemp()
 
     return call_claude(
         system,
         user,
         model,
-        cwd=cwd,
+        cwd=effective_cwd,
         allowed_tools=allowed_tools,
         mcp_config=mcp_config,
         env=env,

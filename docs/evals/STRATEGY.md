@@ -38,7 +38,15 @@ LLM-Qualität gemessen.
 **Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
 tests/evals/ -q` ohne installierte `claude`-CLI im PATH — `claude_cli_available()`
 gatet den Guard zusätzlich, Issue #631; der frühere parallele
-`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `346 passed, 195 skipped`.
+`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `346 passed, 197 skipped`.
+Die Skip-Zahl ist mit #823 von 195 auf 197 gestiegen, weil der neue
+Negativfall `pc-03` (`evals/plagiarism-check/evals.json`, `cwd: "none"`)
+genau zwei zusätzliche Skips erzeugt: einen Mode-Filter-Skip in
+`test_rest_evals.py` (`without_skill`) und einen CLI-Gate-Skip in
+`eval_runner.call_claude` (`with_skill`). Beide belegt durch einen echten
+Lauf mit aus dem `PATH` entfernter `claude`-CLI, je einmal auf `main`
+(`426 passed, 195 skipped`) und auf dem Branch (`436 passed, 197 skipped`);
+keine bestehende Prüfung wurde stillgelegt.
 Seit #390 sind weitere Suiten dazugekommen (u. a.
 #524, #626, #628, #630, #721); die Skip-Zahl ist gegenüber dem #390-Snapshot
 gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
@@ -415,6 +423,39 @@ Ein unbekannter Wert bricht die Collection mit `ValueError` ab statt still
 auf "alle Skills" zurueckzufallen -- ein Tippfehler im Input soll auffallen,
 nicht lautlos das Budget sprengen.
 
+## Context-FS-Fixture (Issue #823)
+
+`ab-01`/`ab-02` (`abstract-generator`), `ac-03` (`academic-context`),
+`mt-01` (`methodology-advisor`) und `pc-02` (`plagiarism-check`) scheiterten
+im Lauf vom 2026-08-10 nicht an ihrem eigentlichen Verhalten, sondern daran,
+dass das gemeinsame Preamble (`skills/_common/preamble.md`) `./academic_context.md`
+und `./literature_state.md` als Vorbedingung prüft — der CLI-Subprozess in
+`eval_runner._run_claude_cli` lief ohne `cwd` (also im Repo-Root) und ohne
+Tool-Zugriff, konnte die Dateien also nie sehen. Die Skills meldeten korrekt
+die fehlende Vorbedingung; die Evals werteten das als Fehlschlag, weil sie
+inhaltliche Ausgabe erwarteten.
+
+Fix: `tests/evals/fixtures/context_fs/` enthält drei realistische Dateien
+(`academic_context.md`, `literature_state.md`, `writing_state.md`, Thema
+DevOps Governance in KMU) in einem suiteneigenen Verzeichnis
+(`eval_runner.CONTEXT_FS_DIR`). #823 baut dafür bewusst nicht auf einer
+eigenen `cwd`/Tool-Achse auf, sondern auf den Eval-Sitzungsprofilen aus
+#830 (Abschnitt "Sitzungsprofile" unten): die betroffenen Skills sind dort
+bereits als `context-fs`-Profil hinterlegt und bekommen `allowed_tools="Read"`
+automatisch über `call_claude_for_component()`. `test_rest_evals.py` und
+`test_abstract_generator_evals.py` reichen lediglich noch den fehlenden
+Baustein durch — `cwd=CONTEXT_FS_DIR` als Override an
+`call_claude_for_component()` —, statt einen zweiten, zum Profil-Mechanismus
+parallelen Weg zu bauen. Ein Case kann sich per `"cwd": "none"` im
+`evals.json`-Prompt bewusst gegen die Fixture entscheiden (die Suite ruft
+dann `call_claude_for_component()` ohne `cwd`-Override; das `context-fs`-
+Profil erzeugt automatisch ein leeres, isoliertes Fallback-Verzeichnis statt
+den Repo-Root zu erben) — Negativfall `pc-03` prüft so weiterhin, dass die
+fehlende Vorbedingung ehrlich gemeldet wird, wenn die Fixture fehlt.
+
+Bewusst offen gelassen (Out of Scope laut Issue): die Vault-MCP-Testdatenbank
+(#824) — #823 liefert nur die `context-fs`-Fixture, keine `vault`-Testdaten.
+
 ## Alt-Issue #55
 
 Issue #55 („Baseline-Eval v5.2.0") verlangte denselben Nachweis auf altem
@@ -600,15 +641,18 @@ system, user, ...)` schließt diese Lücke: sie zieht `allowed_tools` aus
 (`bare`) zu belassen, und reicht optionale `cwd`/`mcp_config`-Overrides
 unverändert durch. Die sechs Suiten der Widerspruchstabelle oben rufen
 darüber statt über das rohe `call_claude` auf: `test_rest_evals.py`
-(`academic-context`, `methodology-advisor`, `plagiarism-check`),
-`test_abstract_generator_evals.py`, `test_chapter_writer_evals.py`,
-`test_quote_extractor_evals.py`. Da die Fixture-Seite (Kontextdateien,
-Vault-Testdatenbank) erst mit #823/#824 landet, bleibt `cwd`/`mcp_config`
-für diese Suiten vorerst `None` — nur `allowed_tools` ändert sich bereits
-gegenüber dem alten `bare`-Default. Sobald #823/#824 die Fixture-Pfade
-liefern, reicht die jeweilige Suite sie als `cwd=`/`mcp_config=`-Override an
-`call_claude_for_component()` durch, ohne dass sich diese Funktion oder
-`SESSION_PROFILES` ändern muss. Getestet in
+(`academic-context`, `methodology-advisor`, `plagiarism-check` sowie alle
+weiteren `REST_SKILLS`/`REST_AGENTS`), `test_abstract_generator_evals.py`,
+`test_chapter_writer_evals.py`, `test_quote_extractor_evals.py`. Mit #823
+liefert die `context-fs`-Seite (`tests/evals/fixtures/context_fs/`,
+`eval_runner.CONTEXT_FS_DIR`) ihren Fixture-Pfad: `test_rest_evals.py` und
+`test_abstract_generator_evals.py` reichen ihn als `cwd=`-Override an
+`call_claude_for_component()` durch (ausser ein Case setzt `"cwd": "none"`).
+Mit #824 liefert die Vault-Testdatenbank (`tests/evals/vault_fixture.py`,
+`vault_session`-Fixture) den `cwd`/`mcp_config`-Wert für das `vault`-Profil:
+`test_chapter_writer_evals.py`/`test_quote_extractor_evals.py` reichen beide
+als Override an `call_claude_for_component()` durch, ohne dass sich diese
+Funktion oder `SESSION_PROFILES` dafür ändern musste. Getestet in
 `tests/evals/test_session_profiles.py`
 (`test_call_claude_for_component_*`, gemockter `call_claude`, kein Live-Call).
 

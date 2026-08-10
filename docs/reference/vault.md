@@ -421,14 +421,20 @@ Der Preis, bewusst getragen und hier nachlesbar statt im Commit vergraben:
   in `papers_trgm`: Titel und Abstract sind rund 1–2 KB je Paper, PDF-Volltexte 50–200 KB.
 - **Dokumentierte Grenze.** Folge davon: `Mittelstand` findet `Mittelstandsdigitalisierung`
   in Titel und Abstract, **nicht** im PDF-Volltext. Dort greift weiterhin nur die
-  Wortsuche über `papers_fts.fulltext`. Ein Trigram-Index über den Volltext und über
-  `notes_fts` bleibt ein eigenes Vorhaben — er braucht zuerst eine Größenmessung als
-  Entscheidungsgrundlage.
+  Wortsuche über `papers_fts.fulltext`.
 - **Trefferrauschen bei Kurzsuchen.** Ein Token aus drei Zeichen *ist* genau ein Trigram
   und träfe jede Wortmitte (`KMU` in `Werkmuseum`). Der Teilwort-Zweig schaltet sich
   deshalb erst ab vier Zeichen je Token frei (`server._TRIGRAM_MIN_TOKEN_LEN`); darunter
   läuft jede Suche bitgleich auf dem alten Pfad. In `KMU Digitalisierung` trägt nur das
   lange Token zur Teilwortsuche bei.
+
+**Entscheidung für Volltext und `notes_fts` (#766):** geprüft und **negativ** entschieden
+— kein Trigram-Index über `paper_fulltext.text` oder `notes.text`. Die Größenmessung an
+einem synthetischen 40-Paper/80-Notizen-Bestand blieb zwar knapp unter der 100-%-Schwelle
+(Volltext +94 %, Notizen +19 %), ein Nutzennachweis ist mit dem heutigen #708-Goldset aber
+laut #789 strukturell nicht zu führen (1/60 `papers_fts`-, 0/60 `papers_trgm`-Treffer) —
+beide Bedingungen der Entscheidungsregel müssen erfüllt sein. Details, Zahlen und
+Begründung: [`docs/evals/2026-08-10-fulltext-trgm-size-766.md`](../evals/2026-08-10-fulltext-trgm-size-766.md).
 
 Bestands-Vaults hebt `migrate.add_papers_trgm_table()` auf Schema-Version 12 und füllt den
 Index für bereits vorhandene Paper nach (die Trigger allein erfassen nur, was danach

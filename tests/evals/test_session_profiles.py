@@ -290,19 +290,12 @@ def test_only_vault_profile_needs_mcp() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_call_claude_for_component_passes_profile_allowed_tools_through(tmp_path: Path) -> None:
+def test_call_claude_for_component_passes_profile_allowed_tools_through() -> None:
     """call_claude_for_component('chapter-writer', ...) muss das vault-Profil ziehen.
 
     chapter-writer ist in COMPONENT_PROFILES als 'vault' hinterlegt --
     allowed_tools muss also SESSION_PROFILES['vault']['allowed_tools'] sein,
     nicht der bisherige feste Leerstring.
-
-    Seit dem Root-Leak-Fix zu #830 gilt das nur, wenn die Sitzung die vom
-    Profil verlangten Achsen auch mitbringt: ohne ``cwd``/``mcp_config``
-    faellt die Funktion bewusst auf den bare-Default zurueck (eigener Test
-    unten). Die Fixture, die beides liefert, kam mit #824 --
-    ``tests/evals/vault_fixture.py``; hier genuegen Platzhalterpfade, weil
-    der Aufruf gemockt ist.
     """
     captured: dict[str, Any] = {}
 
@@ -313,24 +306,20 @@ def test_call_claude_for_component_passes_profile_allowed_tools_through(tmp_path
         return "ok"
 
     with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
-        result = call_claude_for_component(
-            "chapter-writer",
-            "sys",
-            "user",
-            cwd=tmp_path,
-            mcp_config=tmp_path / "mcp_config.json",
-        )
+        result = call_claude_for_component("chapter-writer", "sys", "user")
 
     assert result == "ok"
     assert captured["allowed_tools"] == SESSION_PROFILES["vault"]["allowed_tools"]
 
 
-def test_call_claude_for_component_vault_without_fixture_falls_back_to_bare() -> None:
-    """Ohne cwd/mcp_config bleibt das vault-Profil werkzeuglos (Root-Leak-Fix zu #830).
+def test_call_claude_for_component_uses_isolated_temp_dir_when_needs_cwd_has_no_override() -> None:
+    """Regressionsschutz fuer den Root-Leak-Fix: cwd=None darf bei needs_cwd
 
-    Sonst zeigte ``cwd=None`` auf den Repo-Root und der Agent haette den
-    gesamten Quellbaum als Ressource -- die Kontrollgruppe ``without_skill``
-    waere damit nicht mehr skillfrei.
+    nicht unveraendert an call_claude durchgereicht werden -- sonst zeigt
+    cwd=None auf den Repo-Root und die without_skill-Kontrollgruppe sieht
+    Skill-Dateien/Eval-Erwartungen. Gleichzeitig darf das den Test oben nicht
+    unterlaufen: allowed_tools muss trotzdem das Profil widerspiegeln, statt
+    (wie in einer frueheren Fassung) auf None zu fallen.
     """
     captured: dict[str, Any] = {}
 
@@ -343,9 +332,13 @@ def test_call_claude_for_component_vault_without_fixture_falls_back_to_bare() ->
     with patch("tests.evals.eval_runner.call_claude", side_effect=fake_call_claude):
         call_claude_for_component("chapter-writer", "sys", "user")
 
-    assert captured["allowed_tools"] is None
-    assert captured["cwd"] is None
-    assert captured["mcp_config"] is None
+    used_cwd = captured["cwd"]
+    assert used_cwd is not None, "needs_cwd=True darf cwd=None nicht unveraendert durchreichen."
+    repo_root = Path(__file__).parent.parent.parent.resolve()
+    assert Path(used_cwd).resolve() != repo_root, "Fallback-cwd darf nicht der Repo-Root sein."
+    assert Path(used_cwd).is_dir()
+    assert list(Path(used_cwd).iterdir()) == [], "Fallback-cwd muss leer sein (kein Fixture-Leak)."
+    assert captured["allowed_tools"] == SESSION_PROFILES["vault"]["allowed_tools"]
 
 
 def test_call_claude_for_component_bare_profile_keeps_no_tools() -> None:
