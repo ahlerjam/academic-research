@@ -283,12 +283,12 @@ class TestArms:
 
     def test_language_gap_subset_reported_per_arm(self, goldset, report):
         gap_ids = {q["query_id"] for q in goldset["queries"] if q["case"] == "language-gap"}
-        assert len(gap_ids) == 6
+        assert len(gap_ids) == 14
         for arm in proto.ARMS:
             subset = report["arms"][arm]["subsets"]["language-gap"]
             rows = [r for r in report["arms"][arm]["per_query"] if r["query_id"] in gap_ids]
-            assert len(rows) == 6, arm
-            recomputed = sum(r["ndcg_at_10"] for r in rows) / 6
+            assert len(rows) == 14, arm
+            recomputed = sum(r["ndcg_at_10"] for r in rows) / 14
             assert subset["ndcg_at_10"] == pytest.approx(recomputed, abs=1e-9), arm
             assert subset != report["arms"][arm]["overall"], arm
 
