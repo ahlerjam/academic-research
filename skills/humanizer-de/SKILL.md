@@ -3,15 +3,22 @@ name: humanizer-de
 description: >
   Erkennt und entfernt KI-generierte Schreibmuster aus deutschsprachigen Texten.
   Verwende diesen Skill wenn ein Kapitelentwurf oder Text auf KI-typische Muster
-  geprüft und überarbeitet werden soll (Anti-KI-Audit-Pass). Trigger-Phrasen:
-  "humanisieren", "menschlicher klingen", "Text humanisieren", "umschreiben",
-  "weniger KI-haft", "KI-Floskeln entfernen", "aufgeblähte Symbolik/Werbesprache
-  entfernen". Unterstützt Modus normal (Sachlich) und deep (vollständiger
-  Zwei-Pass-Durchlauf mit finalem Anti-KI-Audit). Optionale Voice-Kalibrierung
-  via Schreibproben. Produziert humanisierten Text sowie Severity-gegliedertes
-  Diff. Inkludiert Korrektur (Eingriff am Text) — für reine Detektion/Score/Audit
-  ohne Eingriff → style-evaluator. Nicht triggern für: Zitation,
-  Literaturrecherche, Kapitelplanung.
+  bzw. Anzeichen für KI-generierte Inhalte geprüft und/oder überarbeitet werden
+  soll (Anti-KI-Audit-Pass, auch als reiner Audit ohne anschliessende
+  Überarbeitung). Trigger-Phrasen: "humanisieren", "menschlicher klingen",
+  "Text humanisieren", "umschreiben", "weniger KI-haft", "KI-Floskeln
+  entfernen", "aufgeblähte Symbolik/Werbesprache entfernen", "KI-typische
+  Muster/Schreibmuster prüfen", "Anzeichen für KI-generierte Inhalte prüfen".
+  Unterstützt Modus normal (Sachlich) und deep (vollständiger Zwei-Pass-Durchlauf
+  mit finalem Anti-KI-Audit). Optionale Voice-Kalibrierung via Schreibproben.
+  Produziert humanisierten Text sowie Severity-gegliedertes Diff. Inkludiert
+  Korrektur (Eingriff am Text) — Abgrenzung zu style-evaluator: style-evaluator
+  deckt allgemeine Stilqualitätsmetriken ohne KI-Bezug ab (Satzlänge,
+  Passiv-Quote, Nominalstil, Duktus, Füllwörter, Lesbarkeit, Score); sobald
+  "KI-typisch"/"KI-generiert"/"ChatGPT-artig" im Prompt vorkommt, gehört die
+  Anfrage zu humanizer-de, auch bei reiner Prüfung ohne anschliessende
+  Überarbeitung. Nicht triggern für: Zitation, Literaturrecherche,
+  Kapitelplanung.
 version: 3.2.4-de.1-vendored
 vendored_from: "https://github.com/marmbiz/humanizer-de"
 upstream_sha: "d3b4a8d0590ec7c1d5c17213909450392dedf079"
