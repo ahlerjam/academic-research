@@ -332,6 +332,28 @@ class TestThresholdGate:
         assert proc.returncode != 0
         assert "manifest" in proc.stderr.lower()
 
+    def test_unexpected_error_exits_2_with_readable_stderr(self, tmp_path):
+        """#798 AC1: ein unerwarteter Fehler (hier kaputtes JSON, kein
+        ManifestMismatchError) endet mit Exit 2 und einer lesbaren stderr-Zeile
+        statt mit einem nackten Traceback."""
+        broken = tmp_path / "goldset-broken.json"
+        broken.write_text("{ das ist kein JSON", encoding="utf-8")
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "eval" / "run_retrieval_chunk_goldset.py"),
+                "--goldset",
+                str(broken),
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+        )
+        assert proc.returncode == 2, proc.stderr
+        assert "Traceback" not in proc.stderr
+        assert "unerwarteter Fehler" in proc.stderr
+
     def test_thresholds_stay_below_measured_values(self, report, thresholds):
         """Schwellen sind Messwert minus Marge — nie darueber, nie beliebig tief."""
         for scope, measured in [("overall", report["overall"])] + [

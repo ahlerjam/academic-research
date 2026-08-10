@@ -513,6 +513,12 @@ def diverged_per_query(
                 "davon nur der letzte Eintrag"
             )
 
+    # Drei getrennte Zweige statt einer Meldung: "Rangfolge weicht ab" stimmt
+    # nur, wenn auf beiden Seiten ein Wert steht und die Werte sich
+    # unterscheiden. Fehlt die Zeile ganz (_ABSENT) oder fuehrt sie das Feld
+    # nicht (_NO_FIELD), ist das kein Vergleich zweier Rangfolgen, und die
+    # bisherige Formulierung fuehrte beim Triagieren eines roten CI-Laufs in
+    # die falsche Richtung (#798).
     diverged = sorted(
         (
             key
@@ -521,11 +527,34 @@ def diverged_per_query(
         ),
         key=repr,
     )
-    if diverged:
+    value_diffs: list[Any] = []
+    missing_rows: list[Any] = []
+    no_field_rows: list[Any] = []
+    for key in diverged:
+        fresh_val = fresh_index.get(key, _ABSENT)
+        stored_val = stored_index.get(key, _ABSENT)
+        if fresh_val is _ABSENT or stored_val is _ABSENT:
+            missing_rows.append(key)
+        elif fresh_val is _NO_FIELD or stored_val is _NO_FIELD:
+            no_field_rows.append(key)
+        else:
+            value_diffs.append(key)
+
+    if value_diffs:
         problems.append(
             f"{label}.{field}: Rangfolge weicht von {source} ab bei "
-            f"query_id={diverged!r} -- "
-            f"{_detail(diverged, fresh_index, stored_index, limit, source)}"
+            f"query_id={value_diffs!r} -- "
+            f"{_detail(value_diffs, fresh_index, stored_index, limit, source)}"
+        )
+    if missing_rows:
+        problems.append(
+            f"{label}.{field}: Zeile fehlt bei query_id={missing_rows!r} -- "
+            f"{_detail(missing_rows, fresh_index, stored_index, limit, source)}"
+        )
+    if no_field_rows:
+        problems.append(
+            f"{label}.{field}: Zeile ohne dieses Feld bei query_id={no_field_rows!r} -- "
+            f"{_detail(no_field_rows, fresh_index, stored_index, limit, source)}"
         )
 
     # Nur die gemeinsamen Schluessel, und jeden nur einmal: eine fehlende oder
@@ -648,29 +677,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    goldset = load_goldset(args.goldset)
-    if not args.skip_manifest_check:
-        try:
-            verify_manifest(goldset)
-        except ManifestMismatchError as exc:
-            print(str(exc), file=sys.stderr)
-            return 2
+    try:
+        goldset = load_goldset(args.goldset)
+        if not args.skip_manifest_check:
+            try:
+                verify_manifest(goldset)
+            except ManifestMismatchError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
 
-    report = evaluate(goldset, load_vectors(args.vectors), k=args.k)
-    print(json.dumps(report, indent=2, ensure_ascii=False))
+        report = evaluate(goldset, load_vectors(args.vectors), k=args.k)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
 
-    if not args.check_thresholds:
+        if not args.check_thresholds:
+            return 0
+
+        violations = check_thresholds(report, load_thresholds(args.thresholds))
+        if violations:
+            print(
+                "Retrieval-Goldset #708: Schwelle unterschritten\n  " + "\n  ".join(violations),
+                file=sys.stderr,
+            )
+            return 1
+        print("Retrieval-Goldset #708: alle Schwellen gehalten.", file=sys.stderr)
         return 0
-
-    violations = check_thresholds(report, load_thresholds(args.thresholds))
-    if violations:
-        print(
-            "Retrieval-Goldset #708: Schwelle unterschritten\n  " + "\n  ".join(violations),
-            file=sys.stderr,
-        )
-        return 1
-    print("Retrieval-Goldset #708: alle Schwellen gehalten.", file=sys.stderr)
-    return 0
+    except Exception as exc:
+        # Aeusserster Fang: ManifestMismatchError ist oben bereits spezifisch
+        # behandelt. Alles andere endete sonst als Traceback ganz ohne
+        # Problemliste -- diese Zeile ist die strukturelle Absicherung dafuer
+        # (#798).
+        print(f"Retrieval-Goldset #708: unerwarteter Fehler: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

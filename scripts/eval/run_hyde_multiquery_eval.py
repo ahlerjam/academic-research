@@ -399,29 +399,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    goldset = load_goldset()
-    report = evaluate_all_arms(
-        goldset=goldset,
-        goldset_vectors=load_vectors(),
-        transforms=transforms,
-        transform_vectors=transform_vectors,
-        k=args.k,
-    )
-    print(json.dumps(report, indent=2, ensure_ascii=False))
-
-    if args.check_against is None:
-        return 0
-
-    problems = compare_against(report, _read_json(args.check_against))
-    if problems:
-        print(
-            "HyDE/Multi-Query (#733): Lauf und eingecheckte Rohdaten weichen ab\n  "
-            + "\n  ".join(problems),
-            file=sys.stderr,
+    try:
+        goldset = load_goldset()
+        report = evaluate_all_arms(
+            goldset=goldset,
+            goldset_vectors=load_vectors(),
+            transforms=transforms,
+            transform_vectors=transform_vectors,
+            k=args.k,
         )
-        return 1
-    print("HyDE/Multi-Query (#733): Lauf deckt sich mit den Rohdaten.", file=sys.stderr)
-    return 0
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+
+        if args.check_against is None:
+            return 0
+
+        problems = compare_against(report, _read_json(args.check_against))
+        if problems:
+            print(
+                "HyDE/Multi-Query (#733): Lauf und eingecheckte Rohdaten weichen ab\n  "
+                + "\n  ".join(problems),
+                file=sys.stderr,
+            )
+            return 1
+        print("HyDE/Multi-Query (#733): Lauf deckt sich mit den Rohdaten.", file=sys.stderr)
+        return 0
+    except Exception as exc:
+        # Aeusserster Fang: ManifestMismatchError ist oben bereits spezifisch
+        # behandelt (#798).
+        print(f"HyDE/Multi-Query (#733): unerwarteter Fehler: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

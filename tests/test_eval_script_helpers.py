@@ -418,6 +418,11 @@ def test_compare_against_reports_a_completely_missing_by_case_block() -> None:
 # neue Verschaerfung nicht wieder einen Nachbarfall aufreisst, ohne dass es
 # auffaellt. Alle Faelle muessen ein Problem melden -- Falsch-Gruen ist bei
 # einem Gatter der teuerste Fehler.
+#
+# Konvention (#798): eine neue Defektklasse bekommt eine neue Tabellenzeile
+# hier, keinen neuen Einzeltest -- Einzeltests sind fuer Verhalten reserviert,
+# das ueber "meldet ueberhaupt ein Problem" hinausgeht (z. B. konkretes
+# Wording, siehe die drei Tests direkt unter dieser Tabelle).
 _PER_QUERY_DEFECTS = [
     pytest.param(
         [{"query_id": "q1", "retrieved": ["a"]}],
@@ -464,6 +469,36 @@ _PER_QUERY_DEFECTS = [
 @pytest.mark.parametrize(("fresh", "stored"), _PER_QUERY_DEFECTS)
 def test_diverged_per_query_reports_every_defect_class(fresh: Any, stored: Any) -> None:
     assert diverged_per_query(fresh, stored, "L"), "Falsch-Gruen: kein Problem gemeldet"
+
+
+def test_diverged_per_query_missing_row_does_not_say_rangfolge() -> None:
+    """Fehlt die Zeile ganz, ist das kein Rangfolge-Vergleich (#798 AC2) --
+    die alte Formulierung fuehrte beim Triagieren eines roten CI-Laufs in die
+    falsche Richtung."""
+    problems = diverged_per_query([{"query_id": "q1", "retrieved": ["a"]}], [], "L")
+    joined = " ".join(problems)
+    assert "Zeile fehlt" in joined
+    assert "Rangfolge" not in joined
+
+
+def test_diverged_per_query_missing_field_does_not_say_rangfolge() -> None:
+    """Fuehrt die gespeicherte Zeile das Feld nicht, ist das ebenfalls kein
+    Rangfolge-Vergleich (#798 AC2)."""
+    problems = diverged_per_query(
+        [{"query_id": "q1", "retrieved": ["a"]}], [{"query_id": "q1"}], "L"
+    )
+    joined = " ".join(problems)
+    assert "ohne dieses Feld" in joined
+    assert "Rangfolge" not in joined
+
+
+def test_diverged_per_query_value_diff_still_says_rangfolge() -> None:
+    """Gegenprobe: ein echter Wertunterschied bleibt bei der bisherigen
+    Formulierung -- nur die beiden neuen Faelle bekommen eigenes Wording."""
+    problems = diverged_per_query(
+        [{"query_id": "q1", "retrieved": ["a"]}], [{"query_id": "q1", "retrieved": ["b"]}], "L"
+    )
+    assert any("Rangfolge" in problem for problem in problems)
 
 
 def test_diverged_per_query_stays_silent_on_identical_blocks() -> None:

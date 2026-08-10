@@ -592,30 +592,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ManifestMismatchError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(json.dumps(report, indent=2, ensure_ascii=False))
 
-    if not report["control_check"]["passed"]:
-        print(
-            "Kontext-Ablation (#785): Kontrolltest fehlgeschlagen -- metadata_context "
-            "reproduziert die #731-Zahlen nicht mehr:\n  "
-            + "\n  ".join(report["control_check"]["problems"]),
-            file=sys.stderr,
-        )
-        return 2
+    try:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
 
-    if args.check_against is None:
+        if not report["control_check"]["passed"]:
+            print(
+                "Kontext-Ablation (#785): Kontrolltest fehlgeschlagen -- metadata_context "
+                "reproduziert die #731-Zahlen nicht mehr:\n  "
+                + "\n  ".join(report["control_check"]["problems"]),
+                file=sys.stderr,
+            )
+            return 2
+
+        if args.check_against is None:
+            return 0
+
+        problems = compare_against(report, _read_json(args.check_against))
+        if problems:
+            print(
+                "Kontext-Ablation (#785): Lauf und eingecheckte Rohdaten weichen ab\n  "
+                + "\n  ".join(problems),
+                file=sys.stderr,
+            )
+            return 1
+        print("Kontext-Ablation (#785): Lauf deckt sich mit den Rohdaten.", file=sys.stderr)
         return 0
-
-    problems = compare_against(report, _read_json(args.check_against))
-    if problems:
-        print(
-            "Kontext-Ablation (#785): Lauf und eingecheckte Rohdaten weichen ab\n  "
-            + "\n  ".join(problems),
-            file=sys.stderr,
-        )
-        return 1
-    print("Kontext-Ablation (#785): Lauf deckt sich mit den Rohdaten.", file=sys.stderr)
-    return 0
+    except Exception as exc:
+        # Aeusserster Fang: ManifestMismatchError ist oben bereits spezifisch
+        # behandelt (#798).
+        print(f"Kontext-Ablation (#785): unerwarteter Fehler: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
