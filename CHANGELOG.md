@@ -10,6 +10,20 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Context-FS-Fixture behebt Fehlanzeigen fuer fehlende Kontextdateien in
+  Verhaltens-Evals (#823):** `ab-01`/`ab-02`, `ac-03`, `mt-01` und `pc-02`
+  scheiterten im Lauf vom 2026-08-10, weil `eval_runner._run_claude_cli`
+  ohne `cwd` und ohne Tool-Zugriff lief -- die Skills meldeten korrekt die
+  fehlende Vorbedingung (`./academic_context.md`, `./literature_state.md`),
+  die Evals werteten das als Fehlschlag. Neue Fixture
+  `tests/evals/fixtures/context_fs/` (DevOps Governance in KMU, drei
+  Dateien inkl. `literature_state.md`) in einem suiteneigenen Verzeichnis;
+  `_run_claude_cli`/`call_claude`/`call_claude_with_tokens` kennen die
+  optionalen Achsen `cwd`/`allowed_tools`, `test_rest_evals.py` und
+  `test_abstract_generator_evals.py` reichen sie fuer die betroffenen
+  `context-fs`-Skills durch. Neuer Negativfall `pc-03`
+  (`evals/plagiarism-check/evals.json`, `"cwd": "none"`) haelt den
+  Vorbedingungs-Ehrlichkeitscheck ohne Fixture weiterhin fest.
 - **Reranker-Ablation misst den Beitrag des aktiven `bge-reranker-v2-m3`
   (#804):** #722 hatte den Reranker-Beitrag per Leave-one-out beziffert
   (+0,0000 Recall@10, +0,0107 nDCG@10, +0,0144 MRR), beide Nicht-Null-Werte

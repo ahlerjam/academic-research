@@ -415,6 +415,36 @@ Ein unbekannter Wert bricht die Collection mit `ValueError` ab statt still
 auf "alle Skills" zurueckzufallen -- ein Tippfehler im Input soll auffallen,
 nicht lautlos das Budget sprengen.
 
+## Context-FS-Fixture (Issue #823)
+
+`ab-01`/`ab-02` (`abstract-generator`), `ac-03` (`academic-context`),
+`mt-01` (`methodology-advisor`) und `pc-02` (`plagiarism-check`) scheiterten
+im Lauf vom 2026-08-10 nicht an ihrem eigentlichen Verhalten, sondern daran,
+dass das gemeinsame Preamble (`skills/_common/preamble.md`) `./academic_context.md`
+und `./literature_state.md` als Vorbedingung prüft — der CLI-Subprozess in
+`eval_runner._run_claude_cli` lief ohne `cwd` (also im Repo-Root) und ohne
+Tool-Zugriff, konnte die Dateien also nie sehen. Die Skills meldeten korrekt
+die fehlende Vorbedingung; die Evals werteten das als Fehlschlag, weil sie
+inhaltliche Ausgabe erwarteten.
+
+Fix: `tests/evals/fixtures/context_fs/` enthält drei realistische Dateien
+(`academic_context.md`, `literature_state.md`, `writing_state.md`, Thema
+DevOps Governance in KMU) in einem suiteneigenen Verzeichnis
+(`eval_runner.CONTEXT_FS_DIR`). `_run_claude_cli`/`call_claude`/
+`call_claude_with_tokens` kennen seither die optionalen Achsen `cwd` und
+`allowed_tools`; `test_rest_evals.py` und `test_abstract_generator_evals.py`
+reichen `cwd=CONTEXT_FS_DIR, allowed_tools=["Read"]` für die betroffenen
+`context-fs`-Skills durch. Ein Case kann sich per `"cwd": "none"` im
+`evals.json`-Prompt bewusst dagegen entscheiden — Negativfall `pc-03` prüft
+weiterhin, dass die fehlende Vorbedingung ehrlich gemeldet wird, wenn die
+Fixture fehlt.
+
+Bewusst offen gelassen (Out of Scope laut Issue): die Vault-MCP-Testdatenbank
+(#824) und die grundsätzliche Frage, welche Suite mit welchen Werkzeugen
+läuft (#830) — #823 liefert davon nur die `cwd`-Achse, die `allowed_tools`-
+Achse kam als notwendige Ergänzung dazu, weil `cwd` ohne Lesezugriff wirkungslos
+bliebe.
+
 ## Alt-Issue #55
 
 Issue #55 („Baseline-Eval v5.2.0") verlangte denselben Nachweis auf altem

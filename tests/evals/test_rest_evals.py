@@ -5,6 +5,7 @@ import json
 import pytest
 
 from tests.evals.eval_runner import (
+    CONTEXT_FS_DIR,
     EVALS_ROOT,
     call_claude,
     check_expected,
@@ -26,6 +27,13 @@ REST_SKILLS = [
     "submission-checker",
 ]
 REST_AGENTS = ["query-generator"]
+
+# Alle REST_SKILLS laden das gemeinsame Preamble (skills/_common/preamble.md)
+# und setzen ./academic_context.md + ./literature_state.md voraus (Issue
+# #823). Sie bekommen die context-fs-Fixture per cwd= durchgereicht, sofern
+# der Case nicht explizit "cwd": "none" setzt (Negativfall: Vorbedingung
+# bewusst ohne Kontextdateien pruefen).
+CONTEXT_FS_SKILLS = set(REST_SKILLS)
 
 
 def _collect_prompts() -> list[tuple[str, dict]]:
@@ -56,7 +64,10 @@ def test_rest_eval(component, prompt, mode):
         system = load_skill_content(component) if mode == "with_skill" else ""
     else:
         system = load_agent_content(component) if mode == "with_skill" else ""
-    output = call_claude(system=system, user=prompt["input"])
+    use_context_fs = component in CONTEXT_FS_SKILLS and prompt.get("cwd") != "none"
+    cwd = CONTEXT_FS_DIR if use_context_fs else None
+    allowed_tools = ["Read"] if use_context_fs else None
+    output = call_claude(system=system, user=prompt["input"], cwd=cwd, allowed_tools=allowed_tools)
     assert check_expected(output, prompt["expected"]), (
         f"[{component}/{mode}] {prompt['id']}: expected={prompt['expected']} actual={output[:200]}"
     )

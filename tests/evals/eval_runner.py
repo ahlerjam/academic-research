@@ -31,6 +31,13 @@ SKILLS_ROOT = Path(__file__).parent.parent.parent / "skills"
 AGENTS_ROOT = Path(__file__).parent.parent.parent / "agents"
 BASELINES_ROOT = Path(__file__).parent.parent / "baselines"
 
+# Suiteneigenes Arbeitsverzeichnis fuer die "context-fs"-Fixture (Issue #823):
+# academic_context.md, literature_state.md, writing_state.md, thematisch an
+# DevOps Governance in KMU ausgerichtet. Wird Suiten, die diese Vorbedingung
+# brauchen, per cwd= an call_claude/call_claude_with_tokens durchgereicht --
+# nicht im Repo-Root abgelegt, damit sie fuer andere Suiten unsichtbar bleibt.
+CONTEXT_FS_DIR = Path(__file__).parent / "fixtures" / "context_fs"
+
 # Harter Deckel fuer einen einzelnen CLI-Subprozess-Aufruf (Issue #631).
 # Grosszuegig wie evals/sparring-partner/record.py, damit ein haengender
 # Aufruf nicht den ganzen Testlauf blockiert.
@@ -141,14 +148,27 @@ def _log_model_used(mode: str, model: str) -> None:
     print(f"[eval_runner] mode={mode} model={model}", file=sys.stderr)
 
 
-def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
+def _run_claude_cli(
+    system: str,
+    user: str,
+    model: str,
+    *,
+    cwd: Path | str | None = None,
+    allowed_tools: list[str] | None = None,
+) -> dict[str, Any]:
     """Ruft ``claude --print`` als Subprozess auf, liefert das geparste JSON.
 
-    Muster analog ``evals/sparring-partner/record.py``: keine Tools
-    (``--allowedTools ""``), keine Projekt-/User-Settings
+    Muster analog ``evals/sparring-partner/record.py``: standardmaessig
+    keine Tools (``--allowedTools ""``), keine Projekt-/User-Settings
     (``--setting-sources ""``), damit die Umgebung des Ausfuehrungsrechners
     nicht in die Antwort einfaerbt. ``--output-format json`` liefert u.a.
     ``result``, ``is_error``, ``usage`` und ``stop_reason`` in einer Antwort.
+
+    ``cwd``/``allowed_tools`` sind optionale Achsen (Issue #823): Suiten, die
+    eine ``context-fs``-Vorbedingung (``academic_context.md`` etc.) brauchen,
+    reichen ein suiteneigenes Arbeitsverzeichnis samt ``["Read"]`` durch.
+    Default bleibt das bisherige Verhalten -- kein ``cwd`` im
+    ``subprocess.run``-Aufruf, keine Tools.
 
     Bekannte Luecke (Issue #631, AC6, weiterhin gueltig nach #716): die CLI
     kennt kein ``--temperature``-Flag (lt. ``claude --help``) -- ein
@@ -160,6 +180,14 @@ def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
             oder ``is_error: true`` in der Antwort (Auth-/Rate-Limit-/
             API-Fehler) -- unterscheidbar von einer regulaeren Antwort.
     """
+    allowed_tools_str = ",".join(allowed_tools) if allowed_tools else ""
+    run_kwargs: dict[str, Any] = {
+        "capture_output": True,
+        "text": True,
+        "timeout": CLI_TIMEOUT_SECONDS,
+    }
+    if cwd is not None:
+        run_kwargs["cwd"] = cwd
     try:
         result = subprocess.run(
             [
@@ -172,14 +200,12 @@ def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
                 "--system-prompt",
                 system,
                 "--allowedTools",
-                "",
+                allowed_tools_str,
                 "--setting-sources",
                 "",
                 user,
             ],
-            capture_output=True,
-            text=True,
-            timeout=CLI_TIMEOUT_SECONDS,
+            **run_kwargs,
         )
     except subprocess.TimeoutExpired as exc:
         raise ClaudeCliError(f"claude --print Timeout nach {CLI_TIMEOUT_SECONDS}s") from exc
@@ -204,10 +230,21 @@ def _run_claude_cli(system: str, user: str, model: str) -> dict[str, Any]:
     return parsed
 
 
-def call_claude(system: str, user: str, model: str = "claude-sonnet-4-6") -> str:
-    """Ruft Claude ueber die claude-CLI (OAuth-Session) auf, sonst Skip (Issue #716)."""
+def call_claude(
+    system: str,
+    user: str,
+    model: str = "claude-sonnet-4-6",
+    *,
+    cwd: Path | str | None = None,
+    allowed_tools: list[str] | None = None,
+) -> str:
+    """Ruft Claude ueber die claude-CLI (OAuth-Session) auf, sonst Skip (Issue #716).
+
+    ``cwd``/``allowed_tools`` (Issue #823) werden unveraendert an
+    ``_run_claude_cli`` durchgereicht -- s. dort fuer die context-fs-Achse.
+    """
     if claude_cli_available():
-        parsed = _run_claude_cli(system, user, model)
+        parsed = _run_claude_cli(system, user, model, cwd=cwd, allowed_tools=allowed_tools)
         _log_model_used("cli", model)
         return str(parsed.get("result", ""))
     pytest.skip("claude-CLI nicht verfuegbar - Eval uebersprungen")
@@ -295,6 +332,9 @@ def call_claude_with_tokens(
     system: str,
     user: str,
     model: str = "claude-sonnet-4-6",
+    *,
+    cwd: Path | str | None = None,
+    allowed_tools: list[str] | None = None,
 ) -> tuple[str, int, int]:
     """Ruft Claude auf und gibt (text, tokens_in, tokens_out) zurueck.
 
@@ -302,10 +342,11 @@ def call_claude_with_tokens(
     ``usage``-Feld aus ``claude --print --output-format json`` traegt
     input_tokens/output_tokens fuer genau diesen Aufruf (ohne die interne,
     session-weite Cache-Erstellung des Agenten-Scaffolds mitzuzaehlen).
-    Ohne CLI: pytest.skip().
+    Ohne CLI: pytest.skip(). ``cwd``/``allowed_tools`` s. ``_run_claude_cli``
+    (Issue #823).
     """
     if claude_cli_available():
-        parsed = _run_claude_cli(system, user, model)
+        parsed = _run_claude_cli(system, user, model, cwd=cwd, allowed_tools=allowed_tools)
         _log_model_used("cli", model)
         text = str(parsed.get("result", ""))
         usage = parsed.get("usage") or {}
