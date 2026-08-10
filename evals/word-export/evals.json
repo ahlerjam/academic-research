@@ -7,7 +7,7 @@
       "input": "Erstelle aus diesem Kapitel ein Word-Dokument mit echten Ueberschriften-Formatvorlagen:\n\n# Einleitung\n\nDiese Arbeit untersucht DevOps-Governance in KMU.\n\n## Motivation\n\nText.",
       "expected": {
         "type": "regex",
-        "value": "(HeadingLevel|Formatvorlage|Heading 1|Ueberschrift)"
+        "value": "(HeadingLevel|Formatvorlage|Heading 1|(Ü|Ue)berschrift)"
       },
       "mode": "with_skill"
     },

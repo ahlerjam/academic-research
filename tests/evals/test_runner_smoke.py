@@ -1,4 +1,5 @@
 """Smoke-Test fuer eval_runner.check_expected."""
+
 import pytest
 
 from tests.evals.eval_runner import check_expected
@@ -14,6 +15,27 @@ def test_substring_miss():
 
 def test_regex_match():
     assert check_expected("abc123", {"type": "regex", "value": r"\d+"})
+
+
+def test_regex_dotall_matches_across_newlines():
+    """Issue #826: ``.*`` in einer regex-Erwartung darf keine Zeilenumbrueche
+    ausschliessen. ab-01 erwartet ``(Ziel|Methode|Ergebnis).*\\b(Methode|
+    Ergebnis|Diskussion)\\b`` -- ohne re.DOTALL scheitert das strukturell an
+    jedem Absatzumbruch oder Markdown-Ueberschriften zwischen den Begriffen."""
+    output = "**Ziel:** DevOps-Adoption untersuchen.\n\n**Methode:** Interviews."
+    assert check_expected(
+        output,
+        {"type": "regex", "value": r"(Ziel|Methode|Ergebnis).*\b(Methode|Ergebnis|Diskussion)\b"},
+    )
+
+
+def test_regex_reject_dotall_matches_across_newlines():
+    """reject-Muster muessen dieselbe DOTALL-Semantik wie value bekommen."""
+    output = "Fehler:\nkeine Angabe gefunden."
+    assert not check_expected(
+        output,
+        {"type": "regex", "value": r"\w+", "reject": [r"Fehler.*gefunden"]},
+    )
 
 
 def test_json_field_exists():
