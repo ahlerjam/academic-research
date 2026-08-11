@@ -2595,7 +2595,13 @@ Der akademische Kontext wandert von Claude-Memory (`~/.claude/projects/<hash>/me
 
 Erstes getracktes Release. Monolithische 7-Phasen-Pipeline → 13 modulare Skills. Siehe Git-Historie für frühere Änderungen.
 
-[8.0.0]: https://github.com/ahlerjam/academic-research/compare/v6.7.0...v8.0.0
+<!-- Vergleichsbasis ist v5.4.0, nicht v6.7.0: die gesamte 6.x-Reihe wurde nie
+     getaggt (letzter gesetzter Tag: v5.4.0, `gh release list` leer). Ein Link auf
+     einen nie existierenden Tag laeuft auf GitHub ins Leere. Dieselbe Basis nennen
+     die Release-Notes zu 8.0.0. Die aelteren Fusszeilen-Links unten zeigen aus
+     demselben Grund teils auf fehlende Tags (v4.0.0, v5.3.0, v6.0.0-v6.5.0) --
+     gewachsene Altlast, hier bewusst nicht mitverbogen. -->
+[8.0.0]: https://github.com/ahlerjam/academic-research/compare/v5.4.0...v8.0.0
 [6.7.0]: https://github.com/ahlerjam/academic-research/compare/v6.5.0...v6.7.0
 [6.5.0]: https://github.com/ahlerjam/academic-research/compare/v6.4.0...v6.5.0
 [6.4.0]: https://github.com/ahlerjam/academic-research/compare/v6.3.0...v6.4.0
