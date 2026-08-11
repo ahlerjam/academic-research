@@ -8,6 +8,35 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Fixed
+
+- **Eval-Erwartungen, die eine korrekt orthografierte Antwort nicht treffen
+  koennen (#826):** `sc-02` (`evals/submission-checker/evals.json`) verlangte
+  als reine Substring-Erwartung `"Erklaerung"` -- ein Skill, der Deutsch mit
+  voller Orthografie schreibt, antwortet `Erklärung` und der Fall kann nie
+  bestehen (Doppelfehlschlag `with_skill`/`without_skill` am 2026-08-10 trotz
+  inhaltlich richtiger Antwort). Repo-weiter Scan auf `expected.value`/
+  `.reject` mit reiner ASCII-Transliteration ohne Umlaut-Alternative ergab
+  sieben weitere tote Zweige (`bh-p01`, `nb-02`, `pr-01`, `rr-03` [2 Muster],
+  `sc-01`, `sq-02`, `wx-01`), nach dem bewaehrten Muster
+  `(ä|ae)`/`(ü|ue)`/`(ö|oe)` umgeschrieben (Vorbild: `ai-disclosure id-01`,
+  `instrument-design id-01`). `check_expected` in `tests/evals/eval_runner.py`
+  fehlte `re.DOTALL` fuer `type=="regex"` (value UND reject) -- mehrzeilige
+  `.*`-Erwartungen wie `ab-01` konnten an jedem Absatzumbruch strukturell
+  scheitern, unabhaengig von der inhaltlichen Qualitaet der Antwort. `qr-04`
+  (`evals/quality-reviewer/evals.json`) behauptete "Kein Kriterium ist
+  verletzt" bei einem Pruefsatz mit neun statt der geforderten 15-25 Woerter
+  -- der Text wurde so erweitert, dass beide Kriterien (Satzlaenge,
+  Quellen/1000W) tatsaechlich unverletzt sind. Die "Mueller"-Faelle (`cw-04`,
+  `ce-02`, `ce-vault-02`) gegen die Fixture-Daten geprueft: `Mueller` ist dort
+  selbst ASCII geschrieben (`tests/evals/vault_fixture.py`,
+  `fixtures/context_fs/literature_state.md`) bzw. der Eval-Input liefert die
+  Schreibweise woertlich ohne Vault-Normalisierung -- keine Aenderung noetig.
+  Neuer Guard `tests/evals/test_eval_umlaut_guard.py` scannt alle
+  `evals/*/evals.json` maschinell auf dasselbe Muster und schlaegt bei neuen
+  Faellen an (verifiziert: rot auf dem alten Stand vor diesem Fix, gruen
+  danach).
+
 ### Added
 
 - **Test-Vault im CI an die Eval-Sitzung gebunden statt vault-abhaengige

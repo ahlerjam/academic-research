@@ -22,7 +22,7 @@
     },
     {
       "id": "qr-04",
-      "input": "Iteration: 2. Text: 'Die Untersuchung folgt einem qualitativen Design und stuetzt sich auf zehn leitfadengestuetzte Interviews (Mueller, 2022). Die Auswertung erfolgt inhaltsanalytisch entlang festgelegter Kategorien (Schmidt, 2023).' Kriterien: Satzlaenge 15-25, Quellen/1000W >= 5. Kein Kriterium ist verletzt.",
+      "input": "Iteration: 2. Text: 'Die Untersuchung folgt einem qualitativen Design und stuetzt sich auf zehn leitfadengestuetzte Interviews (Mueller, 2022). Die Auswertung der Interviewdaten erfolgt inhaltsanalytisch entlang zuvor induktiv und deduktiv festgelegter Kategorien nach dem Verfahren von Mayring (Schmidt, 2023).' Kriterien: Satzlaenge 15-25, Quellen/1000W >= 5. Kein Kriterium ist verletzt.",
       "expected": {"type": "regex", "value": "VERDICT:\\s*PASS"},
       "mode": "with_skill"
     }

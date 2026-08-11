@@ -165,8 +165,22 @@ def resolve_anchors(chunks: list[dict], sources: dict) -> list[dict[str, Any]]:
 
     Raises:
         ValueError: Ein Anker taucht in keinem Chunk auf (Quelltext geaendert,
-            Anker nicht nachgezogen).
+            Anker nicht nachgezogen), oder zwei Queries teilen sich dieselbe
+            ``query_id`` (handgeschriebene ``sources.json``, keine
+            automatische Vergabe -- der Vergleich zweier Laeufe meldet
+            Dubletten zwar, aber erst am naechsten Schritt; hier faellt der
+            Defekt schon beim Goldset-Bau auf).
     """
+    seen_query_ids: set[Any] = set()
+    for query in sources["queries"]:
+        query_id = query["query_id"]
+        if query_id in seen_query_ids:
+            raise ValueError(
+                f"Query-ID {query_id!r} kommt mehrfach in sources.json vor. "
+                "query_id muss ueber alle Queries eindeutig sein."
+            )
+        seen_query_ids.add(query_id)
+
     normalized = [(c["chunk_id"], _normalize(c["chunk_text"])) for c in chunks]
     queries: list[dict[str, Any]] = []
     for query in sources["queries"]:

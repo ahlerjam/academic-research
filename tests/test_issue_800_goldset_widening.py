@@ -137,6 +137,36 @@ class TestAnchorsAndIdentity:
 
 
 # ---------------------------------------------------------------------------
+# #798 AC3: doppelte query_id bricht den Goldset-Bau ab statt erst beim
+# Vergleich zweier Laeufe aufzufallen.
+# ---------------------------------------------------------------------------
+def test_resolve_anchors_rejects_duplicate_query_id() -> None:
+    from scripts.eval.build_retrieval_chunk_goldset import resolve_anchors
+
+    chunks = [{"chunk_id": "c1", "chunk_text": "Foo bar baz."}]
+    sources = {
+        "queries": [
+            {
+                "query_id": "dup-1",
+                "lang": "de",
+                "case": "same-language",
+                "query": "Wo ist Foo?",
+                "anchors": ["Foo bar"],
+            },
+            {
+                "query_id": "dup-1",
+                "lang": "de",
+                "case": "same-language",
+                "query": "Was ist baz?",
+                "anchors": ["baz"],
+            },
+        ]
+    }
+    with pytest.raises(ValueError, match="dup-1"):
+        resolve_anchors(chunks, sources)
+
+
+# ---------------------------------------------------------------------------
 # Regel 3: Trivialitätsverbot
 # ---------------------------------------------------------------------------
 class TestNoTrivialLexicalMatch:
