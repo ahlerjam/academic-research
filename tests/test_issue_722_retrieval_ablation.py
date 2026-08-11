@@ -13,7 +13,6 @@ Der volle Live-Lauf (echte e5-/bge-reranker-Vektoren) ist manuell:
 from __future__ import annotations
 
 import json
-import sqlite3
 
 import pytest
 from academic_vault.db import VaultDB
@@ -214,15 +213,18 @@ def test_search_papers_pre_702_returns_empty_for_pure_operator_query(tmp_path) -
     assert search_papers_pre_702(db_path, "   ", k=5) == []
 
 
-def test_fts5_comma_defect_is_a_real_pre_existing_production_bug(tmp_path) -> None:
-    """Dokumentiert den in docs/evals/retrieval-ablation-722.md beschriebenen
-
-    Fund: ``db._sanitize_fts5_query`` haertet kein Komma ab, FTS5 MATCH
-    bricht dann mit ``sqlite3.OperationalError`` ab -- reproduzierbar ueber
-    die PRODUKTIONSFUNKTION ``server.search_papers`` selbst, nicht nur ueber
-    den #722-Harness. Dieser Test ist eine Beleg-, keine Regressionsschranke:
-    er darf rot werden, sobald `#area/vault` den Defekt behebt (kein
-    ``xfail`` -- ein reflexhaft gruen gehaltener Beleg waere nutzlos).
+def test_fts5_comma_defect_is_fixed_no_longer_a_production_bug(tmp_path) -> None:
+    """Der in docs/evals/retrieval-ablation-722.md dokumentierte Fund
+    (``db._sanitize_fts5_query`` haertete kein Komma ab, FTS5 MATCH brach mit
+    ``sqlite3.OperationalError`` ab) ist seit #841 BEHOBEN: der Sanitizer
+    quotet unsichere Tokens (u.a. das Komma-Token) als FTS5-Stringliteral
+    statt sie unbehandelt durchzureichen. Dieser Test war urspruenglich ein
+    Beleg-, kein Regressionstest (durfte laut eigenem Docstring rot werden,
+    sobald der Defekt behoben ist -- das ist jetzt eingetreten) und wird hier
+    zur Regressionsschranke umgedreht: ``search_papers`` (die
+    PRODUKTIONSFUNKTION, nicht nur der #722-Harness) darf bei einer
+    Komma-Query weder abstuerzen noch leer bleiben, wenn ein passendes Paper
+    existiert -- der Treffer muss trotz Komma gefunden werden.
     """
     from academic_vault.server import search_papers
 
@@ -230,6 +232,7 @@ def test_fts5_comma_defect_is_a_real_pre_existing_production_bug(tmp_path) -> No
     db = VaultDB(db_path)
     db.init_schema()
     db.add_paper(paper_id="p1", csl_json=json.dumps({"title": "x", "type": "article-journal"}))
-    db.set_fulltext("p1", "irgendein Text")
-    with pytest.raises(sqlite3.OperationalError):
-        search_papers(db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, rerank=False)
+    db.set_fulltext("p1", "wie erkennt man frueh dass etwas fehlt")
+    # Wirft NICHT mehr sqlite3.OperationalError -- das ist der eigentliche Test.
+    results = search_papers(db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, rerank=False)
+    assert any(r["paper_id"] == "p1" for r in results)

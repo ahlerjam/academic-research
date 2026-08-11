@@ -89,6 +89,27 @@ LATEX_COMMAND_RE = re.compile(
 _LATEX_COMMAND_RE = LATEX_COMMAND_RE
 
 
+#: Selektive Zeichen — kein _ da es fuer *_kursiv_* Syntax verwendet wird.
+#: Als dict + Single-Pass-Regex (statt sequenzieller .replace()-Aufrufe):
+#: die Ersetzung fuer "\" fuegt selbst literale "{" "}" ein
+#: (\textbackslash{}) -- ein nachfolgender .replace("{", ...) wuerde diese
+#: erneut escapen (Doppel-Escaping, siehe Finding #14 der Review). Ein
+#: einziger regex.sub()-Scan ueber den ORIGINALTEXT trifft jedes Sonderzeichen
+#: genau einmal; bereits eingefuegter Ersatztext wird nicht erneut gescannt.
+_PARA_SPECIAL_MAP: dict[str, str] = {
+    "\\": r"\textbackslash{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "^": r"\textasciicircum{}",
+    "~": r"\textasciitilde{}",
+    "{": r"\{",
+    "}": r"\}",
+}
+_PARA_SPECIAL_RE = re.compile("|".join(re.escape(c) for c in _PARA_SPECIAL_MAP))
+
+
 def _escape_tex_text(text: str) -> str:
     """Escaped LaTeX-Sonderzeichen in Paragraph-Text.
 
@@ -99,22 +120,9 @@ def _escape_tex_text(text: str) -> str:
     Bereits im Markdown vorhandene LaTeX-Kommandos (z. B. \\cite{key}) werden
     erkannt und unveraendert durchgereicht statt escaped (Issue #386).
     """
-    # Selektive Zeichen — kein _ da es fuer *_kursiv_* Syntax verwendet wird
-    PARA_SPECIAL = [
-        ("\\", r"\textbackslash{}"),
-        ("&", r"\&"),
-        ("%", r"\%"),
-        ("$", r"\$"),
-        ("#", r"\#"),
-        ("^", r"\textasciicircum{}"),
-        ("~", r"\textasciitilde{}"),
-    ]
 
     def escape_plain(segment: str) -> str:
-        result = segment
-        for char, replacement in PARA_SPECIAL:
-            result = result.replace(char, replacement)
-        return result
+        return _PARA_SPECIAL_RE.sub(lambda m: _PARA_SPECIAL_MAP[m.group(0)], segment)
 
     parts: list[str] = []
     last_end = 0

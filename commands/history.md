@@ -95,23 +95,34 @@ Ablauf:
 
 ```bash
 ~/.academic-research/venv/bin/python -c "
-import sys
+import json, sys
 sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}')
-from academic_vault.server import restore_snapshot
-ok = restore_snapshot(
+from academic_vault.db import default_db_path
+from academic_vault.server import restore_snapshot_report
+# db_path ausdruecklich uebergeben (default_db_path() = kanonischer Live-Vault-Pfad,
+# beachtet VAULT_DB_PATH): restore_snapshot_report() raet NIE selbst auf einen
+# DB-Zielpfad (Datenverlust-Vorfall 11.08.2026), ohne db_path wuerde die vault.db
+# NICHT zurueckgespielt, nur uebergangen.
+report = restore_snapshot_report(
     slug='<slug>',
     ts='<ts>',
-    target_dir='<CLAUDE_PROJECT_DIR>'
+    target_dir='<CLAUDE_PROJECT_DIR>',
+    db_path=default_db_path(),
 )
-print('Wiederhergestellt.' if ok else 'Fehler: Snapshot nicht gefunden.')
+print(json.dumps(report, ensure_ascii=False))
 "
 ```
 
-4. Erfolg/Fehler ausgeben:
-   - Erfolg: `✅ Snapshot <ts> wiederhergestellt in <CLAUDE_PROJECT_DIR>`
-   - Fehler: `❌ Snapshot <ts> nicht gefunden unter ~/.academic-research/snapshots/<slug>/`
+4. Ergebnis auswerten (`report` ist das JSON-Objekt aus Schritt 3) — **`ok` allein sagt
+   nichts darueber aus, ob die vault.db zurueckgespielt wurde**; das steht ausschliesslich
+   in `vault_db_restored`/`vault_db_skipped`/`error`:
+   - `report['error']` gesetzt → `❌ <error>` ausgeben (z. B. `❌ Snapshot nicht gefunden: ~/.academic-research/snapshots/<slug>/<ts>.tgz` oder die Meldung aus `vault_db_skipped`, falls das der einzige Snapshot-Inhalt war).
+   - `report['ok']` ist `true` UND `report['vault_db_restored']` ist gesetzt →
+     `✅ Snapshot <ts> wiederhergestellt in <CLAUDE_PROJECT_DIR> — vault.db zurückgespielt nach <vault_db_restored> (Sicherung des bisherigen Bestands: <vault_db_backup, oder "keine — Vault existierte noch nicht">).`
+   - `report['ok']` ist `true` UND `report['vault_db_restored']` ist `null` (Snapshot enthielt keine vault.db) →
+     `✅ Snapshot <ts> wiederhergestellt in <CLAUDE_PROJECT_DIR> (Snapshot enthielt keine vault.db, nur Projektdateien).`
 
-**Hinweis:** Vor der Wiederherstellung werden aktuelle Dateien überschrieben. Empfehlung: Neuen Snapshot erstellen bevor --restore ausgeführt wird.
+**Hinweis:** Vor der Wiederherstellung werden aktuelle Dateien überschrieben. Die bestehende `vault.db` wird dabei automatisch als `vault.db.<YYYYMMDD-HHMMSS>.bak` neben sich gesichert, bevor sie überschrieben wird — trotzdem Empfehlung: Neuen Snapshot erstellen bevor --restore ausgeführt wird.
 
 ## Session-Wiederherstellung (`--restore-session <id>`)
 

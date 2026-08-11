@@ -578,6 +578,82 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Fixed
 
+- **Vollrepo-Review: still ausfallende Guards, Vault-Datenintegritaet und
+  Test-Isolation gehaertet (#857).** Ein `/code-review max` ueber das gesamte
+  Repo (60 Agenten, jeder Fundort adversarisch gegengeprueft) ergab 54
+  verifizierte Befunde; ein zweiter Review gegen die entstandenen Fixes fand
+  darin nochmals 10 Regressionen. Beide Runden sind hier behoben.
+
+  Leitmuster war eine Klasse von Defekten, die per Definition unsichtbar ist:
+  *ein Guard faellt aus und meldet nichts*. `hooks/verbatim-guard.mjs` rief den
+  Vault ueber ein hartkodiertes `python3` statt ueber die Interpreter-Kaskade
+  aus `hooks/lib/vault-bridge.mjs` — auf dem PATH-Python (macOS 3.9.6) scheitert
+  der `academic_vault`-Import, alle drei Lookups landeten im Fail-open, und ein
+  Kapitel-Write mit frei erfundenem Zitat verliess den Hook mit Exit 0 statt zu
+  blockieren. Der zugehoerige Smoke-Test konnte das strukturell nicht fangen,
+  weil seine Fixture den funktionierenden venv-Python in den PATH stellte.
+  Ebenso: `verify_citations()` war der einzige Read-Pfad ohne
+  `_ensure_schema_for_read()` (auf frischem Vault `no such table: papers`, vom
+  Hook in ein Fail-open je Zitat uebersetzt), `exportVaultSnapshot()` in
+  `hooks/pre-compact.mjs` war toter Code (PreCompact-Snapshots enthielten nie
+  die Vault-DB), und `restore_snapshot()` entpackte `vault.db` nach CWD, wo sie
+  niemand liest, meldete aber `True`.
+
+  Vault-Datenintegritaet: `add_quote()` liess `printed_page` stale, wenn die
+  Verifikation eine andere `pdf_page` ergab (Folge: korrekte Zitate wurden
+  spaeter als `page-mismatch` hart geblockt); `normalize_number()` wies ueber
+  float64 + 10-Stellen-Rundung verschiedene Zahlen als gleich aus und lehnte
+  zugleich legitime Werte ab (U+2212, Tausendertrenner) — jetzt `Decimal` mit
+  Negation im erweiterten Kontext; vier Schreibmethoden umgingen
+  `_raise_if_locked()`, sodass ein gesperrter Material-Passport weiterhin
+  Seitenzahlen verschieben liess.
+
+  Laute False Positives: `_sanitize_fts5_query` liess `.` `,` `?` `'` durch, was
+  jede Suchanfrage mit Satzzeichen mit `fts5: syntax error` abbrechen liess
+  (jetzt Tokenisierung an Nicht-Wortzeichen, implizites UND statt
+  Adjazenz-Zwang); der Quote-Scan lief auf ungemaskertem Inhalt, sodass ein
+  eigenes Literaturverzeichnis oder ein Code-Fence den Write blockierte — die
+  Maskierung entscheidet jetzt nur noch, *welche* Fundstellen uebersprungen
+  werden, nachgeschlagen wird der Originaltext.
+
+  Ausserdem: `apply_verdicts.py` (Join scheiterte bei nullbaren `file`/`line`,
+  refutierte Blocker wurden nie entfernt), Decision-Log-Hash ueber das
+  Edit-Fragment statt die Datei, `check_retractions` ignorierte
+  `ACADEMIC_CHAPTER_DIR`, `render_tex.py` escapte `{`/`}` nicht trotz
+  gegenteiliger Zusage im Docstring, zwei Hooks mit eigener
+  Interpreter-Kaskade ohne Budget gegen ihr Hook-Timeout, und ein
+  Python-Subprozess je Zitat im verbatim-guard (jetzt ein gebuendelter Lookup).
+
+- **Testsuite kann nicht mehr in echte Nutzerpfade schreiben (#857).** Waehrend
+  der Verifikation leerte ein Testlauf die echte Vault dieser Maschine: der
+  neue `restore_snapshot`-Pfad fiel ohne explizites Ziel auf
+  `default_db_path()` zurueck, und das bereits vorhandene
+  `tests/test_history_restore.py` ruft ohne `VAULT_DB_PATH` auf. Daten wurden
+  aus dem automatischen Backup wiederhergestellt. Zwei Konsequenzen: `db_path`
+  ist in `restore_snapshot_report()`/`restore_snapshot()` jetzt **keyword-only
+  ohne Fallback** — ohne ausdrueckliches Ziel bleibt `vault.db` unangetastet
+  und der Report sagt das unter `vault_db_skipped`, waehrend die MCP-Tool-
+  Schicht den Live-Pfad selbst aufloest und ausdruecklich uebergibt (Fund 8
+  bleibt also behoben). Und `tests/conftest.py` bekam einen dreischichtigen
+  Schutzwall: HOME-Umleitung je Test, `sys.addaudithook` gegen Schreibzugriffe
+  auf `~/.academic-research` in-process (noetig, weil `_DEFAULT_DB` und die
+  MCP-Closures zur Importzeit eingefroren werden und eine reine
+  Env-Umleitung sie nicht erwischt), plus ein Fingerabdruck-Vergleich vor/nach
+  jedem Test als `pytest_runtest_call`-Hookwrapper, der auch Subprozesse
+  erfasst und einen Datenverlust zum echten Testfehlschlag macht.
+
+- **Eval-Baselines konservierten den FTS5-Defekt (#857).** Der Sanitizer-Fix
+  verbessert das Retrieval messbar — `recall_at_10` 0.5667 -> 0.8667,
+  `ndcg_at_10` 0.5282 -> 0.7608, `by_case language-gap` 0.0714 -> 0.7143. Die
+  eingecheckten Rohdaten in `docs/evals/` stammten aus Laeufen MIT dem Defekt
+  und wurden neu gemessen (hermetisch ueber den Playback-Embedder der Fixture,
+  kein Netz, kein API-Schluessel; Reproduzierbarkeit ueber variierende
+  `PYTHONHASHSEED` geprueft, die gegatterten Bloecke sind bytegleich). Zwei
+  Tests, die den Defekt als Baseline festschrieben — darunter einer, der
+  ausdruecklich `sqlite3.OperationalError` erwartete — wurden nach dem Muster
+  aus #722/#789 zu Regressionswaechtern umgebaut statt geloescht oder
+  geskippt.
+
 - **Trigger-Recall `humanizer-de`/`title-generator`: Mess-Harness gehaertet
   statt Beschreibung/Goldset geraten (#825).** Live-Diagnose (echte
   `claude`-CLI-Aufrufe, `claude-haiku-4-5`, volle Rohausgabe je Fehlschlag

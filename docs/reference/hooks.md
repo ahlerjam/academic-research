@@ -13,7 +13,7 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `PreToolUse` (`Write\|Edit\|MultiEdit`) | `context-fidelity-guard.mjs` | Markiert Zitate, deren echter Quellkontext der Kapitelverwendung widerspricht (Quote-Mining) |
 | `PostToolUse` (`Write\|Edit\|MultiEdit`) | `post-tool-use-decisions.mjs` | Decision-Log: jede `.md`-Änderung wird im Vault protokolliert |
 | `PostToolUse` (`Write\|Edit\|MultiEdit`) | `nli-quote-scan.mjs` | NLI-Zitatscan: stößt nach einem Kapitel-Write den Scan aller belegten Zitate an und meldet Fundstellen |
-| `PreCompact` | `pre-compact.mjs` | Snapshot-Backup vor Claude-Compaction |
+| `PreCompact` | `pre-compact.mjs` | Snapshot-Backup vor Claude-Compaction (State-Dateien + `vault.db`) |
 | `UserPromptSubmit` | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln (nach ~20 Nachrichten) |
 | `UserPromptSubmit` | `nli-quote-scan.mjs` | Nachreichen offener Zitatscan-Befunde (nur Abholung, kein neuer Scan) |
 | `SessionStart` (kein Matcher) | *(Inline-Bash)* | Prüft, ob `~/.academic-research/venv` existiert und die Kernpakete importierbar sind |
@@ -61,7 +61,21 @@ versehentlich mitzählt oder löscht, kennzeichnet `session-snapshot.mjs` seine
 eigenen Exporte mit dem Suffix `.session.tgz` und prunt ausschließlich danach
 (Audit-Finding, PR #650 — blindes Pruning aller `.tgz` unabhängig von der
 Herkunft konnte fremde, potenziell vault-haltige Snapshots vorzeitig
-verdrängen). Die Marker-Datei selbst ist vom Pruning ausgenommen. Ein
+verdrängen). Die Marker-Datei selbst ist vom Pruning ausgenommen.
+
+`pre-compact.mjs` folgt seit #857 derselben Konvention mit dem Suffix
+`.precompact.tgz` und prunt ebenfalls nur die eigenen Dateien (gleiches
+`ACADEMIC_SNAPSHOTS_KEEP`). Nötig wurde das, weil der PreCompact-Snapshot seit
+demselben Change tatsächlich die vollständige `vault.db` enthält (der Export
+war zuvor toter Code): ohne Kennzeichnung wuchs das Snapshot-Verzeichnis bei
+jeder Auto-Compaction um eine komplette DB-Kopie, die kein Pruning-Filter je
+erfasst hätte. Kollidieren zwei Läufe in derselben Minute, weicht der Hook auf
+`<ts>-1.precompact.tgz`, `<ts>-2…` aus, statt den vorhandenen — potenziell
+vault-haltigen — Tarball zu kürzen; dasselbe Schema nutzt
+`academic_vault.server.export_snapshot()`. `restore_snapshot` löst einen
+Zeitstempel entsprechend auf alle gültigen Namensformen auf (`<ts>.tgz`,
+`<ts>-<n>.tgz`, `.precompact`/`.session`-gekennzeichnete), sonst wären genau
+die vault-haltigen Snapshots über `/history --restore` unerreichbar. Ein
 Fehlschlag beim Export (z. B. kein funktionierender
 Python-Interpreter erreichbar) bricht die Sitzung nicht ab: `exit 0`, aber
 eine sichtbare `⚠️`-Meldung auf stderr, und der Marker bleibt unverändert
@@ -103,7 +117,9 @@ Kapitelordner `Kapitel/` statt `kapitel/` hieß.
 Das Kapitelverzeichnis selbst ist über `ACADEMIC_CHAPTER_DIR` konfigurierbar
 (Default weiterhin `"kapitel"`, unverändertes Verhalten ohne die Variable) —
 für Projekte, die ihren Ordner `chapters/`, `manuskript/` oder `text/`
-nennen.
+nennen. `academic_vault.server.check_retractions()` (Issue #604) honoriert
+denselben Override über die gleiche Trim-Semantik (`_chapter_dirname()`) —
+sonst schützten Guards und Retraction-Prüfung unterschiedliche Verzeichnisse.
 
 **Sichtbare Meldung statt stillem Durchlass:** Schreibt `Write`/`Edit`/
 `MultiEdit` eine `.md`- oder `.tex`-Datei außerhalb der geschützten Menge, gibt

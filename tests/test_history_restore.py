@@ -8,8 +8,19 @@ CLAUDE_PROJECT_DIR).
 
 Diese Tests pruefen die Vault-seitige export_snapshot-Funktion direkt
 (nicht den history-Command-Parser, der Markdown ist).
+
+ISOLATION: jeder Aufruf hier benennt seine Pfade ausdruecklich --
+``db_path``/``snapshots_dir``/``target_dir`` zeigen ausnahmslos in ``tmp_path``.
+Das ist Absicht und kein Zufall: bis zum 11.08.2026 rief
+``test_restore_snapshot_extracts_files`` ohne ``db_path`` auf, worauf
+``restore_snapshot`` auf ``default_db_path()`` zurueckfiel und den ECHTEN Vault
+unter ``~/.academic-research/projects/<slug>/vault.db`` mit tmp-Testdaten
+ueberschrieb. Der Rateweg ist inzwischen aus dem Produktionscode entfernt und
+der Schutzwall in tests/conftest.py wuerde es zusaetzlich abfangen -- diese
+Datei soll aber auch ohne beides sicher sein.
 """
 
+import sqlite3
 import tarfile
 from pathlib import Path
 
@@ -125,14 +136,43 @@ def test_export_snapshot_failopen_when_dir_missing(tmp_path, temp_vault_db):
     # Entweder None oder leer — kein Crash
 
 
+def _markiere_vault(db_path: str, marke: str) -> None:
+    """Schreibt eine erkennbare Marke in die DB, damit der Rundlauf pruefbar ist."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS restore_probe (marke TEXT)")
+        conn.execute("DELETE FROM restore_probe")
+        conn.execute("INSERT INTO restore_probe (marke) VALUES (?)", (marke,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _lies_marke(db_path: str) -> str | None:
+    conn = sqlite3.connect(db_path)
+    try:
+        zeile = conn.execute("SELECT marke FROM restore_probe").fetchone()
+    finally:
+        conn.close()
+    return zeile[0] if zeile else None
+
+
 def test_restore_snapshot_extracts_files(tmp_path, temp_vault_db):
-    """restore_snapshot extrahiert Tarball in Zielverzeichnis."""
-    from academic_vault.server import export_snapshot, restore_snapshot
+    """restore_snapshot stellt State-Dateien UND die Vault-DB wieder her.
+
+    Das Ziel der DB ist ausdruecklich benannt (``db_path``) und liegt im
+    tmp-Baum. Genau dieser Test rief frueher ohne ``db_path`` auf und schrieb
+    dadurch in den ECHTEN Vault (Datenverlust 11.08.2026); dass es unbemerkt
+    blieb, lag daran, dass er nur ``academic_context.md`` geprueft hat. Der
+    vault.db-Rundlauf wird deshalb jetzt mitgeprueft.
+    """
+    from academic_vault.server import export_snapshot, restore_snapshot_report
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     (project_dir / "academic_context.md").write_text("# Original Kontext")
     (project_dir / "literature_state.md").write_text("# Original Literatur")
+    _markiere_vault(temp_vault_db, "original-vault")
 
     snapshots_dir = tmp_path / "snapshots"
     export_snapshot(
@@ -150,17 +190,90 @@ def test_restore_snapshot_extracts_files(tmp_path, temp_vault_db):
     assert len(tarballs) == 1
     ts = tarballs[0].stem  # Dateiname ohne .tgz
 
-    # Restore
-    restore_snapshot(
+    # Restore — DB-Ziel ausdruecklich in den tmp-Baum, nie in den Live-Vault.
+    db_ziel = tmp_path / "restored-vault.db"
+    report = restore_snapshot_report(
         slug="restore-test",
         ts=ts,
         snapshots_dir=str(snapshots_dir),
         target_dir=str(project_dir),
+        db_path=str(db_ziel),
     )
+
+    assert report["ok"] is True, f"Restore fehlgeschlagen: {report}"
 
     # Datei muss wiederhergestellt sein
     restored = (project_dir / "academic_context.md").read_text()
     assert "Original" in restored, f"Restore fehlgeschlagen: {restored!r}"
+
+    # Vault-DB: an das benannte Ziel geschrieben und inhaltlich die alte.
+    assert report["vault_db_restored"] == str(db_ziel), report
+    assert report["vault_db_skipped"] is None, report
+    assert db_ziel.exists(), f"vault.db nicht nach {db_ziel} geschrieben"
+    assert _lies_marke(str(db_ziel)) == "original-vault", "vault.db-Rundlauf fehlgeschlagen"
+
+
+def test_restore_snapshot_ohne_db_path_ruehrt_keine_datenbank_an(tmp_path, temp_vault_db):
+    """Ohne ``db_path`` wird die vault.db uebergangen statt geraten.
+
+    Regression zum Datenverlust vom 11.08.2026: die Vorgaengerfassung fiel auf
+    ``default_db_path()`` zurueck und ueberschrieb damit
+    ``~/.academic-research/projects/<slug>/vault.db``. Heute gibt es diesen
+    Rateweg nicht mehr -- ohne ausdruecklichen Zielpfad wird die DB weder
+    entpackt noch geschrieben, und der Report sagt das.
+    """
+    from academic_vault.server import export_snapshot, restore_snapshot_report
+
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / "academic_context.md").write_text("# Original Kontext")
+    _markiere_vault(temp_vault_db, "original-vault")
+
+    snapshots_dir = tmp_path / "snapshots"
+    export_snapshot(
+        db_path=temp_vault_db,
+        slug="ohne-db-path",
+        project_dir=str(project_dir),
+        snapshots_dir=str(snapshots_dir),
+    )
+    ts = list((snapshots_dir / "ohne-db-path").glob("*.tgz"))[0].stem
+
+    ziel = tmp_path / "ziel"
+    report = restore_snapshot_report(
+        slug="ohne-db-path",
+        ts=ts,
+        snapshots_dir=str(snapshots_dir),
+        target_dir=str(ziel),
+    )
+
+    # State-Dateien kommen normal an ...
+    assert report["ok"] is True, report
+    assert (ziel / "academic_context.md").exists()
+
+    # ... die DB dagegen ausdruecklich nicht.
+    assert report["vault_db_restored"] is None, report
+    assert report["vault_db_backup"] is None, report
+    assert report["vault_db_skipped"], "Uebergehen der vault.db wurde nicht gemeldet"
+    assert "db_path" in report["vault_db_skipped"], report["vault_db_skipped"]
+
+    # Nirgendwo im Zielbaum darf eine vault.db aufschlagen.
+    assert not list(ziel.rglob("vault.db")), (
+        f"vault.db wurde doch entpackt: {list(ziel.rglob('vault.db'))}"
+    )
+
+
+def test_restore_snapshot_nimmt_db_path_nicht_positional(tmp_path):
+    """``db_path`` ist keyword-only -- ein durchgereichtes Positionsargument
+    darf nie versehentlich zum DB-Ziel werden."""
+    import inspect
+
+    from academic_vault.server import restore_snapshot, restore_snapshot_report
+
+    for funktion in (restore_snapshot, restore_snapshot_report):
+        parameter = inspect.signature(funktion).parameters["db_path"]
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (
+            f"{funktion.__name__}: db_path ist nicht keyword-only ({parameter.kind})"
+        )
 
 
 # ---------------------------------------------------------------------------

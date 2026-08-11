@@ -68,9 +68,20 @@ def _caller_texts() -> list[tuple[Path, str]]:
 
 
 def _callers_of(tool: str, texts: list[tuple[Path, str]]) -> list[str]:
-    """Dateien, die ``tool`` in einer der drei akzeptierten Formen referenzieren."""
+    """Dateien, die ``tool`` in einer der akzeptierten Formen referenzieren.
+
+    Die Python-Form akzeptiert neben ``<tool>(`` auch ``<tool>_report(``: einige
+    MCP-Tools sind duenne Huellen um eine ``_report``-Variante, die dasselbe tut,
+    aber statt eines Bool das vollstaendige Ergebnis-dict liefert (``restore_snapshot``
+    -> ``restore_snapshot_report``, #857). Ein Aufrufer, der die Report-Variante
+    nutzt, ruft dieselbe Operation auf und ist damit kein verwaistes Tool -- worum
+    es diesem Test geht. ``commands/history.md`` etwa muss den Python-Weg nehmen
+    (``allowed-tools`` erlaubt dort bewusst kein MCP), weil ``/history --restore``
+    gerade dann tragen muss, wenn die Vault beschaedigt ist und der MCP-Server
+    womoeglich nicht startet.
+    """
     workflow_form = re.compile(rf"(?:vault\.{tool}\(|mcp__academic-vault__vault_{tool}\b)")
-    python_form = re.compile(rf"(?<![\w]){tool}\(")
+    python_form = re.compile(rf"(?<![\w]){tool}(?:_report)?\(")
     callers = []
     for path, text in texts:
         if workflow_form.search(text) or ("academic_vault" in text and python_form.search(text)):

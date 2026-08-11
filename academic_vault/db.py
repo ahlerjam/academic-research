@@ -553,32 +553,66 @@ def escape_like(value: str) -> str:
 _FTS5_OPERATOR_KEYWORDS = re.compile(r"\b(?:NEAR|AND|OR|NOT)\b")
 
 
+# Wort-Token fuer FTS5-Queries: ``\w`` deckt unter Unicode ASCII-Alnum,
+# Unterstrich UND alle Unicode-Wortzeichen ab (Umlaute, ss, Akzente) -- jedes
+# andere Zeichen (Bindestrich, Slash, Klammer, Doppelpunkt, Satzzeichen, Stern,
+# Anfuehrungszeichen) TRENNT. Damit ist jedes erzeugte Token per Konstruktion
+# ein legales FTS5-Bareword: laut SQLite-FTS5-Doku (``https://devdocs.io/sqlite/fts5``,
+# Abschnitt "FTS5 Strings", per context7 verifiziert) bestehen Barewords
+# ausschliesslich aus ASCII-Buchstaben/-Ziffern, Unterstrich und Zeichen
+# >= 0x80 -- eine echte Obermenge von ``\w``.
+_FTS5_WORD_TOKEN = re.compile(r"\w+", re.UNICODE)
+
+
 def _sanitize_fts5_query(query: str) -> str:
     """Bereinigt Query fuer sichere FTS5-MATCH-Ausfuehrung.
 
-    FTS5-Sonderzeichen die Probleme verursachen: - / ^ * " ( ) sowie der
-    Column-Filter-Operator ':'. Zusaetzlich werden die booleschen
-    Operator-Keywords NEAR/AND/OR/NOT (nur in Grossschreibung
-    operatorwirksam) neutralisiert, damit usergenerierte Strings nicht
-    versehentlich als FTS5-Syntax interpretiert werden und einen
-    Query-Crash ausloesen.
+    Eine Blacklist einzelner Sonderzeichen verliert strukturell immer wieder
+    gegen die Menge an Zeichen, die in einem FTS5-Bareword illegal sind (u.a.
+    ``. , ? ' ! % ; = [ @ # & | ~ \\ < >`` -- Issue #841 zeigt das an
+    ``"Was ist DevOps-Governance?"``, ``"Web 2.0"``, ``"Governance, Praxis"``
+    und ``"it's governance"``, die alle mit ``sqlite3.OperationalError: fts5:
+    syntax error`` abstuerzten, obwohl die alte Blacklist bereits ``-^/*():"``
+    entfernte). Strategie daher nicht "verbotene Zeichen raus", sondern
+    "an allem zerlegen, was kein Wortzeichen ist" (:data:`_FTS5_WORD_TOKEN`):
+    uebrig bleiben ausschliesslich legale Barewords, die per Leerzeichen
+    verbunden werden. Die Query ist damit fuer beliebigen User-Input
+    syntaktisch immer gueltig, und kein Zeichen mit Operator-Bedeutung
+    (``: * ^ ( ) " -``) ueberlebt -- die Schutzabsicht aus Issue #196 bleibt
+    ohne Zeichen-Blacklist erhalten.
 
-    Strategie: Sonderzeichen und Operator-Keywords durch Leerzeichen
-    ersetzen, Mehrfach-Leerzeichen kollabieren. Kleingeschriebene Woerter
-    wie 'android' oder 'and' bleiben unangetastet — nur die in FTS5
-    operatorwirksamen Grossschreibungen werden entfernt.
+    Bewusst NICHT gewaehlt: das ganze Whitespace-Token als FTS5-Stringliteral
+    quoten (``DevOps-Governance`` -> ``"DevOps-Governance"``). Ein
+    Stringliteral mit mehreren Tokens ist in FTS5 eine PHRASE mit
+    Adjazenz-Zwang; sie faende nur noch Text, in dem die Woerter unmittelbar
+    hintereinander stehen. ``Governance von DevOps in KMU`` fiele damit aus
+    der Trefferliste (die alte Blacklist fand es, weil sie den Bindestrich zu
+    Whitespace machte), ``Mueller/Schmidt`` faende kein ``Schmidt und
+    Mueller``, und ``Governance, Praxis`` machte im Trigram-Zweig das Komma
+    zum Pflicht-Substring. Das Zerlegen liefert stattdessen ``DevOps
+    Governance`` -- implizites UND und damit derselbe Recall wie vor #841.
+
+    Kurze Tokens bleiben unquotiert und damit bytegleich zum Verhalten vor
+    #841 -- wichtig, weil ``server._trigram_match_expression()`` die
+    Tokenlaenge der sanitisierten Query auswertet (Issue #703, AK5): ein
+    gequotetes ``"KMU"`` waere 2 Zeichen laenger als das Bareword ``KMU`` und
+    haette die dortige Laengenschwelle falsch ausgeloest.
+
+    Die booleschen Operator-Keywords NEAR/AND/OR/NOT werden VOR dem Zerlegen
+    entfernt (nur in Grossschreibung operatorwirksam) -- so bleibt das
+    bisherige Verhalten erhalten, dass usergenerierte Grossschreib-Operatoren
+    nicht als literale Suchbegriffe landen. Kleingeschriebene Woerter wie
+    'android' oder 'and' bleiben unangetastet.
 
     Gemeinsam genutzt von server.search_papers() und VaultDB.search_notes()
     (Issue #462) -- lebt hier statt in server.py, weil VaultDB (db.py) nicht
     von server.py importieren darf (Zirkularimport).
     """
-    # FTS5-Sonderzeichen entfernen/ersetzen: -, ^, /, *, (, ), ", :
-    sanitized = re.sub(r'[-^/*():"]', " ", query)
-    # Boolesche Operator-Keywords (Grossschreibung) neutralisieren
-    sanitized = _FTS5_OPERATOR_KEYWORDS.sub(" ", sanitized)
-    # Mehrfache Leerzeichen zusammenfassen
-    sanitized = re.sub(r"\s+", " ", sanitized).strip()
-    return sanitized
+    # Boolesche Operator-Keywords (Grossschreibung) neutralisieren, BEVOR
+    # tokenisiert wird -- sonst landeten sie als literale Suchbegriffe im
+    # Ergebnis, statt zu verschwinden.
+    without_operators = _FTS5_OPERATOR_KEYWORDS.sub(" ", query)
+    return " ".join(_FTS5_WORD_TOKEN.findall(without_operators))
 
 
 def project_slug(cwd: str | None = None) -> str:
@@ -1066,12 +1100,22 @@ class VaultDB:
         return dict(row)
 
     def set_page_offset(self, paper_id: str, offset: int) -> None:
-        """Setzt page_offset fuer ein Paper."""
+        """Setzt page_offset fuer ein Paper.
+
+        Raises:
+            ValueError: ``paper_id`` verweist auf kein bestehendes Paper.
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock,
+                Issue #380/#407) -- ein gesperrter Passport darf keine
+                Seitenzitate mehr verschieben.
+        """
         with self._connection(commit=True) as conn:
-            conn.execute(
+            self._raise_if_locked(conn)
+            cursor = conn.execute(
                 "UPDATE papers SET page_offset = ?, updated_at = ? WHERE paper_id = ?",
                 (offset, int(time.time()), paper_id),
             )
+            if cursor.rowcount == 0:
+                raise ValueError(f"vault.set_page_offset: Paper '{paper_id}' nicht gefunden")
 
     def get_page_offset(self, paper_id: str) -> int:
         """Gibt page_offset fuer ein Paper zurueck. Fallback: 0."""
@@ -1119,12 +1163,21 @@ class VaultDB:
         (``server.check_retractions()``) -- ein Crossref-Ausfall darf den
         Zeitstempel nicht vorruecken, sonst wuerde der naechste Lauf faelschlich
         annehmen, das Paper sei bereits aktuell geprueft.
+
+        Raises:
+            ValueError: ``paper_id`` verweist auf kein bestehendes Paper.
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
         """
         with self._connection(commit=True) as conn:
-            conn.execute(
+            self._raise_if_locked(conn)
+            cursor = conn.execute(
                 "UPDATE papers SET retraction_checked_at = ? WHERE paper_id = ?",
                 (checked_at, paper_id),
             )
+            if cursor.rowcount == 0:
+                raise ValueError(
+                    f"vault.update_retraction_checked_at: Paper '{paper_id}' nicht gefunden"
+                )
 
     # ------------------------------------------------------------------
     # Quotes CRUD
@@ -1703,20 +1756,36 @@ class VaultDB:
         return "unknown"
 
     def set_ocr_done(self, paper_id: str, value: int = 1) -> None:
-        """Setzt ocr_done-Flag fuer ein Paper."""
+        """Setzt ocr_done-Flag fuer ein Paper.
+
+        Raises:
+            ValueError: ``paper_id`` verweist auf kein bestehendes Paper.
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+        """
         with self._connection(commit=True) as conn:
-            conn.execute(
+            self._raise_if_locked(conn)
+            cursor = conn.execute(
                 "UPDATE papers SET ocr_done = ?, updated_at = ? WHERE paper_id = ?",
                 (value, int(time.time()), paper_id),
             )
+            if cursor.rowcount == 0:
+                raise ValueError(f"vault.set_ocr_done: Paper '{paper_id}' nicht gefunden")
 
     def update_pdf_path(self, paper_id: str, new_path: str) -> None:
-        """Aktualisiert pdf_path fuer ein Paper."""
+        """Aktualisiert pdf_path fuer ein Paper.
+
+        Raises:
+            ValueError: ``paper_id`` verweist auf kein bestehendes Paper.
+            VaultLockedError: Vault ist gesperrt (Material-Passport-Lock).
+        """
         with self._connection(commit=True) as conn:
-            conn.execute(
+            self._raise_if_locked(conn)
+            cursor = conn.execute(
                 "UPDATE papers SET pdf_path = ?, updated_at = ? WHERE paper_id = ?",
                 (new_path, int(time.time()), paper_id),
             )
+            if cursor.rowcount == 0:
+                raise ValueError(f"vault.update_pdf_path: Paper '{paper_id}' nicht gefunden")
 
     # ------------------------------------------------------------------
     # Volltext-Index (Issue #373)

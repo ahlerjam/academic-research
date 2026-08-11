@@ -40,11 +40,11 @@
  *   ACADEMIC_PYTHON           — Interpreter-Override fuer den Vault-Lookup
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { join, dirname, basename, isAbsolute, sep } from 'node:path';
+import { join, dirname, basename, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
+import { runVaultPython } from './lib/vault-bridge.mjs';
 import { isProtectedPath } from './lib/protected-path.mjs';
 
 // ---------------------------------------------------------------------------
@@ -64,6 +64,12 @@ const VAULT_DB = process.env.VAULT_DB_PATH
 const WINDOW = positiveInt(process.env.CLAIM_DRIFT_WINDOW, 300);
 const MAX_LOOKUPS = positiveInt(process.env.CLAIM_DRIFT_MAX_LOOKUPS, 10);
 const DEBUG = process.env.CLAIM_DRIFT_DEBUG === '1';
+
+// Zeitbudget des gesamten Vault-Lookups. hooks.json gibt diesem Hook 15 s; der
+// Lookup muss deutlich darunter bleiben, damit ein haengender Interpreter-Kandidat
+// den Hook nicht ueber das Timeout traegt, bevor er noch "unavailable" melden kann
+// (Finding 15, Code-Review Trigger-Mess-Harness).
+const LOOKUP_BUDGET_MS = 10000;
 
 // Mindestlaenge eines Zitat-Spans (Zeichen) — analog verbatim-guard.mjs.
 const MIN_QUOTE_LEN = 10;
@@ -389,18 +395,9 @@ function findAnchoredQuotes(pair) {
 // Vault-Lookup (Tri-State: found | not-found | unavailable)
 // ---------------------------------------------------------------------------
 
-/**
- * Interpreter-Kaskade wie in mid-session-reinforcement.mjs (#382): das
- * System-Python auf macOS (3.9) kann academic_vault nicht importieren.
- */
-function pythonCandidates() {
-  const candidates = [];
-  if (process.env.ACADEMIC_PYTHON) candidates.push(process.env.ACADEMIC_PYTHON);
-  if (process.env.VIRTUAL_ENV) candidates.push(join(process.env.VIRTUAL_ENV, 'bin', 'python'));
-  candidates.push(join(os.homedir(), '.academic-research', 'venv', 'bin', 'python'));
-  candidates.push('python3');
-  return [...new Set(candidates)];
-}
+// Interpreter-Kaskade (ACADEMIC_PYTHON, $VIRTUAL_ENV/bin/python, kanonisches
+// Setup-venv, PATH-Fallback) kommt aus hooks/lib/vault-bridge.mjs::runVaultPython()
+// (#382 fuer die Kaskade selbst; hier verwendet statt einer eigenen Kopie).
 
 const PY_LOOKUP = [
   'import sys, json',
@@ -427,7 +424,9 @@ const PY_LOOKUP = [
 
 /**
  * Schlaegt mehrere Spans in EINEM Subprozess nach (ein Python-Start pro
- * Hook-Aufruf statt einem pro Zitat — das 15-s-Timeout in hooks.json haelt).
+ * Hook-Aufruf statt einem pro Zitat) — ueber runVaultPython() aus
+ * hooks/lib/vault-bridge.mjs, mit LOOKUP_BUDGET_MS als Gesamtbudget ueber alle
+ * Interpreter-Kandidaten, damit das 15-s-Hook-Timeout in hooks.json haelt.
  *
  * @returns {{status: 'ok', results: object[]} | {status: 'unavailable'}}
  */
@@ -438,26 +437,20 @@ function lookupQuotes(spanTexts) {
     return { status: 'unavailable' };
   }
 
-  const failures = [];
-  for (const python of pythonCandidates()) {
-    if (python.includes(sep) && !existsSync(python)) {
-      failures.push(`${python}: nicht vorhanden`);
-      continue;
-    }
-    try {
-      const output = execFileSync(python, ['-c', PY_LOOKUP, VAULT_DB, JSON.stringify(spanTexts)], {
-        encoding: 'utf-8',
-        timeout: 10000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      const parsed = JSON.parse(output.trim());
-      if (Array.isArray(parsed)) return { status: 'ok', results: parsed };
-      failures.push(`${python}: unerwartete Antwort`);
-    } catch (err) {
-      failures.push(`${python}: ${err.message.split('\n')[0]}`);
-    }
+  const output = runVaultPython(PY_LOOKUP, [VAULT_DB, JSON.stringify(spanTexts)], {
+    timeout: LOOKUP_BUDGET_MS,
+    budget: LOOKUP_BUDGET_MS,
+    label: 'Claim-Drift',
+  });
+  if (output === null) return { status: 'unavailable' };
+
+  try {
+    const parsed = JSON.parse(output.trim());
+    if (Array.isArray(parsed)) return { status: 'ok', results: parsed };
+    debug('Vault-Lookup: unerwartete Antwort.');
+  } catch (err) {
+    debug(`Vault-Antwort nicht lesbar: ${err.message}`);
   }
-  debug(`Vault-Lookup mit keinem Interpreter moeglich: ${failures.join(' | ')}`);
   return { status: 'unavailable' };
 }
 

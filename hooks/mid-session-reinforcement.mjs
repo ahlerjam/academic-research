@@ -60,6 +60,15 @@ const MAX_DECISIONS = 5;
 // Kontext, keine Entscheidungen, und duerfen die echten nicht verdraengen.
 const MAX_FILE_CHANGES = 3;
 
+// Zeitbudget des gesamten Vault-Lookups. hooks.json gibt diesem Hook 15 s (sowohl
+// im UserPromptSubmit- als auch im SessionStart/compact-Block); der Lookup muss
+// deutlich darunter bleiben, damit ein haengender Interpreter-Kandidat den Hook
+// nicht ueber das Timeout traegt, bevor runVaultPython() noch auf den naechsten
+// Kandidaten oder den Fail-open-Pfad wechseln kann (Finding 15, Code-Review
+// Trigger-Mess-Harness: runVaultPython() bekam bislang kein ``budget`` und
+// probierte bis zu vier Kandidaten a 10 s ungebremst durch).
+const LOOKUP_BUDGET_MS = 10000;
+
 // ---------------------------------------------------------------------------
 // Stdin lesen
 // ---------------------------------------------------------------------------
@@ -153,7 +162,11 @@ function loadTopDecisions() {
     `print(json.dumps({'manual': manual[:${MAX_DECISIONS}], 'auto': auto[:${MAX_FILE_CHANGES}]}))`,
   ].join('; ');
 
-  const output = runVaultPython(pyCode, [VAULT_DB], { timeout: 10000, label: 'Reinforcement' });
+  const output = runVaultPython(pyCode, [VAULT_DB], {
+    timeout: LOOKUP_BUDGET_MS,
+    budget: LOOKUP_BUDGET_MS,
+    label: 'Reinforcement',
+  });
   if (output === null) {
     return empty;
   }
@@ -234,9 +247,9 @@ async function main() {
     state.prompt_count = promptCount;
 
     // Zaehler SOFORT persistieren — auf beiden Pfaden und vor dem Vault-Lookup.
-    // Der Lookup blockiert pro Interpreter-Kandidat bis zu 10 s (execFileSync-
-    // timeout, bis zu vier Kandidaten), das UserPromptSubmit-Timeout in
-    // hooks.json betraegt 15 s. Wuerde erst nach dem Lookup gespeichert, bliebe
+    // Der Lookup blockiert insgesamt bis zu LOOKUP_BUDGET_MS (Gesamtbudget ueber
+    // alle Interpreter-Kandidaten, runVaultPython()), das UserPromptSubmit-Timeout
+    // in hooks.json betraegt 15 s. Wuerde erst nach dem Lookup gespeichert, bliebe
     // bei einem abgeschossenen Trigger-Aufruf TRIGGER_N-1 in der State-Datei
     // stehen: der naechste Prompt traefe wieder den Trigger-Pfad, haenge wieder,
     // wuerde wieder gekillt. Der Zaehler waere dauerhaft eingefroren und der

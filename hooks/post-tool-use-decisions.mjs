@@ -29,7 +29,15 @@
  *   CLAUDE_PROJECT_DIR      — Projekt-Verzeichnis (default: cwd)
  */
 
-import { appendFileSync, mkdirSync, existsSync, chmodSync, statSync, renameSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  existsSync,
+  chmodSync,
+  statSync,
+  renameSync,
+  createReadStream,
+} from 'node:fs';
 import { dirname, relative, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
@@ -58,10 +66,19 @@ const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const WRITE_LIKE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
 
 /**
- * Extrahiert den geschriebenen Text aus tool_input — abhaengig vom Tool:
- *   - Write:     tool_input.content
- *   - Edit:      tool_input.new_string
- *   - MultiEdit: alle edits[].new_string (zusammengefuegt)
+ * NOTLOESUNG, nicht die primaere Hash-Quelle (siehe hashFileFromDisk unten):
+ * extrahiert den Text aus tool_input, den das jeweilige Tool geschrieben hat —
+ * abhaengig vom Tool:
+ *   - Write:     tool_input.content (= kompletter Datei-Inhalt)
+ *   - Edit:      tool_input.new_string (= NUR das eingefuegte Fragment)
+ *   - MultiEdit: alle edits[].new_string (zusammengefuegt, ebenfalls Fragmente)
+ *
+ * Fuer Edit/MultiEdit ist das ausdruecklich NICHT der resultierende
+ * Datei-Inhalt — zwei verschiedene Aenderungen an derselben Datei koennen
+ * zufaellig dasselbe new_string-Fragment einfuegen (z.B. dieselbe Ueberschrift
+ * an zwei Stellen) und haetten dann identische Hashes, obwohl der
+ * Datei-Zustand unterschiedlich ist. Nur als Fallback verwendet, wenn die
+ * Datei nach dem Tool-Aufruf nicht von der Platte gelesen werden kann.
  */
 function extractContent(toolName, toolInput) {
   if (toolName === 'MultiEdit' && Array.isArray(toolInput.edits)) {
@@ -71,6 +88,46 @@ function extractContent(toolName, toolInput) {
     return toolInput.new_string || '';
   }
   return toolInput.content || '';
+}
+
+/**
+ * Hasht den RESULTIERENDEN Datei-Inhalt von der Platte (SHA-256 ueber die
+ * Rohbytes, kein Encoding) — das ist die einzige Quelle, die fuer Write,
+ * Edit UND MultiEdit denselben Idempotenz-Vertrag erfuellt, den
+ * academic_vault/decision_log.py::content_hash dokumentiert: "dieselbe Datei
+ * mit demselben Inhalt einmal per Write und einmal per Edit geschrieben ist
+ * eine Aenderung, keine zwei" (#644 / Finding 12).
+ *
+ * PostToolUse feuert NACHDEM Write/Edit/MultiEdit die Datei bereits
+ * geschrieben haben — der Lesezugriff hier ist also kein Race gegen das
+ * ausloesende Tool selbst, sondern nur gegen (seltene) externe Eingriffe.
+ *
+ * Gestreamt statt per readFileSync komplett eingelesen, damit auch grosse
+ * Dateien keinen Speicherdruck erzeugen ("large files"-Fall). Der Hash laeuft
+ * ueber die rohen Bytes (Buffer-Chunks, kein 'utf-8'-Decoding), damit auch
+ * binaerer oder kaputter UTF-8-Inhalt deterministisch gehasht wird, statt
+ * still durch Ersatzzeichen verfaelscht zu werden ("binary content"-Fall).
+ *
+ * Rueckgabe: { ok: true, hash } bei Erfolg, sonst { ok: false, error } — der
+ * Fehler wird NICHT verschluckt, der Aufrufer schreibt ihn auf stderr, bevor
+ * er auf den Fragment-/Content-Fallback ausweicht ("file missing/unreadable
+ * after the tool ran"-Fall, z.B. geloescht, keine Leserechte, ist ein
+ * Verzeichnis).
+ */
+function hashFileFromDisk(filePath) {
+  return new Promise((resolve) => {
+    let stream;
+    try {
+      stream = createReadStream(filePath);
+    } catch (err) {
+      resolve({ ok: false, error: err.message });
+      return;
+    }
+    const hash = createHash('sha256');
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve({ ok: true, hash: hash.digest('hex') }));
+    stream.on('error', (err) => resolve({ ok: false, error: err.message }));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -230,7 +287,6 @@ async function main() {
 
   const toolInput = input?.tool_input || {};
   const filePath = toolInput.file_path || '';
-  const content = extractContent(toolName, toolInput);
 
   // Nur .md-Dateien im Projekt
   if (!isMdInProject(filePath)) {
@@ -238,8 +294,29 @@ async function main() {
   }
 
   const relPath = toRelPath(filePath);
-  // SHA-256-Hash des Inhalts statt Klartext-Snippet (Idempotenz-Check ohne Leak).
-  const hash = createHash('sha256').update(content || '', 'utf-8').digest('hex');
+
+  // SHA-256-Hash des RESULTIERENDEN Datei-Inhalts (Finding 12) — nicht des
+  // Edit-Fragments. PostToolUse feuert nach dem Schreiben, die Datei liegt
+  // also bereits im Ziel-Zustand vor; das ist fuer Write, Edit und MultiEdit
+  // gleichermassen die korrekte Idempotenz-Quelle. Klartext landet nirgends
+  // im Log — nur der Hash.
+  const diskResult = await hashFileFromDisk(filePath);
+  let hash;
+  if (diskResult.ok) {
+    hash = diskResult.hash;
+  } else {
+    // Nicht stillschweigend uebergehen: Diagnosezeile auf stderr, dann
+    // Fallback auf den Fragment-/Content-Text aus tool_input, damit der Hook
+    // fail-open bleibt. In Produktion ein seltener Rand-/Race-Fall (Datei
+    // zwischen Tool-Aufruf und Hook geloescht o.ae.); die Idempotenz-Garantie
+    // ist fuer DIESEN einen Eintrag dann eingeschraenkt.
+    process.stderr.write(
+      `[Decisions-Log] Datei nach ${toolName} nicht von Platte lesbar (${filePath}): ` +
+        `${diskResult.error}. Fallback auf Fragment-Hash.\n`
+    );
+    const fallbackContent = extractContent(toolName, toolInput);
+    hash = createHash('sha256').update(fallbackContent || '', 'utf-8').digest('hex');
+  }
 
   recordInVault(toolName, relPath, hash);
   writeLogLine(toolName, relPath, hash);

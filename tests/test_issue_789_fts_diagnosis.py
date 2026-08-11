@@ -295,18 +295,23 @@ def test_diagnose_query_empty_query_returns_zeroed_result(tmp_path) -> None:
     assert result["vec_paper_rank"] == {}
 
 
-def test_diagnose_query_surfaces_fts5_comma_defect_without_crashing(tmp_path, monkeypatch) -> None:
+def test_diagnose_query_comma_defect_is_fixed_and_no_longer_crashes(tmp_path, monkeypatch) -> None:
     """Derselbe vorbestehende Komma-Defekt wie in #722/#729 (nicht
-    #789-spezifisch): die Diagnose darf daran nicht abstuerzen, sondern
-    meldet ihn im Feld ``fts5_syntax_error``."""
+    #789-spezifisch) ist seit #841 BEHOBEN: ``db._sanitize_fts5_query``
+    quotet das Komma-Token als FTS5-Stringliteral statt es unbehandelt zu
+    lassen, MATCH wirft deshalb kein ``sqlite3.OperationalError`` mehr.
+    ``fts5_syntax_error`` bleibt entsprechend ``None`` (statt wie vorher
+    befuellt), und die Diagnose laeuft VOLLSTAENDIG durch -- insbesondere
+    bleibt ``vec_paper_rank`` befuellt (vorher wegen des fruehen Abbruchs im
+    except-Zweig zwangsweise ``{}``), der Beweis, dass kein Fehlerpfad mehr
+    genommen wird."""
     db_path = _build_two_paper_lexical_db(tmp_path)
     _cached_embedder(_FixedVectorEmbedder([1.0, 0.0, 0.0, 0.0]), monkeypatch)
 
     result = diagnose_query(db_path, "zebra, giraffe", k=5)
 
-    assert result["fts5_syntax_error"] is not None
-    assert result["fts_hit_count"] == 0
-    assert result["vec_paper_rank"] == {}
+    assert result["fts5_syntax_error"] is None
+    assert result["vec_paper_rank"] == {"p1": 1, "p2": 2}
 
 
 def test_diagnose_query_min_score_gap_is_positive_for_distinct_vec_ranks(

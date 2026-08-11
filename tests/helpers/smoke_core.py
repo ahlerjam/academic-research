@@ -26,6 +26,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -515,8 +516,48 @@ def check_mcp_malformed_csl(state: dict[str, Any]) -> None:
 # ===========================================================================
 
 
+def _resolve_real_node_bin() -> str:
+    """Echter node-Binärpfad (``process.execPath``), nicht bloß der erste
+    PATH-Treffer: Versionsmanager (asdf/nvm/volta) legen dort oft nur einen
+    Shim-Wrapper ab, der selbst wieder ``bash`` + weitere PATH-Einträge
+    braucht — mit dem absichtlich verengten PATH in
+    ``check_hook_verbatim_guard`` (nur der kaputte ``python3``-Stub) wäre so
+    ein Shim nicht mehr lauffähig. Aufgelöst wird deshalb einmal MIT dem
+    echten PATH der laufenden Umgebung, danach per Vollpfad gestartet.
+    """
+    node_on_path = shutil.which("node") or "node"
+    result = subprocess.run(
+        [node_on_path, "-e", "process.stdout.write(process.execPath)"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    return result.stdout.strip() or node_on_path
+
+
 def check_hook_verbatim_guard() -> None:
-    """verbatim-guard: exaktes Vault-Zitat erlaubt, erfundenes blockiert."""
+    """verbatim-guard: exaktes Vault-Zitat erlaubt, erfundenes blockiert —
+    auch wenn PATH nur ein KAPUTTES ``python3`` bietet.
+
+    Vorher lief dieser Smoke-Check mit ``PATH = venv_bin + System-PATH``, also
+    resolvte das bare ``python3``, das der Hook (vor dem Fix zum
+    Code-Review-Fund unten) hartkodiert aufrief, IMMER zufällig auf denselben
+    funktionierenden venv-Interpreter — der Fixture war strukturell unfähig,
+    das hartkodierte ``python3`` von der seit #382 vorgesehenen
+    Interpreter-Kaskade (``hooks/lib/vault-bridge.mjs::runVaultPython``) zu
+    unterscheiden. Auf einem echten macOS-System-Python (3.9, kein PEP 604)
+    wäre dieselbe Lookup mit ``TypeError: unsupported operand type(s) for |``
+    gescheitert und der Guard fail-open durchgelaufen (siehe
+    ``tests/test_review_fix_verbatim_guard.py`` für die vollständige
+    Herleitung inkl. Vorher/Nachher-Beleg gegen den Pre-Fix-Stand).
+
+    Reproduziert wird das jetzt, indem PATH NUR einen Stub-``python3``
+    enthält, der bei jedem Aufruf fehlschlägt — HOME zeigt weiter auf das
+    echte Home, sodass der PATH-UNABHÄNGIGE venv-Kandidat aus
+    ``pythonCandidates()`` (Kandidat 3) greifen muss, damit dieser Check
+    überhaupt grün wird. Ein hartkodiertes ``python3`` würde stattdessen den
+    Stub treffen und (b) fälschlich mit exit 0 durchlassen.
+    """
     from academic_vault.server import add_paper, add_quote
 
     with tempfile.TemporaryDirectory(prefix="smoke-guard-") as tmp:
@@ -528,9 +569,23 @@ def check_hook_verbatim_guard() -> None:
         verbatim = "Wissenschaft ist die Kunst des Moeglichen im akademischen Kontext"
         add_quote(db, "g1", verbatim, "manual")
 
-        venv_bin = str(VENV_PYTHON.parent)
+        # Stub-``python3``, der IMMER fehlschlägt (simuliert macOS-System-
+        # Python 3.9, das academic_vault mangels PEP-604-Syntax nicht
+        # importieren kann). Liegt NICHT unter venv_bin — nur dieser Stub
+        # steht im PATH.
+        fake_bin = Path(tmp) / "fake-bin"
+        fake_bin.mkdir()
+        fake_python3 = fake_bin / "python3"
+        fake_python3.write_text(
+            "#!/bin/sh\n"
+            "echo \"TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'\" >&2\n"
+            "exit 1\n"
+        )
+        fake_python3.chmod(0o755)
+
+        node_bin = _resolve_real_node_bin()
         env = {
-            "PATH": venv_bin + os.pathsep + os.environ.get("PATH", ""),
+            "PATH": str(fake_bin),
             "HOME": os.environ.get("HOME", ""),
             "VAULT_DB_PATH": db,
             "CLAUDE_PROJECT_DIR": str(proj),
@@ -545,23 +600,31 @@ def check_hook_verbatim_guard() -> None:
                 }
             )
 
-        # (a) exaktes Zitat -> ERLAUBT (exit 0)
-        allow = _run_node_hook(
-            "verbatim-guard.mjs", write_payload(f'Im Text steht: "{verbatim}" als Beleg.'), env
-        )
+        def run(content: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [node_bin, str(HOOKS_DIR / "verbatim-guard.mjs")],
+                input=write_payload(content),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+        # (a) exaktes Zitat -> ERLAUBT (exit 0), trotz kaputtem PATH-python3.
+        allow = run(f'Im Text steht: "{verbatim}" als Beleg.')
         assert allow.returncode == 0, (
-            f"verbatim-guard blockierte ein VERIFIZIERTES Zitat (rc={allow.returncode}). "
-            f"stderr: {allow.stderr[:300]}"
+            f"verbatim-guard blockierte ein VERIFIZIERTES Zitat (rc={allow.returncode}) "
+            f"trotz erreichbarem venv-Kandidat. stderr: {allow.stderr[:300]}"
         )
 
-        # (b) erfundenes Zitat -> BLOCKIERT (exit 2 + decision:block)
+        # (b) erfundenes Zitat -> BLOCKIERT (exit 2 + decision:block), trotz
+        # kaputtem PATH-python3 — das ist der eigentliche Regressionsfall.
         invented = "Dieses Zitat wurde frei erfunden und niemals in den Vault eingepflegt"
-        block = _run_node_hook(
-            "verbatim-guard.mjs", write_payload(f'Angeblich: "{invented}" — falsch.'), env
-        )
+        block = run(f'Angeblich: "{invented}" — falsch.')
         assert block.returncode == 2, (
-            f"verbatim-guard blockierte ein ERFUNDENES Zitat NICHT (rc={block.returncode}). "
-            f"stdout: {block.stdout[:200]} stderr: {block.stderr[:200]}"
+            f"verbatim-guard blockierte ein ERFUNDENES Zitat NICHT (rc={block.returncode}), "
+            "obwohl der venv-Kandidat unabhaengig vom kaputten PATH-python3 erreichbar "
+            f"gewesen waere. stdout: {block.stdout[:200]} stderr: {block.stderr[:200]}"
         )
         decision = json.loads(block.stdout.strip())
         assert decision.get("decision") == "block", f"Block-Payload ohne decision:block: {decision}"
