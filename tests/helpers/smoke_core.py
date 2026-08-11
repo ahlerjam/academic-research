@@ -689,7 +689,7 @@ def check_hook_no_crash() -> None:
 
 
 def check_plugin_marketplace_consistency() -> None:
-    """plugin.json + marketplace.json: valides JSON, Version 6.5.x, Name konsistent."""
+    """plugin.json + marketplace.json: valides JSON, Version 8.0.x, Name konsistent."""
     plugin = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
     market = json.loads(MARKETPLACE_JSON.read_text(encoding="utf-8"))
 
@@ -701,7 +701,7 @@ def check_plugin_marketplace_consistency() -> None:
     )
 
     p_ver = plugin.get("version", "")
-    assert re.match(r"^6\.7\.\d+$", p_ver), f"plugin.json Version nicht 6.7.x: {p_ver}"
+    assert re.match(r"^8\.0\.\d+$", p_ver), f"plugin.json Version nicht 8.0.x: {p_ver}"
 
     plugins = market.get("plugins", [])
     assert plugins, "marketplace.json hat keine plugins-Liste"

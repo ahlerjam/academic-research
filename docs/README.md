@@ -69,6 +69,10 @@ Neue Begriffe schlägst du unterwegs im [Glossar](reference/glossary.md) nach.
 - [CHANGELOG.md](../CHANGELOG.md) — was sich wann geändert hat.
 - [Entscheidungsvermerke](decisions/README.md) — Entwürfe, die eine projektweite
   Architekturfrage beantworten, bevor sie sich als Umsetzungs-Issue schreiben lässt.
+- [Release-Weg](releasing.md) — Prüfliste vor dem Tag, wie ein Tag-Push
+  `release.yml` auslöst, was danach manuell folgt.
+- [Release-Notes 8.0.0 (Entwurf)](release-notes/8.0.0.md) — was das Plugin in diesem
+  Stand kann und was nicht.
 
 ## Historisches und Momentaufnahmen
 
