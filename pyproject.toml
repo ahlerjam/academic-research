@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "academic-research"
-version = "6.7.0"
+version = "8.0.0"
 description = "Claude-Code-Plugin fuer wissenschaftliche Recherche, Vault-MCP-Server und Fetch-Pipelines."
 readme = "README.md"
 # Mindestversion: 3.11 (entwickelt + getestet mit 3.14, CI-Matrix 3.11/3.12/3.13).

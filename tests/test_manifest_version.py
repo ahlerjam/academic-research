@@ -1,9 +1,9 @@
 """
-Tests für Issue #166: Manifest-Version 5.4.0 -> 6.7.0 + Description-Sync (28 Skills, v6-Features)
+Tests für Issue #738: Manifest-Version 6.7.0 -> 8.0.0 + Description-Sync (45 Skills)
 
 Regressions-Tests, die sicherstellen, dass:
-- plugin.json und marketplace.json beide Version 6.7.0 deklarieren
-- plugin.json description "28" enthält
+- plugin.json und marketplace.json beide Version 8.0.0 deklarieren
+- plugin.json description "45" enthält
 - Beide JSON-Dateien valide sind
 """
 
@@ -17,22 +17,22 @@ MARKETPLACE_JSON = REPO_ROOT / ".claude-plugin" / "marketplace.json"
 
 
 def test_plugin_json_version():
-    """plugin.json muss Version 6.7.0 deklarieren."""
+    """plugin.json muss Version 8.0.0 deklarieren."""
     data = json.loads(PLUGIN_JSON.read_text())
     version = data["version"]
-    assert re.match(r"^6\.7\.", version), (
-        f"plugin.json version erwartet ^6.7.x, got '{version}' — "
-        "vermutlich noch auf altem Stand (5.4.0)"
+    assert re.match(r"^8\.0\.", version), (
+        f"plugin.json version erwartet ^8.0.x, got '{version}' — "
+        "vermutlich noch auf altem Stand (6.7.0)"
     )
 
 
 def test_marketplace_json_version():
-    """marketplace.json plugins[0].version muss 6.7.0 deklarieren."""
+    """marketplace.json plugins[0].version muss 8.0.0 deklarieren."""
     data = json.loads(MARKETPLACE_JSON.read_text())
     version = data["plugins"][0]["version"]
-    assert re.match(r"^6\.7\.", version), (
-        f"marketplace.json plugins[0].version erwartet ^6.7.x, got '{version}' — "
-        "vermutlich noch auf altem Stand (5.4.0)"
+    assert re.match(r"^8\.0\.", version), (
+        f"marketplace.json plugins[0].version erwartet ^8.0.x, got '{version}' — "
+        "vermutlich noch auf altem Stand (6.7.0)"
     )
 
 
