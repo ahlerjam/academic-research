@@ -117,10 +117,16 @@ print(json.dumps(report, ensure_ascii=False))
    nichts darueber aus, ob die vault.db zurueckgespielt wurde**; das steht ausschliesslich
    in `vault_db_restored`/`vault_db_skipped`/`error`:
    - `report['error']` gesetzt → `❌ <error>` ausgeben (z. B. `❌ Snapshot nicht gefunden: ~/.academic-research/snapshots/<slug>/<ts>.tgz` oder die Meldung aus `vault_db_skipped`, falls das der einzige Snapshot-Inhalt war).
+     **Ist dabei `report['restored_files']` nicht leer, war es kein folgenloser Fehlschlag** — die genannten State-Dateien wurden bereits ersetzt, bevor der Fehler auftrat. Dann zusätzlich ausgeben:
+     `⚠️ Bereits ersetzt, bevor der Fehler auftrat: <restored_files>. Die vault.db ist unverändert.`
    - `report['ok']` ist `true` UND `report['vault_db_restored']` ist gesetzt →
      `✅ Snapshot <ts> wiederhergestellt in <CLAUDE_PROJECT_DIR> — vault.db zurückgespielt nach <vault_db_restored> (Sicherung des bisherigen Bestands: <vault_db_backup, oder "keine — Vault existierte noch nicht">).`
    - `report['ok']` ist `true` UND `report['vault_db_restored']` ist `null` (Snapshot enthielt keine vault.db) →
      `✅ Snapshot <ts> wiederhergestellt in <CLAUDE_PROJECT_DIR> (Snapshot enthielt keine vault.db, nur Projektdateien).`
+
+   In allen Erfolgsfällen den tatsächlich verwendeten Tarball aus `report['tarball']` mit ausgeben — zu einem Zeitstempel können mehrere Dateien gehören (`<ts>.tgz`, `<ts>.precompact.tgz`, `<ts>-1.tgz`), und bei einem Vault-Rollback muss nachvollziehbar sein, welcher davon eingespielt wurde.
+
+   `<ts>` muss dem Exportformat `YYYYMMDD-HHMM` entsprechen. Ein abgeschnittener Wert (nur das Datum) löst bewusst auf **nichts** auf und liefert „Snapshot nicht gefunden" — er würde sonst einen beliebigen Snapshot desselben Tages über die Live-`vault.db` legen.
 
 **Hinweis:** Vor der Wiederherstellung werden aktuelle Dateien überschrieben. Die bestehende `vault.db` wird dabei automatisch als `vault.db.<YYYYMMDD-HHMMSS>.bak` neben sich gesichert, bevor sie überschrieben wird — trotzdem Empfehlung: Neuen Snapshot erstellen bevor --restore ausgeführt wird.
 

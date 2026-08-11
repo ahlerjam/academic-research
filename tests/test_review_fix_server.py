@@ -29,6 +29,7 @@ muss ueber die gesperrte ``VaultDB``-Methode laufen und einen
 
 import json
 import os
+import re
 import sqlite3
 import tarfile
 from pathlib import Path
@@ -1289,3 +1290,55 @@ def test_restore_ts_bricht_nicht_aus_dem_slug_verzeichnis_aus(tmp_path):
         assert report["ok"] is False, f"ts={boeser_ts!r} hat aus dem Slug ausgebrochen."
         assert report["tarball"] is None
         assert not (ziel / "academic_context.md").exists()
+
+
+def test_restore_akzeptiert_keinen_abgeschnittenen_zeitstempel(tmp_path, monkeypatch):
+    """Deep-Review P1: ein Datums-Praefix darf keinen Snapshot dieses Tages einfangen.
+
+    ``_SNAPSHOT_NAME_MUSTER`` traegt eine optionale Kollisionsgruppe ``(-\\d+)?``
+    (fuer ``<ts>-1.tgz``). Ohne Formatpruefung verschluckt genau die den
+    ``-HHMM``-Teil: ``ts='20260507'`` passte per ``fullmatch`` auf
+    ``20260507-1430.tgz``. Da seit #857 ein ``db_path`` ausdruecklich uebergeben
+    wird, liefe der Fehltreffer nicht mehr ins Leere, sondern legte eine fremde
+    Snapshot-DB ueber den aktiven Vault. Frueher (harter Pfad ``<ts>.tgz``) kam
+    bei einem unvollstaendigen ``ts`` sauber "nicht gefunden" zurueck.
+    """
+    from academic_vault.server import restore_snapshot_report
+
+    db_path, project_dir, snapshots_dir, ts = _projekt_mit_snapshot(tmp_path, monkeypatch)
+
+    # Sanity: der vollstaendige Zeitstempel loest weiterhin auf.
+    assert re.fullmatch(r"\d{8}-\d{4}", ts), f"Exportformat unerwartet: {ts!r}"
+
+    ziel = tmp_path / "ziel"
+    vault_ziel = tmp_path / "fremder-vault.db"
+    vault_ziel.write_bytes(b"UNANGETASTET")
+
+    for abgeschnitten in (ts.split("-")[0], ts[:6], ts[:-1]):
+        report = restore_snapshot_report(
+            slug="proj",
+            ts=abgeschnitten,
+            snapshots_dir=str(snapshots_dir),
+            target_dir=str(ziel),
+            db_path=str(vault_ziel),
+        )
+        assert report["ok"] is False, (
+            f"ts={abgeschnitten!r} hat einen Snapshot eingefangen: {report['tarball']!r}"
+        )
+        assert report["tarball"] is None
+        assert report["vault_db_restored"] is None
+        assert vault_ziel.read_bytes() == b"UNANGETASTET", (
+            f"ts={abgeschnitten!r} hat die Ziel-DB ueberschrieben."
+        )
+        assert not (ziel / "academic_context.md").exists()
+
+    # Gegenprobe: mit dem vollstaendigen Zeitstempel greift der Restore.
+    report = restore_snapshot_report(
+        slug="proj",
+        ts=ts,
+        snapshots_dir=str(snapshots_dir),
+        target_dir=str(ziel),
+        db_path=str(vault_ziel),
+    )
+    assert report["ok"] is True, report
+    assert report["vault_db_restored"] == str(vault_ziel)

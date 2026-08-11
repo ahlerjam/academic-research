@@ -2890,6 +2890,15 @@ _SNAPSHOT_HERKUNFT_MARKER = (".precompact", ".session")
 # aus uniqueOwnTarPath() in hooks/pre-compact.mjs).
 _SNAPSHOT_NAME_MUSTER = r"(-\d+)?({marker})?\.tgz"
 
+# Kanonisches Zeitstempel-Format der Exporte (``strftime("%Y%m%d-%H%M")``, s.
+# :func:`export_snapshot`). Der ``ts`` MUSS dagegen validiert werden, bevor er in
+# das Namensmuster eingesetzt wird: die optionale Kollisionsgruppe ``(-\d+)?``
+# verschluckt sonst genau den ``-HHMM``-Teil, sodass ein abgeschnittener ``ts``
+# wie ``20260507`` auf JEDEN Snapshot dieses Tages passt. Mit dem seit #857
+# ausdruecklich uebergebenen ``db_path`` liefe der Fehltreffer nicht mehr ins
+# Leere, sondern legte eine fremde Snapshot-DB ueber den aktiven Vault.
+_SNAPSHOT_TS_MUSTER = re.compile(r"\d{8}-\d{4}")
+
 
 def _finde_snapshot_tarballs(slug_dir: Path, ts: str) -> list[Path]:
     """Loest einen Zeitstempel auf ALLE zu ihm gehoerenden Tarball-Dateien auf.
@@ -2916,6 +2925,12 @@ def _finde_snapshot_tarballs(slug_dir: Path, ts: str) -> list[Path]:
         also ``[-1]`` == juengster. Leere Liste, wenn nichts passt oder das
         Slug-Verzeichnis nicht lesbar ist.
     """
+    # Fail-closed: ein ``ts``, der nicht dem Exportformat entspricht (abgeschnitten,
+    # praepariert), loest auf NICHTS auf, statt ueber die Kollisionsgruppe einen
+    # beliebigen Snapshot desselben Tages einzufangen.
+    if not _SNAPSHOT_TS_MUSTER.fullmatch(ts):
+        return []
+
     muster = re.compile(
         re.escape(ts)
         + _SNAPSHOT_NAME_MUSTER.format(
@@ -3087,8 +3102,12 @@ def restore_snapshot_report(
     ``vault.db.<YYYYMMDD-HHMMSS>.bak`` daneben gesichert
     (:func:`_backup_live_vault`), und der Report benennt Sicherung wie Ziel.
 
-    Ein FEHLGESCHLAGENER Restore laesst den Ausgangszustand vollstaendig
-    zurueck (``ok=False`` heisst: nichts angefasst). Dafuer wird die neue DB
+    Ein FEHLGESCHLAGENER Restore laesst die LIVE-``vault.db`` unangetastet --
+    ``ok=False`` heisst also nicht "nichts angefasst": die State-Dateien werden
+    vor dem DB-Block nach ``target_dir`` entpackt und sind dann bereits ersetzt.
+    Welche das waren, steht auch im Fehlerfall in ``restored_files``; Aufrufer
+    sollen das ausweisen, statt einen Teil-Erfolg als folgenlosen Fehlschlag
+    darzustellen. Fuer die DB selbst wird die neue Fassung
     erst vollstaendig als ``vault.db.restore-tmp`` danebengeschrieben; erst
     danach werden Sicherung und Wegraeumen der WAL-/SHM-Beidateien angestossen
     und die Datei atomar getauscht -- scheitert der Tausch doch, kommen die
