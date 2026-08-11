@@ -32,14 +32,16 @@
  *      "frisches Projekt"-Fall verwechselt wird.
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, appendFileSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as os from 'node:os';
-import { extractCitations, markSpans, detectUncheckedCitationForms } from './lib/citation-parse.mjs';
+import {
+  extractCitations, markSpans, detectUncheckedCitationForms, maskSkipRegions,
+} from './lib/citation-parse.mjs';
 import { loadConfig, resolveCitations } from './lib/citation-cascade.mjs';
 import { isProtectedPath, isMarkdownOrTexFile, chapterDirLabel } from './lib/protected-path.mjs';
+import { runVaultPython } from './lib/vault-bridge.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -75,6 +77,15 @@ const ENV_SWITCH_NAMES = [
 ];
 // Mindestlänge eines Zitat-Spans (in Zeichen). Muss mit den Regex-Quantifizierern übereinstimmen.
 const MIN_QUOTE_LEN = 10;
+// Zeitbudget je Vault-Aufruf. hooks.json gibt dem Hook insgesamt 30 s, und ein
+// Write loest hoechstens ZWEI Aufrufe aus: einen gebuendelten fuer alle
+// Quote-Spans und Figure-Referenzen (lookupBatch) und einen fuer alle
+// Klammer-Belege (verifyCitationsInVault). 2 x 10 s = 20 s lassen dem
+// Node-Start und der externen Beleg-Kaskade noch Luft unter den 30 s.
+// Vorher lief ein eigener Subprozess JE Span — vier Zitate plus zwei
+// Abbildungsverweise kamen so auf bis zu 48 s und wurden vom Hook-Timeout
+// abgeschossen.
+const VAULT_LOOKUP_BUDGET_MS = 10000;
 // Pattern fuer Figure-Referenzen (Abb., Abbildung, Tab., Tabelle, Fig., Figure + Nummer)
 const FIGURE_REF_PATTERN = /(Abb|Abbildung|Tab|Tabelle|Fig|Figure)\.?\s*\d+(\.\d+)?/gi;
 
@@ -161,25 +172,62 @@ function extractContent(toolName, toolInput) {
  *   ``…'' — LaTeX
  *
  * Mindestlänge: MIN_QUOTE_LEN Zeichen (innerer Text).
- * Gibt Array von Strings (innere Texte) zurueck.
+ * Gibt Array von ``{start, end, text}`` zurueck — ``text`` ist der innere Text,
+ * ``start``/``end`` seine Offsets IM UEBERGEBENEN Content.
+ *
+ * Gelesen wird immer der ORIGINALINHALT, nie eine maskierte Fassung: der
+ * nachzuschlagende Text muss der echte sein (ein Zitat mit Inline-Code oder
+ * LaTeX-Makro ginge sonst mit Leerzeichen an der Makro-Stelle in den Vault und
+ * traefe nicht), und die Maskierung frisst sonst auch die Zitat-Grenzen selbst
+ * — ``\`\`…''`` beginnt mit zwei Backticks, die als leerer Inline-Code
+ * maskiert werden. Welche Spans uebersprungen werden, entscheidet stattdessen
+ * spanIsMasked() weiter unten.
  */
 function extractQuoteSpans(content) {
   const spans = [];
   const q = MIN_QUOTE_LEN;
   // Jedes Pattern als Konstruktor — dadurch wird lastIndex isoliert pro Durchlauf.
+  // openLen = Laenge des oeffnenden Delimiters, damit der innere Startoffset
+  // exakt ist (kein indexOf-Raten auf dem Treffertext).
   const patterns = [
-    new RegExp(`"([^"]{${q},})"`, 'g'),           // ASCII "…"
-    new RegExp(`„([^“]{${q},})“`, 'g'), // Deutsche „…" (U+201E…U+201C)
-    new RegExp(`«([^»]{${q},})»`, 'g'), // Guillemets «…» (U+00AB…U+00BB)
-    new RegExp(`\`\`([^']{${q},})''`, 'g'),        // LaTeX ``…''
+    { re: new RegExp(`"([^"]{${q},})"`, 'g'), openLen: 1 },  // ASCII "…"
+    { re: new RegExp(`„([^“]{${q},})“`, 'g'), openLen: 1 }, // Deutsche „…" (U+201E…U+201C)
+    { re: new RegExp(`«([^»]{${q},})»`, 'g'), openLen: 1 }, // Guillemets «…» (U+00AB…U+00BB)
+    { re: new RegExp(`\`\`([^']{${q},})''`, 'g'), openLen: 2 }, // LaTeX ``…''
   ];
-  for (const r of patterns) {
+  for (const { re, openLen } of patterns) {
     let match;
-    while ((match = r.exec(content)) !== null) {
-      if (match[1]) spans.push(match[1]);
+    while ((match = re.exec(content)) !== null) {
+      if (!match[1]) continue;
+      const start = match.index + openLen;
+      spans.push({ start, end: start + match[1].length, text: match[1] });
     }
   }
   return spans;
+}
+
+/**
+ * True, wenn im Bereich [start, end) KEIN sichtbares Zeichen die Maskierung
+ * ueberlebt hat — der Span liegt also vollstaendig in einer Skip-Region
+ * (Code-Fence, Inline-Code, LaTeX-Makro, Kommentar, Literaturverzeichnis).
+ *
+ * ``maskSkipRegions()`` ist laengenerhaltend (ersetzt jede Region durch
+ * Leerzeichen gleicher Laenge), deshalb sind die Offsets aus dem Original im
+ * maskierten Text gueltig — dieselbe Annahme wie in
+ * citation-parse.mjs::spansMaskedRegion().
+ *
+ * Bewusst "vollstaendig" statt "ueberlappend": ein Zitat, das ein Makro oder
+ * Inline-Code ENTHAELT, bleibt ein Zitat und muss geprueft werden. Nur was
+ * ganz in einer Skip-Region steht (Quellentitel im Literaturverzeichnis,
+ * Beispiel-String im Code-Fence), wird uebersprungen.
+ */
+function spanIsMasked(content, masked, start, end) {
+  for (let i = start; i < end; i += 1) {
+    const ch = content[i];
+    if (ch === undefined || /\s/u.test(ch)) continue;
+    if (masked[i] !== ' ') return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -207,73 +255,104 @@ function warnFailOpen(context, kind, detail) {
 }
 
 // ---------------------------------------------------------------------------
-// Vault-Lookup via Python-Subprocess
+// Vault-/Figure-Lookup via EINEN Python-Subprozess (gebuendelt)
 // ---------------------------------------------------------------------------
 
 /**
- * Sucht verbatim im Vault. Gibt true zurueck wenn ein Treffer gefunden wurde.
- * Bei fehlender Python/Vault-Umgebung: Warnung + true (fail-open).
+ * Schlaegt ALLE Quote-Spans und ALLE Figure-Referenzen eines Writes in EINEM
+ * Subprozess nach (Muster aus claim-drift-guard.mjs::PY_LOOKUP). Ein
+ * Interpreterstart je Aufruf statt einem je Span — sonst summieren sich
+ * Interpreterstart + academic_vault-Import ueber das Hook-Timeout hinaus.
+ *
+ * Jeder Eintrag wird EINZELN in try/except gekapselt: faellt ein Lookup aus,
+ * betrifft das genau diesen Eintrag (``{"error": ...}``) und nicht den ganzen
+ * Batch — das entspricht dem frueheren Verhalten, bei dem ein Subprozess je
+ * Span lief und nur dieser eine fail-open wurde.
  */
-function lookupInVault(verbatim) {
-  // Vault-DB muss existieren (sonst fail-open, Fall 1: "DB fehlt")
-  if (!existsSync(VAULT_DB)) {
-    return warnFailOpen('Vault-Guard', 'missing-db', VAULT_DB);
-  }
+const PY_BATCH_LOOKUP = [
+  'import sys, json',
+  `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
+  'from academic_vault.server import search_quote_text, find_figure_by_caption',
+  'db_path = sys.argv[1]',
+  'payload = json.loads(sys.argv[2])',
+  'out = {"quotes": [], "figures": []}',
+  'for kind, fn in (("quotes", search_quote_text), ("figures", find_figure_by_caption)):',
+  '    for needle in payload[kind]:',
+  '        try:',
+  '            out[kind].append(bool(fn(db_path, needle)))',
+  '        except Exception as exc:',
+  '            out[kind].append({"error": "%s: %s" % (type(exc).__name__, exc)})',
+  'print(json.dumps(out))',
+].join('\n');
 
-  const pyCode = [
-    'import sys, json',
-    `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-    'from academic_vault.server import search_quote_text',
-    `hits = search_quote_text(sys.argv[1], sys.argv[2])`,
-    'print(json.dumps(hits))',
-  ].join('; ');
-
-  try {
-    const output = execFileSync('python3', ['-c', pyCode, VAULT_DB, verbatim], {
-      encoding: 'utf-8',
-      timeout: 10000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    const hits = JSON.parse(output.trim());
-    return Array.isArray(hits) && hits.length > 0;
-  } catch (err) {
-    // Fall 2: DB vorhanden, aber Exception (z. B. korrupte Datei/Query) — unerwartet.
-    return warnFailOpen('Vault-Guard', 'lookup-error', err.message);
+/**
+ * Deutet die Ergebnisliste EINER Sorte (Quotes oder Figures) aus dem Batch.
+ * ``true`` heisst "nicht blockieren" — entweder Treffer im Vault oder
+ * fail-open nach einem Fehler. Fehler werden je Eintrag gemeldet, damit ein
+ * einzelner kaputter Lookup nicht die uebrigen Ergebnisse entwertet und
+ * umgekehrt kein Eintrag stillschweigend als verifiziert gilt.
+ */
+function readBatchFlags(values, expected, context) {
+  if (expected === 0) return [];
+  if (!Array.isArray(values) || values.length !== expected) {
+    warnFailOpen(context, 'lookup-error', `unerwartete Antwortform (erwartet ${expected} Ergebnisse)`);
+    return Array.from({ length: expected }, () => true);
   }
+  return values.map((value) => {
+    if (typeof value === 'boolean') return value;
+    // Fall 2: DB vorhanden, aber Exception fuer GENAU diesen Eintrag.
+    return warnFailOpen(context, 'lookup-error', value?.error || 'unerwarteter Ergebniswert');
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Figure-Caption-Lookup via Python-Subprocess
-// ---------------------------------------------------------------------------
-
 /**
- * Sucht Caption-Fragment im Vault.
- * Gibt true wenn mindestens ein Eintrag gefunden oder Vault fehlt (fail-open).
+ * Sucht alle Zitat-Texte und Figure-Referenzen im Vault.
+ * Rueckgabe: ``{quotes: boolean[], figures: boolean[]}`` in Eingabereihenfolge,
+ * ``true`` = kein Block (Treffer oder fail-open).
  */
-function lookupFigureInVault(captionFragment) {
+function lookupBatch(spanTexts, figureRefs) {
+  const allOpen = () => ({
+    quotes: spanTexts.map(() => true),
+    figures: figureRefs.map(() => true),
+  });
+  if (spanTexts.length === 0 && figureRefs.length === 0) return allOpen();
+
+  // Vault-DB muss existieren (sonst fail-open, Fall 1: "DB fehlt").
+  // Beide Kontexte melden getrennt — der Wortlaut je Guard ist gepinnt
+  // (Issue #381, tests/test_verbatim_figure_guard.py).
   if (!existsSync(VAULT_DB)) {
-    return warnFailOpen('Figure-Guard', 'missing-db', VAULT_DB);
+    if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'missing-db', VAULT_DB);
+    if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'missing-db', VAULT_DB);
+    return allOpen();
   }
 
-  const pyCode = [
-    'import sys, json',
-    `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-    'from academic_vault.server import find_figure_by_caption',
-    `hits = find_figure_by_caption(sys.argv[1], sys.argv[2])`,
-    'print(json.dumps(hits))',
-  ].join('; ');
+  const payload = JSON.stringify({ quotes: spanTexts, figures: figureRefs });
+  const output = runVaultPython(PY_BATCH_LOOKUP, [VAULT_DB, payload], {
+    timeout: VAULT_LOOKUP_BUDGET_MS,
+    budget: VAULT_LOOKUP_BUDGET_MS,
+    label: 'Vault-Guard',
+  });
+  if (output === null) {
+    // Kein Interpreter konnte den Vault oeffnen (Kaskade in runVaultPython
+    // hat den Grund bereits auf stderr protokolliert) — unerwartet.
+    const detail = 'kein Interpreter konnte den Vault oeffnen';
+    if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', detail);
+    if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', detail);
+    return allOpen();
+  }
 
+  let parsed;
   try {
-    const output = execFileSync('python3', ['-c', pyCode, VAULT_DB, captionFragment], {
-      encoding: 'utf-8',
-      timeout: 10000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    const hits = JSON.parse(output.trim());
-    return Array.isArray(hits) && hits.length > 0;
+    parsed = JSON.parse(output.trim());
   } catch (err) {
-    return warnFailOpen('Figure-Guard', 'lookup-error', err.message);
+    if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', err.message);
+    if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', err.message);
+    return allOpen();
   }
+  return {
+    quotes: readBatchFlags(parsed?.quotes, spanTexts.length, 'Vault-Guard'),
+    figures: readBatchFlags(parsed?.figures, figureRefs.length, 'Figure-Guard'),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -467,12 +546,16 @@ function verifyCitationsInVault(citations) {
     })),
   );
 
+  const output = runVaultPython(pyCode, [VAULT_DB, payload], {
+    budget: VAULT_LOOKUP_BUDGET_MS,
+    label: 'Citation-Guard',
+  });
+  if (output === null) {
+    warnFailOpen('Citation-Guard', 'lookup-error', 'kein Interpreter konnte den Vault oeffnen');
+    for (const c of citations) statuses.set(c.key, { status: 'unavailable' });
+    return statuses;
+  }
   try {
-    const output = execFileSync('python3', ['-c', pyCode, VAULT_DB, payload], {
-      encoding: 'utf-8',
-      timeout: 10000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
     const parsed = JSON.parse(output.trim());
     citations.forEach((c, i) => statuses.set(c.key, parsed[i] || { status: 'unavailable' }));
   } catch (err) {
@@ -789,49 +872,70 @@ async function main() {
     process.exit(0);
   }
 
-  // Quote-Spans extrahieren und gegen Vault pruefen
-  const spans = extractQuoteSpans(content);
-  for (const span of spans) {
-    const found = lookupInVault(span);
-    if (!found) {
-      const truncated = span.length > 80 ? span.slice(0, 77) + '...' : span;
-      const msg = [
-        `[Vault-Guard] BLOCKIERT: Zitat nicht im Vault verifiziert.`,
-        `Zitat: "${truncated}"`,
-        `Bitte Zitat über vault.add_quote() oder den quote-extractor einpflegen.`,
-      ].join('\n');
-      process.stderr.write(msg + '\n');
+  // Gesucht wird im ORIGINALINHALT, uebersprungen werden nur ganze Fundstellen,
+  // die in einer Skip-Region liegen. Die Maskierung entscheidet also, WELCHE
+  // Fundstellen geprueft werden — nicht, WELCHER TEXT nachgeschlagen wird:
+  //   - ohne den Skip blockte ein Quellentitel im eigenen Literaturverzeichnis
+  //     ("Mueller, T. (2021). \"Digitalisierung ...\". Springer.") oder ein
+  //     Beispiel-String im Code-Fence faelschlich (Finding 4);
+  //   - wuerde umgekehrt auf dem maskierten Text GESUCHT, ginge ein Zitat mit
+  //     Inline-Code oder LaTeX-Makro mit Leerzeichen an der Makro-Stelle in den
+  //     Vault-Lookup und blockte ebenfalls faelschlich — und ein
+  //     LaTeX-Zitat ``…'' waere gar nicht mehr auffindbar, weil seine beiden
+  //     oeffnenden Backticks als leerer Inline-Code maskiert werden.
+  // maskSkipRegions() ist laengenerhaltend, deshalb sind die Offsets aus dem
+  // Original im maskierten Text gueltig (siehe spanIsMasked()).
+  const maskedContent = maskSkipRegions(content);
 
-      // Claude Code PreToolUse Block-Protokoll: JSON auf stdout + exit 2
-      console.log(JSON.stringify({
-        decision: 'block',
-        reason: msg,
-      }));
-      process.exit(2);
-    }
-  }
+  const spans = extractQuoteSpans(content)
+    .filter((span) => !spanIsMasked(content, maskedContent, span.start, span.end));
+  const figures = [...content.matchAll(FIGURE_REF_PATTERN)]
+    .map((match) => ({
+      text: match[0], // z.B. "Abb. 3.4"
+      start: match.index,
+      end: match.index + match[0].length,
+    }))
+    .filter((ref) => !spanIsMasked(content, maskedContent, ref.start, ref.end));
+
+  // EIN Subprozess fuer alle Spans und Referenzen zusammen (Regression aus dem
+  // ersten Fix: je Span ein eigener Interpreterstart sprengte das 30-s-Timeout).
+  const lookups = lookupBatch(spans.map((s) => s.text), figures.map((f) => f.text));
+
+  spans.forEach((span, i) => {
+    if (lookups.quotes[i]) return;
+    const truncated = span.text.length > 80 ? span.text.slice(0, 77) + '...' : span.text;
+    const msg = [
+      `[Vault-Guard] BLOCKIERT: Zitat nicht im Vault verifiziert.`,
+      `Zitat: "${truncated}"`,
+      `Bitte Zitat über vault.add_quote() oder den quote-extractor einpflegen.`,
+    ].join('\n');
+    process.stderr.write(msg + '\n');
+
+    // Claude Code PreToolUse Block-Protokoll: JSON auf stdout + exit 2
+    console.log(JSON.stringify({
+      decision: 'block',
+      reason: msg,
+    }));
+    process.exit(2);
+  });
 
   // ---------------------------------------------------------------------------
   // Figure-Referenz-Check (additiv, nach Quote-Check)
   // ---------------------------------------------------------------------------
-  const figureMatches = [...content.matchAll(FIGURE_REF_PATTERN)];
-  for (const match of figureMatches) {
-    const refText = match[0]; // z.B. "Abb. 3.4"
-    const found = lookupFigureInVault(refText);
-    if (!found) {
-      const msg = [
-        `[Figure-Guard] BLOCKIERT: Figure-Referenz nicht im Vault verifiziert.`,
-        `Referenz: "${refText}"`,
-        `Bitte Figure via figure-verifier oder vault.add_figure einpflegen.`,
-      ].join('\n');
-      process.stderr.write(msg + '\n');
-      console.log(JSON.stringify({
-        decision: 'block',
-        reason: msg,
-      }));
-      process.exit(2);
-    }
-  }
+  figures.forEach((ref, i) => {
+    if (lookups.figures[i]) return;
+    const msg = [
+      `[Figure-Guard] BLOCKIERT: Figure-Referenz nicht im Vault verifiziert.`,
+      `Referenz: "${ref.text}"`,
+      `Bitte Figure via figure-verifier oder vault.add_figure einpflegen.`,
+    ].join('\n');
+    process.stderr.write(msg + '\n');
+    console.log(JSON.stringify({
+      decision: 'block',
+      reason: msg,
+    }));
+    process.exit(2);
+  });
 
   // ---------------------------------------------------------------------------
   // Klammer-Beleg-Check (additiv, nach Quote- und Figure-Check; Issue #378)

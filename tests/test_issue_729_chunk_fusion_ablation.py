@@ -15,16 +15,12 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
-import tempfile
 from contextlib import contextmanager
-from pathlib import Path
 
 import pytest
 from academic_vault import embedding_model
 from academic_vault.db import VaultDB
 from academic_vault.retrieval import ENV_LOCAL_RERANKER_DISABLE, apply_reranker
-from scripts.eval.run_retrieval_ablation_722 import build_db
 from scripts.eval.run_retrieval_ablation_729 import (
     AC3_PAPER_COUNT,
     AC3_QUERIES,
@@ -42,12 +38,7 @@ from scripts.eval.run_retrieval_ablation_729 import (
     run_search,
     search_papers_paper_level,
 )
-from scripts.eval.run_retrieval_chunk_goldset import (
-    GOLDSET_PATH,
-    build_playback_embedder,
-    load_goldset,
-    load_vectors,
-)
+from scripts.eval.run_retrieval_chunk_goldset import GOLDSET_PATH, load_goldset, load_vectors
 
 
 # ---------------------------------------------------------------------------
@@ -431,12 +422,26 @@ def test_run_quality_ablation_matches_pre_708_baseline_values() -> None:
     Der erwartete Wert ist an die #708-Fixture gebunden, nicht an eine feste
     Query-Zahl -- er aendert sich mit jeder Goldset-Verbreiterung (26 -> 60
     Queries seit #800) und ist hier bewusst der aktuell gemessene Wert, kein
-    Literal aus einem aelteren Lauf."""
+    Literal aus einem aelteren Lauf.
+
+    Der Literal-Wert ist seit #841 0.8667 (vorher 0.5667): der FTS5-Sanitizer
+    (``db._sanitize_fts5_query``) haerte urspruenglich einzelne Zeichen aus
+    einer Blacklist ab und liess u.a. Komma/Punkt/Fragezeichen durch, was
+    ``papers_fts`` MATCH bei jeder betroffenen Query mit
+    ``sqlite3.OperationalError`` abstuerzen liess (siehe
+    ``test_fts5_comma_defect_...`` unten) -- diese Queries zaehlten bislang
+    als Nulltreffer. #841 ersetzte die Blacklist durch eine Tokenisierung:
+    der Sanitizer zerlegt die Query an jedem Nicht-Wortzeichen
+    (``_FTS5_WORD_TOKEN = re.compile(r\"\\w+\")``) und fuegt die Wort-Tokens
+    per Leerzeichen (implizites UND) wieder zusammen -- das Ergebnis ist per
+    Konstruktion immer ein gueltiges FTS5-Bareword-Query, keine Query stuerzt
+    mehr ab, und die zuvor verlorenen Treffer zaehlen jetzt mit. Die
+    Verbesserung ist deshalb erwartet und belegt den Fix, keine Drift."""
     goldset = load_goldset()
     vectors = dict(load_vectors())
     report = run_quality_ablation(goldset, vectors, k=10)
     vorher = report["results"]["vorher"]["overall"]
-    assert vorher["recall_at_10"] == pytest.approx(0.5667, abs=0.001)
+    assert vorher["recall_at_10"] == pytest.approx(0.8667, abs=0.001)
 
 
 @pytest.mark.skipif(not GOLDSET_PATH.exists(), reason="#708-Fixture nicht vorhanden")
@@ -450,39 +455,49 @@ def test_run_quality_ablation_leaves_embedder_cache_clean() -> None:
     assert embedding_model._EMBEDDER_CACHE == prior
 
 
-@pytest.mark.skipif(not GOLDSET_PATH.exists(), reason="#708-Fixture nicht vorhanden")
-def test_fts5_comma_defect_affects_vorher_and_zwischenzustand_a_identically() -> None:
+def test_fts5_comma_defect_is_fixed_for_vorher_and_zwischenzustand_a_alike(tmp_path) -> None:
     """Derselbe vorbestehende Defekt wie in #722 (Komma nicht sanitisiert,
-    sqlite3.OperationalError) betrifft BEIDE Faelle gleichermassen -- er
-    sitzt in ``_papers_fts_hits`` (gemeinsame Kandidatenquelle, siehe
+    ``sqlite3.OperationalError``) betraf BEIDE Faelle gleichermassen -- er
+    sass in ``_papers_fts_hits`` (gemeinsame Kandidatenquelle, siehe
     Modul-Docstring), lange bevor ``attach_chunk`` ueberhaupt ausgewertet
     wird. Kein #729-spezifisches Verhalten, nur die gemeinsame Ursache in
-    ``db._sanitize_fts5_query``."""
-    goldset = load_goldset()
-    vectors = dict(load_vectors())
-    doc_titles = {d["doc_id"]: d["title"] for d in goldset["documents"]}
-    chunk_vectors = {c["chunk_id"]: vectors[c["chunk_id"]] for c in goldset["chunks"]}
-    embedding_texts = {c["chunk_id"]: c["embedding_text"] for c in goldset["chunks"]}
-    embedder = build_playback_embedder(goldset, vectors)
+    ``db._sanitize_fts5_query``.
 
-    with tempfile.TemporaryDirectory() as tmp:
-        db_path = build_db(
-            Path(tmp), "x", goldset, doc_titles, chunk_vectors, embedding_texts, trigram=True
-        )
-        prior = dict(embedding_model._EMBEDDER_CACHE)
-        embedding_model._EMBEDDER_CACHE[embedder.model_id] = embedder
-        try:
-            with pytest.raises(sqlite3.OperationalError):
-                search_papers_paper_level(
-                    db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, attach_chunk=False
-                )
-            with pytest.raises(sqlite3.OperationalError):
-                search_papers_paper_level(
-                    db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, attach_chunk=True
-                )
-        finally:
-            embedding_model._EMBEDDER_CACHE.clear()
-            embedding_model._EMBEDDER_CACHE.update(prior)
+    Ist seit #841 BEHOBEN: der Sanitizer zerlegt die Query an jedem
+    Nicht-Wortzeichen (``_FTS5_WORD_TOKEN``) statt einzelne Zeichen aus einer
+    Blacklist zu entfernen -- das Komma verschwindet damit beim Tokenisieren
+    von selbst, statt eine syntaktisch ungueltige FTS5-Query zu hinterlassen.
+    Dieser Test war urspruenglich ein Beleg-, kein Regressionstest (durfte
+    laut eigenem Docstring rot werden, sobald der Defekt behoben ist -- das
+    ist jetzt eingetreten) und wird hier zur Regressionsschranke umgedreht:
+    ``search_papers_paper_level`` darf bei einer Komma-Query in KEINEM der
+    beiden Faelle mehr abstuerzen, UND ein zur Query passendes Paper muss
+    trotz Komma gefunden werden (kein stiller Leerlauf statt Absturz) --
+    weiterhin identisch fuer ``vorher`` und ``zwischenzustand_a``, weil beide
+    auf derselben ``_papers_fts_hits``-Kandidatenquelle aufsetzen.
+
+    Minimaler handgebauter Volltext statt der #708-Fixture (Muster wie
+    ``tests/test_issue_722_retrieval_ablation.py::
+    test_fts5_comma_defect_is_fixed_no_longer_a_production_bug``): die reale
+    Goldset-Fixture enthaelt diese Wortfolge nicht woertlich, ein Treffer
+    dort waere Zufall statt Beleg."""
+    db_path = str(tmp_path / "comma.db")
+    db = VaultDB(db_path)
+    db.init_schema()
+    db.add_paper(paper_id="p1", csl_json=json.dumps({"title": "x", "type": "article-journal"}))
+    db.set_fulltext("p1", "wie erkennt man frueh dass etwas fehlt")
+
+    # Wirft NICHT mehr sqlite3.OperationalError -- das ist der eigentliche
+    # Test.
+    without_attach = search_papers_paper_level(
+        db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, attach_chunk=False
+    )
+    with_attach = search_papers_paper_level(
+        db_path, "wie erkennt man frueh, dass etwas fehlt", k=5, attach_chunk=True
+    )
+
+    assert [r["paper_id"] for r in without_attach] == ["p1"]
+    assert [r["paper_id"] for r in with_attach] == ["p1"]
 
 
 # ---------------------------------------------------------------------------

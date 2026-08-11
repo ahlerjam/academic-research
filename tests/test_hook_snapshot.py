@@ -5,6 +5,17 @@ Eingabe: JSON auf stdin (Claude Code PreCompact-Format).
 Der Hook schreibt academic_context.md, literature_state.md, writing_state.md
 und einen Vault-Tarball nach ~/.academic-research/snapshots/<slug>/<ts>.tgz.
 Exit 0 immer (fail-open).
+
+ISOLATION: der Hook faellt ohne Env-Vorgaben auf ``os.homedir()`` zurueck und
+schreibt dann in den ECHTEN Nutzer-Baum. Am 11.08.2026 ist genau das passiert:
+``test_hook_exits_zero_on_empty_input`` und
+``test_hook_exits_zero_on_compact_event`` liefen ohne Overrides, und weil der
+Vault-Export im Hook zwischenzeitlich scharf geschaltet wurde, landeten aus
+einem einzigen Testlauf zwei echte Tarballs in
+``~/.academic-research/snapshots/``. Deshalb setzt :func:`run_hook` die drei
+Isolationsvariablen jetzt selbst und weigert sich, den Subprozess ohne sie zu
+starten. Der Schutzwall in tests/conftest.py sieht Subprozess-Schreibzugriffe
+prinzipbedingt nicht kommen -- er meldet sie nur hinterher.
 """
 
 import json
@@ -13,15 +24,57 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import pytest
+
+from tests.conftest import REAL_ACADEMIC_ROOT, is_protected_path
+
 HOOK_PATH = Path(__file__).parent.parent / "hooks" / "pre-compact.mjs"
 WORKTREE_ROOT = Path(__file__).parent.parent
 
+#: Variablen, ohne die der Hook in den echten Nutzer-Baum schreibt.
+ISOLATION_VARS = ("ACADEMIC_SNAPSHOTS_DIR", "CLAUDE_PROJECT_DIR", "VAULT_DB_PATH")
 
-def run_hook(payload: dict, env_overrides: dict = None) -> subprocess.CompletedProcess:
-    """Startet den Hook als Subprocess mit JSON-Eingabe auf stdin."""
+
+def isolation_env(sandbox: Path) -> dict:
+    """Vollstaendige Isolation des Hooks in einem tmp-Verzeichnis.
+
+    HOME wird mitgesetzt, damit auch die Pfade greifen, die der Hook nicht ueber
+    eine eigene Variable, sondern ueber ``os.homedir()`` bildet.
+    """
+    return {
+        "HOME": str(sandbox),
+        "ACADEMIC_SNAPSHOTS_DIR": str(sandbox / "snapshots"),
+        "CLAUDE_PROJECT_DIR": str(sandbox / "project"),
+        "VAULT_DB_PATH": str(sandbox / "vault.db"),
+    }
+
+
+def _assert_isolated(env: dict) -> None:
+    """Bricht ab, bevor der Subprozess ueberhaupt startet, statt danach zu klagen."""
+    for name in ISOLATION_VARS:
+        wert = env.get(name)
+        assert wert, (
+            f"{name} ist nicht gesetzt -- der Hook wuerde in den echten "
+            f"~/.academic-research-Baum schreiben (Vorfall 11.08.2026)."
+        )
+        assert not is_protected_path(wert), f"{name} zeigt in den echten Nutzer-Baum: {wert}"
+
+
+def run_hook(
+    payload: dict, env_overrides: dict = None, *, sandbox: Path = None
+) -> subprocess.CompletedProcess:
+    """Startet den Hook als Subprocess mit JSON-Eingabe auf stdin.
+
+    ``sandbox`` (in der Regel ``tmp_path``) setzt die Isolationsvariablen auf
+    einen Schlag; ``env_overrides`` sticht sie fuer Tests, die einzelne Pfade
+    gezielt brauchen. Ohne beides startet der Subprozess nicht.
+    """
     env = os.environ.copy()
+    if sandbox is not None:
+        env.update(isolation_env(sandbox))
     if env_overrides:
         env.update(env_overrides)
+    _assert_isolated(env)
 
     return subprocess.run(
         ["node", str(HOOK_PATH)],
@@ -33,20 +86,44 @@ def run_hook(payload: dict, env_overrides: dict = None) -> subprocess.CompletedP
     )
 
 
-def test_hook_exits_zero_on_empty_input():
+def test_hook_exits_zero_on_empty_input(tmp_path):
     """Hook ist fail-open: exit 0 auch bei leerem Payload."""
-    result = run_hook({})
+    result = run_hook({}, sandbox=tmp_path)
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
 
 
-def test_hook_exits_zero_on_compact_event():
+def test_hook_exits_zero_on_compact_event(tmp_path):
     """Hook laeuft bei PreCompact-Event durch (exit 0)."""
     payload = {
         "hook_event_name": "PreCompact",
         "trigger_reason": "manual",
     }
-    result = run_hook(payload)
+    result = run_hook(payload, sandbox=tmp_path)
     assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+
+
+def test_run_hook_verweigert_lauf_ohne_isolation(tmp_path):
+    """Ohne Isolationsvariablen startet der Subprozess gar nicht erst.
+
+    Regression zum Vorfall vom 11.08.2026 (zwei echte Tarballs in
+    ~/.academic-research/snapshots/ aus einem Testlauf).
+    """
+    echt = REAL_ACADEMIC_ROOT / "snapshots"
+    for luecke in (
+        {"ACADEMIC_SNAPSHOTS_DIR": ""},
+        {"CLAUDE_PROJECT_DIR": ""},
+        {"VAULT_DB_PATH": ""},
+    ):
+        with pytest.raises(AssertionError):
+            run_hook({}, env_overrides=luecke, sandbox=tmp_path)
+
+    # Und ebenso, wenn eine Variable zwar gesetzt ist, aber in den echten Baum zeigt.
+    with pytest.raises(AssertionError):
+        run_hook(
+            {},
+            env_overrides={"ACADEMIC_SNAPSHOTS_DIR": str(echt)},
+            sandbox=tmp_path,
+        )
 
 
 def test_hook_writes_snapshot_files(tmp_path):

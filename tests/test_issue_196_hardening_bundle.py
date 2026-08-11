@@ -8,12 +8,41 @@ entfaellt seit Issue #377):
   L5 — mid-session-reinforcement.mjs schreibt State mit 0600
 
 Alle Tests sind ohne externe Abhaengigkeiten (kein API-Key, keine DB) lauffaehig.
+
+M2-Nachtrag (Issue #841): die urspruengliche Zeichen-Blacklist (``-^/*():"``)
+liess ``. , ? '`` unangetastet und stuerzte an genau diesen Zeichen mit
+``sqlite3.OperationalError`` ab. Der Fix ersetzt die Blacklist durch
+Tokenize+Quote (:func:`academic_vault.db._sanitize_fts5_query`): jedes
+FTS5-unsichere Token wird als FTS5-Stringliteral gequotet statt einzelne
+Zeichen zu entfernen. Sanitisierte Queries enthalten seither LEGITIM ``"`` und
+``:`` -- die drei betroffenen Tests unten pruefen deshalb nicht mehr auf
+Abwesenheit einzelner Zeichen, sondern real gegen eine In-Memory-FTS5-Tabelle
+auf die eigentliche Schutzeigenschaft: kein Crash, keine Operator-Wirkung.
 """
 
 import re
+import sqlite3
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _assert_valid_fts5_query(sanitized: str, corpus: str = "irrelevant filler text") -> list:
+    """Fuehrt ``sanitized`` als echtes FTS5-MATCH-Argument gegen eine
+    In-Memory-FTS5-Tabelle aus und gibt die Treffer zurueck.
+
+    Eine ``sqlite3.OperationalError`` wuerde hier durchschlagen, BEVOR
+    irgendeine Zeilen-Assertion greift -- das ist die eigentliche
+    Schutzwirkung von Issue #196/#841, eine weit staerkere Pruefung als reine
+    String-Inspektion des sanitisierten Ergebnisses.
+    """
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute("CREATE VIRTUAL TABLE t USING fts5(body)")
+        conn.execute("INSERT INTO t(body) VALUES (?)", (corpus,))
+        return conn.execute("SELECT rowid FROM t WHERE t MATCH ?", (sanitized,)).fetchall()
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -29,15 +58,47 @@ class TestFts5SanitizerHardening:
 
         return _sanitize_fts5_query(query)
 
-    def test_double_quote_removed(self):
-        """Anfuehrungszeichen duerfen nicht durchgereicht werden."""
+    def test_double_quote_query_executes_as_valid_fts5(self):
+        """Ein eingebettetes Anfuehrungszeichen darf die FTS5-Query nicht
+        syntaktisch brechen. Seit #841 wird das Token NICHT mehr entfernt,
+        sondern als FTS5-Stringliteral gequotet (ein eingebettetes ``"`` wird
+        dabei verdoppelt) -- die Query bleibt dadurch fuer JEDE Eingabe
+        gueltig. Verifiziert wird das real gegen eine In-Memory-FTS5-Tabelle,
+        nicht per String-Inspektion (die alte Assertion ``'"' not in out``
+        gilt nicht mehr, weil das Anfuehrungszeichen jetzt Teil des
+        gueltigen, gequoteten Ergebnisses ist)."""
         out = self._sanitize('foo "bar baz')
-        assert '"' not in out
+        _assert_valid_fts5_query(out)
 
-    def test_colon_removed(self):
-        """Doppelpunkt (Column-Filter-Operator) wird neutralisiert."""
+    def test_colon_query_executes_as_valid_fts5_and_is_not_a_column_filter(self):
+        """Doppelpunkt (Column-Filter-Operator in FTS5, z.B. ``title:foo``)
+        darf nicht als Operator wirken. Seit #841 wird ``title:foo`` als
+        Stringliteral ``"title:foo"`` gequotet statt den Doppelpunkt zu
+        entfernen -- das neutralisiert die Operator-Bedeutung, OHNE das
+        Zeichen zu tilgen (die alte Assertion ``':' not in out`` gilt nicht
+        mehr). Verifiziert wird das an einer echten Mehrspalten-FTS5-Tabelle:
+        ein UNSANITISIERTES ``title:foo`` faende eine Zeile allein ueber
+        deren ``title``-Spalte (Zeile 1); die sanitisierte Query darf das
+        NICHT tun, muss aber eine Zeile finden, die den literalen Text
+        ``title:foo`` enthaelt (Zeile 2) -- der Beweis, dass der Doppelpunkt
+        nur noch literaler Text ist, kein Operator mehr."""
         out = self._sanitize("title:foo")
-        assert ":" not in out
+        conn = sqlite3.connect(":memory:")
+        try:
+            conn.execute("CREATE VIRTUAL TABLE t USING fts5(title, body)")
+            conn.execute("INSERT INTO t(title, body) VALUES ('foo', 'irrelevant filler text')")
+            conn.execute(
+                "INSERT INTO t(title, body) VALUES "
+                "('something else', 'contains literal title:foo right here')"
+            )
+            rows = conn.execute("SELECT rowid FROM t WHERE t MATCH ?", (out,)).fetchall()
+        finally:
+            conn.close()
+        assert rows == [(2,)], (
+            "sanitisierte Query darf NICHT ueber den Spalten-Filter 'title:' "
+            "matchen (Zeile 1, kein literales 'title:foo' enthalten), sondern "
+            "nur den literalen Text 'title:foo' finden (Zeile 2)"
+        )
 
     def test_near_operator_neutralised(self):
         """NEAR als Operator-Keyword darf nicht als Operator durchkommen."""
@@ -61,13 +122,20 @@ class TestFts5SanitizerHardening:
         assert "notation" in out
 
     def test_combined_query_does_not_crash_fts5(self):
-        """Eine boese Query mit allen Operatoren ergibt ein sauberes
-        MATCH-faehiges Ergebnis (keine FTS5-Syntax-Tokens mehr)."""
-        out = self._sanitize('"climate" AND change NEAR* (x) OR y NOT z col:val')
-        for forbidden in ('"', ":"):
-            assert forbidden not in out
+        """Eine boese Query mit allen Operatoren PLUS den #841-Sonderzeichen
+        (Punkt, Komma, Fragezeichen, Apostroph, die die alte Blacklist
+        durchliess) ergibt eine syntaktisch gueltige FTS5-MATCH-Query.
+        Verifiziert wird das real gegen eine In-Memory-FTS5-Tabelle statt per
+        String-Inspektion auf Abwesenheit von ``"``/``:`` -- die seit #841
+        legitim im gequoteten Ergebnis vorkommen. Die Operator-Keywords
+        AND/OR/NOT/NEAR muessen als eigenstaendige Tokens weiterhin
+        verschwinden (unveraendertes Verhalten seit #462)."""
+        out = self._sanitize(
+            '"climate" AND change NEAR* (x) OR y NOT z col:val, it\'s DevOps-Governance?'
+        )
         for op in ("AND", "OR", "NOT", "NEAR"):
             assert not re.search(rf"\b{op}\b", out)
+        _assert_valid_fts5_query(out)
 
 
 # ---------------------------------------------------------------------------

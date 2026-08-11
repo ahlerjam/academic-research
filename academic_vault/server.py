@@ -10,6 +10,7 @@ Start via: python -m academic_vault.server
 import json
 import logging
 import os
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -20,6 +21,7 @@ from .db import (
     _UNSET,
     VALID_PAPER_TYPES,
     VaultDB,
+    VaultLockedError,
     _sanitize_fts5_query,
     _Unset,
     default_db_path,
@@ -559,6 +561,101 @@ def quote_context_similarity(
     return float(sum(a * b for a, b in zip(left, right, strict=True)))
 
 
+def _printed_page_zur_verifizierten_seite(
+    db_path: str,
+    paper_id: str,
+    *,
+    uebergebene_pdf_page: int | None,
+    verifizierte_pdf_page: int,
+    printed_page: int,
+) -> int | None:
+    """Zieht ``printed_page`` auf die verifizierte PDF-Seite nach (#512, Fund 3).
+
+    ``_verify_local_verbatim`` liefert IMMER die verifizierte Fundstelle --
+    auch dann, wenn der Aufrufer gar keine ``pdf_page`` genannt hat. Weicht
+    diese Seite von der Grundlage ab, auf der die uebergebene ``printed_page``
+    beruht, muss die gedruckte Seite mitwandern; sonst steht im Vault
+    ``printed_page=45`` neben ``pdf_page=59``. Solche Paare sind nicht bloss
+    unschoen: ``printed_page`` ist ueber ``db.known_page_markers()`` die
+    Stichprobe, gegen die ``db.page_coverage()`` spaeter Klammerbelege
+    prueft -- ein falscher Wert blockt einen KORREKTEN Beleg als
+    ``page-mismatch``.
+
+    Welche Grundlage gilt:
+
+    * **Aufrufer nannte eine ``pdf_page``** -- dann gehoert ``printed_page``
+      zu genau dieser Seite. Stimmt sie mit der verifizierten ueberein, bleibt
+      alles unangetastet (auch eine zum ``page_offset`` unstimmige
+      ``printed_page``: der Beleg hat sich nicht verschoben, hier wird nichts
+      stillschweigend "korrigiert").
+    * **Aufrufer nannte nur die gedruckte Seite** (``pdf_page=None``, der
+      dokumentierte Weg beim Buch in der Hand) -- dann ist der hinterlegte
+      ``page_offset`` die einzige Bruecke zwischen beiden Zaehlungen: die
+      Grundlage ist ``printed_page + page_offset``.
+
+    Umgerechnet wird mit dem hinterlegten ``page_offset``
+    (``printed_page = pdf_page - page_offset``, dieselbe Regel wie
+    :func:`get_printed_page`). Ist KEIN Offset hinterlegt -- Schema-Default
+    ``0``, praktisch nicht von einem echten Nullversatz unterscheidbar --
+    dann gilt:
+
+    * mit uebergebener ``pdf_page`` liefert das Paar
+      (``pdf_page``/``printed_page``) selbst den Versatz; die Fundstelle wird
+      um dieselbe Seitenzahl verschoben wie die PDF-Seite. Das ist naeher an
+      der Wahrheit als die naive Regel mit Offset 0, die aus "gedruckt 45"
+      kommentarlos "gedruckt 59" gemacht haette.
+    * ohne uebergebene ``pdf_page`` gibt es ueberhaupt keine Zuordnung
+      zwischen PDF- und Druckzaehlung. Dann bleibt ``printed_page`` stehen
+      (mit Warnung): die vom Nutzer genannte Buchseite ist die einzige
+      Evidenz ueber die gedruckte Zaehlung, und sie durch die PDF-Seite zu
+      ersetzen waere geraten, nicht gerechnet -- und wuerde spaeter genau den
+      korrekten Beleg blocken, den der Nutzer aus dem Buch abschreibt.
+
+    Returns:
+        Die gueltige gedruckte Seite, oder ``None``, wenn die verifizierte
+        Seite vor dem Textbeginn liegt (Vorspann) -- wie
+        :func:`get_printed_page` wird nicht auf 1 geklemmt.
+    """
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    offset = db.get_page_offset(paper_id)
+
+    if uebergebene_pdf_page is not None:
+        if uebergebene_pdf_page == verifizierte_pdf_page:
+            return printed_page
+        versatz = offset if offset else uebergebene_pdf_page - printed_page
+    else:
+        if not offset:
+            logger.warning(
+                "vault.add_quote: Zitat verifiziert auf pdf_page=%s, uebergeben war nur "
+                "printed_page=%s -- ohne hinterlegten page_offset laesst sich die "
+                "gedruckte Seite nicht nachrechnen; sie bleibt unveraendert. Passt sie "
+                "nicht zur Fundstelle, page_offset setzen (vault.set_page_offset) und "
+                "das Zitat neu erfassen (Paper '%s').",
+                verifizierte_pdf_page,
+                printed_page,
+                paper_id,
+            )
+            return printed_page
+        versatz = offset
+        if printed_page + versatz == verifizierte_pdf_page:
+            return printed_page
+
+    korrigiert: int | None = verifizierte_pdf_page - versatz
+    if korrigiert is not None and korrigiert < 1:
+        korrigiert = None
+    logger.warning(
+        "vault.add_quote: printed_page=%s gehoerte zur PDF-Seite %s -- wegen der "
+        "verifizierten Seite %s wird printed_page=%s gespeichert (Paper '%s').",
+        printed_page,
+        printed_page + versatz,
+        verifizierte_pdf_page,
+        korrigiert,
+        paper_id,
+    )
+    return korrigiert
+
+
 def add_quote(
     db_path: str,
     paper_id: str,
@@ -585,7 +682,16 @@ def add_quote(
       Bei ``exact``/``snapped`` wird der QUELLTEXT (nicht der uebergebene
       Kandidat) samt der VERIFIZIERTEN Seite gespeichert; ein abweichend
       uebergebenes ``pdf_page`` wird verworfen und per ``logger.warning``
-      sichtbar gemacht, weil die verifizierte Seite der Beweis ist.
+      sichtbar gemacht, weil die verifizierte Seite der Beweis ist. Ein
+      mituebergebenes ``printed_page`` gehoert zur verworfenen Seite und wird
+      deshalb aus der verifizierten Seite neu berechnet -- auch dann, wenn
+      gar keine ``pdf_page`` uebergeben wurde (dann ist der hinterlegte
+      ``page_offset`` die Grundlage, s.
+      :func:`_printed_page_zur_verifizierten_seite`). Ohne diese Korrektur
+      landete eine gedruckte Seite im Vault, die nicht zur gespeicherten
+      PDF-Seite passt -- sie wandert ueber ``known_page_markers()`` in die
+      Seiten-Stichprobe und laesst ``verify_citation()`` spaeter einen
+      KORREKTEN Klammerbeleg als ``page-mismatch`` blocken.
       Danach wird -- non-fatal, Issue #520 -- versucht, echten Quellkontext
       aus ``paper_fulltext`` aufzuloesen (:func:`resolve_quote_context`) und
       ``context_before``/``context_after``/``context_source`` zu befuellen.
@@ -623,7 +729,16 @@ def add_quote(
             "vault.add_quote: api_response_id required for extraction_method='citations-api'"
         )
     if extraction_method == "local-verbatim":
+        uebergebene_pdf_page = pdf_page
         verbatim, pdf_page = _verify_local_verbatim(db_path, paper_id, verbatim, pdf_page)
+        if printed_page is not None:
+            printed_page = _printed_page_zur_verifizierten_seite(
+                db_path,
+                paper_id,
+                uebergebene_pdf_page=uebergebene_pdf_page,
+                verifizierte_pdf_page=pdf_page,
+                printed_page=printed_page,
+            )
     quote_id = str(uuid4())
     db = VaultDB(db_path)
     db.init_schema()
@@ -1752,8 +1867,18 @@ def verify_citations(db_path: str, items: list[dict]) -> list[dict]:
     [[first, last], ...]}`` mit den im Vault hinterlegten Seiten fuer die
     Blockmeldung (Issue #724, AC1) -- in derselben Reihenfolge wie ``items``.
     Status-Bedeutung siehe :func:`verify_citation`.
+
+    Wie jeder andere Lesepfad laeuft zuerst :func:`_ensure_schema_for_read`:
+    ohne ihn warf der erste Vault-Zugriff auf einer frisch angelegten, noch
+    schemalosen ``vault.db`` ein ``sqlite3.OperationalError: no such table:
+    papers``. ``hooks/verbatim-guard.mjs`` deutet den Nicht-Null-Exit als
+    "Vault nicht verfuegbar" und laesst den Schreibvorgang mit
+    ``[UNVERIFIED]``-Markern durch (fail-open) -- die existSync-Vorpruefung des
+    Hooks greift nicht, weil die Datei ja existiert. Ein sauberes "no-match"
+    auf leerem Vault ist die richtige Auskunft.
     """
     db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
     snapshot = db._papers_snapshot()
     results: list[dict] = []
     for item in items:
@@ -2255,6 +2380,20 @@ def is_excluded(db_path: str, paper_id: str) -> bool:
 _DEFAULT_KAPITEL_DIRNAME = "kapitel"
 
 
+def _chapter_dirname() -> str:
+    """Name des Kapitelverzeichnisses -- ``ACADEMIC_CHAPTER_DIR`` oder Default.
+
+    Semantik bewusst identisch zu ``chapterDirFrom()`` in
+    ``hooks/lib/protected-path.mjs``: der Wert wird getrimmt, ein leerer oder
+    nur aus Whitespace bestehender Override faellt auf ``kapitel`` zurueck.
+    Beide Seiten muessen dasselbe Verzeichnis meinen -- sonst schuetzt der
+    Hook ``manuskript/03.md``, waehrend ``check_retractions()`` in einem
+    nicht existierenden ``kapitel/`` sucht und jeden Rueckzug als "nicht
+    zitiert" meldet (dokumentiert in ``docs/reference/hooks.md``).
+    """
+    return os.environ.get("ACADEMIC_CHAPTER_DIR", "").strip() or _DEFAULT_KAPITEL_DIRNAME
+
+
 def check_retractions(
     db_path: str,
     max_age_days: int = 90,
@@ -2283,14 +2422,31 @@ def check_retractions(
     Treffer traegt seine Fundstelle (``source``, der Crossref-DOI der
     Retraction-Notiz) sowie ein ``cited_in_chapter``-Flag: eine heuristische
     (Autor-Familienname + Jahr, s. ``db.paper_cited_in_chapters``) Pruefung,
-    ob das Paper bereits in einem Kapiteltext unter ``<project_dir>/kapitel/``
-    vorkommt (AC5).
+    ob das Paper bereits in einem Kapiteltext unter
+    ``<project_dir>/<ACADEMIC_CHAPTER_DIR oder kapitel>/`` vorkommt (AC5) --
+    dasselbe Verzeichnis, das auch die Kapitel-Guards schuetzen (s.
+    :func:`_chapter_dirname`).
 
     Papers ohne DOI erscheinen unter ``no_doi`` -- "nicht pruefbar", nicht
     stillschweigend uebergangen (AC6). Ein Crossref-Ausfall pro Paper landet
     unter ``error`` mit Klartext-Ursache; ``error_count`` macht einen
     Teilausfall im Gesamtergebnis sichtbar statt ihn wie ein leeres "keine
     Rueckzuege"-Resultat aussehen zu lassen (AC7).
+
+    **Auf einem gesperrten Vault laeuft die Pruefung trotzdem** (Material-
+    Passport-Lock, s. ``VaultDB._raise_if_locked``): Das Vorruecken von
+    ``retraction_checked_at`` ist Buchhaltung ueber den Pruefzeitpunkt, kein
+    inhaltlicher Schreibvorgang am Material -- der ``VaultLockedError`` wird
+    deshalb GENAU an dieser Stelle abgefangen, das Update entfaellt und die
+    Pruefung laeuft weiter. Sonst waere ``vault.check_retractions`` ab dem
+    Sperren des Passports komplett unbrauchbar (der erste 'clean'-Treffer
+    haette den Aufruf mit einem Tool-Fehler beendet -- samt der bereits
+    gefundenen Rueckzuege, also genau der Warnung, die in dieser Phase
+    gebraucht wird). Der Lock selbst bleibt unangetastet: geschrieben wird
+    nichts, ``lock_skipped_count`` benennt die uebersprungenen Updates, und
+    der naechste Lauf prueft die betroffenen Papers eben erneut. Die echten
+    Schreibpfade (``set_page_offset``, ``update_pdf_path``, ``set_ocr_done``)
+    fangen den Fehler NICHT ab und bleiben hart gesperrt.
 
     Rueckgabe:
         {
@@ -2300,6 +2456,8 @@ def check_retractions(
           "no_doi": [paper_id, ...],
           "checked_count": int,   # tatsaechlich gegen Crossref geprueft
           "skipped_fresh_count": int,  # uebersprungen, da noch nicht "stale"
+          "lock_skipped_count": int,   # Zeitstempel-Updates, die der
+                                       # Passport-Lock verhindert hat
           "error_count": int,
         }
     """
@@ -2309,7 +2467,7 @@ def check_retractions(
     papers = db.list_literature_papers()
     now = int(time.time())
     stale_cutoff = now - max_age_days * 86400
-    kapitel_dir = Path(project_dir) / _DEFAULT_KAPITEL_DIRNAME
+    kapitel_dir = Path(project_dir) / _chapter_dirname()
 
     result: dict = {
         "retracted": [],
@@ -2318,6 +2476,7 @@ def check_retractions(
         "no_doi": [],
         "checked_count": 0,
         "skipped_fresh_count": 0,
+        "lock_skipped_count": 0,
     }
 
     for paper in papers:
@@ -2343,7 +2502,19 @@ def check_retractions(
             continue  # kein Timestamp-Update -- naechster Lauf versucht erneut.
 
         if check.status == "clean":
-            db.update_retraction_checked_at(paper_id, now)
+            try:
+                db.update_retraction_checked_at(paper_id, now)
+            except VaultLockedError:
+                # Der Zeitstempel ist reine Buchhaltung ("wann zuletzt gegen
+                # Crossref geprueft"), kein inhaltlicher Vault-Schreibvorgang.
+                # Auf einem gesperrten Vault -- dem NORMALEN Endzustand eines
+                # abgeschlossenen Material-Passports -- soll die Pruefung
+                # deshalb durchlaufen und ihren Report liefern, statt mit
+                # VaultLockedError abzubrechen und damit ausgerechnet die
+                # bereits gefundenen Rueckzuege zu verschlucken. Der Lock
+                # bleibt trotzdem wirksam: geschrieben wird NICHTS, der
+                # naechste Lauf prueft dieses Paper eben erneut.
+                result["lock_skipped_count"] += 1
             result["clean"].append(paper_id)
             continue
 
@@ -2366,6 +2537,13 @@ def check_retractions(
         )
 
     result["error_count"] = len(result["error"])
+    if result["lock_skipped_count"]:
+        logger.warning(
+            "vault.check_retractions: Vault ist gesperrt -- fuer %s Paper(s) wurde der "
+            "Pruefzeitstempel nicht fortgeschrieben. Die Pruefung selbst ist vollstaendig, "
+            "der naechste Lauf prueft diese Papers erneut gegen Crossref.",
+            result["lock_skipped_count"],
+        )
     return result
 
 
@@ -2641,6 +2819,14 @@ def export_snapshot(
     slug_dir = Path(snapshots_dir) / slug
     slug_dir.mkdir(parents=True, exist_ok=True)
     out_path = slug_dir / f"{ts}.tgz"
+    # Zwei Exporte in derselben MINUTE duerfen einander nicht ueberschreiben:
+    # ``tarfile.open(..., "w:gz")`` kuerzt eine bestehende Datei, und das waere
+    # ausgerechnet die zuletzt gezogene Sicherung. Gleiche Logik wie bei
+    # :func:`_backup_live_vault` (Datenverlust-Vorfall 11.08.2026).
+    lauf = 1
+    while out_path.exists():
+        out_path = slug_dir / f"{ts}-{lauf}.tgz"
+        lauf += 1
 
     state_files = [
         "academic_context.md",
@@ -2678,32 +2864,330 @@ def export_snapshot(
         return None
 
 
-def restore_snapshot(
+# Arcname, unter dem :func:`export_snapshot` die Vault-DB ablegt. Sie wird
+# beim Restore NICHT nach target_dir entpackt, sondern an den Pfad
+# zurueckgeschrieben, von dem der Export sie gelesen hat (s.
+# :func:`restore_snapshot_report`).
+_SNAPSHOT_VAULT_ARCNAME = "vault.db"
+
+# Platzhalter-Member eines Snapshots ohne Nutzdaten (s. export_snapshot).
+# Sein Vorhandensein ist kein wiederhergestellter Inhalt.
+_SNAPSHOT_EMPTY_ARCNAME = "snapshot-empty.txt"
+
+
+# Herkunftskennzeichnungen, die die Snapshot-Hooks NACH dem Export an den
+# Dateinamen haengen, um ihr jeweiliges Pruning auf die eigenen Dateien zu
+# beschraenken (beide Hooks teilen sich das Slug-Verzeichnis):
+#   * ``.precompact`` -- hooks/pre-compact.mjs (OWN_SNAPSHOT_SUFFIX dort)
+#   * ``.session``    -- hooks/session-snapshot.mjs (OWN_SNAPSHOT_SUFFIX dort)
+# Ohne Kennzeichnung liegen die Exporte von :func:`export_snapshot` selbst da
+# (MCP-Tool ``vault.export_snapshot``, manueller Aufruf).
+_SNAPSHOT_HERKUNFT_MARKER = (".precompact", ".session")
+
+# Vollstaendige Namensform eines Snapshot-Tarballs zu einem Zeitstempel:
+#   <ts>.tgz  <ts>-<n>.tgz  <ts>.precompact.tgz  <ts>-<n>.session.tgz  ...
+# ``-<n>`` ist das Kollisionsschema aus :func:`export_snapshot` (und, gespiegelt,
+# aus uniqueOwnTarPath() in hooks/pre-compact.mjs).
+_SNAPSHOT_NAME_MUSTER = r"(-\d+)?({marker})?\.tgz"
+
+# Kanonisches Zeitstempel-Format der Exporte (``strftime("%Y%m%d-%H%M")``, s.
+# :func:`export_snapshot`). Der ``ts`` MUSS dagegen validiert werden, bevor er in
+# das Namensmuster eingesetzt wird: die optionale Kollisionsgruppe ``(-\d+)?``
+# verschluckt sonst genau den ``-HHMM``-Teil, sodass ein abgeschnittener ``ts``
+# wie ``20260507`` auf JEDEN Snapshot dieses Tages passt. Mit dem seit #857
+# ausdruecklich uebergebenen ``db_path`` liefe der Fehltreffer nicht mehr ins
+# Leere, sondern legte eine fremde Snapshot-DB ueber den aktiven Vault.
+_SNAPSHOT_TS_MUSTER = re.compile(r"\d{8}-\d{4}")
+
+
+def _finde_snapshot_tarballs(slug_dir: Path, ts: str) -> list[Path]:
+    """Loest einen Zeitstempel auf ALLE zu ihm gehoerenden Tarball-Dateien auf.
+
+    Der Restore baute den Pfad frueher hart als ``<slug_dir>/<ts>.tgz``. Damit
+    war jeder von einem Hook gekennzeichnete Snapshot ueber den einzigen
+    dokumentierten Wiederherstellungsweg (``/academic-research:history
+    --restore <ts>`` bzw. ``vault.restore_snapshot``) unerreichbar -- also
+    ausgerechnet die Snapshots, die als einzige eine vollstaendige ``vault.db``
+    mitfuehren. Der Nutzer bekam "Snapshot nicht gefunden", obwohl die Datei
+    dalag.
+
+    Aufgeloest wird ausschliesslich ueber die Verzeichnis-Auflistung: der
+    ``ts`` wird nie in einen Pfad interpoliert, sondern nur als
+    ``re.escape``-ter Namensbestandteil gegen bereits vorhandene DATEINAMEN
+    geprueft. Ein praeparierter ``ts`` (``../fremd/...``, absoluter Pfad) kann
+    deshalb prinzipiell keinen Treffer erzeugen -- Dateinamen enthalten keinen
+    Pfadtrenner. Der Traversal-Guard fuer die Tarball-MEMBER in
+    :func:`restore_snapshot_report` ist davon unberuehrt und bleibt bestehen;
+    er schuetzt gegen etwas anderes (Inhalt statt Auswahl des Archivs).
+
+    Returns:
+        Treffer aufsteigend nach Aenderungszeit (bei Gleichstand nach Name),
+        also ``[-1]`` == juengster. Leere Liste, wenn nichts passt oder das
+        Slug-Verzeichnis nicht lesbar ist.
+    """
+    # Fail-closed: ein ``ts``, der nicht dem Exportformat entspricht (abgeschnitten,
+    # praepariert), loest auf NICHTS auf, statt ueber die Kollisionsgruppe einen
+    # beliebigen Snapshot desselben Tages einzufangen.
+    if not _SNAPSHOT_TS_MUSTER.fullmatch(ts):
+        return []
+
+    muster = re.compile(
+        re.escape(ts)
+        + _SNAPSHOT_NAME_MUSTER.format(
+            marker="|".join(re.escape(m) for m in _SNAPSHOT_HERKUNFT_MARKER)
+        )
+    )
+    try:
+        namen = sorted(eintrag.name for eintrag in slug_dir.iterdir())
+    except OSError:
+        return []
+
+    treffer: list[tuple[int, str, Path]] = []
+    for name in namen:
+        if not muster.fullmatch(name):
+            continue
+        # Kein os.path.join mit ``ts``: ``name`` stammt aus iterdir() und kann
+        # daher keinen Pfadtrenner enthalten -- der Kandidat liegt zwingend im
+        # Slug-Verzeichnis.
+        kandidat = slug_dir / name
+        try:
+            if not kandidat.is_file():
+                continue
+            treffer.append((kandidat.stat().st_mtime_ns, name, kandidat))
+        except OSError:  # pragma: no cover -- Datei verschwand zwischen den Aufrufen
+            continue
+
+    treffer.sort()
+    return [pfad for _, _, pfad in treffer]
+
+
+def _backup_live_vault(db_target: Path) -> tuple[str | None, str]:
+    """Sichert eine bestehende ``vault.db`` neben sich, bevor sie ueberschrieben wird.
+
+    Bevorzugt die SQLite-Backup-API (konsistente Kopie inkl. WAL-Inhalt); ist
+    die Datei nicht als SQLite lesbar (genau der Havariefall, wegen dessen der
+    Restore laeuft), wird byteweise kopiert.
+
+    Rein additiv: die Funktion legt eine Kopie an und fasst den Ausgangszustand
+    NICHT an. Die WAL-/SHM-Beidateien -- die zur ALTEN Datei gehoeren und nach
+    dem Ueberschreiben auf die zurueckgespielte DB angewendet wuerden -- raeumt
+    erst :func:`_wal_beidateien_beiseitelegen` weg, unmittelbar vor dem Tausch
+    (s. dort, Regression aus Runde 2).
+
+    Returns:
+        ``(Pfad der Sicherung oder None, Zeitstempel)``. ``None``, wenn es
+        nichts zu sichern gab; der Zeitstempel benennt beide Sicherungen
+        (DB wie Beidateien) einheitlich.
+    """
+    import shutil
+    from datetime import datetime
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if not db_target.exists():
+        return None, stamp
+
+    backup = db_target.with_name(f"{db_target.name}.{stamp}.bak")
+    lauf = 1
+    while backup.exists():
+        # Zwei Restores in derselben Sekunde duerfen die erste Sicherung nicht
+        # ueberschreiben -- sonst waere genau der Stand weg, den sie sichert.
+        backup = db_target.with_name(f"{db_target.name}.{stamp}-{lauf}.bak")
+        lauf += 1
+    try:
+        src = sqlite3.connect(str(db_target))
+        try:
+            dst = sqlite3.connect(str(backup))
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+    except sqlite3.Error:
+        # Keine lesbare SQLite-Datei (korrupt/leer) -- dann eben roh kopieren,
+        # damit der bisherige Stand trotzdem nicht verloren geht.
+        backup.unlink(missing_ok=True)
+        shutil.copy2(str(db_target), str(backup))
+
+    return str(backup), stamp
+
+
+def _wal_beidateien_beiseitelegen(db_target: Path, stamp: str) -> list[tuple[Path, Path]]:
+    """Legt ``vault.db-wal``/``-shm`` beiseite -- unmittelbar vor dem Tausch.
+
+    Die Beidateien gehoeren zur ALTEN Datei; blieben sie liegen, wuerde SQLite
+    sie beim naechsten Oeffnen auf die zurueckgespielte DB anwenden. Sie
+    duerfen aber erst weichen, wenn die neue DB vollstaendig geschrieben und
+    der Tausch unmittelbar bevorsteht: Bricht der Restore vorher ab (korruptes
+    Tarball, Platte voll), bleibt die Live-DB unveraendert liegen -- ohne ihr
+    WAL waeren aus Nutzersicht dennoch alle dort committeten, noch nicht
+    gecheckpointeten Transaktionen verloren, obwohl der Restore als
+    fehlgeschlagen gemeldet wurde. Genau dieser stille Datenverlust war die
+    Regression aus Runde 2.
+
+    Returns:
+        Liste ``(neuer Pfad, urspruenglicher Pfad)`` fuer
+        :func:`_wal_beidateien_zurueckrollen`.
+    """
+    verschoben: list[tuple[Path, Path]] = []
+    for sidecar_suffix in ("-wal", "-shm"):
+        sidecar = db_target.with_name(db_target.name + sidecar_suffix)
+        if sidecar.exists():
+            ziel = db_target.with_name(f"{db_target.name}{sidecar_suffix}.{stamp}.bak")
+            lauf = 1
+            while ziel.exists():
+                ziel = db_target.with_name(f"{db_target.name}{sidecar_suffix}.{stamp}-{lauf}.bak")
+                lauf += 1
+            sidecar.replace(ziel)
+            verschoben.append((ziel, sidecar))
+    return verschoben
+
+
+def _wal_beidateien_zurueckrollen(verschoben: list[tuple[Path, Path]]) -> None:
+    """Stellt beiseitegelegte WAL-/SHM-Dateien wieder her (Tausch fehlgeschlagen)."""
+    for ziel, original in verschoben:
+        try:
+            ziel.replace(original)
+        except OSError as exc:  # pragma: no cover -- reiner Notnagel
+            logger.warning(
+                "vault.restore_snapshot: %s liess sich nicht nach %s zurueckrollen: %s",
+                ziel,
+                original,
+                exc,
+            )
+
+
+_VAULT_DB_UEBERGANGEN = (
+    "vault.db nicht zurueckgespielt: kein db_path uebergeben. Das "
+    "Zurueckschreiben einer Live-Datenbank verlangt einen ausdruecklichen "
+    "Zielpfad (db_path=...)."
+)
+
+
+def restore_snapshot_report(
     slug: str,
     ts: str,
     snapshots_dir: str | None = None,
     target_dir: str = ".",
-) -> bool:
-    """Stellt Snapshot zurueck: Entpackt <slug>/<ts>.tgz in target_dir.
+    *,
+    db_path: str | None = None,
+) -> dict:
+    """Stellt Snapshot ``<slug>/<ts>.tgz`` zurueck und berichtet, was passiert ist.
+
+    Die State-Dateien landen in ``target_dir``; das ``vault.db``-Member wird
+    dagegen an GENAU den Pfad zurueckgeschrieben, den ``db_path`` nennt --
+    typischerweise der Pfad, von dem :func:`export_snapshot` die DB gelesen
+    hat. Frueher wurde sie nach ``target_dir`` entpackt, also neben den CWD
+    gelegt; dort liest der Server nie (``db.default_db_path()`` schliesst das
+    CWD ausdruecklich aus). Der Rollback lief damit ins Leere, meldete aber
+    ``True``.
+
+    **Ohne ``db_path`` wird das ``vault.db``-Member uebergangen** -- nicht
+    entpackt, nicht zurueckgeschrieben -- und das im Report unter
+    ``vault_db_skipped`` ausdruecklich gesagt. Kein Fallback auf
+    :func:`db.default_db_path`, und zwar wegen des Datenverlust-Vorfalls vom
+    11.08.2026: die Vorgaengerfassung schrieb nach ``db_path or
+    default_db_path()``, worauf ein Testlauf ohne ``db_path`` und ohne
+    ``VAULT_DB_PATH`` den ECHTEN Vault unter
+    ``~/.academic-research/projects/<slug>/vault.db`` mit tmp-Testdaten
+    ueberschrieb (1 Paper, 2 Zitate, 1 Notiz, 1 excluded_source weg). Der
+    kanonische Default ist als Rateweg damit gestrichen: wer eine Live-DB
+    ueberschreiben will, muss sie benennen. Der MCP-Tool-Pfad
+    (``vault.restore_snapshot``) tut genau das und loest den konkreten Pfad
+    vorher auf; ``db_path`` ist zusaetzlich keyword-only, damit kein
+    durchgereichtes Positionsargument versehentlich zum DB-Ziel wird.
+
+    Weil hier eine LIVE-Datenbank ueberschrieben wird, geschieht das
+    ausdruecklich nachvollziehbar: der bisherige Bestand wird zuvor als
+    ``vault.db.<YYYYMMDD-HHMMSS>.bak`` daneben gesichert
+    (:func:`_backup_live_vault`), und der Report benennt Sicherung wie Ziel.
+
+    Ein FEHLGESCHLAGENER Restore laesst die LIVE-``vault.db`` unangetastet --
+    ``ok=False`` heisst also nicht "nichts angefasst": die State-Dateien werden
+    vor dem DB-Block nach ``target_dir`` entpackt und sind dann bereits ersetzt.
+    Welche das waren, steht auch im Fehlerfall in ``restored_files``; Aufrufer
+    sollen das ausweisen, statt einen Teil-Erfolg als folgenlosen Fehlschlag
+    darzustellen. Fuer die DB selbst wird die neue Fassung
+    erst vollstaendig als ``vault.db.restore-tmp`` danebengeschrieben; erst
+    danach werden Sicherung und Wegraeumen der WAL-/SHM-Beidateien angestossen
+    und die Datei atomar getauscht -- scheitert der Tausch doch, kommen die
+    Beidateien zurueck. Frueher wanderten sie VOR dem Schreiben beiseite, was
+    einen abgebrochenen Restore alle im WAL committeten, noch nicht
+    gecheckpointeten Transaktionen kosten liess, obwohl er sich als
+    folgenlos gescheitert meldete.
+
+    Der ``ts`` wird ueber :func:`_finde_snapshot_tarballs` auf eine Datei
+    aufgeloest, nicht mehr hart zu ``<ts>.tgz`` zusammengesetzt: dieselbe Minute
+    kann als ``<ts>.tgz``, ``<ts>-<n>.tgz`` (Kollisionsschema) sowie mit
+    Herkunftskennzeichnung als ``<ts>.precompact.tgz`` / ``<ts>.session.tgz``
+    danebenliegen. Passen MEHRERE Dateien, gewinnt die juengste; ``tarball``
+    nennt die tatsaechlich verwendete, ``tarball_candidates`` alle Treffer.
 
     Args:
         slug:          Projekt-Slug.
-        ts:            Timestamp-String (Dateiname ohne .tgz).
+        ts:            Timestamp-String (Dateiname ohne .tgz und ohne
+                       Herkunftskennzeichnung, z. B. ``20260507-1430``).
         snapshots_dir: Basisverzeichnis der Snapshots.
-        target_dir:    Zielverzeichnis fuer Extraktion.
+        target_dir:    Zielverzeichnis fuer die State-Dateien.
+        db_path:       Zielpfad der Vault-DB (keyword-only). Ohne Angabe wird
+                       die DB NICHT wiederhergestellt.
 
     Returns:
-        True bei Erfolg, False bei Fehler.
+        ``{"ok": bool, "tarball": str | None, "tarball_candidates": [...],
+        "restored_files": [...], "vault_db_restored": str | None,
+        "vault_db_backup": str | None, "vault_db_skipped": str | None,
+        "error": str | None}``. ``ok`` ist nur
+        dann ``True``, wenn tatsaechlich etwas zurueckgespielt wurde -- ein
+        Snapshot, der nur den Platzhalter ``snapshot-empty.txt`` enthaelt oder
+        dessen einziger Inhalt die uebergangene ``vault.db`` ist, meldet
+        ``False`` statt einen Erfolg vorzutaeuschen.
     """
     import tarfile
+
+    report: dict = {
+        "ok": False,
+        "tarball": None,
+        "tarball_candidates": [],
+        "restored_files": [],
+        "vault_db_restored": None,
+        "vault_db_backup": None,
+        "vault_db_skipped": None,
+        "error": None,
+    }
 
     if snapshots_dir is None:
         snapshots_dir = str(Path.home() / ".academic-research" / "snapshots")
 
-    tar_path = Path(snapshots_dir) / slug / f"{ts}.tgz"
-    if not tar_path.exists():
-        return False
+    slug_dir = Path(snapshots_dir) / slug
+    kandidaten = _finde_snapshot_tarballs(slug_dir, ts)
+    if not kandidaten:
+        report["error"] = (
+            f"Snapshot nicht gefunden: {slug_dir / (ts + '.tgz')} -- auch nicht "
+            f"als {ts}-<n>.tgz, {ts}.precompact.tgz oder {ts}.session.tgz."
+        )
+        return report
 
+    # Mehrere Namensformen koennen zu EINEM Zeitstempel gehoeren (Kollisions-
+    # schema plus die Herkunftskennzeichnungen der beiden Hooks). Es wird nicht
+    # geraten: der juengste Treffer gewinnt -- das ist der Stand, den der Nutzer
+    # mit "der Snapshot von <ts>" meint -- und der Report nennt in ``tarball``
+    # die TATSAECHLICH verwendete Datei sowie in ``tarball_candidates`` alle
+    # Treffer, damit die Auswahl nachvollziehbar bleibt.
+    report["tarball_candidates"] = [str(p) for p in kandidaten]
+    tar_path = kandidaten[-1]
+    report["tarball"] = str(tar_path)
+    if len(kandidaten) > 1:
+        logger.info(
+            "vault.restore_snapshot: %d Snapshots zu ts=%s gefunden (%s); "
+            "verwendet wird der juengste: %s",
+            len(kandidaten),
+            ts,
+            ", ".join(p.name for p in kandidaten),
+            tar_path,
+        )
+
+    # Bewusst KEIN `or default_db_path()`: siehe Docstring (Datenverlust 11.08.2026).
+    db_target = Path(db_path) if db_path else None
     target_path = Path(target_dir)
     target_path.mkdir(parents=True, exist_ok=True)
 
@@ -2713,8 +3197,11 @@ def restore_snapshot(
             # Sicher extrahieren (CVE-2007-4559 / CWE-22, Issue #192).
             # Schicht 1: Symlink-/Hardlink-Member und Path-Traversal pro
             # Member explizit ablehnen — funktioniert auch auf Python < 3.12
-            # ohne PEP-706-Filter.
+            # ohne PEP-706-Filter. Gilt unveraendert auch fuer das
+            # vault.db-Member: ein als Symlink getarntes "vault.db" wuerde
+            # sonst beim Zurueckschreiben durch den Link hindurch schreiben.
             safe_members = []
+            vault_member = None
             for m in tar.getmembers():
                 if m.issym() or m.islnk():
                     # Symlinks/Hardlinks erlauben Escapes aus dem Zielverzeichnis.
@@ -2724,6 +3211,11 @@ def restore_snapshot(
                 resolved = (dest / m.name).resolve()
                 if resolved != dest and dest not in resolved.parents:
                     raise ValueError(f"path traversal: {m.name}")
+                if m.name == _SNAPSHOT_VAULT_ARCNAME:
+                    if not m.isfile():
+                        raise ValueError(f"vault.db-Member ist keine regulaere Datei: {m.name}")
+                    vault_member = m
+                    continue
                 safe_members.append(m)
             # Schicht 2: PEP-706-data-Filter (Python 3.12+, backportiert auf
             # 3.9.17+/3.10.12+/3.11.4+). Blockiert Symlink-Escape und
@@ -2734,9 +3226,99 @@ def restore_snapshot(
             except TypeError:
                 # filter-Argument auf aelteren Pythons nicht vorhanden
                 tar.extractall(str(target_path), members=safe_members)
-        return True
-    except Exception:
-        return False
+            report["restored_files"] = [
+                m.name for m in safe_members if m.isfile() and m.name != _SNAPSHOT_EMPTY_ARCNAME
+            ]
+
+            if vault_member is not None and db_target is None:
+                # Uebergehen statt raten: lieber ein DB-loser Restore, den der
+                # Report benennt, als ein Treffer auf einer fremden Live-DB.
+                report["vault_db_skipped"] = _VAULT_DB_UEBERGANGEN
+                logger.warning(
+                    "vault.restore_snapshot: %s enthaelt ein vault.db-Member, "
+                    "das ohne db_path uebergangen wird.",
+                    tar_path,
+                )
+            elif vault_member is not None and db_target is not None:
+                quelle = tar.extractfile(vault_member)
+                if quelle is None:
+                    raise ValueError("vault.db-Member liess sich nicht lesen.")
+                db_target.parent.mkdir(parents=True, exist_ok=True)
+                tmp_target = db_target.with_name(f"{db_target.name}.restore-tmp")
+                try:
+                    # Reihenfolge ist hier Datensicherheit: erst die neue DB
+                    # VOLLSTAENDIG danebenlegen, dann sichern, dann die
+                    # WAL-Beidateien wegraeumen, dann atomar tauschen. Bricht
+                    # irgendetwas davor ab (korruptes Tarball, Platte voll),
+                    # liegt der Ausgangszustand komplett und unveraendert da --
+                    # inklusive WAL, dessen Verlust sonst als "Restore
+                    # fehlgeschlagen, nichts passiert" gemeldete Transaktionen
+                    # verschluckt haette.
+                    with open(tmp_target, "wb") as ziel:
+                        while True:
+                            block = quelle.read(1024 * 1024)
+                            if not block:
+                                break
+                            ziel.write(block)
+                    report["vault_db_backup"], stamp = _backup_live_vault(db_target)
+                    verschobene_beidateien = _wal_beidateien_beiseitelegen(db_target, stamp)
+                    try:
+                        tmp_target.replace(db_target)
+                    except OSError:
+                        _wal_beidateien_zurueckrollen(verschobene_beidateien)
+                        raise
+                finally:
+                    tmp_target.unlink(missing_ok=True)
+                report["vault_db_restored"] = str(db_target)
+                logger.info(
+                    "vault.restore_snapshot: vault.db aus %s nach %s zurueckgespielt "
+                    "(Sicherung des bisherigen Bestands: %s).",
+                    tar_path,
+                    db_target,
+                    report["vault_db_backup"] or "keine (Vault existierte nicht)",
+                )
+
+        report["ok"] = bool(report["restored_files"]) or report["vault_db_restored"] is not None
+        if not report["ok"]:
+            # Wenn die uebergangene DB der einzige Inhalt war, ist genau das der
+            # Grund -- nicht "leerer Snapshot".
+            report["error"] = (
+                report["vault_db_skipped"] or "Snapshot enthielt keine wiederherstellbaren Inhalte."
+            )
+        return report
+    except Exception as exc:
+        logger.warning("vault.restore_snapshot: Wiederherstellung fehlgeschlagen: %s", exc)
+        report["ok"] = False
+        report["error"] = str(exc)
+        return report
+
+
+def restore_snapshot(
+    slug: str,
+    ts: str,
+    snapshots_dir: str | None = None,
+    target_dir: str = ".",
+    *,
+    db_path: str | None = None,
+) -> bool:
+    """Bool-Fassade von :func:`restore_snapshot_report` (Aufrufer: ``/history --restore``).
+
+    ``True`` nur, wenn tatsaechlich etwas zurueckgespielt wurde -- Details
+    (Dateien, Vault-Pfad, Sicherung, uebergangene DB) liefert
+    :func:`restore_snapshot_report`.
+
+    ``db_path`` ist wie dort keyword-only und hat KEINEN Default auf den
+    kanonischen Vault-Pfad: ohne Angabe bleibt die Live-DB unangetastet
+    (Datenverlust-Vorfall 11.08.2026). Wer sie zurueckrollen will, uebergibt
+    ``db_path=default_db_path()`` -- ausdruecklich und sichtbar am Aufruf.
+    """
+    return restore_snapshot_report(
+        slug,
+        ts,
+        snapshots_dir=snapshots_dir,
+        target_dir=target_dir,
+        db_path=db_path,
+    )["ok"]
 
 
 def get_printed_page(db_path: str, paper_id: str, pdf_page: int) -> int | None:
@@ -3532,13 +4114,29 @@ def _build_mcp_server():
         ts: str,
         snapshots_dir: str | None = None,
         target_dir: str = ".",
-    ) -> bool:
-        """Stellt einen Snapshot zurueck: entpackt <slug>/<ts>.tgz nach target_dir.
+    ) -> dict:
+        """Stellt einen Snapshot zurueck: State-Dateien nach target_dir, vault.db an ihren Platz.
 
-        ts ist der Timestamp-String (Dateiname ohne .tgz). Gibt True bei Erfolg,
-        False bei Fehler. snapshots_dir default: ~/.academic-research/snapshots.
+        ts ist der Timestamp-String (Dateiname ohne .tgz). snapshots_dir
+        default: ~/.academic-research/snapshots. Die Vault-DB wird an den vom
+        Server gelesenen Pfad zurueckgeschrieben; der bisherige Bestand wird
+        vorher als vault.db.<zeitstempel>.bak daneben gesichert.
+
+        Rueckgabe: {"ok", "tarball", "restored_files", "vault_db_restored",
+        "vault_db_backup", "vault_db_skipped", "error"} -- "ok" ist nur True,
+        wenn wirklich etwas zurueckgespielt wurde.
         """
-        return restore_snapshot(slug, ts, snapshots_dir=snapshots_dir, target_dir=target_dir)
+        # Der Tool-Aufruf IST die bewusste Entscheidung des Nutzers, den Live-Vault
+        # zurueckzurollen -- also loest diese Schicht den konkreten Zielpfad auf und
+        # uebergibt ihn ausdruecklich. restore_snapshot_report() selbst raet nie
+        # (Datenverlust-Vorfall 11.08.2026, s. dortiger Docstring).
+        return restore_snapshot_report(
+            slug,
+            ts,
+            snapshots_dir=snapshots_dir,
+            target_dir=target_dir,
+            db_path=db_path,
+        )
 
     return mcp
 
