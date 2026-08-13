@@ -3,7 +3,7 @@
 [![CI](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml/badge.svg)](https://github.com/ahlerjam/academic-research/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ahlerjam/academic-research/branch/main/graph/badge.svg)](https://codecov.io/gh/ahlerjam/academic-research)
 [![Version](https://img.shields.io/badge/version-8.0.0-blue.svg)](CHANGELOG.md)
-[![Skills](https://img.shields.io/badge/skills-45-orange.svg)](docs/reference/skills.md)
+[![Skills](https://img.shields.io/badge/skills-46-orange.svg)](docs/reference/skills.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-8A2BE2.svg)](https://code.claude.com/docs/en/plugins)
 
@@ -78,7 +78,7 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 ```mermaid
 graph LR
     U[Du in Claude Code] --> C[12 Slash-Commands]
-    U --> S[45 Skills<br/>selbstaktivierend]
+    U --> S[46 Skills<br/>selbstaktivierend]
     C --> A[29 Agents<br/>Subagents]
     S --> A
     A --> V[(Vault<br/>SQLite + FTS5 + vec0)]
