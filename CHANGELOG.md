@@ -8,6 +8,47 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Fixed
+
+- **Screening-Kaskade: Zirkularität, Vorfilter, Ausschlussprotokoll (#892):**
+  Die Bewertungskette in `commands/search.md` lief in einer Reihenfolge, die
+  ohne sich selbst nicht auskam — der Ranking-Schritt rechnete den 5D-Score mit
+  einer Relevanz, die erst der spätere `relevance-scorer` erzeugt. Drei
+  zusammenhängende Änderungen:
+  - **Vorranking statt Zirkelschluss.** Neu `scoring.prescore()` /
+    `prescore_paper()` / `prescore_weights()`: die vier *gerechneten*
+    Dimensionen (Aktualität, Qualität, Autorität, Zugang), Gewichte auf 1.0
+    renormiert, ohne Relevanzparameter. CLI-Zweig
+    `scoring.py prescore '<paper-json>'`. Der 5D-Gesamtscore
+    (`total_score()`) bleibt unverändert und entsteht erst dort, wo die
+    Relevanz existiert. `run_interactive_phase1()` sortiert nach `prescore`
+    und fällt auf ein vorhandenes `score`-Feld zurück (Bestands-`ranked.json`).
+  - **Mechanischer Vorfilter.** Neu
+    `skills/parallel-screening/scripts/screening_prefilter.py`: wendet die
+    maschinenlesbaren Kriterien (Zeitraum, Sprache, Publikationstyp) aus einem
+    `screening_filters`-Block in `### Ein-/Ausschlusskriterien` von
+    `./academic_context.md` an und legt dem Modell nur die Grenzfälle vor. Auf
+    der Messfixture (`tests/fixtures/screening_prefilter_892/`, 1000 Treffer):
+    **100 Batches vorher, 14 nachher**. Fail-open in beide Richtungen — ohne
+    Filterblock ein No-Op, ein fehlendes Metadatum schließt nie aus. Schalter
+    `screening_prefilter` in `config/parallel_agents.json` (Default `true`,
+    ohne Filterblock wirkungslos). `scripts/search.py` liefert dafür
+    `language`/`publication_type` mit (CrossRef, OpenAlex, Semantic Scholar,
+    arXiv → `preprint`); `normalize_paper()` führt beide Felder,
+    fehlend → `None`.
+  - **Ausschlussprotokoll.** Jeder mechanische Ausschluss geht mit
+    Kriteriumsnamen im Grund als Ledger-Zeile (`decided_by: "rule"`, neuer
+    Parameter an `record_decision`) nach `excluded_sources`. Weil `pending()`
+    protokollierte IDs überspringt, kostet ein eindeutiger Fehltreffer keinen
+    Modellaufruf. Die PRISMA-Zähler kommen in `commands/search.md` jetzt aus
+    dem Ledger, die Handzählung ist nur noch Fallback. `rule`-Zeilen bleiben
+    aus Paarbildung, Cohen's Kappa und Dissens heraus (#598 unverfälscht),
+    zählen in `merge()`/`merge_double()` und damit im PRISMA-Fluss aber voll
+    mit. Doku: `skills/parallel-screening/references/prefilter.md`.
+  - Nicht enthalten und bewusst offen: das **Sättigungs-/Abbruchkriterium**
+    (die Priorisierung sagt, womit angefangen wird, nicht wann aufgehört
+    werden darf) und die Autonomie des Screening-Laufs (#880).
+
 ### Added
 
 - **Entscheidungsklassen im Preamble (#905):** `skills/_common/preamble.md`

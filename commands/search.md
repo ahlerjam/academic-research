@@ -200,15 +200,35 @@ Im Report/Digest ausweisen:
 2. Was gefunden wurde, inkl. expliziter Nulltreffer.
 3. Bei Fallback: den Grund aus `fallback_reason`.
 
-### Schritt 7: Ranking (5D-Scoring + Cluster)
+### Schritt 7: Vorranking (4D `prescore` + Cluster)
 
-Die Heuristik-Dimensionen (Aktualität, Qualität, Autorität, Zugang) werden von `scripts/scoring.py` berechnet (siehe `commands/score.md` → „Schritt 3+4: 4 weitere Dimensionen berechnen..."). Gesamtscore wie dort, Clusterzuweisung ebenfalls. Das Resultat in `$SESSION_DIR/ranked.json` schreiben.
+An dieser Stelle gibt es noch **keine** Relevanzbewertung — die entsteht erst in
+Schritt 11. Ein Ranking, das sie hier schon bräuchte, würde mit einer Zahl
+rechnen, die es noch nicht gibt (#892). Darum rechnet dieser Schritt ein
+Vorranking aus den vier *gerechneten* Dimensionen (Aktualität, Qualität,
+Autorität, Zugang), deren Gewichte auf 1.0 renormiert sind:
+
+```bash
+~/.academic-research/venv/bin/python \
+  ${CLAUDE_PLUGIN_ROOT}/scripts/scoring.py prescore '<paper-json>' [current_year]
+```
+
+`scripts/scoring.py` → `prescore()` / `prescore_paper()`. Der Wert wird je
+Treffer als Feld `prescore` in `$SESSION_DIR/ranked.json` geschrieben,
+Clusterzuweisung wie in `commands/score.md`. Alles Weitere bis Schritt 11
+sortiert nach `prescore`.
+
+Der gewichtete Gesamtscore über alle fünf Dimensionen (`scoring.total_score()`,
+siehe `commands/score.md`) entsteht erst in Schritt 10, sobald die Relevanz
+tatsächlich vorliegt.
 
 ### Schritt 8: Interactive Mode — Phase 1 (Approval-Gate, Default)
 
 Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 10, damit der
 User Query-Expansion und Trefferlage sieht, bevor das teure LLM-Relevanz-Scoring
-startet.
+startet. Die Vorschau ordnet nach `prescore` aus Schritt 7 (`run_interactive_phase1`
+fällt auf ein altes `score`-Feld zurück, falls die `ranked.json` aus einem Lauf vor
+#892 stammt).
 
 Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 9):
 
@@ -256,7 +276,81 @@ Optionen:
 
 Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
 
-### Schritt 9: PRISMA-Zähler speichern
+### Schritt 9: Mechanischer Vorfilter
+
+Was die Ein-/Ausschlusskriterien **eindeutig** entscheiden, entscheidet ein
+Kriterienabgleich — nicht das Modell. Eine Arbeit, die den Zeitraum, die
+Sprache oder den Publikationstyp verfehlt, kostet damit keinen Modellaufruf
+(#892):
+
+```bash
+~/.academic-research/venv/bin/python \
+  ${CLAUDE_PLUGIN_ROOT}/skills/parallel-screening/scripts/screening_prefilter.py \
+  prefilter --session-dir "$SESSION_DIR" \
+  --papers "$SESSION_DIR/ranked.json" \
+  --context ./academic_context.md \
+  --db-path "$VAULT_DB"
+```
+
+Der Schritt liest den eingezäunten `screening_filters`-Block aus der Section
+`### Ein-/Ausschlusskriterien` von `./academic_context.md` (geschrieben vom
+`preregistration`-Skill) und schreibt zwei Dateien:
+
+- `$SESSION_DIR/to_screen.json` — die verbleibende Menge, absteigend nach
+  `prescore` sortiert. Bei knappem Budget wird damit das Aussichtsreichste
+  zuerst bewertet.
+- `$SESSION_DIR/prefilter_report.json` — Trefferzahl und Batchzahl **vor und
+  nach** dem Filter plus die Aufschlüsselung je Kriterium. Diese Zahlen gehören
+  in den Ergebnis-Digest.
+
+Jeder mechanische Ausschluss steht danach mit Kriteriumsnamen im Grund im
+Ledger (`decided_by: "rule"`) und in `excluded_sources` — mechanische und
+Modell-Ausschlüsse liegen im selben Protokoll, aus dem Schritt 11 die
+PRISMA-Zähler zieht.
+
+Fail-open, in beide Richtungen:
+
+- **Kein Filterblock in `./academic_context.md`** → No-Op, der Lauf verhält sich
+  exakt wie vor #892. Nichts wird erfunden: der Vorfilter schließt nur an
+  Grenzen aus, die ausdrücklich in den Kriterien stehen.
+- **Fehlt einem Treffer das geprüfte Metadatum** (kein `year`, keine `language`,
+  kein `publication_type`) → er wird **nicht** ausgeschlossen, sondern dem
+  Modell vorgelegt. Unwissen ist kein Ausschlussgrund.
+
+Abschaltbar per `--no-prefilter` bzw. `screening_prefilter: false` in
+`config/parallel_agents.json`.
+
+### Schritt 10: Relevanz-Scoring
+
+Den `relevance-scorer`-Agent in Batches von 10 Papers starten. Grundlage ist die
+Restmenge aus `$SESSION_DIR/to_screen.json`, in deren `prescore`-Reihenfolge:
+Was der Vorfilter in Schritt 9 bereits entschieden hat, taucht hier nicht mehr
+auf (`screening_ledger.pending()` überspringt protokollierte IDs). Läuft das
+Screening über den `parallel-screening`-Skill, kommt die Wellenplanung von dort.
+
+Erst hier existiert die Relevanz — und erst hier entsteht der gewichtete
+Gesamtscore über alle fünf Dimensionen (`scoring.total_score()`), der das
+Vorranking aus Schritt 7 ablöst. Top-N nach Modus wählen (quick=15,
+standard=25, deep=40). Als `$SESSION_DIR/papers.json` speichern.
+
+Das Scoring läuft vollständig in der Sitzung, ohne eigenen Modellzugang und
+ohne asynchrone Abholung (#632).
+
+### Schritt 11: PRISMA-Zähler speichern
+
+Die Zähler kommen aus dem Ausschlussprotokoll, nicht aus einer getrennt
+geführten Zählung — mechanische Ausschlüsse aus Schritt 9 und Modell-Urteile
+aus Schritt 10 stehen beide im selben Ledger (#892):
+
+```bash
+~/.academic-research/venv/bin/python \
+  ${CLAUDE_PLUGIN_ROOT}/skills/parallel-screening/scripts/screening_ledger.py \
+  counters --session-dir "$SESSION_DIR" --n-identified "${N_IDENTIFIED}" \
+  > "$SESSION_DIR/prisma_counters.json"
+```
+
+**Fallback** — nur wenn gar kein Ledger existiert (das Screening lief weder über
+den Vorfilter noch über `parallel-screening`), die Handzählung:
 
 ```bash
 ~/.academic-research/venv/bin/python -c "
@@ -274,30 +368,10 @@ save_prisma_counters('$SESSION_DIR', counters)
 "
 ```
 
-Die Zähler werden in `$SESSION_DIR/prisma_counters.json` gespeichert.
+Die Zähler werden in beiden Fällen in `$SESSION_DIR/prisma_counters.json`
+gespeichert.
 
-Lief das Screening über den `parallel-screening`-Skill, sind die Zähler bereits
-im Ledger protokolliert — dann statt der Handzählung:
-
-```bash
-~/.academic-research/venv/bin/python \
-  ${CLAUDE_PLUGIN_ROOT}/skills/parallel-screening/scripts/screening_ledger.py \
-  counters --session-dir "$SESSION_DIR" --n-identified "${N_IDENTIFIED}" \
-  > "$SESSION_DIR/prisma_counters.json"
-```
-
-### Schritt 10: Relevanz-Scoring
-
-Den `relevance-scorer`-Agent in Batches von 10 Papers starten. Das gilt
-unabhängig von der Treffermenge: auch 50, 100 oder mehr Paper laufen über
-denselben Weg, nur mit mehr Agent-Läufen — es gibt keinen Sonderpfad. LLM-Scores ins Ranking einmischen. Top-N nach
-Modus wählen (quick=15, standard=25, deep=40). Als `$SESSION_DIR/papers.json`
-speichern.
-
-Das Scoring läuft vollständig in der Sitzung, ohne eigenen Modellzugang und
-ohne asynchrone Abholung (#632).
-
-### Schritt 11: Session-Index aktualisieren
+### Schritt 12: Session-Index aktualisieren
 
 Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
 im Index unter `~/.academic-research/session_index.json` fortgeschrieben
@@ -327,7 +401,7 @@ Paper (fällt das Scoring aus, ersatzweise `$SESSION_DIR/ranked.json`). Die
 Anzahl beschaffter Volltexte wird automatisch aus `$SESSION_DIR/pdfs/*.pdf`
 gezählt.
 
-### Schritt 12: Ergebnisse anzeigen
+### Schritt 13: Ergebnisse anzeigen
 
 Eine formatierte Tabelle mit Rang, Titel, Jahr, Score, Cluster und Quellmodul ausgeben.
 Treffer mit `is_retracted: true` wie in Schritt 8 sichtbar markieren („⚠ Retracted");

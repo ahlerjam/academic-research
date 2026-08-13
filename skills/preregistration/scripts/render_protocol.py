@@ -295,6 +295,42 @@ def _liste_oder_platzhalter(eintraege: list[str] | None) -> list[str]:
     return [f"- {e}" for e in eintraege]
 
 
+#: Reihenfolge der maschinenlesbaren Filterschluessel (#892) -- fest, damit
+#: zwei Laeufe mit denselben Werten byte-identischen Text liefern (AC4).
+SCREENING_FILTER_KEYS = ("year_min", "year_max", "languages", "publication_types")
+
+
+def _screening_filter_block(filters: dict[str, Any] | None) -> list[str]:
+    """Der maschinenlesbare ``screening_filters``-Block (#892).
+
+    Nur die Kriterien, die der Plan tatsaechlich als Feld mitbringt, werden
+    gerendert -- die Prosa daneben bleibt in jedem Fall stehen und ist
+    weiterhin die verbindliche Fassung fuer den Menschen. Ohne Felder entfaellt
+    der Block ersatzlos: dann laeuft der Vorfilter als No-Op, statt an einer
+    erfundenen Grenze auszuschliessen.
+    """
+    if not isinstance(filters, dict):
+        return []
+    vorhanden = [(k, filters[k]) for k in SCREENING_FILTER_KEYS if filters.get(k) is not None]
+    if not vorhanden:
+        return []
+    zeilen = [
+        "",
+        "<!-- Maschinenlesbar fuer den Screening-Vorfilter (#892). Der Vorfilter",
+        "     schliesst NUR daran aus; fehlt einem Treffer das Metadatum, entscheidet",
+        "     das Modell. Die Prosa oben bleibt die verbindliche Fassung. -->",
+        "```screening_filters",
+    ]
+    for schluessel, wert in vorhanden:
+        if isinstance(wert, (list, tuple)):
+            werte = ", ".join(str(v) for v in wert)
+            zeilen.append(f"{schluessel}: [{werte}]")
+        else:
+            zeilen.append(f"{schluessel}: {wert}")
+    zeilen.append("```")
+    return zeilen
+
+
 def _section_block(ueberschrift: str, zeilen: list[str]) -> str:
     return "\n".join([f"### {ueberschrift}", "", *zeilen, ""])
 
@@ -336,6 +372,7 @@ def aktualisiere_academic_context(
     suchstrategie: str | None,
     einschlusskriterien: list[str] | None,
     ausschlusskriterien: list[str] | None,
+    screening_filters: dict[str, Any] | None = None,
 ) -> str:
     """Schreibt Suchstrategie + Ein-/Ausschlusskriterien in einen bereits
     gelesenen ``academic_context.md``-Text (AC3). Das Lesen-vor-Schreiben ist
@@ -355,6 +392,7 @@ def aktualisiere_academic_context(
         "",
         "**Ausschluss**",
         *_liste_oder_platzhalter(ausschlusskriterien),
+        *_screening_filter_block(screening_filters),
     ]
     text = _upsert_section(
         text,
@@ -401,6 +439,7 @@ def _cmd_update_context(args: argparse.Namespace) -> int:
         suchstrategie=plan.get("suchstrategie"),
         einschlusskriterien=plan.get("einschlusskriterien"),
         ausschlusskriterien=plan.get("ausschlusskriterien"),
+        screening_filters=plan.get("screening_filters"),
     )
     context_pfad.write_text(aktualisiert, encoding="utf-8")
     print(f"Aktualisiert: {context_pfad}")

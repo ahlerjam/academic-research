@@ -77,7 +77,8 @@ def run_interactive_phase1(
     """Phase 1 of interactive research mode: return top-paper preview + approval options.
 
     Args:
-        papers: List of scored paper dicts (expected to have 'score' key).
+        papers: List of ranked paper dicts (expected to have a 'prescore' key;
+            falls back to 'score' for ranked.json written before #892).
         query: Original search query.
         n_preview: Minimum number of papers to include in preview (default 5).
 
@@ -94,7 +95,7 @@ def run_interactive_phase1(
             "query": query,
         }
 
-    sorted_papers = sorted(papers, key=lambda p: p.get("score", 0.0), reverse=True)
+    sorted_papers = sorted(papers, key=_ranking_key, reverse=True)
     preview_count = max(n_preview, min(10, len(sorted_papers)))
     top_papers = sorted_papers[:preview_count]
 
@@ -103,6 +104,22 @@ def run_interactive_phase1(
         "approval_options": _approval_options(),
         "query": query,
     }
+
+
+def _ranking_key(paper: dict[str, Any]) -> float:
+    """Sortierschluessel der Vorschau: 4D-Vorranking, sonst der 5D-Score (#892).
+
+    Das Gate steht vor dem Relevanz-Scoring — dort existiert nur ``prescore``.
+    ``score`` bleibt als Rueckfall, damit eine ``ranked.json`` aus einem Lauf
+    vor #892 unveraendert sortierbar bleibt.
+    """
+    value = paper.get("prescore")
+    if value is None:
+        value = paper.get("score", 0.0)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _approval_options() -> list[str]:
@@ -200,6 +217,8 @@ def search_crossref(query: str, limit: int) -> list[dict[str, Any]]:
                         "venue": (item.get("container-title") or [None])[0],
                         "citations": item.get("is-referenced-by-count", 0),
                         "url": item.get("URL"),
+                        "language": item.get("language"),
+                        "publication_type": item.get("type"),
                     },
                     "crossref",
                 )
@@ -252,6 +271,8 @@ def search_openalex(query: str, limit: int) -> list[dict[str, Any]]:
                     "oa_url": oa_info.get("oa_url"),
                     "is_retracted": item.get("is_retracted"),
                     "citations_normalized": item.get("fwci"),
+                    "language": item.get("language"),
+                    "publication_type": item.get("type"),
                 },
                 "openalex",
             )
@@ -267,7 +288,10 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
     params: dict[str, str | int] = {
         "query": query,
         "limit": limit,
-        "fields": "paperId,title,authors,year,abstract,venue,citationCount,openAccessPdf,externalIds",
+        "fields": (
+            "paperId,title,authors,year,abstract,venue,citationCount,openAccessPdf,"
+            "externalIds,publicationTypes"
+        ),
     }
     headers: dict[str, str] = {}
     if api_key := os.environ.get("SS_API_KEY"):
@@ -287,6 +311,9 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
         try:
             external_ids = item.get("externalIds") or {}
             oa_pdf = item.get("openAccessPdf") or {}
+            # S2 liefert eine Liste (z.B. ["JournalArticle", "Review"]); der
+            # Vorfilter arbeitet auf einem Wert -- der erste ist der primaere.
+            publication_types = item.get("publicationTypes") or []
             entry = normalize_paper(
                 {
                     "doi": external_ids.get("DOI"),
@@ -300,6 +327,7 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
                     if item.get("paperId")
                     else None,
                     "open_access_pdf": oa_pdf.get("url"),
+                    "publication_type": publication_types[0] if publication_types else None,
                 },
                 "semantic_scholar",
             )
@@ -640,6 +668,9 @@ def search_arxiv(query: str, limit: int) -> list[dict[str, Any]]:
                         "citations": 0,
                         "url": pdf_url,
                         "open_access_pdf": pdf_url,
+                        # arXiv liefert keinen Typ -- die Quelle ist per
+                        # Definition ein Preprint-Server (#892).
+                        "publication_type": "preprint",
                     },
                     "arxiv",
                 )
