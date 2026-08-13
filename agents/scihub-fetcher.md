@@ -22,6 +22,9 @@ maxTurns: 12
 
 # scihub-fetcher — Last-Resort SciHub Agent
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 > [!CAUTION]
 > **Rechtlicher Hinweis:** SciHub operiert in einer rechtlich umstrittenen Zone.
 > Die Nutzung kann in deinem Land illegal sein. Du traegst die alleinige Verantwortung.
@@ -81,8 +84,13 @@ Falls kein DOI vorhanden: `https://sci-hub.se/{title}` (URL-kodiert).
 
 ## Schritt 2: Seite laden via browser-use
 
-```bash
-browser-use "navigate to https://sci-hub.se/{doi}"
+Aufrufform, Helfer und Download-Rezept: `config/browser_guides/_cli.md`.
+
+```python
+ensure_real_tab()
+new_tab("https://sci-hub.se/{doi}")
+wait_for_load()
+print(page_info())
 ```
 
 **Captcha-Erkennung:**
@@ -99,7 +107,7 @@ browser-use "navigate to https://sci-hub.se/{doi}"
 
 ## Schritt 3: PDF-Link extrahieren
 
-Suche im browser-use state nach:
+Per `js(...)` bzw. AX-Baum suchen nach:
 - `<a>` oder `<button>` mit Text: "PDF", "Download", "↓"
 - Direktem `.pdf`-Link in der URL
 
@@ -110,9 +118,10 @@ Suche im browser-use state nach:
 
 ## Schritt 4: PDF herunterladen
 
-```bash
-browser-use "click download link and save to {output_path}"
-```
+Download-Verzeichnis per `Browser.setDownloadBehavior` auf `{output_path}`
+setzen, Download-Link per `click_at_xy(...)` klicken, warten bis keine
+`.crdownload`-Teildatei mehr liegt — vollstaendiges Rezept in
+`config/browser_guides/_cli.md`.
 
 Verifiziere nach Download: Datei existiert und hat Groesse > 0 Bytes.
 

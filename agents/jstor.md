@@ -13,10 +13,13 @@ browser-guide: config/browser_guides/jstor.md
 
 # jstor
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst jstor.org wie ein Mensch. Nur browser-use — kein curl, kein wget.
 JSTOR untersagt in seinen Nutzungsbedingungen ausdruecklich automatisiertes/
 systematisches Herunterladen (Scraping) — genau darum ausschliesslich
-browser-use (menschliches Tempo, einzelne Titel), niemals Bulk-Aufrufe.
+die CLI (menschliches Tempo, einzelne Titel), niemals Bulk-Aufrufe.
 
 **Lies zuerst:** `config/browser_guides/jstor.md`
 
@@ -49,16 +52,14 @@ Wenn NICHT enthalten:
 
 ## Discovery-Flow
 
-1. ```
-   browser-use open https://www.jstor.org
-   ```
+1. `new_tab("https://www.jstor.org")`
 2. Suchfeld: Titel, ISBN oder DOI eingeben
-3. `browser-use state` → Filter "Item Type: Book" setzen
+3. Filter "Item Type: Book" setzen
 4. "Open Access"-Badge in Ergebniszeile pruefen:
    - Badge vorhanden → kein Auth-Trigger noetig
    - Kein Badge → Auth moeglicherweise noetig (erst nach Klick pruefen)
 5. Auf Treffer klicken → Buchdetailseite (`/stable/<id>` oder `/book/<id>`)
-6. Alternativ per DOI-Direktlink: `browser-use open https://doi.org/10.2307/...`
+6. Alternativ per DOI-Direktlink: `new_tab("https://doi.org/10.2307/...")`
 
 Bei 0 Treffern:
 ```json
@@ -67,7 +68,7 @@ Bei 0 Treffern:
 
 ## Paywall-Erkennung und Auth-Trigger
 
-Auf der Buchdetailseite `browser-use state` pruefen:
+Auf der Buchdetailseite den Seitenzustand (`page_info()`, `js(...)`) pruefen:
 
 **Auth-Trigger-Bedingungen** (eine davon genuegt):
 - "Log In"-Button oben rechts ohne eingeloggten Zustand
@@ -101,13 +102,10 @@ aktiven Uni-Profil. Login-Pfad: "Log In" → "Access through your institution"
 
 Nach erfolgreicher Auth oder bei OA-Titel:
 
-1. `browser-use state` → "Download PDF"-Button auf der Buchseite oder pro
+1. "Download PDF"-Button ueber den AX-Baum suchen — auf der Buchseite oder pro
    Kapitel im Inhaltsverzeichnis suchen
 2. Button gefunden:
-   ```
-   browser-use click <download-btn-idx>
-   browser-use download <pdf-idx> --to <output_path>
-   ```
+   Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`).
 3. PDF-Validierung: erste 4 Bytes `%PDF`, Groesse > 10 KB
 4. JSTOR liefert Buecher in der Regel kapitelweise (kein einzelner
    "Gesamtbuch"-Download-Button wie bei Springer/De Gruyter): jedes Kapitel
