@@ -226,11 +226,14 @@ def run_known_item_search(
                 module_errors[module_name] = "HTTP/network error or timeout"
             hits.extend(papers)
 
-        # Nur known_works_queries badgen, nicht Zitationsheuristik (#886 P1)
-        is_known_works = candidate.get("source") == "known_works_queries"
+        # Alle Treffer dieses Schritts badgen, unabhaengig von der Kandidaten-
+        # quelle (known_works_queries / citation_heuristic / reference_tally)
+        # -- AC2 (#886) verlangt, dass "die so gefundenen Arbeiten" erkennbar
+        # sind, und der Issue-Scope zaehlt alle drei Quellen zum selben
+        # Schritt auf. commands/search.md dokumentiert das unqualifiziert
+        # ("Treffer werden mit found_via_known_item: true markiert").
         for paper in hits:
-            if is_known_works:
-                paper["found_via_known_item"] = True
+            paper["found_via_known_item"] = True
 
         status = "module_failed" if module_errors else ("zero_hits" if not hits else "success")
         found[query] = {

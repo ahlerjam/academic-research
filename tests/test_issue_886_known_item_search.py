@@ -195,6 +195,33 @@ def test_run_known_item_search_tags_hits_as_found_via_known_item():
     assert report["papers"][0]["found_via_known_item"] is True
 
 
+def test_run_known_item_search_tags_citation_heuristic_hits_too():
+    """AC2 (#886): 'die so gefundenen Arbeiten' erkennbar -- Issue-Scope nennt
+    known_works_queries UND Zitationsheuristik/Referenz-Tally als Quellen
+    desselben Schritts. commands/search.md behauptet unqualifiziert
+    vollstaendige Markierung ("Treffer werden mit found_via_known_item: true
+    markiert"). Ein Fallback-Lauf ganz ohne known_works_queries (#881,
+    query-generator ausgefallen) darf deshalb nicht mit 0 markierten Treffern
+    enden, nur weil alle Kandidaten aus citation_heuristic/reference_tally
+    stammen."""
+    candidates = [
+        {"type": "title", "query": "MetaGPT", "source": "citation_heuristic"},
+        {"type": "title", "query": "CAMEL", "source": "reference_tally"},
+    ]
+    hit_a = {"title": "MetaGPT", "citations": 500}
+    hit_b = {"title": "CAMEL", "citations": 300}
+
+    def _fake_run_module(module_name, query, limit):
+        return ("openalex", [hit_a if query == "MetaGPT" else hit_b], False)
+
+    with patch("known_item_search._run_module", side_effect=_fake_run_module):
+        report = run_known_item_search(candidates, modules=["openalex"], limit=5)
+
+    assert report["found"]["MetaGPT"]["hits"][0]["found_via_known_item"] is True
+    assert report["found"]["CAMEL"]["hits"][0]["found_via_known_item"] is True
+    assert all(p["found_via_known_item"] is True for p in report["papers"])
+
+
 def test_run_known_item_search_multiple_candidates_all_reported():
     candidates = [
         {"type": "title", "query": "A", "source": "known_works_queries"},
