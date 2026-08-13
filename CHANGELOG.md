@@ -6,6 +6,35 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **NLI-Zitatscan meldete 20 von 21 Zitaten als verdaechtig, praktisch alle
+  Fehlalarme (#899):** `academic_vault/nli_prefilter.py::prefilter_quote`
+  wandte die Entailment-Pruefung blind auf jeden Kapitelsatz an, auch auf
+  reine Zuschreibungssaetze ("X berichtet, dass '...'") — NLI misst
+  Satzfolgerung, nicht Zitattreue, und ein Zuschreibungssatz ist per
+  Konstruktion keine Folgerung aus dem Zitat. Ein solcher Satz gilt jetzt nur
+  noch als verdaechtig, wenn er einen lexikalischen Widerspruchs-/
+  Negationsmarker traegt (kuratierte Liste, DE+EN); ohne Marker wird die
+  NLI-Pruefung uebersprungen, ohne den Scorer aufzurufen — der Auditor-Pfad
+  verliert dabei kein Zitat. Zusaetzlich riss `claim_sentence_for_span` bei
+  Zitaten mit eigenen Satzzeichen (Abkuerzungen, Zahlen, mehrere Saetze im
+  Zitat) den falschen Nachbarsatz heran, und Markdown-Ueberschriften zaehlten
+  fuer die Satzgrenzenerkennung nicht als Blockgrenze (Regressionsfall:
+  ein Zitat direkt nach einer `###`-Ueberschrift wurde gegen den Satz VOR der
+  Ueberschrift geprueft). Die Funktion liefert jetzt entweder den Satz, der
+  die GESAMTE Zitat-Spanne umschliesst, oder `None` — kein
+  Zeichenfenster-Rateversuch mehr; ein Item ohne eindeutige Zuordnung bleibt
+  im Pruefpfad, wird aber nicht mehr per NLI bewertet. Gemessen am lokalen
+  Referenzkapitel: 20/21 → 0/21 (vorher/nachher, echter `BgeM3ZeroshotScorer`,
+  kein Fixture). Schwelle `DEFAULT_THRESHOLD = 0.95` unveraendert — die
+  Fehlalarme lagen an der Attributions-/Satzzuordnungslogik, nicht am
+  Sprachenpaar-Kalibrierpunkt, siehe Issue-Kommentar.
+
+---
+
 ## [8.0.0] — 2026-08-11
 
 ### Fixed
