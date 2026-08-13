@@ -1,8 +1,11 @@
 """Tests for dedup.py — paper deduplication."""
 
 import itertools
+import random
+import time
+from difflib import SequenceMatcher
 
-from dedup import deduplicate, merge_group
+from dedup import _length_bound_ok, deduplicate, merge_group
 from text_utils import normalize_doi
 
 
@@ -785,3 +788,165 @@ def test_dedup_bridge_record_group_membership_permutation_invariant():
         assert membership == first, (
             f"permutation {perm} yields different group membership: {membership} != {first}"
         )
+
+
+# ---------------------------------------------------------------------------
+# #890 — Blocking vor der Titel-Paarbildung
+# ---------------------------------------------------------------------------
+
+
+def test_length_bound_ok_matches_ratio_upper_bound():
+    """`_length_bound_ok` ist ein notwendiges (nicht hinreichendes) Kriterium:
+    kein Paar, dessen tatsaechliches `ratio()` den Threshold erreicht, darf
+    vom Bound ausgeschlossen werden (mathematischer Beweis aus dem Plan-
+    Kommentar: ratio() <= 2*min(la,lb)/(la+lb))."""
+    threshold = 0.85
+    # Gleich lang: 2*min/max = 1.0 >= threshold -> immer erlaubt.
+    assert _length_bound_ok(10, 10, threshold) is True
+    # Extrem verschieden lang: 2*10/210 << threshold -> ausgeschlossen.
+    assert _length_bound_ok(10, 200, threshold) is False
+    # Randomisierter Brute-Force-Vergleich: fuer 500 zufaellige Laengenpaare
+    # darf _length_bound_ok niemals False liefern, wenn ein reales
+    # Titelpaar dieser Laengen den Threshold erreichen KOENNTE (oberste
+    # erreichbare ratio() bei diesen Laengen ist genau 2*min/(la+lb)).
+    rng = random.Random(42)
+    for _ in range(500):
+        la = rng.randint(1, 200)
+        lb = rng.randint(1, 200)
+        max_possible_ratio = 2 * min(la, lb) / (la + lb)
+        bound_says_possible = _length_bound_ok(la, lb, threshold)
+        if max_possible_ratio >= threshold:
+            assert bound_says_possible is True, (la, lb, max_possible_ratio)
+        else:
+            assert bound_says_possible is False, (la, lb, max_possible_ratio)
+
+
+def test_length_bound_ok_rejects_zero_length():
+    assert _length_bound_ok(0, 5, 0.85) is False
+    assert _length_bound_ok(0, 0, 0.85) is False
+
+
+def _brute_force_title_pairs(titles: list[str], threshold: float) -> set[tuple[int, int]]:
+    """Referenzimplementierung: alle Paare per unbeschraenktem O(n^2)-Scan
+    und vollem `SequenceMatcher.ratio()` (das alte Verhalten vor #890)."""
+    pairs = set()
+    for i in range(len(titles)):
+        if not titles[i]:
+            continue
+        for j in range(i + 1, len(titles)):
+            if not titles[j]:
+                continue
+            ratio = SequenceMatcher(None, titles[i].lower(), titles[j].lower()).ratio()
+            if ratio >= threshold:
+                pairs.add((i, j))
+    return pairs
+
+
+def test_dedup_blocking_loses_no_merge_vs_brute_force():
+    """AC3-Aequivalenztest: Fuer eine synthetische Menge mit gestreuten
+    Titellaengen und Near-Duplicate-Clustern muss die geblockte
+    `deduplicate()`-Fassung dieselben Gruppen liefern wie eine reine
+    Brute-Force-Referenz ueber alle Paare."""
+    rng = random.Random(7)
+    vocab = [
+        "devops",
+        "governance",
+        "cloud",
+        "security",
+        "framework",
+        "large",
+        "organizations",
+        "study",
+        "systematic",
+        "review",
+        "empirical",
+        "analysis",
+        "continuous",
+        "delivery",
+        "pipeline",
+        "risk",
+        "compliance",
+        "architecture",
+        "microservices",
+        "agile",
+    ]
+
+    def random_title(word_count: int) -> str:
+        return " ".join(rng.choice(vocab) for _ in range(word_count)).title()
+
+    titles: list[str] = []
+    for _ in range(80):
+        base = random_title(rng.randint(2, 12))
+        titles.append(base)
+        if rng.random() < 0.3:
+            # Near-Duplicate: ein Wort ersetzt (typisches Duplikaten-Muster).
+            words = base.split()
+            if words:
+                words[rng.randrange(len(words))] = rng.choice(vocab).title()
+                titles.append(" ".join(words))
+
+    threshold = 0.85
+    brute_pairs = _brute_force_title_pairs(titles, threshold)
+
+    # Union-Find ueber die Brute-Force-Paare als Referenzgruppierung
+    # (ignoriert die ID-Konfliktregel bewusst, da hier keine IDs vorkommen).
+    parent = list(range(len(titles)))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for i, j in brute_pairs:
+        union(i, j)
+
+    expected_groups: dict[int, set[int]] = {}
+    for idx in range(len(titles)):
+        expected_groups.setdefault(find(idx), set()).add(idx)
+    # Jeder Titel bekommt einen eindeutigen "Autor" als Tracer, damit sich
+    # die Gruppenzugehoerigkeit nach dem Merge ueber die konsolidierte
+    # Autorenliste rekonstruieren laesst (merge_group() verliert die
+    # Einzeltitel, nicht aber die Autoren).
+    expected_id_groups = {frozenset(group) for group in expected_groups.values()}
+
+    papers = [
+        {"doi": None, "title": t, "authors": [f"tracer-{idx}"], "citations": 0}
+        for idx, t in enumerate(titles)
+    ]
+    result = deduplicate(papers, threshold=threshold)
+
+    result_id_groups = set()
+    for paper in result:
+        ids = {int(a.removeprefix("tracer-")) for a in paper["authors"]}
+        result_id_groups.add(frozenset(ids))
+
+    assert result_id_groups == expected_id_groups, (
+        f"Gruppierung weicht ab: geblockt={sorted(map(sorted, result_id_groups))}, "
+        f"brute-force={sorted(map(sorted, expected_id_groups))}"
+    )
+
+
+def test_dedup_blocking_performance_smoke():
+    """Regressionswaechter: 500 synthetische Titel muessen deutlich unter
+    30s dedupliziert werden (AC1, grosszuegige CI-Schranke)."""
+    rng = random.Random(99)
+    vocab = [f"word{i}" for i in range(60)]
+
+    def random_title() -> str:
+        length = rng.randint(3, 15)
+        return " ".join(rng.choice(vocab) for _ in range(length)).title()
+
+    titles = [random_title() for _ in range(500)]
+    papers = [{"doi": None, "title": t, "authors": [], "citations": 0} for t in titles]
+
+    start = time.monotonic()
+    deduplicate(papers)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 10.0, f"500 Titel dauerten {elapsed:.1f}s (Ziel < 10s)"

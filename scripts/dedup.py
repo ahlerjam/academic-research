@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import logging
 import re
@@ -117,6 +118,59 @@ def _non_none_count(paper: dict[str, Any]) -> int:
 def _title_similarity(a: str, b: str) -> float:
     """Compute title similarity ratio."""
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
+def _length_bound_ok(la: int, lb: int, threshold: float) -> bool:
+    """Notwendiges (nicht hinreichendes) Kriterium dafuer, ob zwei Titel der
+    Laengen `la`/`lb` `SequenceMatcher.ratio() >= threshold` ueberhaupt
+    erreichen KOENNEN (#890).
+
+    Beweis: `ratio() = 2*M / (len(a)+len(b))` mit `M <= min(len(a), len(b))`
+    (M ist die Anzahl uebereinstimmender Zeichen ueber alle Matching-
+    Bloecke, kann per Definition nicht groesser sein als der kuerzere der
+    beiden Strings). Daraus folgt die obere Schranke
+    `ratio() <= 2*min(la,lb) / (la+lb)`. Ein Paar kann `threshold` also nur
+    erreichen, wenn `2*min(la,lb) >= threshold*(la+lb)` gilt. Da dies eine
+    obere Schranke und keine Heuristik ist, kann kein Paar, das heute
+    tatsaechlich gemerged wird, durch diesen Filter verloren gehen — jedes
+    `False` hier beweist `ratio() < threshold` fuer JEDE moegliche
+    Zeichenfolge dieser Laengen.
+    """
+    if la <= 0 or lb <= 0:
+        return False
+    lo, hi = (la, lb) if la <= lb else (lb, la)
+    return 2 * lo >= threshold * (lo + hi)
+
+
+def _blocked_candidate_pairs(
+    indices: list[int], titles: list[str], threshold: float
+) -> list[tuple[int, int]]:
+    """Erzeuge Kandidatenpaare per Laengen-Blocking statt aller `O(n^2)`
+    Paare (#890). `indices` sind die zu betrachtenden Positionen (Titel
+    ungleich leer), `titles` die vollstaendige Titelliste.
+
+    Die Indizes werden nach Titellaenge sortiert; fuer jeden Index wird nur
+    das zusammenhaengende Laengenfenster gescannt, in dem `_length_bound_ok`
+    erfuellt sein kann (per `bisect` auf der sortierten Laengenliste statt
+    linearem Scan). Rueckgabe: Paare `(i, j)` mit `i, j` aus `indices`, ohne
+    Ordnungsgarantie — die Aufrufer-Seite sortiert die Paare anschliessend
+    nach der bestehenden `canonical_order`-Position.
+    """
+    order_by_len = sorted(indices, key=lambda idx: len(titles[idx]))
+    lengths = [len(titles[idx]) for idx in order_by_len]
+    n = len(order_by_len)
+    pairs: list[tuple[int, int]] = []
+    for pos in range(n):
+        la = lengths[pos]
+        if la <= 0:
+            continue
+        # ratio() <= threshold erfordert lb <= la*(2-threshold)/threshold
+        # (Herleitung siehe `_length_bound_ok`-Docstring, la<=lb-Fall).
+        upper = la * (2 - threshold) / threshold
+        end = bisect.bisect_right(lengths, upper, lo=pos + 1)
+        for pos2 in range(pos + 1, end):
+            pairs.append((order_by_len[pos], order_by_len[pos2]))
+    return pairs
 
 
 def merge_group(group: list[dict[str, Any]]) -> dict[str, Any]:
@@ -312,20 +366,40 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
     # same paper set produces the identical pair order and therefore the
     # identical final grouping.
     canonical_order = sorted(range(count), key=lambda idx: _canonical_sort_key(working[idx]))
+    position = [0] * count
+    for pos, idx in enumerate(canonical_order):
+        position[idx] = pos
 
     # Collect candidate pairs (i, j) where titles are similar
     # BEFORE cluster conflict checks (optimization: #707 P1 performance).
+    #
+    # #890: statt aller `O(n^2)` Paare wird per Laengen-Blocking nur das
+    # Fenster gescannt, in dem `SequenceMatcher.ratio() >= threshold`
+    # ueberhaupt erreichbar ist (`_length_bound_ok`, mathematisch
+    # bewiesenes notwendiges Kriterium — kein heute gefundenes Paar geht
+    # dadurch verloren). Fuer die im Fenster verbliebenen Paare filtert
+    # zusaetzlich `quick_ratio()` vor (echte Obergrenze fuer `ratio()` laut
+    # difflib-Doku: `quick_ratio() >= ratio()` immer), bevor der teure
+    # `ratio()`-Aufruf faellt.
+    non_empty_indices = [idx for idx in range(count) if titles[idx]]
+    blocked_pairs = _blocked_candidate_pairs(non_empty_indices, titles, threshold)
+
     candidate_pairs: list[tuple[int, int]] = []
-    for a in range(count):
-        i = canonical_order[a]
-        if not titles[i]:
+    for x, y in blocked_pairs:
+        if uf.find(x) == uf.find(y):
             continue
-        for b in range(a + 1, count):
-            j = canonical_order[b]
-            if not titles[j] or uf.find(i) == uf.find(j):
-                continue
-            if _title_similarity(titles[i], titles[j]) >= threshold:
-                candidate_pairs.append((i, j))
+        i, j = (x, y) if position[x] < position[y] else (y, x)
+        matcher = SequenceMatcher(None, titles[i].lower(), titles[j].lower())
+        if matcher.quick_ratio() < threshold:
+            continue
+        if matcher.ratio() >= threshold:
+            candidate_pairs.append((i, j))
+
+    # Reihenfolge exakt wie die bisherige verschachtelte Schleife: nach
+    # `canonical_order`-Position sortiert (a vor b) — haelt die
+    # Bridge-Record-Determinismus-Garantie aus #707/PR #758 unveraendert,
+    # nur die Paar-*Erzeugung* wird billiger, nicht die Verarbeitungsreihenfolge.
+    candidate_pairs.sort(key=lambda pair: (position[pair[0]], position[pair[1]]))
 
     # Process candidates with cluster-level conflict checking.
     # Cache cluster IDs per root to avoid O(n^3) re-scans.

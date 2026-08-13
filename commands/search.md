@@ -141,25 +141,37 @@ Pro Modul:
 
 Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
 
-### Schritt 5: Deduplikation
+### Schritt 5: Vorfilterung
+
+Vor der Deduplikation laufen Korpus-Hygiene-Regeln, die entscheiden, was
+überhaupt in den weiteren Prozess gehört — dieser Schritt ist der
+Ankerpunkt dafür (#890). Die inhaltlichen Filterregeln selbst sind ein
+eigener Schnitt und noch nicht Teil dieses Schritts; aktuell reicht die
+Ergebnisliste unverändert durch:
+
+```bash
+cp "$SESSION_DIR/api_results.json" "$SESSION_DIR/prefiltered.json"
+```
+
+### Schritt 6: Deduplikation
 
 ```bash
 ~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/dedup.py \
-  --papers "$SESSION_DIR/api_results.json" \
+  --papers "$SESSION_DIR/prefiltered.json" \
   --output "$SESSION_DIR/deduped.json"
 ```
 
-### Schritt 6: Ranking (5D-Scoring + Cluster)
+### Schritt 7: Ranking (5D-Scoring + Cluster)
 
 Die Heuristik-Dimensionen (Aktualität, Qualität, Autorität, Zugang) werden von `scripts/scoring.py` berechnet (siehe `commands/score.md` → „Schritt 3+4: 4 weitere Dimensionen berechnen..."). Gesamtscore wie dort, Clusterzuweisung ebenfalls. Das Resultat in `$SESSION_DIR/ranked.json` schreiben.
 
-### Schritt 7: Interactive Mode — Phase 1 (Approval-Gate, Default)
+### Schritt 8: Interactive Mode — Phase 1 (Approval-Gate, Default)
 
-Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 9, damit der
+Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 10, damit der
 User Query-Expansion und Trefferlage sieht, bevor das teure LLM-Relevanz-Scoring
 startet.
 
-Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 8):
+Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 9):
 
 - `--interactive=off` — das dokumentierte Opt-out, stellt das Verhalten vor #537 her.
 - Nicht-interaktive bzw. headless Läufe (kein `AskUserQuestion`-Kanal verfügbar,
@@ -202,7 +214,7 @@ Optionen:
 
 Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
 
-### Schritt 8: PRISMA-Zähler speichern
+### Schritt 9: PRISMA-Zähler speichern
 
 ```bash
 ~/.academic-research/venv/bin/python -c "
@@ -232,7 +244,7 @@ im Ledger protokolliert — dann statt der Handzählung:
   > "$SESSION_DIR/prisma_counters.json"
 ```
 
-### Schritt 9: Relevanz-Scoring
+### Schritt 10: Relevanz-Scoring
 
 Den `relevance-scorer`-Agent in Batches von 10 Papers starten. Das gilt
 unabhängig von der Treffermenge: auch 50, 100 oder mehr Paper laufen über
@@ -243,7 +255,7 @@ speichern.
 Das Scoring läuft vollständig in der Sitzung, ohne eigenen Modellzugang und
 ohne asynchrone Abholung (#632).
 
-### Schritt 10: Session-Index aktualisieren
+### Schritt 11: Session-Index aktualisieren
 
 Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
 im Index unter `~/.academic-research/session_index.json` fortgeschrieben
@@ -273,10 +285,10 @@ Paper (fällt das Scoring aus, ersatzweise `$SESSION_DIR/ranked.json`). Die
 Anzahl beschaffter Volltexte wird automatisch aus `$SESSION_DIR/pdfs/*.pdf`
 gezählt.
 
-### Schritt 11: Ergebnisse anzeigen
+### Schritt 12: Ergebnisse anzeigen
 
 Eine formatierte Tabelle mit Rang, Titel, Jahr, Score, Cluster und Quellmodul ausgeben.
-Treffer mit `is_retracted: true` wie in Schritt 7 sichtbar markieren („⚠ Retracted");
+Treffer mit `is_retracted: true` wie in Schritt 8 sichtbar markieren („⚠ Retracted");
 `is_retracted: false` unmarkiert, fehlend/`null` ebenfalls unmarkiert und nicht als
 „nicht zurückgezogen" ausweisen (#618). Der Hinweis führt zu keinem automatischen
 Ausschluss — die Entscheidung trifft der Mensch.
