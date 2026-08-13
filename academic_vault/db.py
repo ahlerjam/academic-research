@@ -1874,6 +1874,29 @@ class VaultDB:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
+    def papers_with_fulltext(self, limit: int | None = None) -> list[dict]:
+        """Papers mit hinterlegtem PDF-Pfad UND bereits vorhandenem Volltext-Eintrag.
+
+        Pendant zu :meth:`papers_missing_fulltext`: Kandidatenliste fuer den
+        Re-Extraktions-Nachlauf (``migrate.reextract_fulltext``, Issue #897),
+        der bereits im Vault liegende (ggf. mit Silbentrennungs-Artefakten
+        behaftete) Volltexte ueberschreibt statt nur Luecken zu fuellen.
+        """
+        sql = """
+            SELECT p.paper_id, p.pdf_path
+            FROM papers p
+            JOIN paper_fulltext f ON f.paper_id = p.paper_id
+            WHERE p.pdf_path IS NOT NULL AND trim(p.pdf_path) != ''
+            ORDER BY p.added_at, p.paper_id
+        """
+        params: list = []
+        if limit is not None and limit > 0:
+            sql += " LIMIT ?"
+            params.append(limit)
+        with self._connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
     # ------------------------------------------------------------------
     # Strukturerhaltend extrahierte Tabellen (Issue #630)
     # ------------------------------------------------------------------

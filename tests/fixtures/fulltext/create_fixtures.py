@@ -1,4 +1,4 @@
-"""Erzeugt die PDF-Fixtures fuer die Volltext-Extraktion (Issue #373).
+"""Erzeugt die PDF-Fixtures fuer die Volltext-Extraktion (Issue #373, #897).
 
 Aufruf: python tests/fixtures/fulltext/create_fixtures.py
 
@@ -8,9 +8,13 @@ pyproject.toml noch in scripts/requirements.txt eine Dependency, und ein
 Fixture-Generator, der sich nur mit einer optionalen Zusatz-Lib ausfuehren
 laesst, ist praktisch nicht reproduzierbar.
 
-Zwei Fixtures:
-  - nonce_paper.pdf   Text-Layer mit dem Nonce-Token (pypdf extrahiert Text)
-  - scan_no_text.pdf  leere Seiten ohne Text-Layer (Scan-Simulation)
+Drei Fixtures:
+  - nonce_paper.pdf      Text-Layer mit dem Nonce-Token (pypdf extrahiert Text)
+  - scan_no_text.pdf     leere Seiten ohne Text-Layer (Scan-Simulation)
+  - hyphenation_897.pdf  Silbentrennung am Zeilenumbruch (Issue #897): jede
+    Zeile wird als eigene ``Tj``/``T*``-Operation geschrieben, pypdf gibt sie
+    daher als eigene Textzeile mit ``\\n`` an der Trennstelle aus — genau das
+    Muster, das ``_merge_hyphenation()`` auflösen muss.
 
 NONCE_TOKEN ist bewusst ein Kunstwort: es darf in keinem Titel und keinem
 Abstract der Testdaten vorkommen, damit ein Suchtreffer beweist, dass der
@@ -112,7 +116,32 @@ def create_scan_pdf(path: Path) -> None:
     path.write_bytes(_build_pdf([[], []]))
 
 
+# Jede Zeichenkette wird als eigene Textzeile geschrieben (Tj + T*), pypdf
+# trennt sie daher per "\n" -- genau das Layout eines zweispaltigen Satzes,
+# der am Zeilenende trennt. Deckt AC1 (Belegfaelle), AC2 (echter Bindestrich
+# ohne Umbruch) und die Gegenprobe fuer AC4 (indizierbares Zitat) ab.
+HYPHENATION_LINES: list[list[str]] = [
+    [
+        "In-",
+        "equality ist das erste Belegwort aus dem Lauf vom 12.08.2026.",
+        "Das betrifft jedes individ-",
+        "uelle Beispiel aus dem Bericht.",
+        "Auch consul-",
+        "tancy und reproducibil-",
+        "ity sowie compu-",
+        "tation gehoeren dazu.",
+        "Multi-Agent-Systeme sind hier ein echter Bindestrich ohne Umbruch.",
+    ],
+]
+
+
+def create_hyphenation_pdf(path: Path) -> None:
+    """PDF mit Silbentrennungen am Zeilenumbruch (Issue #897)."""
+    path.write_bytes(_build_pdf(HYPHENATION_LINES))
+
+
 if __name__ == "__main__":
     create_nonce_pdf(OUT / "nonce_paper.pdf")
     create_scan_pdf(OUT / "scan_no_text.pdf")
+    create_hyphenation_pdf(OUT / "hyphenation_897.pdf")
     print(f"Fixtures erstellt in {OUT}")
