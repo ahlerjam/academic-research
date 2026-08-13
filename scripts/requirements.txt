@@ -1,5 +1,5 @@
 httpx>=0.28.1
-pypdf>=4.0.0
+pypdf>=6.15.0
 pyyaml>=6.0.3
 # Pflicht-Dependency des Excel-Backends document-skills:xlsx, das /excel und
 # /pickup aufrufen — Issue #367, Backend extern seit #445.
