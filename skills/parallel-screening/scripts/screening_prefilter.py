@@ -168,13 +168,16 @@ def _normalize_publication_type(value: Any) -> str | None:
 
     Abbildet CrossRef, OpenAlex und Semantic Scholar Werte auf das kanonische
     CrossRef-Format ab, damit der Allowlist-Vergleich unabhängig von der
-    Quelle funktioniert.
+    Quelle funktioniert. Unbekannte Werte werden klein-normalisiert weitergegeben
+    (fallback zu einfacher Lowercase-Normalisierung).
     """
     if value is None:
         return None
     normalized_key = str(value).strip().lower()
     if not normalized_key:
         return None
+    # Mapping verwenden, wenn vorhanden; sonst klein-normalisiert weitergeben
+    # (fallback für unbekannte Vokabularwerte).
     return _PUBLICATION_TYPE_MAPPING.get(normalized_key, normalized_key)
 
 
