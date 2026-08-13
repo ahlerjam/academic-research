@@ -61,6 +61,7 @@ def test_all_commands_present_in_commands_dir() -> None:
     Urspruenglich (#209) exakt 9 Commands; #446 fuegt `word`/`slides` hinzu.
     """
     assert set(ALL_COMMANDS) == {
+        "entscheidungen",
         "excel",
         "fetch",
         "history",
