@@ -168,35 +168,45 @@ def test_build_candidates_deduplicates_and_caps(tmp_path: Path):
 
 
 def test_run_known_item_search_reports_searched_for_even_on_zero_hits():
-    candidates = [{"type": "title", "query": "Some Obscure Nonexistent Title XYZ"}]
+    candidates = [
+        {
+            "type": "title",
+            "query": "Some Obscure Nonexistent Title XYZ",
+            "source": "known_works_queries",
+        }
+    ]
     with patch("known_item_search._run_module", return_value=("crossref", [], False)):
         report = run_known_item_search(candidates, modules=["crossref"], limit=5)
 
     assert report["searched_for"] == candidates
-    assert report["found"]["Some Obscure Nonexistent Title XYZ"] == []
+    found_info = report["found"]["Some Obscure Nonexistent Title XYZ"]
+    assert found_info["hits"] == []
+    assert found_info["status"] == "zero_hits"
     assert report["papers"] == []
 
 
 def test_run_known_item_search_tags_hits_as_found_via_known_item():
-    candidates = [{"type": "title", "query": "MetaGPT"}]
+    candidates = [{"type": "title", "query": "MetaGPT", "source": "known_works_queries"}]
     hit = {"title": "MetaGPT", "citations": 500}
     with patch("known_item_search._run_module", return_value=("openalex", [hit], False)):
         report = run_known_item_search(candidates, modules=["openalex"], limit=5)
 
-    assert report["found"]["MetaGPT"][0]["found_via_known_item"] is True
+    assert report["found"]["MetaGPT"]["hits"][0]["found_via_known_item"] is True
     assert report["papers"][0]["found_via_known_item"] is True
 
 
 def test_run_known_item_search_multiple_candidates_all_reported():
     candidates = [
-        {"type": "title", "query": "A"},
-        {"type": "title", "query": "B"},
+        {"type": "title", "query": "A", "source": "known_works_queries"},
+        {"type": "title", "query": "B", "source": "citation_heuristic"},
     ]
     with patch("known_item_search._run_module", return_value=("crossref", [], False)):
         report = run_known_item_search(candidates, modules=["crossref"], limit=5)
 
     assert len(report["searched_for"]) == 2
     assert set(report["found"].keys()) == {"A", "B"}
+    # Both should have the new structure with status
+    assert all("hits" in report["found"][q] and "status" in report["found"][q] for q in ["A", "B"])
 
 
 # ---------------------------------------------------------------------------
