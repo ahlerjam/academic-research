@@ -6,12 +6,31 @@ Jeder Skill lädt diese Datei am Anfang seiner Aktivierung.
 ## Vorbedingungen
 
 Bevor du startest: Prüfe, ob `./academic_context.md` und `./literature_state.md`
-vorhanden und aktuell sind. Fehlt Kontext → triggere den `academic-context`-
-Skill und warte auf dessen Abschluss.
+vorhanden und aktuell sind. Fehlt `academic_context.md` vollständig → triggere
+den `academic-context`-Skill und warte auf dessen Abschluss.
 
 Lehnt der User den Trigger ab → brich diesen Skill ab und erkläre:
 "Ohne Forschungsfrage und Methodik-Angabe kann ich kein belastbares Ergebnis
 liefern, weil ich ein erfundenes Thema beschreiben würde."
+
+Existiert `academic_context.md`, reicht das allein nicht — prüfe zusätzlich
+den Zustand: Ist die Phase dieses Skills laut `config/workflow-phases.json`
+(verbindliche Quelle der Ablaufordnung, keine Duplizierung hier) überhaupt an
+der Reihe, und sind ihre `preconditions[].field`-Einträge im Kontext befüllt?
+Ein Feld gilt als **unbelegt**, wenn es leer ist oder den Wert `TODO`, `OFFEN`
+oder `VORLAEUFIG` trägt — diese drei Marker zählen gleichermaßen als nicht
+belegt.
+
+Ist eine Vorbedingung unbelegt: **warnen, nicht blockieren.** Melde
+dreiteilig — (a) welche Vorbedingung fehlt, (b) welcher Skill sie erfüllt
+(z. B. fehlt "Forschungsfrage" → nächster Schritt ist
+`research-question-refiner`) und (c) die Rückfrage per `AskUserQuestion`, ob
+trotzdem fortgefahren werden soll. Bestätigt der User "trotzdem fortfahren",
+läuft der Skill wie angefragt weiter.
+
+Sind alle Vorbedingungen der aktuellen Phase erfüllt, entfällt diese Meldung
+komplett — nur bei unbelegten Feldern entsteht der zusätzliche Rückfrageschritt,
+der reibungslose Normalfall bleibt unverändert ohne Overhead.
 
 ## Keine Fabrikation
 
