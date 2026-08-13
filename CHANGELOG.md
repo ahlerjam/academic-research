@@ -8,6 +8,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Added
+
+- **Entscheidungsklassen im Preamble (#905):** `skills/_common/preamble.md`
+  unterscheidet jetzt zwischen einer fehlenden Tatsache (nur der Operator hat
+  die Angabe — Prüfungsordnung, Abgabedatum, Zugangsdaten, das Thema selbst;
+  weiterhin Rückfrage) und einer offenen Abwägung (aus dem vorhandenen
+  Material begründbar und vom Operator jederzeit revidierbar — Positionierung,
+  Methodenwahl im Rahmen der Methodik, Screening-Grenzfälle; wird entschieden,
+  begründet, per `vault.add_decision(category="judgment-call", ...)`
+  protokolliert und dann weitergearbeitet statt zwischenberichtet). Neue
+  Kategorie-Konstante `JUDGMENT_CALL_CATEGORY` in
+  `academic_vault/decision_log.py`, symmetrisch zu `AUTO_CATEGORY`/
+  `MODEL_VERSION_CATEGORY`. Neuer Command `/academic-research:entscheidungen`
+  listet aktive und abgelöste `judgment-call`-Decisions und revidiert eine
+  davon per `vault.supersede_decision` (alte bleibt als abgelöst sichtbar).
+  Bestehende Haltepunkte (`outline_gate` in `chapter-writer` u. a.) bleiben
+  unberührt — die neue Preamble-Sektion regelt nur den Default für
+  unadressierte Abwägungen. Slash-Commands 12 → 13 (README-Badge,
+  `docs/reference/`, Release-Notes synchron aktualisiert).
+
 ### Fixed
 
 - **NLI-Zitatscan meldete 20 von 21 Zitaten als verdaechtig, praktisch alle
