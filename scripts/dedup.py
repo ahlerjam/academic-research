@@ -160,11 +160,11 @@ def _blocked_candidate_pairs(
     # (every similarity ratio is >= 0). Without this guard, the formula
     # `la * (2 - threshold) / threshold` would divide by zero.
     if threshold <= 0:
-        pairs: list[tuple[int, int]] = []
+        pairs_all: list[tuple[int, int]] = []
         for i in range(len(indices)):
             for j in range(i + 1, len(indices)):
-                pairs.append((indices[i], indices[j]))
-        return pairs
+                pairs_all.append((indices[i], indices[j]))
+        return pairs_all
 
     order_by_len = sorted(indices, key=lambda idx: len(titles[idx]))
     lengths = [len(titles[idx]) for idx in order_by_len]
