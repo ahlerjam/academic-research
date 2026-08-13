@@ -45,7 +45,7 @@ Du musst aktiv nach Volltext-Links/OA-Indikatoren filtern.
 7. Bei Volltext-Link gefunden:
    - `browser-use click <volltext-link-idx>` → externe Seite
    - Download-Versuch: `browser-use download <pdf-idx> --to <output_path>`
-   - Validation: Magic-Bytes `%PDF`, Groesse > 10 KB
+   - Validation: Magic-Bytes `%PDF`, Groesse >= 2 KB
    - Erfolg: `{"status": "success", "source_subagent": "kvk-fetcher", "pdf_path": "..."}`
 8. Nur Bibliotheks-Nachweis (kein Volltext):
    - Standorte sammeln: Bibliotheksname, Ort, Signatur

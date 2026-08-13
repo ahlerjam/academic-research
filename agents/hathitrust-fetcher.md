@@ -52,7 +52,7 @@ gemeinfreie ("Full view") als auch urheberrechtlich geschuetzte ("Limited
 8. `browser-use download <link-idx> --to <output_path>`
    - Bei grossen Werken: "Your PDF is being prepared" abwarten, dann erneut
      versuchen
-9. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+9. Validation: erste 4 Bytes = `%PDF`, Groesse >= 2 KB
 10. **Ausgabe-/Jahresangabe:** Feld "Published" auf der Digitalisat-Detailseite
     lesen und als `edition` uebernehmen — NIE die Eingabe-ISBN/-Titel-Angabe
     kopieren, da mehrere Bibliotheken unterschiedliche Auflagen desselben

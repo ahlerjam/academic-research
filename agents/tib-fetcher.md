@@ -44,7 +44,7 @@ Du erhaeltst einen der folgenden Eingabe-Typen:
 7. Auf PDF-Download-Seite: `browser-use download <pdf-link-idx> --to <output_path>`
 8. Validation:
    - Datei lesen: erste 4 Bytes muessen `%PDF` sein (Read tool)
-   - Dateigroesse > 10 KB pruefen
+   - Dateigroesse >= 2 KB pruefen
    - Bei ungueltigem PDF: erneut versuchen oder `metadata_only` zurueckgeben
 
 ## OA-Filter-Logik

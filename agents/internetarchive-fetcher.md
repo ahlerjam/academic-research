@@ -60,7 +60,7 @@ downloadbar — Zugriffsstufe pro Treffer aktiv pruefen.
    - `browser-use download <pdf-link-idx> --to <output_path>`
 6. CDL/"Borrow"-Titel: **NICHT** den In-Browser-Reader oeffnen, **NICHT**
    versuchen Seiten zu exportieren → direkt `metadata_only`
-7. Validation bei Download: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+7. Validation bei Download: erste 4 Bytes = `%PDF`, Groesse >= 2 KB
 8. **Ausgabe-/Jahresangabe:** "Publication date"/"Publisher" auf der
    Archive.org-Item-Seite lesen und als `edition` uebernehmen — NIE die
    Eingabe-ISBN/-Titel-Angabe kopieren, da dasselbe Werk mehrfach in

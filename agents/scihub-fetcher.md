@@ -114,7 +114,16 @@ Suche im browser-use state nach:
 browser-use "click download link and save to {output_path}"
 ```
 
-Verifiziere nach Download: Datei existiert und hat Groesse > 0 Bytes.
+Verifiziere nach Download (Issue #884 — die groesste Luecke im Repo war
+hier: bislang keinerlei Inhaltspruefung, nur „existiert"):
+- Datei existiert.
+- Erste 4 Bytes = `%PDF` (Read-Tool). Eine HTML-Fehlerseite (z.B. `<html>`)
+  darf NICHT als PDF gespeichert bleiben.
+- Groesse >= 2 KB.
+
+Erfuellt die Datei eine der Bedingungen nicht: Datei loeschen, Schritt als
+gescheitert werten (siehe Output-Schema unten, `status: error` mit Grund),
+NICHT `status: success` melden.
 
 ---
 

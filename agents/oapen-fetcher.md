@@ -42,7 +42,7 @@ Jeder gefundene Treffer ist per Definition OA — kein separater OA-Filter noeti
 5. `browser-use state` → "Download PDF"-Button suchen
    - Button-Index identifizieren
 6. `browser-use download <pdf-btn-idx> --to <output_path>`
-7. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+7. Validation: erste 4 Bytes = `%PDF`, Groesse >= 2 KB
 
 ## Output-Schema
 

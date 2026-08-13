@@ -47,7 +47,7 @@ ABER: Nicht alle Eintraege haben einen direkten Download-Link — manche haben n
    - Springer/Verlag-Link → Download-Button auf Verlagsseite
    - Unbekannter Provider → DOM nach PDF-Link durchsuchen
 8. `browser-use download <pdf-link-idx> --to <output_path>`
-9. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+9. Validation: erste 4 Bytes = `%PDF`, Groesse >= 2 KB
 
 ## OA-Filter-Logik
 

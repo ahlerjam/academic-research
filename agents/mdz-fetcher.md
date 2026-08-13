@@ -64,7 +64,7 @@ Seitenansicht).
     "PDF-Datei oeffnen oder herunterladen" ein — auf diesen Link warten, statt
     den Schritt als fehlgeschlagen zu werten
 12. `browser-use download <pdf-link-idx> --to <output_path>`
-13. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+13. Validation: erste 4 Bytes = `%PDF`, Groesse >= 2 KB
 14. **Ausgabe-/Jahresangabe:** Block "Bibliografische Angaben" auf der
     Werkseite lesen und als `edition` uebernehmen — NIE die Eingabe-ISBN/
     -Titel-Angabe kopieren. MDZ-Digitalisate sind oft historische
