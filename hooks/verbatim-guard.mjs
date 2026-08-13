@@ -164,6 +164,45 @@ function extractContent(toolName, toolInput) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Sucht sequenziell Delimiter-PAARE (nicht Vorkommen) eines einzelnen
+ * Anfuehrungszeichen-Typs: ab ``pos`` das naechste oeffnende Delimiter, dann
+ * ab dessen Ende das naechste SCHLIESSENDE Delimiter — nie umgekehrt gesucht,
+ * nie ueber ein zu kurzes Paar hinweg weitergesucht. Erst NACH der Paarung
+ * wird auf ``minLen`` gefiltert (Post-Filter, nicht Teil der Suche selbst),
+ * und in JEDEM Fall (Paar zu kurz oder nicht) geht es ab dem Ende des
+ * gefundenen Paares weiter.
+ *
+ * Das ist der Kern des Issue-#900-Fixes: die fruehere gierige Regex
+ * (`/"([^"]{10,})"/g`) sprang bei einem zu kurzen Paar einfach zum naechsten
+ * "-Zeichen weiter und paarte damit das SCHLIESSENDE Zeichen des einen mit
+ * dem OEFFNENDEN des naechsten kurzen Begriffs — der Fliesstext dazwischen
+ * wurde dann faelschlich als Zitat gelesen. Der sequenzielle Scanner bindet
+ * jedes Oeffnen an genau das naechste Schliessen danach, unabhaengig von der
+ * Laenge, und verwirft nur zu kurze PAARE — nie eine falsche Paarung.
+ *
+ * Wenn nach einem oeffnenden Delimiter kein schliessendes mehr folgt, gibt es
+ * fuer diesen Typ keine weiteren Paare mehr (das schliessende Delimiter kommt
+ * im restlichen Text nicht mehr vor) — der Scan bricht dann ab.
+ */
+function scanDelimiterPairs(content, open, close, minLen) {
+  const spans = [];
+  let pos = 0;
+  while (true) {
+    const openIdx = content.indexOf(open, pos);
+    if (openIdx === -1) break;
+    const innerStart = openIdx + open.length;
+    const closeIdx = content.indexOf(close, innerStart);
+    if (closeIdx === -1) break;
+    const text = content.slice(innerStart, closeIdx);
+    if (text.length >= minLen) {
+      spans.push({ start: innerStart, end: closeIdx, text });
+    }
+    pos = closeIdx + close.length;
+  }
+  return spans;
+}
+
+/**
  * Extrahiert Anführungszeichen-Spans aus dem Content.
  * Unterstuetzte Typen:
  *   "…"   — ASCII double quotes
@@ -171,7 +210,9 @@ function extractContent(toolName, toolInput) {
  *   «…»   — Guillemets
  *   ``…'' — LaTeX
  *
- * Mindestlänge: MIN_QUOTE_LEN Zeichen (innerer Text).
+ * Mindestlänge: MIN_QUOTE_LEN Zeichen (innerer Text). Jeder Delimiter-Typ wird
+ * unabhaengig von den anderen sequenziell gepaart (scanDelimiterPairs), nicht
+ * per gieriger Regex — siehe dort fuer den Grund (Issue #900).
  * Gibt Array von ``{start, end, text}`` zurueck — ``text`` ist der innere Text,
  * ``start``/``end`` seine Offsets IM UEBERGEBENEN Content.
  *
@@ -184,26 +225,28 @@ function extractContent(toolName, toolInput) {
  * spanIsMasked() weiter unten.
  */
 function extractQuoteSpans(content) {
-  const spans = [];
   const q = MIN_QUOTE_LEN;
-  // Jedes Pattern als Konstruktor — dadurch wird lastIndex isoliert pro Durchlauf.
-  // openLen = Laenge des oeffnenden Delimiters, damit der innere Startoffset
-  // exakt ist (kein indexOf-Raten auf dem Treffertext).
-  const patterns = [
-    { re: new RegExp(`"([^"]{${q},})"`, 'g'), openLen: 1 },  // ASCII "…"
-    { re: new RegExp(`„([^“]{${q},})“`, 'g'), openLen: 1 }, // Deutsche „…" (U+201E…U+201C)
-    { re: new RegExp(`«([^»]{${q},})»`, 'g'), openLen: 1 }, // Guillemets «…» (U+00AB…U+00BB)
-    { re: new RegExp(`\`\`([^']{${q},})''`, 'g'), openLen: 2 }, // LaTeX ``…''
+  const delimiters = [
+    { open: '"', close: '"' },   // ASCII "…"
+    { open: '„', close: '“' },  // Deutsche „…" (U+201E…U+201C)
+    { open: '«', close: '»' },  // Guillemets «…» (U+00AB…U+00BB)
+    { open: '``', close: "''" }, // LaTeX ``…''
   ];
-  for (const { re, openLen } of patterns) {
-    let match;
-    while ((match = re.exec(content)) !== null) {
-      if (!match[1]) continue;
-      const start = match.index + openLen;
-      spans.push({ start, end: start + match[1].length, text: match[1] });
-    }
+  const spans = [];
+  for (const { open, close } of delimiters) {
+    spans.push(...scanDelimiterPairs(content, open, close, q));
   }
   return spans;
+}
+
+/**
+ * True, wenn ``span`` mit MINDESTENS einem der ``quoteSpans`` ueberlappt
+ * (halboffenes Intervall [start, end)). Jede Ueberlappung genuegt — auch eine
+ * Teilueberlappung, denn ein Marker, der nur an EINER Stelle innerhalb des
+ * Zitats landet, zerreisst den geprueften Wortlaut trotzdem (Issue #900).
+ */
+function overlapsAnyQuoteSpan(span, quoteSpans) {
+  return quoteSpans.some((q) => span.start < q.end && span.end > q.start);
 }
 
 /**
@@ -685,8 +728,14 @@ function reportUncheckedCitationForms(content, filePath, env = process.env) {
  * Führt den Klammer-Beleg-Check aus. Blockiert (exit 2) bei sauberem Negativ,
  * markiert bei probable/unavailable mit [UNVERIFIED] (exit 0) und gibt sonst
  * die Kontrolle zurück.
+ *
+ * ``quoteSpans`` (Issue #900): Anführungszeichen-Spans aus derselben
+ * extractQuoteSpans()-Erkennung, die main() bereits für den Zitat-Check
+ * gebildet hat. Ein Klammerbeleg, dessen Fundstelle in einem dieser Spans
+ * liegt, wird weiterhin GEMELDET (stderr-Grund), aber NICHT markiert — der
+ * Marker würde sonst mitten in geprüftem Wortlaut landen und ihn verändern.
  */
-async function runCitationCheck(toolName, toolInput, content) {
+async function runCitationCheck(toolName, toolInput, content, quoteSpans = []) {
   // Unabhaengig vom occurrences.length === 0-Early-Return unten (Issue #740,
   // Plan Task 7): sonst bliebe ausgerechnet der Fall aus dem Issue-Text —
   // ein woertliches Zitat mit AUSSCHLIESSLICH einer ungeprueften Beleg-Form —
@@ -798,9 +847,13 @@ async function runCitationCheck(toolName, toolInput, content) {
   }
   if (markKeys.size === 0) return;
 
-  // Markiert wird jede Fundstelle des betroffenen Belegs; die Begründung nennt
-  // ihn einmal.
-  const toMark = occurrences.filter((c) => markKeys.has(c.key));
+  // Markiert wird jede Fundstelle des betroffenen Belegs — AUSSER sie liegt in
+  // einem Anführungszeichen-Span (Issue #900): dort würde der Marker in
+  // geprüften Wortlaut eingreifen. Die Begründung nennt den Beleg trotzdem
+  // einmal (reason unten filtert nur auf markKeys, nicht auf Quote-Overlap).
+  const toMark = occurrences.filter(
+    (c) => markKeys.has(c.key) && !overlapsAnyQuoteSpan(c, quoteSpans),
+  );
   const reason = [
     '[Citation-Guard] Belege konnten nicht abschließend verifiziert werden und '
       + 'wurden mit [UNVERIFIED] markiert:',
@@ -940,7 +993,7 @@ async function main() {
   // ---------------------------------------------------------------------------
   // Klammer-Beleg-Check (additiv, nach Quote- und Figure-Check; Issue #378)
   // ---------------------------------------------------------------------------
-  await runCitationCheck(toolName, toolInput, content);
+  await runCitationCheck(toolName, toolInput, content, spans);
 
   process.exit(0);
 }
