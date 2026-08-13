@@ -13,6 +13,9 @@ browser-guide: config/browser_guides/cambridge-core.md
 
 # cambridge-core
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst cambridge.org/core wie ein Mensch. Nur browser-use — kein curl, kein wget.
 
 **Lies zuerst:** `config/browser_guides/cambridge-core.md`
@@ -45,16 +48,14 @@ Wenn NICHT enthalten:
 
 ## Discovery-Flow
 
-1. ```
-   browser-use open https://www.cambridge.org/core
-   ```
+1. `new_tab("https://www.cambridge.org/core")`
 2. Suchfeld: Titel, ISBN oder DOI eingeben
-3. `browser-use state` → Filter "Book" (Content Type) setzen
+3. Filter "Book" (Content Type) setzen
 4. OA-Badge ("Open Access") in Ergebniszeile pruefen:
    - OA-Badge vorhanden → kein Auth-Trigger noetig
    - Kein OA-Badge → Auth moeglicherweise noetig (erst nach Klick pruefen)
 5. Auf Treffer klicken → Buchdetailseite (`/core/books/...`)
-6. Alternativ per DOI-Direktlink: `browser-use open https://doi.org/10.1017/...`
+6. Alternativ per DOI-Direktlink: `new_tab("https://doi.org/10.1017/...")`
 
 Bei 0 Treffern:
 ```json
@@ -63,7 +64,7 @@ Bei 0 Treffern:
 
 ## Paywall-Erkennung und Auth-Trigger
 
-Auf der Buchdetailseite `browser-use state` pruefen:
+Auf der Buchdetailseite den Seitenzustand (`page_info()`, `js(...)`) pruefen:
 
 **Auth-Trigger-Bedingungen** (eine davon genuegt):
 - "Log In"-Button oben rechts ohne eingeloggten Zustand
@@ -94,12 +95,9 @@ auth-helper gibt zurueck:
 
 Nach erfolgreicher Auth oder bei OA-Titel:
 
-1. `browser-use state` → "Download book PDF"-Button suchen (Buchseite `/core/books/<slug>`)
+1. "Download book PDF"-Button ueber den AX-Baum suchen (Buchseite `/core/books/<slug>`)
 2. Button gefunden:
-   ```
-   browser-use click <download-btn-idx>
-   browser-use download <pdf-idx> --to <output_path>
-   ```
+   Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`).
 3. PDF-Validierung: erste 4 Bytes `%PDF`, Groesse > 10 KB
 4. Falls Vollbuch-Download nicht verfuegbar, aber Kapitel-Download moeglich
    (jedes Kapitel hat eigenen "Download PDF"-Link im linken Inhaltsverzeichnis):
