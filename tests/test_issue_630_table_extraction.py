@@ -304,7 +304,7 @@ def test_get_table_cell_returns_none_for_merged_position(tmp_path):
     assert result["status"] == tables_mod.STATUS_OK
 
     # Die merged-Position sollte in extract_tables korrekt als Platzhalter erscheinen
-    assert result["low_confidence_tables"] == []  # high confidence
+    assert result["low_confidence_tables"] == 0  # high confidence
 
     # Aber get_table_cell() muss None zurückgeben für die geschluckte Position
     cell = get_table_cell(db_path, paper_id, page=0, table_index=0, row=0, col=2)
