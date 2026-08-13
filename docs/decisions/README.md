@@ -16,3 +16,6 @@ Nummerierung fortlaufend, ein Vermerk pro Datei, Dateiname `NNNN-kurzer-slug.md`
 - [0001 — Modellzugang beim Ingest ohne eigenen Schlüssel](0001-modellzugang-ingest.md)
   — welcher Weg dem Vault-Ingest ein Modell für inhaltliche Kontextsätze verschafft,
   ohne die No-Key-Randbedingung aus #632 zu verletzen.
+- [0002 — OpenAlex: Filter-Syntax, Semantic Search, Usage-based Pricing](0002-openalex-search-syntax-semantic-pricing.md)
+  — Audit der Filter-Suchsyntax (bereits umgestellt), Einstufung von Semantic
+  Search (Beta, abwarten) und Usage-based Pricing (keylos bleibt Default, #632).
