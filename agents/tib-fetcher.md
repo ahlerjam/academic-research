@@ -16,6 +16,9 @@ browser-guide: config/browser_guides/tib.md
 
 # tib-fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst tib.eu wie ein Mensch. Nur browser-use — kein curl, kein wget.
 
 **Lies zuerst:** `config/browser_guides/tib.md`
@@ -30,18 +33,18 @@ Du erhaeltst einen der folgenden Eingabe-Typen:
 
 ## Standard-Flow
 
-1. `browser-use open https://www.tib.eu/de/suchen?query=<URL-encoded-query>`
+1. `new_tab("https://www.tib.eu/de/suchen?query=<URL-encoded-query>")`
    (query = ISBN, DOI oder Titel, URL-encoded)
-2. `browser-use state` → Treffer-Liste lesen
+2. Treffer-Liste per `js(...)` lesen
 3. Plausibelsten Treffer waehlen: Titel + Autor + Jahr matcht Input
    - Bei 0 Treffern: `{"status": "no_match", "source_subagent": "tib-fetcher", "reason": "0 Treffer fuer <query>"}`
-4. `browser-use click <idx>` auf Treffer-Titel → Detailseite
-5. `browser-use state` → Detailseite pruefen:
+4. Treffer-Titel ueber den AX-Baum finden und `click_at_xy(...)` → Detailseite
+5. Detailseite per `page_info()` / `js(...)` pruefen:
    - "Open Access"-Badge sichtbar? → OA-Indiz vorhanden
    - "Volltext"-Block sichtbar? → Download moeglich
    - Kein OA-Indiz → `{"status": "metadata_only", "source_subagent": "tib-fetcher", "url": "<detailseite-url>"}`
-6. Volltext-Link anklicken: `browser-use click <volltext-idx>`
-7. Auf PDF-Download-Seite: `browser-use download <pdf-link-idx> --to <output_path>`
+6. Volltext-Link ueber den AX-Baum finden und `click_at_xy(...)`
+7. Auf PDF-Download-Seite: Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
 8. Validation:
    - Datei lesen: erste 4 Bytes muessen `%PDF` sein (Read tool)
    - Dateigroesse > 10 KB pruefen
