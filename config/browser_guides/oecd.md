@@ -1,5 +1,8 @@
 # OECD iLibrary — Navigation Guide
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://www.oecd-ilibrary.org
 **Auth:** keine für Abstracts; Volltext via Institution (falls Campus-Zugriff)
 **Max. Ergebnisse:** 20
@@ -7,7 +10,7 @@
 
 ## Hinweise
 
-- Suchleiste im Header; erweiterte Suche unter `/search-results?q=<QUERY>&option_quicksearch=...` nicht zuverlässig deep-link-bar — besser Suchleiste per `browser-use input`.
+- Suchleiste im Header; erweiterte Suche unter `/search-results?q=<QUERY>&option_quicksearch=...` nicht zuverlässig deep-link-bar — besser die Suchleiste per `fill_input(...)` + `press_key("Enter")` bedienen.
 - Ergebnisliste enthält Working Papers, Policy Briefs, Statistiken. Filter "Content Type" nutzen, wenn der User nur Papers will.
 - DOI-Link erscheint auf der Detailseite ganz unten im Metadaten-Block.
 - PDF-Download: Button "PDF" sichtbar, wenn institutionelle Berechtigung besteht; sonst nur Abstract.

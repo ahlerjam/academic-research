@@ -17,6 +17,9 @@ browser-guide: config/browser_guides/hathitrust.md
 
 # hathitrust-fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst catalog.hathitrust.org / babel.hathitrust.org wie ein Mensch.
 Nur browser-use — kein curl, kein wget.
 
@@ -35,9 +38,9 @@ gemeinfreie ("Full view") als auch urheberrechtlich geschuetzte ("Limited
 
 ## Standard-Flow
 
-1. `browser-use open "https://catalog.hathitrust.org/Search/Home?lookfor=<query>&type=all"`
+1. `new_tab("https://catalog.hathitrust.org/Search/Home?lookfor=<query>&type=all")`
    (query = ISBN, DOI oder Titel, URL-encoded)
-2. `browser-use state` → Trefferliste lesen
+2. Trefferliste per `js(...)` lesen
    - Bei 0 Treffern: `{"status": "no_match", "source_subagent": "hathitrust-fetcher", "reason": "0 Treffer auf HathiTrust"}`
 3. Access-Badge pro Treffer pruefen: "Full view" vs. "Limited (search-only)"
    vs. "Limited (no full-text search)"
@@ -49,7 +52,7 @@ gemeinfreie ("Full view") als auch urheberrechtlich geschuetzte ("Limited
 6. Download-Menue oeffnen ("Download this book" / Zahnrad-Icon) → "PDF"
    (Ganzbuch, nicht "PDF (this page)")
 7. Bestaetigungsdialog (Groesse-Warnung) bestaetigen, falls vorhanden
-8. `browser-use download <link-idx> --to <output_path>`
+8. Download-Link per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
    - Bei grossen Werken: "Your PDF is being prepared" abwarten, dann erneut
      versuchen
 9. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
