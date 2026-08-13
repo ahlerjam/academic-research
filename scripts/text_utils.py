@@ -57,6 +57,113 @@ def normalize_paper(data: dict[str, Any], source_module: str) -> dict[str, Any]:
     }
 
 
+@dataclass
+class ParsedAuthorName:
+    """Ergebnis von :func:`parse_author_name` (Issue #908).
+
+    ``family``/``given`` sind nur gesetzt, wenn der Rohstring zuverlaessig
+    zerlegbar war (``parsed=True``). Unklare Faelle (Organisationen,
+    mehrteilige/nicht-westliche Namen ohne Komma-Trenner) werden NICHT
+    geraten -- sie landen unveraendert in ``literal`` mit ``parsed=False``.
+    ``warning`` wird ausschliesslich von :func:`parse_author_names` gesetzt
+    (Plausibilitaetscheck ueber ein ganzes Autoren-Datenset hinweg).
+    """
+
+    family: str | None = None
+    given: str | None = None
+    literal: str | None = None
+    parsed: bool = False
+    warning: str | None = None
+
+    def display_name(self) -> str:
+        """Kanonische Anzeigeform ('Given Family'), fuer ``Paper.authors``."""
+        if self.given and self.family:
+            return f"{self.given} {self.family}".strip()
+        if self.family:
+            return self.family
+        if self.given:
+            return self.given
+        return self.literal or ""
+
+
+def parse_author_name(raw: str) -> ParsedAuthorName:
+    """Zerlegt einen rohen Autoren-String in Vor-/Nachname (Issue #908).
+
+    Erkennt zuverlaessig NUR das Dublin-Core-Komma-Format
+    ``"Nachname, Vorname"`` (EconStor/BASE ``dccreator``, DNB MARC 100/700).
+    Alles andere (bereits fertige "Vorname Nachname"-Strings, Organisationen,
+    mehrteilige Nachnamen ohne Komma) wird NICHT per "letztes Wort =
+    Nachname" geraten -- genau dieser Griff hat die drei Falschzitate vom
+    12.08.2026 erzeugt, wenn er auf einen noch nicht erkannten Komma-String
+    angewendet wurde. Stattdessen bleibt der Rohstring unveraendert in
+    ``literal`` mit ``parsed=False``.
+    """
+    raw = raw.strip()
+    if "," in raw:
+        family, _, given = raw.partition(",")
+        family = family.strip()
+        given = given.strip()
+        if family:
+            return ParsedAuthorName(
+                family=family,
+                given=given or None,
+                parsed=True,
+            )
+    return ParsedAuthorName(literal=raw, parsed=False)
+
+
+def _flag_implausible_splits(parsed: list[ParsedAuthorName]) -> list[ParsedAuthorName]:
+    """Markiert Eintraege, deren Nachname auch als Vorname im selben
+    Datensatz auftaucht (Issue #908 AC4) -- gemeinsame Plausibilitaetslogik
+    fuer :func:`parse_author_names` (Roh-Strings) und
+    :func:`csl_authors_to_parsed` (bereits zerlegtes CSL-JSON, siehe
+    ``scripts/audit_author_names.py``)."""
+    given_names_lower = {p.given.strip().lower() for p in parsed if p.given}
+    for p in parsed:
+        if p.family and p.family.strip().lower() in given_names_lower:
+            p.warning = (
+                f"Nachname '{p.family}' taucht auch als Vorname im selben "
+                "Datensatz auf -- moeglicherweise vertauschte Reihenfolge."
+            )
+    return parsed
+
+
+def parse_author_names(raw_names: list[str]) -> list[ParsedAuthorName]:
+    """Parst eine ganze Autorenliste und markiert unplausible Zerlegungen.
+
+    Plausibilitaetscheck (Issue #908 AC4): landet der ermittelte Nachname
+    eines Eintrags auch als Vorname eines (beliebigen) Eintrags desselben
+    Datensatzes, deutet das auf vertauschte Reihenfolge hin -- das Ergebnis
+    wird trotzdem zurueckgegeben (kein Raten, kein Verwerfen), nur mit
+    ``warning`` versehen.
+    """
+    return _flag_implausible_splits([parse_author_name(raw) for raw in raw_names])
+
+
+def csl_authors_to_parsed(csl_authors: list[dict[str, Any]]) -> list[ParsedAuthorName]:
+    """Wandelt bereits zerlegte CSL-JSON-Autoren-Dicts in :class:`ParsedAuthorName`
+    um und wendet denselben Plausibilitaetscheck an wie :func:`parse_author_names`.
+
+    Fuer den Bestandscheck (Issue #908 AC5, ``scripts/audit_author_names.py``):
+    CSL-Autoren liegen im Vault bereits als ``{"family": ..., "given": ...}``
+    oder ``{"literal": ...}`` vor (kein Roh-String mehr zu parsen), aber
+    derselbe "Nachname == Vorname eines Co-Autors"-Check ist weiterhin
+    sinnvoll, um bereits vertauschte Bestandsdaten aufzuspueren.
+    """
+    parsed: list[ParsedAuthorName] = []
+    for entry in csl_authors:
+        if not isinstance(entry, dict):
+            continue
+        family = entry.get("family")
+        given = entry.get("given")
+        if family:
+            parsed.append(ParsedAuthorName(family=str(family), given=given, parsed=True))
+        else:
+            literal = entry.get("literal") or entry.get("name")
+            parsed.append(ParsedAuthorName(literal=literal, parsed=False))
+    return _flag_implausible_splits(parsed)
+
+
 _DOI_PREFIXES = (
     "https://dx.doi.org/",
     "http://dx.doi.org/",

@@ -262,10 +262,29 @@ def test_base_parses_real_fixture(monkeypatch):
     assert paper["title"] == (
         "10 years BASE: A contribution to the worldwide development of repositories"
     )
-    assert paper["authors"] == ["Pieper, Dirk", "Summann, Friedrich"]
+    # Issue #908: dccreator liefert Dublin-Core-"Nachname, Vorname"
+    # (unnormalisiert waeren das die rohen Komma-Strings) -- normalisiert auf
+    # die kanonische "Vorname Nachname"-Form, damit ein nachgelagerter
+    # "letztes Wort = Nachname"-Griff nicht mehr den Vornamen trifft.
+    assert paper["authors"] == ["Dirk Pieper", "Friedrich Summann"]
     assert paper["year"] == 2014
     assert paper["url"] == "https://pub.uni-bielefeld.de/record/2710028"
     assert paper["source_module"] == "base"
+
+
+def test_base_flags_implausible_author_split(monkeypatch):
+    """Issue #908 AC4: taucht der ermittelte Nachname eines dccreator-Eintrags
+    auch als Vorname eines anderen Eintrags desselben Treffers auf, wird eine
+    Warnung am Paper-Dict hinterlegt (additiv, mutiert nichts)."""
+    payload = json.loads((FIXTURES / "base_response.json").read_bytes())
+    payload["response"]["docs"][0]["dccreator"] = ["Miller, Peter", "Peter, Someone"]
+    body = json.dumps(payload).encode("utf-8")
+    _patch_client(monkeypatch, _json_handler(body))
+
+    results = search.search_base("climate change", limit=3)
+
+    assert results[0].get("author_name_warnings")
+    assert "Peter" in results[0]["author_name_warnings"][0]
 
 
 def test_base_reads_abstract_from_documented_dcdescription_field(monkeypatch):
@@ -335,6 +354,25 @@ def test_econbiz_skips_non_dict_item_keeps_rest(monkeypatch):
 # tests/test_issue_236_econstor_limit.py abgedeckt; hier: Nicht-Dict-Items
 # im REST-Pfad werden uebersprungen UND geloggt, siehe #456-Plan Punkt 5)
 # ---------------------------------------------------------------------------
+
+
+def test_econstor_rest_normalizes_comma_format_authors(monkeypatch):
+    """Issue #908: EconStor-REST-authors im Dublin-Core-Komma-Format
+    ('Nachname, Vorname') werden auf 'Vorname Nachname' normalisiert."""
+    items = [
+        {
+            "doi": "10.1234/a",
+            "title": "Paper A",
+            "authors": ["Snell, Charlie", "Huang, Dong"],
+            "year": 2024,
+        },
+    ]
+    body = json.dumps(items).encode("utf-8")
+    _patch_client(monkeypatch, _json_handler(body))
+
+    results = search.search_econstor("test-time compute", limit=3)
+
+    assert results[0]["authors"] == ["Charlie Snell", "Dong Huang"]
 
 
 def test_econstor_rest_parses_real_shaped_items(monkeypatch):

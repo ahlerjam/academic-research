@@ -26,7 +26,7 @@ from typing import Any
 
 import httpx
 
-from text_utils import normalize_paper, save_json
+from text_utils import normalize_paper, parse_author_names, save_json
 
 # ---------------------------------------------------------------------------
 # PRISMA counters
@@ -356,24 +356,31 @@ def search_base(query: str, limit: int) -> list[dict[str, Any]]:
                     break
             year_raw = dc("dcyear")
             year = int(year_raw) if year_raw and str(year_raw).isdigit() else None
-            results.append(
-                normalize_paper(
-                    {
-                        "doi": doi,
-                        "title": dc("dctitle"),
-                        "authors": item.get("dccreator") or [],
-                        "year": year,
-                        # BASE kennt kein "dcabstract" -- das Abstract-Feld
-                        # heisst "dcdescription" (Interface Guide v1.27,
-                        # Appendix 2 "Fields").
-                        "abstract": dc("dcdescription"),
-                        "venue": dc("dcpublisher"),
-                        "citations": 0,
-                        "url": dc("dcidentifier"),
-                    },
-                    "base",
-                )
+            # dccreator liefert Dublin-Core-"Nachname, Vorname" (#908) --
+            # auf die kanonische "Vorname Nachname"-Form normalisieren, statt
+            # den rohen Komma-String durchzureichen (ein nachgelagerter
+            # "letztes Wort = Nachname"-Griff traf sonst den Vornamen).
+            parsed_authors = parse_author_names(item.get("dccreator") or [])
+            entry = normalize_paper(
+                {
+                    "doi": doi,
+                    "title": dc("dctitle"),
+                    "authors": [p.display_name() for p in parsed_authors],
+                    "year": year,
+                    # BASE kennt kein "dcabstract" -- das Abstract-Feld
+                    # heisst "dcdescription" (Interface Guide v1.27,
+                    # Appendix 2 "Fields").
+                    "abstract": dc("dcdescription"),
+                    "venue": dc("dcpublisher"),
+                    "citations": 0,
+                    "url": dc("dcidentifier"),
+                },
+                "base",
             )
+            warnings = [p.warning for p in parsed_authors if p.warning]
+            if warnings:
+                entry["author_name_warnings"] = warnings
+            results.append(entry)
         except Exception:
             log.warning("Module 'base': skipping malformed item %r", item, exc_info=True)
     return results
@@ -572,21 +579,26 @@ def search_econstor(
             log.warning("Module 'econstor': skipping non-dict item %r", item)
             continue
         try:
-            results.append(
-                normalize_paper(
-                    {
-                        "doi": item.get("doi"),
-                        "title": item.get("title"),
-                        "authors": item.get("authors") or [],
-                        "year": item.get("year"),
-                        "abstract": item.get("abstract"),
-                        "venue": "EconStor",
-                        "citations": 0,
-                        "url": item.get("url"),
-                    },
-                    "econstor",
-                )
+            # dc:creator-Herkunft (REST wie OAI-PMH-Fallback) liefert dasselbe
+            # Dublin-Core-Komma-Format wie BASE -- selbe Normalisierung (#908).
+            parsed_authors = parse_author_names(item.get("authors") or [])
+            entry = normalize_paper(
+                {
+                    "doi": item.get("doi"),
+                    "title": item.get("title"),
+                    "authors": [p.display_name() for p in parsed_authors],
+                    "year": item.get("year"),
+                    "abstract": item.get("abstract"),
+                    "venue": "EconStor",
+                    "citations": 0,
+                    "url": item.get("url"),
+                },
+                "econstor",
             )
+            warnings = [p.warning for p in parsed_authors if p.warning]
+            if warnings:
+                entry["author_name_warnings"] = warnings
+            results.append(entry)
         except Exception:
             log.warning("Module 'econstor': skipping malformed item %r", item, exc_info=True)
     return results
@@ -938,11 +950,25 @@ def main() -> int:
     output_text = json.dumps(papers, ensure_ascii=False, indent=2)
     if args.output:
         save_json(papers, args.output)
+        # #908: implausible Autoren-Splits (dc:creator-Komma-Format) landen
+        # additiv gebuendelt in der Sidecar-Statusdatei -- pro betroffenem
+        # Paper Titel/Quelle/Warnungen, damit sie beim Review auffallen statt
+        # nur in einem WARNING-Log-Eintrag zu verschwinden.
+        author_name_warnings = [
+            {
+                "title": p.get("title"),
+                "source_module": p.get("source_module"),
+                "warnings": p["author_name_warnings"],
+            }
+            for p in papers
+            if p.get("author_name_warnings")
+        ]
         status = {
             "requested_modules": requested,
             "failed_modules": sorted(failed),
             "skipped_modules": sorted(skipped),
             "papers_per_module": papers_per_module,
+            "author_name_warnings": author_name_warnings,
         }
         status_path = Path(args.output).with_name(Path(args.output).stem + "_status.json")
         save_json(status, str(status_path))
