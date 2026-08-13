@@ -201,22 +201,27 @@ def test_claim_sentence_for_span_regression_smit_tuning_heading_case():
     )
 
 
-def test_claim_sentence_for_span_returns_none_when_no_enclosing_sentence():
-    """Kein Guess-Pfad mehr: findet sich keine eindeutig umschliessende
-    Satzgrenze, liefert die Funktion None statt eines Zeichenfenster-
-    Rateversuchs."""
-    # Das Zitat steht direkt am Textanfang, ohne jede Satzgrenze davor, und
-    # traegt selbst keinen Satzschluss-Punkt vor dem Textende -- es gibt
-    # keinen Bound, der Anfang UND Ende der Spanne vollstaendig umschliesst,
-    # weil der Text nach dem Zitat abbricht, ohne selbst einen Satz zu bilden.
+def test_claim_sentence_for_span_returns_full_text_when_it_is_the_only_bound():
+    """Steht das Zitat allein im gesamten Text (keine weitere Struktur- oder
+    Satzgrenze), bildet der gesamte Text den einzigen Bound und umschliesst
+    die Spanne vollstaendig -- ein gueltiger Fall, kein None-Fall."""
     content = '"Ein Zitat ohne jede erkennbare Satzgrenze drumherum"'
     spans = extract_quote_spans(content, min_len=5)
     assert len(spans) == 1
     claim = claim_sentence_for_span(content, spans[0])
-    # Hier bildet der gesamte Text den einzigen Bound und umschliesst die
-    # Spanne vollstaendig -- das ist ein gueltiger Fall, kein None-Fall.
     assert claim is not None
     assert "Ein Zitat ohne jede erkennbare Satzgrenze" in claim
+
+
+def test_claim_sentence_for_span_returns_none_when_span_crosses_a_structural_boundary():
+    """Kein Guess-Pfad mehr: traegt das Zitat selbst einen Absatzumbruch (eine
+    Leerzeile INNERHALB der Spanne), gibt es keinen ``_non_structural_runs``-
+    Block, der Anfang UND Ende der Spanne vollstaendig umschliesst -- die
+    Funktion liefert None statt eines Zeichenfenster-Rateversuchs."""
+    content = '"Zitat mit\n\ninnerem Absatzumbruch, das keine Satzgrenze eindeutig umschliesst"'
+    spans = extract_quote_spans(content, min_len=5)
+    assert len(spans) == 1
+    assert claim_sentence_for_span(content, spans[0]) is None
 
 
 def test_ambiguous_claim_item_is_forwarded_but_never_reported_suspicious():
@@ -255,6 +260,11 @@ def test_ambiguous_claim_item_is_forwarded_but_never_reported_suspicious():
 
 
 def test_scan_chapter_quotes_marks_claim_ambiguous_for_unresolvable_span(temp_vault_db):
+    """Ein Zitat, dessen Spanne selbst einen Absatzumbruch traegt, hat keine
+    umschliessende ``_non_structural_runs``-Grenze -- ``claim_ambiguous`` muss
+    ``True`` sein, nicht bloss als Key existieren (P1-Fund PR #926: der alte
+    Test pruefte nur Key-Praesenz und die Fixture war gar nicht unaufloesbar,
+    ``claim_sentence_for_span`` fand dort einen eindeutigen Satz)."""
     from academic_vault.server import add_paper, add_quote
 
     add_paper(
@@ -262,23 +272,34 @@ def test_scan_chapter_quotes_marks_claim_ambiguous_for_unresolvable_span(temp_va
         paper_id="paper-899",
         csl_json='{"title": "Test Paper 899", "type": "article-journal"}',
     )
-    verbatim = "when performing hyperparameter tuning, several MAD systems perform better"
+    ambiguous_verbatim = (
+        "several MAD systems perform\n\nbetter after extensive tuning across benchmarks"
+    )
     add_quote(
         db_path=temp_vault_db,
         paper_id="paper-899",
-        verbatim=verbatim,
+        verbatim=ambiguous_verbatim,
+        extraction_method="manual",
+    )
+    unambiguous_verbatim = "the model outperforms all baselines on the held-out test set"
+    add_quote(
+        db_path=temp_vault_db,
+        paper_id="paper-899",
+        verbatim=unambiguous_verbatim,
         extraction_method="manual",
     )
     content = (
-        "Vorheriger Absatz ohne Zitat, der lang genug ist, um eigenstaendig zu wirken.\n"
+        f'Autor (2023) findet: "{ambiguous_verbatim}", was interessant ist.\n'
         "\n"
-        "### Ueberschrift dazwischen\n"
-        "\n"
-        f'Autor (2023) findet: "{verbatim}", was interessant ist.'
+        f'Weiter berichtet Autor (2023), dass "{unambiguous_verbatim}".'
     )
     items = scan_chapter_quotes(content, temp_vault_db)
-    assert len(items) == 1
-    # Kein Fehler, egal ob eindeutig oder ambiguous -- das Item bleibt im
-    # Pruefpfad (Kernzusicherung, siehe test_ambiguous_claim_item_is_forwarded...).
-    assert "quote_id" in items[0]
-    assert "claim_ambiguous" in items[0]
+    by_verbatim = {item["verbatim"]: item for item in items}
+    assert len(items) == 2
+
+    ambiguous_item = by_verbatim[ambiguous_verbatim]
+    assert ambiguous_item["claim_ambiguous"] is True
+
+    unambiguous_item = by_verbatim[unambiguous_verbatim]
+    assert unambiguous_item["claim_ambiguous"] is False
+    assert "outperforms all baselines" in unambiguous_item["chapter_claim"]
