@@ -299,7 +299,11 @@ def test_scan_chapter_quotes_then_batch_prefilter_end_to_end(temp_vault_db):
         verbatim=verbatim,
         extraction_method="manual",
     )
-    chapter = f'Text davor. "{verbatim}" -- das belegt die Kernthese der Arbeit. Text danach.'
+    # Negationsmarker ("widerspricht") noetig, damit der Satz nicht als reine
+    # Zuschreibung ohne Scorer-Aufruf durchgewunken wird (Issue #899) -- der
+    # Test prueft hier die Infrastruktur (scan -> batch), nicht die
+    # Attributions-Heuristik selbst.
+    chapter = f'Text davor. "{verbatim}" -- das widerspricht der Kernthese der Arbeit. Text danach.'
 
     items = scan_chapter_quotes(chapter, temp_vault_db)
     assert len(items) == 1

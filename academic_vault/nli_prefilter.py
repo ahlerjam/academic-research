@@ -298,6 +298,60 @@ class MDebertaScorer(NliModelScorer):
 # ---------------------------------------------------------------------------
 
 
+#: Kuratierte, dokumentierte Liste lexikalischer Widerspruchs-/
+#: Negationsmarker (Issue #899, Vorbild :data:`TRANSITION_PREFIXES`). Anders
+#: als dort wird hier NICHT auf Satzanfang geprueft, sondern per Substring --
+#: ein Negationsmarker kann an jeder Stelle des Rahmensatzes stehen ("X
+#: bestreitet, dass ..." ebenso wie "..., was Y jedoch widerspricht").
+#: Deutsch UND Englisch, weil der Rahmensatz (Kapitelsatz) deutsch, der
+#: Quellkontext ueblicherweise englisch ist -- ein Widerspruch kann in
+#: beiden Sprachen formuliert sein, je nachdem, wessen Wortlaut zitiert wird.
+NEGATION_MARKERS = (
+    # Deutsch
+    "widerspricht",
+    "widerspruch",
+    "bestreitet",
+    "bestreiten",
+    "verneint",
+    "verneinen",
+    "im gegensatz zu",
+    "im gegensatz dazu",
+    "entgegen der",
+    "stimmt nicht",
+    "ist falsch",
+    "trifft nicht zu",
+    "keineswegs",
+    # Englisch
+    "contradicts",
+    "contradiction",
+    "disputes",
+    "disputed",
+    "denies",
+    "denied",
+    "refutes",
+    "refuted",
+)
+
+
+def _is_attribution_sentence(chapter_claim: str, verbatim: str) -> bool:
+    """True, wenn der Kapitelsatz das Zitat selbst (normalisiert) enthaelt.
+
+    Dann ist die zu pruefende Frage nicht Satzfolgerung (NLI-Domaene),
+    sondern ob der Rahmensatz dem Zitat widerspricht -- Issue #899. Bei
+    ``chapter_claim`` aus :func:`claim_sentence_for_span` trifft das auf
+    praktisch jedes Item zu, weil der Kapitelsatz immer der Satz UM die
+    gefundene Zitat-Spanne ist.
+    """
+    normalized_claim = " ".join(chapter_claim.split())
+    normalized_verbatim = " ".join(verbatim.split())
+    return bool(normalized_verbatim) and normalized_verbatim in normalized_claim
+
+
+def _has_negation_marker(chapter_claim: str) -> bool:
+    lowered = chapter_claim.lower()
+    return any(marker in lowered for marker in NEGATION_MARKERS)
+
+
 def prefilter_quote(
     scorer: NliScorer,
     quote_id: str,
@@ -306,12 +360,48 @@ def prefilter_quote(
     context_before: str | None,
     verbatim: str,
     context_after: str | None,
+    *,
+    claim_ambiguous: bool = False,
 ) -> dict:
     """Bewertet EIN Zitat-Kapitel-Paar. Reine Funktion, kein Vault-Zugriff.
 
     ``suspicious`` ist das einzige Urteilsfeld: True bedeutet "melden", nicht
     "aus dem Pruefpfad nehmen" (Detektor-Semantik seit #717).
+
+    Zwei Faelle werden OHNE Scorer-Aufruf als nicht-verdaechtig behandelt
+    (Issue #899):
+
+    - ``claim_ambiguous``: die Satzzuordnung konnte keine eindeutig
+      umschliessende Kapitelsatz-Grenze bestimmen (siehe
+      :func:`claim_sentence_for_span`) -- kein geratener Vergleich.
+    - Zuschreibungssatz (:func:`_is_attribution_sentence`) OHNE
+      Negationsmarker (:func:`_has_negation_marker`): NLI misst
+      Satzfolgerung, nicht Zitattreue -- ein Rahmensatz wie "X berichtet,
+      dass '...'" ist per Konstruktion keine Folgerung aus dem Zitat, der
+      neutrale/nicht-treue NLI-Ausschlag ist hier kein Befund. Traegt der
+      Rahmensatz einen Negationsmarker, ist er keine reine Zuschreibung mehr
+      und die normale Pruefung greift.
     """
+    if claim_ambiguous:
+        return {
+            "quote_id": quote_id,
+            "chapter_claim": chapter_claim,
+            "paper_id": paper_id,
+            "verdict": "unklar",
+            "raw_score": None,
+            "suspicious": False,
+        }
+    if _is_attribution_sentence(chapter_claim, verbatim) and not _has_negation_marker(
+        chapter_claim
+    ):
+        return {
+            "quote_id": quote_id,
+            "chapter_claim": chapter_claim,
+            "paper_id": paper_id,
+            "verdict": "zuschreibung",
+            "raw_score": None,
+            "suspicious": False,
+        }
     premise = build_premise(context_before, verbatim, context_after)
     verdict, raw_score = scorer.predict(premise, chapter_claim)
     return {
@@ -385,6 +475,7 @@ def run_batch_prefilter(
             item.get("context_before"),
             item["verbatim"],
             item.get("context_after"),
+            claim_ambiguous=bool(item.get("claim_ambiguous", False)),
         )
         for item in items
     ]
@@ -405,10 +496,6 @@ def run_batch_prefilter(
 #: Mindestlaenge einer zitierten Spanne (identisches Mass wie
 #: ``hooks/claim-drift-guard.mjs::MIN_QUOTE_LEN``).
 MIN_QUOTE_LEN = 20
-
-#: Zeichenfenster fuer den Satz-Fallback, falls um eine Zitat-Spanne keine
-#: erkennbare Satzgrenze liegt (z. B. Zitat am Absatzanfang/-ende).
-_CLAIM_WINDOW = 200
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+(?=[A-ZÄÖÜ])")
 
@@ -452,24 +539,71 @@ def extract_quote_spans(content: str, min_len: int = MIN_QUOTE_LEN) -> list[dict
     return spans
 
 
-def claim_sentence_for_span(content: str, span: dict) -> str:
+def claim_sentence_for_span(content: str, span: dict) -> str | None:
     """Naehert die Kapitelbehauptung an: der Satz, der die Zitat-Spanne
-    umschliesst. Fallback auf ein Zeichenfenster, wenn keine Satzgrenze in
-    Content-Reichweite erkennbar ist (z. B. Zitat direkt am Textanfang)."""
+    VOLLSTAENDIG umschliesst (Issue #899 -- vormals reichte Ueberlappung mit
+    Spannenanfang ODER -ende, was bei zitat-internen Satzzeichen den
+    falschen Nachbarsatz lieferte statt des umschliessenden).
+
+    Zwei Haertungen gegenueber der urspruenglichen Fassung (Issue #899):
+
+    1. **Markdown-Strukturzeilen sind harte Blockgrenzen.** Ueberschriften,
+       Listenpunkte und Leerzeilen (:func:`_non_structural_runs`, bereits
+       Grundlage von :func:`extract_statement_sentences`) trennen die Suche
+       nach der umschliessenden Satzgrenze -- ein Zitat direkt NACH einer
+       Ueberschrift wird nicht mehr gegen den Satz VOR der Ueberschrift
+       geprueft (Regressionsfall des Issues: Smit-Tuning-Zitat gegen einen
+       Satz ueber die Benchmark-Verteilung, weil ``### 6.4 ...`` fuer
+       :data:`_SENTENCE_SPLIT` keine erkennbare Satzgrenze ist).
+    2. **Satzgrenzen INNERHALB der Zitat-Spanne selbst zaehlen nicht.** Ein
+       Zitat, das eigene Satzzeichen traegt (Abkuerzungen, Zahlen, mehrere
+       Saetze), darf die Satzsuche nicht mitten im Zitat abbrechen lassen.
+
+    Liefert ``None``, wenn sich keine eindeutig umschliessende Satzgrenze
+    bestimmen laesst -- KEIN Zeichenfenster-Rateversuch mehr (Issue #899:
+    ein falscher Nachbarsatz ist teurer als keine Meldung).
+    """
+    run = None
+    for run_start, run_end in _non_structural_runs(content):
+        if run_start <= span["start"] and span["end"] <= run_end:
+            run = (run_start, run_end)
+            break
+    if run is None:
+        return None
+    run_start, run_end = run
+    block = content[run_start:run_end]
+    local_start = span["start"] - run_start
+    local_end = span["end"] - run_start
+
     pos = 0
     sentence_bounds = []
-    for m in _SENTENCE_SPLIT.finditer(content):
+    for m in _SENTENCE_SPLIT.finditer(block):
+        if local_start <= m.start() < local_end:
+            # Satzzeichen INNERHALB der Zitat-Spanne -- zaehlt nicht als
+            # Grenze, sonst zerreisst das Zitat sich selbst.
+            continue
         sentence_bounds.append((pos, m.start()))
         pos = m.end()
-    sentence_bounds.append((pos, len(content)))
+    sentence_bounds.append((pos, len(block)))
 
     for start, end in sentence_bounds:
-        if start <= span["start"] < end or start < span["end"] <= end:
-            claim = content[start:end].strip()
+        if start <= local_start and local_end <= end:
+            claim = block[start:end].strip()
             if claim:
                 return claim
+    return None
 
-    window = _CLAIM_WINDOW
+
+#: Zeichenfenster fuer die Forwarding-Naeherung, wenn
+#: :func:`claim_sentence_for_span` keine eindeutig umschliessende
+#: Satzgrenze liefert (``None``). NUR fuers Forwarding an den Auditor
+#: (lesbarer Kontext) -- NIE fuer den NLI-Vergleich, dafuer sorgt
+#: ``claim_ambiguous`` in :func:`prefilter_quote` (Issue #899).
+_FALLBACK_WINDOW = 200
+
+
+def _fallback_window_text(content: str, span: dict) -> str:
+    window = _FALLBACK_WINDOW
     fallback = content[max(0, span["start"] - window) : min(len(content), span["end"] + window)]
     return fallback.strip()
 
@@ -521,11 +655,22 @@ def scan_chapter_quotes(content: str, db_path: str, min_len: int = MIN_QUOTE_LEN
         seen_quote_ids.add(quote_id)
         record = match["record"]
         span = {"start": match["start"], "end": match["end"]}
+        claim = claim_sentence_for_span(content, span)
         items.append(
             {
                 "quote_id": quote_id,
                 "paper_id": record["paper_id"],
-                "chapter_claim": claim_sentence_for_span(content, span),
+                # Kein Guess-Pfad im NLI-Vergleich (Issue #899): fehlt eine
+                # eindeutige Satzzuordnung, bleibt das Item trotzdem im
+                # Pruefpfad (Detektor-Semantik, #717) -- fuer die Weiterleitung
+                # an den Auditor dient das rohe Textumfeld der Spanne als
+                # bestmoegliche lesbare Naeherung, ``claim_ambiguous``
+                # markiert, dass DIESE Naeherung nicht fuer den NLI-Vergleich
+                # herangezogen werden darf (siehe prefilter_quote).
+                "chapter_claim": claim
+                if claim is not None
+                else _fallback_window_text(content, span),
+                "claim_ambiguous": claim is None,
                 "context_before": record.get("context_before"),
                 "verbatim": record["verbatim"],
                 "context_after": record.get("context_after"),
