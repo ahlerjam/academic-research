@@ -124,6 +124,15 @@ def _normalize_weak(text: str) -> str:
     return " ".join(normalized.split())
 
 
+#: Oeffentlicher Alias fuer :func:`_normalize_weak` (Issue #846).
+#: :mod:`academic_vault.quote_match` braucht dieselbe schwache Normalisierung
+#: fuer den Wortlaut-Abgleich im Guard-Pfad. Ein Zugriff auf den
+#: unterstrichenen Namen aus einem anderen Modul waere die Falle aus #501
+#: (privater Zugriff von aussen), ein zweiter Normalisierer waere schlimmer:
+#: zwei Definitionen von "gleich bis auf Darstellung" liefen auseinander.
+normalize_weak = _normalize_weak
+
+
 @dataclass
 class VerbatimResult:
     """Ergebnis von :func:`verify_verbatim`.

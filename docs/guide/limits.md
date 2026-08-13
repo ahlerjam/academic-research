@@ -64,12 +64,29 @@ Schritt 1.
 ## Was das Plugin nicht prüft
 
 - **Zitate ohne Gegenprüfung.** Der `verbatim-guard`-Hook (`hooks/verbatim-guard.mjs`)
-  belegt, dass ein Zitat aus deinem Vault stammt — nicht, dass der Wortlaut korrekt aus
-  dem Original übernommen wurde. Autorenname, Jahr und (seit Issue #724) auch die
-  Seitenzahl von Klammer-Belegen werden gegen den Vault geprüft (`papers.csl_json`
-  bzw. `quotes.printed_page`/`papers.page_first`/`page_last`); der Wortlaut selbst
-  bleibt ungeprüft — dafür `vault.verify_verbatim` auf Anforderung nutzen. Jedes
-  Zitat vor der Abgabe trotzdem im Original gegenprüfen.
+  belegt, dass ein Zitat aus deinem Vault stammt. Autorenname, Jahr und (seit Issue #724)
+  auch die Seitenzahl von Klammer-Belegen werden gegen den Vault geprüft
+  (`papers.csl_json` bzw. `quotes.printed_page`/`papers.page_first`/`page_last`).
+  **Seit Issue #846 wird auch der Wortlaut selbst geprüft:** weicht ein wörtliches Zitat
+  vom hinterlegten Vault-Snapshot ab, blockiert der Hook mit Fundstelle
+  (`Datei:Zeile:Spalte`), beiden Wortlauten und den abweichenden Wörtern. Reine
+  Darstellungsunterschiede lösen dabei keinen Alarm aus — typografische
+  Anführungszeichen und Apostrophe, kollabierter Whitespace und Zeilenumbrüche,
+  Ligaturen, Trennstriche am Zeilenende und `[…]`-Auslassungen gelten als
+  gleichbedeutend, ein reiner Groß-/Kleinschreibungsunterschied als Hinweis statt
+  als Block.
+  Was der Wortlaut-Abgleich **nicht** leistet: Es gilt eine **Mindestlänge** von 40
+  normalisierten Zeichen (`MIN_FUZZY_CANDIDATE_LEN` in
+  `academic_vault/quote_match.py`); kürzere Zitate werden nur auf Vorkommen geprüft, nicht auf
+  Abweichung — kurze Fragmente erreichen in langem Text zufällig hohe
+  Ähnlichkeitswerte und ergäben Falschbefunde. Passen zwei Vault-Zitate praktisch
+  gleich gut, meldet der Hook „nicht im Vault" statt einen Wortlaut-Vorwurf gegen das
+  womöglich falsche Zitat zu erheben. Geprüft wird immer gegen den **Vault-Snapshot**,
+  nicht gegen das PDF — ist der Snapshot selbst falsch erfasst, ist es die Prüfung auch
+  (dafür `vault.verify_verbatim` gegen den PDF-Volltext nutzen). Paraphrasen bleiben
+  Sache des separaten NLI-Zitatscans (`hooks/nli-quote-scan.mjs`), seitenübergreifende
+  Zitate und Zitate aus Quellen außerhalb des Vaults bleiben ungeprüft. Jedes Zitat vor
+  der Abgabe trotzdem im Original gegenprüfen.
   **Geprüft** werden ausschließlich APA-artige Belege: die klammer­förmige Form
   (`(Müller 2021, S. 45)`, Co-Autoren, `vgl.`/`zit. nach`), die narrative Form
   außerhalb von Klammern (`Müller (2021, S. 45) zeigt …`, `Müller et al. (2021)

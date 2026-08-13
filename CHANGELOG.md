@@ -10,6 +10,32 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ### Added
 
+- **Wortlaut-Prüfung wörtlicher Zitate im Write-Pfad (#846):**
+  `hooks/verbatim-guard.mjs` prüft Anführungszeichen-Spans nicht mehr nur auf
+  *Vorkommen* im Vault, sondern auf den *Wortlaut*. Neues Modul
+  `academic_vault/quote_match.py` + Batch-API
+  `academic_vault.server.match_quote_wording()` liefern je Zitat einen Status
+  (`exact` | `normalized` | `ellipsis` | `deviation` | `absent`) statt eines
+  Booleans. Weicht der Wortlaut ab, blockiert der Hook mit Fundstelle
+  (`Datei:Zeile:Spalte`), Kapitel- und Vault-Wortlaut sowie den abweichenden
+  Wörtern. Reine Darstellungsvarianten passieren dagegen ohne Falschalarm —
+  typografische Anführungszeichen/Apostrophe, kollabierter Whitespace und
+  Zeilenumbrüche, NFKC/Ligaturen, Trennstriche am Zeilenende und
+  `[…]`-Auslassungen; ein reiner Groß-/Kleinschreibungsunterschied ergibt einen
+  Hinweis statt eines Blocks. Die teure Zuordnung läuft erst ab 40
+  normalisierten Zeichen und nur bei eindeutigem Treffer (mehrdeutige
+  Zuordnung → `absent` statt falscher Vorwurf); ein einziger Quotes-Snapshot je
+  Write bedient alle Spans (`VaultDB.quotes_snapshot_for_wording()`). Das
+  bestehende Prüfkontingent `ACADEMIC_CITATION_MAX_PER_WRITE` gilt auch hier —
+  überzählige Spans verlieren nur die Wortlaut-Zuordnung, nicht die Prüfung
+  (kein stiller Durchlass). Neuer Schalter `ACADEMIC_VERBATIM_WORDING=report`
+  (Default `block`) meldet statt zu blockieren und wird als guard-schwächender
+  Schalter protokolliert (#519). Fail-open bei fehlender/kaputter DB bleibt
+  unverändert (#381); `search_quote_text()` bleibt in Semantik und Signatur
+  unangetastet, weil `claim-drift-guard.mjs`, `context-fidelity-guard.mjs` und
+  das MCP-Tool daran hängen. `docs/guide/limits.md` und
+  `docs/reference/hooks.md` sind entsprechend fortgeschrieben.
+
 - **Entscheidungsklassen im Preamble (#905):** `skills/_common/preamble.md`
   unterscheidet jetzt zwischen einer fehlenden Tatsache (nur der Operator hat
   die Angabe — Prüfungsordnung, Abgabedatum, Zugangsdaten, das Thema selbst;

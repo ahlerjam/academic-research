@@ -6,7 +6,11 @@
  * Anführungszeichen-Spans enthält, die nicht im Vault verifiziert sind.
  *
  * Drei additive Prüfstufen (jede läuft erst, wenn die vorige durch ist):
- *   1. Wörtliche Zitate  — Anführungszeichen-Spans gegen quotes.verbatim
+ *   1. Wörtliche Zitate  — Anführungszeichen-Spans gegen quotes.verbatim,
+ *      seit Issue #846 samt WORTLAUT (nicht nur Vorkommen): ein verändertes
+ *      Wort blockiert mit Fundstelle und Abweichung, reine Darstellungs-
+ *      varianten (Typografie, Whitespace, Ligaturen, Trennstrich, [...])
+ *      passieren. Siehe academic_vault/quote_match.py.
  *   2. Figure-Referenzen — "Abb. 3.4" gegen figures.caption
  *   3. Klammer-Belege    — "(Müller 2021, S. 45)" gegen papers.csl_json,
  *      mit externer Kaskade als Fallback (Issue #378)
@@ -74,6 +78,7 @@ const ENV_SWITCH_NAMES = [
   'ACADEMIC_CITATION_CASCADE',
   'ACADEMIC_CITATION_MAX_PER_WRITE',
   'ACADEMIC_CITATION_UNCHECKED_NOTICE',
+  'ACADEMIC_VERBATIM_WORDING',
 ];
 // Mindestlänge eines Zitat-Spans (in Zeichen). Muss mit den Regex-Quantifizierern übereinstimmen.
 const MIN_QUOTE_LEN = 10;
@@ -310,21 +315,34 @@ function warnFailOpen(context, kind, detail) {
  * Jeder Eintrag wird EINZELN in try/except gekapselt: faellt ein Lookup aus,
  * betrifft das genau diesen Eintrag (``{"error": ...}``) und nicht den ganzen
  * Batch — das entspricht dem frueheren Verhalten, bei dem ein Subprozess je
- * Span lief und nur dieser eine fail-open wurde.
+ * Span lief und nur dieser eine fail-open wurde. Fuer die Zitate uebernimmt
+ * ``match_quote_wording()`` diese Kapselung je Kandidat selbst; scheitert
+ * schon der gemeinsame Snapshot (korrupte DB), traegt jeder Kandidat denselben
+ * Fehler — derselbe fail-open-Ausgang wie zuvor.
+ *
+ * Zitate liefern seit Issue #846 KEIN Boolean mehr, sondern ein Statusobjekt
+ * (exact/normalized/ellipsis/deviation/absent). Figuren bleiben Boolean —
+ * ``find_figure_by_caption`` ist unveraendert.
  */
 const PY_BATCH_LOOKUP = [
   'import sys, json',
   `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-  'from academic_vault.server import search_quote_text, find_figure_by_caption',
+  'from academic_vault.server import match_quote_wording, find_figure_by_caption',
   'db_path = sys.argv[1]',
   'payload = json.loads(sys.argv[2])',
   'out = {"quotes": [], "figures": []}',
-  'for kind, fn in (("quotes", search_quote_text), ("figures", find_figure_by_caption)):',
-  '    for needle in payload[kind]:',
-  '        try:',
-  '            out[kind].append(bool(fn(db_path, needle)))',
-  '        except Exception as exc:',
-  '            out[kind].append({"error": "%s: %s" % (type(exc).__name__, exc)})',
+  'try:',
+  '    out["quotes"] = match_quote_wording(',
+  '        db_path, payload["quotes"], wording_limit=payload.get("wording_limit")',
+  '    )',
+  'except Exception as exc:',
+  '    detail = "%s: %s" % (type(exc).__name__, exc)',
+  '    out["quotes"] = [{"error": detail} for _ in payload["quotes"]]',
+  'for needle in payload["figures"]:',
+  '    try:',
+  '        out["figures"].append(bool(find_figure_by_caption(db_path, needle)))',
+  '    except Exception as exc:',
+  '        out["figures"].append({"error": "%s: %s" % (type(exc).__name__, exc)})',
   'print(json.dumps(out))',
 ].join('\n');
 
@@ -349,13 +367,41 @@ function readBatchFlags(values, expected, context) {
 }
 
 /**
- * Sucht alle Zitat-Texte und Figure-Referenzen im Vault.
- * Rueckgabe: ``{quotes: boolean[], figures: boolean[]}`` in Eingabereihenfolge,
- * ``true`` = kein Block (Treffer oder fail-open).
+ * Deutet die Zitat-Ergebnisse aus dem Batch (Issue #846).
+ *
+ * Anders als bei den Figuren ist ein Zitat-Ergebnis ein Statusobjekt, kein
+ * Boolean. Nicht deutbare Eintraege (``{error}``, fehlende/kaputte Antwortform)
+ * werden zu ``{status: 'open'}`` — der fail-open-Fall, mit derselben
+ * Warnung wie bisher, damit ein kaputter Lookup nicht als "verifiziert" gilt
+ * und die uebrigen Ergebnisse nicht entwertet.
  */
-function lookupBatch(spanTexts, figureRefs) {
+function readQuoteResults(values, expected, context) {
+  if (expected === 0) return [];
+  if (!Array.isArray(values) || values.length !== expected) {
+    warnFailOpen(context, 'lookup-error', `unerwartete Antwortform (erwartet ${expected} Ergebnisse)`);
+    return Array.from({ length: expected }, () => ({ status: 'open' }));
+  }
+  return values.map((value) => {
+    if (value && typeof value === 'object' && typeof value.status === 'string') return value;
+    warnFailOpen(context, 'lookup-error', value?.error || 'unerwarteter Ergebniswert');
+    return { status: 'open' };
+  });
+}
+
+/**
+ * Sucht alle Zitat-Texte und Figure-Referenzen im Vault.
+ * Rueckgabe: ``{quotes: object[], figures: boolean[]}`` in Eingabereihenfolge.
+ * Bei den Figuren heisst ``true`` "kein Block" (Treffer oder fail-open), bei
+ * den Zitaten entscheidet der Status (siehe readQuoteResults).
+ *
+ * ``wordingLimit`` ist das Pruefkontingent fuer die teure Wortlaut-Zuordnung
+ * (Issue #846) — ueberzaehlige Spans laufen nur noch durch den billigen
+ * Bestands-Abgleich und bleiben im Zweifel ``absent`` (Block), nie still
+ * durchgewunken.
+ */
+function lookupBatch(spanTexts, figureRefs, wordingLimit) {
   const allOpen = () => ({
-    quotes: spanTexts.map(() => true),
+    quotes: spanTexts.map(() => ({ status: 'open' })),
     figures: figureRefs.map(() => true),
   });
   if (spanTexts.length === 0 && figureRefs.length === 0) return allOpen();
@@ -369,7 +415,11 @@ function lookupBatch(spanTexts, figureRefs) {
     return allOpen();
   }
 
-  const payload = JSON.stringify({ quotes: spanTexts, figures: figureRefs });
+  const payload = JSON.stringify({
+    quotes: spanTexts,
+    figures: figureRefs,
+    wording_limit: wordingLimit ?? null,
+  });
   const output = runVaultPython(PY_BATCH_LOOKUP, [VAULT_DB, payload], {
     timeout: VAULT_LOOKUP_BUDGET_MS,
     budget: VAULT_LOOKUP_BUDGET_MS,
@@ -393,9 +443,87 @@ function lookupBatch(spanTexts, figureRefs) {
     return allOpen();
   }
   return {
-    quotes: readBatchFlags(parsed?.quotes, spanTexts.length, 'Vault-Guard'),
+    quotes: readQuoteResults(parsed?.quotes, spanTexts.length, 'Vault-Guard'),
     figures: readBatchFlags(parsed?.figures, figureRefs.length, 'Figure-Guard'),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Wortlaut-Pruefung woertlicher Zitate (Issue #846)
+// ---------------------------------------------------------------------------
+
+/**
+ * Status, die den Zitat-Check passieren lassen:
+ *   - ``exact``/``normalized``/``ellipsis`` — Wortlaut belegt (ggf. nur
+ *     typografisch/durch Auslassung abweichend);
+ *   - ``open`` — fail-open, weil der Lookup fuer diesen Eintrag scheiterte.
+ * ``deviation`` und ``absent`` fuehren zur Meldung (siehe main()).
+ */
+const PASSING_QUOTE_STATUSES = new Set(['exact', 'normalized', 'ellipsis', 'open']);
+
+/**
+ * Reaktion auf einen abweichenden Wortlaut: ``"block"`` (Default) oder
+ * ``"report"``. ``report`` ist eine ABSCHWAECHUNG des Guards und deshalb in
+ * ENV_SWITCH_NAMES protokolliert (Issue #519) — der Default bleibt
+ * blockierend, damit aus #846 kein stiller Rueckschritt wird.
+ */
+function wordingPolicy(env = process.env) {
+  return (env.ACADEMIC_VERBATIM_WORDING || 'block').toLowerCase() === 'report'
+    ? 'report'
+    : 'block';
+}
+
+/** 1-basierte Zeile/Spalte eines Zeichenoffsets im Pruef-Text. */
+function locationOf(content, index) {
+  const before = content.slice(0, Math.max(0, index));
+  const line = before.split('\n').length;
+  const column = before.length - (before.lastIndexOf('\n') + 1) + 1;
+  return { line, column };
+}
+
+/** Kuerzt lange Wortlaute fuer die Meldung (identische Grenze wie beim Bestandsblock). */
+function shorten(text, max = 120) {
+  const value = String(text ?? '');
+  return value.length > max ? `${value.slice(0, max - 3)}...` : value;
+}
+
+/**
+ * Die abweichenden Woerter als lesbare Zeilen. ``kind`` kommt aus
+ * academic_vault/quote_match.py::_word_diff.
+ */
+function formatWordDiff(diff) {
+  return (diff || []).map((entry) => {
+    const chapter = shorten(entry.chapter, 60);
+    const vault = shorten(entry.vault, 60);
+    if (entry.kind === 'missing') return `  im Kapitel ausgelassen: "${vault}"`;
+    if (entry.kind === 'added') return `  im Kapitel ergaenzt: "${chapter}"`;
+    return `  "${chapter}" statt "${vault}"`;
+  });
+}
+
+/**
+ * Meldung fuer einen abweichenden Wortlaut — mit Fundstelle (Datei + Zeile:Spalte),
+ * beiden Wortlauten und den benannten Abweichungen (Issue #846, AC1).
+ */
+function wordingDeviationMessage(span, result, filePath, content, blocking) {
+  const { line, column } = locationOf(content, span.start);
+  const quoteRef = result.quote_id ? ` (Quote ${result.quote_id})` : '';
+  return [
+    blocking
+      ? '[Vault-Guard] BLOCKIERT: Wortlaut weicht vom Vault-Snapshot ab.'
+      : '[Vault-Guard] Warnung: Wortlaut weicht vom Vault-Snapshot ab (nicht blockiert).',
+    `Fundstelle: ${filePath || '(unbekannter Pfad)'}:${line}:${column}`,
+    `Kapitel: "${shorten(result.candidate || span.text)}"`,
+    `Vault:   "${shorten(result.vault_verbatim)}"${quoteRef}`,
+    'Abweichung:',
+    ...formatWordDiff(result.diff),
+    'Bitte den Wortlaut an den Vault-Snapshot angleichen — oder das Zitat neu '
+      + 'einpflegen (vault.add_quote), wenn der Vault-Eintrag falsch ist.',
+    ...(blocking
+      ? ['Abschwaechung: ACADEMIC_VERBATIM_WORDING=report meldet die Abweichung, '
+        + 'statt zu blockieren.']
+      : []),
+  ].join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -950,16 +1078,64 @@ async function main() {
     }))
     .filter((ref) => !spanIsMasked(content, maskedContent, ref.start, ref.end));
 
+  // Pruefkontingent (Issue #846, AC4): dieselbe Obergrenze wie fuer die
+  // Klammer-Belege. Ueberzaehlige Spans verlieren nur die teure
+  // Wortlaut-Zuordnung, nicht die Pruefung selbst — sie bleiben im Zweifel
+  // "nicht im Vault" und blocken. Ein stiller Durchlass waere ein Loch im
+  // Guard (genug Zitate vor einem erfundenen, und das erfundene passiert).
+  const wordingLimit = maxCitationsPerWrite();
+  if (spans.length > wordingLimit) {
+    process.stderr.write(
+      `[Vault-Guard] Warnung: ${spans.length} Zitat-Spans überschreiten das Prüfkontingent `
+      + `von ${wordingLimit} (ACADEMIC_CITATION_MAX_PER_WRITE). Für die überzähligen `
+      + `${spans.length - wordingLimit} läuft nur der Bestands-Abgleich, keine `
+      + 'Wortlaut-Zuordnung.\n'
+    );
+  }
+
   // EIN Subprozess fuer alle Spans und Referenzen zusammen (Regression aus dem
   // ersten Fix: je Span ein eigener Interpreterstart sprengte das 30-s-Timeout).
-  const lookups = lookupBatch(spans.map((s) => s.text), figures.map((f) => f.text));
+  const lookups = lookupBatch(
+    spans.map((s) => s.text), figures.map((f) => f.text), wordingLimit,
+  );
 
-  spans.forEach((span, i) => {
-    if (lookups.quotes[i]) return;
+  const wordingMode = wordingPolicy();
+  for (let i = 0; i < spans.length; i += 1) {
+    const span = spans[i];
+    const result = lookups.quotes[i] || { status: 'open' };
+
+    if (PASSING_QUOTE_STATUSES.has(result.status)) {
+      // Reiner Gross-/Kleinschreibungs-Unterschied: sichtbar, aber kein Block
+      // (die alte LIKE-Suche war fuer ASCII ebenfalls case-insensitiv — ein
+      // Block waere eine neue, unangekuendigte Blockklasse gewesen).
+      if (result.case_only) {
+        const { line, column } = locationOf(content, span.start);
+        process.stderr.write(
+          `[Vault-Guard] Hinweis: Zitat weicht nur in der Groß-/Kleinschreibung vom `
+          + `Vault-Snapshot ab (${filePath || '(unbekannter Pfad)'}:${line}:${column}).\n`
+        );
+      }
+      continue;
+    }
+
+    if (result.status === 'deviation') {
+      const blocking = wordingMode === 'block';
+      const msg = wordingDeviationMessage(span, result, filePath, content, blocking);
+      process.stderr.write(`${msg}\n`);
+      if (!blocking) continue;
+      console.log(JSON.stringify({ decision: 'block', reason: msg }));
+      process.exit(2);
+    }
+
+    // status === 'absent' — Bestandsbefund, Wortlaut des Blocks unveraendert.
     const truncated = span.text.length > 80 ? span.text.slice(0, 77) + '...' : span.text;
     const msg = [
       `[Vault-Guard] BLOCKIERT: Zitat nicht im Vault verifiziert.`,
       `Zitat: "${truncated}"`,
+      ...(result.quota_capped
+        ? ['Hinweis: Der Wortlaut-Abgleich lief für dieses Zitat nicht — Prüfkontingent '
+          + `${wordingLimit} erschöpft (ACADEMIC_CITATION_MAX_PER_WRITE).`]
+        : []),
       `Bitte Zitat über vault.add_quote() oder den quote-extractor einpflegen.`,
     ].join('\n');
     process.stderr.write(msg + '\n');
@@ -970,7 +1146,7 @@ async function main() {
       reason: msg,
     }));
     process.exit(2);
-  });
+  }
 
   // ---------------------------------------------------------------------------
   // Figure-Referenz-Check (additiv, nach Quote-Check)

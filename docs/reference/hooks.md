@@ -141,6 +141,51 @@ bieten. Wer Kapiteltexte über Bash statt über `Write`/`Edit`/`MultiEdit`
 verändert, bekommt aktuell **keine** Zitat-, Claim-Drift- oder
 Kontexttreue-Prüfung.
 
+### Wortlaut-Prüfung wörtlicher Zitate (#846)
+
+Anführungszeichen-Spans (`"…"`, `„…"`, `«…»`, ` ``…'' `) ab zehn Zeichen werden
+gegen die Vault-Tabelle `quotes` geprüft. Bis #846 war das ein Boolean
+(`verbatim LIKE '%kandidat%'`): jede typografische Abweichung galt als „nicht im
+Vault" (Falschalarm), und ein *verändertes* Wort war vom *fehlenden* Zitat nicht
+zu unterscheiden. Seit #846 liefert
+`academic_vault.server.match_quote_wording()` je Span einen Status:
+
+| Status | Bedeutung | Reaktion |
+|---|---|---|
+| `exact` | zeichengleich im Vault | still durch |
+| `normalized` | gleich bis auf Anführungszeichen/Apostroph, Whitespace, NFKC/Ligaturen, Trennstrich am Zeilenumbruch — oder nur Groß-/Kleinschreibung | still durch (bei reinem Case-Unterschied ein Hinweis auf stderr) |
+| `ellipsis` | Auslassungszitat: alle Fragmente zwischen `[…]`/`[...]` kommen in dieser Reihenfolge vor | still durch |
+| `deviation` | eindeutig zugeordnet, Wortlaut weicht ab | **Block** mit Fundstelle (`Datei:Zeile:Spalte`), beiden Wortlauten und den abweichenden Wörtern |
+| `absent` | kein Vault-Zitat zuordenbar | **Block** mit der bisherigen Meldung „Zitat nicht im Vault verifiziert" |
+
+Die Zuordnung läuft zweistufig: zuerst der billige Substring-Abgleich über die
+Normalisierungsstufen aus `academic_vault/verbatim.py`, dann — erst ab **40
+normalisierten Zeichen** — eine rapidfuzz-Zuordnung (`partial_ratio`, Schwelle
+82) über einen **einmal je Write** gelesenen Quotes-Snapshot
+(`VaultDB.quotes_snapshot_for_wording()`, Längenband-Vorfilter + Limit 5000).
+Die Mindestlänge ist Absicht: kurze Fragmente erzielen in langem Text zufällig
+hohe Ähnlichkeitswerte (#520). Liegen die zwei besten Treffer näher als zwei
+Punkte beieinander und unterscheiden sich ihre Wortlaute, gilt der Span als
+`absent` — ein Wortlaut-Vorwurf gegen das falsche Vault-Zitat wäre schlimmer als
+der unspezifische Bestandsbefund.
+
+**Prüfkontingent:** Es gilt dieselbe Obergrenze wie für die Klammer-Belege
+(`ACADEMIC_CITATION_MAX_PER_WRITE`, Default 100). Überzählige Spans verlieren
+nur die teure Zuordnung, nicht die Prüfung: sie bleiben im Zweifel `absent` und
+blockieren weiterhin, die Meldung nennt die Kappung. Ein stiller Durchlass wäre
+ein Loch im Guard.
+
+**Strenge-Schalter:** `ACADEMIC_VERBATIM_WORDING=report` meldet eine
+Wortlaut-Abweichung nur auf stderr, statt zu blockieren (Default `block`). Der
+Schalter ist guard-schwächend und wird deshalb wie die vier
+`ACADEMIC_CITATION_*`-Schalter protokolliert (siehe Env-Switch-Report unten).
+
+**Fail-open bleibt unverändert:** fehlende Vault-DB, kaputter Interpreter,
+Exception im Lookup → kein Block, mit den beiden getrennten Wortlauten aus #381.
+`search_quote_text()` ist unangetastet — `claim-drift-guard.mjs`,
+`context-fidelity-guard.mjs` und das MCP-Tool `vault.search_quote_text` hängen an
+seiner Boolean-Semantik.
+
 ### Klammer-Zitat-Validierung
 
 Klammer- und Paraphrase-Belege wie `(Müller 2021, S. 45)`,
@@ -724,13 +769,16 @@ dauerhaft unsichtbar. `bypass-log-report.mjs` schließt die Lücke als rein
 
 ### Env-Switch-Report: guard-schwächende Schalter sichtbar (#519, Audit R7)
 
-Drei Env-Schalter schwächen `verbatim-guard.mjs` gezielt ab, ohne ihn
+Mehrere Env-Schalter schwächen `verbatim-guard.mjs` gezielt ab, ohne ihn
 abzuschalten: `ACADEMIC_CITATION_AMBIGUOUS=mark` (mehrdeutige Klammerform wird
 markiert statt blockiert), `ACADEMIC_CITATION_CASCADE=off` (externe Kaskade
-deaktiviert) und `ACADEMIC_CITATION_MAX_PER_WRITE` (Prüfkontingent pro Write).
-Legitime Konfiguration — aber ihre Nutzung blieb bislang unbemerkt. Bei einem
-Guard-Lauf auf einer geschützten Datei protokolliert `verbatim-guard.mjs` jetzt
-für **jeden gesetzten** (nicht-leeren) der drei Schalter je eine Zeile nach
+deaktiviert), `ACADEMIC_CITATION_MAX_PER_WRITE` (Prüfkontingent pro Write),
+`ACADEMIC_CITATION_UNCHECKED_NOTICE=off` (Hinweis auf ungeprüfte Belegformen
+aus, #740) und `ACADEMIC_VERBATIM_WORDING=report` (Wortlaut-Abweichung wird
+gemeldet statt blockiert, #846). Legitime Konfiguration — aber ihre Nutzung
+blieb bislang unbemerkt. Bei einem Guard-Lauf auf einer geschützten Datei
+protokolliert `verbatim-guard.mjs` jetzt für **jeden gesetzten** (nicht-leeren)
+dieser Schalter je eine Zeile nach
 `~/.academic-research/vault-guard-env-switch.log` (Env-Override
 `VAULT_GUARD_ENV_SWITCH_LOG`, 0600/0700, fail-open — identisches Muster wie das
 Bypass-Log aus #381).

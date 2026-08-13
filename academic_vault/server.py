@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from . import quote_match
 from . import retraction as _retraction
 from .db import (
     _UNSET,
@@ -1828,6 +1829,61 @@ def search_quote_text(db_path: str, verbatim: str, k: int = 5) -> list[dict]:
     db = VaultDB(db_path)
     _ensure_schema_for_read(db_path)
     return db.search_quote_text(verbatim, k)
+
+
+def match_quote_wording(
+    db_path: str,
+    candidates: list,
+    wording_limit: int | None = None,
+) -> list[dict]:
+    """Prueft den WORTLAUT mehrerer Zitat-Kandidaten gegen den Vault (Issue #846).
+
+    Batch-Gegenstueck zu :func:`search_quote_text`, das bewusst unangetastet
+    bleibt: an dessen Boolean-Semantik haengen das MCP-Tool ``vault_search_quote_text``,
+    ``claim-drift-guard.mjs``, ``context-fidelity-guard.mjs`` und mehrere Evals.
+    Diese Funktion liefert stattdessen je Kandidat einen Status
+    (``exact``/``normalized``/``ellipsis``/``deviation``/``absent``, siehe
+    :mod:`academic_vault.quote_match`), damit
+    ``hooks/verbatim-guard.mjs`` einen veraenderten Wortlaut von einem gar
+    nicht vorhandenen Zitat unterscheiden kann.
+
+    Der Quotes-Snapshot wird EINMAL fuer alle Kandidaten gelesen und
+    normalisiert (Muster aus :func:`verify_citations`/#501) -- ein Write mit
+    mehreren Zitaten kostet damit einen Tabellenscan, nicht einen je Zitat.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        candidates: Zitat-Texte in Reihenfolge der Fundstellen.
+        wording_limit: Pruefkontingent. Ab diesem Index laeuft nur noch der
+            billige Substring-/Auslassungs-Abgleich; nicht belegte Kandidaten
+            bleiben dann ``absent`` mit ``quota_capped=True``. Das ist eine
+            Verschlechterung der DIAGNOSE, kein stiller Durchlass -- geblockt
+            wird weiterhin.
+
+    Returns:
+        Liste in Eingabereihenfolge. Je Eintrag entweder das Statusobjekt aus
+        :meth:`academic_vault.quote_match.QuoteWordingMatch.as_dict` oder
+        ``{"error": "..."}``, wenn genau dieser Kandidat scheitert -- ein
+        kaputter Eintrag entwertet den Batch nicht.
+    """
+    db = VaultDB(db_path)
+    _ensure_schema_for_read(db_path)
+    snapshot = db.quotes_snapshot_for_wording(
+        min_length=quote_match.min_snapshot_length(candidates),
+        limit=quote_match.MAX_SNAPSHOT_QUOTES,
+    )
+    entries = quote_match.prepare_snapshot(snapshot)
+
+    results: list[dict] = []
+    for index, candidate in enumerate(candidates):
+        allow_fuzzy = wording_limit is None or index < wording_limit
+        try:
+            results.append(
+                quote_match.match_candidate(entries, candidate, allow_fuzzy=allow_fuzzy).as_dict()
+            )
+        except Exception as exc:  # pragma: no cover - Defensivpfad je Eintrag
+            results.append({"error": f"{type(exc).__name__}: {exc}"})
+    return results
 
 
 def find_quotes(
