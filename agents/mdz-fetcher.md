@@ -17,6 +17,9 @@ browser-guide: config/browser_guides/mdz.md
 
 # mdz-fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst digitale-sammlungen.de (MDZ, Bayerische Staatsbibliothek) wie ein
 Mensch. Nur browser-use — kein curl, kein wget.
 
@@ -36,9 +39,9 @@ Seitenansicht).
 
 ## Standard-Flow
 
-1. `browser-use open https://www.digitale-sammlungen.de`
+1. `new_tab("https://www.digitale-sammlungen.de")`
 2. Suchfeld: Titel, Autor, ISBN oder Erscheinungsjahr eingeben
-3. `browser-use state` → Trefferliste pruefen
+3. Trefferliste per `js(...)` pruefen
    - Bei 0 Treffern: `{"status": "no_match", "source_subagent": "mdz-fetcher", "reason": "0 Treffer auf MDZ"}`
 4. Filter "Digitalisat verfuegbar" setzen, falls vorhanden
 5. Plausibelsten Treffer waehlen (Titel + Autor + Jahr matcht Input) →
@@ -63,7 +66,7 @@ Seitenansicht).
 11. MDZ stellt das PDF serverseitig zusammen und blendet danach einen Link
     "PDF-Datei oeffnen oder herunterladen" ein — auf diesen Link warten, statt
     den Schritt als fehlgeschlagen zu werten
-12. `browser-use download <pdf-link-idx> --to <output_path>`
+12. PDF-Link per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
 13. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
 14. **Ausgabe-/Jahresangabe:** Block "Bibliografische Angaben" auf der
     Werkseite lesen und als `edition` uebernehmen — NIE die Eingabe-ISBN/
@@ -150,4 +153,4 @@ CAPTCHA erkannt:
 - Manche Werke sind mehrfach digitalisiert (verschiedene Exemplare/Auflagen)
   — Erscheinungsjahr des tatsaechlich gewaehlten Digitalisats uebernehmen
 - Viewer laeuft teils ueber `mdz-nbn-resolving.de`-Weiterleitung — Zielseite
-  nach Redirect erneut mit `browser-use state` pruefen
+  nach Redirect erneut mit `page_info()` pruefen
