@@ -103,6 +103,14 @@ def connection_ready(checks: dict[str, bool]) -> bool:
     return bool(checks.get("daemon_alive")) and bool(checks.get("active_browser_connections"))
 
 
+def preflight_ready(checks: dict[str, bool]) -> bool:
+    """Entschaerfte Pruefung fuer Preflight: True nur, wenn der Daemon bereits
+    laeuft (und damit prinzipiell verbinden kann). Active-Connections koennen
+    noch nicht da sein, wenn der Nutzer den Chrome-Dialog noch nicht bestaetigt
+    hat — das ist kein Grund, den Browser-Lauf abzubrechen."""
+    return bool(checks.get("daemon_alive"))
+
+
 def cloud_available(checks: dict[str, bool]) -> bool:
     """True nur, wenn Doctor die Cloud-Auth als ``[ok]`` meldet (nicht bei
     der ``[FAIL] ... optional: ...``-Zeile eines nicht eingeloggten Kontos)."""

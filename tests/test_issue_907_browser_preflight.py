@@ -33,6 +33,13 @@ DOCTOR_CLOUD_OK = """
   [ok  ] Browser Use cloud auth
 """
 
+DOCTOR_DAEMON_OK_NO_CONNECTIONS = """
+  [ok  ] chrome running
+  [ok  ] daemon alive
+  [FAIL] active browser connections — 0
+  [FAIL] Browser Use cloud auth — optional: browser-harness auth login
+"""
+
 
 def test_preflight_fails_when_never_configured(tmp_path, capsys):
     exit_code = browser_preflight.main(
@@ -88,3 +95,21 @@ def test_preflight_fails_when_cloud_method_but_not_authenticated(tmp_path, capsy
     assert exit_code == 1
     out = capsys.readouterr().out
     assert "auth login" in out
+
+
+def test_preflight_ok_when_daemon_alive_no_active_connections_yet(tmp_path, capsys):
+    """Issue #907 P1: Henne-Ei-Szenario nach Setup — Daemon laeuft, aber
+    noch keine aktiven Verbindungen, weil der Nutzer den Chrome-Dialog
+    noch nicht bestaetigt hat. Preflight sollte OK sein und den Browser-
+    Teil nicht blockieren."""
+    state_path = tmp_path / "browser_connection.json"
+    bcs.record_method(bcs.METHOD_LOCAL, checks={}, path=state_path)
+
+    exit_code = browser_preflight.main(
+        [],
+        state_path=state_path,
+        doctor_runner=lambda: DOCTOR_DAEMON_OK_NO_CONNECTIONS,
+    )
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "ok" in out.lower()

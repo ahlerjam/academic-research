@@ -24,9 +24,9 @@ from pathlib import Path
 from browser_connection_setup import (
     METHOD_CLOUD,
     cloud_available,
-    connection_ready,
     load_state,
     parse_doctor,
+    preflight_ready,
 )
 from browser_connection_setup import run_doctor as _run_doctor_real
 
@@ -77,7 +77,9 @@ def check(state: dict | None, checks: dict[str, bool]) -> tuple[bool, str]:
     # Default/METHOD_LOCAL (und jeder unbekannte/kuenftige Wert faellt
     # sicherheitshalber auf den lokalen Pfad zurueck statt stillschweigend
     # als Erfolg zu gelten).
-    if connection_ready(checks):
+    # Fuer Preflight: daemon_alive genuegt (active_browser_connections koennen
+    # noch nicht da sein nach Setup, bis der Chrome-Dialog bestaetigt ist).
+    if preflight_ready(checks):
         return True, "ok"
     return False, LOCAL_BLOCKED_MESSAGE
 
@@ -88,7 +90,6 @@ def main(
     state_path: Path | None = None,
     doctor_runner: Callable[[], str] | None = None,
 ) -> int:
-    _ = list(sys.argv[1:] if argv is None else argv)
     state = load_state(state_path)
     runner = doctor_runner if doctor_runner is not None else _run_doctor_real
     checks = parse_doctor(runner())
