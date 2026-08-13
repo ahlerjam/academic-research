@@ -111,6 +111,47 @@ def test_openalex_parses_real_fixture(monkeypatch):
     assert all(r["title"] for r in results)
     assert all(r["source_module"] == "openalex" for r in results)
 
+    # Feldwert-Assertions gegen die eingefrorene Fixture (Issue #850 AC2):
+    # verankert das aktuelle Antwortschema, damit eine Umbenennung/ein Wegfall
+    # eines Felds (z.B. "doi", "cited_by_count", "fwci", "open_access.oa_url")
+    # den Test rot werden laesst statt still durchzurutschen.
+    third = results[2]
+    assert third["doi"] == "10.2307/20033020"
+    assert third["title"].startswith("Climate Change 2001: The Scientific Basi")
+    assert third["year"] == 2002
+    assert third["citations"] == 12986
+    assert third["citations_normalized"] == 2745.478
+    assert third["url"] == "https://openalex.org/W1522296012"
+    assert third["venue"]
+    assert third["authors"]
+    assert all(isinstance(a, str) and a for a in third["authors"])
+
+    first = results[0]
+    assert first["oa_url"] == "https://digital.library.unt.edu/ark:/67531/metadc950228/"
+
+
+def test_openalex_uses_search_param_not_deprecated_filter(monkeypatch):
+    """Guard gegen die deprecated OpenAlex-Filter-Syntax (Issue #850 AC1).
+
+    Verhindert eine stille Rueckkehr zu 'filter=default.search:'/'filter=title.search:'
+    -- die neue, dokumentierte Syntax ist der Top-Level-Parameter 'search'
+    (https://blog.openalex.org/openalex-api-new-features-and-usage-based-pricing/).
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        body = (FIXTURES / "openalex_response.json").read_bytes()
+        return httpx.Response(200, content=body, headers={"content-type": "application/json"})
+
+    _patch_client(monkeypatch, handler)
+
+    search.search_openalex("climate change", limit=3)
+
+    assert "search" in captured["params"]
+    assert captured["params"]["search"] == "climate change"
+    assert "filter" not in captured["params"]
+
 
 def test_openalex_passes_through_is_retracted_true(monkeypatch):
     """Ein Treffer mit is_retracted: true traegt das Merkmal nach der Normalisierung (#618 AC1)."""
