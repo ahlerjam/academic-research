@@ -56,6 +56,27 @@ def is_valid_pdf(content: bytes) -> bool:
     return len(content) >= 4 and content[:4] == PDF_MAGIC
 
 
+def tier_arxiv_direct(doi: str | None) -> str | None:
+    """Tier 0: Bildet die arXiv-PDF-Adresse direkt aus der DOI, ohne einen
+    Nachweisdienst zu befragen (Issue #885).
+
+    Nutzt arxiv_latex.arxiv_id_from_doi() wieder, damit das
+    arXiv-DOI-Muster (`10.48550/arxiv.<id>`) nur an einer Stelle im Repo
+    lebt. Keine Netzwerk-I/O -- kann folglich nie einen Fehler werfen.
+
+    Args:
+        doi: DOI-String, roh oder bereits normalisiert; `None` erlaubt.
+
+    Returns:
+        Die PDF-Adresse `https://arxiv.org/pdf/<id>` oder `None`, wenn
+        `doi` nicht dem arXiv-DOI-Muster entspricht.
+    """
+    arxiv_id = arxiv_latex.arxiv_id_from_doi(doi)
+    if not arxiv_id:
+        return None
+    return f"https://arxiv.org/pdf/{arxiv_id}"
+
+
 # ---------------------------------------------------------------------------
 # Download
 # ---------------------------------------------------------------------------
@@ -277,6 +298,7 @@ def resolve_pdf_url(
     """Try all tiers to find a PDF URL. Returns (url, source_tier, error).
 
     Tier order:
+      0  arXiv-Direct (DOI) — vor allen Nachweisdiensten (Issue #885)
       1  OpenAIRE         (DOI) — European OA repositories
       2  Unpaywall        (DOI)
       3  CORE             (DOI)
@@ -292,6 +314,10 @@ def resolve_pdf_url(
     last_error = None
     paper_type = paper.get("type") or ""
     is_book = paper_type in {"book", "chapter"}
+
+    # Tier 0: arXiv-Direct — kein Netzwerkaufruf, daher kein last_error moeglich
+    if url := tier_arxiv_direct(doi):
+        return url, "arxiv_direct", last_error
 
     # Tier 1: OpenAIRE
     if doi:

@@ -1,6 +1,6 @@
 """Unit-Tests fuer neue PDF-Tier-Funktionen (Tiers 6-8) — Chunk J v6.2."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -587,3 +587,102 @@ class TestResolvePdfUrlOrdering:
         assert url == "https://unpaywall.example/paper.pdf"
         assert source == "unpaywall"
         assert error is None
+
+
+# ---------------------------------------------------------------------------
+# Tier 0: arXiv-Direct (Issue #885)
+# ---------------------------------------------------------------------------
+
+
+class TestTierArxivDirect:
+    """Prueft tier_arxiv_direct() als reine Funktion ohne Netzwerk-I/O."""
+
+    def test_arxiv_doi_returns_direct_pdf_url(self):
+        from pdf import tier_arxiv_direct
+
+        result = tier_arxiv_direct("10.48550/arxiv.2301.12345")
+
+        assert result == "https://arxiv.org/pdf/2301.12345"
+
+    def test_non_arxiv_doi_returns_none(self):
+        from pdf import tier_arxiv_direct
+
+        assert tier_arxiv_direct("10.1000/xyz123") is None
+
+    def test_none_doi_returns_none(self):
+        from pdf import tier_arxiv_direct
+
+        assert tier_arxiv_direct(None) is None
+
+
+class TestResolvePdfUrlArxivDirect:
+    """Prueft die Einbindung von Tier 0 (arXiv-Direct) in resolve_pdf_url()."""
+
+    def test_arxiv_doi_resolves_without_contacting_any_service(self):
+        """AC1: Eine arXiv-DOI wird beschafft, ohne dass ein Nachweisdienst
+        befragt wird — der Client-Mock wirft bei jedem .get()-Aufruf."""
+        from pdf import resolve_pdf_url
+
+        client = MagicMock()
+        client.get.side_effect = AssertionError("Netzwerk-I/O haette nicht stattfinden duerfen")
+
+        paper = {"doi": "10.48550/arxiv.2301.12345", "title": "An arXiv paper"}
+        url, source, error = resolve_pdf_url(client, paper, "test@example.com")
+
+        assert url == "https://arxiv.org/pdf/2301.12345"
+        client.get.assert_not_called()
+
+    def test_arxiv_doi_source_is_arxiv_direct(self):
+        """AC2: Der Beschaffungsweg ist eigenstaendig als 'arxiv_direct'
+        gekennzeichnet — unterscheidbar von Tier 6 ('arxiv')."""
+        from pdf import resolve_pdf_url
+
+        client = MagicMock()
+        client.get.side_effect = AssertionError("Netzwerk-I/O haette nicht stattfinden duerfen")
+
+        paper = {"doi": "10.48550/arxiv.2301.12345", "title": "An arXiv paper"}
+        url, source, error = resolve_pdf_url(client, paper, "test@example.com")
+
+        assert source == "arxiv_direct"
+        assert error is None
+
+    def test_arxiv_doi_never_calls_unpaywall(self):
+        """AC3 (Regression): eine arXiv-DOI darf tier_unpaywall() nicht mehr
+        aufrufen. Faellt Tier 0 kuenftig weg oder wandert hinter Tier 1,
+        wird tier_unpaywall aufgerufen und dieser Test schlaegt fehl."""
+        import pdf
+        from pdf import resolve_pdf_url
+
+        with patch.object(pdf, "tier_unpaywall") as mock_unpaywall:
+            client = MagicMock()
+            client.get.side_effect = AssertionError("Netzwerk-I/O haette nicht stattfinden duerfen")
+
+            paper = {"doi": "10.48550/arxiv.2301.12345", "title": "An arXiv paper"}
+            resolve_pdf_url(client, paper, "test@example.com")
+
+            mock_unpaywall.assert_not_called()
+
+    def test_non_arxiv_doi_still_starts_with_openaire(self):
+        """AC4: Nicht-arXiv-DOIs nehmen unveraendert die bisherige Kaskade —
+        Tier 1 (OpenAIRE) wird weiterhin zuerst versucht."""
+        from pdf import resolve_pdf_url
+
+        def mock_get(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status = MagicMock()
+            resp.text = self._EMPTY_ARXIV_XML
+            if "api.openaire.eu" in url:
+                resp.json.return_value = OPENAIRE_HIT_RESPONSE
+            else:
+                resp.json.return_value = {}
+            return resp
+
+        client = MagicMock()
+        client.get.side_effect = mock_get
+
+        paper = {"doi": "10.1371/journal.pbio.1002055", "title": "Test paper"}
+        url, source, error = resolve_pdf_url(client, paper, "test@example.com")
+
+        assert source == "openaire"
+
+    _EMPTY_ARXIV_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
