@@ -200,7 +200,13 @@ def _seed_chapter(db_path: str, tmp_path: Path, verbatims: list[str]) -> tuple[P
     chapter = chapter_dir / "03.md"
     body = ["Einleitender Satz ohne jeden Beleg."]
     for i, v in enumerate(verbatims):
-        body.append(f'Befund {i} laut Mueller (2021): "{v}" — das stuetzt These {i}.')
+        # "widerspricht" ist ein Negationsmarker (Issue #899) -- ohne ihn
+        # waere der Satz reine Zuschreibung und wuerde ohne Scorer-Aufruf nie
+        # als verdaechtig gelten; diese Tests pruefen die Scan-/Spool-
+        # Infrastruktur und brauchen echte Scorer-Aufrufe.
+        body.append(
+            f'Befund {i} widerspricht laut Mueller (2021) der Annahme: "{v}" — das widerlegt These {i}.'
+        )
     body.append(
         'Ein nicht im Vault vorhandenes Fantasiezitat: "Dieses Zitat existiert nirgendwo im Bestand."'
     )
