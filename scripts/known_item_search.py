@@ -206,21 +206,38 @@ def run_known_item_search(
 
     Ein Null-Treffer ist ein valides, zu meldendes Ergebnis (#886 AC3) -- er
     landet trotzdem in `searched_for` und als leere Liste in `found[query]`.
+
+    Modulfehler werden als `status: "module_failed"` registriert statt
+    verschluckt zu werden (#886 P1).
     """
     searched_for: list[dict[str, Any]] = []
-    found: dict[str, list[dict[str, Any]]] = {}
+    found: dict[str, dict[str, Any]] = {}  # query -> {hits, status, module_errors}
     all_hits: list[dict[str, Any]] = []
 
     for candidate in candidates:
         query = candidate["query"]
         searched_for.append(candidate)
         hits: list[dict[str, Any]] = []
+        module_errors: dict[str, str] = {}
+
         for module_name in modules:
-            _name, papers, _failed = _run_module(module_name, query, limit)
+            _name, papers, failed = _run_module(module_name, query, limit)
+            if failed:
+                module_errors[module_name] = "HTTP/network error or timeout"
             hits.extend(papers)
+
+        # Nur known_works_queries badgen, nicht Zitationsheuristik (#886 P1)
+        is_known_works = candidate.get("source") == "known_works_queries"
         for paper in hits:
-            paper["found_via_known_item"] = True
-        found[query] = hits
+            if is_known_works:
+                paper["found_via_known_item"] = True
+
+        status = "module_failed" if module_errors else ("zero_hits" if not hits else "success")
+        found[query] = {
+            "hits": hits,
+            "status": status,
+            "module_errors": module_errors if module_errors else None,
+        }
         all_hits.extend(hits)
 
     return {
