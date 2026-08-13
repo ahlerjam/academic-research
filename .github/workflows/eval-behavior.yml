@@ -1,4 +1,4 @@
-name: Eval-Behavior (manuell + woechentliches Kern-Set)
+name: Eval-Behavior (manuell + woechentliches Kern-Set + taeglicher Smoke-Lauf)
 
 # Separat auslösbarer Lauf fuer die Verhaltens-Evals unter tests/evals/ (Issue #470,
 # Aufrufweg erweitert in #631, SDK-Pfad seither entfernt -- Issue #716). Bewusst
@@ -31,11 +31,23 @@ name: Eval-Behavior (manuell + woechentliches Kern-Set)
 # aber eben als Stichprobe statt als Vollauf. Ein Fehlschlag des geplanten
 # Laufs erzeugt ein Issue (Report-Step unten) statt in einem ungesehenen
 # Actions-Tab zu verpuffen.
+#
+# Issue #848: zusaetzlich ein zweiter, taeglicher `schedule`-Cron fuer eine
+# feste, kleine Smoke-Stichprobe (`SMOKE_SET_NODE_IDS` in
+# tests/evals/smoke_set.py, docs/evals/STRATEGY.md Abschnitt "Taeglicher
+# Smoke-Lauf"), damit ein Modell-Drift in einer gerade nicht rotierten
+# Kern-Set-Gruppe nicht bis zu drei Wochen unentdeckt bleibt. Zwei
+# `schedule`-Eintraege liefern beide `github.event_name == 'schedule'` --
+# die Job-Logik unterscheidet ueber `github.event.schedule` (den konkreten
+# Cron-String), s. WEEKLY_CRON unten.
 on:
   schedule:
     # Montag 07:00 UTC -- eine Stunde nach live-fetch-weekly.yml (Montag
     # 06:00 UTC), um Runner-Kontention zu vermeiden (Plan-Kommentar zu #597).
     - cron: "0 7 * * 1"
+    # Taeglich 05:00 UTC -- vor dem woechentlichen Kern-Set-Lauf, damit ein
+    # Montag beide Laeufe unabhaengig voneinander sieht (Issue #848).
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       component:
@@ -94,8 +106,14 @@ jobs:
     # einen vollen CLI-Pfad-Lauf zu haben. Der manuelle Lauf (workflow_dispatch,
     # ggf. component-Filter) behaelt die bestehenden 60 Minuten.
     # `timeout-minutes` akzeptiert Ausdruecke nur ueber github/inputs/vars-
-    # Kontexte -- reicht hier, weil nur github.event_name gebraucht wird.
-    timeout-minutes: ${{ github.event_name == 'schedule' && 120 || 60 }}
+    # Kontexte -- reicht hier, weil nur github.event_name/github.event.schedule
+    # gebraucht wird. Issue #848: dritter Zweig fuer den taeglichen
+    # Smoke-Cron ("0 5 * * *") -- acht Faelle brauchen kein 120-Minuten-
+    # Budget wie der Kern-Set-Lauf, 20 Minuten sind grosszuegiger Puffer
+    # (s. docs/evals/STRATEGY.md, Abschnitt "Taeglicher Smoke-Lauf").
+    timeout-minutes: >-
+      ${{ github.event.schedule == '0 5 * * *' && 20
+       || (github.event_name == 'schedule' && 120 || 60) }}
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -139,6 +157,10 @@ jobs:
           # hier aber bewusst exklusiv (schedule ignoriert inputs.component,
           # s. Beschreibung des Inputs oben).
           IS_SCHEDULED: ${{ github.event_name == 'schedule' }}
+          # Issue #848: unterscheidet die beiden `schedule`-Cron-Eintraege --
+          # github.event_name allein reicht dafuer nicht mehr (beide liefern
+          # 'schedule').
+          IS_SMOKE_SCHEDULE: ${{ github.event.schedule == '0 5 * * *' }}
           # Wie FILTER oben: ueber env: binden statt direkt zu templaten --
           # inputs.trigger_rotation_group ist derselbe untrusted Input-Typ.
           ROTATION_GROUP_INPUT: ${{ inputs.trigger_rotation_group }}
@@ -146,17 +168,31 @@ jobs:
           set -o pipefail
           # EVAL_TRIGGER_ROTATION_GROUP steuert die Skill-Auswahl in
           # tests/evals/test_triggers.py (s. Modul-Kommentar dort). Der
-          # geplante Lauf waehlt ohne expliziten Override automatisch die
-          # ISO-Kalenderwoche-Gruppe ("auto"); jeder andere Lauf (manuell,
-          # oder geplant MIT explizitem Override) reicht den Input unveraendert
-          # durch -- leer bedeutet dort weiterhin "alle Skills" (Verhalten vor
-          # Issue #597).
-          if [ "${IS_SCHEDULED}" = "true" ] && [ -z "${ROTATION_GROUP_INPUT}" ]; then
+          # woechentliche Kern-Set-Lauf waehlt ohne expliziten Override
+          # automatisch die ISO-Kalenderwoche-Gruppe ("auto"); der taegliche
+          # Smoke-Lauf (Issue #848) erzwingt IMMER "all", weil die drei fest
+          # gewaehlten Smoke-Skills unabhaengig von der Wochen-Rotation
+          # kollektierbar sein muessen (s. tests/evals/smoke_set.py);
+          # jeder andere Lauf (manuell, oder geplant MIT explizitem Override)
+          # reicht den Input unveraendert durch -- leer bedeutet dort
+          # weiterhin "alle Skills" (Verhalten vor Issue #597).
+          if [ "${IS_SMOKE_SCHEDULE}" = "true" ]; then
+            export EVAL_TRIGGER_ROTATION_GROUP="all"
+          elif [ "${IS_SCHEDULED}" = "true" ] && [ -z "${ROTATION_GROUP_INPUT}" ]; then
             export EVAL_TRIGGER_ROTATION_GROUP="auto"
           else
             export EVAL_TRIGGER_ROTATION_GROUP="${ROTATION_GROUP_INPUT}"
           fi
-          if [ "${IS_SCHEDULED}" = "true" ]; then
+          if [ "${IS_SMOKE_SCHEDULE}" = "true" ]; then
+            # Issue #848: feste Node-ID-Stichprobe statt Datei-/Marker-Filter
+            # -- SMOKE_SET_NODE_IDS in tests/evals/smoke_set.py ist die eine
+            # Quelle der Wahrheit, hier nur ausgelesen und an pytest als
+            # Positionsargumente uebergeben (kein `-k`-Ausdruck noetig).
+            mapfile -t SMOKE_NODE_IDS < <(uv run python -c \
+              "from tests.evals.smoke_set import SMOKE_SET_NODE_IDS; print('\n'.join(SMOKE_SET_NODE_IDS))")
+            uv run pytest "${SMOKE_NODE_IDS[@]}" -v \
+              --junitxml=eval-results.xml 2>&1 | tee eval-output.log
+          elif [ "${IS_SCHEDULED}" = "true" ]; then
             uv run pytest tests/evals/ -m eval_core_set -v \
               --junitxml=eval-results.xml 2>&1 | tee eval-output.log
           elif [ -n "${FILTER}" ]; then
