@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -22,6 +24,11 @@ COMMANDS_DIR = REPO_ROOT / "commands"
 AGENTS_DIR = REPO_ROOT / "agents"
 
 HEADING_PATTERN = re.compile(r"^##\s+(\d+)\.\s+(.+)$", re.MULTILINE)
+
+# Geschlossenes Vokabular fuer preconditions[].expected (AC2: maschinell
+# pruefbar statt freier Prosa). Nuancen gehoeren ins optionale 'note'-Feld,
+# das NICHT gegen dieses Vokabular geprueft wird.
+ALLOWED_EXPECTED_VALUES = {"filled", "checked", "checked_partial"}
 
 
 def _load_phases_data() -> dict:
@@ -78,13 +85,37 @@ class TestWorkflowPhasesFile:
     """Die reale config/workflow-phases.json gegen walkthrough.md und den Skill-Baum."""
 
     def test_json_is_valid_and_parseable(self) -> None:
-        """AC3: Ein Node-Skript kann die Datei ohne Zusatzabhaengigkeit lesen --
-        reines JSON ohne Kommentar-Syntax/Trailing Commas ist die Voraussetzung
-        dafuer (JSON.parse in Node verhaelt sich hier identisch zu json.load)."""
+        """AC3 (Python-Seite): json.load liest die Datei fehlerfrei -- reines
+        JSON ohne Kommentar-Syntax/Trailing Commas ist die Voraussetzung dafuer."""
         data = _load_phases_data()
         assert "phases" in data
         assert isinstance(data["phases"], list)
         assert len(data["phases"]) > 0
+
+    def test_json_is_parseable_by_node_without_extra_dependency(self) -> None:
+        """AC3 (Node-Seite, die tatsaechliche Behauptung der Datei selbst --
+        config/workflow-phases.json:2 sagt 'Gelesen von Node-Hooks
+        (JSON.parse)'): JSON.parse in Node muss dieselbe Datei ohne
+        Zusatzabhaengigkeit lesen koennen. json.load und JSON.parse sind NICHT
+        identisch (z.B. NaN/Infinity-Literale), daher hier ein echter
+        Node-Aufruf statt einer Gleichsetzung im Docstring."""
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node ist auf diesem System nicht installiert")
+        result = subprocess.run(
+            [
+                node,
+                "-e",
+                "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf-8'))",
+                str(PHASES_PATH),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0, (
+            f"JSON.parse ist an config/workflow-phases.json gescheitert: {result.stderr}"
+        )
 
     def test_all_walkthrough_headings_have_phase(self) -> None:
         """AC1: Kein Schritt aus walkthrough.md fehlt in der Definition."""
@@ -99,6 +130,19 @@ class TestWorkflowPhasesFile:
             f"Phasen in workflow-phases.json ohne Entsprechung im Walkthrough: {only_in_phases}"
         )
         assert len(phases) == len(headings)
+
+    def test_phase_order_matches_walkthrough_order(self) -> None:
+        """config/workflow-phases.json erklaert sich selbst zur 'verbindlichen
+        Quelle der Ablaufordnung' -- eine reine Mengengleichheit deckt eine
+        vertauschte Reihenfolge im 'phases'-Array nicht ab, obwohl genau das
+        der Kern von Issue #876 ist (Forschungsfrage an der falschen Stelle)."""
+        headings = _walkthrough_headings()
+        phases = _phase_entries(_load_phases_data())
+        phase_headings_in_order = [p["walkthrough_heading"] for p in phases]
+        assert phase_headings_in_order == headings, (
+            "Reihenfolge von 'phases' in workflow-phases.json weicht von der "
+            "Ueberschriften-Reihenfolge in walkthrough.md ab"
+        )
 
     def test_every_phase_has_field_checkable_preconditions(self) -> None:
         """AC2: Zu jeder Phase ist maschinell pruefbar hinterlegt, welche Felder
@@ -126,6 +170,11 @@ class TestWorkflowPhasesFile:
                 assert cond["field"] in stub_text, (
                     f"{phase['id']}: Feld '{cond['field']}' kommt nicht in "
                     "academic_context.stub.md vor -- nicht maschinell pruefbar"
+                )
+                assert cond["expected"] in ALLOWED_EXPECTED_VALUES, (
+                    f"{phase['id']}: 'expected' = {cond['expected']!r} ist kein "
+                    f"geschlossenes Vokabular (erlaubt: {sorted(ALLOWED_EXPECTED_VALUES)}) -- "
+                    "Prosa waere nicht maschinell auswertbar; Nuancen gehoeren ins 'note'-Feld"
                 )
 
     def test_all_referenced_skills_and_commands_exist(self) -> None:
@@ -160,6 +209,32 @@ class TestDriftDetectionFiresOnMismatch:
         only_in_walkthrough, only_in_phases = _diff_headings_vs_phases(headings, phases)
         assert only_in_walkthrough == {"3. Forschungsfrage schaerfen"}
         assert only_in_phases == set()
+
+    def test_swapped_phase_order_is_not_masked_by_set_equality(self) -> None:
+        """Regression fuer die Luecke im Review: gleiche Menge, vertauschte
+        Reihenfolge muss die Mengenpruefung passieren lassen (kein False
+        Positive dort) UND vom Reihenfolge-Vergleich erkannt werden."""
+        headings = ["1. Kontext einrichten", "2. Thema finden", "3. Forschungsfrage schaerfen"]
+        phases = [
+            {"id": "research-question", "walkthrough_heading": "3. Forschungsfrage schaerfen"},
+            {"id": "context-setup", "walkthrough_heading": "1. Kontext einrichten"},
+            {"id": "topic-finding", "walkthrough_heading": "2. Thema finden"},
+        ]
+        only_in_walkthrough, only_in_phases = _diff_headings_vs_phases(headings, phases)
+        assert only_in_walkthrough == set()
+        assert only_in_phases == set()
+        phase_headings_in_order = [p["walkthrough_heading"] for p in phases]
+        assert phase_headings_in_order != headings, (
+            "Testaufbau fehlerhaft: die Fixture muss tatsaechlich vertauscht sein"
+        )
+
+    def test_unenumerated_expected_value_is_rejected(self) -> None:
+        """Regression fuer die Luecke im Review: 'expected' als freie Prosa
+        (z.B. 'wenn es passt') muss gegen das Vokabular durchfallen."""
+        assert "wenn es passt" not in ALLOWED_EXPECTED_VALUES
+        assert "filled" in ALLOWED_EXPECTED_VALUES
+        assert "checked" in ALLOWED_EXPECTED_VALUES
+        assert "checked_partial" in ALLOWED_EXPECTED_VALUES
 
     def test_matching_headings_and_phases_produce_no_drift(self) -> None:
         headings = ["1. Kontext einrichten", "2. Thema finden"]
