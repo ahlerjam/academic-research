@@ -16,6 +16,12 @@ Skills aktivieren sich selbst, sobald die passende Formulierung fällt — die B
 unten enthalten deshalb bewusst die realen Trigger-Phrasen aus der
 [Skills-Übersicht](../reference/skills.md). Commands rufst du dagegen explizit auf.
 
+Die verbindliche, maschinenlesbare Quelle dieser Reihenfolge ist
+[`config/workflow-phases.json`](../../config/workflow-phases.json) — dieselben 23 Phasen,
+je mit Vorbedingungen über `academic_context.md`-Felder, zuständigen Skills/Commands/Agents
+und Abschlusskriterium. Ein CI-Test hält beide Seiten synchron; diese Seite bleibt die
+menschenlesbare Sicht darauf.
+
 ## 1. Kontext einrichten
 
 ```
