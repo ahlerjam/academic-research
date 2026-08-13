@@ -77,7 +77,7 @@ blockt jeden Kapitel-Write, dessen Zitat dort nicht steht.
 
 ```mermaid
 graph LR
-    U[Du in Claude Code] --> C[12 Slash-Commands]
+    U[Du in Claude Code] --> C[13 Slash-Commands]
     U --> S[45 Skills<br/>selbstaktivierend]
     C --> A[29 Agents<br/>Subagents]
     S --> A
