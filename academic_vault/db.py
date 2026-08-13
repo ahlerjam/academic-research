@@ -196,7 +196,12 @@ VALID_CHUNK_CONTEXT_SOURCES = frozenset({"metadata", "model"})
 #      Grundlage fuer den Schreibweg `vault.enrich_chunk_contexts()` und die
 #      Bestandsabfrage `vault.pending_context_chunks()`. Migrationshelfer:
 #      `migrate.add_chunk_context_source_column()`.
-CURRENT_SCHEMA_VERSION = 15
+# 16 = paper_tables.confidence + paper_tables.detection (Issue #847): Pro-Tabelle-
+#      Signal statt eines einzigen PDF-weiten Status (`high`/`low`,
+#      `lines`/`text-strategy`). DEFAULT 'high'/'lines' fuer Bestandszeilen --
+#      sie sind ausnahmslos ueber den Linien-Pfad entstanden. Migrationshelfer:
+#      `migrate.add_paper_tables_confidence_columns()`.
+CURRENT_SCHEMA_VERSION = 16
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -226,6 +231,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
     ),
     "notes": frozenset({"page"}),
     "chunk_embeddings": frozenset({"section_title", "page_start", "page_end", "context_source"}),
+    "paper_tables": frozenset({"confidence", "detection"}),
 }
 
 # Tabellen, die `migrate.apply_pending_migrations()` auf einer Bestands-DB
@@ -1926,8 +1932,9 @@ class VaultDB:
                     """
                     INSERT INTO paper_tables
                       (table_id, paper_id, page, table_index, backend,
-                       n_rows, n_cols, bbox_json, rows_json, cells_json, extracted_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       n_rows, n_cols, bbox_json, rows_json, cells_json, extracted_at,
+                       confidence, detection)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(uuid4()),
@@ -1941,6 +1948,8 @@ class VaultDB:
                         json.dumps(table["rows"], ensure_ascii=False),
                         json.dumps(table["cells"], ensure_ascii=False),
                         now,
+                        table.get("confidence", "high"),
+                        table.get("detection", "lines"),
                     ),
                 )
         return len(tables)
@@ -1985,8 +1994,9 @@ class VaultDB:
 
         Returns:
             ``{"paper_id", "page", "table_index", "row", "col", "value", "bbox",
-            "backend", "evidence"}`` oder ``None``, wenn es die Zelle nicht
-            gibt. ``None`` statt eines Naeherungstreffers: ein geratener Beleg
+            "backend", "confidence", "detection", "evidence"}`` oder ``None``,
+            wenn es die Zelle nicht gibt. ``None`` statt eines Naeherungstreffers:
+            ein geratener Beleg
             waere schlimmer als gar keiner.
         """
         with self._connection() as conn:
@@ -2015,6 +2025,8 @@ class VaultDB:
                 "value": cell["value"],
                 "bbox": cell["bbox"],
                 "backend": str(found["backend"]),
+                "confidence": str(found["confidence"]),
+                "detection": str(found["detection"]),
                 "evidence": format_table_evidence(
                     paper_id, int(found["page"]), int(found["table_index"]), row, col
                 ),
