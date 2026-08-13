@@ -307,13 +307,13 @@ def test_get_table_cell_returns_none_for_merged_position(tmp_path):
     assert result["low_confidence_tables"] == 0  # high confidence
 
     # Aber get_table_cell() muss None zurückgeben für die geschluckte Position
-    cell = get_table_cell(db_path, paper_id, page=0, table_index=0, row=0, col=2)
+    cell = get_table_cell(db_path, paper_id, page=1, table_index=0, row=0, col=2)
     assert cell is None, (
         "Platzhalter-Zelle mit merged_into sollte None sein, nicht einen Beleg ohne Koordinaten"
     )
 
     # Echte Zellen sollten weiterhin einen Beleg liefern
-    header_cell = get_table_cell(db_path, paper_id, page=0, table_index=0, row=0, col=1)
+    header_cell = get_table_cell(db_path, paper_id, page=1, table_index=0, row=0, col=1)
     assert header_cell is not None
     assert header_cell["value"] == "Effekt"
     assert header_cell["bbox"] is not None
