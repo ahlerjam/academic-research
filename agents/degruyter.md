@@ -12,6 +12,9 @@ browser-guide: config/browser_guides/degruyter.md
 
 # degruyter
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst degruyter.com wie ein Mensch. Nur browser-use — kein curl, kein wget.
 
 **Lies zuerst:** `config/browser_guides/degruyter.md`
@@ -42,16 +45,14 @@ Wenn NICHT enthalten:
 
 ## Discovery-Flow
 
-1. ```
-   browser-use open https://www.degruyter.com
-   ```
+1. `new_tab("https://www.degruyter.com")`
 2. Suchfeld: Titel, ISBN oder DOI eingeben
-3. `browser-use state` → Filter "Content Type: Books" setzen
+3. Filter "Content Type: Books" setzen
 4. OA-Badge ("Open Access") in Ergebniszeile pruefen:
    - OA-Badge vorhanden → kein Auth-Trigger noetig
    - Kein OA-Badge → Auth moeglicherweise noetig (erst nach Klick pruefen)
 5. Auf Treffer klicken → Buchdetailseite
-6. Alternativ per DOI-Direktlink: `browser-use open https://doi.org/10.1515/...`
+6. Alternativ per DOI-Direktlink: `new_tab("https://doi.org/10.1515/...")`
 
 Bei 0 Treffern:
 ```json
@@ -60,7 +61,7 @@ Bei 0 Treffern:
 
 ## Paywall-Erkennung und Auth-Trigger
 
-Auf der Buchdetailseite `browser-use state` pruefen:
+Auf der Buchdetailseite den Seitenzustand (`page_info()`, `js(...)`) pruefen:
 
 **Auth-Trigger-Bedingungen** (eine davon genuegt):
 - "Sign in via institution" / "Ueber Institution anmelden"-Button sichtbar auf Buchseite
@@ -91,12 +92,9 @@ auth-helper gibt zurueck:
 
 Nach erfolgreicher Auth oder bei OA-Titel:
 
-1. `browser-use state` → "PDF herunterladen"-Button suchen (Buchseite `/book/<isbn>`)
+1. "PDF herunterladen"-Button ueber den AX-Baum suchen (Buchseite `/book/<isbn>`)
 2. Button gefunden:
-   ```
-   browser-use click <download-btn-idx>
-   browser-use download <pdf-idx> --to <output_path>
-   ```
+   Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`).
 3. PDF-Validierung: erste 4 Bytes `%PDF`, Groesse > 10 KB
 4. Falls Vollbuch-Download nicht verfuegbar, aber Kapitel-Download moeglich:
    - Kapitelweiser Fallback (jede Kapitelseite `/document/<doi>`)
