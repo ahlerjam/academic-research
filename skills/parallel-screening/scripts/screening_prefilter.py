@@ -143,6 +143,41 @@ def _criteria_section(text: str) -> str:
     return "\n".join(lines[start:end]) + "\n"
 
 
+# Publikationstypen aus verschiedenen Vokabularen auf kanonisches Format abbilden.
+# Kanonisches Format: CrossRef-Vokabular (z.B. "journal-article", "proceedings-article").
+_PUBLICATION_TYPE_MAPPING = {
+    # CrossRef-Vokabular (bereits kanonisch)
+    "journal-article": "journal-article",
+    "proceedings-article": "proceedings-article",
+    "book": "book",
+    "book-chapter": "book-chapter",
+    "report": "report",
+    "dataset": "dataset",
+    # OpenAlex-Vokabular (https://docs.openalex.org/api-entities/works/work-object#type)
+    "article": "journal-article",  # OpenAlex 'article' ist ein Journal-Artikel
+    "conference": "proceedings-article",
+    # Semantic Scholar-Vokabular (CamelCase)
+    "journalarticle": "journal-article",
+    "conferencepaper": "proceedings-article",
+    "review": "journal-article",
+}
+
+
+def _normalize_publication_type(value: Any) -> str | None:
+    """Normalisiere Publikationstyp aus verschiedenen Quellvokabularen.
+
+    Abbildet CrossRef, OpenAlex und Semantic Scholar Werte auf das kanonische
+    CrossRef-Format ab, damit der Allowlist-Vergleich unabhängig von der
+    Quelle funktioniert.
+    """
+    if value is None:
+        return None
+    normalized_key = str(value).strip().lower()
+    if not normalized_key:
+        return None
+    return _PUBLICATION_TYPE_MAPPING.get(normalized_key, normalized_key)
+
+
 def load_filters(text: str) -> dict[str, Any]:
     """Liest den ``screening_filters``-Block aus dem Kriterien-Abschnitt.
 
@@ -166,7 +201,15 @@ def load_filters(text: str) -> dict[str, Any]:
         return {}
     if not isinstance(data, dict):
         return {}
-    return {key: data[key] for key in KNOWN_FILTER_KEYS if data.get(key) is not None}
+    filters = {key: data[key] for key in KNOWN_FILTER_KEYS if data.get(key) is not None}
+    # Publikationstypen in der Allowlist auch normalisieren, damit der Vergleich
+    # unabhängig vom Eingabeformat (z.B. 'JournalArticle' vs 'journal-article') ist.
+    if "publication_types" in filters and isinstance(filters["publication_types"], (list, tuple)):
+        filters["publication_types"] = [
+            _normalize_publication_type(pt) or str(pt).strip().lower()
+            for pt in filters["publication_types"]
+        ]
+    return filters
 
 
 def load_filters_from_file(path: str | Path | None) -> dict[str, Any]:
@@ -264,8 +307,11 @@ def _rule_violation(paper: dict[str, Any], filters: dict[str, Any]) -> tuple[str
     detail = _check_allowlist(paper.get("language"), filters.get("languages"), "Sprache")
     if detail:
         return CRITERION_LANGUAGE, detail
+    # Publikationstyp vor dem Vergleich normalisieren, um verschiedene Quellvokabulare
+    # (CrossRef, OpenAlex, Semantic Scholar) einheitlich zu behandeln.
+    normalized_pub_type = _normalize_publication_type(paper.get("publication_type"))
     detail = _check_allowlist(
-        paper.get("publication_type"), filters.get("publication_types"), "Publikationstyp"
+        normalized_pub_type, filters.get("publication_types"), "Publikationstyp"
     )
     if detail:
         return CRITERION_PUBLICATION_TYPE, detail

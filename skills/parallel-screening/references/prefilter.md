@@ -49,6 +49,12 @@ OpenAlex über `language`/`type`, Semantic Scholar über `publicationTypes[0]`,
 arXiv fest als `preprint`. Module ohne diese Felder liefern `None` — und
 `None` schließt nie aus.
 
+**Vocabular-Normalisierung:** Die Publikationstypen stammen aus verschiedenen
+Quell-Vocabularen (CrossRef: `journal-article`, OpenAlex: `article`, Semantic
+Scholar: `JournalArticle`). Der Filter normalisiert alle auf das kanonische
+CrossRef-Format vor dem Allowlist-Vergleich (siehe `_PUBLICATION_TYPE_MAPPING`
+im Skript) — dadurch wird der Vergleich unabhängig von der Quelle.
+
 ## Fail-open, in beide Richtungen
 
 1. **Kein Filterblock** → `apply_filters` gibt die Eingabe unverändert zurück,
