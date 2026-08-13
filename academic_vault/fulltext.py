@@ -63,29 +63,69 @@ BACKENDS = ("auto", "grobid", "pypdf")
 # und danach optionaler Leerraum, dann GENAU EIN Zeilenumbruch (ein
 # Absatzumbruch "\n\n" matcht nicht -- die negative Lookahead-Gruppe
 # verhindert das), danach wieder optionaler Leerraum und ein Buchstabe.
-_HYPHEN_LINEBREAK_RE = re.compile(r"(?P<letter>[^\W\d_])-[ \t]*\n(?!\n)[ \t]*(?P<next>[^\W\d_])")
+_HYPHEN_LINEBREAK_RE = re.compile(r"(?P<letter>[^\W\d_])-[ \t]*\n(?!\n)[ \t]*(?P<word>[^\W\d_]+)")
+
+# Deutsche Funktionswörter, die eine Silbentrennung widersprechen.
+# Eine Silbe endet nie mit einem eigenständigen Funktionswort; falls das
+# Regex einen Umbruch am Bindestrich mit Funktionswort-Fortsatz erkennt,
+# ist es ein echter Bindestrich (z. B. "Ein- und Ausschlusskriterien"),
+# keine Silbentrennung.
+_FUNCTION_WORDS = {
+    "und",
+    "oder",
+    "bzw",
+    "sowie",
+    "wie",
+    "als",
+    "aber",
+    "doch",
+    "sondern",
+    "noch",
+    "entweder",
+    "da",
+    "weil",
+    "obwohl",
+    "wenn",
+    "falls",
+    "solange",
+    "bis",
+    "nachdem",
+    "bevor",
+    "kaum",
+    "ehe",
+    "damit",
+    "sodass",
+    "weshalb",
+    "um",
+    "zu",
+    "statt",
+    "anstatt",
+}
 
 
 def _merge_hyphenation(text: str) -> str:
     """Loest Silbentrennungen am Zeilenumbruch auf, echte Bindestriche bleiben stehen.
 
-    Entscheidungsregel (#897, siehe Plan-Kommentar im Issue): beginnt der
-    Fortsatz nach dem Umbruch kleingeschrieben, wird zusammengefuehrt
-    (``"In-\\nequality"`` -> ``"Inequality"``). Beginnt er grossgeschrieben,
-    bleibt es beim bisherigen Verhalten (Bindestrich + Leerzeichen aus dem
-    generischen Whitespace-Collapse) -- Grossschreibung nach einem Umbruch ist
-    im Regelfall ein Satzanfang oder Eigenname, keine Silbentrennung. Ein am
-    Umbruch getrenntes Kompositum wie ``"Multi-\\nAgent"`` bleibt damit bewusst
-    als ``"Multi- Agent"`` stehen -- eine hier ungenaue Regel wuerde haeufiger
-    falsch verschmelzen als richtig trennen.
+    Entscheidungsregel (#897, siehe Plan-Kommentar im Issue): Der Fortsatz
+    nach dem Umbruch wird dann zusammengefuehrt, wenn:
+    1. Er kleingeschrieben beginnt UND
+    2. Er kein eigenstaendiges Funktionswort ist (z. B. "und", "oder", "bzw").
+
+    Beispiele:
+    - "In-\\nequality" -> "Inequality" (zusammengeführt)
+    - "Ein-\\nund" -> "Ein- und" (bleibt, ist Funktionswort)
+    - "Multi-\\nAgent" -> "Multi- Agent" (bleibt, grossgeschrieben)
     """
 
     def _replace(match: re.Match[str]) -> str:
         letter = match.group("letter")
-        nxt = match.group("next")
-        if nxt.islower():
-            return f"{letter}{nxt}"
-        return f"{letter}- {nxt}"
+        word = match.group("word")
+        first_char = word[0]
+
+        # Nur zusammenführen, wenn klein UND kein Funktionswort
+        if first_char.islower() and word.lower() not in _FUNCTION_WORDS:
+            return f"{letter}{word}"
+        return f"{letter}- {word}"
 
     return _HYPHEN_LINEBREAK_RE.sub(_replace, text)
 

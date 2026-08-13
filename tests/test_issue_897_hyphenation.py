@@ -95,6 +95,20 @@ class TestMergeHyphenation:
         result = fulltext_mod.normalize_whitespace("In-  \n  equality")
         assert result == "Inequality"
 
+    def test_function_words_prevent_hyphenation_merge(self):
+        """AC5 Regression: Funktionswörter nach Umbruch bleiben verbunden mit Bindestrich.
+
+        "Ein-\nund" ist keine Silbentrennung, sondern ein echter Bindestrich
+        in einer Listenaufzählung. Der Fortsatz "und" ist ein Funktionswort,
+        das nie am Ende einer Silbe steht — nicht verschmelzen.
+        """
+        result = fulltext_mod.normalize_whitespace("Ein-\nund Ausschlusskriterien")
+        assert result == "Ein- und Ausschlusskriterien"
+        # Weitere Funktionswörter auch testen
+        assert fulltext_mod.normalize_whitespace("Vor-\nund Nachteile") == "Vor- und Nachteile"
+        # "amerikanisch" ist KEIN Funktionswort — wird verschmolzen
+        assert fulltext_mod.normalize_whitespace("US-\namerikanisch") == "USamerikanisch"
+
 
 # ---------------------------------------------------------------------------
 # AC4 — Integrationstest ueber extract_pypdf() auf der Fixture
