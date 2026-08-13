@@ -2016,6 +2016,11 @@ class VaultDB:
         for cell in json.loads(found["cells_json"]):
             if cell["row"] != row or cell["col"] != col:
                 continue
+            # Platzhalter-Zellen (geschluckt durch merging) haben kein Beleg-Recht —
+            # ein Beleg ohne Koordinaten ist keiner (Issue #630 AC2). Diese Zellen
+            # signalisieren nur die Lücke; sie sind nicht anquotierbar.
+            if cell.get("merged_into") is not None:
+                return None
             return {
                 "paper_id": paper_id,
                 "page": int(found["page"]),

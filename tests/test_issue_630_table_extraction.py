@@ -292,6 +292,35 @@ def test_merged_header_fixture_result_is_pinned():
 
 
 @requires_backend
+def test_get_table_cell_returns_none_for_merged_position(tmp_path):
+    """Regression-Test (#847 P1): Platzhalter-Zellen (merged_into) sind keine Belege.
+
+    get_table_cell() muss None zurückgeben für eine geschluckte Position (row=0,
+    col=2 auf merged_header.pdf), nicht einen Beleg ohne Koordinaten. Ein Beleg
+    auf eine Zelle ohne value/bbox ist keiner.
+    """
+    db_path, paper_id = _make_paper(tmp_path, MERGED_HEADER_PDF)
+    result = extract_tables_for_paper(db_path, paper_id)
+    assert result["status"] == tables_mod.STATUS_OK
+
+    # Die merged-Position sollte in extract_tables korrekt als Platzhalter erscheinen
+    assert result["low_confidence_tables"] == []  # high confidence
+
+    # Aber get_table_cell() muss None zurückgeben für die geschluckte Position
+    cell = get_table_cell(db_path, paper_id, page=0, table_index=0, row=0, col=2)
+    assert cell is None, (
+        "Platzhalter-Zelle mit merged_into sollte None sein, nicht einen Beleg ohne Koordinaten"
+    )
+
+    # Echte Zellen sollten weiterhin einen Beleg liefern
+    header_cell = get_table_cell(db_path, paper_id, page=0, table_index=0, row=0, col=1)
+    assert header_cell is not None
+    assert header_cell["value"] == "Effekt"
+    assert header_cell["bbox"] is not None
+    assert header_cell["evidence"] is not None
+
+
+@requires_backend
 def test_gridless_table_is_found_via_text_strategy_fallback():
     """Gitterlinienlose Tabelle: kein Linien-Pfad, Text-Strategie-Fallback greift (#847 AC1)."""
     result = tables_mod.extract_tables(str(GRIDLESS_TABLE_PDF))
