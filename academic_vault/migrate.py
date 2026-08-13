@@ -1080,6 +1080,64 @@ def backfill_fulltext(
     return {"filled": filled, "skipped": skipped, "errors": errors}
 
 
+def reextract_fulltext(
+    db_path: str,
+    limit: int | None = None,
+    backend: str = "auto",
+) -> dict:
+    """Extrahiert den Volltext aller Paper NEU, die BEREITS eine Zeile in
+    ``paper_fulltext`` haben (Issue #897).
+
+    Anders als :func:`backfill_fulltext` (nur Luecken) ist das hier der
+    Massen-Nachlauf fuer bereits im Vault liegende Volltexte: die Aufloesung
+    von Silbentrennungen am Zeilenumbruch (``fulltext.normalize_whitespace``)
+    greift erst bei einer NEUEN Extraktion. Ohne diesen Pfad bliebe der
+    bestehende Korpus dauerhaft mit den alten Artefakten (`"In- equality"`
+    statt `"Inequality"`) stehen.
+
+    Schreibt wie ``backfill_fulltext`` ausschliesslich nach ``paper_fulltext``
+    und ``papers_fts`` -- ``papers`` (inkl. ``updated_at``) und ``quotes``
+    bleiben unveraendert. Idempotent: ein zweiter Lauf extrahiert erneut
+    (deterministisch dasselbe Ergebnis), ueberschreibt aber nichts anderes.
+
+    Args:
+        db_path: Pfad zur Vault-DB.
+        limit: Maximale Anzahl Paper pro Lauf (``None`` = alle).
+        backend: Extraktions-Backend, siehe ``fulltext.extract_fulltext``.
+
+    Returns:
+        ``{"fixed": int, "skipped": int, "errors": int}``. ``skipped`` zaehlt
+        PDFs, aus denen kein Text mehr gewonnen wurde (z. B. Datei inzwischen
+        ein Scan), ``errors`` fehlende/defekte Dateien.
+    """
+    from academic_vault.db import VaultDB
+    from academic_vault.fulltext import extract_fulltext
+
+    db = VaultDB(db_path)
+    fixed = 0
+    skipped = 0
+    errors = 0
+
+    for candidate in db.papers_with_fulltext(limit=limit):
+        paper_id = candidate["paper_id"]
+        pdf_path = candidate["pdf_path"]
+        try:
+            text, extractor = extract_fulltext(pdf_path, backend=backend)
+        except Exception as exc:
+            print(f"[ERROR] Re-Extraktion '{paper_id}': {exc}", file=sys.stderr)
+            errors += 1
+            continue
+        if not text:
+            skipped += 1
+            continue
+        if db.set_fulltext(paper_id, text, extractor):
+            fixed += 1
+        else:  # pragma: no cover - text ist hier nachweislich nicht leer
+            skipped += 1
+
+    return {"fixed": fixed, "skipped": skipped, "errors": errors}
+
+
 def backfill_quote_embeddings(
     db_path: str,
     limit: int | None = None,
@@ -1239,6 +1297,13 @@ def main() -> None:
         "quote_embeddings-Eintrag nachtragen (#521)",
     )
     parser.add_argument(
+        "--reextract-fulltext",
+        action="store_true",
+        help="Statt der Seed-Migration: PDF-Volltexte fuer Bestands-Paper, die "
+        "BEREITS einen (ggf. artefaktbehafteten) Volltext-Eintrag haben, neu "
+        "extrahieren -- Nachlauf fuer die Silbentrennungs-Aufloesung (#897)",
+    )
+    parser.add_argument(
         "--reindex-embeddings",
         action="store_true",
         help="Statt der Seed-Migration: alle Vektoren mit dem aktuell konfigurierten "
@@ -1249,7 +1314,8 @@ def main() -> None:
         "--limit",
         type=int,
         default=None,
-        help="Obergrenze fuer --backfill-fulltext/--backfill-quote-embeddings (default: alle)",
+        help="Obergrenze fuer --backfill-fulltext/--backfill-quote-embeddings/"
+        "--reextract-fulltext (default: alle)",
     )
     parser.add_argument(
         "--pdf-dir",
@@ -1272,6 +1338,19 @@ def main() -> None:
         print(
             f"Volltext-Backfill abgeschlossen: "
             f"filled={stats['filled']}, "
+            f"skipped={stats['skipped']}, "
+            f"errors={stats['errors']}"
+        )
+        return
+
+    if args.reextract_fulltext:
+        if not Path(args.db).exists():
+            print(f"[ERROR] Vault-DB nicht gefunden: {args.db}", file=sys.stderr)
+            sys.exit(1)
+        stats = reextract_fulltext(args.db, limit=args.limit)
+        print(
+            f"Volltext-Re-Extraktion abgeschlossen: "
+            f"fixed={stats['fixed']}, "
             f"skipped={stats['skipped']}, "
             f"errors={stats['errors']}"
         )
@@ -1308,7 +1387,11 @@ def main() -> None:
         return
 
     if not args.state:
-        print("[ERROR] --state ist ohne --backfill-fulltext Pflicht", file=sys.stderr)
+        print(
+            "[ERROR] --state ist ohne --backfill-fulltext/--reextract-fulltext/"
+            "--backfill-quote-embeddings/--reindex-embeddings Pflicht",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     if not Path(args.state).exists():
