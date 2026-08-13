@@ -144,16 +144,16 @@ sources:
     type: paper
     doi: "10.48550/arXiv.2303.08774"
     title: "GPT-4 Technical Report"
-    expected_tier: arxiv
+    expected_tier: arxiv_direct
     expected_hit: true
     domain: general
-    notes: "arXiv — direkter Tier-5-Treffer erwartet"
+    notes: "arXiv — direkter Tier-0-Treffer erwartet"
 
   - id: general-02
     type: paper
     doi: "10.48550/arXiv.1706.03762"
     title: "Attention Is All You Need"
-    expected_tier: arxiv
+    expected_tier: arxiv_direct
     expected_hit: true
     domain: general
     notes: "Transformer-Paper — arXiv"
@@ -162,7 +162,7 @@ sources:
     type: paper
     doi: "10.48550/arXiv.2005.14165"
     title: "Language Models are Few-Shot Learners"
-    expected_tier: arxiv
+    expected_tier: arxiv_direct
     expected_hit: true
     domain: general
     notes: "GPT-3 — arXiv"
@@ -198,7 +198,7 @@ sources:
     type: paper
     doi: "10.48550/arXiv.2204.01691"
     title: "Training language models to follow instructions with human feedback"
-    expected_tier: arxiv
+    expected_tier: arxiv_direct
     expected_hit: true
     domain: general
     notes: "InstructGPT — arXiv OA"
