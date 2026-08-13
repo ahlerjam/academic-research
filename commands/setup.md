@@ -15,20 +15,43 @@ Vollständiges Setup über das zentrale Installationsskript. Ein Aufruf, alle Ab
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh $ARGUMENTS
 ```
 
-Das Skript übernimmt in acht Schritten:
+Das Skript übernimmt in zehn Schritten:
 
 1. Legt `~/.academic-research/{sessions,pdfs,venv}` an.
 2. Erstellt die Python-venv und installiert `httpx`, `pypdf`, `pyyaml`, `openpyxl` (aus `scripts/requirements.txt`).
 3. Prüft, ob `browser-use` CLI vorhanden ist. Falls nicht: installiert automatisch via `uv tool install` oder `pipx install`, sofern eines der beiden Tools vorhanden ist. Führt anschließend `browser-use doctor` aus.
-4. Prüft, ob der globale `browser-use` Claude-Skill unter `~/.claude/skills/browser-use/` liegt.
-4a. Prüft, ob der `humanizer-de`-Skill unter `~/.codex/skills/humanizer-de/`
+4. **Chrome-Verbindungsweg einrichten (#907).** Ermittelt einmalig über
+   `scripts/browser_connection_setup.py --setup`, wie `browser-use` den
+   Browser erreicht, und vermerkt das Ergebnis in
+   `~/.academic-research/browser_connection.json` — ein späterer Lauf
+   handelt den Weg nicht neu aus. Zwei Wege:
+   - **Lokales Chrome** (`local_chrome`, Default): braucht i. d. R. einen
+     einmaligen Klick auf „Allow" im Chrome-Berechtigungsdialog
+     (`chrome://inspect/#remote-debugging`); danach hält die Verbindung, bis
+     Chrome sie von sich aus wieder schließt.
+   - **Cloud-Browser** (`cloud`, optional, kostenpflichtig): kein Klick
+     nötig, setzt `browser-use auth login` voraus. Wird **nie** automatisch
+     gewählt — nur bei explizitem interaktivem Opt-in (Option 2 im Prompt).
+     Bei nicht-interaktivem stdin (z. B. dieser `/setup`-Aufruf durch Claude
+     Code, oder CI) gilt immer der sichere Default `local_chrome`, ohne
+     Rückfrage.
+   Ist bereits ein Weg vermerkt (idempotenter Re-Lauf), wird nicht erneut
+   gefragt: `✅ Browser-Verbindungsweg bereits eingerichtet: <weg>`. Fehlt die
+   `browser-use` CLI (Schritt 3), entfällt dieser Schritt mit einer Warnung,
+   kein Hard-Fail. Vor dem ersten Browser-Modul eines Suchlaufs prüft
+   `scripts/browser_preflight.py` diesen vermerkten Weg erneut (siehe
+   `commands/search.md` Schritt 4) — ohne eingerichteten Weg ist
+   `--mode deep` **nicht** unbeaufsichtigt lauffähig, siehe
+   [troubleshooting.md](../docs/guide/troubleshooting.md).
+5. Prüft, ob der globale `browser-use` Claude-Skill unter `~/.claude/skills/browser-use/` liegt.
+5a. Prüft, ob der `humanizer-de`-Skill unter `~/.codex/skills/humanizer-de/`
     global installiert ist. Dieser Skill ist im Plugin bereits vendoriert
     (`skills/humanizer-de/`) und damit immer verfügbar. Der globale Check
     gilt für eigenständige Nutzung außerhalb des Plugins.
     - Gefunden: `✅ humanizer-de Skill (global): vorhanden`
     - Nicht gefunden: `⚠️ humanizer-de Skill (global): nicht gefunden — für eigenständige Nutzung installieren: https://github.com/marmbiz/humanizer-de`
     (kein Hard-Fail — der vendorierte Skill im Plugin bleibt funktionsfähig)
-5. **Claude-Code-Permissions (benutzerweit, nicht projektbezogen).** Zeigt die
+6. **Claude-Code-Permissions (benutzerweit, nicht projektbezogen).** Zeigt die
    neu zu setzenden Regeln über `scripts/configure_permissions.py` an und
    schreibt sie erst nach Bestätigung nach `~/.claude/settings.local.json` —
    diese Datei gilt für **alle** Claude-Code-Projekte auf dem Rechner, nicht
@@ -61,9 +84,9 @@ Das Skript übernimmt in acht Schritten:
    Läuft `setup.sh` dagegen direkt in einem echten Terminal (nicht über
    Claude Code), fragt `configure_permissions.py` bereits selbst interaktiv
    nach — dieses zusätzliche Gate entfällt dann.
-6. **Projekt-Bootstrap (Auto-Detect).** Wenn das aktuelle Verzeichnis ein leerer Ordner ist, fragt `/setup` `"Hier einen Facharbeit-Arbeitsordner initialisieren?"`. Bei `y` werden `academic_context.md` (Stub), `CLAUDE.md`, `.gitignore`, sowie `kapitel/`, `literatur/`, `pdfs/` angelegt. In einem bestehenden Facharbeit-Ordner (mit `academic_context.md`) werden nur fehlende Artefakte nachgezogen — idempotent, keine Rückfrage. In Code-Repos (erkannt an `package.json`, `pyproject.toml`, …) oder nicht-leeren fremden Verzeichnissen: keine Aktion. Findet der Bootstrap zusätzlich bestehenden Kontext in Claude-Memory, bietet er an, ihn einmalig ins Projekt zu kopieren; die Memory-Dateien bleiben als Backup liegen.
-7. **Uni-Profil-Setup (F16.5).** Mit `--uni <profil>` (z.B. `/academic-research:setup --uni tum`) wird `config/library-profiles/<profil>.yaml` nicht-interaktiv nach `~/.academic-research/library-profiles/active.yaml` kopiert. Ohne `--uni` fragt das Skript interaktiv (Opt-in), ob jetzt ein Hochschul-Profil gewählt werden soll — bei Zustimmung folgt eine nummerierte Profil-Auswahl. Bei Opt-out oder nicht-interaktivem stdin (z.B. CI) bleibt das aktive Profil leer/Default, ohne Fehler. Verfügbare Profile: siehe [Per-Uni-Profile](../docs/reference/uni-profiles.md). Hinweis: Ein unbekannter `--uni`-Wert bricht das Setup ab (`set -euo pipefail`).
-8. **SciHub Opt-in (F18).** Das Skript fragt am Ende:
+7. **Projekt-Bootstrap (Auto-Detect).** Wenn das aktuelle Verzeichnis ein leerer Ordner ist, fragt `/setup` `"Hier einen Facharbeit-Arbeitsordner initialisieren?"`. Bei `y` werden `academic_context.md` (Stub), `CLAUDE.md`, `.gitignore`, sowie `kapitel/`, `literatur/`, `pdfs/` angelegt. In einem bestehenden Facharbeit-Ordner (mit `academic_context.md`) werden nur fehlende Artefakte nachgezogen — idempotent, keine Rückfrage. In Code-Repos (erkannt an `package.json`, `pyproject.toml`, …) oder nicht-leeren fremden Verzeichnissen: keine Aktion. Findet der Bootstrap zusätzlich bestehenden Kontext in Claude-Memory, bietet er an, ihn einmalig ins Projekt zu kopieren; die Memory-Dateien bleiben als Backup liegen.
+8. **Uni-Profil-Setup (F16.5).** Mit `--uni <profil>` (z.B. `/academic-research:setup --uni tum`) wird `config/library-profiles/<profil>.yaml` nicht-interaktiv nach `~/.academic-research/library-profiles/active.yaml` kopiert. Ohne `--uni` fragt das Skript interaktiv (Opt-in), ob jetzt ein Hochschul-Profil gewählt werden soll — bei Zustimmung folgt eine nummerierte Profil-Auswahl. Bei Opt-out oder nicht-interaktivem stdin (z.B. CI) bleibt das aktive Profil leer/Default, ohne Fehler. Verfügbare Profile: siehe [Per-Uni-Profile](../docs/reference/uni-profiles.md). Hinweis: Ein unbekannter `--uni`-Wert bricht das Setup ab (`set -euo pipefail`).
+9. **SciHub Opt-in (F18).** Das Skript fragt am Ende:
 
    ```
    SciHub-Tier aktivieren? (Rechtlich umstritten — Nutzung auf deine eigene Verantwortung)
@@ -82,6 +105,9 @@ Das Skript übernimmt in acht Schritten:
 |--------|-----------|
 | ✅ Python environment: ready | venv + requirements.txt erfolgreich installiert |
 | ✅ browser-use CLI: ready | CLI vorhanden und `browser-use doctor` meldet keinen Fehler |
+| ✅ Browser-Verbindungsweg vermerkt: local_chrome | Chrome-Verbindung ist gerade aktiv, Weg gespeichert |
+| ⚠️ Browser-Verbindungsweg vermerkt: local_chrome (Chrome-Berechtigung aktuell nicht aktiv …) | Weg gespeichert, aber der einmalige „Allow"-Klick steht (noch) aus — betrifft nur den nächsten Browser-Lauf, nicht das Setup selbst |
+| ✅ Browser-Verbindungsweg bereits eingerichtet: \<weg\> | Idempotenter Re-Lauf — kein erneutes Fragen |
 | ✅ browser-use Claude-Skill: vorhanden | Skill unter `~/.claude/skills/browser-use/` |
 | ✅ humanizer-de Skill (global): vorhanden | Skill global unter `~/.codex/skills/humanizer-de/` installiert |
 | ⚠️ humanizer-de Skill (global): nicht gefunden | Nur vendorierter Plugin-Skill verfügbar (ausreichend für Plugin-Nutzung) |
@@ -104,5 +130,6 @@ Das Skript ist idempotent. Ein zweiter Aufruf:
 - erstellt kein zweites venv, installiert nur fehlende Pakete
 - überspringt die `browser-use` CLI-Installation, wenn bereits installiert
 - wiederholt `browser-use doctor` (harmlos, aktualisiert den Status)
+- fragt beim Chrome-Verbindungsweg (#907) nicht erneut, wenn bereits einer vermerkt ist — Nachholen/Ändern: `python3 scripts/browser_connection_setup.py --setup --force`
 - überschreibt keine Seed-Dateien
 - fügt Permissions nur hinzu, wenn sie noch nicht in `~/.claude/settings.local.json` stehen

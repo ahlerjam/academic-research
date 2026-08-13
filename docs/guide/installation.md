@@ -168,17 +168,26 @@ Der Command ruft `scripts/setup.sh`. Was dabei passiert (in dieser Reihenfolge):
    Zusatzschritt mit.
 4. Installiert die `browser-use`-CLI via `uv tool install` oder `pipx install` — sofern
    eines von beiden vorhanden ist.
-5. Prüft, ob der globale `browser-use`-Claude-Skill unter `~/.claude/skills/browser-use/`
+5. **Chrome-Verbindungsweg einrichten (#907).** Ermittelt einmalig, wie
+   `browser-use` den Browser erreicht (lokales Chrome mit einmaligem
+   „Allow"-Klick, oder — nur bei explizitem Opt-in — ein kostenpflichtiger
+   Cloud-Browser), und vermerkt das Ergebnis unter
+   `~/.academic-research/browser_connection.json`. Ohne diesen eingerichteten
+   Weg ist `--mode deep` **nicht unbeaufsichtigt** lauffähig: der erste
+   Browser-Lauf ohne Weg bricht kontrolliert mit einer Handlungsanweisung ab,
+   statt mit `permission-blocked` mitten im Modul-Loop zu hängen (siehe
+   [troubleshooting.md](troubleshooting.md)).
+6. Prüft, ob der globale `browser-use`-Claude-Skill unter `~/.claude/skills/browser-use/`
    liegt (wird separat von Anthropic bereitgestellt, nicht Teil dieses Plugins).
-6. Zeigt die neu zu setzenden Claude-Code-Permissions an und trägt sie erst
+7. Zeigt die neu zu setzenden Claude-Code-Permissions an und trägt sie erst
    nach Bestätigung in `~/.claude/settings.local.json` ein (siehe Hinweis
    unten).
-7. Fragt (bei leerem Ordner): *„Hier einen Facharbeit-Arbeitsordner initialisieren?"*
-8. Fragt nach dem **SciHub-Tier** — Default ist *aus*.
+8. Fragt (bei leerem Ordner): *„Hier einen Facharbeit-Arbeitsordner initialisieren?"*
+9. Fragt nach dem **SciHub-Tier** — Default ist *aus*.
 
 Das Setup ist **idempotent**: mehrfach aufrufbar, ohne etwas zu zerstören.
 
-> **Schritt 6 ist benutzerweit, nicht projektbezogen:** `~/.claude/settings.local.json`
+> **Schritt 7 ist benutzerweit, nicht projektbezogen:** `~/.claude/settings.local.json`
 > gilt für **alle** Claude-Code-Projekte auf diesem Rechner, nicht nur für
 > academic-research. Das Setup zeigt deshalb die einzelnen neuen Regeln vor
 > dem Schreiben an (`scripts/configure_permissions.py`) und schreibt erst nach
@@ -195,7 +204,7 @@ Das Setup ist **idempotent**: mehrfach aufrufbar, ohne etwas zu zerstören.
 > `~/.claude/settings.local.json` manuell entfernen (oder — falls dort keine
 > anderen Projekt-Berechtigungen stehen — die ganze Datei löschen).
 
-> **Stolperstelle:** Schritt 7 und 8 sind interaktive Fragen. Läuft `setup.sh` ohne
+> **Stolperstelle:** Schritt 8 und 9 sind interaktive Fragen. Läuft `setup.sh` ohne
 > Terminal (Pipe, CI), greift jeweils der sichere Default — der Arbeitsordner wird dann
 > **nicht** angelegt und SciHub bleibt aus. In Claude Code ist das kein Thema; wer das
 > Skript direkt aus einem Skript heraus aufruft, sollte es wissen. Belegt im
@@ -203,7 +212,7 @@ Das Setup ist **idempotent**: mehrfach aufrufbar, ohne etwas zu zerstören.
 
 ### Was der Arbeitsordner enthält
 
-Nach `y` auf die Frage aus Schritt 7 liegt im **User-Projektordner** (nicht im
+Nach `y` auf die Frage aus Schritt 8 liegt im **User-Projektordner** (nicht im
 Plugin-Repo):
 
 ```

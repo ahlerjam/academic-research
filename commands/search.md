@@ -82,6 +82,28 @@ Default-Werte automatisch.
 
 ### Schritt 4: Browser-Suche (standard-/deep-Modus, falls nicht `--no-browser`)
 
+#### Preflight vor dem ersten Browser-Modul (#907)
+
+Bevor irgendein Browser-Modul startet — auch vor dem Consent-Gate unten —
+wird die Chrome-Verbindung billig geprüft, statt mittendrin mit
+`permission-blocked` abzubrechen:
+
+```bash
+~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/browser_preflight.py
+```
+
+- **Exit 0:** Verbindung steht, weiter mit dem Consent-Gate/Modul-Loop unten.
+- **Exit ≠ 0:** stdout enthält eine konkrete Handlungsanweisung (welcher
+  Dialog zu bestätigen ist, die Cloud-Browser-Alternative, wie der Lauf
+  fortgesetzt wird — nicht nur `permission-blocked`). Der komplette
+  Browser-Teil (alle Module aus 1./2. unten) wird für diesen Lauf
+  übersprungen; im Ergebnis-Digest vermerken, welche Module deshalb nicht
+  liefen. Die 7 API-Module aus Schritt 3 sind davon unberührt und laufen wie
+  geplant weiter — Schritt 5 (Deduplikation) folgt direkt im Anschluss.
+  Ohne eingerichteten Verbindungsweg (`/academic-research:setup`, Schritt 4)
+  ist `--mode deep` **nicht unbeaufsichtigt** lauffähig — dieser Preflight
+  ist der Punkt, an dem das sichtbar wird, statt später im Modul-Loop.
+
 Für jedes Browser-Modul in fester Reihenfolge:
 
 1. **No-Auth zuerst:** `google_scholar` → `springer` → `oecd` → `repec`
@@ -138,6 +160,16 @@ Pro Modul:
    - CAPTCHA erkannt → `browser-use screenshot` machen, User informieren, Teilergebnisse behalten.
    - Login schlägt fehl → Modul überspringen, Warnung loggen, mit nächstem Modul weitermachen.
    - Rate-Limit → 30s Pause, einmal wiederholen, dann Modul überspringen.
+   - **Verbindungsabbruch (#907):** Bricht die Chrome-Verbindung mitten im
+     Modul-Loop weg (z. B. `permission-blocked` oder eine vergleichbare
+     Fehlermeldung von `browser-use`, obwohl der Preflight oben noch grün
+     war), wird der Browser-Teil an dieser Stelle abgebrochen — nicht
+     Modul für Modul weiter versucht. Das Ergebnis nennt explizit, welche
+     Browser-Module noch **nicht** liefen (die verbleibenden Einträge aus
+     1./2. oben), zusätzlich zu den Modulen, die vor dem Abbruch bereits
+     Treffer geliefert haben. Der übrige Lauf (Deduplikation, Ranking,
+     Scoring) läuft danach regulär mit den bis dahin gesammelten Ergebnissen
+     weiter — er bricht nicht mit ab.
 
 Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
 
