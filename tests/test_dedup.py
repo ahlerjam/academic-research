@@ -1,10 +1,18 @@
 """Tests for dedup.py — paper deduplication."""
 
+import gzip
 import itertools
+import json
+import os
 import random
+import subprocess
+import sys
 import time
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Any
+
+import pytest
 
 from dedup import _canonical_sort_key, _length_bound_ok, deduplicate, merge_group
 from text_utils import normalize_doi
@@ -903,9 +911,12 @@ def _generate_near_duplicate_titles(
     count: int, vocab: list[str], seed: int, min_words: int = 2, max_words: int = 12
 ) -> list[str]:
     """Synthetische Titelmenge mit ~30% Near-Duplicate-Clustern (ein Wort
-    ersetzt) — dasselbe Muster wie die reale 12.08.2026-Messung, aber ohne
-    reale Treffermenge im Repo (#890, es existiert keine solche Fixture;
-    siehe PR-Beschreibung/Plan-Kommentar #890)."""
+    ersetzt) — dasselbe Muster wie die reale 12.08.2026-Messung, aber frei
+    skalierbar und ohne Fixture-Ladezeit. Der Abgleich auf der REALEN
+    Treffermenge vom 12.08.2026 steht in
+    `test_dedup_real_hitset_2026_08_12_matches_pre_890_output` (#890 AC3);
+    die synthetischen Mengen ergaenzen ihn um viele unabhaengige Stichproben,
+    sie ersetzen ihn nicht mehr."""
     rng = random.Random(seed)
 
     def random_title(word_count: int) -> str:
@@ -981,14 +992,13 @@ def test_dedup_blocking_loses_no_merge_vs_brute_force():
 
 
 def test_dedup_blocking_loses_no_merge_vs_brute_force_multi_seed():
-    """AC3-Aequivalenztest, verschaerft: Es existiert keine reale
-    12.08.2026-Treffermenge im Repo (weder unter tests/fixtures/ noch unter
-    docs/evals/ — geprueft, siehe PR-Diskussion zu #890), daher ist eine
-    Brute-Force-Aequivalenzpruefung auf synthetischen Daten der bestmoegliche
-    ehrliche Ersatz. Um das Risiko zu senken, dass ein einzelner 80-Titel-
-    Lauf einen Blocking-Fehler verdeckt, laufen hier drei unabhaengige Seeds
-    bei 300 Titeln (mehr Near-Duplicate-Cluster, breitere Laengenstreuung)
-    gegen dieselbe Brute-Force-Referenz."""
+    """AC3-Aequivalenztest, verschaerft: drei unabhaengige Seeds bei 300
+    Titeln (mehr Near-Duplicate-Cluster, breitere Laengenstreuung) gegen
+    dieselbe Brute-Force-Referenz — damit kein einzelner Lauf einen
+    Blocking-Fehler verdecken kann. Ergaenzung zum Abgleich auf der realen
+    12.08.2026-Treffermenge
+    (`test_dedup_real_hitset_2026_08_12_matches_pre_890_output`), der die
+    woertliche AC3-Pruefung leistet."""
     for seed in (11, 23, 42):
         titles = _generate_near_duplicate_titles(300, _DEVOPS_VOCAB, seed=seed)
         _assert_blocking_matches_brute_force(titles)
@@ -1028,3 +1038,120 @@ def test_dedup_blocking_performance_2000_titles_ac1():
     elapsed = time.monotonic() - start
 
     assert elapsed < 10.0, f"2000 Titel dauerten {elapsed:.1f}s (Ziel < 30s, CI-Schranke 10s)"
+
+
+def test_dedup_blocking_keeps_pair_exactly_on_the_length_bound():
+    """Pinnt den Gleitkomma-Rand in `_blocked_candidate_pairs` (#890).
+
+    `la * (2 - threshold) / threshold` ist eine Gleitkomma-Division und kann
+    am exakten Rand nach UNTEN abweichen: fuer `la=17, threshold=0.85` ergibt
+    sie `22.999999999999996` statt `23.0`, worauf `bisect_right` einen Titel
+    der Laenge 23 aus dem Fenster wirft — obwohl `_length_bound_ok(17, 23,
+    0.85)` (dieselbe Ungleichung ohne Division) `True` liefert und das Paar
+    mit `ratio() == 0.85` genau auf der Schwelle liegt und gemergt gehoert.
+
+    Der Fall stammt aus einem 100-Seed-Stresslauf der #890-Fix-Runde; ohne
+    diesen Test blieb er ungedeckt: mit entferntem Sicherheits-Epsilon lief
+    die uebrige Dedup-Suite (inklusive der Multi-Seed-Brute-Force-Tests und
+    des Abgleichs auf der realen Treffermenge) unveraendert gruen."""
+    short, long = "Devops Systematic", "Devops Large Systematic"
+    assert (len(short), len(long)) == (17, 23)
+    assert SequenceMatcher(None, short.lower(), long.lower()).ratio() == 0.85
+    assert _length_bound_ok(17, 23, 0.85) is True
+
+    papers = [
+        {"doi": None, "title": short, "authors": ["a"], "citations": 0},
+        {"doi": None, "title": long, "authors": ["b"], "citations": 0},
+    ]
+    result = deduplicate(papers)
+
+    assert len(result) == 1, "Paar exakt auf der Schwelle wurde nicht zusammengefuehrt"
+
+
+# ---------------------------------------------------------------------------
+# AC3 auf der REALEN Treffermenge vom 12.08.2026 (#890)
+# ---------------------------------------------------------------------------
+
+_HITSET_DIR = Path(__file__).resolve().parent / "fixtures" / "dedup_890"
+_HITSET_PATH = _HITSET_DIR / "hitset_2026-08-12.json.gz"
+_GOLDEN_PATH = _HITSET_DIR / "golden_pre_890_output.json.gz"
+_VERIFY_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "dev" / "verify_dedup_890_hitset.py"
+)
+
+
+def _load_json_gz(path: Path) -> list[dict[str, Any]]:
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    assert isinstance(payload, list)
+    return payload
+
+
+def _canonical_dedup_result(payload: list[dict[str, Any]]) -> list[str]:
+    """Vergleichsform fuer zwei Dedup-Ergebnisse.
+
+    `source_modules` wird sortiert, weil `merge_group()` diese Liste als
+    `list({...})` aus einem String-Set baut: die Iterationsreihenfolge eines
+    String-Sets haengt am `PYTHONHASHSEED` und unterscheidet sich damit
+    zwischen zwei Prozessen (nachstellbar:
+    `PYTHONHASHSEED=7 python3 -c 'print(list({"dblp","arxiv"}))'` gegen
+    `PYTHONHASHSEED=12 ...`). Das ist keine Folge von #890 — dieselbe Zeile
+    steht schon in `d141b09` — und beruehrt keine Gruppenzugehoerigkeit,
+    sondern nur die Reihenfolge innerhalb dieses einen Ausgabefeldes. Ohne
+    diese Kanonisierung waere der Golden-Vergleich zufaellig rot.
+    """
+    normalized = []
+    for record in payload:
+        if "source_modules" in record:
+            record = {**record, "source_modules": sorted(record["source_modules"])}
+        normalized.append(json.dumps(record, sort_keys=True, default=str))
+    return sorted(normalized)
+
+
+def test_dedup_real_hitset_2026_08_12_matches_pre_890_output():
+    """AC3 woertlich: auf der REALEN Treffermenge vom 12.08.2026 findet die
+    neue Fassung dieselben Zusammenfuehrungen wie die alte.
+
+    Eingabe ist `tests/fixtures/dedup_890/hitset_2026-08-12.json.gz` — die
+    1957 Treffer aus `all_raw.json` des Laufs
+    `~/.academic-research/sessions/2026-08-12T10-25-52Z/`, also genau die
+    Menge hinter der zweiten Messung im Issue („1957 Titel"); die 1603 der
+    ersten Messung (`prefiltered.json`) sind eine Teilmenge davon. Herkunft
+    und Feldreduktion: `tests/fixtures/dedup_890/README.md`.
+
+    Erwartung ist das eingefrorene Ergebnis der Fassung VOR #890
+    (`d141b09:scripts/dedup.py`, der #707-Stand aus PR #758), erzeugt mit
+    `scripts/dev/verify_dedup_890_hitset.py golden` — geladen aus der
+    Git-Historie, nicht nachgebaut.
+    """
+    papers = _load_json_gz(_HITSET_PATH)
+    assert len(papers) == 1957, "Fixture ist nicht mehr die reale 12.08.2026-Treffermenge"
+
+    expected = _load_json_gz(_GOLDEN_PATH)
+    actual = deduplicate(papers)
+
+    assert len(actual) == len(expected), (
+        f"Gruppenzahl weicht ab: neu={len(actual)}, vor-#890={len(expected)}"
+    )
+    assert _canonical_dedup_result(actual) == _canonical_dedup_result(expected)
+
+
+@pytest.mark.skipif(
+    os.environ.get("DEDUP_890_LIVE_REFERENCE") != "1",
+    reason="Rechnet die Vor-#890-Fassung live nach (~2,5 min); opt-in via DEDUP_890_LIVE_REFERENCE=1",
+)
+def test_dedup_real_hitset_golden_reproduces_from_pre_890_implementation():
+    """Beleg, dass die eingefrorene Golden-Datei nicht veraltet ist: laesst
+    `d141b09:scripts/dedup.py` frisch ueber dieselbe Fixture laufen und
+    vergleicht das Ergebnis sowohl gegen die aktuelle Fassung (im selben
+    Prozess, ohne jede Kanonisierung) als auch gegen die eingefrorene Datei.
+    Braucht Git-Historie bis `d141b09` (in einem flachen Checkout nicht
+    vorhanden — dann schlaegt `git show` fehl und der Test meldet das als
+    Fehler, statt eine Aussage vorzutaeuschen)."""
+    result = subprocess.run(
+        [sys.executable, str(_VERIFY_SCRIPT), "compare", "--live"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
