@@ -32,7 +32,7 @@ from browser_connection_setup import run_doctor as _run_doctor_real
 UNCONFIGURED_MESSAGE = (
     "❌ Browser-Verbindung ist noch nicht eingerichtet.\n"
     "   Fuehre zuerst das Setup aus: /academic-research:setup (Schritt 4)\n"
-    "   oder direkt: python3 scripts/browser_connection_setup.py --setup\n"
+    "   oder direkt: ~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/browser_connection_setup.py --setup\n"
     "   Browser-Module dieses Laufs werden uebersprungen; die API-Module\n"
     "   laufen davon unabhaengig weiter."
 )
@@ -48,14 +48,14 @@ LOCAL_BLOCKED_MESSAGE = (
     "      davon weiter.\n"
     "   Alternative ohne Klick (kostenpflichtig): Cloud-Browser einrichten\n"
     "   mit 'browser-use auth login' und danach erneut\n"
-    "   'python3 scripts/browser_connection_setup.py --setup --force'\n"
+    "   '~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/browser_connection_setup.py --setup --force'\n"
     "   ausfuehren, dort Option 2 waehlen."
 )
 
 CLOUD_BLOCKED_MESSAGE = (
     "❌ Cloud-Browser ist als Weg vermerkt, aber nicht (mehr) authentifiziert.\n"
     "   1. 'browser-use auth login' ausfuehren.\n"
-    "   2. Danach 'python3 scripts/browser_connection_setup.py --setup --force'\n"
+    "   2. Danach '~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/browser_connection_setup.py --setup --force'\n"
     "      erneut ausfuehren.\n"
     "   Browser-Module dieses Laufs werden uebersprungen; die API-Module\n"
     "   laufen davon unabhaengig weiter."

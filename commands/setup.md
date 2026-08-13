@@ -130,6 +130,6 @@ Das Skript ist idempotent. Ein zweiter Aufruf:
 - erstellt kein zweites venv, installiert nur fehlende Pakete
 - überspringt die `browser-use` CLI-Installation, wenn bereits installiert
 - wiederholt `browser-use doctor` (harmlos, aktualisiert den Status)
-- fragt beim Chrome-Verbindungsweg (#907) nicht erneut, wenn bereits einer vermerkt ist — Nachholen/Ändern: `python3 scripts/browser_connection_setup.py --setup --force`
+- fragt beim Chrome-Verbindungsweg (#907) nicht erneut, wenn bereits einer vermerkt ist — Nachholen/Ändern: `~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/browser_connection_setup.py --setup --force`
 - überschreibt keine Seed-Dateien
 - fügt Permissions nur hinzu, wenn sie noch nicht in `~/.claude/settings.local.json` stehen
