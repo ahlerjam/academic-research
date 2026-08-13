@@ -165,7 +165,7 @@ jobs:
           # inputs.trigger_rotation_group ist derselbe untrusted Input-Typ.
           ROTATION_GROUP_INPUT: ${{ inputs.trigger_rotation_group }}
         run: |
-          set -o pipefail
+          set -euo pipefail
           # EVAL_TRIGGER_ROTATION_GROUP steuert die Skill-Auswahl in
           # tests/evals/test_triggers.py (s. Modul-Kommentar dort). Der
           # woechentliche Kern-Set-Lauf waehlt ohne expliziten Override
@@ -188,8 +188,13 @@ jobs:
             # -- SMOKE_SET_NODE_IDS in tests/evals/smoke_set.py ist die eine
             # Quelle der Wahrheit, hier nur ausgelesen und an pytest als
             # Positionsargumente uebergeben (kein `-k`-Ausdruck noetig).
-            mapfile -t SMOKE_NODE_IDS < <(uv run python -c \
+            SMOKE_IDS_RAW=$(uv run python -c \
               "from tests.evals.smoke_set import SMOKE_SET_NODE_IDS; print('\n'.join(SMOKE_SET_NODE_IDS))")
+            mapfile -t SMOKE_NODE_IDS <<<"${SMOKE_IDS_RAW}"
+            if [ "${#SMOKE_NODE_IDS[@]}" -eq 0 ]; then
+              echo "::error::Smoke-Set leer -- kein Test haette gelaufen, Fehlschlag ist verschleiert"
+              exit 1
+            fi
             uv run pytest "${SMOKE_NODE_IDS[@]}" -v \
               --junitxml=eval-results.xml 2>&1 | tee eval-output.log
           elif [ "${IS_SCHEDULED}" = "true" ]; then
