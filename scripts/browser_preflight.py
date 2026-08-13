@@ -65,6 +65,14 @@ CLOUD_BLOCKED_MESSAGE = (
 def check(state: dict | None, checks: dict[str, bool]) -> tuple[bool, str]:
     """Reine Entscheidungsfunktion: (ok, message)."""
     if state is None:
+        # Wenn der Weg nicht vermerkt ist, aber die Verbindung steht:
+        # Funktioniert die Preflight-Pruefung, dann erlauben wir den Browser-Teil
+        # mit einem Hinweis, das Setup nachzuholen (statt komplett abzubrechen).
+        if preflight_ready(checks):
+            return (
+                True,
+                "✓ Browser-Verbindung aktiv (Weg noch nicht vermerkt — /setup Schritt 4 nachholen)",
+            )
         return False, UNCONFIGURED_MESSAGE
 
     method = state.get("method")
