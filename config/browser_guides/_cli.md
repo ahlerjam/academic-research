@@ -123,8 +123,9 @@ setzen, klicken, warten bis die `.crdownload`-Teildatei verschwunden ist.
 
 ```bash
 browser-use <<'PY'
-out = Path("<output_dir>")
+out = Path("<output_path>").parent
 out.mkdir(parents=True, exist_ok=True)
+before = set(out.glob("*.pdf"))
 cdp("Browser.setDownloadBehavior", behavior="allow",
     downloadPath=str(out), eventsEnabled=True)
 
@@ -134,11 +135,17 @@ import time
 deadline = time.time() + 120
 while time.time() < deadline:
     partial = list(out.glob("*.crdownload"))
-    done = [p for p in out.glob("*.pdf") if p.stat().st_size > 0]
+    done = [p for p in (set(out.glob("*.pdf")) - before) if p.stat().st_size > 0]
     if done and not partial:
         break
     wait(1.0)
-print([str(p) for p in out.glob("*.pdf")])
+new_pdfs = set(out.glob("*.pdf")) - before
+if new_pdfs:
+    new_file = list(new_pdfs)[0]
+    new_file.rename("<output_path>")
+    print(str(Path("<output_path>")))
+else:
+    raise RuntimeError("Kein PDF heruntergeladen nach Ablauf des Timeouts")
 PY
 ```
 
@@ -152,10 +159,13 @@ Cookie-Zwang, ist `curl`/`Write` der ehrlichere Weg — sofern der Agent das dar
 ## Credentials
 
 Passwörter dürfen weder im Skripttext noch in einem Prompt stehen. Sie kommen
-aus ENV-Variablen und werden im Heredoc über `os.environ` gelesen:
+aus ENV-Variablen und werden im Heredoc über `os.environ` gelesen. Variablen
+**vor** dem `browser-use`-Aufruf setzen (mit `export`), nicht als Präfix:
 
 ```bash
-BROWSER_USE_USER="…" BROWSER_USE_PASS="…" browser-use <<'PY'
+export BROWSER_USE_USER="…"
+export BROWSER_USE_PASS="…"
+browser-use <<'PY'
 import os
 fill_input("input[name='username']", os.environ["BROWSER_USE_USER"])
 fill_input("input[name='password']", os.environ["BROWSER_USE_PASS"])
@@ -166,9 +176,9 @@ PY
 ```
 
 Der gequotete Delimiter `<<'PY'` ist hier Pflicht: sonst expandiert die Shell
-`$BROWSER_USE_PASS` und der Klartext landet in der sichtbaren Kommandozeile,
-in Shell-History und in Hook-Logs. Credential-Variablen nie per `echo`/`print`
-ausgeben.
+`$BROWSER_USE_PASS` im Heredoc-Text. Credential-Variablen nie per Präfix-
+Assignment auf der Kommandozeile (z. B. `VAR="…" browser-use …`), nie per
+`echo`/`print` ausgeben und nie in den Skripttext schreiben.
 
 ## Verbindung: eigenes Automations-Chrome statt Default-Profil
 
