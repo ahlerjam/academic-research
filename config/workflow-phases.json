@@ -1,0 +1,304 @@
+{
+  "_comment": "Issue #876: Maschinenlesbare Abbildung der 23 Schritte aus docs/guide/walkthrough.md. Diese Datei ist die verbindliche Quelle der Ablaufordnung -- Aenderungen an der Reihenfolge zuerst hier, dann im Walkthrough. Gelesen von Node-Hooks (JSON.parse) und Python (json.load); reines JSON, keine Kommentar-Syntax ausser den _comment*-Feldern selbst. Drift gegen walkthrough.md und Existenz jedes skills/commands/agents-Slugs wird durch tests/test_issue_876_workflow_phases_drift.py in der CI erzwungen.",
+  "_comment_preconditions": "Jede Vorbedingung ist eine Aussage {field, expected} ueber ein Feld/eine Checkbox aus scripts/bootstrap/academic_context.stub.md. 'field' muss woertlich im Stub vorkommen (Fliesstext-Match, keine Pfadangabe) -- das haelt die Vorbedingung tatsaechlich pruefbar statt frei erfunden. Nur die Startphase (is_entry_point=true) hat eine leere Liste.",
+  "_comment_skills_commands_agents": "skills referenzieren skills/<slug>/SKILL.md (aktivieren sich selbst durch Konversation), commands referenzieren commands/<slug>.md (explizit aufgerufen per /academic-research:<slug>), agents referenzieren agents/<slug>.md (vom Skill/Command orchestrierte Subagents, im Walkthrough namentlich genannt). Ein Schritt kann mehrere oder keine Eintraege je Kategorie haben (z.B. Phase 12 'Vault abfragen' hat keinen eigenen Skill -- direkter MCP-Zugriff).",
+  "phases": [
+    {
+      "id": "context-setup",
+      "title": "Kontext einrichten",
+      "walkthrough_heading": "1. Kontext einrichten",
+      "is_entry_point": true,
+      "preconditions": [],
+      "skills": ["academic-context"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "academic_context.md ist befuellt (Profil, Arbeit-Kernfelder nicht mehr TODO); alle folgenden Skills lesen ab hier aus dieser Datei."
+    },
+    {
+      "id": "topic-finding",
+      "title": "Thema finden",
+      "walkthrough_heading": "2. Thema finden",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Universität", "expected": "nicht mehr TODO"}
+      ],
+      "skills": ["topic-brainstorm"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "3-5 Themenkandidaten mit Feasibility-, Novelty- und Career-Fit-Score vorhanden."
+    },
+    {
+      "id": "research-question",
+      "title": "Forschungsfrage schärfen",
+      "walkthrough_heading": "3. Forschungsfrage schärfen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Thema", "expected": "nicht mehr TODO"}
+      ],
+      "skills": ["research-question-refiner"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Forschungsfrage ist auf Spezifität, Beantwortbarkeit und Falsifizierbarkeit geprüft und im Kontext eingetragen."
+    },
+    {
+      "id": "outline-and-expose",
+      "title": "Gliederung und Exposé",
+      "walkthrough_heading": "4. Gliederung und Exposé",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Forschungsfrage", "expected": "nicht mehr TODO"}
+      ],
+      "skills": ["advisor"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Kapitelgerüst gegen sieben Kriterien geprüft, Exposé-Entwurf vorhanden, Checkbox 'Gliederung steht' gesetzt."
+    },
+    {
+      "id": "methodology-choice",
+      "title": "Methodik wählen",
+      "walkthrough_heading": "5. Methodik wählen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Forschungsfrage", "expected": "nicht mehr TODO"}
+      ],
+      "skills": ["methodology-advisor"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Methodenvorschlag mit Scoring über vier Dimensionen; Feld 'Methodik' im Kontext eingetragen."
+    },
+    {
+      "id": "literature-search",
+      "title": "Literatur suchen",
+      "walkthrough_heading": "6. Literatur suchen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Gliederung steht", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": [],
+      "commands": ["search"],
+      "agents": [],
+      "completion_criterion": "Suchlauf meldet 'Found N papers (0 modules failed, 0 modules skipped)'; Treffer liegen im Vault."
+    },
+    {
+      "id": "reading-list-import",
+      "title": "Literaturliste aus einem Handout übernehmen",
+      "walkthrough_heading": "7. Literaturliste aus einem Handout übernehmen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Gliederung steht", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["reading-list-import"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Einträge aus PDF/Markdown/Text/Zotero liegen als Paper-Datensätze im Vault, dedupliziert gegen den Bestand."
+    },
+    {
+      "id": "book-acquisition",
+      "title": "Bücher beschaffen",
+      "walkthrough_heading": "8. Bücher beschaffen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Gliederung steht", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": [],
+      "commands": ["fetch", "pickup"],
+      "agents": ["book-fetcher"],
+      "completion_criterion": "Status success (PDF im Vault), pickup_required, captcha oder no_match zurückgemeldet."
+    },
+    {
+      "id": "screening",
+      "title": "Treffermenge screenen",
+      "walkthrough_heading": "9. Treffermenge screenen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Gliederung steht", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["parallel-screening"],
+      "commands": [],
+      "agents": ["screening-judge"],
+      "completion_criterion": "Ledger mit Ein-/Ausschluss samt Begründung geschrieben, PRISMA-Zähler aktualisiert."
+    },
+    {
+      "id": "source-quality-check",
+      "title": "Quellenqualität prüfen",
+      "walkthrough_heading": "10. Quellenqualität prüfen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Gliederung steht", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["source-quality-audit"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Score von 0-100 über fünf Dimensionen je Quelle, mit Begründung."
+    },
+    {
+      "id": "reading-notes",
+      "title": "Lesenotizen anlegen",
+      "walkthrough_heading": "11. Lesenotizen anlegen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Gliederung steht", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["reading-notes"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Strukturiertes Exzerpt im Vault (vault.add_note()), auffindbar über vault.search_notes()."
+    },
+    {
+      "id": "vault-query",
+      "title": "Vault abfragen",
+      "walkthrough_heading": "12. Vault abfragen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Literatur gesammelt", "expected": "mindestens teilweise (Vault enthält Paper)"}
+      ],
+      "skills": [],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "vault.search() liefert Snippet, Quelle und Seite ohne erneuten PDF-Upload."
+    },
+    {
+      "id": "study-comparison",
+      "title": "Studien vergleichen",
+      "walkthrough_heading": "13. Studien vergleichen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Literatur gesammelt", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["extraction-matrix"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Matrix mit Quellen als Zeilen und Schlüsselkonzepten als Spalten, als Tabelle exportierbar."
+    },
+    {
+      "id": "scoring-and-excel-export",
+      "title": "Bewerten und als Excel exportieren",
+      "walkthrough_heading": "14. Bewerten und als Excel exportieren",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Literatur gesammelt", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": [],
+      "commands": ["score", "excel"],
+      "agents": ["relevance-scorer"],
+      "completion_criterion": "Relevanz-Scoring abgeschlossen, Excel-Übersicht der Literatur erzeugt."
+    },
+    {
+      "id": "literature-gap-analysis",
+      "title": "Literaturlücken finden",
+      "walkthrough_heading": "15. Literaturlücken finden",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Literatur gesammelt", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["literature-gap-analysis"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Coverage-Bericht je Kapitel: wo Belege dünn sind, welche Konzepte ungedeckt sind."
+    },
+    {
+      "id": "quote-extraction",
+      "title": "Zitate extrahieren",
+      "walkthrough_heading": "16. Zitate extrahieren",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Literatur gesammelt", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["citation-extraction"],
+      "commands": [],
+      "agents": ["quote-extractor"],
+      "completion_criterion": "Seitengenaue Belege im Vault; verbatim-guard-Hook lässt danach Kapitel-Writes mit diesen Zitaten durch."
+    },
+    {
+      "id": "chapter-writing",
+      "title": "Kapitel schreiben",
+      "walkthrough_heading": "17. Kapitel schreiben",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Literatur gesammelt", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["chapter-writer"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Entwurf in <projekt>/kapitel/ mit über vault.find_quotes() belegten Zitaten; Checkbox 'Kapitel geschrieben' gesetzt."
+    },
+    {
+      "id": "anti-ai-audit",
+      "title": "Anti-KI-Audit",
+      "walkthrough_heading": "18. Anti-KI-Audit",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Kapitel geschrieben", "expected": "Checkbox gesetzt (mindestens ein Kapitel)"}
+      ],
+      "skills": ["humanizer-de"],
+      "commands": ["humanize"],
+      "agents": [],
+      "completion_criterion": "<kapitel>.humanized.md und <kapitel>.diff.md mit Severity-Ranking der gefundenen KI-Muster erzeugt."
+    },
+    {
+      "id": "plagiarism-check",
+      "title": "Plagiatsnähe prüfen",
+      "walkthrough_heading": "19. Plagiatsnähe prüfen",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Kapitel geschrieben", "expected": "Checkbox gesetzt (mindestens ein Kapitel)"}
+      ],
+      "skills": ["plagiarism-check"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "N-Gramm-Overlap gegen die Vault-Quellen mit den kritischen Stellen; ersetzt keinen Hochschul-Plagiatsdienst."
+    },
+    {
+      "id": "prisma-flow",
+      "title": "PRISMA-Flow (nur systematische Reviews)",
+      "walkthrough_heading": "20. PRISMA-Flow (nur systematische Reviews)",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Literatur gesammelt", "expected": "Checkbox gesetzt"}
+      ],
+      "skills": ["prisma-flow"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "Mermaid-Flussdiagramm mit realen Zählern aus dem Screening plus 27-Punkte-Checkliste."
+    },
+    {
+      "id": "abstract-title-formalia",
+      "title": "Abstract, Titel, Formalia",
+      "walkthrough_heading": "21. Abstract, Titel, Formalia",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Kapitel geschrieben", "expected": "Checkbox gesetzt (mindestens ein Kapitel)"}
+      ],
+      "skills": ["abstract-generator", "title-generator", "submission-checker"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "IMRaD-Abstract in beiden Sprachen, 5-7 Titelvarianten mit Begründung, Formalia-Bericht mit konkreten Verstößen."
+    },
+    {
+      "id": "export",
+      "title": "Exportieren",
+      "walkthrough_heading": "22. Exportieren",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Kapitel geschrieben", "expected": "Checkbox gesetzt (mindestens ein Kapitel)"}
+      ],
+      "skills": [],
+      "commands": ["latex", "word", "slides"],
+      "agents": [],
+      "completion_criterion": "thesis.tex plus thesis.bib, thesis.docx mit Formatvorlagen, Foliensatz mit einer Kernaussage pro Folie."
+    },
+    {
+      "id": "reproducible-freeze",
+      "title": "Abgabe reproduzierbar einfrieren",
+      "walkthrough_heading": "23. Abgabe reproduzierbar einfrieren",
+      "is_entry_point": false,
+      "preconditions": [
+        {"field": "Kapitel geschrieben", "expected": "Checkbox gesetzt (mindestens ein Kapitel)"}
+      ],
+      "skills": ["material-passport"],
+      "commands": [],
+      "agents": [],
+      "completion_criterion": "material-passport.json erzeugt, Repro-Lock gesetzt; keine Schreibzugriffe mehr möglich."
+    }
+  ]
+}
