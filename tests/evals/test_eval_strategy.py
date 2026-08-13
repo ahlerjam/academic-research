@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from tests.evals.eval_runner import claude_cli_available
+from tests.evals.smoke_set import SMOKE_SET_NODE_IDS
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 STRATEGY_PATH = REPO_ROOT / "docs" / "evals" / "STRATEGY.md"
@@ -676,3 +677,86 @@ def test_no_eval_runner_requires_api_key():
         assert "require_api_key" not in source, (
             f"{runner.relative_to(REPO_ROOT)} haengt an require_api_key() und wuerde skippen."
         )
+
+
+# ---------------------------------------------------------------------------
+# Issue #848: taeglicher Smoke-Lauf. Guard analog zu
+# test_eval_core_set_matches_documented_files oben, aber auf Testfall-Ebene
+# (SMOKE_SET_NODE_IDS in tests/evals/smoke_set.py) statt Datei-Ebene, weil
+# der Smoke-Lauf explizit eine Stichprobe auf Fallebene ist (Issue-AC1).
+# ---------------------------------------------------------------------------
+
+
+def test_eval_smoke_set_matches_documented_cases():
+    """`SMOKE_SET_NODE_IDS` sind real collectible (Issue #848 AC1/AC3).
+
+    Explizites `EVAL_TRIGGER_ROTATION_GROUP=all`: die drei Smoke-Skills aus
+    `test_triggers.py` muessen unabhaengig von der woechentlichen ISO-Wochen-
+    Rotation kollektierbar sein -- der taegliche Workflow-Zweig setzt dieselbe
+    Umgebungsvariable (siehe Modul-Kommentar in smoke_set.py). Eine
+    Umbenennung/Parametrisierungs-Aenderung an einem der Faelle faellt hier
+    auf, statt den taeglichen Smoke-Lauf lautlos leer laufen zu lassen (Muster
+    Issue #470/#824)."""
+    env = dict(os.environ, EVAL_TRIGGER_ROTATION_GROUP="all")
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", *SMOKE_SET_NODE_IDS, "--collect-only", "-q"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env=env,
+    )
+    assert result.returncode == 0, (
+        f"--collect-only fuer SMOKE_SET_NODE_IDS schlug fehl:\n{result.stdout}\n{result.stderr}"
+    )
+    collected = {line for line in result.stdout.splitlines() if "::" in line}
+    missing = set(SMOKE_SET_NODE_IDS) - collected
+    assert not missing, (
+        f"Smoke-Set-Node-IDs nicht mehr collectible (umbenannt/entfernt?): {sorted(missing)} "
+        "(Issue #848)."
+    )
+    assert 5 <= len(SMOKE_SET_NODE_IDS) <= 10, (
+        f"SMOKE_SET_NODE_IDS hat {len(SMOKE_SET_NODE_IDS)} Faelle -- Issue #848 gibt die "
+        "Groessenordnung 5-10 vor."
+    )
+
+
+def test_pytest_exits_nonzero_when_no_tests_collected():
+    """AC3: ein leer treffender Filter beendet pytest mit Exitcode != 0.
+
+    Haelt die Annahme fest, auf der das Skip-Inventar-Gate (Issue #824) im
+    taeglichen Workflow-Zweig aufbaut: faellt das Node-ID-Inventar durch eine
+    Umbenennung leer aus, darf der Lauf NICHT taeuschend gruen durchgehen
+    (0 real geprueft, 0 gemeldet) -- Standard-pytest-Verhalten ist Exit 5
+    ("no tests collected"), dieser Test pinnt genau das."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/evals/",
+            "-k",
+            "definitely_no_such_smoke_case_xyz",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode != 0, (
+        "pytest mit leer treffendem -k muss ungleich 0 zurueckgeben (erwartet: Exit 5 'no "
+        "tests collected') -- sonst waere ein leerer Smoke-Lauf taeuschend gruen (Issue #848 "
+        "AC3)."
+    )
+
+
+def test_strategy_documents_eval_smoke_set_schedule():
+    """AC4: STRATEGY.md nennt Rhythmus, Stichprobe und Budget des taeglichen Smoke-Laufs."""
+    text = _strategy_text()
+    assert "taeglich" in text.lower() or "täglich" in text.lower(), (
+        "STRATEGY.md muss den Rhythmus des taeglichen Smoke-Laufs benennen (Issue #848 AC4)."
+    )
+    assert "smoke_set" in text or "SMOKE_SET_NODE_IDS" in text, (
+        "STRATEGY.md muss auf smoke_set.py/SMOKE_SET_NODE_IDS als Quelle der Wahrheit fuer die "
+        "Smoke-Stichprobe verweisen (Issue #848 AC4)."
+    )
