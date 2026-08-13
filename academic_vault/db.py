@@ -2021,19 +2021,22 @@ class VaultDB:
             # signalisieren nur die Lücke; sie sind nicht anquotierbar.
             if cell.get("merged_into") is not None:
                 return None
+            # Defensiv lesen: auf älteren DBs ohne confidence/detection Spalten sind
+            # die Defaults "high"/"lines" (Migration Add­schema_for_read setzt das)
+            record = dict(found)
             return {
                 "paper_id": paper_id,
-                "page": int(found["page"]),
-                "table_index": int(found["table_index"]),
+                "page": int(record["page"]),
+                "table_index": int(record["table_index"]),
                 "row": row,
                 "col": col,
                 "value": cell["value"],
                 "bbox": cell["bbox"],
-                "backend": str(found["backend"]),
-                "confidence": str(found["confidence"]),
-                "detection": str(found["detection"]),
+                "backend": str(record["backend"]),
+                "confidence": str(record.get("confidence", "high")),
+                "detection": str(record.get("detection", "lines")),
                 "evidence": format_table_evidence(
-                    paper_id, int(found["page"]), int(found["table_index"]), row, col
+                    paper_id, int(record["page"]), int(record["table_index"]), row, col
                 ),
             }
         return None
