@@ -27,6 +27,7 @@ Neuableitung wuerde den indizierten Volltext still veraendern.
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 
 import httpx
@@ -57,14 +58,48 @@ TEI_NS = "{http://www.tei-c.org/ns/1.0}"
 BACKENDS = ("auto", "grobid", "pypdf")
 
 
+# Silbentrennung am Zeilenumbruch (Issue #897): ein Bindestrich unmittelbar
+# zwischen zwei Buchstaben (kein Ziffern-Bindestrich wie bei Bereichen), davor
+# und danach optionaler Leerraum, dann GENAU EIN Zeilenumbruch (ein
+# Absatzumbruch "\n\n" matcht nicht -- die negative Lookahead-Gruppe
+# verhindert das), danach wieder optionaler Leerraum und ein Buchstabe.
+_HYPHEN_LINEBREAK_RE = re.compile(r"(?P<letter>[^\W\d_])-[ \t]*\n(?!\n)[ \t]*(?P<next>[^\W\d_])")
+
+
+def _merge_hyphenation(text: str) -> str:
+    """Loest Silbentrennungen am Zeilenumbruch auf, echte Bindestriche bleiben stehen.
+
+    Entscheidungsregel (#897, siehe Plan-Kommentar im Issue): beginnt der
+    Fortsatz nach dem Umbruch kleingeschrieben, wird zusammengefuehrt
+    (``"In-\\nequality"`` -> ``"Inequality"``). Beginnt er grossgeschrieben,
+    bleibt es beim bisherigen Verhalten (Bindestrich + Leerzeichen aus dem
+    generischen Whitespace-Collapse) -- Grossschreibung nach einem Umbruch ist
+    im Regelfall ein Satzanfang oder Eigenname, keine Silbentrennung. Ein am
+    Umbruch getrenntes Kompositum wie ``"Multi-\\nAgent"`` bleibt damit bewusst
+    als ``"Multi- Agent"`` stehen -- eine hier ungenaue Regel wuerde haeufiger
+    falsch verschmelzen als richtig trennen.
+    """
+
+    def _replace(match: re.Match[str]) -> str:
+        letter = match.group("letter")
+        nxt = match.group("next")
+        if nxt.islower():
+            return f"{letter}{nxt}"
+        return f"{letter}- {nxt}"
+
+    return _HYPHEN_LINEBREAK_RE.sub(_replace, text)
+
+
 def normalize_whitespace(text: str) -> str:
     """Kollabiert jede Whitespace-Folge zu einem einzelnen Leerzeichen.
 
     PDF-Extraktion erzeugt reihenweise Zeilenumbrueche mitten im Satz und
     Spaltenfuellzeichen. Fuer einen FTS5-Index ist das irrelevantes Rauschen,
-    das den Index nur aufblaeht.
+    das den Index nur aufblaeht. Silbentrennungen am Zeilenumbruch werden VOR
+    dem generischen Collapse aufgeloest (#897) -- danach ist der Zeilenumbruch
+    bereits zu einem Leerzeichen kollabiert und nicht mehr erkennbar.
     """
-    return " ".join(text.split())
+    return " ".join(_merge_hyphenation(text).split())
 
 
 def _truncate(text: str) -> str:
