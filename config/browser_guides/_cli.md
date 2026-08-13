@@ -170,10 +170,54 @@ Der gequotete Delimiter `<<'PY'` ist hier Pflicht: sonst expandiert die Shell
 in Shell-History und in Hook-Logs. Credential-Variablen nie per `echo`/`print`
 ausgeben.
 
+## Verbindung: eigenes Automations-Chrome statt Default-Profil
+
+Ohne weitere Angabe hängt sich die CLI an das laufende Chrome mit dem
+Default-Profil. Chrome verlangt dafür seit M144 **pro Verbindung** einen Klick
+auf „Allow remote debugging?"; bleibt er aus, endet jeder Aufruf mit
+`permission-blocked`. Ein Agent kann diesen Klick nicht auslösen — er ist damit
+über den Default-Weg handlungsunfähig.
+
+Der Ausweg braucht keine Bestätigung: ein **eigener** Chrome-Prozess mit
+eigenem `--user-data-dir` und offenem Debug-Port, an den sich die CLI über
+`BU_CDP_URL` hängt. Ein separates Profil fällt weder unter das Allow-Popup noch
+unter die Default-Profil-Sperre; das laufende Chrome des Nutzers bleibt
+unangetastet.
+
+```bash
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+PROFILE="$(mktemp -d)/chrome-automation"
+
+"$CHROME" --remote-debugging-port=9333 --user-data-dir="$PROFILE" \
+  --no-first-run --no-default-browser-check about:blank &
+until curl -sf http://127.0.0.1:9333/json/version > /dev/null; do sleep 1; done
+
+BU_CDP_URL=http://127.0.0.1:9333 browser-use <<'PY'
+ensure_real_tab()
+new_tab("https://example.org")
+wait_for_load()
+print(page_info())
+PY
+```
+
+`BU_CDP_URL` ist der **HTTP**-Endpunkt (`http://host:port`), nicht die
+WebSocket-URL — die löst die CLI selbst auf. `BU_CDP_URL` muss bei **jedem**
+Aufruf gesetzt sein, sonst greift wieder der Default-Weg.
+
+Das frische Profil hat keine Logins und keine Cookies. Für Guides hinter einer
+Anmeldung (`han_login`, `nationallizenzen`, Verlagszugänge) heißt das: entweder
+im Automations-Chrome anmelden — die Session hält, solange das Profil liegen
+bleibt — oder das Default-Profil nehmen und den Klick beim Nutzer einholen.
+
 ## Fehlerpfade
 
 - Verbindet sich der Daemon nicht: `browser-use --doctor`. Läuft Chrome gar
   nicht, startet die CLI es selbst.
+- `permission-blocked` oder „Chrome is asking 'Allow remote debugging?'":
+  Default-Profil-Weg. Auf das Automations-Chrome oben umsteigen; nur wenn
+  genau dieses Profil gebraucht wird, den Nutzer um den Klick bitten. **Nicht
+  in einer Schleife wiederholen** — Chrome öffnet für jede neue Verbindung ein
+  neues Popup.
 - Läuft Chrome, ist aber Remote-Debugging aus, öffnet die CLI
   `chrome://inspect/#remote-debugging` — der Nutzer muss „Allow remote debugging
   for this browser instance" bestätigen. Danach denselben Aufruf wiederholen.

@@ -264,6 +264,34 @@ def test_cli_doc_replaces_index_model_with_ax_tree():
     assert "DOM.getBoxModel" in text
 
 
+def test_cli_doc_documents_non_interactive_attach():
+    """AC3-Blocker: der Attach an das Default-Chrome ist nicht agententauglich.
+
+    Chrome (M144+) verlangt fuer jede neue DevTools-Verbindung an das laufende
+    Default-Profil einen Klick auf „Allow remote debugging?"; der Harness
+    bricht sonst mit `permission-blocked` ab. Ein Agent kann diesen Klick nicht
+    ausloesen — steht in der kanonischen Doku nur dieser eine Weg, ist jeder
+    Guide fuer ihn unbenutzbar. Der Harness selbst kennt den Ausweg
+    (`BU_CDP_URL` gegen ein eigenes Automations-Chrome mit eigenem
+    `--user-data-dir`), also muss er hier dokumentiert sein.
+    """
+    text = _read(CANONICAL_DOC)
+    missing = [
+        marker
+        for marker in (
+            "permission-blocked",
+            "BU_CDP_URL",
+            "--remote-debugging-port",
+            "--user-data-dir",
+        )
+        if marker not in text
+    ]
+    assert not missing, (
+        f"{CANONICAL_REF} beschreibt den nicht-interaktiven Verbindungsweg nicht: {missing}. "
+        "Ohne ihn bleibt jeder Guide hinter Chromes Allow-Popup stehen."
+    )
+
+
 def test_google_scholar_guide_has_no_index_language():
     """Der belegte Nutzfall darf nicht mehr auf Element-Indizes verweisen."""
     text = _read(GUIDES_DIR / "google_scholar.md")

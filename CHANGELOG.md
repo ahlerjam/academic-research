@@ -48,7 +48,15 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   `tests/test_issue_906_browser_use_cli_form.py` prüft gegen eine **Allowlist**
   der real existierenden Unterbefehle (nicht gegen eine Blockliste der alten)
   und gleicht diese Allowlist zusätzlich live gegen `browser-use --help` ab,
-  sofern die CLI installiert ist.
+  sofern die CLI installiert ist. `_cli.md` beschreibt außerdem den
+  nicht-interaktiven Verbindungsweg: Chrome (M144+) verlangt für jede
+  DevTools-Verbindung an das Default-Profil einen Klick auf „Allow remote
+  debugging?", den kein Agent auslösen kann — jeder Aufruf endete mit
+  `permission-blocked`. Ein eigenes Automations-Chrome
+  (`--remote-debugging-port` + eigenes `--user-data-dir`, angebunden über
+  `BU_CDP_URL`) umgeht das Popup, ohne das laufende Chrome des Nutzers
+  anzufassen; damit läuft der Google-Scholar-Guide ohne Handgriff durch
+  (20 Treffer über zwei Seiten, Protokoll im Issue).
 - **NLI-Zitatscan meldete 20 von 21 Zitaten als verdaechtig, praktisch alle
   Fehlalarme (#899):** `academic_vault/nli_prefilter.py::prefilter_quote`
   wandte die Entailment-Pruefung blind auf jeden Kapitelsatz an, auch auf
