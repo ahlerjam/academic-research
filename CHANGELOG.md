@@ -28,6 +28,26 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   unadressierte Abwägungen. Slash-Commands 12 → 13 (README-Badge,
   `docs/reference/`, Release-Notes synchron aktualisiert).
 
+### Changed
+
+- **PreToolUse-Guards teilen sich einen gebatchten Vault-Lookup statt drei
+  Subprozess-Starts pro Write (#844):** `verbatim-guard.mjs`,
+  `claim-drift-guard.mjs` und `context-fidelity-guard.mjs` schlugen bislang
+  fuer denselben Kapitel-Write groesstenteils dieselben Zitat-Texte im Vault
+  nach — jeder mit einem eigenen Python-Subprozess (~23 ms statt ~1 ms nativ).
+  Neuer dateibasierter Batch-Cache in `hooks/lib/vault-bridge.mjs` (Schluessel
+  `sha256(Pfad + tool_input)`, TTL 20 s, 0600-Rechte): der Guard, der zuerst
+  einen Cache-Miss sieht, laedt die Zitat-Obermenge aller drei Guards
+  (neues `hooks/lib/quote-span-extract.mjs`) in EINEM `runVaultPython`-Aufruf
+  vor, die beiden anderen lesen nur noch die Cache-Datei. Producer-Rolle ist
+  nicht an eine feste `hooks.json`-Reihenfolge gekoppelt. Fail-open bleibt
+  unveraendert: ein kaputter/unschreibbarer Cache oder eine fehlgeschlagene
+  Interpreter-Kaskade blockiert keinen Write, mit identischem Wortlaut wie vor
+  #844. Blockier-/Warn-Semantik der drei Guards unveraendert. Latenz-/
+  Subprozess-Nachweis (echter Codepfad): `node scripts/dev/bench_hook_guards_batch.mjs`
+  — Median 3 Subprozesse/Write → 1 Subprozess/Write, ~2,5x schnellerer
+  Gesamtdurchlauf im lokalen Testlauf (Rohzahlen im PR).
+
 ### Fixed
 
 - **NLI-Zitatscan meldete 20 von 21 Zitaten als verdaechtig, praktisch alle

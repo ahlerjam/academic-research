@@ -538,6 +538,43 @@ importieren kann. Der Hook probiert daher in dieser Reihenfolge:
 Scheitert jeder Kandidat, bleibt der Hook fail-open (Exit 0) und injiziert den Hinweis
 ohne Decision-Liste.
 
+### Geteilter Batch-Vault-Cache der drei Kapitel-Guards (#844)
+
+`verbatim-guard.mjs`, `claim-drift-guard.mjs` und `context-fidelity-guard.mjs` laufen
+als drei separate OS-Prozesse (`hooks.json`, `PreToolUse` `Write|Edit|MultiEdit`) und
+schlugen bis #844 für denselben Write größtenteils **dieselben** Zitat-Texte im Vault
+nach — jeder mit einem eigenen Python-Subprozess-Start (~23 ms statt ~1 ms nativ, siehe
+oben). Statt eines gemeinsamen Hooks (würde die Blockier-/Warn-Semantik der drei
+unabhängigen Guards vermischen) teilen sie sich seit #844 einen dateibasierten Cache in
+`hooks/lib/vault-bridge.mjs::ensureQuoteBatch()`:
+
+- **Cache-Schlüssel**: `sha256(Dateipfad + rohes tool_input-JSON)` — alle drei Guards
+  erhalten dasselbe `tool_input` desselben `PreToolUse`-Events, der Schlüssel ist also für
+  alle drei identisch.
+- **Producer-Rolle**: nicht an "verbatim-guard läuft zuerst" gekoppelt, sondern an "wer
+  zuerst einen Cache-Miss sieht" — robust gegen künftige `hooks.json`-Reihenfolge­
+  änderungen (siehe `tests/test_issue_844_batch_cache.py`). Der Producer lädt eine
+  Obermenge aller drei Guard-Bedarfe (`hooks/lib/quote-span-extract.mjs::unionQuoteTexts`)
+  in **einem** `runVaultPython`-Aufruf vor und schreibt das Ergebnis unter
+  `~/.academic-research/hook-batch-cache/<schlüssel>.json` (TTL 20 s, 0600-Rechte,
+  Verzeichnis via `HOOK_BATCH_CACHE_DIR` überschreibbar).
+- **Konsumenten**: die beiden anderen Guards lesen bei Cache-Hit nur noch die Datei —
+  kein Subprozess.
+- **Fail-open**: jeder Fehler auf diesem Pfad (Cache nicht schreibbar, korrupte
+  Cache-Datei, Interpreter-Kaskade scheitert) liefert `null` zurück; der jeweilige Guard
+  behandelt das identisch zu "kein Cache vorhanden" (fail-open, kein Block). Ein zweiter
+  eigener Subprozess-Versuch findet **nicht** statt — `ensureQuoteBatch()` hat bereits
+  einen vollen Versuch mit demselben Budget unternommen, ein zweiter würde nur das
+  Zeitbudget verdoppeln, ohne die Erfolgsaussicht zu ändern.
+- **Figures/Klammer-Belege**: nur `verbatim-guard.mjs` braucht Figure-Referenzen
+  (`find_figure_by_caption`) und Klammer-Belege (`verify_citations`) — diese sind kein
+  Cross-Guard-Bedarf und bleiben außerhalb des geteilten Zitat-Caches (Figures laufen
+  im selben Batch-Aufruf mit, Klammer-Belege weiterhin über einen eigenen, unveränderten
+  `runVaultPython`-Call).
+
+Latenz-/Subprozess-Nachweis (echter Codepfad, kein Mikrobenchmark):
+`node scripts/dev/bench_hook_guards_batch.mjs --reps 10`.
+
 ### Intervall-Zähler und Hook-Timeout
 
 Der `UserPromptSubmit`-Payload enthält kein `message_count`; der Hook zählt seine eigenen

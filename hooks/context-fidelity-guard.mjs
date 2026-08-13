@@ -50,7 +50,7 @@ import { dirname } from 'node:path';
 import * as os from 'node:os';
 import { join } from 'node:path';
 
-import { VAULT_SRC, resolveVaultDb, runVaultPython } from './lib/vault-bridge.mjs';
+import { resolveVaultDb, ensureQuoteBatch } from './lib/vault-bridge.mjs';
 import { isProtectedPath } from './lib/protected-path.mjs';
 
 // ---------------------------------------------------------------------------
@@ -263,42 +263,43 @@ function logBypassUsage(filePath) {
 }
 
 // ---------------------------------------------------------------------------
-// Vault-Lookup (ein Subprozess fuer alle Kandidaten)
+// Vault-Lookup ueber den geteilten Batch-Cache (Issue #844)
 // ---------------------------------------------------------------------------
+//
+// Der eigene Interpreterstart je Write ist seit Issue #844 durch den mit
+// verbatim-guard.mjs und claim-drift-guard.mjs geteilten Batch-Cache ersetzt
+// (hooks/lib/vault-bridge.mjs::ensureQuoteBatch()).
 
-const PY_LOOKUP = [
-  'import sys, json',
-  `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-  'from academic_vault.server import search_quote_text, get_quote',
-  'db_path = sys.argv[1]',
-  'out = []',
-  'for item in json.loads(sys.argv[2]):',
-  '    hits = search_quote_text(db_path, item["span"], 1)',
-  '    if not hits:',
-  '        out.append({"found": False})',
-  '        continue',
-  '    quote_id = hits[0]["quote_id"]',
-  '    record = get_quote(db_path, quote_id) or {}',
-  '    out.append({',
-  '        "found": True,',
-  '        "quote_id": quote_id,',
-  '        "paper_id": record.get("paper_id") or hits[0].get("paper_id"),',
-  '        "context_before": record.get("context_before"),',
-  '        "context_after": record.get("context_after"),',
-  '        "context_source": record.get("context_source"),',
-  '        "printed_page": record.get("printed_page"),',
-  '        "verbatim": record.get("verbatim"),',
-  '        "similarity": None,',
-  '    })',
-  'print(json.dumps(out))',
-].join('\n');
+/**
+ * Deutet einen Cache-Eintrag (ensureQuoteBatch) in dieselbe Record-Form wie
+ * PY_LOOKUP. ``similarity`` ist im PreToolUse-Pfad ohnehin nie belegt (Signal 4
+ * inaktiv, siehe SIM_MIN-Kommentar oben) — bleibt hier konsequent `null`.
+ * Ein `{error}`-Eintrag zaehlt als "nicht gefunden" (dieser Hook markiert nur,
+ * blockt nie — ein stiller Fail-open-Fund waere harmlos).
+ */
+function fromCacheRecord(entry) {
+  if (entry === undefined || entry === null || entry.error) return { found: false };
+  const {
+    found, quote_id, paper_id, context_before, context_after, context_source,
+    printed_page, verbatim,
+  } = entry;
+  return {
+    found, quote_id, paper_id, context_before, context_after, context_source,
+    printed_page, verbatim, similarity: null,
+  };
+}
 
 /**
  * Schlaegt alle Kandidaten in EINEM Python-Subprozess nach.
  *
+ * Nutzt zuerst den mit verbatim-guard.mjs und claim-drift-guard.mjs geteilten
+ * Batch-Cache (Issue #844, vault-bridge.mjs::ensureQuoteBatch) — liefert der
+ * einen `null` (nicht verfuegbar), faellt dieser Guard unveraendert auf den
+ * eigenen Direktaufruf zurueck.
+ *
  * @returns {{status: 'ok', results: object[]} | {status: 'unavailable'}}
  */
-function lookupQuotes(candidates) {
+function lookupQuotes(candidates, ctx = {}) {
   if (candidates.length === 0) return { status: 'ok', results: [] };
   if (!existsSync(VAULT_DB)) {
     debug(`Vault-DB nicht gefunden (${VAULT_DB}).`);
@@ -308,26 +309,33 @@ function lookupQuotes(candidates) {
   // Keine Embedding-Modelle im PreToolUse-Pfad: quote_context_similarity laeuft
   // nicht im Lookup (Signal 4 bleibt aus). Das verhindert torch-/sentence-transformers-
   // Importe und Gewichts-Loads auch wenn der Embedder cached ist. Signale 1-3 arbeiten
-  // rein lexikalisch und sind schnell genug.
+  // rein lexikalisch und sind schnell genug. Gilt fuer JEDEN Python-Aufruf ueber den
+  // Vault-Batch-Cache, nicht nur diesen Guard — deshalb vor ensureQuoteBatch() gesetzt.
   process.env.HF_HUB_OFFLINE = process.env.HF_HUB_OFFLINE ?? '1';
   process.env.HF_HUB_DISABLE_TELEMETRY = process.env.HF_HUB_DISABLE_TELEMETRY ?? '1';
 
-  const payload = JSON.stringify(
-    candidates.map((c) => ({ span: c.text, window: c.window.combined }))
-  );
-  const output = runVaultPython(PY_LOOKUP, [VAULT_DB, payload], {
-    timeout: LOOKUP_BUDGET_MS,
+  const batch = ensureQuoteBatch({
+    filePath: ctx.filePath,
+    toolName: ctx.toolName,
+    toolInput: ctx.toolInput,
+    vaultDb: VAULT_DB,
+    quoteTexts: candidates.map((c) => c.text),
     budget: LOOKUP_BUDGET_MS,
     label: 'Kontexttreue',
   });
-  if (output === null) return { status: 'unavailable' };
-
-  try {
-    const parsed = JSON.parse(output.trim());
-    if (Array.isArray(parsed)) return { status: 'ok', results: parsed };
-  } catch (err) {
-    debug(`Vault-Antwort nicht lesbar: ${err.message}`);
+  if (batch) {
+    return {
+      status: 'ok',
+      results: candidates.map((c) => fromCacheRecord(batch.quotes[c.text])),
+    };
   }
+
+  // ensureQuoteBatch() hat bereits EINEN vollen runVaultPython-Versuch (mit
+  // LOOKUP_BUDGET_MS) unternommen und ist gescheitert — ein zweiter eigener
+  // Versuch mit derselben Interpreter-Kaskade und demselben Budget wuerde nur
+  // das Zeitbudget verdoppeln, ohne die Erfolgsaussicht zu aendern. Also
+  // direkt fail-open (AC3, Issue #844).
+  debug('Batch-Lookup nicht verfuegbar (Vault-Bridge fehlgeschlagen).');
   return { status: 'unavailable' };
 }
 
@@ -509,7 +517,7 @@ async function main() {
 
   if (candidates.length === 0) process.exit(0); // Kein Zitat — nichts zu melden.
 
-  const lookup = lookupQuotes(candidates);
+  const lookup = lookupQuotes(candidates, { filePath, toolName, toolInput });
 
   const findings = [];
   const unverifiable = [];
