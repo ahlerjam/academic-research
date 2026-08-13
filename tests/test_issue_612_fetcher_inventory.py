@@ -18,29 +18,28 @@ AGENTS_DOC = REPO_ROOT / "docs" / "reference" / "agents.md"
 README = REPO_ROOT / "README.md"
 LIVE_FETCH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "live-fetch-weekly.yml"
 
-#: Site-Agents, die book-fetcher als Fallback-Kette anspielt (Issue #612
-#: Gegenpruefung-Kommentar: 16 echte Fetcher + auth-helper als Grenzfall;
-#: book-fetcher selbst ist Dispatcher, kein Fetcher gegen fremde Seiten).
-FETCHER_AGENTS = {
-    "tib-fetcher",
-    "springer-book",
-    "oapen-fetcher",
-    "doabooks-fetcher",
-    "degruyter",
-    "nationallizenzen",
-    "ebook-central",
-    "cambridge-core",
-    "oxford-academic",
-    "jstor",
-    "kvk-fetcher",
-    "hathitrust-fetcher",
-    "internetarchive-fetcher",
-    "mdz-fetcher",
-    "generic-fetcher",
-    "scihub-fetcher",
-}
+BOOK_FETCHER = AGENTS_DIR / "book-fetcher.md"
+
 AUTH_HELPER = "auth-helper"
 DISPATCHER = "book-fetcher"
+
+
+def _fetcher_agents() -> set[str]:
+    """Site-Agents, die book-fetcher als Fallback-Kette anspielt.
+
+    Abgeleitet aus dem book-fetcher-Frontmatter statt hartkodiert: eine zweite
+    Inventarliste hier lief bei jeder Aenderung an der Kette aus dem Tritt
+    (Learning aus dieser Datei; ausgeloest von Issue #840, das 16 Fetcher auf
+    8 konsolidiert hat). `auth-helper` zaehlt nicht als Fetcher, book-fetcher
+    selbst ist Dispatcher.
+    """
+    frontmatter = BOOK_FETCHER.read_text(encoding="utf-8").split("---", 2)[1]
+    agents = set(re.findall(r'"Agent\(([a-z0-9-]+)\)"', frontmatter))
+    assert agents, "Keine Agent(...)-Tools im book-fetcher-Frontmatter gefunden"
+    return agents - {AUTH_HELPER}
+
+
+FETCHER_AGENTS = _fetcher_agents()
 
 #: Erlaubte Live-Test-Kennzeichnungen (Issue #612 Plan-Kommentar, Schritt 2-4).
 ALLOWED_STATUS_MARKERS = (
@@ -55,7 +54,7 @@ ALLOWED_STATUS_MARKERS = (
 
 def _buchbeschaffung_table_lines() -> list[str]:
     text = AGENTS_DOC.read_text(encoding="utf-8")
-    section = text.split("## Buchbeschaffung", 1)[1].split("\n## ", 1)[0]
+    section = text.split("## Buchbeschaffung", 1)[1].split("\n### ", 1)[0]
     return [
         line
         for line in section.splitlines()
@@ -108,11 +107,13 @@ def test_scihub_fetcher_marked_deliberately_untested_not_plain_unproven():
     )
 
 
-def test_kvk_fetcher_marked_not_applicable_not_plain_unproven():
-    lines = _buchbeschaffung_table_lines()
-    kvk_line = next(line for line in lines if line.startswith("| `kvk-fetcher`"))
+def test_kvk_site_marked_not_applicable_not_plain_unproven():
+    """KVK hat seit #840 keinen eigenen Agenten mehr — die Kennzeichnung steht
+    jetzt in der Site-Config-Tabelle darunter, aber sie steht."""
+    section = AGENTS_DOC.read_text(encoding="utf-8").split("### Site-Configs", 1)[1]
+    kvk_line = next(line for line in section.splitlines() if line.startswith("| `kvk`"))
     assert "n/a — kein Volltext-Host" in kvk_line, (
-        "kvk-fetcher ist Meta-Suche ohne eigenen Volltext-Host (agents/kvk-fetcher.md) "
+        "kvk ist Meta-Suche ohne eigenen Volltext-Host (config/browser_guides/kvk.md) "
         "und kann das PDF-Ebenen-Falsch-Negativ aus Issue #603 nicht erzeugen"
     )
 
@@ -130,9 +131,15 @@ def test_readme_agent_count_matches_actual_agent_files():
 
 
 def test_live_fetch_workflow_comment_uses_corrected_fetcher_count():
+    """Die Zahl im Kommentarblock muss dem abgeleiteten Fetcher-Inventar folgen.
+
+    Frueher stand hier die feste Angabe "16 Fetcher"; seit der Konsolidierung
+    (#840) sind es 8 — die Zahl wird deshalb aus dem Frontmatter abgeleitet
+    statt erneut hartkodiert.
+    """
     text = LIVE_FETCH_WORKFLOW.read_text(encoding="utf-8")
     assert "17 der 28 Agents" not in text, (
         "Falsche Mengenangabe aus Issue #603 (book-fetcher faelschlich als Fetcher "
         "mitgezaehlt) noch im Kommentarblock des Workflows"
     )
-    assert "16 Fetcher" in text and "auth-helper" in text
+    assert f"{len(FETCHER_AGENTS)} Fetcher" in text and "auth-helper" in text

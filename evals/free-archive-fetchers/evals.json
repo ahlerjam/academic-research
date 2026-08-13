@@ -2,15 +2,16 @@
   {
     "id": "fa-01",
     "description": "HathiTrust-Fetcher: bekannter gemeinfreier Klassiker via Titel — HathiTrust sperrt den anonymen Volltextzugriff (HTTP 403), erwartet wird darum metadata_only mit der Zugriffsstufe 'Plattform-Sperre'; gelingt der Volltext ueber einen echten Browser doch, ist success der bessere Ausgang.",
-    "agent": "hathitrust-fetcher",
+    "agent": "generic-fetcher",
     "input": {
       "title": "Alice's Adventures in Wonderland",
       "output_path": "/tmp/eval-fa-01.pdf"
     },
     "expected": {
       "status": "metadata_only",
-      "source_subagent": "hathitrust-fetcher",
-      "reason_contains": "Zugriffsstufe: Plattform-Sperre"
+      "reason_contains": "Zugriffsstufe: Plattform-Sperre",
+      "source": "generic-fetcher",
+      "site": "hathitrust"
     },
     "fallback_acceptable": "success",
     "rate_limit_acceptable": true,
@@ -19,21 +20,24 @@
       "record": "evals/free-archive-fetchers/live-verification.json",
       "verdict": "blocked_verified",
       "replay": "RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py"
-    }
+    },
+    "site": "hathitrust",
+    "site_config": "config/browser_guides/hathitrust.md"
   },
   {
     "id": "fa-02",
     "description": "Internet-Archive-Fetcher: bekannter gemeinfreier Klassiker via Titel — erwartet success mit pdf_path und edition-Feld",
-    "agent": "internetarchive-fetcher",
+    "agent": "generic-fetcher",
     "input": {
       "title": "Pride and Prejudice",
       "output_path": "/tmp/eval-fa-02.pdf"
     },
     "expected": {
       "status": "success",
-      "source_subagent": "internetarchive-fetcher",
-      "pdf_path_non_empty": true,
-      "edition_non_empty": true
+      "edition_non_empty": true,
+      "source": "generic-fetcher",
+      "site": "internetarchive",
+      "file_path_non_empty": true
     },
     "fallback_acceptable": "metadata_only",
     "rate_limit_acceptable": true,
@@ -42,21 +46,24 @@
       "record": "evals/free-archive-fetchers/live-verification.json",
       "verdict": "pdf_verified",
       "replay": "RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py"
-    }
+    },
+    "site": "internetarchive",
+    "site_config": "config/browser_guides/internetarchive.md"
   },
   {
     "id": "fa-03",
     "description": "MDZ-Fetcher: bekannter gemeinfreier deutscher Klassiker via Titel — erwartet success mit pdf_path und edition-Feld (Digitalisat der Bayerischen Staatsbibliothek)",
-    "agent": "mdz-fetcher",
+    "agent": "generic-fetcher",
     "input": {
       "title": "Kinder- und Hausmärchen",
       "output_path": "/tmp/eval-fa-03.pdf"
     },
     "expected": {
       "status": "success",
-      "source_subagent": "mdz-fetcher",
-      "pdf_path_non_empty": true,
-      "edition_non_empty": true
+      "edition_non_empty": true,
+      "source": "generic-fetcher",
+      "site": "mdz",
+      "file_path_non_empty": true
     },
     "fallback_acceptable": "metadata_only",
     "rate_limit_acceptable": true,
@@ -65,6 +72,8 @@
       "record": "evals/free-archive-fetchers/live-verification.json",
       "verdict": "pdf_verified",
       "replay": "RUN_LIVE_FREE_ARCHIVE_FETCH=1 uv run pytest tests/test_issue_450_live_fetch.py"
-    }
+    },
+    "site": "mdz",
+    "site_config": "config/browser_guides/mdz.md"
   }
 ]

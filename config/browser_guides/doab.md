@@ -31,13 +31,33 @@ Kein Login erforderlich. DOAB ist ein Metadaten-Aggregator ohne eigenen Volltext
   - De Gruyter-Link → `degruyter.md`
   - Unbekannter Provider → `generic-fetcher`-Subagent
 
-## Pickup-Triggers
+## OA-Invariante
 
-- `status: pickup_required` wenn:
-  - Volltext-Link zeigt auf Paywall oder lizenzierte Seite.
-  - Kein Volltext-Link auf Detailseite vorhanden (nur Metadaten).
-  - Externer Provider gibt 404 oder Access-Denied zurück.
-- `status: no_match` wenn Suche 0 Treffer liefert.
+DOAB listet ausschließlich OA-Bücher — jeder Treffer ist per Definition Open
+Access. Das heißt aber **nicht**, dass jeder Eintrag einen Volltext-Link hat:
+manche Einträge tragen nur Metadaten, weil der Verlag noch nicht geliefert hat.
+Volltext-Verfügbarkeit deshalb pro Treffer prüfen, nicht aus der OA-Invariante
+folgern.
+
+## Status-Vokabular
+
+| Beobachtung | Status | Feld |
+|---|---|---|
+| Volltext-Link vorhanden, Download geglückt und verifiziert | `success` | `file_path` |
+| Volltext-Link zeigt auf eine Paywall oder eine lizenzierte Seite | `metadata_only` | `url` = DOAB-Detailseite |
+| Kein Volltext-Link auf der Detailseite (nur Metadaten) | `metadata_only` | `reason: "Zugriffsstufe: nur Metadaten — kein Volltext-Link"` |
+| Externer Provider gibt 404 / Access-Denied (Link-Rot) | `metadata_only` | `url` = DOAB-Detailseite |
+| Suche liefert 0 Treffer | `no_match` | `reason: "0 Treffer auf DOAB"` |
+
+Ein Paywall-Treffer über DOAB ist **`metadata_only`, nicht `pickup_required`**:
+der Master braucht die Unterscheidung, um seine Verlags-Stufe zu aktivieren.
+
+## Verbote (site-spezifisch)
+
+- **Kein direkter DOAB-REST-API-Aufruf.** `directory.doabooks.org/rest/search`
+  existiert, wird aber nicht verwendet — die Site wird wie von einem Menschen
+  über browser-use bedient.
+- Keine automatische Fernleihe, keine Bestellformulare ausfüllen.
 
 ## Bekannte Fallstricke
 

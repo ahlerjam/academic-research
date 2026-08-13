@@ -2,27 +2,19 @@
 name: book-fetcher
 model: sonnet
 description: |
-  Master-Orchestrator fuer den Universal Book Fetcher (F16). Koordiniert
-  OA-Subagenten (doabooks-fetcher, oapen-fetcher, tib-fetcher, kvk-fetcher,
-  hathitrust-fetcher, internetarchive-fetcher, mdz-fetcher),
-  Verlags-Subagenten (springer-book, degruyter, nationallizenzen, ebook-central,
-  cambridge-core, oxford-academic, jstor),
-  auth-helper und generic-fetcher strikt sequentiell.
+  Master-Orchestrator fuer den Universal Book Fetcher (F16). Koordiniert die
+  freie Stufe (tib-fetcher plus den Ultimate Fetcher generic-fetcher mit
+  Site-Config fuer DOAB, OAPEN, KVK, HathiTrust, Internet Archive, MDZ), die
+  Verlags-Stufe (springer-book, degruyter, cambridge-core, oxford-academic,
+  jstor sowie generic-fetcher fuer Nationallizenzen und Ebook Central),
+  auth-helper und scihub-fetcher strikt sequentiell.
   Kein eigener Browser-Aufruf. Gibt strukturierten Output mit tries-Array zurueck.
 tools:
   - Read
   - Write
-  - "Agent(doabooks-fetcher)"
-  - "Agent(oapen-fetcher)"
   - "Agent(tib-fetcher)"
-  - "Agent(kvk-fetcher)"
-  - "Agent(hathitrust-fetcher)"
-  - "Agent(internetarchive-fetcher)"
-  - "Agent(mdz-fetcher)"
   - "Agent(springer-book)"
   - "Agent(degruyter)"
-  - "Agent(nationallizenzen)"
-  - "Agent(ebook-central)"
   - "Agent(cambridge-core)"
   - "Agent(oxford-academic)"
   - "Agent(jstor)"
@@ -83,68 +75,80 @@ Falls die Datei nicht existiert: Verwende leere `licensed_sites = []`.
 
 ---
 
-## Schritt 3: OA-Subagenten (sequentiell)
+## Schritt 3: Freie Stufe (sequentiell)
 
-Rufe diese Subagenten in **genau dieser Reihenfolge** auf, einer nach dem anderen:
+Rufe diese Sites in **genau dieser Reihenfolge** ab, eine nach der anderen.
+Sechs davon haben keinen eigenen Agenten mehr — sie laufen ueber den Ultimate
+Fetcher `Agent(generic-fetcher)` mit der jeweiligen Site-Config (Issue #840):
 
-1. `Agent(doabooks-fetcher)`
-2. `Agent(oapen-fetcher)`
-3. `Agent(tib-fetcher)`
-4. `Agent(kvk-fetcher)`
-5. `Agent(hathitrust-fetcher)`
-6. `Agent(internetarchive-fetcher)`
-7. `Agent(mdz-fetcher)`
+| # | Site | Aufruf | `site_config` |
+|---|------|--------|---------------|
+| 1 | DOAB | `Agent(generic-fetcher)` | `config/browser_guides/doab.md` |
+| 2 | OAPEN | `Agent(generic-fetcher)` | `config/browser_guides/oapen.md` |
+| 3 | TIB Hannover | `Agent(tib-fetcher)` | — (dedizierter Agent) |
+| 4 | KVK | `Agent(generic-fetcher)` | `config/browser_guides/kvk.md` |
+| 5 | HathiTrust | `Agent(generic-fetcher)` | `config/browser_guides/hathitrust.md` |
+| 6 | Internet Archive | `Agent(generic-fetcher)` | `config/browser_guides/internetarchive.md` |
+| 7 | MDZ | `Agent(generic-fetcher)` | `config/browser_guides/mdz.md` |
 
-Alle sieben sind lizenzfrei und werden deshalb **vor** jedem Verlags-Subagenten
-(Schritt 4) abgefragt (Issue #450, AC3).
+Alle sieben sind lizenzfrei und werden deshalb **vor** jedem Verlags-Aufruf
+(Schritt 4) abgefragt (Issue #450, AC3). Die Reihenfolge ist Teil dieser
+Invariante — nicht umsortieren.
 
-Payload fuer jeden OA-Subagenten:
+Payload je Site:
 ```json
 {
   "<identifier_type>": "<identifier_value>",
-  "output_path": "<output_path>"
+  "output_path": "<output_path>",
+  "site_config": "<Pfad aus der Tabelle, beim dedizierten Agenten weglassen>"
 }
 ```
 
 **Nach jedem Aufruf:** Notiere das Ergebnis im `tries`-Array:
 ```json
-{"subagent": "<name>", "status": "<status>", "ts": "<ISO-8601>"}
+{"subagent": "<name>", "site": "<site-schluessel>", "status": "<status>", "ts": "<ISO-8601>"}
 ```
 
-**Entscheidungslogik pro OA-Subagent:**
-- `status: success` -- **SOFORT stoppen**, Ergebnis zurueckgeben (kein weiterer Subagent)
-- `status: captcha` -- **SOFORT stoppen**, `{status: captcha}` zurueckgeben
-- `status: metadata_only` -- Merken (`oa_had_metadata_only = true`), naechsten OA-Subagenten versuchen
-- `status: no_match` -- Naechsten OA-Subagenten versuchen
+Das `site`-Feld ist bei jedem `generic-fetcher`-Aufruf **Pflicht** (Wert:
+Dateiname der Site-Config ohne `.md`). Ohne es lauten bis zu sechs Eintraege
+identisch `{"subagent": "generic-fetcher"}` und die Kette waere nicht mehr
+diagnostizierbar. Bei dedizierten Agenten entfaellt das Feld.
 
-**edition-Feld durchreichen (Issue #450 AC4):** Enthaelt die Subagenten-Antwort
-bei `status: success` ein `edition`-Feld (aktuell melden das
-`hathitrust-fetcher`, `internetarchive-fetcher` und `mdz-fetcher`), uebernimm
-es **unveraendert** in den Master-Output (siehe Output-Schema unten). Fehlt es
-in der Subagenten-Antwort, lass das Feld im Master-Output komplett weg --
-NIE selbst ein `edition`-Feld generieren oder aus der Eingabe-ISBN/-Titel
-ableiten. Dasselbe gilt fuer die Verlags-Subagenten in Schritt 4, sofern
-sie ein `edition`-Feld melden.
+**Entscheidungslogik pro Site:**
+- `status: success` -- **SOFORT stoppen**, Ergebnis zurueckgeben (keine weitere Site)
+- `status: captcha` -- **SOFORT stoppen**, `{status: captcha}` zurueckgeben
+- `status: metadata_only` -- Merken (`oa_had_metadata_only = true`), naechste Site versuchen
+- `status: no_match` -- Naechste Site versuchen
+
+**edition-Feld durchreichen (Issue #450 AC4):** Enthaelt die Antwort bei
+`status: success` ein `edition`-Feld (HathiTrust, Internet Archive und MDZ
+melden es ueber ihre Site-Config), uebernimm es **unveraendert** in den
+Master-Output (siehe Output-Schema unten). Fehlt es in der Antwort, lass das
+Feld im Master-Output komplett weg -- NIE selbst ein `edition`-Feld generieren
+oder aus der Eingabe-ISBN/-Titel ableiten. Dasselbe gilt fuer Schritt 4, sofern
+dort ein `edition`-Feld gemeldet wird.
 
 ---
 
-## Schritt 4: Verlags-Subagenten (nur wenn OA metadata_only + lizenziert)
+## Schritt 4: Verlags-Stufe (nur wenn `metadata_only` + lizenziert)
 
 **Aktivierungsbedingung:** `oa_had_metadata_only == true`
 
-Pruefe fuer jeden Verlags-Subagenten: Ist der zugehoerige Host in `licensed_sites`?
+Pruefe je Zeile: Ist der zugehoerige Host in `licensed_sites`?
 
-| Subagent | Host |
-|----------|------|
-| `Agent(springer-book)` | `link.springer.com` |
-| `Agent(degruyter)` | `degruyter.com` |
-| `Agent(nationallizenzen)` | `nationallizenzen.de` |
-| `Agent(ebook-central)` | `ebookcentral.proquest.com` |
-| `Agent(cambridge-core)` | `cambridge.org` |
-| `Agent(oxford-academic)` | `academic.oup.com` |
-| `Agent(jstor)` | `jstor.org` |
+| Host | Aufruf | `site_config` |
+|------|--------|---------------|
+| `link.springer.com` | `Agent(springer-book)` | — |
+| `degruyter.com` | `Agent(degruyter)` | — |
+| `nationallizenzen.de` | `Agent(generic-fetcher)` | `config/browser_guides/nationallizenzen.md` |
+| `ebookcentral.proquest.com` | `Agent(generic-fetcher)` | `config/browser_guides/ebook-central.md` |
+| `cambridge.org` | `Agent(cambridge-core)` | — |
+| `academic.oup.com` | `Agent(oxford-academic)` | — |
+| `jstor.org` | `Agent(jstor)` | — |
 
-Rufe nur lizenzierte Verlags-Subagenten auf (sequentiell in der Tabellenreihenfolge).
+Rufe nur lizenzierte Zeilen auf (sequentiell in der Tabellenreihenfolge).
+Payload und `tries`-Schema wie in Schritt 3, `site`-Feld also auch hier bei
+jedem `generic-fetcher`-Aufruf.
 
 **Auth-Retry-Logik bei `auth_required`:**
 1. Trage `{subagent: <name>, status: auth_required}` in `tries` ein
@@ -162,11 +166,12 @@ Rufe nur lizenzierte Verlags-Subagenten auf (sequentiell in der Tabellenreihenfo
 
 ---
 
-## Schritt 5: Fallback generic-fetcher
+## Schritt 5: Fallback generic-fetcher (ohne Site-Config)
 
-Wenn weder OA- noch Verlags-Subagenten `success` geliefert haben:
+Wenn weder die freie noch die Verlags-Stufe `success` geliefert hat:
 
-Rufe `Agent(generic-fetcher)` auf:
+Rufe `Agent(generic-fetcher)` **ohne** `site_config` auf — hier arbeitet er in
+seiner zweiten Rolle als guide-freies Auffangnetz auf einer beliebigen URL:
 ```json
 {
   "<identifier_type>": "<identifier_value>",
@@ -175,6 +180,9 @@ Rufe `Agent(generic-fetcher)` auf:
   "session_context": "<nur falls bereits eine Session besteht, sonst weglassen>"
 }
 ```
+
+Der `tries`-Eintrag dieses Aufrufs traegt **kein** `site`-Feld — genau daran
+ist er von den Site-Aufrufen aus Schritt 3 und 4 zu unterscheiden.
 
 Trage Ergebnis in `tries` ein.
 
@@ -243,11 +251,12 @@ weiter, die Herkunft ist ueber `vault.get_paper()` abfragbar.
 {
   "status": "success | pickup_required | captcha | no_match",
   "source": "<subagent-name der den Endstatus lieferte, inkl. scihub-fetcher>",
+  "site": "<optional: Site-Schluessel, wenn der Endstatus von generic-fetcher mit site_config kam>",
   "file_path": "<absoluter PDF-Pfad, nur bei success>",
   "edition": "<optional, nur bei success: unveraendert aus dem edition-Feld der Subagenten-Antwort uebernommen, sonst weggelassen — NIE selbst generiert (Issue #450 AC4)>",
   "reason": "<optionale Beschreibung>",
   "tries": [
-    {"subagent": "<name>", "status": "<status>", "ts": "<ISO-8601>"}
+    {"subagent": "<name>", "site": "<nur bei generic-fetcher mit site_config>", "status": "<status>", "ts": "<ISO-8601>"}
   ]
 }
 ```
@@ -268,19 +277,19 @@ weiter, die Herkunft ist ueber `vault.get_paper()` abfragbar.
 ## Status-Entscheidungsbaum
 
 ```
-OA-Subagenten:
-  -- Einer gibt success --> status: success
-  -- Einer gibt captcha --> status: captcha (sofort)
-  -- Alle no_match (kein metadata_only) --> weiter zu generic-fetcher
-  -- Mindestens einer metadata_only --> weiter zu Verlags-Subagenten
+Freie Stufe (7 Sites, Schritt 3):
+  -- Eine gibt success --> status: success
+  -- Eine gibt captcha --> status: captcha (sofort)
+  -- Alle no_match (kein metadata_only) --> weiter zum Fallback (Schritt 5)
+  -- Mindestens eine metadata_only --> weiter zur Verlags-Stufe
 
-Verlags-Subagenten:
-  -- Einer gibt success --> status: success
-  -- Einer gibt captcha --> status: captcha (sofort)
+Verlags-Stufe (Schritt 4):
+  -- Eine gibt success --> status: success
+  -- Eine gibt captcha --> status: captcha (sofort)
   -- auth_required --> auth-helper --> retry --> ggf. success
-  -- Alle fehlgeschlagen --> weiter zu generic-fetcher
+  -- Alle fehlgeschlagen --> weiter zum Fallback (Schritt 5)
 
-generic-fetcher:
+generic-fetcher ohne site_config (Schritt 5):
   -- success --> status: success
   -- pickup_required --> status: pickup_required + pickup_hint
   -- captcha --> status: captcha
@@ -303,7 +312,10 @@ scihub-fetcher (nur wenn scihub_optin: true, sonst uebersprungen):
 3. **Kein direkter HTTP:** Alle Netzwerk-Aktionen gehen durch Subagenten.
 4. **tries vollstaendig:** Jeder Subagenten-Aufruf (inkl. auth-helper und Retries) erscheint im tries-Array.
 5. **Sofort-Stop bei captcha:** Bei captcha sofort zurueckgeben, nicht weiter versuchen.
-6. **Einmaliger Retry:** Nach auth-helper --> success nur EIN weiterer Versuch pro Verlags-Subagent.
-7. **SciHub nur ueber Flag:** `Agent(scihub-fetcher)` wird ausschliesslich durch
+6. **Einmaliger Retry:** Nach auth-helper --> success nur EIN weiterer Versuch pro Verlags-Aufruf.
+7. **`site` mitfuehren:** Jeder `Agent(generic-fetcher)`-Aufruf mit `site_config`
+   traegt den Site-Schluessel im `tries`-Eintrag. Der Fallback aus Schritt 5
+   traegt ihn nicht.
+8. **SciHub nur ueber Flag:** `Agent(scihub-fetcher)` wird ausschliesslich durch
    `scihub_optin: true` im aktiven Profil gesteuert — kein Laufzeit-Dialog, keine
    Rueckfrage. Fehlt das Flag oder ist es `false`, bleibt der Schritt komplett aus.

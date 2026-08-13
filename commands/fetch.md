@@ -105,8 +105,8 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 ```
 
    `result.edition` (von book-fetcher gemeldet, Freitext "Jahr/Ausgabe/Verlag
-   DIESES Digitalisats" — siehe `agents/book-fetcher.md`/
-   `agents/hathitrust-fetcher.md` etc.) NICHT unveraendert als Freitext-Blob
+   DIESES Digitalisats" — siehe `agents/book-fetcher.md`, `agents/generic-fetcher.md`
+   und `config/browser_guides/hathitrust.md` etc.) NICHT unveraendert als Freitext-Blob
    in ein einzelnes CSL-Feld kopieren — der `latex-export`-Skill
    (`skills/latex-export/scripts/build_bib.py`) liest das Jahr ausschliesslich
    aus `csl_json.issued["date-parts"]`, nicht aus `edition`. Stattdessen

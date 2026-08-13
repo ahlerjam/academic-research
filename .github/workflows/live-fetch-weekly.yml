@@ -5,9 +5,12 @@ name: Live-Fetch Woechentlich (echte Verlags-/Archivseiten)
 # Academic, JSTOR) und tests/test_issue_450_live_fetch.py (freie Archive:
 # Internet Archive, MDZ, HathiTrust) real gegen die echten Seiten aus, statt
 # sie wie im regulaeren `pytest tests/`-Lauf per Env-Schalter zu skippen.
-# 16 Fetcher (plus auth-helper als Grenzfall) greifen auf fremde Verlags-/
+# 8 Fetcher (plus auth-helper als Grenzfall) greifen auf fremde Verlags-/
 # Archivseiten zu; book-fetcher selbst ist Dispatcher, kein Fetcher (Issue
-# #612 Gegenpruefung zu #603). Ein stillschweigend kaputter Fetcher ist
+# #612 Gegenpruefung zu #603). Seit der Konsolidierung (Issue #840) bedient
+# der Ultimate Fetcher `generic-fetcher` acht dieser Sites ueber Site-Configs
+# unter config/browser_guides/ — die abgedeckten Zugriffswege bleiben
+# dieselben, nur ihre Traeger-Agenten nicht. Ein stillschweigend kaputter Fetcher ist
 # schlechter als ein fehlender, weil er ein falsches Negativ erzeugt (Issue
 # #603, "Why").
 #

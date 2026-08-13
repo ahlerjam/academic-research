@@ -1,4 +1,10 @@
-"""Frontmatter-Validierung, Output-Schema-Check und Verbots-Pruefung fuer OA-Fetcher-Subagenten."""
+"""Frontmatter-, Guide- und Eval-Pruefung fuer die freie OA-Stufe.
+
+Seit Issue #840 hat von den vier OA-Quellen nur noch TIB einen eigenen Agenten.
+DOAB, OAPEN und KVK laufen ueber den Ultimate Fetcher `generic-fetcher` mit
+einer Site-Config unter ``config/browser_guides/`` — ihr Site-Wissen wird
+deshalb dort geprueft statt in einer Agent-Datei.
+"""
 
 import json
 import re
@@ -8,9 +14,19 @@ import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 AGENTS_DIR = REPO_ROOT / "agents"
+GUIDES_DIR = REPO_ROOT / "config" / "browser_guides"
 EVALS_PATH = REPO_ROOT / "evals" / "oa-fetchers" / "evals.json"
 
-AGENT_NAMES = ["tib-fetcher", "oapen-fetcher", "doabooks-fetcher", "kvk-fetcher"]
+#: OA-Quelle mit eigenem Agenten.
+AGENT_NAMES = ["tib-fetcher"]
+
+#: OA-Quellen ohne eigenen Agenten -> Site-Schluessel und Site-Config (#840).
+GUIDE_SITES = {
+    "oapen": "oapen.md",
+    "doab": "doab.md",
+    "kvk": "kvk.md",
+}
+
 VALID_STATUSES = {"success", "pickup_required", "captcha", "no_match", "metadata_only"}
 
 
@@ -92,8 +108,6 @@ class TestAgentFrontmatter:
         """tools-Zeile muss 'browser-use' enthalten."""
         path = AGENTS_DIR / f"{agent_name}.md"
         content = path.read_text(encoding="utf-8")
-        # tools kann als YAML-Inline-Liste oder Multiline-Block vorliegen
-        # Einfachster Check: 'browser-use' irgendwo im Frontmatter
         fm_match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
         assert fm_match, f"Kein Frontmatter in {agent_name}.md"
         fm_raw = fm_match.group(1)
@@ -120,12 +134,7 @@ class TestAgentFrontmatter:
 
     @pytest.mark.parametrize(
         "agent_name, expected_guide",
-        [
-            ("tib-fetcher", "config/browser_guides/tib.md"),
-            ("oapen-fetcher", "config/browser_guides/oapen.md"),
-            ("doabooks-fetcher", "config/browser_guides/doab.md"),
-            ("kvk-fetcher", "config/browser_guides/kvk.md"),
-        ],
+        [("tib-fetcher", "config/browser_guides/tib.md")],
     )
     def test_body_references_browser_guide(self, agent_name, expected_guide):
         """Agent-Body muss den kanonischen Browser-Guide-Pfad referenzieren."""
@@ -136,7 +145,44 @@ class TestAgentFrontmatter:
         )
 
 
-# ─── Klasse 2: Output-Schema-Validierung ─────────────────────────────────────
+# ─── Klasse 2: Site-Configs der agentenlosen OA-Quellen (#840) ───────────────
+
+
+class TestGuideDrivenSites:
+    """DOAB, OAPEN und KVK haben keinen eigenen Agenten mehr — ihre Anleitung
+    muss vollstaendig in der Site-Config stehen, sonst ist der Zugriffsweg weg."""
+
+    @pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+    def test_guide_exists(self, site, guide_name):
+        assert (GUIDES_DIR / guide_name).exists(), f"Site-Config fehlt fuer {site}"
+
+    @pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+    def test_guide_drives_browser_use(self, site, guide_name):
+        text = (GUIDES_DIR / guide_name).read_text(encoding="utf-8")
+        assert "browser-use" in text, (
+            f"config/browser_guides/{guide_name} nennt browser-use nicht — der "
+            "Zugriffsweg waere ohne Werkzeug beschrieben"
+        )
+
+    @pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+    def test_guide_documents_status_vocabulary(self, site, guide_name):
+        text = (GUIDES_DIR / guide_name).read_text(encoding="utf-8")
+        found = {status for status in VALID_STATUSES if status in text}
+        assert {"success", "metadata_only", "no_match"} <= found, (
+            f"config/browser_guides/{guide_name} dokumentiert das Status-Vokabular "
+            f"unvollstaendig: {sorted(found)}"
+        )
+
+    @pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+    def test_guide_has_no_direct_http_calls(self, site, guide_name):
+        text = (GUIDES_DIR / guide_name).read_text(encoding="utf-8")
+        offenders = re.findall(r"^\s*`?(curl|wget)\b", text, re.MULTILINE)
+        assert not offenders, (
+            f"config/browser_guides/{guide_name} beschreibt direkte HTTP-Calls: {offenders}"
+        )
+
+
+# ─── Klasse 3: Output-Schema-Validierung ─────────────────────────────────────
 
 
 class TestOutputSchema:
@@ -149,47 +195,46 @@ class TestOutputSchema:
             f"{context}: status='{obj['status']}' ist kein gueltiger Wert. "
             f"Erlaubt: {VALID_STATUSES}"
         )
-        assert "source_subagent" in obj, f"{context}: 'source_subagent'-Feld fehlt"
-        assert obj["source_subagent"] in AGENT_NAMES, (
-            f"{context}: source_subagent='{obj['source_subagent']}' nicht in AGENT_NAMES"
-        )
+        assert "source" in obj, f"{context}: 'source'-Feld fehlt"
 
-    def test_success_output_has_pdf_path(self):
-        """success-Output muss pdf_path enthalten."""
+    def test_success_output_has_file_path(self):
+        """success-Output muss file_path enthalten."""
         output = {
             "status": "success",
-            "source_subagent": "tib-fetcher",
-            "pdf_path": "/tmp/book.pdf",
+            "source": "tib-fetcher",
+            "file_path": "/tmp/book.pdf",
         }
         self._validate_output(output, "success")
-        assert "pdf_path" in output, "success-Output braucht pdf_path"
-        assert output["pdf_path"], "pdf_path darf nicht leer sein"
+        assert output["file_path"], "file_path darf nicht leer sein"
 
     def test_metadata_only_output_has_url(self):
         """metadata_only-Output muss url enthalten."""
         output = {
             "status": "metadata_only",
-            "source_subagent": "oapen-fetcher",
+            "source": "generic-fetcher",
+            "site": "oapen",
             "url": "https://library.oapen.org/handle/12345",
         }
         self._validate_output(output, "metadata_only")
         assert "url" in output, "metadata_only-Output braucht url"
 
-    def test_pickup_required_output(self):
-        """pickup_required-Output ist gueltiger Status."""
+    def test_generic_dispatch_carries_site(self):
+        """Ohne `site` waeren die generic-fetcher-Eintraege ununterscheidbar (#840)."""
         output = {
-            "status": "pickup_required",
-            "source_subagent": "kvk-fetcher",
+            "status": "metadata_only",
+            "source": "generic-fetcher",
+            "site": "kvk",
             "url": "https://kvk.bibliothek.kit.edu/...",
             "reason": "Standorte: BSB Muenchen, UB Berlin",
         }
-        self._validate_output(output, "pickup_required")
+        self._validate_output(output, "metadata_only")
+        assert output["site"] in GUIDE_SITES
 
     def test_captcha_output(self):
         """captcha-Output ist gueltiger Status."""
         output = {
             "status": "captcha",
-            "source_subagent": "tib-fetcher",
+            "source": "tib-fetcher",
             "reason": "CAPTCHA auf Detailseite erkannt",
         }
         self._validate_output(output, "captcha")
@@ -198,17 +243,15 @@ class TestOutputSchema:
         """no_match-Output ist gueltiger Status."""
         output = {
             "status": "no_match",
-            "source_subagent": "doabooks-fetcher",
+            "source": "generic-fetcher",
+            "site": "doab",
             "reason": "0 Treffer fuer ISBN 000-0-0000-0000-0",
         }
         self._validate_output(output, "no_match")
 
     def test_invalid_status_rejected(self):
         """Ungueltige Status-Werte sollen erkannt werden."""
-        invalid = {
-            "status": "unknown_status",
-            "source_subagent": "tib-fetcher",
-        }
+        invalid = {"status": "unknown_status", "source": "tib-fetcher"}
         assert invalid["status"] not in VALID_STATUSES, (
             "unknown_status muss als ungueltig erkannt werden"
         )
@@ -221,7 +264,7 @@ class TestOutputSchema:
         )
 
 
-# ─── Klasse 3: Verbots-Check ─────────────────────────────────────────────────
+# ─── Klasse 4: Verbots-Check ─────────────────────────────────────────────────
 
 
 class TestForbiddenPatterns:
@@ -232,7 +275,6 @@ class TestForbiddenPatterns:
         """Agent darf kein 'curl' als Shell-Command enthalten."""
         path = AGENTS_DIR / f"{agent_name}.md"
         content = path.read_text(encoding="utf-8")
-        # Suche nach curl als standalone-Befehl (Zeilenanfang + optionaler Backtick)
         curl_uses = re.findall(r"^\s*`?curl\b", content, re.MULTILINE)
         assert len(curl_uses) == 0, f"curl-Aufruf in {agent_name}.md gefunden: {curl_uses}"
 
@@ -266,7 +308,7 @@ class TestForbiddenPatterns:
         )
 
 
-# ─── Klasse 4: Eval-Cases ────────────────────────────────────────────────────
+# ─── Klasse 5: Eval-Cases ────────────────────────────────────────────────────
 
 
 class TestEvalCases:
@@ -293,20 +335,32 @@ class TestEvalCases:
     def test_each_eval_has_required_fields(self):
         """Jeder Eval-Case muss id, description, agent und expected enthalten."""
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
+        allowed = set(AGENT_NAMES) | {"generic-fetcher"}
         for case in data:
             assert "id" in case, f"id fehlt in Case: {case}"
             assert "description" in case, f"description fehlt in Case {case['id']}"
             assert "agent" in case, f"agent fehlt in Case {case['id']}"
             assert "expected" in case, f"expected fehlt in Case {case['id']}"
-            assert case["agent"] in AGENT_NAMES, (
-                f"agent='{case['agent']}' in Case {case['id']} nicht in AGENT_NAMES"
+            assert case["agent"] in allowed, (
+                f"agent='{case['agent']}' in Case {case['id']} ist kein bekannter Fetcher"
             )
 
-    def test_one_eval_per_agent(self):
-        """Jeder der 4 Agenten muss genau einen Eval-Case haben."""
+    def test_generic_cases_name_their_site_config(self):
+        """#840: ein generic-fetcher-Case ohne site_config waere nicht reproduzierbar."""
         data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
-        agents_in_evals = [c["agent"] for c in data]
-        assert set(agents_in_evals) == set(AGENT_NAMES), (
-            f"Nicht alle Agenten haben einen Eval-Case. "
-            f"Vorhanden: {set(agents_in_evals)}, erwartet: {set(AGENT_NAMES)}"
+        for case in data:
+            if case["agent"] != "generic-fetcher":
+                continue
+            guide = case.get("site_config", "")
+            assert guide.startswith("config/browser_guides/"), (
+                f"Case {case['id']}: site_config fehlt oder zeigt woandershin: {guide!r}"
+            )
+            assert (REPO_ROOT / guide).exists(), f"Case {case['id']}: {guide} existiert nicht"
+
+    def test_every_oa_source_has_exactly_one_eval(self):
+        """Jede der 4 OA-Quellen muss genau einen Eval-Case haben."""
+        data = json.loads(EVALS_PATH.read_text(encoding="utf-8"))
+        covered = {c.get("site") or c["agent"] for c in data}
+        assert covered == set(GUIDE_SITES) | set(AGENT_NAMES), (
+            f"Nicht jede OA-Quelle hat einen Eval-Case. Vorhanden: {covered}"
         )

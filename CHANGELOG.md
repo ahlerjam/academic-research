@@ -8,6 +8,41 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Changed
+
+- **Fetcher-Konsolidierung: 16 Fetcher-Subagenten auf 8 reduziert (#840):**
+  `agents/generic-fetcher.md` ist jetzt der **Ultimate Fetcher** — er nimmt
+  optional einen Parameter `site_config` (Pfad unter `config/browser_guides/`)
+  entgegen, liest den Guide als ersten Schritt (kostet kein Schritt-Budget) und
+  folgt dessen Discovery-/Download-Weg. Zustandsmodell, Download-Verifikation,
+  Schritt-Budget und Verbote bleiben unveraendert; ohne den Parameter arbeitet
+  er weiter als guide-freies Auffangnetz. Dafuer entfallen acht Agent-Dateien
+  (`doabooks-fetcher`, `oapen-fetcher`, `kvk-fetcher`, `hathitrust-fetcher`,
+  `internetarchive-fetcher`, `mdz-fetcher`, `nationallizenzen`,
+  `ebook-central`, 29 → 21 Agents); ihr Site-Wissen ist vollstaendig in die
+  bereits vorhandenen Guides gewandert (Status-Vokabular, Zugriffsstufen,
+  Auth-Delegation an `auth-helper`, site-spezifische Verbote). Dedizierte
+  Agenten bleiben Springer, JSTOR, Oxford Academic, Cambridge Core, De Gruyter,
+  TIB und Sci-Hub.
+
+  Zwei Verhaltensluecken wurden dabei mitgeschlossen, ohne die die
+  Konsolidierung ein stiller Funktionsverlust gewesen waere: der Ultimate
+  Fetcher kennt jetzt den Status `metadata_only` (daran haengt die gesamte
+  Verlags-Stufe von `agents/book-fetcher.md`, Schritt 4) und fuehrt das
+  optionale Feld `edition` (#450 AC4, Ausgabenkennzeichnung im Vault). Neu ist
+  ausserdem das Feld `site`: bis zu sechs `tries`-Eintraege lauten sonst
+  identisch `{"subagent": "generic-fetcher"}` und die Kette waere nicht mehr
+  diagnostizierbar.
+
+  Die Reihenfolge der Fallback-Kette ist unveraendert — alle lizenzfreien
+  Quellen laufen weiterhin vor jedem Verlags-Aufruf (#450 AC3). Inventar- und
+  Zaehl-Tests leiten die Fetcher-Menge jetzt aus dem `book-fetcher`-Frontmatter
+  ab statt sie erneut hartzukodieren (`tests/test_issue_612_fetcher_inventory.py`,
+  neu `tests/test_issue_840_fetcher_consolidation.py`). Der historische
+  Live-Nachweis in `evals/free-archive-fetchers/live-verification.json` bleibt
+  unveraendert; die Kopplung an die Eval-Faelle laeuft additiv ueber das neue
+  Feld `site`.
+
 ### Fixed
 
 - **NLI-Zitatscan meldete 20 von 21 Zitaten als verdaechtig, praktisch alle
