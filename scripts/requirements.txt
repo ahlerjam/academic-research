@@ -24,7 +24,7 @@ sqlite-vec>=0.1.0
 # strikte csl_json-Validierung in vault.add_paper (Issue #213)
 jsonschema>=4.0
 # optional — nur fuer Zotero-Import (Skill: zotero-import)
-pyzotero>=1.5
+pyzotero>=1.13.4
 # lokale Embedding-Pipeline fuer die Vektor-Suche (Issue #372).
 # Befuellt chunk_embeddings beim Ingest und liefert vault.search(rerank=True)
 # echte Vektortreffer statt reiner FTS5-Umsortierung

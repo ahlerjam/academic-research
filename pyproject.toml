@@ -49,7 +49,7 @@ dependencies = [
     "mcp>=1.0,<2",
     "sqlite-vec==0.1.10a4",
     "jsonschema>=4.0",
-    "pyzotero>=1.5",
+    "pyzotero>=1.13.4",
     # Lokale Embedding-Pipeline der Vektor-Suche (#372): laedt
     # intfloat/multilingual-e5-small (MIT, 384d). Harte Dependency, weil
     # chunk_embeddings sonst in jeder realen Installation leer bliebe und
