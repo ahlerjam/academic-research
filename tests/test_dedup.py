@@ -4,8 +4,9 @@ import itertools
 import random
 import time
 from difflib import SequenceMatcher
+from typing import Any
 
-from dedup import _length_bound_ok, deduplicate, merge_group
+from dedup import _canonical_sort_key, _length_bound_ok, deduplicate, merge_group
 from text_utils import normalize_doi
 
 
@@ -826,14 +827,70 @@ def test_length_bound_ok_rejects_zero_length():
     assert _length_bound_ok(0, 0, 0.85) is False
 
 
-def _brute_force_title_pairs(titles: list[str], threshold: float) -> set[tuple[int, int]]:
+_DEVOPS_VOCAB = [
+    "devops",
+    "governance",
+    "cloud",
+    "security",
+    "framework",
+    "large",
+    "organizations",
+    "study",
+    "systematic",
+    "review",
+    "empirical",
+    "analysis",
+    "continuous",
+    "delivery",
+    "pipeline",
+    "risk",
+    "compliance",
+    "architecture",
+    "microservices",
+    "agile",
+]
+
+
+def _brute_force_title_pairs(
+    papers: list[dict[str, Any]], threshold: float
+) -> set[tuple[int, int]]:
     """Referenzimplementierung: alle Paare per unbeschraenktem O(n^2)-Scan
-    und vollem `SequenceMatcher.ratio()` (das alte Verhalten vor #890)."""
+    und vollem `SequenceMatcher.ratio()` — das Verhalten vor #890 (siehe
+    `d141b09:scripts/dedup.py`, verschachtelte Doppelschleife ueber
+    `canonical_order`).
+
+    WICHTIG (Bugfix nach False-Positive-Fund bei der #890-Fix-Runde):
+    `SequenceMatcher(a, b).ratio() != SequenceMatcher(b, a).ratio()` im
+    Allgemeinen (empirisch verifiziert, keine symmetrische Kennzahl trotz
+    des Namens). `deduplicate()` weist deshalb bewusst `seq1`/`seq2` nach
+    `canonical_order`-POSITION zu (niedrigere Position = `seq1`), NICHT
+    nach roher Listen-Reihenfolge — das war schon vor #890 so (#707) und
+    ist die Grundlage der Bridge-Record-Determinismus-Garantie. Eine
+    Referenz, die stattdessen rohe Listen-Reihenfolge fuer die a/b-Rollen
+    verwendet, ist bei manchen Titelpaaren nahe der Schwelle eine ANDERE
+    (falsche) Rechnung als das, was `deduplicate()` selbst berechnet, und
+    erzeugt dadurch Schein-Abweichungen, die keine echten Blocking-Fehler
+    sind (verifiziert: die alte UND die neue Implementierung liefern fuer
+    einen so gefundenen Fall IDENTISCHE Gruppen — nur die alte, rohe-Index-
+    basierte Referenz in dieser Testdatei war falsch). Diese Funktion
+    repliziert deshalb exakt dieselbe canonical-order-basierte Rollenwahl
+    wie `deduplicate()` (`_canonical_sort_key` + `normalize_doi`), um eine
+    tatsaechlich faire Referenz zu sein."""
+    working: list[dict[str, Any]] = []
+    for paper in papers:
+        paper_copy = dict(paper)
+        paper_copy["doi"] = normalize_doi(paper.get("doi"))
+        working.append(paper_copy)
+    canonical_order = sorted(range(len(working)), key=lambda idx: _canonical_sort_key(working[idx]))
+
+    titles = [(paper.get("title") or "").strip() for paper in working]
     pairs = set()
-    for i in range(len(titles)):
+    for a in range(len(canonical_order)):
+        i = canonical_order[a]
         if not titles[i]:
             continue
-        for j in range(i + 1, len(titles)):
+        for b in range(a + 1, len(canonical_order)):
+            j = canonical_order[b]
             if not titles[j]:
                 continue
             ratio = SequenceMatcher(None, titles[i].lower(), titles[j].lower()).ratio()
@@ -842,51 +899,39 @@ def _brute_force_title_pairs(titles: list[str], threshold: float) -> set[tuple[i
     return pairs
 
 
-def test_dedup_blocking_loses_no_merge_vs_brute_force():
-    """AC3-Aequivalenztest: Fuer eine synthetische Menge mit gestreuten
-    Titellaengen und Near-Duplicate-Clustern muss die geblockte
-    `deduplicate()`-Fassung dieselben Gruppen liefern wie eine reine
-    Brute-Force-Referenz ueber alle Paare."""
-    rng = random.Random(7)
-    vocab = [
-        "devops",
-        "governance",
-        "cloud",
-        "security",
-        "framework",
-        "large",
-        "organizations",
-        "study",
-        "systematic",
-        "review",
-        "empirical",
-        "analysis",
-        "continuous",
-        "delivery",
-        "pipeline",
-        "risk",
-        "compliance",
-        "architecture",
-        "microservices",
-        "agile",
-    ]
+def _generate_near_duplicate_titles(
+    count: int, vocab: list[str], seed: int, min_words: int = 2, max_words: int = 12
+) -> list[str]:
+    """Synthetische Titelmenge mit ~30% Near-Duplicate-Clustern (ein Wort
+    ersetzt) — dasselbe Muster wie die reale 12.08.2026-Messung, aber ohne
+    reale Treffermenge im Repo (#890, es existiert keine solche Fixture;
+    siehe PR-Beschreibung/Plan-Kommentar #890)."""
+    rng = random.Random(seed)
 
     def random_title(word_count: int) -> str:
         return " ".join(rng.choice(vocab) for _ in range(word_count)).title()
 
     titles: list[str] = []
-    for _ in range(80):
-        base = random_title(rng.randint(2, 12))
+    while len(titles) < count:
+        base = random_title(rng.randint(min_words, max_words))
         titles.append(base)
-        if rng.random() < 0.3:
-            # Near-Duplicate: ein Wort ersetzt (typisches Duplikaten-Muster).
+        if rng.random() < 0.3 and len(titles) < count:
             words = base.split()
             if words:
                 words[rng.randrange(len(words))] = rng.choice(vocab).title()
                 titles.append(" ".join(words))
+    return titles[:count]
 
-    threshold = 0.85
-    brute_pairs = _brute_force_title_pairs(titles, threshold)
+
+def _assert_blocking_matches_brute_force(titles: list[str], threshold: float = 0.85) -> None:
+    """AC3-Aequivalenz-Kern: die geblockte `deduplicate()`-Fassung muss
+    dieselben Gruppen liefern wie eine reine Brute-Force-Referenz ueber
+    alle Paare, unabhaengig von der internen Gruppen-Reihenfolge."""
+    papers = [
+        {"doi": None, "title": t, "authors": [f"tracer-{idx}"], "citations": 0}
+        for idx, t in enumerate(titles)
+    ]
+    brute_pairs = _brute_force_title_pairs(papers, threshold)
 
     # Union-Find ueber die Brute-Force-Paare als Referenzgruppierung
     # (ignoriert die ID-Konfliktregel bewusst, da hier keine IDs vorkommen).
@@ -915,10 +960,6 @@ def test_dedup_blocking_loses_no_merge_vs_brute_force():
     # Einzeltitel, nicht aber die Autoren).
     expected_id_groups = {frozenset(group) for group in expected_groups.values()}
 
-    papers = [
-        {"doi": None, "title": t, "authors": [f"tracer-{idx}"], "citations": 0}
-        for idx, t in enumerate(titles)
-    ]
     result = deduplicate(papers, threshold=threshold)
 
     result_id_groups = set()
@@ -930,6 +971,27 @@ def test_dedup_blocking_loses_no_merge_vs_brute_force():
         f"Gruppierung weicht ab: geblockt={sorted(map(sorted, result_id_groups))}, "
         f"brute-force={sorted(map(sorted, expected_id_groups))}"
     )
+
+
+def test_dedup_blocking_loses_no_merge_vs_brute_force():
+    """AC3-Aequivalenztest (Basisgroesse): 80 synthetische Titel mit
+    gestreuten Laengen und Near-Duplicate-Clustern."""
+    titles = _generate_near_duplicate_titles(80, _DEVOPS_VOCAB, seed=7)
+    _assert_blocking_matches_brute_force(titles)
+
+
+def test_dedup_blocking_loses_no_merge_vs_brute_force_multi_seed():
+    """AC3-Aequivalenztest, verschaerft: Es existiert keine reale
+    12.08.2026-Treffermenge im Repo (weder unter tests/fixtures/ noch unter
+    docs/evals/ — geprueft, siehe PR-Diskussion zu #890), daher ist eine
+    Brute-Force-Aequivalenzpruefung auf synthetischen Daten der bestmoegliche
+    ehrliche Ersatz. Um das Risiko zu senken, dass ein einzelner 80-Titel-
+    Lauf einen Blocking-Fehler verdeckt, laufen hier drei unabhaengige Seeds
+    bei 300 Titeln (mehr Near-Duplicate-Cluster, breitere Laengenstreuung)
+    gegen dieselbe Brute-Force-Referenz."""
+    for seed in (11, 23, 42):
+        titles = _generate_near_duplicate_titles(300, _DEVOPS_VOCAB, seed=seed)
+        _assert_blocking_matches_brute_force(titles)
 
 
 def test_dedup_blocking_performance_smoke():
@@ -950,3 +1012,19 @@ def test_dedup_blocking_performance_smoke():
     elapsed = time.monotonic() - start
 
     assert elapsed < 10.0, f"500 Titel dauerten {elapsed:.1f}s (Ziel < 10s)"
+
+
+def test_dedup_blocking_performance_2000_titles_ac1():
+    """AC1-Regressionswaechter bei Zielgroesse: 2000 Titel mit demselben
+    Vokabular/Near-Duplicate-Muster wie die AC3-Aequivalenztests muessen
+    deutlich unter 30s dedupliziert werden. Grosszuegige CI-Schranke
+    (10s statt der gemessenen ~4s), damit die Messung auf langsamerer
+    CI-Hardware nicht flakig wird."""
+    titles = _generate_near_duplicate_titles(2000, _DEVOPS_VOCAB, seed=1)
+    papers = [{"doi": None, "title": t, "authors": [], "citations": 0} for t in titles]
+
+    start = time.monotonic()
+    deduplicate(papers)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 10.0, f"2000 Titel dauerten {elapsed:.1f}s (Ziel < 30s, CI-Schranke 10s)"

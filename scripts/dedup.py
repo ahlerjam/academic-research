@@ -166,7 +166,22 @@ def _blocked_candidate_pairs(
             continue
         # ratio() <= threshold erfordert lb <= la*(2-threshold)/threshold
         # (Herleitung siehe `_length_bound_ok`-Docstring, la<=lb-Fall).
-        upper = la * (2 - threshold) / threshold
+        #
+        # Sicherheits-Epsilon (Bugfix #890-Fix-Runde): `la * (2 - threshold)
+        # / threshold` ist eine Gleitkomma-Division und kann am exakten
+        # Rand um wenige ULP nach UNTEN abweichen (z. B. `la=17,
+        # threshold=0.85` ergibt `22.999999999999996` statt exakt `23.0`).
+        # `bisect_right` wuerde dann `lb=23` fälschlich AUSSCHLIESSEN, obwohl
+        # `_length_bound_ok(17, 23, 0.85)` — dieselbe Ungleichung ohne
+        # Division berechnet — korrekt `True` liefert (`34 >= 34.0`).
+        # Belegter Fall: Titel "Devops Systematic" (17 Zeichen) und "Devops
+        # Large Systematic" (23 Zeichen) mit `ratio() == 0.85` (exakt auf
+        # der Schwelle) gingen dadurch als Paar komplett verloren. Ein
+        # Epsilon-Puffer VOR dem Bisect ist hier sicher, da eine
+        # Ueberinklusion (ein paar zusaetzliche Kandidaten im Fenster)
+        # ohnehin von `quick_ratio()`/`ratio()` danach herausgefiltert wird
+        # — nur eine UNTERinklusion kann ein reales Match verlieren.
+        upper = la * (2 - threshold) / threshold + 1e-9
         end = bisect.bisect_right(lengths, upper, lo=pos + 1)
         for pos2 in range(pos + 1, end):
             pairs.append((order_by_len[pos], order_by_len[pos2]))
@@ -351,6 +366,7 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
                 uf.union(first, other)
 
     titles = [(paper.get("title") or "").strip() for paper in working]
+    titles_lower = [t.lower() for t in titles]
 
     # Canonical (content-based, NOT input-position-based) processing order.
     # The greedy merge loop below is order-sensitive: when a bridge record
@@ -377,23 +393,57 @@ def deduplicate(papers: list[dict[str, Any]], threshold: float = 0.85) -> list[d
     # Fenster gescannt, in dem `SequenceMatcher.ratio() >= threshold`
     # ueberhaupt erreichbar ist (`_length_bound_ok`, mathematisch
     # bewiesenes notwendiges Kriterium — kein heute gefundenes Paar geht
-    # dadurch verloren). Fuer die im Fenster verbliebenen Paare filtert
-    # zusaetzlich `quick_ratio()` vor (echte Obergrenze fuer `ratio()` laut
-    # difflib-Doku: `quick_ratio() >= ratio()` immer), bevor der teure
-    # `ratio()`-Aufruf faellt.
+    # dadurch verloren). Bei realistischen (schmalen) Titellaengen-
+    # Verteilungen bleibt das Laengenfenster trotzdem gross (belegt: bei
+    # 2000 Titeln mit 51-151 Zeichen Laenge blieben ~53 % aller Paare im
+    # Fenster) — der eigentliche Engpass ist dann nicht die Paaranzahl,
+    # sondern dass fuer JEDES verbliebene Paar ein neues `SequenceMatcher`-
+    # Objekt konstruiert wird: `set_seq2()` baut dabei die komplette
+    # Zeichen-Frequenztabelle fuer `b` neu auf (O(len(b))), obwohl dasselbe
+    # `b` (der `j`-Titel) in vielen Paaren wiederkehrt (jeder Titel liegt im
+    # Laengenfenster mehrerer anderer). Fix: Paare nach ihrem `j`-Titel
+    # gruppieren und EINEN SequenceMatcher pro `j` wiederverwenden —
+    # `set_seq2(titles[j])` einmal, dann `set_seq1(titles[i])` je
+    # Gegenstueck; das ist exakt das von der difflib-Doku empfohlene Muster
+    # fuer "eine Sequenz gegen viele vergleichen" und liefert bit-identische
+    # `quick_ratio()`/`ratio()`-Werte zur bisherigen Pro-Paar-Konstruktion
+    # (beide bauen intern denselben State ueber `set_seqs(a, b) ==
+    # set_seq2(b) + set_seq1(a)` auf). `quick_ratio()` bleibt als echte
+    # Obergrenze fuer `ratio()` (laut difflib-Doku: `quick_ratio() >=
+    # ratio()` immer) der Vorfilter vor dem teuren `ratio()`-Aufruf.
+    #
+    # ACHTUNG Reihenfolge: `SequenceMatcher(a, b).ratio() !=
+    # SequenceMatcher(b, a).ratio()` im Allgemeinen (empirisch verifiziert —
+    # kein symmetrisches Mass trotz Doku-Beschreibung als
+    # "Aehnlichkeits"-Mass). Die bestehende Rollenzuweisung (`i` = niedrigere
+    # `canonical_order`-Position als `seq1`, `j` = hoehere als `seq2`) MUSS
+    # deshalb exakt erhalten bleiben — sie ist die Grundlage der
+    # Bridge-Record-Determinismus-Garantie aus #707/PR #758. Das Gruppieren
+    # nach `j` aendert nur die BERECHNUNGSREIHENFOLGE (welches Paar zuerst
+    # ausgewertet wird), nicht welches Argument als `seq1`/`seq2` verwendet
+    # wird — die spaetere `candidate_pairs.sort(...)` stellt ohnehin die
+    # bisherige Verarbeitungsreihenfolge wieder her, bevor die Paare in die
+    # Union-Find-Schleife gehen.
     non_empty_indices = [idx for idx in range(count) if titles[idx]]
     blocked_pairs = _blocked_candidate_pairs(non_empty_indices, titles, threshold)
 
-    candidate_pairs: list[tuple[int, int]] = []
+    pairs_by_j: dict[int, list[int]] = {}
     for x, y in blocked_pairs:
         if uf.find(x) == uf.find(y):
             continue
         i, j = (x, y) if position[x] < position[y] else (y, x)
-        matcher = SequenceMatcher(None, titles[i].lower(), titles[j].lower())
-        if matcher.quick_ratio() < threshold:
-            continue
-        if matcher.ratio() >= threshold:
-            candidate_pairs.append((i, j))
+        pairs_by_j.setdefault(j, []).append(i)
+
+    candidate_pairs: list[tuple[int, int]] = []
+    matcher = SequenceMatcher(None)
+    for j, candidates in pairs_by_j.items():
+        matcher.set_seq2(titles_lower[j])
+        for i in candidates:
+            matcher.set_seq1(titles_lower[i])
+            if matcher.quick_ratio() < threshold:
+                continue
+            if matcher.ratio() >= threshold:
+                candidate_pairs.append((i, j))
 
     # Reihenfolge exakt wie die bisherige verschachtelte Schleife: nach
     # `canonical_order`-Position sortiert (a vor b) — haelt die
