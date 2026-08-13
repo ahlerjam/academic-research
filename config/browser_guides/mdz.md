@@ -1,5 +1,8 @@
 # MDZ — Münchener Digitalisierungszentrum — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://www.digitale-sammlungen.de (Bayerische Staatsbibliothek)
 **Auth:** keine — MDZ digitalisiert ausschließlich gemeinfreie/rechtefreie
 Bestände, kein Login-Konzept für den Volltextzugriff.
@@ -10,14 +13,14 @@ Bestände, kein Login-Konzept für den Volltextzugriff.
 Kein Login erforderlich. MDZ ist ein Digitalisierungsportal der Bayerischen
 Staatsbibliothek für gemeinfreie Werke.
 
-1. `browser-use open https://www.digitale-sammlungen.de`
+1. `new_tab("https://www.digitale-sammlungen.de")`
 2. Direkt zur Discovery fortfahren.
 
 ## Discovery-Pfad
 
 1. Suchfeld auf der Startseite: Titel, Autor, ISBN (bei neueren Digitalisaten)
    oder Erscheinungsjahr eingeben.
-2. `browser-use state` → Trefferliste lesen.
+2. Trefferliste per `js(...)` lesen.
 3. Filter "Digitalisat verfügbar" links setzen, falls vorhanden — MDZ listet
    auch rein bibliografische Katalogisate ohne Scan.
 4. Auf Treffer klicken → Werkansicht/Viewer öffnet
@@ -48,7 +51,7 @@ Staatsbibliothek für gemeinfreie Werke.
 - Bei mehrbändigen Werken: sicherstellen, dass der passende Band ausgewählt
   ist, bevor der PDF-Download gestartet wird (MDZ listet Bände oft als
   separate Digitalisate mit eigener Werk-ID).
-- `browser-use download <pdf-link-idx> --to <output_path>`
+- PDF-Link klicken, Download nach `<output_path>` (Rezept in `_cli.md`).
 
 ## Access-Level-Matrix
 
@@ -72,7 +75,7 @@ des Digitalisats übernehmen, nicht das einer moderneren Neuauflage.
 - `status: metadata_only` wenn:
   - Katalogeintrag ohne Viewer-Link (kein Digitalisat vorhanden).
   - Viewer vorhanden, aber keine PDF-Download-Option (reiner Seitenbetrachter).
-- `status: captcha` wenn ein CAPTCHA in `browser-use state` sichtbar ist
+- `status: captcha` wenn ein CAPTCHA in `page_info()` sichtbar ist
   (selten bei MDZ).
 - `status: no_match` wenn Suche 0 Treffer liefert.
 - **HTTP 429 / Rate-Limit:** korrekt diagnostizieren (Statuscode +
@@ -91,7 +94,7 @@ des Digitalisats übernehmen, nicht das einer moderneren Neuauflage.
   Volltextsuche erzeugen — das betrifft nur die MDZ-eigene Suche, nicht den
   PDF-Download selbst.
 - Der Viewer läuft in einigen Fällen über `mdz-nbn-resolving.de`-Weiterleitung
-  — Zielseite nach Redirect erneut mit `browser-use state` prüfen.
+  — Zielseite nach Redirect erneut mit `page_info()` prüfen.
 - Der Rechtehinweis ist keine Formalie: MDZ stellt seine Digitalisate unter
   wechselnde Rights Statements (das geprüfte Beispiel unter NoC-NC, also ohne
   kommerzielle Nutzung). Das Statement der konkreten Werkseite gehört zur
