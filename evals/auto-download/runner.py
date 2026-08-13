@@ -40,6 +40,7 @@ import pdf as pdf_module  # noqa: E402
 # scripts/pdf.py. Aenderungen an der Tier-Liste muessen hier nachgezogen werden;
 # tests/evals/test_auto_download_routing.py prueft das Vokabular gegen sources.yaml.
 TIER_FUNCTIONS: dict[str, str] = {
+    "arxiv_direct": "tier_arxiv_direct",
     "unpaywall": "tier_unpaywall",
     "core": "tier_core",
     "module_oa": "tier_module_urls",
