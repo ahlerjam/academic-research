@@ -38,7 +38,7 @@ LLM-Qualität gemessen.
 **Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
 tests/evals/ -q` ohne installierte `claude`-CLI im PATH — `claude_cli_available()`
 gatet den Guard zusätzlich, Issue #631; der frühere parallele
-`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `346 passed, 197 skipped`.
+`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `529 passed, 199 skipped`.
 Die Skip-Zahl ist mit #823 von 195 auf 197 gestiegen, weil der neue
 Negativfall `pc-03` (`evals/plagiarism-check/evals.json`, `cwd: "none"`)
 genau zwei zusätzliche Skips erzeugt: einen Mode-Filter-Skip in
@@ -47,6 +47,17 @@ genau zwei zusätzliche Skips erzeugt: einen Mode-Filter-Skip in
 Lauf mit aus dem `PATH` entfernter `claude`-CLI, je einmal auf `main`
 (`426 passed, 195 skipped`) und auf dem Branch (`436 passed, 197 skipped`);
 keine bestehende Prüfung wurde stillgelegt.
+Mit #877 ist die Zahl zwischenzeitlich auf 208 gestiegen: der neue Skill
+`workflow-status` bringt eigene `evals/workflow-status/trigger_evals.json`
+(10 `should_trigger`/10 `should_not_trigger`, je API-gatet in
+`test_triggers.py`) und `evals.json` (4 Quality-Prompts) mit. Seither ist in
+`main` #840 gemergt (Fetcher-Konsolidierung: acht dedizierte Fetcher-Agenten
+-- doabooks, ebook-central, hathitrust, internetarchive, kvk, mdz,
+nationallizenzen, oapen -- zu einem generischen Fetcher zusammengefasst) und
+hat mehr API-gatete Skips entfernt, als #877 hinzugefuegt hat: aktueller
+Stand `529 passed, 199 skipped`, belegt durch einen echten Lauf mit aus dem
+`PATH` entfernter `claude`-CLI (`528 passed, 199 skipped` ohne diesen
+Guard-Test selbst, `+1` fuer ihn als bestandener Test).
 Seit #390 sind weitere Suiten dazugekommen (u. a.
 #524, #626, #628, #630, #721); die Skip-Zahl ist gegenüber dem #390-Snapshot
 gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
@@ -139,9 +150,10 @@ Spalten: Komponente | Status | Ausführungspfad | Begründung bzw. Anmerkung.
 | `submission-checker` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Prüft Einreichungsrichtlinien in natürlicher Sprache, die je Journal variieren. Ohne Key Skip. |
 | `title-generator` | structural | `tests/evals/test_rest_evals.py` (API-gated), `tests/evals/test_eval_coverage.py` | Titelqualität ist ein Geschmacks- und Präzisionsurteil ohne Referenzlösung. Ohne Key Skip. |
 | `topic-brainstorm` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Ideengenerierung ist per Definition offen; ein Offline-Assert würde Vielfalt bestrafen. Ohne Key Skip. |
+| `workflow-status` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Die Kernauswertung (`compute_status()`: erste Phase mit unerfüllter Vorbedingung, erledigte Phasen, Restkette bis Export) ist in `tests/test_issue_877_workflow_status.py` vollständig deterministisch getestet; die Evals prüfen nur, ob das Modell auf die Trigger-Formulierungen anspringt und Phase/nächsten Schritt inkl. Auslöser (Claude/Operator) im Fließtext wiedergibt, statt die Rohausgabe des Skripts unkommentiert zu zitieren. Ohne Key Skip. |
 | `zotero-import` | structural | `tests/evals/test_triggers.py` (API-gated), `tests/evals/test_eval_coverage.py` | Der Import-Pfad ist in `tests/test_zotero_import.py` abgedeckt; die Evals prüfen Trigger und Dialog. Ohne Key Skip. |
 
-**Bilanz:** 8 × `metric`, 51 × `structural`, 0 × `removed` (Stand Issue #606:
+**Bilanz:** 8 × `metric`, 52 × `structural`, 0 × `removed` (Stand Issue #606:
 `abstract-generator`, `chapter-writer`, `parallel-screening`, `quality-reviewer`
 und `source-quality-audit` von `structural` auf `metric` gehoben — vorher waren
 es 3 × `metric` und 56 × `structural`; Stand Issue #446:
@@ -152,6 +164,9 @@ wird kein Modell befragt; gemessen wird offline die Unterscheidungskraft der
 Kriterien gegen neun Negativkontrollen, siehe Zeile oben; Stand Issue #472:
 `defense-prep` neu, `structural` — Kernaussage- und Fragenkatalog-Qualität
 bleiben Modellurteile, die strukturellen Vorgaben deckt `tests/test_defense_prep.py`;
+Stand Issue #877: `workflow-status` neu, `structural` — Trigger-Erkennung und
+Fließtext-Wiedergabe von Phase/Auslöser bleiben Modellurteile, die
+Kernauswertung deckt `tests/test_issue_877_workflow_status.py` deterministisch;
 seither sind weitere Verzeichnisse dazugekommen, die Bilanzzahl wird durch
 `test_balance_line_matches_table_counts` gegen die Tabelle gehalten und muss bei
 jedem neuen `structural`-Eintrag mitgepflegt werden).
@@ -670,7 +685,7 @@ folgt einem festen Kriterium statt einer Einzelfallentscheidung:
   `reading-list-import`, `research-question-refiner`, `reviewer-response`,
   `slide-export`, `source-quality-audit`, `style-evaluator`,
   `submission-checker`, `title-generator`, `topic-brainstorm`,
-  `zotero-import`.
+  `workflow-status`, `zotero-import`.
 - **`bare`**: weder noch. Zwei Unterfälle: (a) eine offene Aufgabe ohne
   Referenzlösung, deren `SKILL.md`/Agent-Definition keine Kontextdatei-
   Vorbedingung stellt (`query-generator` s. o. ist Grenzfall und liegt bei

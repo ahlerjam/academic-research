@@ -648,3 +648,110 @@ def test_hook_failopen_when_vault_missing():
     assert result.returncode == 0, (
         f"Erwartet 0 (fail-open), got {result.returncode}. stderr: {result.stderr}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Issue #877: Phasenstand-Block nur im Compaction-Pfad
+# ---------------------------------------------------------------------------
+
+
+def test_hook_appends_phase_status_after_compaction(tmp_path):
+    """Nach SessionStart(source=compact) mit befuellter academic_context.md
+    erscheint ein dritter Block mit dem Phasenstand (AC5)."""
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "academic_context.md").write_text(
+        "## Profil\n- Universität: TU Beispiel\n\n## Fortschritt\n- [ ] Thema festgelegt\n",
+        encoding="utf-8",
+    )
+
+    payload = {
+        "hook_event_name": "SessionStart",
+        "source": "compact",
+    }
+    env_overrides = {
+        "VAULT_DB_PATH": str(tmp_path / "no-such-vault.db"),
+        "ACADEMIC_REINFORCEMENT_STATE": str(tmp_path / "state.json"),
+        "CLAUDE_PROJECT_DIR": str(project),
+        "CLAUDE_PLUGIN_ROOT": str(WORKTREE_ROOT),
+    }
+    result = run_hook(payload, env_overrides=env_overrides)
+    assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+    assert "[flowkit] Phase:" in result.stdout, (
+        f"Kein Phasenstand-Block nach Compaction: stdout={result.stdout!r}"
+    )
+
+
+def test_hook_phase_status_does_not_displace_decision_block(tmp_path):
+    """Der Phasenstand-Block haengt HINTER dem Decision-Block, statt ihn zu
+    verdraengen -- Regressionsschutz fuer das Ausgabebudget (AC6)."""
+    db_path = make_vault_with_decision(tmp_path, "Qualitative Analyse")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "academic_context.md").write_text(
+        "## Profil\n- Universität: TU Beispiel\n\n## Fortschritt\n- [ ] Thema festgelegt\n",
+        encoding="utf-8",
+    )
+
+    payload = {
+        "hook_event_name": "SessionStart",
+        "source": "compact",
+    }
+    env_overrides = {
+        "VAULT_DB_PATH": db_path,
+        "ACADEMIC_REINFORCEMENT_STATE": str(tmp_path / "state.json"),
+        "CLAUDE_PROJECT_DIR": str(project),
+        "CLAUDE_PLUGIN_ROOT": str(WORKTREE_ROOT),
+    }
+    result = run_hook(payload, env_overrides=env_overrides)
+    assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+    stdout = result.stdout
+    assert "Qualitative" in stdout
+    assert "[flowkit] Phase:" in stdout
+    # Decision-Block bleibt VOR dem Phasenstand-Block.
+    assert stdout.index("Qualitative") < stdout.index("[flowkit] Phase:"), (
+        f"Phasenstand-Block verdraengt den Decision-Block: {stdout!r}"
+    )
+
+
+def test_hook_no_phase_status_block_without_context(tmp_path):
+    """Ohne academic_context.md im Projekt bleibt der dritte Block ganz aus
+    (AC2/AC3 gelten auch fuer den Compaction-Pfad)."""
+    project = tmp_path / "project"
+    project.mkdir()
+
+    payload = {
+        "hook_event_name": "SessionStart",
+        "source": "compact",
+    }
+    env_overrides = {
+        "VAULT_DB_PATH": str(tmp_path / "no-such-vault.db"),
+        "ACADEMIC_REINFORCEMENT_STATE": str(tmp_path / "state.json"),
+        "CLAUDE_PROJECT_DIR": str(project),
+        "CLAUDE_PLUGIN_ROOT": str(WORKTREE_ROOT),
+    }
+    result = run_hook(payload, env_overrides=env_overrides)
+    assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+    assert "[flowkit] Phase:" not in result.stdout
+
+
+def test_hook_no_phase_status_block_on_userpromptsubmit(tmp_path):
+    """Der Phasenstand-Block ist Compaction-only -- auf UserPromptSubmit
+    (auch mit befuellter academic_context.md) erscheint er nicht."""
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "academic_context.md").write_text(
+        "## Profil\n- Universität: TU Beispiel\n", encoding="utf-8"
+    )
+
+    payload = {"hook_event_name": "UserPromptSubmit"}
+    env_overrides = {
+        "VAULT_DB_PATH": str(tmp_path / "no-such-vault.db"),
+        "ACADEMIC_REINFORCEMENT_STATE": str(tmp_path / "state.json"),
+        "ACADEMIC_REINFORCEMENT_N": "1",
+        "CLAUDE_PROJECT_DIR": str(project),
+        "CLAUDE_PLUGIN_ROOT": str(WORKTREE_ROOT),
+    }
+    result = run_hook(payload, env_overrides=env_overrides)
+    assert result.returncode == 0, f"Erwartet 0, got {result.returncode}. stderr: {result.stderr}"
+    assert "[flowkit] Phase:" not in result.stdout

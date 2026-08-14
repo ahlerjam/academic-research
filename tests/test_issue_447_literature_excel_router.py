@@ -247,15 +247,15 @@ def test_readme_skills_doc_does_not_list_bare_excel_trigger():
 # --------------------------------------------------------------------------
 
 
-def test_skill_count_is_45_across_docs_and_manifests():
+def test_skill_count_is_46_across_docs_and_manifests():
     skill_count = len(
         [p for p in (REPO_ROOT / "skills").glob("*/SKILL.md") if p.parent.name != "_common"]
     )
-    assert skill_count == 45, f"Erwartet 45 Skills, gefunden {skill_count}."
+    assert skill_count == 46, f"Erwartet 46 Skills, gefunden {skill_count}."
 
-    assert "skills-45" in README.read_text(encoding="utf-8")
-    assert "45 Skills" in _docs.SKILLS_DOC.read_text(encoding="utf-8")
-    assert "45 Skills" in AGENTS_MD.read_text(encoding="utf-8")
+    assert "skills-46" in README.read_text(encoding="utf-8")
+    assert "46 Skills" in _docs.SKILLS_DOC.read_text(encoding="utf-8")
+    assert "46 Skills" in AGENTS_MD.read_text(encoding="utf-8")
 
     plugin_data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
     assert "45" in plugin_data["description"]

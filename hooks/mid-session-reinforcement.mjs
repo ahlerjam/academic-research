@@ -15,6 +15,13 @@
  * die echten Entscheidungen aus dem Fenster draengen.
  * Loest max. 1× pro 20 Messages aus (State-Datei verhindert Duplikate).
  *
+ * Dritter, Compaction-only Block (#877): der Phasenstand aus
+ * academic_context.md gegen config/workflow-phases.json (dieselbe Logik wie
+ * der SessionStart-Hook, ueber scripts/workflow_status.py) — haengt HINTER
+ * den beiden Decision-Bloecken an, damit deren Ausgabebudget (MAX_DECISIONS/
+ * MAX_FILE_CHANGES) unangetastet bleibt. Auf UserPromptSubmit bleibt der
+ * Block aus, um das haeufigere Trigger-Intervall nicht zusaetzlich zu fuellen.
+ *
  * Zaehlung der User-Messages (Fix #382 P2-Finding aus PR #420-Review):
  * Der UserPromptSubmit-Payload von Claude Code enthaelt laut Doku KEIN
  * `message_count`-Feld (nur session_id, prompt_id, transcript_path, cwd,
@@ -41,9 +48,17 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import * as os from 'node:os';
 
-import { resolveVaultDb, VAULT_SRC, runVaultPython } from './lib/vault-bridge.mjs';
+import { resolveVaultDb, VAULT_SRC, runVaultPython, pythonCandidates } from './lib/vault-bridge.mjs';
+
+// Plugin-Wurzel dieser Datei (liegt direkt in hooks/, eine Ebene hoch reicht —
+// im Gegensatz zu hooks/lib/vault-bridge.mjs, das zwei Ebenen hochgeht).
+const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT_SELF = dirname(HOOK_DIR);
+const WORKFLOW_STATUS_SCRIPT = join(PLUGIN_ROOT_SELF, 'scripts', 'workflow_status.py');
 
 // Kanonischer DB-Default (Single Source of Truth, Issue #190/#527): kommt aus
 // hooks/lib/vault-bridge.mjs — derselben Aufloesung, die der PostToolUse-Hook zum
@@ -68,6 +83,13 @@ const MAX_FILE_CHANGES = 3;
 // Trigger-Mess-Harness: runVaultPython() bekam bislang kein ``budget`` und
 // probierte bis zu vier Kandidaten a 10 s ungebremst durch).
 const LOOKUP_BUDGET_MS = 10000;
+
+// Eigenes, knappes Zeitbudget fuer den Phasenstand-Lookup (#877) — laeuft nur
+// im Compaction-Pfad, zusaetzlich zum Vault-Lookup oben, innerhalb desselben
+// 15s-Hook-Timeouts. Deutlich kleiner als LOOKUP_BUDGET_MS: workflow_status.py
+// liest nur zwei lokale Dateien (kein DB-Zugriff), ein haengender Kandidat
+// darf den Hook trotzdem nicht in die Naehe des Gesamt-Timeouts treiben.
+const PHASE_STATUS_BUDGET_MS = 4000;
 
 // ---------------------------------------------------------------------------
 // Stdin lesen
@@ -183,15 +205,56 @@ function loadTopDecisions() {
 }
 
 // ---------------------------------------------------------------------------
+// Phasenstand laden (#877, nur Compaction-Pfad)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ruft scripts/workflow_status.py auf und liefert dessen Zeilen (bereits
+ * fertig formatiert als '[flowkit] ...'-Zeilen) oder ein leeres Array bei
+ * jedem Fehlerpfad (Skript fehlt, kein Interpreter, Timeout, kaputte
+ * Ausgabe) — fail-open, analog zu loadTopDecisions().
+ */
+function loadPhaseStatusLines() {
+  if (!existsSync(WORKFLOW_STATUS_SCRIPT)) {
+    return [];
+  }
+  const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || PLUGIN_ROOT_SELF;
+  const startedAt = Date.now();
+  for (const python of pythonCandidates()) {
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= PHASE_STATUS_BUDGET_MS) {
+      break;
+    }
+    try {
+      const output = execFileSync(
+        python,
+        [WORKFLOW_STATUS_SCRIPT, '--project-dir', projectDir, '--plugin-root', pluginRoot],
+        {
+          encoding: 'utf-8',
+          timeout: PHASE_STATUS_BUDGET_MS - elapsed,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        },
+      );
+      return output.split('\n').map((l) => l.trimEnd()).filter((l) => l.length > 0);
+    } catch {
+      // naechster Kandidat; kein Log noetig, das Skript selbst ist fail-silent
+    }
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Reminder ausgeben
 // ---------------------------------------------------------------------------
 
 /**
- * Gibt den System-Hint auf stdout aus — zwei Bloecke (#527):
- * die manuell gepflegten Decisions und, davon getrennt, die zuletzt
- * geaenderten Dateien.
+ * Gibt den System-Hint auf stdout aus — zwei feste Bloecke (#527): die
+ * manuell gepflegten Decisions und, davon getrennt, die zuletzt geaenderten
+ * Dateien. Ein dritter, optionaler Block (#877, nur Compaction-Pfad) haengt
+ * dahinter an, ohne die beiden ersten zu verdraengen.
  */
-function printReminder({ manual = [], auto = [] } = {}) {
+function printReminder({ manual = [], auto = [] } = {}, phaseLines = []) {
   const lines = ['[Reinforcement] Aktive Decisions:'];
   for (const d of manual) {
     const cat = d.category ? `[${d.category}] ` : '';
@@ -205,6 +268,9 @@ function printReminder({ manual = [], auto = [] } = {}) {
     for (const d of auto) {
       lines.push(`  - ${d.text}`);
     }
+  }
+  if (phaseLines.length > 0) {
+    lines.push(...phaseLines);
   }
   // Auf stdout (wird als System-Hint an Modell weitergegeben)
   process.stdout.write(lines.join('\n') + '\n');
@@ -267,8 +333,12 @@ async function main() {
   // Decisions laden
   const decisions = loadTopDecisions();
 
+  // Phasenstand nur im Compaction-Pfad (#877) — auf UserPromptSubmit bliebe
+  // der zusaetzliche Lookup ungenutztes Zeitbudget im haeufigeren Intervall.
+  const phaseLines = isCompaction ? loadPhaseStatusLines() : [];
+
   // Reminder ausgeben
-  printReminder(decisions);
+  printReminder(decisions, phaseLines);
 
   // Kein weiterer saveState: prompt_count ist oben bereits persistiert, der
   // Compaction-Pfad veraendert den State ueberhaupt nicht.
