@@ -96,7 +96,11 @@ Für die systematische Recherche mit Browser-Modulen (Google Scholar, Springer, 
 ```
 
 Das ist der teuerste Suchmodus — Details zu Modi und Quellen stehen in
-[Suchquellen und Scoring](../reference/search.md).
+[Suchquellen und Scoring](../reference/search.md). Unbeaufsichtigt läuft
+`--mode deep` nur, wenn `/academic-research:setup` (Schritt 4) den
+Chrome-Verbindungsweg bereits eingerichtet hat — sonst bricht der
+Browser-Teil kontrolliert mit einer Handlungsanweisung ab, siehe
+[troubleshooting.md](troubleshooting.md).
 
 ## 7. Literaturliste aus einem Handout übernehmen
 

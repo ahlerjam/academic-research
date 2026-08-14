@@ -5,12 +5,13 @@
 #   1. Datenverzeichnis + Python venv
 #   2. Python-Pakete aus requirements.txt
 #   3. browser-use CLI (via uv oder pipx)
-#   4. Check: globaler browser-use Claude-Skill
-#   5. Claude-Code-Permissions via configure_permissions.py
-#   6. Projekt-Bootstrap (Auto-Detect) via project_bootstrap.py
-#   7. Uni-Profil-Setup (F16.5) via uni_profile_setup.py
-#   8. SciHub Opt-in (F18) via scihub_optin.py
-#   9. Modell-Vorab-Download (#718) via model_prefetch.py
+#   4. Chrome-Verbindungsweg einrichten (#907) via browser_connection_setup.py
+#   5. Check: globaler browser-use Claude-Skill
+#   6. Claude-Code-Permissions via configure_permissions.py
+#   7. Projekt-Bootstrap (Auto-Detect) via project_bootstrap.py
+#   8. Uni-Profil-Setup (F16.5) via uni_profile_setup.py
+#   9. SciHub Opt-in (F18) via scihub_optin.py
+#   10. Modell-Vorab-Download (#718) via model_prefetch.py
 
 set -euo pipefail
 
@@ -144,7 +145,26 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 4. browser-use Claude-Skill (global)
+# 4. Chrome-Verbindungsweg einrichten (#907)
+# ---------------------------------------------------------------------------
+# Ermittelt/vermerkt einmalig, ueber welchen Weg browser-use den Browser
+# erreicht (lokales Chrome oder Cloud-Browser), statt das bei jedem Lauf neu
+# auszuhandeln. Ohne installierte CLI (Schritt 3 fehlgeschlagen) liefert
+# browser-use --doctor keine Treffer, es wird trotzdem der sichere
+# lokale Default vermerkt (kein Hard-Fail, analog zum Node.js-Muster oben).
+# Bei nicht-interaktivem stdin (z.B. dieser /setup-Aufruf durch Claude Code)
+# wird NIE automatisch der kostenpflichtige Cloud-Weg gewaehlt (#907 AC5).
+
+if command -v browser-use &>/dev/null; then
+  "$BASE/venv/bin/python" "$SCRIPT_DIR/browser_connection_setup.py" --setup
+else
+  echo "⚠️  Chrome-Verbindungsweg uebersprungen — browser-use CLI fehlt (siehe Schritt 3)."
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 5. browser-use Claude-Skill (global)
 # ---------------------------------------------------------------------------
 
 if [ -d "${HOME}/.claude/skills/browser-use" ]; then
@@ -158,7 +178,7 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 5. Claude-Code-Permissions (benutzerweit, nicht projektbezogen)
+# 6. Claude-Code-Permissions (benutzerweit, nicht projektbezogen)
 # ---------------------------------------------------------------------------
 # configure_permissions.py zeigt die neu zu setzenden Regeln an und schreibt
 # sie erst nach Bestaetigung (Issue #458). Bei nicht-interaktivem stdin
@@ -179,7 +199,7 @@ if [ "$REMAINING_PERMS" -gt 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Projekt-Bootstrap (Auto-Detect)
+# 7. Projekt-Bootstrap (Auto-Detect)
 # ---------------------------------------------------------------------------
 
 "$BASE/venv/bin/python" "$SCRIPT_DIR/project_bootstrap.py"
@@ -187,7 +207,7 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 7. Uni-Profil-Setup (F16.5)
+# 8. Uni-Profil-Setup (F16.5)
 # ---------------------------------------------------------------------------
 # Mit --uni <profil>: kopiert config/library-profiles/<profil>.yaml nicht-
 # interaktiv nach ~/.academic-research/library-profiles/active.yaml.
@@ -204,7 +224,7 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 8. SciHub Opt-in (F18)
+# 9. SciHub Opt-in (F18)
 # ---------------------------------------------------------------------------
 # Fragt interaktiv, ob der rechtlich umstrittene SciHub-Last-Resort-Tier
 # aktiviert werden soll, und schreibt das Ergebnis als scihub_optin nach
@@ -216,7 +236,7 @@ echo ""
 echo ""
 
 # ---------------------------------------------------------------------------
-# 9. Modell-Vorab-Download (#718)
+# 10. Modell-Vorab-Download (#718)
 # ---------------------------------------------------------------------------
 # Fragt einmal, ob alle drei lokalen Modelle (Embedding, Reranker,
 # NLI-Zitatscan; zusammen ~3,9 GB) jetzt vollstaendig geladen werden sollen,
