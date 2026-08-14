@@ -19,10 +19,19 @@ to the cache even though the PR head had moved (#817).
 
 Conservative by design — any anomaly is a MISS (full review runs):
 missing comment, missing/mismatched hash, malformed JSON, findings that
-would crash the gate (missing ``severity``). Fail-open goes toward a full
-review, never toward green-without-review. Note that a base update touching
-the same files as the PR changes the diff's context lines, so the hash
-differs and a real re-review runs — exactly when it is warranted.
+would crash the gate (missing ``severity``), and cached ``ci-failure``
+placeholders (see below). Fail-open goes toward a full review, never toward
+green-without-review. Note that a base update touching the same files as the
+PR changes the diff's context lines, so the hash differs and a real re-review
+runs — exactly when it is warranted.
+
+The ``ci-failure`` case is what made five PRs unmergeable at once (run
+``wf_9e31f7a1-4fb``): when a reviewer job is cancelled, ``pr-deep-review.yml``
+writes a P1 placeholder saying the reviewer produced no output. Caching that
+placeholder is self-sealing — the hit skips the reviewer jobs, the gate
+re-applies the phantom P1, and since the diff stays byte-identical a re-run
+never clears it. Only a human forcing ``override-claude-review`` could break
+the loop. Such a placeholder is therefore always a MISS.
 
 Output (stdout, ``$GITHUB_OUTPUT`` format)::
 
@@ -41,6 +50,12 @@ from typing import Any
 
 JSON_MARKER_OPEN = "<!-- flowkit-review-json:v1"
 JSON_MARKER_CLOSE = "-->"
+
+# Kategorie des Platzhalter-Findings, das ``pr-deep-review.yml`` schreibt, wenn
+# ein Reviewer-Job kein Artifact hinterlaesst (``result=cancelled``/``failure``).
+# Es ist KEIN Urteil ueber den Diff, sondern eine Aussage ueber einen kaputten
+# Lauf — und darf deshalb nie aus dem Cache wiederkehren (siehe ``check``).
+CI_FAILURE_CATEGORY = "ci-failure"
 
 
 def extract_payload(previous_body: str) -> dict[str, Any]:
@@ -76,6 +91,15 @@ def check(diff_path: Path, previous_path: Path) -> tuple[bool, str, dict[str, An
     if not isinstance(findings, list) or any(
         not isinstance(f, dict) or "severity" not in f for f in findings
     ):
+        return (False, diff_hash, {})
+
+    # Ein Platzhalter aus einem abgebrochenen Reviewer-Job ist kein Befund ueber
+    # den Diff — er sagt nur, dass niemand geurteilt hat. Waere er cachefaehig,
+    # bliebe der PR dauerhaft blockiert: der Treffer ueberspringt die
+    # Reviewer-Jobs, das Gate wendet das Phantom-P1 erneut an, und weil der Diff
+    # byte-identisch ist, aendert auch ein Re-Run daran nichts. MISS heisst hier
+    # "einmal richtig reviewen" und deckt sich mit der Fail-open-Regel oben.
+    if any(f.get("category") == CI_FAILURE_CATEGORY for f in findings):
         return (False, diff_hash, {})
 
     return (True, diff_hash, payload)

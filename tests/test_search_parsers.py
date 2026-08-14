@@ -111,6 +111,46 @@ def test_openalex_parses_real_fixture(monkeypatch):
     assert all(r["title"] for r in results)
     assert all(r["source_module"] == "openalex" for r in results)
 
+    first = results[0]
+    assert first["doi"] is None
+    assert first["title"] == "Climate change 2007: the physical science basis"
+    assert first["authors"][:2] == ["Susan Solomon", "Dahe Qin"]
+    assert first["year"] == 2007
+    assert first["citations"] == 23477
+    assert first["venue"] == (
+        "University of North Texas Digital Library (University of North Texas)"
+    )
+    assert first["url"] == "https://openalex.org/W2939474406"
+    assert first["oa_url"] == "https://digital.library.unt.edu/ark:/67531/metadc950228/"
+    assert first["is_retracted"] is False
+
+    third = results[2]
+    assert third["doi"] == "10.2307/20033020"
+    assert third["citations_normalized"] == 2745.478
+
+
+def test_openalex_uses_search_query_param_not_deprecated_filter_syntax(monkeypatch):
+    """Regressions-Guard fuer AC1 (#850): OpenAlex hat die Filter-Suchsyntax
+    (filter=default.search:/filter=title.search:) als deprecated markiert,
+    empfohlen ist ausschliesslich der ?search=-Query-Parameter (Beleg:
+    https://help.openalex.org/guides/searching, Stand 2026-08-13). Dieser Test
+    haelt fest, dass search_openalex() ueber 'search' und nicht ueber 'filter'
+    parametriert, damit eine stille Rueckkehr zur alten Syntax auffaellt."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(dict(request.url.params))
+        body = (FIXTURES / "openalex_response.json").read_bytes()
+        return httpx.Response(200, content=body, headers={"content-type": "application/json"})
+
+    _patch_client(monkeypatch, handler)
+
+    search.search_openalex("climate change", limit=3)
+
+    assert "search" in captured
+    assert captured["search"] == "climate change"
+    assert "filter" not in captured
+
 
 def test_openalex_passes_through_is_retracted_true(monkeypatch):
     """Ein Treffer mit is_retracted: true traegt das Merkmal nach der Normalisierung (#618 AC1)."""

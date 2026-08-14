@@ -12,6 +12,9 @@ browser-guide: config/browser_guides/nationallizenzen.md
 
 # nationallizenzen
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst nationallizenzen.de wie ein Mensch. Nur browser-use — kein curl, kein wget.
 
 **Lies zuerst:** `config/browser_guides/nationallizenzen.md`
@@ -38,11 +41,9 @@ Wenn NICHT enthalten:
 
 ## Discovery-Flow
 
-1. ```
-   browser-use open https://www.nationallizenzen.de
-   ```
+1. `new_tab("https://www.nationallizenzen.de")`
 2. Suche im Nationallizenzen-Katalog: Titel, ISBN, DOI oder Verlag eingeben
-3. `browser-use state` → Treffer pruefen
+3. Treffer per `js(...)` pruefen
 4. Verlags-Link in Trefferdetails notieren (Springer, Wiley, De Gruyter etc.)
 5. Auf Verlags-Link klicken → Verlagsseite oeffnet
 
@@ -55,7 +56,7 @@ Bei 0 Treffern im Nationallizenzen-Katalog:
 
 ## Auth-Trigger auf Verlagsseite
 
-Nach Weiterleitung auf Verlagsseite `browser-use state` pruefen:
+Nach Weiterleitung auf die Verlagsseite den Seitenzustand (`page_info()`, `js(...)`) pruefen:
 
 **Auth-Trigger-Bedingungen (Paywall-Erkennung auf Verlagsseite):**
 - "Sign in via institution" / "Institutional login"-Button sichtbar
@@ -86,12 +87,9 @@ Nach erfolgreicher Auth auf Verlagsseite:
 
 Der Download-Prozess folgt dem verlagsspezifischen Muster (Springer: "Download book PDF", De Gruyter: "PDF herunterladen" etc.).
 
-1. `browser-use state` → Download-Button auf Verlagsseite suchen
+1. Download-Button auf der Verlagsseite ueber den AX-Baum suchen
 2. Button gefunden → klicken und PDF sichern:
-   ```
-   browser-use click <download-btn-idx>
-   browser-use download <pdf-idx> --to <output_path>
-   ```
+   Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`).
 3. PDF-Validierung: erste 4 Bytes `%PDF`, Groesse > 10 KB
 
 Wenn kein Download-Button nach Auth:
