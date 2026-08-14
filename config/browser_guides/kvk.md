@@ -41,8 +41,8 @@ KVK zeigt physische UND digitale Bestände gemischt. Priorisierung:
 3. "Online-Ressource" ohne Preisangabe = OA-Kandidat.
 4. Nur Print-Nachweis → Standort-Info sammeln.
 
-Bei gefundenem Volltext-Link: Link öffnen, auf der Zielseite herunterladen
-(`browser-use download <pdf-idx> --to <output_path>`), Datei verifizieren.
+Bei gefundenem Volltext-Link: Link öffnen, auf der Zielseite herunterladen,
+Download nach `<output_path>` (Rezept in `_cli.md`), Datei verifizieren.
 
 ### Standort-Info
 

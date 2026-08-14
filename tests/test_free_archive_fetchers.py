@@ -50,8 +50,12 @@ class TestArchiveGuides:
 
     @pytest.mark.parametrize("site", sorted(ARCHIVE_GUIDES))
     def test_guide_drives_browser_use(self, site):
-        assert "browser-use" in _guide(site), (
-            f"config/browser_guides/{ARCHIVE_GUIDES[site]} nennt browser-use nicht"
+        """Seit #906 wiederholen Guides die CLI-Syntax nicht mehr inline,
+        sondern verweisen auf die einzige Quelle ``_cli.md`` (Heredoc-Form,
+        Helfer, Element-Adressierung, Download)."""
+        assert "_cli.md" in _guide(site), (
+            f"config/browser_guides/{ARCHIVE_GUIDES[site]} verweist nicht auf "
+            "die CLI-Doku (_cli.md)"
         )
 
     @pytest.mark.parametrize("site", sorted(ARCHIVE_GUIDES))

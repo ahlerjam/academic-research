@@ -158,10 +158,13 @@ class TestGuideDrivenSites:
 
     @pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
     def test_guide_drives_browser_use(self, site, guide_name):
+        """Seit #906 wiederholen Guides die CLI-Syntax nicht mehr inline,
+        sondern verweisen auf die einzige Quelle ``_cli.md`` (Heredoc-Form,
+        Helfer, Element-Adressierung, Download)."""
         text = (GUIDES_DIR / guide_name).read_text(encoding="utf-8")
-        assert "browser-use" in text, (
-            f"config/browser_guides/{guide_name} nennt browser-use nicht — der "
-            "Zugriffsweg waere ohne Werkzeug beschrieben"
+        assert "_cli.md" in text, (
+            f"config/browser_guides/{guide_name} verweist nicht auf die "
+            "CLI-Doku (_cli.md) — der Zugriffsweg waere ohne Werkzeug beschrieben"
         )
 
     @pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
