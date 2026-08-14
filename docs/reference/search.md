@@ -48,6 +48,14 @@ Auth-Module danach.
 > Ohne installierte `browser-use`-CLI werden die Browser-Module übersprungen; die
 > API-Suche funktioniert unverändert weiter. Das Setup meldet das explizit.
 
+Vor dem ersten Browser-Modul eines Laufs prüft `scripts/browser_preflight.py`
+den in `/academic-research:setup` (Schritt 4) eingerichteten
+Chrome-Verbindungsweg (#907). Steht die Verbindung nicht, wird nur der
+Browser-Teil für diesen Lauf übersprungen (mit Handlungsanweisung statt
+`permission-blocked`) — die API-Module laufen unabhängig davon weiter. Ohne
+eingerichteten Weg ist `--mode deep` nicht unbeaufsichtigt lauffähig, siehe
+[troubleshooting.md](../guide/troubleshooting.md).
+
 Woher die Auth-Module (`ebscohost`, `proquest`, `opac`) ihre HAN-Zugangsdaten nehmen und
 wie sich das vom Per-Uni-Profil unterscheidet, steht gesammelt unter
 [Zugangsdaten](../guide/installation.md#zugangsdaten).
