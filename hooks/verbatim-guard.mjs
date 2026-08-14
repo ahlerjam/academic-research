@@ -41,7 +41,7 @@ import {
 } from './lib/citation-parse.mjs';
 import { loadConfig, resolveCitations } from './lib/citation-cascade.mjs';
 import { isProtectedPath, isMarkdownOrTexFile, chapterDirLabel } from './lib/protected-path.mjs';
-import { runVaultPython } from './lib/vault-bridge.mjs';
+import { runVaultPython, ensureQuoteBatch } from './lib/vault-bridge.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -298,62 +298,55 @@ function warnFailOpen(context, kind, detail) {
 }
 
 // ---------------------------------------------------------------------------
-// Vault-/Figure-Lookup via EINEN Python-Subprozess (gebuendelt)
+// Vault-/Figure-Lookup ueber den geteilten Batch-Cache (Issue #844)
 // ---------------------------------------------------------------------------
+//
+// Der fruehere eigene PY_BATCH_LOOKUP-Subprozess-Aufruf (ein Interpreterstart
+// je Write fuer Quotes+Figures dieses Guards) ist durch
+// hooks/lib/vault-bridge.mjs::ensureQuoteBatch() ersetzt — geteilt mit
+// claim-drift-guard.mjs und context-fidelity-guard.mjs, EIN Subprozess je
+// Write statt einem je Guard (siehe lookupBatch() unten).
 
 /**
- * Schlaegt ALLE Quote-Spans und ALLE Figure-Referenzen eines Writes in EINEM
- * Subprozess nach (Muster aus claim-drift-guard.mjs::PY_LOOKUP). Ein
- * Interpreterstart je Aufruf statt einem je Span — sonst summieren sich
- * Interpreterstart + academic_vault-Import ueber das Hook-Timeout hinaus.
- *
- * Jeder Eintrag wird EINZELN in try/except gekapselt: faellt ein Lookup aus,
- * betrifft das genau diesen Eintrag (``{"error": ...}``) und nicht den ganzen
- * Batch — das entspricht dem frueheren Verhalten, bei dem ein Subprozess je
- * Span lief und nur dieser eine fail-open wurde.
+ * Deutet EINEN Eintrag aus dem geteilten Batch-Cache (ensureQuoteBatch) —
+ * `undefined` (Schluessel fehlt trotz Zusicherung), `null` (kein Treffer),
+ * `{error}` (Lookup fuer GENAU diesen Eintrag gescheitert) oder ein Record.
+ * ``true`` heisst "nicht blockieren" (Treffer oder fail-open) — dasselbe
+ * Prinzip wie beim frueheren readBatchFlags() (vor #844, ein Eintrag je
+ * Guard-eigenem Subprozess-Aufruf statt je Cache-Eintrag).
  */
-const PY_BATCH_LOOKUP = [
-  'import sys, json',
-  `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-  'from academic_vault.server import search_quote_text, find_figure_by_caption',
-  'db_path = sys.argv[1]',
-  'payload = json.loads(sys.argv[2])',
-  'out = {"quotes": [], "figures": []}',
-  'for kind, fn in (("quotes", search_quote_text), ("figures", find_figure_by_caption)):',
-  '    for needle in payload[kind]:',
-  '        try:',
-  '            out[kind].append(bool(fn(db_path, needle)))',
-  '        except Exception as exc:',
-  '            out[kind].append({"error": "%s: %s" % (type(exc).__name__, exc)})',
-  'print(json.dumps(out))',
-].join('\n');
-
-/**
- * Deutet die Ergebnisliste EINER Sorte (Quotes oder Figures) aus dem Batch.
- * ``true`` heisst "nicht blockieren" — entweder Treffer im Vault oder
- * fail-open nach einem Fehler. Fehler werden je Eintrag gemeldet, damit ein
- * einzelner kaputter Lookup nicht die uebrigen Ergebnisse entwertet und
- * umgekehrt kein Eintrag stillschweigend als verifiziert gilt.
- */
-function readBatchFlags(values, expected, context) {
-  if (expected === 0) return [];
-  if (!Array.isArray(values) || values.length !== expected) {
-    warnFailOpen(context, 'lookup-error', `unerwartete Antwortform (erwartet ${expected} Ergebnisse)`);
-    return Array.from({ length: expected }, () => true);
+function cachedQuoteFlag(entry, context) {
+  if (entry === undefined) {
+    return warnFailOpen(context, 'lookup-error', 'Zitat fehlt im geteilten Batch-Cache');
   }
-  return values.map((value) => {
-    if (typeof value === 'boolean') return value;
-    // Fall 2: DB vorhanden, aber Exception fuer GENAU diesen Eintrag.
-    return warnFailOpen(context, 'lookup-error', value?.error || 'unerwarteter Ergebniswert');
-  });
+  if (entry === null) return false;
+  if (typeof entry === 'object' && entry.error) {
+    return warnFailOpen(context, 'lookup-error', entry.error);
+  }
+  return Boolean(entry.found);
+}
+
+function cachedFigureFlag(entry, context) {
+  if (entry === undefined) {
+    return warnFailOpen(context, 'lookup-error', 'Figure-Referenz fehlt im geteilten Batch-Cache');
+  }
+  if (typeof entry === 'boolean') return entry;
+  return warnFailOpen(context, 'lookup-error', entry?.error || 'unerwarteter Ergebniswert');
 }
 
 /**
  * Sucht alle Zitat-Texte und Figure-Referenzen im Vault.
  * Rueckgabe: ``{quotes: boolean[], figures: boolean[]}`` in Eingabereihenfolge,
  * ``true`` = kein Block (Treffer oder fail-open).
+ *
+ * Nutzt zuerst den geteilten Batch-Cache (Issue #844,
+ * hooks/lib/vault-bridge.mjs::ensureQuoteBatch) — geteilt mit
+ * claim-drift-guard.mjs und context-fidelity-guard.mjs, EIN Subprozess je
+ * Write statt einem je Guard. Liefert der Cache `null` (nicht verfuegbar oder
+ * fehlgeschlagen), faellt dieser Guard unveraendert auf seinen eigenen
+ * Direktaufruf zurueck (fail-open bleibt exakt wie vor #844).
  */
-function lookupBatch(spanTexts, figureRefs) {
+function lookupBatch(spanTexts, figureRefs, ctx) {
   const allOpen = () => ({
     quotes: spanTexts.map(() => true),
     figures: figureRefs.map(() => true),
@@ -369,33 +362,34 @@ function lookupBatch(spanTexts, figureRefs) {
     return allOpen();
   }
 
-  const payload = JSON.stringify({ quotes: spanTexts, figures: figureRefs });
-  const output = runVaultPython(PY_BATCH_LOOKUP, [VAULT_DB, payload], {
-    timeout: VAULT_LOOKUP_BUDGET_MS,
+  const batch = ensureQuoteBatch({
+    filePath: ctx.filePath,
+    toolName: ctx.toolName,
+    toolInput: ctx.toolInput,
+    vaultDb: VAULT_DB,
+    quoteTexts: spanTexts,
+    figureTexts: figureRefs,
     budget: VAULT_LOOKUP_BUDGET_MS,
     label: 'Vault-Guard',
   });
-  if (output === null) {
-    // Kein Interpreter konnte den Vault oeffnen (Kaskade in runVaultPython
-    // hat den Grund bereits auf stderr protokolliert) — unerwartet.
-    const detail = 'kein Interpreter konnte den Vault oeffnen';
-    if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', detail);
-    if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', detail);
-    return allOpen();
+  if (batch) {
+    return {
+      quotes: spanTexts.map((text) => cachedQuoteFlag(batch.quotes[text], 'Vault-Guard')),
+      figures: figureRefs.map((text) => cachedFigureFlag(batch.figures[text], 'Figure-Guard')),
+    };
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(output.trim());
-  } catch (err) {
-    if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', err.message);
-    if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', err.message);
-    return allOpen();
-  }
-  return {
-    quotes: readBatchFlags(parsed?.quotes, spanTexts.length, 'Vault-Guard'),
-    figures: readBatchFlags(parsed?.figures, figureRefs.length, 'Figure-Guard'),
-  };
+  // ensureQuoteBatch() hat bereits EINEN vollen runVaultPython-Versuch
+  // (mit VAULT_LOOKUP_BUDGET_MS) unternommen und ist gescheitert — ein
+  // zweiter eigener Versuch mit derselben Interpreter-Kaskade und demselben
+  // Budget wuerde nur das Zeitbudget verdoppeln (Finding: Hook-Timeout-Test
+  // tests/test_review_fix_hook_budget.py), ohne die Erfolgsaussicht zu
+  // aendern — derselbe Fehler traete erneut auf. Also direkt fail-open, mit
+  // demselben Wortlaut wie zuvor beim Direktaufruf (AC3, Issue #844).
+  const detail = 'kein Interpreter konnte den Vault oeffnen';
+  if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', detail);
+  if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', detail);
+  return allOpen();
 }
 
 // ---------------------------------------------------------------------------
@@ -952,7 +946,12 @@ async function main() {
 
   // EIN Subprozess fuer alle Spans und Referenzen zusammen (Regression aus dem
   // ersten Fix: je Span ein eigener Interpreterstart sprengte das 30-s-Timeout).
-  const lookups = lookupBatch(spans.map((s) => s.text), figures.map((f) => f.text));
+  // Zitat-Texte laufen zuerst ueber den geteilten Batch-Cache (Issue #844).
+  const lookups = lookupBatch(
+    spans.map((s) => s.text),
+    figures.map((f) => f.text),
+    { filePath, toolName, toolInput },
+  );
 
   spans.forEach((span, i) => {
     if (lookups.quotes[i]) return;
