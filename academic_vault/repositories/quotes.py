@@ -219,6 +219,47 @@ class QuotesRepo(ConnectionHost):
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def quotes_snapshot_for_wording(
+        self, min_length: int = 0, limit: int = 5000
+    ) -> tuple[list[dict], bool]:
+        """Liest Zitate EINMAL fuer den Wortlaut-Abgleich eines Writes (Issue #846).
+
+        Gegenstueck zu :meth:`_papers_snapshot` fuer die ``quotes``-Tabelle,
+        aber bewusst OEFFENTLICH: :func:`academic_vault.server.match_quote_wording`
+        liegt in einem anderen Modul, und ein Zugriff auf einen unterstrichenen
+        Namen von aussen war genau die Falle aus #501.
+
+        ``min_length`` filtert Zitate weg, die kuerzer sind als der kuerzeste
+        Kandidat des Writes -- sie koennen ihn weder enthalten noch ihm
+        aehneln. ``limit`` deckelt die je Write gelesene Menge, damit ein sehr
+        grosser Vault den Hook-Zeitrahmen nicht sprengt. Die Sortierung ueber
+        ``quote_id`` haelt das Ergebnis bei erreichtem Limit deterministisch.
+
+        Deep-Review-Finding zu #846: ein Vault mit mehr als ``limit``
+        laengenpassenden Zitaten lieferte bisher STUMM nur die (nach
+        ``quote_id``, also praktisch zufaellig sortierten) ersten ``limit`` --
+        ein tatsaechlich vorhandenes Zitat jenseits des Schnitts wurde
+        unsichtbar und vom Abgleich als ``absent`` (nicht im Vault) geblockt.
+        Der Aufrufer MUSS diesen Fall erkennen koennen, deshalb jetzt ein
+        Tupel statt nur der Liste: ``limit + 1`` Zeilen lesen (eine
+        zusaetzliche Sonde, keine separate COUNT(*)-Abfrage) und ``truncated``
+        gesetzt zurueckgeben, wenn mehr als ``limit`` Treffer da waren.
+
+        Returns:
+            ``(rows, truncated)`` -- ``rows`` hat hoechstens ``limit``
+            Eintraege, ``truncated`` ist ``True``, wenn der Vault mehr
+            laengenpassende Zitate hatte, als gelesen wurden.
+        """
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT quote_id, paper_id, verbatim FROM quotes "
+                "WHERE verbatim IS NOT NULL AND length(verbatim) >= ? "
+                "ORDER BY quote_id LIMIT ?",
+                (int(min_length), int(limit) + 1),
+            ).fetchall()
+        truncated = len(rows) > limit
+        return [dict(r) for r in rows[: int(limit)]], truncated
+
     def find_quotes(
         self,
         paper_id: str,

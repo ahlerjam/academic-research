@@ -103,6 +103,28 @@ export function pythonCandidates() {
 }
 
 /**
+ * Klassifiziert, WARUM runVaultPython() `null` liefert (#846-Folgefund,
+ * Deep Review zu PR #939):
+ *   - `'no-interpreter'` — KEIN Kandidat der Kaskade lief ueberhaupt an
+ *     (fehlende Binaries, sofortiger Spawn-Fehler, nicht-Timeout-Abbruch
+ *     jedes Kandidaten). Der Apparat selbst ist kaputt/abwesend.
+ *   - `'timeout'` — mindestens EIN Kandidat ist tatsaechlich gestartet, hat
+ *     aber sein Zeitlimit gerissen (execFileSync wirft dabei
+ *     `code === 'ETIMEDOUT'`). Der Apparat existiert, die MASCHINE ist nur
+ *     gerade zu langsam (Last, grosser Vault -- siehe
+ *     scripts/dev/bench_hook_guards_batch.mjs).
+ *   - `'budget'` — die Kaskade wurde VOR dem letzten Kandidaten abgebrochen,
+ *     weil das Gesamtbudget erschoepft war. Ebenfalls ein Zeit-, kein
+ *     Verfuegbarkeits-Signal.
+ *
+ * `'timeout'`/`'budget'` duerfen NICHT wie `'no-interpreter'` behandelt
+ * werden: ein Vault mit ~5000 Zitaten braucht laut Benchmark bereits
+ * ~1,35 s reine Python-Zeit + Interpreterstart -- unter Last reicht das fuer
+ * einen Timeout, obwohl der Apparat voll funktionsfaehig ist. Wer das wie
+ * "Apparat kaputt" fail-closed behandelt, blockt dann JEDEN Write.
+ */
+
+/**
  * Fuehrt ein Python-Snippet gegen den Vault aus und gibt dessen stdout zurueck.
  *
  * Argumente werden ueber `argv` uebergeben (keine String-Interpolation in den
@@ -112,11 +134,16 @@ export function pythonCandidates() {
  *
  * @param {string} pyCode  Snippet fuer `python -c`
  * @param {string[]} args  Argumente, ab sys.argv[1] sichtbar
- * @param {{timeout?: number, budget?: number, label?: string}} options
+ * @param {{timeout?: number, budget?: number, label?: string,
+ *   diagnostics?: {reason?: string}}} options
  *        timeout: Zeitlimit je Kandidat in ms (Default 10000)
  *        budget:  Gesamtbudget in ms; nach dessen Ablauf wird kein weiterer
  *                 Kandidat mehr probiert (Hook-Timeouts in hooks.json)
  *        label:   Praefix der Diagnose-Zeile auf stderr
+ *        diagnostics: optionales, von Aufrufer bereitgestelltes Objekt --
+ *          wird bei `null`-Rueckgabe mit `.reason` befuellt (siehe oben).
+ *          Bestehende Aufrufer, die `diagnostics` nicht uebergeben, sind
+ *          unveraendert: Rueckgabetyp bleibt `string|null`.
  * @returns {string|null} stdout des ersten erfolgreichen Kandidaten
  */
 export function runVaultPython(pyCode, args = [], options = {}) {
@@ -126,10 +153,17 @@ export function runVaultPython(pyCode, args = [], options = {}) {
   const startedAt = Date.now();
 
   const failures = [];
+  let reason = 'no-interpreter';
   for (const python of pythonCandidates()) {
     const elapsed = Date.now() - startedAt;
     if (elapsed >= budget) {
       failures.push(`${python}: Zeitbudget (${budget} ms) erschoepft`);
+      // Ein bereits festgestelltes 'timeout' (ein Kandidat lief nachweislich
+      // an) ist die praezisere Diagnose und bleibt stehen -- typischerweise
+      // verbraucht GENAU der Timeout eines einzelnen Kandidaten das gesamte
+      // Budget, die naechste Schleifenrunde saehe sonst faelschlich nur noch
+      // "Budget erschoepft" statt der eigentlichen Ursache.
+      if (reason === 'no-interpreter') reason = 'budget';
       break;
     }
     // Absolute Kandidaten vorab pruefen; 'python3' bleibt eine PATH-Aufloesung.
@@ -144,11 +178,21 @@ export function runVaultPython(pyCode, args = [], options = {}) {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (err) {
+      // ETIMEDOUT ist Nodes Fehlercode fuer einen execFileSync-Kandidaten,
+      // der SELBST gestartet ist, aber sein Zeitlimit gerissen hat --
+      // unterscheidet sich von ENOENT (Binary fehlt) und einem regulaeren
+      // Nicht-Null-Exit (Skript lief, brach kontrolliert ab). EIN
+      // Timeout-Kandidat reicht, um die gesamte Kaskade als "Zeitproblem"
+      // statt "kein Interpreter" einzuordnen -- ein spaeterer Kandidat, der
+      // schlicht fehlt, aendert daran nichts mehr (reason wird nicht
+      // zurueckgesetzt).
+      if (err.code === 'ETIMEDOUT') reason = 'timeout';
       failures.push(`${python}: ${String(err.message).split('\n')[0]}`);
     }
   }
 
   process.stderr.write(`[${label}] Kein Interpreter konnte den Vault oeffnen: ${failures.join(' | ')}\n`);
+  if (options.diagnostics) options.diagnostics.reason = reason;
   return null;
 }
 
@@ -260,8 +304,13 @@ function writeBatchCache(key, data) {
  * und tragen den Performance-Gewinn aus #844; nur der (seltenere) Blockfall
  * faellt auf das Verhalten vor #844 zurueck: ein Lookup je Guard.
  *
- * `{error: ...}`-Eintraege gelten als bedienbar — sie sind fail-open (Warnung
- * statt Block) und erzeugen deshalb keinen klebrigen Blocker.
+ * `{error: ...}`-Eintraege gelten (fuer die STANDARD-``isNegative``, s.u.) als
+ * bedienbar — sie sind fail-open (Warnung statt Block) und erzeugen deshalb
+ * keinen klebrigen Blocker. ``isNegative`` ist ein Parameter, kein fester
+ * Test: verbatim-guard.mjs uebergibt fuer Zitate eine EIGENE, strengere
+ * Fassung (siehe dortiges ``isCachedQuoteNegative``), weil der Wortlaut-Status
+ * aus Issue #846 (``deviation``/``absent``/Apparat-Fehler) BLOCKIERT, nicht
+ * nur warnt — genau die Klasse, die hier nicht klebrig bleiben darf.
  */
 function usableCacheEntry(obj, keys, isNegative) {
   return keys.every((key) => {
@@ -305,19 +354,35 @@ export function prefetchLimit(ownCount = 0) {
  * (bool, Muster aus verbatim-guard.mjs::PY_BATCH_LOOKUP) in EINEM Aufruf
  * nachschlaegt. Jeder Eintrag einzeln try/except-gekapselt — ein einzelner
  * kaputter Lookup faellt nur fuer sich selbst aus (`{"error": ...}`).
+ *
+ * Zusaetzlich (Issue #846, nach #844 ergaenzt): jeder Zitat-Eintrag traegt
+ * unter ``"wording"`` den vollen Wortlaut-Status aus ``match_quote_wording()``
+ * (exact/normalized/ellipsis/deviation/absent, ``{"error": ...}`` bei Fehlern
+ * je Kandidat) — NUR verbatim-guard.mjs liest dieses Feld, claim-drift-guard.mjs
+ * und context-fidelity-guard.mjs bleiben bei ``found``/Kontext unveraendert.
+ * Ohne dieses Feld muesste verbatim-guard.mjs einen ZWEITEN, eigenen
+ * Subprozess starten — genau das haette #844s AC1 (hoechstens EIN
+ * Subprozess fuer alle drei Guards) wieder aufgeweicht. ``quotes_out[text]``
+ * ist deshalb IMMER ein Dict (nie mehr bloss ``None`` bei Nicht-Fund) —
+ * ``found: False`` traegt denselben Sinn wie vorher ``None``, jetzt aber mit
+ * Platz fuer ``wording`` daneben; ``usableCacheEntry()`` unten kennt das neue
+ * Negativ-Kriterium.
  */
 const PY_QUOTE_FIGURE_BATCH = [
   'import sys, json',
   `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-  'from academic_vault.server import search_quote_text, get_quote, find_figure_by_caption',
+  'from academic_vault.server import (',
+  '    search_quote_text, get_quote, find_figure_by_caption, match_quote_wording,',
+  ')',
   'db_path = sys.argv[1]',
   'payload = json.loads(sys.argv[2])',
+  'quote_texts = payload["quotes"]',
   'quotes_out = {}',
-  'for text in payload["quotes"]:',
+  'for text in quote_texts:',
   '    try:',
   '        hits = search_quote_text(db_path, text, 1)',
   '        if not hits:',
-  '            quotes_out[text] = None',
+  '            quotes_out[text] = {"found": False}',
   '            continue',
   '        quote_id = hits[0]["quote_id"]',
   '        record = get_quote(db_path, quote_id) or {}',
@@ -333,6 +398,19 @@ const PY_QUOTE_FIGURE_BATCH = [
   '        }',
   '    except Exception as exc:',
   '        quotes_out[text] = {"error": "%s: %s" % (type(exc).__name__, exc)}',
+  'try:',
+  '    wording_results = match_quote_wording(',
+  '        db_path, quote_texts, wording_limit=payload.get("wording_limit")',
+  '    )',
+  'except Exception as exc:',
+  '    detail = "%s: %s" % (type(exc).__name__, exc)',
+  '    wording_results = [{"error": detail} for _ in quote_texts]',
+  'for text, wording in zip(quote_texts, wording_results):',
+  '    entry = quotes_out.get(text)',
+  '    if not isinstance(entry, dict):',
+  '        entry = {}',
+  '        quotes_out[text] = entry',
+  '    entry["wording"] = wording',
   'figures_out = {}',
   'for text in payload["figures"]:',
   '    try:',
@@ -357,22 +435,44 @@ const PY_QUOTE_FIGURE_BATCH = [
  *
  * @param {{filePath: string, toolName: string, toolInput: object,
  *   vaultDb: string, quoteTexts: string[], figureTexts?: string[],
- *   budget?: number, label?: string}} params
- * @returns {{quotes: Record<string, object|null>,
+ *   wordingLimit?: number|null, isQuoteNegative?: (v: object) => boolean,
+ *   budget?: number, label?: string, diagnostics?: {reason?: string}}} params
+ *   `wordingLimit` (Issue #846): Pruefkontingent fuer die teure
+ *     Wortlaut-Zuordnung, an ``match_quote_wording()`` durchgereicht —
+ *     `null`/weggelassen heisst unbegrenzt (claim-drift-guard.mjs/
+ *     context-fidelity-guard.mjs kennen kein eigenes Kontingent und lassen es
+ *     weg; die Obermenge bleibt ohnehin durch `prefetchLimit()` gedeckelt).
+ *   `isQuoteNegative` (Issue #846): welche Zitat-Eintraege als NICHT
+ *     bedienbar gelten (siehe `usableCacheEntry()`) — Default deckt nur die
+ *     alte Boolean-Semantik (`found === false`/`null`) ab. verbatim-guard.mjs
+ *     uebergibt eine striktere Fassung, die zusaetzlich einen blockierenden
+ *     Wortlaut-Status erkennt (sonst bliebe ein Block nach #846 im Cache
+ *     klebrig — Retry-Bruch, siehe Docstring von `usableCacheEntry()`).
+ *   `diagnostics` (Issue #846-Folgefund): optional, wie bei
+ *     `runVaultPython()` — bei `null`-Rueckgabe mit `.reason` befuellt:
+ *     `'missing-db'`, `'no-interpreter'` (von `runVaultPython()`
+ *     durchgereicht), `'timeout'`/`'budget'` (dito), `'parse-error'`
+ *     (Antwort kein valides JSON) oder `'shape-error'` (JSON ohne die
+ *     erwarteten `quotes`/`figures`-Felder). Nur `'no-interpreter'`
+ *     rechtfertigt fail-closed (siehe verbatim-guard.mjs::lookupBatch()) —
+ *     alle anderen sind Aussagen ueber Maschine/Antwortformat, nicht ueber
+ *     Vault-Verfuegbarkeit.
+ * @returns {{quotes: Record<string, object>,
  *   figures: Record<string, boolean|{error:string}>}|null}
  */
 export function ensureQuoteBatch(params) {
   const {
     filePath, toolName, toolInput, vaultDb,
-    quoteTexts = [], figureTexts = [],
-    budget = 10000, label = 'Vault-Batch-Cache',
+    quoteTexts = [], figureTexts = [], wordingLimit = null,
+    isQuoteNegative = (v) => v === null || v?.found === false,
+    budget = 10000, label = 'Vault-Batch-Cache', diagnostics = null,
   } = params;
 
   const key = batchCacheKey(filePath, toolInput);
   const cached = readBatchCache(key);
   if (
     cached
-    && usableCacheEntry(cached.quotes, quoteTexts, (v) => v === null)
+    && usableCacheEntry(cached.quotes, quoteTexts, isQuoteNegative)
     && usableCacheEntry(cached.figures, figureTexts, (v) => v === false)
   ) {
     return cached;
@@ -393,23 +493,37 @@ export function ensureQuoteBatch(params) {
   const allQuotes = [...new Set([...ownQuotes, ...unionQuotes])].slice(0, limit);
   const allFigures = [...new Set(figureTexts)];
 
-  if (!existsSync(vaultDb)) return null;
+  if (!existsSync(vaultDb)) {
+    if (diagnostics) diagnostics.reason = 'missing-db';
+    return null;
+  }
 
-  const payload = JSON.stringify({ quotes: allQuotes, figures: allFigures });
+  const payload = JSON.stringify({
+    quotes: allQuotes, figures: allFigures, wording_limit: wordingLimit,
+  });
+  const runDiagnostics = {};
   const output = runVaultPython(PY_QUOTE_FIGURE_BATCH, [vaultDb, payload], {
     timeout: budget,
     budget,
     label,
+    diagnostics: runDiagnostics,
   });
-  if (output === null) return null;
+  if (output === null) {
+    if (diagnostics) diagnostics.reason = runDiagnostics.reason;
+    return null;
+  }
 
   let result;
   try {
     result = JSON.parse(output.trim());
   } catch {
+    if (diagnostics) diagnostics.reason = 'parse-error';
     return null;
   }
-  if (!result || typeof result !== 'object' || !result.quotes || !result.figures) return null;
+  if (!result || typeof result !== 'object' || !result.quotes || !result.figures) {
+    if (diagnostics) diagnostics.reason = 'shape-error';
+    return null;
+  }
 
   writeBatchCache(key, result);
   return result;

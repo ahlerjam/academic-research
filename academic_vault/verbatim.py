@@ -50,8 +50,6 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
-from rapidfuzz import fuzz
-
 from .chunking import extract_pages
 
 VerbatimStatus = Literal["exact", "snapped", "no-match", "no-textlayer"]
@@ -124,6 +122,15 @@ def _normalize_weak(text: str) -> str:
     return " ".join(normalized.split())
 
 
+#: Oeffentlicher Alias fuer :func:`_normalize_weak` (Issue #846).
+#: :mod:`academic_vault.quote_match` braucht dieselbe schwache Normalisierung
+#: fuer den Wortlaut-Abgleich im Guard-Pfad. Ein Zugriff auf den
+#: unterstrichenen Namen aus einem anderen Modul waere die Falle aus #501
+#: (privater Zugriff von aussen), ein zweiter Normalisierer waere schlimmer:
+#: zwei Definitionen von "gleich bis auf Darstellung" liefen auseinander.
+normalize_weak = _normalize_weak
+
+
 @dataclass
 class VerbatimResult:
     """Ergebnis von :func:`verify_verbatim`.
@@ -188,6 +195,14 @@ def _best_fuzzy_window(candidate: str, page_text: str) -> tuple[int, float]:
         ``(start_index, ratio)`` des besten Fensters. ``ratio`` ist 0.0, wenn
         ``page_text`` leer ist.
     """
+    # Lazy import (#846-Folgefix): normalize_text/normalize_weak in diesem
+    # Modul sind reine String-Funktionen ohne rapidfuzz-Bedarf --
+    # quote_match.py importiert NUR die beiden fuer den billigen
+    # Substring-/Ellipsis-Pfad (kein rapidfuzz noetig). Ein Modulkopf-Import
+    # haette rapidfuzz zur harten Voraussetzung des GESAMTEN Moduls gemacht,
+    # inkl. fuer Aufrufer, die nie fuzzy matchen.
+    from rapidfuzz import fuzz
+
     window_len = len(candidate)
     if window_len == 0 or not page_text:
         return 0, 0.0
