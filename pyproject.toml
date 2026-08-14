@@ -221,6 +221,18 @@ disallow_untyped_defs = false
 module = ["tests.*", "evals.*"]
 ignore_errors = true
 
+# Issue #841 AK4: die Aggregat-Repositories, in die academic_vault/db.py
+# aufgeteilt wurde, sind vollstaendig typannotiert — und bleiben es. Der
+# Override macht die Zusage maschinell pruefbar statt sie nur zu behaupten:
+# eine untypisierte Methode in academic_vault/repositories/ laesst `uv run
+# mypy` rot werden, obwohl das Repo global noch auf
+# disallow_untyped_defs = false steht (schrittweise Einfuehrung, siehe oben).
+# Guard gegen stilles Entfernen: tests/test_issue_841_vault_repositories.py::
+# test_repositories_enforce_typed_defs.
+[[tool.mypy.overrides]]
+module = ["academic_vault.repositories.*"]
+disallow_untyped_defs = true
+
 # Der ML-Stack (seit #372 im Environment) liefert eigene Stubs, die PEP-695-
 # `type`-Statements nutzen. Unter python_version = "3.11" kann mypy sie nicht
 # parsen und bricht mit einem Syntaxfehler ab, BEVOR es unseren Code sieht
