@@ -228,6 +228,41 @@ def test_main_force_interactive_does_not_silently_overwrite_recorded_cloud_with_
     assert state["method"] == bcs.METHOD_CLOUD
 
 
+def test_choose_method_non_interactive_force_keeps_recorded_cloud_method():
+    """P1-Regression (PR #923 Review, dritter Fund): der interaktive Zweig
+    ist seit dem vorigen Fix geschlossen, der nicht-interaktive Zweig
+    (--force ohne TTY, z.B. aus einem Skript/CI) gab bislang immer
+    METHOD_LOCAL zurueck — unabhaengig vom vermerkten Weg. Niemand kann
+    nicht-interaktiv gefragt werden, also gilt: den vermerkten Weg
+    beibehalten statt ihn stillschweigend zu ersetzen."""
+    checks = bcs.parse_doctor(DOCTOR_READY)  # lokales Chrome verbunden
+    assert (
+        bcs.choose_method(interactive=False, checks=checks, current_method=bcs.METHOD_CLOUD)
+        == bcs.METHOD_CLOUD
+    )
+
+
+def test_main_force_non_interactive_does_not_silently_overwrite_recorded_cloud_with_local(
+    tmp_path,
+):
+    """Integrationstest auf main()-Ebene fuer den dritten P1-Fund: ein
+    bereits vermerkter Cloud-Weg darf durch nicht-interaktives
+    '--setup --force' (z.B. aus einem Skript/CI ohne TTY) nicht
+    stillschweigend auf local_chrome zurueckfallen."""
+    state_path = tmp_path / "browser_connection.json"
+    bcs.record_method(bcs.METHOD_CLOUD, checks={}, path=state_path)
+
+    exit_code = bcs.main(
+        ["--setup", "--force"],
+        state_path=state_path,
+        doctor_runner=lambda: DOCTOR_READY,
+        interactive=False,
+    )
+    assert exit_code == 0
+    state = bcs.load_state(state_path)
+    assert state["method"] == bcs.METHOD_CLOUD
+
+
 # ---------------------------------------------------------------------------
 # record_method() / load_state(): AC1 — Weg ist nach dem Setup vermerkt
 # ---------------------------------------------------------------------------

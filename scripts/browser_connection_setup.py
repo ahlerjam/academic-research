@@ -151,8 +151,19 @@ def choose_method(
     ``--setup --force`` bei zufaellig gerade verbundenem lokalem Chrome nie
     zum Prompt und ueberschrieb einen vermerkten Cloud-Weg stillschweigend
     mit local_chrome (P1-Review PR #923). Die Abkuerzung gilt jetzt nur noch
-    im nicht-interaktiven Fall."""
+    im nicht-interaktiven Fall.
+
+    Nicht-interaktiv (kein TTY, z.B. ein Skript oder CI ruft ``--force``
+    ohne Rueckfrage auf) kann niemand gefragt werden. Ist bereits ein Weg
+    vermerkt, bleibt er deshalb erhalten statt ihn stillschweigend durch
+    METHOD_LOCAL zu ersetzen (dritter P1-Fund, PR #923 Review) — dieselbe
+    Regel wie beim expliziten '2' ohne Cloud-Auth oben: ein vermerkter Weg
+    wird nie kommentarlos ueberschrieben. Nur wenn ueberhaupt noch nichts
+    vermerkt ist (Erstlauf), bleibt METHOD_LOCAL der sichere Default
+    (Issue #907 AC5: Cloud nie automatischer Default)."""
     if not interactive:
+        if current_method in (METHOD_LOCAL, METHOD_CLOUD):
+            return current_method
         return METHOD_LOCAL
     answer = input(PROMPT).strip()
     if answer == "2":
