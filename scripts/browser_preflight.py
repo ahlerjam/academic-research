@@ -22,10 +22,12 @@ from pathlib import Path
 
 from browser_connection_setup import (
     METHOD_CLOUD,
+    METHOD_LOCAL,
     cloud_available,
     load_state,
     parse_doctor,
     preflight_ready,
+    record_method,
 )
 from browser_connection_setup import run_doctor as _run_doctor_real
 
@@ -35,6 +37,16 @@ UNCONFIGURED_MESSAGE = (
     "   oder direkt: ~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/browser_connection_setup.py --setup\n"
     "   Browser-Module dieses Laufs werden uebersprungen; die API-Module\n"
     "   laufen davon unabhaengig weiter."
+)
+
+BACKFILLED_MESSAGE = (
+    "✅ Verbindungsweg nachtragen: local_chrome. Kein Vermerk in\n"
+    "   ~/.academic-research/browser_connection.json gefunden — vermutlich eine\n"
+    "   Bestandsinstallation, die '/academic-research:setup' schon vor Issue #907\n"
+    "   ausgefuehrt hat (die Vermerk-Datei legt erst der neue Setup-Schritt 4 an).\n"
+    "   browser-use meldet aber eine funktionierende lokale Verbindung, also wird\n"
+    "   der Weg jetzt automatisch nachgetragen. Dieser Hinweis erscheint nur beim\n"
+    "   ersten Lauf nach dem Update; danach ist der Vermerk vorhanden."
 )
 
 LOCAL_BLOCKED_MESSAGE = (
@@ -62,22 +74,34 @@ CLOUD_BLOCKED_MESSAGE = (
 )
 
 
-def check(state: dict | None, checks: dict[str, bool]) -> tuple[bool, str]:
-    """Reine Entscheidungsfunktion: (ok, message)."""
+def check(state: dict | None, checks: dict[str, bool]) -> tuple[bool, str, str | None]:
+    """Reine Entscheidungsfunktion: (ok, message, backfill_method).
+
+    ``backfill_method`` ist nicht ``None``, wenn ``main()`` den vermerkten
+    Weg nachtragen soll (siehe unten) — ``check()`` selbst schreibt nicht,
+    das bleibt I/O-Aufgabe von ``main()``."""
     if state is None:
-        # Kein Weg vermerkt (Setup nie gelaufen) -> Browser-Teil wird laut
-        # Issue #907 AC2 uebersprungen, auch wenn der Doctor zufaellig eine
-        # aktive Verbindung meldet. Sonst wird das Setup (und damit das
-        # Vermerken des Wegs) nie erzwungen und der Preflight erlaubt
-        # stillschweigend einen Zustand, der beim naechsten Verbindungsabbruch
-        # ohne jede Handlungsanweisung dasteht.
-        return False, UNCONFIGURED_MESSAGE
+        # Kein Weg vermerkt. Zwei ununterscheidbare Ursachen von aussen:
+        # (a) Setup ist nie gelaufen (Issue #907 AC2) -> blockieren.
+        # (b) Bestandsinstallation, die '/academic-research:setup' schon VOR
+        #     diesem PR ausgefuehrt hat -- die Vermerk-Datei legt erst der
+        #     neue setup.sh-Schritt 4 an, es gibt aber laengst eine
+        #     funktionierende Verbindung (P1-Fund, PR #923 Review). Ihren
+        #     naechsten Lauf leer laufen zu lassen, bis sie manuell erneut
+        #     '/setup' aufruft, waere ein neuer, selbst verursachter Ausfall.
+        # Das einzige von aussen pruefbare Unterscheidungsmerkmal ist, ob
+        # die Verbindung tatsaechlich steht: steht sie, ist state=None mit
+        # hoher Wahrscheinlichkeit Fall (b) -- der Weg wird nachgetragen und
+        # der Lauf durchgelassen. Steht sie nicht, bleibt es bei Fall (a).
+        if preflight_ready(checks):
+            return True, BACKFILLED_MESSAGE, METHOD_LOCAL
+        return False, UNCONFIGURED_MESSAGE, None
 
     method = state.get("method")
     if method == METHOD_CLOUD:
         if cloud_available(checks):
-            return True, "ok"
-        return False, CLOUD_BLOCKED_MESSAGE
+            return True, "ok", None
+        return False, CLOUD_BLOCKED_MESSAGE, None
 
     # Default/METHOD_LOCAL (und jeder unbekannte/kuenftige Wert faellt
     # sicherheitshalber auf den lokalen Pfad zurueck statt stillschweigend
@@ -87,8 +111,8 @@ def check(state: dict | None, checks: dict[str, bool]) -> tuple[bool, str]:
     # Zustand aus Issue #907 ([ok] daemon alive + [FAIL] active connections)
     # gilt seit dem P1-Fix (PR #923 Review) nicht mehr als bereit.
     if preflight_ready(checks):
-        return True, "ok"
-    return False, LOCAL_BLOCKED_MESSAGE
+        return True, "ok", None
+    return False, LOCAL_BLOCKED_MESSAGE, None
 
 
 def main(
@@ -101,7 +125,9 @@ def main(
     runner = doctor_runner if doctor_runner is not None else _run_doctor_real
     checks = parse_doctor(runner())
 
-    ok, message = check(state, checks)
+    ok, message, backfill_method = check(state, checks)
+    if backfill_method is not None:
+        record_method(backfill_method, checks, path=state_path)
     print(message)
     return 0 if ok else 1
 

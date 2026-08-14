@@ -42,8 +42,21 @@ DOCTOR_DAEMON_OK_NO_CONNECTIONS = """
 
 
 def test_preflight_fails_when_never_configured(tmp_path, capsys):
+    """Echter AC2-Fall: kein Vermerk UND keine funktionierende Verbindung.
+
+    Korrigiert (PR #923 Review, fuenfter Fund): dieser Test benutzte vorher
+    DOCTOR_READY — also eine STEHENDE Verbindung ohne Vermerk — und schrieb
+    damit versehentlich den Bug fest, den der Review meldete: eine
+    Bestandsinstallation ohne browser_connection.json (die Datei legt erst
+    der neue setup.sh-Schritt 4 an), aber mit laengst funktionierender
+    Verbindung, wurde faelschlich blockiert, bis der Nutzer manuell erneut
+    '/setup' aufruft. Dieser Fall gehoert jetzt zu
+    test_preflight_backfills_state_for_preexisting_install_with_working_connection
+    unten und darf durchlaufen. "Nie konfiguriert" im Sinne von Issue #907
+    AC2 ist nur der Fall ohne Vermerk UND ohne funktionierende Verbindung —
+    das prueft dieser Test jetzt mit DOCTOR_BLOCKED."""
     exit_code = browser_preflight.main(
-        [], state_path=tmp_path / "missing.json", doctor_runner=lambda: DOCTOR_READY
+        [], state_path=tmp_path / "missing.json", doctor_runner=lambda: DOCTOR_BLOCKED
     )
     assert exit_code == 1
     out = capsys.readouterr().out
@@ -187,3 +200,52 @@ def test_preflight_blocks_with_recovery_message_when_legacy_state_and_connection
     # ("noch nicht eingerichtet") — die Datei existiert ja, Setup lief schon:
     assert "noch nicht eingerichtet" not in out.lower()
     assert "allow" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# P1-Regression (PR #923 Review, fuenfter Fund): eine Bestandsinstallation,
+# die '/academic-research:setup' schon VOR diesem PR ausgefuehrt hat, besitzt
+# ueberhaupt keine browser_connection.json — die legt erst der in diesem
+# Diff neue setup.sh-Schritt 4 an. state ist in dem Fall None, nicht "Datei
+# existiert, aber unlesbar" (das war der vierte Fund oben). Der naechste
+# '/search --mode standard'-Lauf darf nicht leer laufen, obwohl Chrome
+# verbunden und browser-use einsatzbereit ist — nur weil die Zustandsdatei
+# fehlt. Steht die Verbindung, wird der Weg nachgetragen und der Lauf
+# durchgelassen; steht sie nicht, bleibt es beim echten AC2-Fall (siehe
+# test_preflight_fails_when_never_configured oben).
+# ---------------------------------------------------------------------------
+
+
+def test_preflight_backfills_state_for_preexisting_install_with_working_connection(
+    tmp_path, capsys
+):
+    state_path = tmp_path / "browser_connection.json"
+    assert not state_path.exists()  # echte Bestandsinstallation: nie geschrieben
+
+    exit_code = browser_preflight.main(
+        [], state_path=state_path, doctor_runner=lambda: DOCTOR_READY
+    )
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "nachtragen" in out.lower() or "nachgetragen" in out.lower()
+
+    state = bcs.load_state(state_path)
+    assert state is not None
+    assert state["method"] == bcs.METHOD_LOCAL
+
+
+def test_preflight_still_blocks_when_no_state_and_no_working_connection(tmp_path, capsys):
+    """Gegenprobe zum Backfill oben: fehlt der Vermerk UND steht keine
+    Verbindung, bleibt es beim Blockieren mit UNCONFIGURED_MESSAGE — kein
+    Weg wird nachgetragen, da nichts auf eine Bestandsinstallation mit
+    funktionierender Verbindung hindeutet."""
+    state_path = tmp_path / "browser_connection.json"
+    assert not state_path.exists()
+
+    exit_code = browser_preflight.main(
+        [], state_path=state_path, doctor_runner=lambda: DOCTOR_BLOCKED
+    )
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "noch nicht eingerichtet" in out.lower()
+    assert not state_path.exists()  # kein Nachtragen ohne funktionierende Verbindung

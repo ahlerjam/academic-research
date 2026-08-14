@@ -176,7 +176,13 @@ Der Command ruft `scripts/setup.sh`. Was dabei passiert (in dieser Reihenfolge):
    Weg ist `--mode deep` **nicht unbeaufsichtigt** lauffähig: der erste
    Browser-Lauf ohne Weg bricht kontrolliert mit einer Handlungsanweisung ab,
    statt mit `permission-blocked` mitten im Modul-Loop zu hängen (siehe
-   [troubleshooting.md](troubleshooting.md)).
+   [troubleshooting.md](troubleshooting.md)). Bestandsinstallationen, die
+   `/academic-research:setup` schon **vor** #907 ausgeführt haben, besitzen
+   diese Datei noch nicht — der Preflight (`scripts/browser_preflight.py`)
+   trägt den Weg dann bei ihrem ersten Lauf danach **automatisch nach**,
+   sofern `browser-use` in dem Moment eine funktionierende lokale Verbindung
+   meldet, und lässt den Lauf durch. Nur wenn auch keine Verbindung steht,
+   verlangt er das erneute Setup.
 6. Prüft, ob der globale `browser-use`-Claude-Skill unter `~/.claude/skills/browser-use/`
    liegt (wird separat von Anthropic bereitgestellt, nicht Teil dieses Plugins).
 7. Zeigt die neu zu setzenden Claude-Code-Permissions an und trägt sie erst
