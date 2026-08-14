@@ -61,6 +61,52 @@ def test_unparseable_name_marked() -> None:
     assert parsed.literal == "Deutsche Bundesbank"
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "Universität Leipzig, Institut für Wirtschaftsinformatik",
+        "OECD, Paris",
+    ],
+)
+def test_corporate_name_with_comma_not_reversed(raw: str) -> None:
+    """P1-Regression: dc:creator-Koerperschaften/Ortsangaben mit Komma
+    (z.B. EconStor/BASE ``Universität Leipzig, Institut fuer
+    Wirtschaftsinformatik`` oder ``OECD, Paris``) sind keine
+    "Nachname, Vorname"-Personennamen. Das naive Komma-Split wuerde sie
+    sinnentstellend umkehren und als Falschzitat in dc:creator landen
+    lassen. Solche Eintraege bleiben unveraendert in ``literal`` mit
+    ``parsed=False``."""
+    parsed = parse_author_name(raw)
+
+    assert parsed.parsed is False
+    assert parsed.family is None
+    assert parsed.given is None
+    assert parsed.literal == raw
+
+
+@pytest.mark.parametrize(
+    "raw,expected_family,expected_given",
+    [
+        ("Müller, Hans", "Müller", "Hans"),
+        ("Schmidt, H.", "Schmidt", "H."),
+        ("van der Berg, Anna", "van der Berg", "Anna"),
+        ("O'Brien, J. R.", "O'Brien", "J. R."),
+    ],
+)
+def test_real_person_names_still_reversed(
+    raw: str, expected_family: str, expected_given: str
+) -> None:
+    """Die Organisations-/Ortsangaben-Heuristik (Issue #908 P1-Fix) darf
+    echte Personennamen -- inkl. Adelspraedikaten/Praepositionen und
+    mehrteiligen Initialen -- nicht faelschlich als Koerperschaft
+    verwerfen."""
+    parsed = parse_author_name(raw)
+
+    assert parsed.parsed is True
+    assert parsed.family == expected_family
+    assert parsed.given == expected_given
+
+
 def test_implausible_split_warns() -> None:
     """Taucht ein ermittelter Nachname als Vorname im selben Datensatz auf,
     wird gewarnt (nicht blockiert)."""

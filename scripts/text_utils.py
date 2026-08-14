@@ -88,6 +88,131 @@ class ParsedAuthorName:
         return self.literal or ""
 
 
+_ORG_KEYWORDS = (
+    "universität",
+    "university",
+    "universitaet",
+    "institut",
+    "institute",
+    "fakultät",
+    "fakultaet",
+    "faculty",
+    "hochschule",
+    "college",
+    "akademie",
+    "academy",
+    "ministerium",
+    "ministry",
+    "behörde",
+    "behoerde",
+    "agency",
+    "amt",
+    "bundesamt",
+    "landesamt",
+    "kommission",
+    "commission",
+    "committee",
+    "ausschuss",
+    "council",
+    "gmbh",
+    "kgaa",
+    "e.v.",
+    "inc.",
+    "ltd.",
+    "llc",
+    "corp.",
+    "corporation",
+    "foundation",
+    "stiftung",
+    "verband",
+    "association",
+    "gesellschaft",
+    "society",
+    "bank",
+    "zentrum",
+    "center",
+    "centre",
+    "department",
+    "abteilung",
+    "büro",
+    "buero",
+    "office",
+    "bureau",
+    "verwaltung",
+    "administration",
+    "organisation",
+    "organization",
+    "vereinigung",
+    "kammer",
+    "chamber",
+    "senat",
+    "senate",
+    "parlament",
+    "parliament",
+    "regierung",
+    "government",
+    "nations",
+    "school of",
+    "press",
+    "verlag",
+    "consortium",
+    "konsortium",
+    "network",
+    "netzwerk",
+)
+
+# Kleingeschriebene Namensbestandteile, die auch innerhalb echter
+# Personennamen vorkommen (Adelspraedikate, Praepositionen) und daher NICHT
+# als Indiz fuer eine Koerperschafts-/Ortsangabe gelten duerfen.
+_NAME_CONNECTORS = frozenset(
+    {"van", "von", "der", "den", "de", "di", "la", "le", "do", "dos", "da", "bin", "ibn", "al"}
+)
+
+
+def _looks_like_organization(text: str) -> bool:
+    """Erkennt Koerperschafts-/Behoerden-Bezeichnungen anhand von
+    Schluesselwoertern oder eines Akronym-Musters (z.B. ``OECD``).
+
+    Reine Namensbestandteile (Nach- oder Vornamen) treffen weder auf ein
+    Schluesselwort noch auf das Akronym-Muster (2-6 Grossbuchstaben ohne
+    Kleinbuchstaben-Mischung)."""
+    lowered = text.lower()
+    if any(re.search(rf"\b{re.escape(keyword)}\b", lowered) for keyword in _ORG_KEYWORDS):
+        return True
+    # Akronym-Muster (z.B. "OECD") nur auf EINZELNE, leerzeichenfreie Tokens
+    # anwenden. Sonst kollabieren mehrteilige Initialen wie "J. R." zu "JR"
+    # und wuerden faelschlich als Organisations-Akronym erkannt (Issue #908
+    # P1-Regression, Fall "O'Brien, J. R.").
+    if " " not in text.strip():
+        compact = text.replace(".", "")
+        if compact.isalpha() and compact.isupper() and 2 <= len(compact) <= 6:
+            return True
+    return False
+
+
+def _looks_like_given_name_part(given: str) -> bool:
+    """Prueft, ob der Teil nach dem Komma wie ein Vorname/Initialen aussieht
+    -- und nicht wie eine Organisations- oder Ortsangabe (Issue #908 P1:
+    Dublin-Core-``dc:creator`` enthaelt haeufig Koerperschaften/Orte mit
+    Komma, z.B. ``"Universität Leipzig, Institut für
+    Wirtschaftsinformatik"`` oder ``"OECD, Paris"``). Ein echter Vorname
+    besteht aus wenigen (<=3) grossgeschriebenen Woertern/Initialen bzw.
+    bekannten Namenspartikeln; institutionelle Zusaetze enthalten dagegen
+    Schluesselwoerter oder kleingeschriebene Fuellwoerter wie ``"für"``."""
+    if not given or _looks_like_organization(given):
+        return False
+    tokens = given.split()
+    if not tokens or len(tokens) > 3:
+        return False
+    for token in tokens[1:]:
+        bare = token.strip(".,")
+        if not bare or bare.lower() in _NAME_CONNECTORS:
+            continue
+        if not bare[0].isupper():
+            return False
+    return True
+
+
 def parse_author_name(raw: str) -> ParsedAuthorName:
     """Zerlegt einen rohen Autoren-String in Vor-/Nachname (Issue #908).
 
@@ -99,13 +224,28 @@ def parse_author_name(raw: str) -> ParsedAuthorName:
     12.08.2026 erzeugt, wenn er auf einen noch nicht erkannten Komma-String
     angewendet wurde. Stattdessen bleibt der Rohstring unveraendert in
     ``literal`` mit ``parsed=False``.
+
+    P1-Nachschaerfung (Deep Review zu PR #933): ``dc:creator`` enthaelt in
+    EconStor/BASE-Daten haeufig Koerperschafts- oder Ortsangaben, die
+    ebenfalls ein Komma enthalten (``"Universität Leipzig, Institut für
+    Wirtschaftsinformatik"``, ``"OECD, Paris"``). Ein blindes Komma-Split
+    wuerde auch diese umkehren und ein sinnloses "Nachname" fabrizieren, das
+    als Falschzitat landet. Deshalb wird zusaetzlich geprueft, ob der Teil
+    VOR dem Komma wie eine Organisation aussieht (Schluesselwort oder
+    Akronym) und ob der Teil NACH dem Komma wie ein Vorname/Initialen
+    aussieht (:func:`_looks_like_given_name_part`). Nur wenn beide Pruefungen
+    unauffaellig sind, gilt der Eintrag als zuverlaessig zerlegbar.
     """
     raw = raw.strip()
     if "," in raw:
         family, _, given = raw.partition(",")
         family = family.strip()
         given = given.strip()
-        if family:
+        if (
+            family
+            and not _looks_like_organization(family)
+            and (not given or _looks_like_given_name_part(given))
+        ):
             return ParsedAuthorName(
                 family=family,
                 given=given or None,
