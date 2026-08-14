@@ -12,15 +12,22 @@ import yaml
 # Absoluter Pfad zum Repo-Root (relativ zu dieser Test-Datei)
 REPO_ROOT = Path(__file__).parent.parent
 
+#: Verlags-Plattformen mit eigenem Agenten. Nationallizenzen und Ebook Central
+#: haben seit Issue #840 keinen mehr — sie laufen ueber den Ultimate Fetcher
+#: `generic-fetcher` mit ihrer Site-Config (siehe GUIDE_SITES unten).
 AGENTS = [
     "springer-book",
     "degruyter",
-    "nationallizenzen",
-    "ebook-central",
     "cambridge-core",
     "oxford-academic",
     "jstor",
 ]
+
+#: Site-Schluessel -> Site-Config der agentenlosen Verlags-Plattformen (#840).
+GUIDE_SITES = {
+    "nationallizenzen": "nationallizenzen.md",
+    "ebook-central": "ebook-central.md",
+}
 
 REQUIRED_FRONTMATTER_KEYS = {"name", "model", "tools", "maxTurns", "browser-guide"}
 
@@ -186,3 +193,73 @@ def test_eval_cases_structure():
         assert "id" in case
         assert "description" in case
         assert "agent" in case
+
+
+# ─── Site-Configs der agentenlosen Verlags-Plattformen (Issue #840) ──────────
+
+GUIDES_DIR = REPO_ROOT / "config" / "browser_guides"
+
+
+def _guide_text(guide_name: str) -> str:
+    return (GUIDES_DIR / guide_name).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+def test_guide_site_has_browser_guide(site, guide_name):
+    """Nationallizenzen und Ebook Central brauchen ohne eigenen Agenten eine
+    vollstaendige Site-Config — sonst ist ihr Zugriffsweg ersatzlos weg."""
+    assert (GUIDES_DIR / guide_name).exists(), f"Site-Config fehlt fuer {site}"
+
+
+@pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+def test_guide_site_documents_auth_trigger(site, guide_name):
+    body_lower = _guide_text(guide_name).lower()
+    assert any(kw in body_lower for kw in PAYWALL_KEYWORDS), (
+        f"{guide_name}: Site-Config dokumentiert keinen Auth-Trigger. "
+        f"Erwartete eines von: {PAYWALL_KEYWORDS}"
+    )
+
+
+@pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+def test_guide_site_documents_auth_method(site, guide_name):
+    auth_methods = ["HAN", "Shibboleth", "EZproxy", "DFN-AAI", "oa-only"]
+    text = _guide_text(guide_name)
+    assert any(method in text for method in auth_methods), (
+        f"{guide_name}: Site-Config nennt keine Auth-Methode. Erwartet eines von: {auth_methods}"
+    )
+
+
+@pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+def test_guide_site_delegates_auth_to_auth_helper(site, guide_name):
+    assert "auth-helper" in _guide_text(guide_name), (
+        f"{guide_name}: Site-Config muss 'auth-helper' als Delegations-Ziel nennen — "
+        "der Ultimate Fetcher verarbeitet nie selbst Credentials"
+    )
+
+
+@pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+def test_guide_site_documents_metadata_only_for_missing_license(site, guide_name):
+    assert "metadata_only" in _guide_text(guide_name), (
+        f"{guide_name}: Site-Config muss 'metadata_only' fuer die fehlende Lizenz "
+        "dokumentieren — daran haengt die Verlags-Stufe des Masters"
+    )
+
+
+@pytest.mark.parametrize("site, guide_name", sorted(GUIDE_SITES.items()))
+def test_guide_site_contains_valid_status_values(site, guide_name):
+    text = _guide_text(guide_name)
+    found = [s for s in VALID_STATUSES if s in text]
+    assert len(found) >= 3, (
+        f"{guide_name}: Site-Config nennt zu wenige Status-Werte ({found}). "
+        f"Erwartet min. 3 aus: {VALID_STATUSES}"
+    )
+
+
+def test_book_fetcher_dispatches_guide_sites_via_site_config():
+    """AC3 (#840): beide Plattformen stehen als Site-Config in der Verlags-Stufe."""
+    text = (REPO_ROOT / "agents" / "book-fetcher.md").read_text(encoding="utf-8")
+    step4 = text.split("## Schritt 4", 1)[1].split("\n## Schritt 5", 1)[0]
+    for guide_name in GUIDE_SITES.values():
+        assert f"config/browser_guides/{guide_name}" in step4, (
+            f"{guide_name} fehlt in der Verlags-Stufe von agents/book-fetcher.md"
+        )

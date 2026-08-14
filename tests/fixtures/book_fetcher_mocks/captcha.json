@@ -1,4 +1,6 @@
 {
   "status": "captcha",
-  "source_subagent": "doabooks-fetcher"
+  "source": "generic-fetcher",
+  "site": "doab",
+  "reason": "CAPTCHA auf der Trefferseite erkannt"
 }
