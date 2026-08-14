@@ -40,6 +40,16 @@ AUTO_CATEGORY = "file-change"
 #: ``"<schritt>: <modell>"``, geparst von ``parse_model_version_text``.
 MODEL_VERSION_CATEGORY = "model-version"
 
+#: Kategorie der im Lauf selbst getroffenen Abwaegungen (Issue #905).
+#: Anders als ``AUTO_CATEGORY``/``MODEL_VERSION_CATEGORY`` wird diese Kategorie
+#: nicht automatisch von einem Hook befuellt, sondern vom Skill selbst per
+#: ``vault.add_decision(category=JUDGMENT_CALL_CATEGORY, ...)`` gesetzt, wenn
+#: das Preamble (``skills/_common/preamble.md``) eine offene Abwaegung statt
+#: einer Rueckfrage entscheidet. Eigene Kategorie, damit sie im
+#: ``mid-session-reinforcement``-Hook und im Material-Passport-Export getrennt
+#: von den datei- und modellbezogenen Auto-Eintraegen erscheint.
+JUDGMENT_CALL_CATEGORY = "judgment-call"
+
 #: Praefix des Decision-Textes. Der Text ist zugleich der Schluessel, ueber den
 #: der Vorgaenger-Eintrag derselben Datei gefunden wird.
 _TEXT_PREFIX = "Datei geaendert: "

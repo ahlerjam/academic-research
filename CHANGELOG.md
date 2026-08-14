@@ -8,8 +8,55 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
 
 ## [Unreleased]
 
+### Added
+
+- **Entscheidungsklassen im Preamble (#905):** `skills/_common/preamble.md`
+  unterscheidet jetzt zwischen einer fehlenden Tatsache (nur der Operator hat
+  die Angabe — Prüfungsordnung, Abgabedatum, Zugangsdaten, das Thema selbst;
+  weiterhin Rückfrage) und einer offenen Abwägung (aus dem vorhandenen
+  Material begründbar und vom Operator jederzeit revidierbar — Positionierung,
+  Methodenwahl im Rahmen der Methodik, Screening-Grenzfälle; wird entschieden,
+  begründet, per `vault.add_decision(category="judgment-call", ...)`
+  protokolliert und dann weitergearbeitet statt zwischenberichtet). Neue
+  Kategorie-Konstante `JUDGMENT_CALL_CATEGORY` in
+  `academic_vault/decision_log.py`, symmetrisch zu `AUTO_CATEGORY`/
+  `MODEL_VERSION_CATEGORY`. Neuer Command `/academic-research:entscheidungen`
+  listet aktive und abgelöste `judgment-call`-Decisions und revidiert eine
+  davon per `vault.supersede_decision` (alte bleibt als abgelöst sichtbar).
+  Bestehende Haltepunkte (`outline_gate` in `chapter-writer` u. a.) bleiben
+  unberührt — die neue Preamble-Sektion regelt nur den Default für
+  unadressierte Abwägungen. Slash-Commands 12 → 13 (README-Badge,
+  `docs/reference/`, Release-Notes synchron aktualisiert).
+
 ### Fixed
 
+- **Browser-Guides und Fetcher-Agenten riefen eine CLI auf, die es nicht mehr
+  gibt (#906):** 35 Dateien (18 Guides unter `config/browser_guides/`, 16
+  Agent-Definitionen, `commands/search.md`) beschrieben die entfernten
+  Unterbefehle `browser-use open|state|click|input|download|screenshot` und
+  das Index-Modell aus dem alten `state`-Output; `auth-helper` und
+  `scihub-fetcher` nutzten zusätzlich die Prompt-Form `browser-use "…"`, die
+  unter der installierten CLI als Python ausgeführt würde. Die tatsächliche
+  Schnittstelle (Python auf stdin per Heredoc, vorimportierte Helfer,
+  Element-Adressierung über den Accessibility-Baum, Download über
+  `Browser.setDownloadBehavior`) steht jetzt genau einmal im Repo — in der
+  neuen Datei `config/browser_guides/_cli.md`; Guides und Agenten verweisen
+  darauf und enthalten nur noch Site-Wissen. Der Credential-Weg im
+  `auth-helper` bleibt gleich sicher: der Wert wird im Heredoc aus
+  `os.environ` gelesen, der gequotete Delimiter `<<'PY'` hält ihn aus der
+  sichtbaren Kommandozeile heraus. Neuer Guard
+  `tests/test_issue_906_browser_use_cli_form.py` prüft gegen eine **Allowlist**
+  der real existierenden Unterbefehle (nicht gegen eine Blockliste der alten)
+  und gleicht diese Allowlist zusätzlich live gegen `browser-use --help` ab,
+  sofern die CLI installiert ist. `_cli.md` beschreibt außerdem den
+  nicht-interaktiven Verbindungsweg: Chrome (M144+) verlangt für jede
+  DevTools-Verbindung an das Default-Profil einen Klick auf „Allow remote
+  debugging?", den kein Agent auslösen kann — jeder Aufruf endete mit
+  `permission-blocked`. Ein eigenes Automations-Chrome
+  (`--remote-debugging-port` + eigenes `--user-data-dir`, angebunden über
+  `BU_CDP_URL`) umgeht das Popup, ohne das laufende Chrome des Nutzers
+  anzufassen; damit läuft der Google-Scholar-Guide ohne Handgriff durch
+  (20 Treffer über zwei Seiten, Protokoll im Issue).
 - **NLI-Zitatscan meldete 20 von 21 Zitaten als verdaechtig, praktisch alle
   Fehlalarme (#899):** `academic_vault/nli_prefilter.py::prefilter_quote`
   wandte die Entailment-Pruefung blind auf jeden Kapitelsatz an, auch auf
