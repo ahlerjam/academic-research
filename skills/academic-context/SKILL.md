@@ -91,8 +91,9 @@ statt die Suchstrategie erneut zu erfragen. Bis dahin leer lassen, nicht erfinde
 
 ### Ein-/Ausschlusskriterien
 [Optional — wird von `preregistration` befüllt (Einschluss/Ausschluss getrennt).
-Dieselbe Section nutzt `parallel-screening` als Kriterienliste im Screening-Dialog.
-Bis dahin leer lassen, nicht erfinden.]
+Dieselbe Section nutzt `parallel-screening` als Kriterienliste im Screening-Dialog;
+ein eingezäunter `screening_filters`-Block darin ist die Quelle des mechanischen
+Vorfilters (#892). Bis dahin leer lassen, nicht erfinden.]
 
 ### Gliederung
 [Nummerierte Gliederung, falls vorhanden]
