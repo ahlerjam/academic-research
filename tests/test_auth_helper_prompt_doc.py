@@ -61,10 +61,29 @@ class TestAuthHelperPromptNoCredentialLeak:
         )
 
     def test_uses_deterministic_input_for_credentials(self, doc_text):
-        """Credential-Eingabe erfolgt deterministisch via 'browser-use input'."""
-        assert "browser-use input" in doc_text, (
-            "auth-helper.md muss 'browser-use input <idx> \"$VAR\"' nutzen, "
-            "damit der Credential-Wert nicht in den LLM-Prompt gelangt."
+        """Credential-Eingabe erfolgt deterministisch via `fill_input(...)` + `os.environ`.
+
+        Issue #906: Die CLI kennt `browser-use input` nicht mehr. Die
+        Sicherheitszusage bleibt unveraendert — der Wert wird im Heredoc-Skript
+        aus der ENV-Variablen gelesen und erreicht den LLM-Prompt nie.
+        """
+        assert 'fill_input("<user_selector>", os.environ["BROWSER_USE_USER"])' in doc_text, (
+            "auth-helper.md muss den Benutzernamen via "
+            'fill_input(<selector>, os.environ["BROWSER_USE_USER"]) eingeben.'
+        )
+        assert 'fill_input("<pass_selector>", os.environ["BROWSER_USE_PASS"])' in doc_text, (
+            "auth-helper.md muss das Passwort via "
+            'fill_input(<selector>, os.environ["BROWSER_USE_PASS"]) eingeben.'
+        )
+
+    def test_quoted_heredoc_delimiter_documented(self, doc_text):
+        """Der Delimiter muss gequotet sein, sonst expandiert die Shell das Passwort.
+
+        Issue #906: `<<PY` (ungequotet) wuerde $BROWSER_USE_PASS in die sichtbare
+        Kommandozeile schreiben — Shell-History, ps-Ausgabe, Hook-Logs.
+        """
+        assert "<<'PY'" in doc_text, (
+            "auth-helper.md muss den gequoteten Heredoc-Delimiter <<'PY' benennen."
         )
 
     def test_env_vars_not_echoed(self, doc_text):
