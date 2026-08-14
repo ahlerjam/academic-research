@@ -82,10 +82,14 @@ class TestSchemaMigration:
             conn.close()
         assert "context_source" in columns
 
-    def test_fresh_db_schema_version_is_15(self, tmp_path):
+    def test_fresh_db_schema_version_matches_current(self, tmp_path):
+        """War fest auf 15 gepinnt; seit Issue #847 (paper_tables.confidence/
+        detection) ist die aktuelle Version 16 -- der Test prueft die
+        eigentliche Zusicherung (frische DB steht auf CURRENT_SCHEMA_VERSION),
+        nicht eine feste Zahl, die bei jeder neuen additiven Migration
+        wieder anzupassen waere."""
         from academic_vault.db import CURRENT_SCHEMA_VERSION
 
-        assert CURRENT_SCHEMA_VERSION == 15
         db_path = str(tmp_path / "vault.db")
         _make_db(db_path)
         conn = sqlite3.connect(db_path)
@@ -93,7 +97,7 @@ class TestSchemaMigration:
             version = conn.execute("PRAGMA user_version").fetchone()[0]
         finally:
             conn.close()
-        assert version == 15
+        assert version == CURRENT_SCHEMA_VERSION
 
     def test_migration_adds_column_to_legacy_db_idempotently(self, tmp_path):
         """migrate.add_chunk_context_source_column() ist mehrfach aufrufbar."""
@@ -169,7 +173,11 @@ class TestSchemaMigration:
         finally:
             conn.close()
         assert "context_source" in columns
-        assert version == 15
+        # War fest auf 15 gepinnt; seit Issue #847 ist CURRENT_SCHEMA_VERSION 16
+        # (siehe test_fresh_db_schema_version_matches_current).
+        from academic_vault.db import CURRENT_SCHEMA_VERSION
+
+        assert version == CURRENT_SCHEMA_VERSION
 
 
 def _degrade_chunk_embeddings_to_schema_14(db_path: str) -> None:

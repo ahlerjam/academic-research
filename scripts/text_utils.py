@@ -27,6 +27,7 @@ class Paper:
     open_access_pdf: str | None = None
     is_retracted: bool | None = None
     citations_normalized: float | None = None
+    found_via_known_item: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -54,6 +55,7 @@ def normalize_paper(data: dict[str, Any], source_module: str) -> dict[str, Any]:
         "open_access_pdf": data.get("open_access_pdf"),
         "is_retracted": data.get("is_retracted"),
         "citations_normalized": data.get("citations_normalized"),
+        "found_via_known_item": bool(data.get("found_via_known_item", False)),
     }
 
 
