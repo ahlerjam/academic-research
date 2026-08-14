@@ -317,9 +317,14 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
         try:
             external_ids = item.get("externalIds") or {}
             oa_pdf = item.get("openAccessPdf") or {}
-            # S2 liefert eine Liste (z.B. ["JournalArticle", "Review"]); der
-            # Vorfilter arbeitet auf einem Wert -- der erste ist der primaere.
-            publication_types = item.get("publicationTypes") or []
+            # S2 liefert eine Liste (z.B. ["Study", "JournalArticle"]), deren
+            # Reihenfolge nichts bedeutet: der erste Wert ist nicht der
+            # primaere. Deshalb gehen alle Werte weiter -- wer nur [0] nimmt,
+            # schliesst Zeitschriftenaufsaetze aus, die S2 zuerst nach ihrem
+            # Studiendesign benennt (#892).
+            publication_types = [
+                str(pub_type) for pub_type in (item.get("publicationTypes") or []) if pub_type
+            ]
             entry = normalize_paper(
                 {
                     "doi": external_ids.get("DOI"),
@@ -334,6 +339,7 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict[str, Any]]:
                     else None,
                     "open_access_pdf": oa_pdf.get("url"),
                     "publication_type": publication_types[0] if publication_types else None,
+                    "publication_types": publication_types,
                 },
                 "semantic_scholar",
             )

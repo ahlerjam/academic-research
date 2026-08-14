@@ -45,15 +45,37 @@ Kriterien haben genau eine Fundstelle.
 | `publication_types` | Allowlist auf `paper["publication_type"]` | `Publikationstyp` |
 
 Beide Metadaten liefert `scripts/search.py` seit #892 mit: CrossRef und
-OpenAlex über `language`/`type`, Semantic Scholar über `publicationTypes[0]`,
-arXiv fest als `preprint`. Module ohne diese Felder liefern `None` — und
-`None` schließt nie aus.
+OpenAlex über `language`/`type`, Semantic Scholar über die **ganze** Liste
+`publicationTypes`, arXiv fest als `preprint`. Module ohne diese Felder liefern
+`None` — und `None` schließt nie aus.
 
-**Vocabular-Normalisierung:** Die Publikationstypen stammen aus verschiedenen
-Quell-Vocabularen (CrossRef: `journal-article`, OpenAlex: `article`, Semantic
+**Vokabular-Normalisierung:** Die Publikationstypen stammen aus verschiedenen
+Quell-Vokabularen (CrossRef: `journal-article`, OpenAlex: `article`, Semantic
 Scholar: `JournalArticle`). Der Filter normalisiert alle auf das kanonische
 CrossRef-Format vor dem Allowlist-Vergleich (siehe `_PUBLICATION_TYPE_MAPPING`
 im Skript) — dadurch wird der Vergleich unabhängig von der Quelle.
+
+Die drei Vokabulare stehen **vollständig** im Skript (`_CROSSREF_TYPES`,
+`_OPENALEX_TYPES`, `_SEMANTIC_SCHOLAR_TYPES`). Erst das trennt zwei Fälle, die
+sich sonst gleich verhalten würden:
+
+- **Bekannter Typ, nicht in der Allowlist** → Ausschluss (`editorial`,
+  `erratum`, `book-review`, `dataset` …).
+- **Unbekannter Wert** → **kein** Ausschluss. Ein Vokabular, das der Filter
+  nicht kennt, ist Unwissen, kein Ausschlussgrund.
+
+Dieselbe Zurückhaltung gilt für reguläre Werte, die gar keinen Publikationstyp
+benennen: Semantic Scholar beschreibt mit `Study`, `CaseReport`,
+`ClinicalTrial` und `MetaAnalysis` das Studiendesign, `other` ist das
+Eingeständnis der Quelle, den Typ nicht zu kennen. Sie normalisieren zu `None`
+und schließen nie aus.
+
+**Mehrwertige Listen:** `publicationTypes` ist bei Semantic Scholar eine Liste,
+deren Reihenfolge nichts bedeutet — `['Study', 'JournalArticle']` ist derselbe
+Zeitschriftenaufsatz wie `['JournalArticle', 'Study']`. Der Filter prüft
+deshalb alle Werte aus `paper["publication_types"]` und schließt nur aus, wenn
+**keiner** der bekannten Typen in der Allowlist steht. Fehlt das Listenfeld,
+zählt der Einzelwert `paper["publication_type"]`.
 
 ## Fail-open, in beide Richtungen
 
@@ -61,6 +83,9 @@ im Skript) — dadurch wird der Vergleich unabhängig von der Quelle.
    Reihenfolge inklusive. Der Lauf verhält sich exakt wie vor #892.
 2. **Fehlendes Metadatum am Treffer** → **kein** Ausschluss. Unwissen ist kein
    Ausschlussgrund; der Fall geht ans Modell.
+3. **Unbekannter oder nichtssagender Publikationstyp** → **kein** Ausschluss.
+   Ein Wert außerhalb der bekannten Vokabulare zählt wie ein fehlendes
+   Metadatum (siehe oben).
 
 Damit kann der Vorfilter nur an Grenzen ausschließen, die ausdrücklich in den
 Kriterien stehen, und nur an Metadaten, die tatsächlich vorliegen. Es gibt kein

@@ -32,6 +32,10 @@ class Paper:
     language: str | None = None
     #: Publikationstyp in der Schreibweise der Quelle (#892), z.B. "journal-article".
     publication_type: str | None = None
+    #: Alle Publikationstypen der Quelle, wenn sie mehrere fuehrt (Semantic
+    #: Scholar: ["Study", "JournalArticle"]). Die Reihenfolge sagt nichts ueber
+    #: den primaeren Typ aus, deshalb zaehlt im Vorfilter die ganze Liste.
+    publication_types: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -64,6 +68,7 @@ def normalize_paper(data: dict[str, Any], source_module: str) -> dict[str, Any]:
         # Vorfilter schliesst bei Unwissen NIE aus, er legt den Fall dem Modell vor.
         "language": data.get("language") or None,
         "publication_type": data.get("publication_type") or None,
+        "publication_types": [str(t) for t in (data.get("publication_types") or []) if t],
     }
 
 

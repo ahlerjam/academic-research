@@ -12,7 +12,8 @@ Drei Grundsätze:
 1. **Fail-open.** Fehlt der Filterblock, ist der Lauf ein No-Op und verhält
    sich exakt wie vor #892. Fehlt einem Treffer das geprüfte Metadatum, wird
    er **nicht** ausgeschlossen, sondern dem Modell vorgelegt. Unwissen ist
-   kein Ausschlussgrund.
+   kein Ausschlussgrund — und ein Publikationstyp, den keines der bekannten
+   Quellvokabulare führt, ist Unwissen.
 2. **Allowlist statt Heuristik.** Es gibt nur Bereichs- und Allowlist-Regeln
    auf tatsächlich vorhandenen Metadaten. Kein Titel-Matching, keine
    Relevanzabschätzung — die Relevanz bleibt beim Modell.
@@ -145,40 +146,154 @@ def _criteria_section(text: str) -> str:
 
 # Publikationstypen aus verschiedenen Vokabularen auf kanonisches Format abbilden.
 # Kanonisches Format: CrossRef-Vokabular (z.B. "journal-article", "proceedings-article").
+#
+# Die drei Vokabulare sind vollständig aufgeführt, weil erst die Vollständigkeit
+# den Unterschied zwischen "kennen wir, passt nicht" (Ausschluss) und "kennen wir
+# nicht" (fail-open, Grundsatz 1) tragfähig macht. Ein Ausschnitt würde reguläre
+# Werte wie ``Study`` zu Ausschlussgründen machen.
+
+#: CrossRef, https://api.crossref.org/types (Stand 2026-08-14).
+_CROSSREF_TYPES = frozenset(
+    {
+        "book",
+        "book-chapter",
+        "book-part",
+        "book-section",
+        "book-series",
+        "book-set",
+        "book-track",
+        "component",
+        "database",
+        "dataset",
+        "dissertation",
+        "edited-book",
+        "grant",
+        "journal",
+        "journal-article",
+        "journal-issue",
+        "journal-volume",
+        "monograph",
+        "other",
+        "peer-review",
+        "posted-content",
+        "proceedings",
+        "proceedings-article",
+        "proceedings-series",
+        "reference-book",
+        "reference-entry",
+        "report",
+        "report-component",
+        "report-series",
+        "standard",
+    }
+)
+
+#: OpenAlex, https://api.openalex.org/works?group_by=type (Stand 2026-08-14).
+_OPENALEX_TYPES = frozenset(
+    {
+        "article",
+        "book",
+        "book-chapter",
+        "book-review",
+        "conference-abstract",
+        "conference-paper",
+        "data-paper",
+        "dataset",
+        "dissertation",
+        "editorial",
+        "erratum",
+        "letter",
+        "libguides",
+        "other",
+        "paratext",
+        "peer-review",
+        "preprint",
+        "reference-entry",
+        "report",
+        "retraction",
+        "review",
+        "software",
+        "software-paper",
+        "standard",
+        "supplementary-materials",
+    }
+)
+
+#: Semantic Scholar, https://api.semanticscholar.org/graph/v1/swagger.json,
+#: Parameter ``publicationTypes`` (Stand 2026-08-14). Kleingeschrieben, weil
+#: der Vergleich auf der klein-normalisierten Form läuft.
+_SEMANTIC_SCHOLAR_TYPES = frozenset(
+    {
+        "review",
+        "journalarticle",
+        "casereport",
+        "clinicaltrial",
+        "conference",
+        "dataset",
+        "editorial",
+        "lettersandcomments",
+        "metaanalysis",
+        "news",
+        "study",
+        "book",
+        "booksection",
+    }
+)
+
+#: Alles, was mindestens eine Quelle als Publikationstyp führt.
+_KNOWN_PUBLICATION_TYPES = _CROSSREF_TYPES | _OPENALEX_TYPES | _SEMANTIC_SCHOLAR_TYPES
+
+#: Reguläre Vokabularwerte, die **keinen** Publikationstyp benennen: Semantic
+#: Scholar beschreibt damit das Studiendesign (``Study`` steht regelmäßig neben
+#: ``JournalArticle``), ``other`` ist das Eingeständnis der Quelle, es nicht zu
+#: wissen. Beides ist kein Ausschlussgrund.
+_UNINFORMATIVE_PUBLICATION_TYPES = frozenset(
+    {"casereport", "clinicaltrial", "metaanalysis", "other", "study"}
+)
+
+#: Schreibweisen derselben Sache aus verschiedenen Vokabularen.
 _PUBLICATION_TYPE_MAPPING = {
-    # CrossRef-Vokabular (bereits kanonisch)
-    "journal-article": "journal-article",
-    "proceedings-article": "proceedings-article",
-    "book": "book",
-    "book-chapter": "book-chapter",
-    "report": "report",
-    "dataset": "dataset",
-    # OpenAlex-Vokabular (https://docs.openalex.org/api-entities/works/work-object#type)
+    # OpenAlex
     "article": "journal-article",  # OpenAlex 'article' ist ein Journal-Artikel
-    "conference": "proceedings-article",
-    # Semantic Scholar-Vokabular (CamelCase)
+    "conference-paper": "proceedings-article",
+    # Semantic Scholar (CamelCase, hier klein)
     "journalarticle": "journal-article",
     "conferencepaper": "proceedings-article",
+    "conference": "proceedings-article",
+    "booksection": "book-chapter",
+    "lettersandcomments": "letter",
+    # Übersichtsarbeiten erscheinen in Zeitschriften — sie sind Journal-Artikel.
     "review": "journal-article",
 }
 
 
 def _normalize_publication_type(value: Any) -> str | None:
-    """Normalisiere Publikationstyp aus verschiedenen Quellvokabularen.
+    """Publikationstyp einer Quelle auf das kanonische CrossRef-Format bringen.
 
-    Abbildet CrossRef, OpenAlex und Semantic Scholar Werte auf das kanonische
-    CrossRef-Format ab, damit der Allowlist-Vergleich unabhängig von der
-    Quelle funktioniert. Unbekannte Werte werden klein-normalisiert weitergegeben
-    (fallback zu einfacher Lowercase-Normalisierung).
+    ``None`` heißt „kein prüfbarer Publikationstyp" — und ``None`` schließt nie
+    aus (Grundsatz 1). Das gilt in drei Fällen: kein Wert; ein Wert, den keines
+    der bekannten Vokabulare führt; ein Wert, der zwar im Vokabular steht, aber
+    keinen Publikationstyp benennt (``Study``, ``other`` — siehe
+    ``_UNINFORMATIVE_PUBLICATION_TYPES``).
+
+    Vorher gab diese Funktion Unbekanntes klein-normalisiert zurück. Damit fiel
+    ein Zeitschriftenaufsatz mit ``publicationTypes: ['Study', 'JournalArticle']``
+    aus der Allowlist ``[journal-article]`` — mechanisch ausgeschlossen, ohne
+    dass das Modell ihn je zu sehen bekam.
     """
     if value is None:
         return None
     normalized_key = str(value).strip().lower()
     if not normalized_key:
         return None
-    # Mapping verwenden, wenn vorhanden; sonst klein-normalisiert weitergeben
-    # (fallback für unbekannte Vokabularwerte).
-    return _PUBLICATION_TYPE_MAPPING.get(normalized_key, normalized_key)
+    canonical = _PUBLICATION_TYPE_MAPPING.get(normalized_key)
+    if canonical is not None:
+        return canonical
+    if normalized_key in _UNINFORMATIVE_PUBLICATION_TYPES:
+        return None
+    if normalized_key in _KNOWN_PUBLICATION_TYPES:
+        return normalized_key
+    return None
 
 
 def load_filters(text: str) -> dict[str, Any]:
@@ -302,6 +417,55 @@ def _check_allowlist(value: Any, allowed: Any, label: str) -> str | None:
     return f"{label} '{value}' steht nicht in {sorted(permitted)}"
 
 
+def _paper_publication_types(paper: dict[str, Any]) -> list[str]:
+    """Alle prüfbaren Publikationstypen eines Treffers, kanonisch und ohne Dubletten.
+
+    Semantic Scholar liefert eine Liste (``publicationTypes``), in der die
+    Reihenfolge nichts bedeutet: ``['Study', 'JournalArticle']`` ist derselbe
+    Zeitschriftenaufsatz wie ``['JournalArticle', 'Study']``. Deshalb zählt hier
+    die ganze Liste — ``scripts/search.py`` reicht sie als ``publication_types``
+    durch, der Einzelwert ``publication_type`` bleibt der Rückfall für Module und
+    Bestandsdaten, die nur einen Wert kennen.
+    """
+    raw = paper.get("publication_types")
+    if isinstance(raw, str):
+        values: list[Any] = [raw]
+    elif isinstance(raw, (list, tuple)):
+        values = list(raw)
+    else:
+        values = []
+    if not values:
+        values = [paper.get("publication_type")]
+    canonical: list[str] = []
+    for value in values:
+        normalized = _normalize_publication_type(value)
+        if normalized is not None and normalized not in canonical:
+            canonical.append(normalized)
+    return canonical
+
+
+def _check_publication_type(paper: dict[str, Any], filters: dict[str, Any]) -> str | None:
+    """Ausschluss nur, wenn **kein** bekannter Typ des Treffers erlaubt ist.
+
+    Ohne prüfbaren Typ (leere Liste) gibt es keinen Ausschluss — Unwissen ist
+    kein Ausschlussgrund.
+    """
+    allowed = filters.get("publication_types")
+    types = _paper_publication_types(paper)
+    if not types:
+        return None
+    details: list[str] = []
+    for pub_type in types:
+        detail = _check_allowlist(pub_type, allowed, CRITERION_PUBLICATION_TYPE)
+        if detail is None:
+            return None
+        details.append(detail)
+    if len(details) == 1:
+        return details[0]
+    permitted = sorted({str(item).strip().lower() for item in allowed})
+    return f"{CRITERION_PUBLICATION_TYPE} {types} steht nicht in {permitted}"
+
+
 def _rule_violation(paper: dict[str, Any], filters: dict[str, Any]) -> tuple[str, str] | None:
     """Erstes verletztes Kriterium als ``(criterion, detail)``, sonst ``None``."""
     detail = _check_period(paper, filters)
@@ -310,12 +474,9 @@ def _rule_violation(paper: dict[str, Any], filters: dict[str, Any]) -> tuple[str
     detail = _check_allowlist(paper.get("language"), filters.get("languages"), "Sprache")
     if detail:
         return CRITERION_LANGUAGE, detail
-    # Publikationstyp vor dem Vergleich normalisieren, um verschiedene Quellvokabulare
+    # Publikationstypen vor dem Vergleich normalisieren, um verschiedene Quellvokabulare
     # (CrossRef, OpenAlex, Semantic Scholar) einheitlich zu behandeln.
-    normalized_pub_type = _normalize_publication_type(paper.get("publication_type"))
-    detail = _check_allowlist(
-        normalized_pub_type, filters.get("publication_types"), "Publikationstyp"
-    )
+    detail = _check_publication_type(paper, filters)
     if detail:
         return CRITERION_PUBLICATION_TYPE, detail
     return None

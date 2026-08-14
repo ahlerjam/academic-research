@@ -35,7 +35,14 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
     ohne Filterblock wirkungslos). `scripts/search.py` liefert dafür
     `language`/`publication_type` mit (CrossRef, OpenAlex, Semantic Scholar,
     arXiv → `preprint`); `normalize_paper()` führt beide Felder,
-    fehlend → `None`.
+    fehlend → `None`. Beim Publikationstyp gilt fail-open auch für das
+    Vokabular: bekannte Werte aus CrossRef, OpenAlex und Semantic Scholar
+    werden auf das kanonische CrossRef-Format normalisiert, alles andere zählt
+    wie ein fehlendes Metadatum und schließt nicht aus — ebenso die
+    S2-Studiendesign-Werte (`Study`, `CaseReport`, `ClinicalTrial`,
+    `MetaAnalysis`) und `other`. Semantic Scholars mehrwertiges
+    `publicationTypes` geht vollständig als `publication_types` weiter; ein
+    erlaubter Typ in der Liste genügt, damit der Treffer bleibt.
   - **Ausschlussprotokoll.** Jeder mechanische Ausschluss geht mit
     Kriteriumsnamen im Grund als Ledger-Zeile (`decided_by: "rule"`, neuer
     Parameter an `record_decision`) nach `excluded_sources`. Weil `pending()`

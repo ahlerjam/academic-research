@@ -256,6 +256,157 @@ def test_each_rule_exclusion_names_its_criterion():
         assert row["reason"].strip()
 
 
+# ---------------------------------------------------------------------------
+# Publikationstyp-Vokabulare (Regression: stiller Ausschluss foerderfaehiger Arbeiten)
+# ---------------------------------------------------------------------------
+
+#: Werte, die Semantic Scholar in ``publicationTypes`` liefert, die aber das
+#: Studiendesign beschreiben und **nichts** ueber den Publikationstyp sagen.
+#: Quelle: https://api.semanticscholar.org/graph/v1/swagger.json, Parameter
+#: ``publicationTypes`` (Stand 2026-08-14).
+S2_STUDY_DESIGN_VALUES = ["Study", "CaseReport", "ClinicalTrial", "MetaAnalysis"]
+
+#: Reale Vokabularwerte, die einen Publikationstyp benennen und deshalb
+#: weiterhin ausschliessen duerfen. Quellen: https://api.crossref.org/types,
+#: https://api.openalex.org/works?group_by=type (Stand 2026-08-14).
+KNOWN_NON_ALLOWED_TYPES = ["editorial", "erratum", "book-review", "letter", "dataset", "preprint"]
+
+
+@pytest.mark.parametrize("value", S2_STUDY_DESIGN_VALUES)
+def test_study_design_values_are_no_exclusion_reason(value):
+    """Fail-open: ``Study`` & Co. benennen keinen Publikationstyp — kein Ausschluss.
+
+    Ein Zeitschriftenaufsatz, den Semantic Scholar als ``Study`` fuehrt, ist
+    eine foerderfaehige Primaerstudie. Wer ihn mechanisch ausschliesst,
+    entwertet das Review — und niemand sieht ihn je, weil ``pending()``
+    protokollierte IDs ueberspringt.
+    """
+    papers = [{"paper_id": "p", "year": 2020, "language": "en", "publication_type": value}]
+    result = screening_prefilter.apply_filters(papers, FILTERS)
+    assert result["excluded"] == []
+    assert [p["paper_id"] for p in result["to_screen"]] == ["p"]
+
+
+def test_unknown_vocabulary_value_is_no_exclusion_reason():
+    """Fail-open: ein Wert, den kein Quellvokabular kennt, ist Unwissen."""
+    papers = [
+        {"paper_id": "p", "year": 2020, "language": "en", "publication_type": "Sonstiger Beitrag"}
+    ]
+    result = screening_prefilter.apply_filters(papers, FILTERS)
+    assert result["excluded"] == []
+    assert [p["paper_id"] for p in result["to_screen"]] == ["p"]
+
+
+def test_multi_valued_publication_types_keep_the_known_article():
+    """``publicationTypes`` ist mehrwertig — ein erlaubter Typ in der Liste genuegt."""
+    papers = [
+        {
+            "paper_id": "study",
+            "year": 2020,
+            "language": "en",
+            "publication_type": "Study",
+            "publication_types": ["Study", "JournalArticle"],
+        },
+        {
+            "paper_id": "editorial-and-article",
+            "year": 2020,
+            "language": "en",
+            "publication_type": "Editorial",
+            "publication_types": ["Editorial", "JournalArticle"],
+        },
+    ]
+    result = screening_prefilter.apply_filters(papers, FILTERS)
+    assert result["excluded"] == []
+    assert {p["paper_id"] for p in result["to_screen"]} == {"study", "editorial-and-article"}
+
+
+def test_multi_valued_publication_types_without_allowed_type_still_exclude():
+    """Die Gegenprobe: keiner der bekannten Typen passt — dann greift die Regel."""
+    papers = [
+        {
+            "paper_id": "ed",
+            "year": 2020,
+            "language": "en",
+            "publication_type": "Editorial",
+            "publication_types": ["Editorial", "News"],
+        }
+    ]
+    result = screening_prefilter.apply_filters(papers, FILTERS)
+    assert [p["paper_id"] for p in result["to_screen"]] == []
+    assert result["excluded"][0]["criterion"] == "Publikationstyp"
+
+
+@pytest.mark.parametrize("value", KNOWN_NON_ALLOWED_TYPES)
+def test_known_vocabulary_types_outside_the_allowlist_still_exclude(value):
+    """Fail-open heisst nicht zahnlos: bekannte Typen schliessen weiter aus."""
+    papers = [{"paper_id": "p", "year": 2020, "language": "en", "publication_type": value}]
+    result = screening_prefilter.apply_filters(papers, FILTERS)
+    assert [row["criterion"] for row in result["excluded"]] == ["Publikationstyp"]
+
+
+@pytest.mark.parametrize(
+    ("value", "canonical"),
+    [
+        ("journal-article", "journal-article"),  # CrossRef
+        ("article", "journal-article"),  # OpenAlex
+        ("JournalArticle", "journal-article"),  # Semantic Scholar
+        ("conference-paper", "proceedings-article"),  # OpenAlex
+        ("Conference", "proceedings-article"),  # Semantic Scholar
+        ("BookSection", "book-chapter"),  # Semantic Scholar
+        ("LettersAndComments", "letter"),  # Semantic Scholar
+    ],
+)
+def test_publication_type_normalisation_maps_real_vocabulary_values(value, canonical):
+    assert screening_prefilter._normalize_publication_type(value) == canonical
+
+
+@pytest.mark.parametrize("value", [*S2_STUDY_DESIGN_VALUES, "other", "Sonstiger Beitrag", "  "])
+def test_publication_type_normalisation_returns_none_where_nothing_is_known(value):
+    assert screening_prefilter._normalize_publication_type(value) is None
+
+
+def test_semantic_scholar_carries_all_publication_types(monkeypatch):
+    """``search.py`` darf die mehrwertige S2-Liste nicht auf ``[0]`` verkuerzen."""
+    import httpx
+
+    import search
+
+    payload = {
+        "data": [
+            {
+                "paperId": "abc",
+                "title": "Governance in DevOps",
+                "authors": [{"name": "A. Autorin"}],
+                "year": 2020,
+                "venue": "IEEE Software",
+                "citationCount": 3,
+                "externalIds": {"DOI": "10.1/x"},
+                "publicationTypes": ["Study", "JournalArticle"],
+            }
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    transport = httpx.MockTransport(handler)
+    real_client = httpx.Client
+
+    def patched_client(*args, **kwargs):
+        kwargs["transport"] = transport
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(search.httpx, "Client", patched_client)
+    monkeypatch.setattr(search.time, "sleep", lambda *a, **k: None)
+
+    entry = search.search_semantic_scholar("devops governance", limit=1)[0]
+    assert entry["publication_types"] == ["Study", "JournalArticle"]
+    result = screening_prefilter.apply_filters(
+        [{**entry, "paper_id": "abc", "language": "en"}], FILTERS
+    )
+    assert result["excluded"] == []
+
+
 def test_prefilter_orders_the_remaining_set_by_prescore():
     """Priorisierung: bei knappem Budget kommt das Aussichtsreichste zuerst."""
     papers = [
