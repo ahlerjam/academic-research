@@ -1,5 +1,8 @@
 # OAPEN — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://www.oapen.org
 **Auth:** keine (Open-Access-Repositorium)
 **Anti-Scraping:** niedrig — OAPEN ist öffentlich zugänglich.
@@ -8,13 +11,13 @@
 
 Kein Login erforderlich. Alle Inhalte sind Open Access.
 
-1. `browser-use open https://www.oapen.org`
+1. `new_tab("https://www.oapen.org")`
 2. Direkt zur Discovery fortfahren.
 
 ## Discovery-Pfad
 
 1. Suchfeld im Header: Titel, Autor oder ISBN eingeben.
-2. `browser-use state` → Suchergebnisse prüfen.
+2. Trefferliste per `js(...)` auslesen und prüfen.
 3. Alternativ per DOI-Direktlink: `https://doi.org/10.xxxx/...` → OAPEN-Detailseite.
 4. Alternativ per Handle: `https://library.oapen.org/handle/<handle>`.
 5. Auf Treffer klicken → Detailseite mit Metadaten und Download-Button.
@@ -22,7 +25,7 @@ Kein Login erforderlich. Alle Inhalte sind Open Access.
 ## Volltext-Lokation
 
 - Auf der Detailseite: Button "Download PDF" suchen.
-- `browser-use state` → Button-Index identifizieren, klicken.
+- Button über den AX-Baum finden und mit `click_at_xy(...)` klicken.
 - PDF liegt direkt auf OAPEN-Servern — keine Weiterleitung zu externen Seiten.
 - Dateiname: meist `<handle>.pdf` oder titelbasiert.
 

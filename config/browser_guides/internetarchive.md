@@ -1,5 +1,8 @@
 # Internet Archive / Open Library — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://archive.org (Discovery zusätzlich über https://openlibrary.org)
 **Auth:** keine für frei herunterladbare Titel; Internet-Archive-Konto
 (kostenlos) nur nötig, um kontrolliert verleihbare ("Controlled Digital
@@ -10,7 +13,7 @@ Massen-Downloads können gedrosselt werden.
 
 ## Login-Flow
 
-1. `browser-use open https://archive.org`
+1. `new_tab("https://archive.org")`
 2. Für Titel mit direktem Download-Recht (Public Domain / "Borrow"-Badge
    fehlt): kein Login nötig.
 3. Für CDL-/Borrow-Titel: Login wird zwar angeboten, aber NICHT verwenden —
@@ -21,12 +24,12 @@ Massen-Downloads können gedrosselt werden.
 ## Discovery-Pfad
 
 1. Bevorzugt über Open Library für saubere Edition-Metadaten:
-   `browser-use open "https://openlibrary.org/search?q=<query>"`
+   `new_tab("https://openlibrary.org/search?q=<query>")`
    (query = ISBN, Titel oder Autor, URL-encoded)
-2. `browser-use state` → Trefferliste lesen, passende Edition wählen
+2. Trefferliste per `js(...)` lesen, passende Edition wählen
    (Open Library listet mehrere Ausgaben/Editionen desselben Werks getrennt).
 3. Alternativ Direktsuche auf Archive.org:
-   `browser-use open "https://archive.org/search?query=<query>&sin=TXT"`
+   `new_tab("https://archive.org/search?query=<query>&sin=TXT")`
 4. Auf Treffer klicken → Item-Detailseite (`archive.org/details/<identifier>`).
 5. Zugriffsstufe auf der Detailseite prüfen (siehe Access-Level-Matrix).
 
@@ -34,7 +37,7 @@ Massen-Downloads können gedrosselt werden.
 
 - Auf der Item-Detailseite: rechter "Download Options"-Block.
 - Bei frei herunterladbaren Titeln: Link "PDF" direkt anklicken.
-  `browser-use download <pdf-link-idx> --to <output_path>`
+  PDF-Link klicken, Download nach `<output_path>` (Rezept in `_cli.md`).
 - Manche Items zeigen den PDF-Download-Link erst nach Klick auf
   "SHOW ALL" / "14 Files" im Download-Block — dort öffnen und den
   `*.pdf`-Eintrag suchen (nicht `_djvu.txt`, nicht `_abbyy.gz`).
@@ -66,7 +69,7 @@ verschiedener Auflagen) — das Jahr des tatsächlich gewählten Scans übernehm
 - `status: metadata_only` wenn:
   - Item zeigt "Borrow"-Button statt Download-Liste (CDL).
   - Kein PDF in den Download-Optionen (nur `_djvu.txt`, `_abbyy.gz` o. ä.).
-- `status: captcha` wenn ein CAPTCHA in `browser-use state` sichtbar ist.
+- `status: captcha` wenn ein CAPTCHA in `page_info()` sichtbar ist.
 - `status: no_match` wenn Suche 0 Treffer liefert.
 - **HTTP 429 / Rate-Limit:** korrekt diagnostizieren (Statuscode +
   Retry-Hinweis im `reason`-Feld), NICHT als `no_match` fehldeuten — siehe

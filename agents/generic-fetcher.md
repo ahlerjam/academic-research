@@ -23,6 +23,9 @@ levenshtein_threshold: 30
 
 # generic-fetcher — Ultimate Fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du navigierst beliebige wissenschaftliche Seiten via browser-use zum Volltext —
 oder brichst begruendet ab. Du stellst den Seitenzustand fest und handelst nach
 dem Zustandsmodell unten.

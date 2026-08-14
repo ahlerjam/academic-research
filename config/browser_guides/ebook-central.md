@@ -1,14 +1,17 @@
 # Ebook Central (ProQuest) — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://ebookcentral.proquest.com
 **Auth:** Shibboleth / HAN / IP-basiert (Institutionszugang)
 **Anti-Scraping:** niedrig (lizenzierter Zugriff), aber Session-Timeout nach Inaktivität.
 
 ## Login-Flow
 
-1. `browser-use open https://ebookcentral.proquest.com`
+1. `new_tab("https://ebookcentral.proquest.com")`
 2. "Sign in" oben rechts klicken.
-3. `browser-use state` → "Sign in through your institution" suchen, klicken.
+3. "Sign in through your institution" über den AX-Baum finden und klicken.
 4. Hochschule im Suchfeld eingeben oder aus Liste wählen.
 5. Shibboleth-Login: Hochschul-Credentials eingeben (aus Uni-Profil).
 6. Auf Weiterleitung zurück zu Ebook Central warten.
@@ -19,7 +22,7 @@ Alternativ via HAN-Proxy: `han_login.md` zuerst ausführen, dann
 ## Discovery-Pfad
 
 1. Suchfeld im Header: Titel, Autor, ISBN eingeben.
-2. `browser-use state` → Suchergebnisse prüfen.
+2. Trefferliste per `js(...)` auslesen und prüfen.
 3. Filter im linken Panel: "Subject", "Publication Date", "Language".
 4. Trefferdetailseite öffnen → Lizenz- und Download-Optionen prüfen.
 5. Alternativ über OPAC-Link: OPAC-Eintrag enthält oft Direktlink zu Ebook Central.
@@ -27,7 +30,7 @@ Alternativ via HAN-Proxy: `han_login.md` zuerst ausführen, dann
 ## Volltext-Lokation
 
 - Auf Detailseite: "Full Book Download" suchen (wenn Lizenz vorhanden).
-- `browser-use state` → Button-Index identifizieren, klicken.
+- Button über den AX-Baum finden und mit `click_at_xy(...)` klicken.
 - Falls "Full Book Download" fehlt: "Download Chapter" für kapitelweisen Download.
 - Online-Reader ("Read Online") ist kein Download-Äquivalent — nicht verwenden.
 - DRM-Hinweis prüfen: "Adobe DRM" bedeutet verschlüsseltes PDF.

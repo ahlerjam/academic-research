@@ -1,5 +1,8 @@
 # Nationallizenzen DFG — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://www.nationallizenzen.de
 **Auth:** DFN-AAI / Shibboleth mit Hochschulkonto (mehrstufig)
 **Anti-Scraping:** niedrig auf Nationallizenzen-Portal; mittel beim Ziel-Verlag.
@@ -18,9 +21,9 @@ Verlags-Plattformen via Shibboleth.
 
 ## Discovery-Pfad
 
-1. `browser-use open https://www.nationallizenzen.de`
+1. `new_tab("https://www.nationallizenzen.de")`
 2. Suche im Nationallizenzen-Katalog: Titel, ISBN, DOI oder Verlag.
-3. `browser-use state` → Treffer prüfen; Verlags-Link in Trefferdetails notieren.
+3. Treffer per `js(...)` prüfen; Verlags-Link in Trefferdetails notieren.
 4. Auf Verlags-Link klicken → Verlagsseite öffnet (Springer, Wiley, etc.).
 5. Auf der Verlagsseite weiter im verlagsspezifischen Guide verfahren
    (`springer.md`, etc.).

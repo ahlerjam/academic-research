@@ -3,7 +3,7 @@
 [← Doku-Übersicht](../README.md)
 
 Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin bringt
-**12 Slash-Commands** mit (`commands/*.md`).
+**13 Slash-Commands** mit (`commands/*.md`).
 
 | Command | Beschreibung |
 |---------|-------------|
@@ -19,6 +19,7 @@ Commands werden explizit per `/academic-research:<name>` aufgerufen. Das Plugin 
 | `/academic-research:word` | Word-Export (`*.docx`, optional PDF) mit echten Formatvorlagen |
 | `/academic-research:slides` | Foliensatz (`*.pptx`) aus Kapiteln, eine Kernaussage pro Folie |
 | `/academic-research:pruefbilanz` | Prüfbilanz eines Kapitels: geprüft/Befund offen/nicht geprüft |
+| `/academic-research:entscheidungen` | Im Lauf getroffene Abwägungen einsehen und revidieren |
 
 Jede Sektion folgt demselben Schema: **Syntax** (mit `argument-hint`), **Beispiel(e)**,
 **Skills/Agents** (was unter der Haube läuft), **Voraussetzungen**, **Rückgabe** und
@@ -386,3 +387,36 @@ ist) — reine Kennzahl, kein Gate, keine Meldung.
 
 **Fehlschlag:** `FileNotFoundError`, wenn die Kapiteldatei nicht existiert. Ein Kapitel
 ohne belegte Zitate ist **kein** Fehlschlag — alle Zähler stehen dann auf `0`.
+
+### `/academic-research:entscheidungen`
+
+Neu in Issue #905: gibt die im Lauf selbst getroffenen Abwägungen (Kategorie
+`judgment-call`, siehe `skills/_common/preamble.md`) mit Grund und Zeitpunkt aus
+und erlaubt, eine davon zu revidieren.
+
+**Syntax:** `/academic-research:entscheidungen [--revidieren <decision_id> "<neue Entscheidung>" "<Grund>"]`
+
+**Beispiele:**
+
+```bash
+# Alle aktiven Abwägungen ausgeben
+/academic-research:entscheidungen
+
+# Eine bestehende Abwägung ersetzen
+/academic-research:entscheidungen --revidieren 3f2b... "Nur RCTs ab 2015" "Aktualitätsanforderung des Prüfers"
+```
+
+**Skills/Agents:** Reine Command-Logik (kein Agent/Skill) — ruft
+`vault.list_decisions(category="judgment-call")`, `vault.add_decision(...)` und
+`vault.supersede_decision(...)` direkt auf.
+
+**Voraussetzungen:** Ein Vault mit protokollierten `judgment-call`-Decisions;
+ohne vorherige Läufe, die Abwägungen protokolliert haben, bleibt die Ausgabe leer.
+
+**Rückgabe:** Aktive Abwägungen (Text, Grund, Zeitpunkt) und abgelöste Abwägungen
+getrennt ausgegeben; bei `--revidieren` zusätzlich die neue `decision_id` und die
+Bestätigung, dass die alte als abgelöst markiert ist.
+
+**Fehlschlag:** Keine aktiven Abwägungen vorhanden → explizite Meldung, kein
+Fehler. `--revidieren` mit unbekannter oder bereits abgelöster `decision_id` →
+Meldung, keine Änderung am Vault.
