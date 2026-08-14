@@ -16,6 +16,9 @@ browser-guide: config/browser_guides/oapen.md
 
 # oapen-fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst oapen.org wie ein Mensch. Nur browser-use.
 
 **Lies zuerst:** `config/browser_guides/oapen.md`
@@ -32,16 +35,16 @@ Jeder gefundene Treffer ist per Definition OA — kein separater OA-Filter noeti
 
 ## Standard-Flow
 
-1. `browser-use open https://www.oapen.org`
+1. `new_tab("https://www.oapen.org")`
 2. Suchfeld im Header: ISBN, DOI oder Titel eingeben
-3. `browser-use state` → Suchergebnisse pruefen
-   - DOI-Direktlink bevorzugen: `browser-use open https://doi.org/<doi>` (falls DOI gegeben)
-   - Handle-URL: `browser-use open https://library.oapen.org/handle/<handle>`
+3. Suchergebnisse per `js(...)` pruefen
+   - DOI-Direktlink bevorzugen: `new_tab("https://doi.org/<doi>")` (falls DOI gegeben)
+   - Handle-URL: `new_tab("https://library.oapen.org/handle/<handle>")`
    - Bei 0 Treffern: `{"status": "no_match", "source_subagent": "oapen-fetcher", "reason": "0 Treffer auf oapen.org"}`
 4. Auf Treffer klicken → Detailseite
-5. `browser-use state` → "Download PDF"-Button suchen
+5. "Download PDF"-Button ueber den AX-Baum suchen
    - Button-Index identifizieren
-6. `browser-use download <pdf-btn-idx> --to <output_path>`
+6. Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
 7. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
 
 ## Output-Schema

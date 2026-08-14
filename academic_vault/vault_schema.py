@@ -174,7 +174,12 @@ VALID_CHUNK_CONTEXT_SOURCES = frozenset({"metadata", "model"})
 #      Grundlage fuer den Schreibweg `vault.enrich_chunk_contexts()` und die
 #      Bestandsabfrage `vault.pending_context_chunks()`. Migrationshelfer:
 #      `migrate.add_chunk_context_source_column()`.
-CURRENT_SCHEMA_VERSION = 15
+# 16 = paper_tables.confidence + paper_tables.detection (Issue #847): Pro-Tabelle-
+#      Signal statt eines einzigen PDF-weiten Status (`high`/`low`,
+#      `lines`/`text-strategy`). DEFAULT 'high'/'lines' fuer Bestandszeilen --
+#      sie sind ausnahmslos ueber den Linien-Pfad entstanden. Migrationshelfer:
+#      `migrate.add_paper_tables_confidence_columns()`.
+CURRENT_SCHEMA_VERSION = 16
 
 # Spalten, die `migrate.apply_pending_migrations()` je Tabelle nachziehen muss
 # (Review-Fund zu PR #427, `db.py`-Zeile bei der `user_version`-Stempelung):
@@ -204,6 +209,7 @@ _LEGACY_MIGRATION_COLUMNS: dict[str, frozenset[str]] = {
     ),
     "notes": frozenset({"page"}),
     "chunk_embeddings": frozenset({"section_title", "page_start", "page_end", "context_source"}),
+    "paper_tables": frozenset({"confidence", "detection"}),
 }
 
 # Tabellen, die `migrate.apply_pending_migrations()` auf einer Bestands-DB

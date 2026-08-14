@@ -46,8 +46,9 @@ class TablesRepo(ConnectionHost):
                     """
                     INSERT INTO paper_tables
                       (table_id, paper_id, page, table_index, backend,
-                       n_rows, n_cols, bbox_json, rows_json, cells_json, extracted_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       n_rows, n_cols, bbox_json, rows_json, cells_json, extracted_at,
+                       confidence, detection)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(uuid4()),
@@ -61,6 +62,8 @@ class TablesRepo(ConnectionHost):
                         json.dumps(table["rows"], ensure_ascii=False),
                         json.dumps(table["cells"], ensure_ascii=False),
                         now,
+                        table.get("confidence", "high"),
+                        table.get("detection", "lines"),
                     ),
                 )
         return len(tables)
@@ -105,8 +108,9 @@ class TablesRepo(ConnectionHost):
 
         Returns:
             ``{"paper_id", "page", "table_index", "row", "col", "value", "bbox",
-            "backend", "evidence"}`` oder ``None``, wenn es die Zelle nicht
-            gibt. ``None`` statt eines Naeherungstreffers: ein geratener Beleg
+            "backend", "confidence", "detection", "evidence"}`` oder ``None``,
+            wenn es die Zelle nicht gibt. ``None`` statt eines Naeherungstreffers:
+            ein geratener Beleg
             waere schlimmer als gar keiner.
         """
         with self._connection() as conn:
@@ -126,17 +130,27 @@ class TablesRepo(ConnectionHost):
         for cell in json.loads(found["cells_json"]):
             if cell["row"] != row or cell["col"] != col:
                 continue
+            # Platzhalter-Zellen (geschluckt durch merging) haben kein Beleg-Recht —
+            # ein Beleg ohne Koordinaten ist keiner (Issue #630 AC2). Diese Zellen
+            # signalisieren nur die Lücke; sie sind nicht anquotierbar.
+            if cell.get("merged_into") is not None:
+                return None
+            # Defensiv lesen: auf älteren DBs ohne confidence/detection Spalten sind
+            # die Defaults "high"/"lines" (Migration Add­schema_for_read setzt das)
+            record = dict(found)
             return {
                 "paper_id": paper_id,
-                "page": int(found["page"]),
-                "table_index": int(found["table_index"]),
+                "page": int(record["page"]),
+                "table_index": int(record["table_index"]),
                 "row": row,
                 "col": col,
                 "value": cell["value"],
                 "bbox": cell["bbox"],
-                "backend": str(found["backend"]),
+                "backend": str(record["backend"]),
+                "confidence": str(record.get("confidence", "high")),
+                "detection": str(record.get("detection", "lines")),
                 "evidence": format_table_evidence(
-                    paper_id, int(found["page"]), int(found["table_index"]), row, col
+                    paper_id, int(record["page"]), int(record["table_index"]), row, col
                 ),
             }
         return None

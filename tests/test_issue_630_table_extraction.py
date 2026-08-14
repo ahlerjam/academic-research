@@ -47,10 +47,12 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures" / "tables"
 RESULTS_PDF = FIXTURE_DIR / "results_table.pdf"
 TWO_COLUMN_PDF = FIXTURE_DIR / "two_column_layout.pdf"
 MERGED_HEADER_PDF = FIXTURE_DIR / "merged_header.pdf"
+GRIDLESS_TABLE_PDF = FIXTURE_DIR / "gridless_table.pdf"
 NO_TABLE_PDF = FIXTURE_DIR / "no_table.pdf"
 SCAN_PDF = FIXTURE_DIR / "scan_no_textlayer.pdf"
 
 VAULT_DOC = REPO_ROOT / "docs" / "reference" / "vault.md"
+LIMITS_DOC = REPO_ROOT / "docs" / "guide" / "limits.md"
 MATRIX_SKILL = REPO_ROOT / "skills" / "extraction-matrix" / "SKILL.md"
 META_AGENT = REPO_ROOT / "agents" / "meta-analysis.md"
 
@@ -108,6 +110,9 @@ def test_results_table_preserves_row_and_column_assignment():
     ]
     assert table["n_rows"] == 4
     assert table["n_cols"] == 4
+    # Linien-Pfad: hoechste Konfidenz, unveraendert gegenueber #630 (Issue #847 AC2).
+    assert table["detection"] == "lines"
+    assert table["confidence"] == "high"
 
 
 @requires_backend
@@ -200,6 +205,19 @@ def test_re_extraction_replaces_instead_of_duplicating(tmp_path):
 
 
 @requires_backend
+def test_extract_tables_for_paper_reports_low_confidence_count(tmp_path):
+    """AC3: der Report zaehlt Low-Confidence-Tabellen, ohne dass der Aufrufer
+    jede Tabelle einzeln inspizieren muss."""
+    db_path, paper_id = _make_paper(tmp_path, RESULTS_PDF)
+    report = extract_tables_for_paper(db_path, paper_id)
+    assert report["low_confidence_tables"] == 0
+
+    db_path2, paper_id2 = _make_paper(tmp_path, GRIDLESS_TABLE_PDF, paper_id="lee2019")
+    report2 = extract_tables_for_paper(db_path2, paper_id2)
+    assert report2["low_confidence_tables"] == 1
+
+
+@requires_backend
 def test_writing_tables_into_a_locked_vault_is_refused(tmp_path):
     db_path, paper_id = _make_paper(tmp_path, RESULTS_PDF)
     VaultDB(db_path).lock_vault(slug="testprojekt")
@@ -218,26 +236,33 @@ def test_two_column_layout_fixture_result_is_pinned():
     """Zweispaltiges Layout: die Tabelle in der linken Spalte wird gefunden.
 
     Festgeschriebener Ist-Zustand — der rechte Textblock darf nicht in die
-    Tabelle geraten.
+    Tabelle geraten. Der Linien-Pfad greift hier unveraendert (ein Gitter ist
+    gezeichnet), also bleibt die Konfidenz hoch (Issue #847).
     """
     result = tables_mod.extract_tables(str(TWO_COLUMN_PDF))
 
     assert result["status"] == tables_mod.STATUS_OK
     assert len(result["tables"]) == 1
-    assert result["tables"][0]["rows"] == [
+    table = result["tables"][0]
+    assert table["rows"] == [
         ["Studie", "N"],
         ["Smith 2020", "120"],
     ]
+    assert table["detection"] == "lines"
+    assert table["confidence"] == "high"
 
 
 @requires_backend
 def test_merged_header_fixture_result_is_pinned():
     """Verbundene Kopfzelle: pdfplumber liefert dort eine ``None``-Zelle.
 
-    Das ist der dokumentierte Teilmisserfolg (AC3): die Kopfzeile hat nur zwei
-    reale Zellen, die dritte Position bleibt ``None``. Der Test friert diesen
-    Ist-Zustand ein, statt ihn schoenzufaerben — die Datenzeilen darunter
-    bleiben davon unberuehrt und korrekt zugeordnet.
+    Das ist der dokumentierte Teilmisserfolg (AC3 aus #630): die Kopfzeile hat
+    nur zwei reale Zellen, die dritte Position bleibt in ``rows`` ``None`` --
+    das aendert #847 nicht, weil ``rows`` die Textmatrix von pdfplumber ist.
+    Neu (#847): die geschluckte Position fehlt in ``cells`` nicht mehr
+    stillschweigend, sondern traegt ein explizites ``merged_into``-Signal auf
+    die breite Nachbarzelle -- kein stummer Gap mehr (AC1). Die Datenzeilen
+    darunter bleiben unberuehrt und korrekt zugeordnet.
     """
     result = tables_mod.extract_tables(str(MERGED_HEADER_PDF))
 
@@ -249,14 +274,98 @@ def test_merged_header_fixture_result_is_pinned():
         ["Smith 2020", "0.42", "0.12"],
         ["Jones 2021", "0.31", "0.13"],
     ]
+    assert table["detection"] == "lines"
+    assert table["confidence"] == "high"
 
     header_cells = [c for c in table["cells"] if c["row"] == 0]
-    assert [c["col"] for c in header_cells] == [0, 1]
+    assert [c["col"] for c in header_cells] == [0, 1, 2]
     merged = header_cells[1]
     assert merged["value"] == "Effekt"
     # Die verbundene Kopfzelle ist doppelt so breit wie eine Datenzelle darunter.
     data_cell = next(c for c in table["cells"] if c["row"] == 2 and c["col"] == 1)
     assert (merged["bbox"][2] - merged["bbox"][0]) > (data_cell["bbox"][2] - data_cell["bbox"][0])
+
+    swallowed = header_cells[2]
+    assert swallowed["value"] is None
+    assert swallowed["bbox"] is None
+    assert swallowed["merged_into"] == 1
+
+
+@requires_backend
+def test_get_table_cell_returns_none_for_merged_position(tmp_path):
+    """Regression-Test (#847 P1): Platzhalter-Zellen (merged_into) sind keine Belege.
+
+    get_table_cell() muss None zurückgeben für eine geschluckte Position (row=0,
+    col=2 auf merged_header.pdf), nicht einen Beleg ohne Koordinaten. Ein Beleg
+    auf eine Zelle ohne value/bbox ist keiner.
+    """
+    db_path, paper_id = _make_paper(tmp_path, MERGED_HEADER_PDF)
+    result = extract_tables_for_paper(db_path, paper_id)
+    assert result["status"] == tables_mod.STATUS_OK
+
+    # Die merged-Position sollte in extract_tables korrekt als Platzhalter erscheinen
+    assert result["low_confidence_tables"] == 0  # high confidence
+
+    # Aber get_table_cell() muss None zurückgeben für die geschluckte Position
+    cell = get_table_cell(db_path, paper_id, page=1, table_index=0, row=0, col=2)
+    assert cell is None, (
+        "Platzhalter-Zelle mit merged_into sollte None sein, nicht einen Beleg ohne Koordinaten"
+    )
+
+    # Echte Zellen sollten weiterhin einen Beleg liefern
+    header_cell = get_table_cell(db_path, paper_id, page=1, table_index=0, row=0, col=1)
+    assert header_cell is not None
+    assert header_cell["value"] == "Effekt"
+    assert header_cell["bbox"] is not None
+    assert header_cell["evidence"] is not None
+
+
+@requires_backend
+def test_gridless_table_is_found_via_text_strategy_fallback():
+    """Gitterlinienlose Tabelle: kein Linien-Pfad, Text-Strategie-Fallback greift (#847 AC1)."""
+    result = tables_mod.extract_tables(str(GRIDLESS_TABLE_PDF))
+
+    assert result["status"] == tables_mod.STATUS_OK
+    assert len(result["tables"]) == 1
+    table = result["tables"][0]
+    assert table["rows"] == [
+        ["Studie", "N", "d"],
+        ["Smith 2020", "120", "0.42"],
+        ["Jones 2021", "84", "0.31"],
+        ["Lee 2019", "210", "0.55"],
+    ]
+    assert table["detection"] == "text-strategy"
+    assert table["confidence"] == "low"
+
+
+@requires_backend
+def test_gridless_table_cell_is_traceable_with_low_confidence(tmp_path):
+    """Der Weg vom PDF ueber die DB bleibt auch fuer Low-Confidence-Zellen belegfaehig."""
+    db_path, paper_id = _make_paper(tmp_path, GRIDLESS_TABLE_PDF)
+    report = extract_tables_for_paper(db_path, paper_id)
+    assert report["status"] == tables_mod.STATUS_OK
+
+    listed = list_paper_tables(db_path, paper_id)
+    assert len(listed) == 1
+    assert listed[0]["detection"] == "text-strategy"
+    assert listed[0]["confidence"] == "low"
+
+    cell = get_table_cell(db_path, paper_id, page=1, table_index=0, row=1, col=1)
+    assert cell is not None
+    assert cell["value"] == "120"
+    assert cell["confidence"] == "low"
+    assert cell["detection"] == "text-strategy"
+
+
+@requires_backend
+def test_prose_is_not_misdetected_as_table_via_text_strategy():
+    """Fliesstext ohne Linien bleibt ``no-tables`` -- der Text-Strategie-Kandidat
+    wird verworfen, weil seine Zellen mehr als zwei Woerter tragen (#847 Risiko:
+    Prosa faelschlich als Tabelle erkennen)."""
+    result = tables_mod.extract_tables(str(NO_TABLE_PDF))
+
+    assert result["status"] == tables_mod.STATUS_NO_TABLES
+    assert result["tables"] == []
 
 
 def test_docs_document_known_table_limits():
@@ -268,6 +377,15 @@ def test_docs_document_known_table_limits():
     # Der Backend-Vergleich ist belegt, nicht behauptet.
     for candidate in ("pdfplumber", "camelot", "Docling", "Marker"):
         assert candidate in doc, f"Backend-Vergleich nennt {candidate} nicht"
+    # Issue #847: Confidence-Signal und Text-Strategie-Fallback dokumentiert,
+    # nicht nur die zwei alten #630-Grenzfaelle.
+    assert "confidence" in doc.lower()
+    assert "text-strategy" in doc.lower() or "text-strategie" in doc.lower()
+    assert "gitterlinienlos" in doc.lower() or "gridless" in doc.lower()
+
+    limits = LIMITS_DOC.read_text(encoding="utf-8")
+    assert "confidence" in limits.lower()
+    assert "gitterlinienlos" in limits.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -522,6 +640,29 @@ def test_legacy_db_gets_paper_tables_via_migration(tmp_path):
     finally:
         conn.close()
     assert row is not None
+
+
+def test_legacy_paper_tables_gets_confidence_and_detection_columns(tmp_path):
+    """Bestands-``paper_tables`` (vor #847) bekommt confidence/detection nachgezogen (idempotent)."""
+    db_path = str(tmp_path / "legacy_confidence.db")
+    VaultDB(db_path).init_schema()
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("ALTER TABLE paper_tables DROP COLUMN confidence")
+        conn.execute("ALTER TABLE paper_tables DROP COLUMN detection")
+        conn.commit()
+    finally:
+        conn.close()
+
+    migrate.add_paper_tables_confidence_columns(db_path)
+    migrate.add_paper_tables_confidence_columns(db_path)  # idempotent
+
+    conn = sqlite3.connect(db_path)
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(paper_tables)").fetchall()}
+    finally:
+        conn.close()
+    assert {"confidence", "detection"} <= columns
 
 
 def test_listing_tables_on_a_legacy_db_returns_empty_instead_of_raising(tmp_path):

@@ -16,6 +16,9 @@ browser-guide: config/browser_guides/kvk.md
 
 # kvk-fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst kvk.bibliothek.kit.edu wie ein Mensch. Nur browser-use.
 
 **Lies zuerst:** `config/browser_guides/kvk.md`
@@ -32,19 +35,19 @@ Du musst aktiv nach Volltext-Links/OA-Indikatoren filtern.
 
 ## Standard-Flow
 
-1. `browser-use open https://kvk.bibliothek.kit.edu`
+1. `new_tab("https://kvk.bibliothek.kit.edu")`
 2. Suchformular ausfuellen: ISBN (bevorzugt), Titel oder Autor
 3. Alle Datenbanken aktiviert lassen (Standard: HEIDI, BVB, GBV, SWB)
 4. "Suchen"-Button klicken
-5. `browser-use state` → Ergebnisliste lesen
+5. Ergebnisliste per `js(...)` lesen
    - Bei 0 Treffern: `{"status": "no_match", "source_subagent": "kvk-fetcher", "reason": "0 Treffer in KVK"}`
 6. Ergebnisse nach OA/Volltext filtern:
    - "Online-Ressource"-Treffer mit externem Link → OA-Kandidat
    - "Volltext"-Link oder OA-Badge in Trefferliste → Download versuchen
    - Nur physische Bestands-Eintraege → Standort-Info notieren
 7. Bei Volltext-Link gefunden:
-   - `browser-use click <volltext-link-idx>` → externe Seite
-   - Download-Versuch: `browser-use download <pdf-idx> --to <output_path>`
+   - Volltext-Link ueber den AX-Baum finden und `click_at_xy(...)` → externe Seite
+   - Download-Versuch: Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
    - Validation: Magic-Bytes `%PDF`, Groesse > 10 KB
    - Erfolg: `{"status": "success", "source_subagent": "kvk-fetcher", "pdf_path": "..."}`
 8. Nur Bibliotheks-Nachweis (kein Volltext):
