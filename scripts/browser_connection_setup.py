@@ -186,16 +186,32 @@ def record_method(method: str, checks: dict[str, bool], path: Path | None = None
 
 
 def load_state(path: Path | None = None) -> dict | None:
-    """Liest den vermerkten Zustand. ``None`` wenn nie eingerichtet oder die
-    Datei kaputt/kein Dict ist — der sichere "nicht konfiguriert"-Fall."""
+    """Liest den vermerkten Zustand.
+
+    ``None`` bedeutet ausschliesslich "die Datei existiert nicht" — der
+    einzige echte "nie konfiguriert"-Fall (Issue #907 AC2), den
+    ``browser_preflight.check()`` mit der UNCONFIGURED_MESSAGE blockiert.
+
+    Existiert die Datei, aber laesst sich ihr Inhalt nicht als JSON-Objekt
+    lesen (kaputtes JSON, kein Dict, oder — der P1-Fund aus dem PR-#923-
+    Review — ein Vermerk in einem Format, das eine aeltere/neuere
+    Plugin-Version geschrieben hat), ist das KEIN "nie konfiguriert": das
+    Setup ist ja gelaufen, nur der aktuelle Code versteht das Format nicht.
+    Ein Plugin-Update darf bestehende Installationen deshalb nicht bei
+    jedem internen Formatwechsel zum erneuten Setup zwingen. Statt ``None``
+    liefert dieser Fall ein leeres Dict: ``check()`` behandelt das wie
+    "Weg unbekannt" und faellt auf den regulaeren, verbindungsbasierten
+    Preflight-Check zurueck (blockiert nur bei tatsaechlich fehlender
+    Verbindung, mit der Wiederherstellungs-Anleitung statt der
+    Setup-Aufforderung)."""
     target = Path(path) if path is not None else _default_state_path()
     if not target.exists():
         return None
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return None
-    return data if isinstance(data, dict) else None
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def main(
@@ -219,10 +235,15 @@ def main(
 
     if "--check" in args:
         state = load_state(path)
-        if state is None:
+        # state kann None (Datei fehlt) ODER ein leeres/methodenloses Dict
+        # sein (Datei existiert, aber Format unbekannt/aelterer Vermerk,
+        # siehe load_state()-Docstring) — in beiden Faellen ist kein Weg
+        # bekannt, also "unset"/Exit 1.
+        method = state.get("method") if isinstance(state, dict) else None
+        if not method:
             print("unset")
             return 1
-        print(state.get("method", "unset"))
+        print(method)
         return 0
 
     force = "--force" in args

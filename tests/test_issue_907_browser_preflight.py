@@ -139,3 +139,51 @@ def test_preflight_ok_when_active_connections_line_missing_from_doctor(tmp_path,
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "ok" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# P1-Regression (PR #923 Review, vierter Fund): der Fail-closed-Fix fuer
+# "nie konfiguriert" (test_preflight_fails_when_never_configured) darf nicht
+# JEDE unlesbare/veraltete Vermerk-Datei wie "nie konfiguriert" behandeln.
+# Setup IST in dem Fall schon mal gelaufen (die Datei existiert) — nur das
+# Format, das eine aeltere Plugin-Version geschrieben hat, versteht der
+# aktuelle Code nicht. Das darf nach einem gewoehnlichen Plugin-Update nicht
+# jeden Browser-Lauf blockieren, solange die Verbindung tatsaechlich steht.
+# ---------------------------------------------------------------------------
+
+
+def test_preflight_ok_when_existing_state_file_predates_current_json_format(tmp_path, capsys):
+    """Simuliert einen Vermerk aus einer aelteren Plugin-Version: die Datei
+    existiert (Setup ist gelaufen), ihr Inhalt ist aber kein JSON-Objekt im
+    aktuellen Schema (hier: reiner Text statt {"method": ...}). Bei stehender
+    Verbindung darf das nicht wie ein fehlendes Setup blockieren."""
+    state_path = tmp_path / "browser_connection.json"
+    state_path.write_text("local_chrome\n", encoding="utf-8")  # aelteres Nicht-JSON-Format
+
+    exit_code = browser_preflight.main(
+        [], state_path=state_path, doctor_runner=lambda: DOCTOR_READY
+    )
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "ok" in out.lower()
+
+
+def test_preflight_blocks_with_recovery_message_when_legacy_state_and_connection_down(
+    tmp_path, capsys
+):
+    """Derselbe veraltete Vermerk, aber diesmal steht die Verbindung
+    tatsaechlich nicht — dann muss weiterhin blockiert werden, allerdings
+    mit der Wiederherstellungs-Anleitung (LOCAL_BLOCKED_MESSAGE), nicht mit
+    der 'noch nie eingerichtet'-Meldung (UNCONFIGURED_MESSAGE)."""
+    state_path = tmp_path / "browser_connection.json"
+    state_path.write_text("local_chrome\n", encoding="utf-8")
+
+    exit_code = browser_preflight.main(
+        [], state_path=state_path, doctor_runner=lambda: DOCTOR_BLOCKED
+    )
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    # LOCAL_BLOCKED_MESSAGE (Wiederherstellung), nicht UNCONFIGURED_MESSAGE
+    # ("noch nicht eingerichtet") — die Datei existiert ja, Setup lief schon:
+    assert "noch nicht eingerichtet" not in out.lower()
+    assert "allow" in out.lower()

@@ -290,6 +290,25 @@ def test_load_state_roundtrips_recorded_method(tmp_path):
     assert state["method"] == bcs.METHOD_CLOUD
 
 
+def test_load_state_distinguishes_missing_file_from_unparseable_existing_file(tmp_path):
+    """P1-Regression (PR #923 Review, vierter Fund): eine EXISTIERENDE, aber
+    nicht parsebare Datei (z.B. ein Vermerk aus einer aelteren Plugin-Version
+    in einem anderen Format, oder beschaedigtes JSON) ist etwas anderes als
+    eine fehlende Datei ('nie konfiguriert'). load_state() muss beides
+    unterscheidbar zurueckgeben: None nur, wenn die Datei fehlt; ein (ggf.
+    leeres) Dict, wenn sie existiert, aber nicht verstanden wird — check()
+    faellt dafuer auf den regulaeren Verbindungscheck zurueck, statt den
+    Nutzer zum erneuten Setup zu zwingen."""
+    missing_path = tmp_path / "missing.json"
+    assert bcs.load_state(missing_path) is None
+
+    legacy_path = tmp_path / "legacy.json"
+    legacy_path.write_text("local_chrome\n", encoding="utf-8")  # kein JSON-Objekt
+    legacy_state = bcs.load_state(legacy_path)
+    assert legacy_state is not None
+    assert isinstance(legacy_state, dict)
+
+
 def test_record_method_idempotent_second_run_no_reprompt(tmp_path):
     """Zweiter Setup-Lauf: der bereits vermerkte Weg wird nicht neu erfragt —
     hier geprueft ueber main(), das bei vorhandenem State nicht erneut nach
