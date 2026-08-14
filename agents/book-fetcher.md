@@ -202,6 +202,21 @@ meldet diesen Status bei einer im Uni-Profil lizenzierten Domain):
 `auth_required` ist ein reiner **Innen-Status**. Er erscheint in `tries`, aber
 nie im Master-Output: du loest ihn immer zu einem der vier Stati unten auf.
 
+**Bei `{status: metadata_only}`:** Der Fallback hat den Titel nachgewiesen, aber
+keinen Volltext bekommen — genau das, was der Nutzer selbst abholen muss. Bilde
+ihn auf `pickup_required` ab und uebernimm die Nachweisseite in den Hinweis:
+
+- `status: pickup_required`
+- `pickup_hint.metadata_url` = `url` aus der `metadata_only`-Antwort
+- `pickup_hint.access_level` = `reason` aus der `metadata_only`-Antwort
+  (festes Vokabular `"Zugriffsstufe: <Beschreibung>"`, siehe
+  `agents/generic-fetcher.md`)
+
+Wie `auth_required` ist auch `metadata_only` ein reiner **Innen-Status**: Er
+steht in `tries`, erscheint aber nie im Master-Output. Ohne diesen Zweig fiele
+die Antwort in den `no_match`-Fall — der Titel gaelte als nicht auffindbar,
+obwohl die Nachweisseite bekannt ist, und `pickup_hint` ginge verloren.
+
 ---
 
 ## Schritt 6: SciHub-Last-Resort (F18, Issue #459)
@@ -267,7 +282,9 @@ weiter, die Herkunft ist ueber `vault.get_paper()` abfragbar.
   "pickup_hint": {
     "bib_pickup_url": "<aus active.yaml>",
     "identifier": "<identifier_value>",
-    "identifier_type": "<identifier_type>"
+    "identifier_type": "<identifier_type>",
+    "metadata_url": "<nur bei metadata_only aus Schritt 5: Nachweisseite>",
+    "access_level": "<nur bei metadata_only: 'Zugriffsstufe: <Beschreibung>'>"
   }
 }
 ```
@@ -294,6 +311,8 @@ generic-fetcher ohne site_config (Schritt 5):
   -- pickup_required --> status: pickup_required + pickup_hint
   -- captcha --> status: captcha
   -- no_match --> status: no_match (kein Treffer in allen Quellen)
+  -- metadata_only --> status: pickup_required + pickup_hint
+                       (metadata_url + access_level aus der Antwort)
   -- auth_required --> auth-helper --> genau ein Retry (mit session_context)
                        --> danach success oder pickup_required
 
