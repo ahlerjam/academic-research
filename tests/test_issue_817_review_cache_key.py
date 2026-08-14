@@ -202,3 +202,113 @@ def test_workflow_passes_full_diff_to_cache_check_not_bounded_copy():
         "lebt der #817-Fehler in der Workflow-Verdrahtung weiter."
     )
     assert '--diff "$RUNNER_TEMP/diff.bounded.patch"' not in run
+
+
+# ---------------------------------------------------------------------------
+# Issue #943 — ci-failure-Platzhalter darf nicht aus dem Cache wiederkehren
+# ---------------------------------------------------------------------------
+
+
+def _sticky_with_findings(diff_hash: str, findings: list[dict]) -> str:
+    payload = {"diffHash": diff_hash, "findings": findings}
+    return f"{JSON_MARKER_OPEN}\n{json.dumps(payload)}\n{JSON_MARKER_CLOSE}"
+
+
+CI_FAILURE_FINDING = {
+    "severity": "P1",
+    "category": "ci-failure",
+    "title": "Reviewer code-review did not produce output (result=cancelled)",
+    "evidence": "Artifact missing — reviewer job crashed, timed out, or was cancelled.",
+    "recommendation": "Re-run the workflow or investigate logs.",
+    "confidence": 100,
+}
+
+
+def test_cache_miss_when_cached_findings_contain_ci_failure(tmp_path: Path):
+    """AC1: Ein gecachter `ci-failure`-Platzhalter erzwingt einen Cache-MISS.
+
+    Der Platzhalter entsteht in `pr-deep-review.yml`, wenn ein Reviewer-Job
+    abgebrochen wird (`result=cancelled`) und sein Artifact fehlt. Er ist KEIN
+    Urteil ueber den Diff, sondern eine Aussage ueber einen kaputten Lauf.
+    Wird er gecacht, blockiert er den PR dauerhaft: der Cache-Treffer
+    ueberspringt die Reviewer-Jobs, `coordinator` wendet das Phantom-P1 erneut
+    an, und weil der Diff byte-identisch bleibt, aendert auch ein Re-Run nichts.
+    """
+    diff = tmp_path / "diff.patch"
+    diff.write_bytes(b"diff --git a/x b/x\n+eine Zeile\n")
+    diff_hash = hashlib.sha256(diff.read_bytes()).hexdigest()
+
+    previous = tmp_path / "previous.md"
+    previous.write_text(_sticky_with_findings(diff_hash, [CI_FAILURE_FINDING]))
+
+    hit, returned_hash, _payload = check(diff, previous)
+
+    assert returned_hash == diff_hash, "Der Hash selbst bleibt unveraendert"
+    assert hit is False, (
+        "Ein gecachter ci-failure-Platzhalter muss einen MISS erzwingen, "
+        "sonst bleibt der PR dauerhaft blockiert"
+    )
+
+
+def test_cache_miss_when_ci_failure_sits_among_real_findings(tmp_path: Path):
+    """AC2: Auch gemischt — ein einziger Platzhalter genuegt fuer den MISS."""
+    diff = tmp_path / "diff.patch"
+    diff.write_bytes(b"diff --git a/y b/y\n+noch eine Zeile\n")
+    diff_hash = hashlib.sha256(diff.read_bytes()).hexdigest()
+
+    previous = tmp_path / "previous.md"
+    previous.write_text(
+        _sticky_with_findings(
+            diff_hash,
+            [
+                {"severity": "P2", "category": "style", "title": "echter Befund"},
+                CI_FAILURE_FINDING,
+            ],
+        )
+    )
+
+    hit, _returned_hash, _payload = check(diff, previous)
+
+    assert hit is False, "Ein Platzhalter unter echten Befunden erzwingt ebenfalls den MISS"
+
+
+def test_cache_hit_preserved_for_genuine_findings(tmp_path: Path):
+    """AC3: Echte Reviewer-Befunde cachen weiterhin — der Fix ist eng gefasst.
+
+    Ohne diesen Test koennte der Fix den Cache faelschlich ganz abschalten und
+    damit den Zweck des Moduls (#817) aushebeln.
+    """
+    diff = tmp_path / "diff.patch"
+    diff.write_bytes(b"diff --git a/z b/z\n+dritte Zeile\n")
+    diff_hash = hashlib.sha256(diff.read_bytes()).hexdigest()
+
+    previous = tmp_path / "previous.md"
+    previous.write_text(
+        _sticky_with_findings(
+            diff_hash,
+            [
+                {"severity": "P1", "category": "correctness", "title": "echtes P1"},
+                {"severity": "P2", "category": "style", "title": "echtes P2"},
+            ],
+        )
+    )
+
+    hit, _returned_hash, payload = check(diff, previous)
+
+    assert hit is True, "Echte Befunde muessen weiterhin cachen"
+    assert len(payload["findings"]) == 2
+
+
+def test_workflow_marks_placeholder_with_ci_failure_category():
+    """AC4: Der Fix haengt daran, dass der Platzhalter `category: ci-failure`
+    traegt. Aendert jemand diesen Wert in `pr-deep-review.yml`, greift der
+    Cache-Filter oben stillschweigend nicht mehr — dieser Test bindet beide
+    Stellen aneinander."""
+    workflow = PR_DEEP_REVIEW_WORKFLOW.read_text()
+    assert '"category": "ci-failure"' in workflow, (
+        "Der Platzhalter in pr-deep-review.yml muss die Kategorie 'ci-failure' "
+        "tragen — cache_check.CI_FAILURE_CATEGORY filtert genau darauf"
+    )
+    assert "did not produce output" in workflow, (
+        "Der Platzhalter-Titel wird als Beleg im Test zitiert"
+    )
