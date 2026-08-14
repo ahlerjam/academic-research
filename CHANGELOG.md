@@ -56,6 +56,50 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
     (die Priorisierung sagt, womit angefangen wird, nicht wann aufgehört
     werden darf) und die Autonomie des Screening-Laufs (#880).
 
+### Changed
+
+- **`academic_vault/db.py` in Repository-Module pro Aggregat aufgeteilt (#841):**
+  Die monolithische Klasse `VaultDB` (3.279 Zeilen, CRUD für über 20 Entitäten
+  in einer Datei — das größte Merge-Konflikt- und Regressionsrisiko des Repos)
+  ist ein reiner Move in elf Aggregat-Mixins unter
+  `academic_vault/repositories/` geworden (`papers`, `quotes`, `notes`,
+  `fulltext`, `tables`, `figures`, `empirics`, `decisions`, `appraisal`,
+  `chunks`, `vectors`; kein Methodenkörper wurde inhaltlich verändert).
+  `db.py` bleibt als Fassade (530 Zeilen) mit Connection-/Transaktions-Kern
+  (`_connection`, WAL, `__enter__`/`__exit__`), `init_schema()`, dem
+  Vault-Lock-Guard `_raise_if_locked()` und der Vektorbreite des Bestands
+  (`_expected_embedding_dim`/`_assert_vector_dim`) — genau die fünf
+  Primitive, die `repositories/_base.py::ConnectionHost` als Kontrakt
+  deklariert. Bewusst **Mixin-Komposition statt Objekt-Delegation**: dadurch
+  bleibt jede Methode direkt an `VaultDB` erreichbar, kein Aufrufer
+  (`server.py`, `ingest.py`, `health.py`, `migrate.py`, Evals, ~40
+  Testdateien) ändert sich, und Klassen-Patches wie
+  `monkeypatch.setattr(db_module.VaultDB, "_papers_snapshot", …)`
+  (`tests/test_issue_378_citation_guard.py`) greifen unverändert. Die reinen
+  Text-/Namens-/Pfad-Helfer (`normalize_family_name`, `csl_*`,
+  `paper_cited_in_chapters`, `escape_like`, `_sanitize_fts5_query`,
+  `project_slug`, `default_db_path`, …) liegen jetzt in
+  `academic_vault/vault_text.py`, die schema-nahen Konstanten (`VALID_*`,
+  `CURRENT_SCHEMA_VERSION`, Sentinel `_UNSET`, vec0-DDL) in
+  `academic_vault/vault_schema.py` — beide werden von `db.py` per `__all__`
+  re-exportiert, jeder bisherige `from academic_vault.db import …` bleibt
+  gültig. Neuer mypy-Override (`disallow_untyped_defs = true` für
+  `academic_vault.repositories.*`) macht „vollständig typannotiert"
+  maschinell prüfbar. Zwei bestehende Guards wurden auf den neuen Modulbaum
+  **ausgeweitet, nicht abgeschwächt**:
+  `tests/test_issue_214_code_hygiene.py::test_like_queries_use_escape_clause`
+  scannt jetzt `db.py` **und** `repositories/*.py` auf die ESCAPE-Pflicht
+  (`like_count > 0` bleibt bestehen), und
+  `tests/test_issue_539_drop_dead_tables.py` globt `rglob("*.py")` statt
+  `glob("*.py")`, damit kein Unterpaket dem Tote-Tabellen-Guard entkommt.
+  Nachweis: `tests/test_issue_841_vault_repositories.py` (Zeilenbudget je
+  Modul ≤ 1.200, Fassade ≤ 900, kein Repository öffnet eine eigene
+  Connection, ein Schreibaufruf je Aggregat teilt sich genau **eine**
+  Connection der Fassade, jeder Aggregat-Schreibpfad wirft weiterhin
+  `VaultLockedError` bei gesperrtem Vault, alle bisher exportierten Namen
+  bleiben importierbar).
+
+
 ### Added
 
 - **Entscheidungsklassen im Preamble (#905):** `skills/_common/preamble.md`
@@ -75,6 +119,35 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   unberührt — die neue Preamble-Sektion regelt nur den Default für
   unadressierte Abwägungen. Slash-Commands 12 → 13 (README-Badge,
   `docs/reference/`, Release-Notes synchron aktualisiert).
+
+### Changed
+
+- **PreToolUse-Guards teilen sich einen gebatchten Vault-Lookup statt drei
+  Subprozess-Starts pro Write (#844):** `verbatim-guard.mjs`,
+  `claim-drift-guard.mjs` und `context-fidelity-guard.mjs` schlugen bislang
+  fuer denselben Kapitel-Write groesstenteils dieselben Zitat-Texte im Vault
+  nach — jeder mit einem eigenen Python-Subprozess (~23 ms statt ~1 ms nativ).
+  Neuer dateibasierter Batch-Cache in `hooks/lib/vault-bridge.mjs` (Schluessel
+  `sha256(Pfad + tool_input)`, TTL 20 s, 0600-Rechte): der Guard, der zuerst
+  einen Cache-Miss sieht, laedt die Zitat-Obermenge aller drei Guards
+  (neues `hooks/lib/quote-span-extract.mjs`) in EINEM `runVaultPython`-Aufruf
+  vor, die beiden anderen lesen nur noch die Cache-Datei. Producer-Rolle ist
+  nicht an eine feste `hooks.json`-Reihenfolge gekoppelt. Fail-open bleibt
+  unveraendert: ein kaputter/unschreibbarer Cache oder eine fehlgeschlagene
+  Interpreter-Kaskade blockiert keinen Write, mit identischem Wortlaut wie vor
+  #844. Blockier-/Warn-Semantik der drei Guards unveraendert. **Negativ-Treffer
+  werden nie aus dem Cache bedient:** genau sie loesen den Block aus — und damit
+  den Retry, bei dem der Nutzer die Ursache schon behoben hat (Zitat
+  nachgetragen). Ein gecachter Negativ-Treffer haette denselben Write die volle
+  TTL weiter blockiert, weil der Schluessel nur an Pfad + `tool_input` haengt.
+  **Die vorgeladene Obermenge ist auf die Guard-Kontingente gedeckelt**
+  (`CLAIM_DRIFT_MAX_LOOKUPS`/`CONTEXT_FIDELITY_MAX_QUOTES`, plus dem eigenen
+  Bedarf des Aufrufers) — vorher skalierte sie mit der ganzen Datei statt mit
+  dem, was die Guards ueberhaupt nachschlagen. Latenz-/Subprozess-Nachweis
+  (echter Codepfad, jetzt zusaetzlich mit einem Kapitel >= 50 Zitaten):
+  `node scripts/dev/bench_hook_guards_batch.mjs` — Median 3 Subprozesse/Write →
+  1 Subprozess/Write in beiden Kapitelgroessen, ~2,1x (60 Zitate) bis ~2,7x
+  (1 Zitat) schnellerer Gesamtdurchlauf im lokalen Testlauf (Rohzahlen im PR).
 
 ### Fixed
 

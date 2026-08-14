@@ -48,7 +48,7 @@ Du musst aktiv nach Volltext-Links/OA-Indikatoren filtern.
 7. Bei Volltext-Link gefunden:
    - Volltext-Link ueber den AX-Baum finden und `click_at_xy(...)` → externe Seite
    - Download-Versuch: Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
-   - Validation: Magic-Bytes `%PDF`, Groesse > 10 KB
+   - Validation: Magic-Bytes `%PDF`, Groesse >= 2 KB
    - Erfolg: `{"status": "success", "source_subagent": "kvk-fetcher", "pdf_path": "..."}`
 8. Nur Bibliotheks-Nachweis (kein Volltext):
    - Standorte sammeln: Bibliotheksname, Ort, Signatur
