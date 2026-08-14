@@ -13,6 +13,9 @@ browser-guide: config/browser_guides/oxford-academic.md
 
 # oxford-academic
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst academic.oup.com wie ein Mensch. Nur browser-use — kein curl, kein wget.
 
 **Lies zuerst:** `config/browser_guides/oxford-academic.md`
@@ -45,17 +48,15 @@ Wenn NICHT enthalten:
 
 ## Discovery-Flow
 
-1. ```
-   browser-use open https://academic.oup.com
-   ```
+1. `new_tab("https://academic.oup.com")`
 2. Suchfeld: Titel, ISBN oder DOI eingeben
-3. `browser-use state` → Filter "Books" (Content Type) setzen
+3. Filter "Books" (Content Type) setzen
 4. Badge in Ergebniszeile pruefen: "Open Access", "Free" oder "Unlocked"
    markieren frei zugaengliche Titel
    - Badge vorhanden → kein Auth-Trigger noetig
    - Kein Badge → Auth moeglicherweise noetig (erst nach Klick pruefen)
 5. Auf Treffer klicken → Buchdetailseite (Oxford Scholarship Online, `/oso/...`)
-6. Alternativ per DOI-Direktlink: `browser-use open https://doi.org/10.1093/oso/...`
+6. Alternativ per DOI-Direktlink: `new_tab("https://doi.org/10.1093/oso/...")`
 
 Bei 0 Treffern:
 ```json
@@ -64,7 +65,7 @@ Bei 0 Treffern:
 
 ## Paywall-Erkennung und Auth-Trigger
 
-Auf der Buchdetailseite `browser-use state` pruefen:
+Auf der Buchdetailseite den Seitenzustand (`page_info()`, `js(...)`) pruefen:
 
 **Auth-Trigger-Bedingungen** (eine davon genuegt):
 - "Sign In"-Button prominent ohne eingeloggten Zustand
@@ -99,12 +100,9 @@ Alternativ EZproxy/WAM, falls im Profil als `proxy_pattern` hinterlegt.
 
 Nach erfolgreicher Auth oder bei OA-Titel:
 
-1. `browser-use state` → "PDF"-Button unterhalb des Buchtitels suchen
+1. "PDF"-Button unterhalb des Buchtitels ueber den AX-Baum suchen
 2. Button gefunden:
-   ```
-   browser-use click <download-btn-idx>
-   browser-use download <pdf-idx> --to <output_path>
-   ```
+   Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`).
 3. PDF-Validierung: erste 4 Bytes `%PDF`, Groesse > 10 KB
 4. Manche Titel bieten nur kapitelweisen Download (kein Gesamtbuch-PDF):
    - Kapitelweiser Fallback (Inhaltsverzeichnis-Navigation)

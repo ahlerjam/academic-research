@@ -1,5 +1,8 @@
 # EBSCOhost — Navigation Guide
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL (über HAN):** https://han.leibniz-fh.de → EBSCOhost
 **Auth:** HAN-Login (siehe `han_login.md`)
 **Max. Ergebnisse:** 30
@@ -9,7 +12,7 @@
 
 - Nach HAN-Login auf der Portal-Seite den Link "EBSCOhost" klicken.
 - Suchoberfläche bietet "Advanced Search" im Hauptmenü — für strukturierte Suche meist besser als die Basissuche.
-- Jede Ergebnisseite zeigt Badges: "Peer Reviewed", "Full Text", "Scholarly (Peer Reviewed) Journal". Im `browser-use state`-Output als Text erkennbar.
+- Jede Ergebnisseite zeigt Badges: "Peer Reviewed", "Full Text", "Scholarly (Peer Reviewed) Journal". Per `js(...)` als Text auslesbar.
 - Volltext-PDF via Button "PDF Full Text" (wenn verfügbar) oder "HTML Full Text".
 - Filter im linken Panel: "Source Types", "Publication Date", "Subject: Thesaurus Term".
 

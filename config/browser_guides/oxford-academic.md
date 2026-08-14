@@ -1,5 +1,8 @@
 # Oxford Academic — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://academic.oup.com
 **Auth:** Shibboleth/OpenAthens (SeamlessAccess) ODER EZproxy/WAM ODER kein
 Login für OA-Titel
@@ -11,9 +14,9 @@ Login für OA-Titel
 
 **Für lizenzierte Titel (Institutionszugang):**
 
-1. `browser-use open https://academic.oup.com`
+1. `new_tab("https://academic.oup.com")`
 2. "Sign In"-Button oben rechts klicken.
-3. `browser-use state` → "Sign in via your institution" suchen, klicken.
+3. "Sign in via your institution" über den AX-Baum finden und klicken.
 4. SeamlessAccess/Institution-Finder: Hochschule wählen.
 5. Hochschul-Login-Formular ausfüllen (Credentials aus Uni-Profil).
 6. Auf Weiterleitung zurück zu Oxford Academic warten — angemeldeten Status
@@ -24,7 +27,7 @@ Login für OA-Titel
 ## Discovery-Pfad
 
 1. Suchfeld im Header: Titel, ISBN oder DOI eingeben.
-2. `browser-use state` → Filter "Books" (Content Type) im linken Panel setzen.
+2. Filter "Books" (Content Type) im linken Panel setzen.
 3. Badge in Ergebniszeile prüfen: "Open Access", "Free" oder "Unlocked".
 4. Auf Treffer klicken → Buchdetailseite öffnet (Oxford Scholarship Online,
    `/oso/...`).
@@ -36,7 +39,7 @@ Login für OA-Titel
 - Auf der Buchdetailseite: Button "PDF" unterhalb des Buchtitels suchen.
   - OA-Titel: Button direkt verfügbar ohne Login, meist DRM-frei.
   - Lizenzierte Titel: Button nur nach erfolgreichem Institutionszugang.
-- `browser-use state` → Button-Index identifizieren.
+- Button über den AX-Baum finden.
 - Manche Titel bieten nur "Download Chapter" statt Gesamtbuch — kapitelweiser
   Fallback über die Inhaltsverzeichnis-Navigation.
 - Vollbuch-Download bevorzugen wenn vorhanden.
@@ -47,7 +50,7 @@ Login für OA-Titel
   - Auth-Wall / "Get access" oder "Buy This Book" statt Download-Button sichtbar.
   - Institutionszugang nicht konfiguriert oder Shibboleth/EZproxy fehlgeschlagen.
   - Nur Online-Lese-Option vorhanden (kein PDF-Button).
-- `status: captcha` wenn CAPTCHA in `browser-use state` erkennbar →
+- `status: captcha` wenn CAPTCHA in `page_info()` erkennbar →
   Screenshot sichern, User informieren.
 - `status: no_match` wenn Suche 0 Treffer liefert.
 

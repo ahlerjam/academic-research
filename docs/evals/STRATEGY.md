@@ -423,6 +423,59 @@ Ein unbekannter Wert bricht die Collection mit `ValueError` ab statt still
 auf "alle Skills" zurueckzufallen -- ein Tippfehler im Input soll auffallen,
 nicht lautlos das Budget sprengen.
 
+## Taeglicher Smoke-Lauf zwischen den Rotationsgruppen (Issue #848)
+
+Die woechentliche Rotation oben (`eval_core_set`, `test_triggers.py`-Gruppen)
+deckt jeden Skill nur alle vier Wochen ab — ein Modell- oder Harness-Drift in
+einer gerade nicht rotierten Gruppe bliebe bis zu drei Wochen unsichtbar.
+Deshalb fuehrt `.github/workflows/eval-behavior.yml` seit Issue #848
+zusaetzlich **taeglich** (zweiter `schedule`-Cron, `0 5 * * *` UTC) eine
+kleine, fest committete Smoke-Stichprobe auf **Testfall-Ebene** aus — bewusst
+kein Datei-Marker wie `eval_core_set`, weil der Smoke-Lauf genau 5-10
+einzelne Faelle treffen soll, nicht ganze Suiten.
+
+Die **eine Stelle**, an der diese Stichprobe steht, ist
+`SMOKE_SET_NODE_IDS` in `tests/evals/smoke_set.py` — acht feste pytest-
+Node-IDs (drei Skills aus `test_triggers.py` mit je Recall+FPR, zwei
+funktionale Faelle aus `test_rest_evals.py`), je mit Begruendung in
+`SMOKE_SET_REASONS` im selben Modul. Der taegliche Workflow-Zweig uebergibt
+diese Node-IDs pytest direkt als Positionsargumente (keine `-k`-Ausdrucks-
+Fragilitaet) und setzt `EVAL_TRIGGER_ROTATION_GROUP=all`, damit die
+gewaehlten `test_triggers.py`-Skills unabhaengig von der aktuellen
+ISO-Wochen-Rotation kollektierbar sind.
+
+Reproduzierbar mit:
+
+```
+EVAL_TRIGGER_ROTATION_GROUP=all uv run pytest $(uv run python -c \
+  "from tests.evals.smoke_set import SMOKE_SET_NODE_IDS as s; print(' '.join(s))")
+```
+
+Der Collect-Only-Guard `test_eval_smoke_set_matches_documented_cases`
+(`tests/evals/test_eval_strategy.py`) haelt diese Liste gegen einen echten
+Collect-Lauf — eine Umbenennung oder Parametrisierungs-Aenderung an einem der
+Faelle faellt dort auf, statt den taeglichen Lauf lautlos leer laufen zu
+lassen (Muster Issue #470/#824). `test_pytest_exits_nonzero_when_no_tests_collected`
+haelt zusaetzlich die pytest-Grundannahme fest, dass ein leer treffender
+Filter mit Exit-Code != 0 endet, nicht taeuschend gruen.
+
+**Budget:** acht Faelle statt der ~330-355 API-Aufrufe eines woechentlichen
+Kern-Set-Laufs — auf dem CLI-Pfad (~6s/Aufruf, Issue #631) unter einer
+Minute reine Aufrufzeit, `timeout-minutes: 20` im taeglichen Workflow-Zweig
+ist grosszuegiger Puffer. Der bestehende Skip-Inventar-Gate-Step
+(`scripts/dev/check_eval_skip_inventory.py`, Issue #824) und der Report-Step
+(`scripts/ci/report_eval_behavior_failure.sh`, Issue #597/#603) laufen im
+Smoke-Zweig unveraendert mit — Fehlschlaege dedupen ueber denselben
+`eval-behavior-failure`-Label + Testfallnamen-Marker wie der woechentliche
+Lauf; faellt derselbe Fall in beiden Laeufen aus, entsteht dadurch kein
+zweites Issue.
+
+`workflow_dispatch` und der woechentliche `eval_core_set`-Cron bleiben
+unveraendert — der taegliche Cron ist ein rein additiver dritter Pfad,
+unterschieden ueber `github.event.schedule` (zwei `schedule`-Eintraege im
+selben Workflow liefern beide `github.event_name == 'schedule'`, das
+bestehende `IS_SCHEDULED`-Flag reicht zur Unterscheidung nicht mehr aus).
+
 ## Context-FS-Fixture (Issue #823)
 
 `ab-01`/`ab-02` (`abstract-generator`), `ac-03` (`academic-context`),

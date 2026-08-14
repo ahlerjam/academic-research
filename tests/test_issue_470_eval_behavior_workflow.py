@@ -161,6 +161,12 @@ def test_workflow_has_timeout_cap():
     Kontexte. Der Guard akzeptiert deshalb entweder ein einzelnes positives
     Int-Literal ODER einen String-Ausdruck, in dem JEDE als Ganzzahl
     auftretende Zahl positiv ist (deckt z.B. ``a && 20 || 60`` ab).
+
+    Issue #848: der Ausdruck kann einen gequoteten Cron-String enthalten
+    (z.B. ``github.event.schedule == '0 5 * * *'``), um den taeglichen
+    Smoke-Zweig zu erkennen -- dessen Ziffern sind kein Zeitbudget-Literal
+    und werden vor der Zahlensuche herausgefiltert (sonst faellt der Guard
+    ueber die '0' aus dem Cron-String selbst).
     """
     job = _job(_load_workflow())
     timeout = job.get("timeout-minutes")
@@ -172,7 +178,8 @@ def test_workflow_has_timeout_cap():
     assert isinstance(timeout, str) and "${{" in timeout, (
         f"timeout-minutes hat unerwarteten Typ/Form: {timeout!r} (Issue #470 AC2 / #597)."
     )
-    numbers = [int(n) for n in re.findall(r"\b\d+\b", timeout)]
+    unquoted = re.sub(r"'[^']*'", "", timeout)
+    numbers = [int(n) for n in re.findall(r"\b\d+\b", unquoted)]
     assert numbers, f"Kein Zahlenliteral im timeout-minutes-Ausdruck gefunden: {timeout!r}."
     assert all(n > 0 for n in numbers), (
         f"Mindestens ein Zweig des timeout-minutes-Ausdrucks ist nicht positiv: {timeout!r} "
