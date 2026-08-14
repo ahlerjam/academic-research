@@ -230,6 +230,24 @@ def test_all_modules_fail_exit_code_one(monkeypatch, tmp_path):
     exit_code = search.main()
 
     assert exit_code == 1
+    # #890 (PR #927-Review P1): commands/search.md liess frueher Schritt 6
+    # (Deduplikation) von einer per `cp` erzeugten Zwischendatei
+    # (prefiltered.json) statt direkt aus api_results.json lesen. Der `cp`-
+    # Aufruf war von keiner allowed-tools-Bash-Regel gedeckt und konnte im
+    # echten Lauf blockiert werden, ohne dass die Zwischendatei entstand --
+    # Dedup haette dann eine fehlende Datei gelesen. Fix: Dedup liest jetzt
+    # direkt aus api_results.json. Beleg, dass diese Datei selbst im
+    # denkbar schlechtesten Fall (ALLE angefragten API-Module fallen aus)
+    # zuverlaessig existiert -- main() schreibt sie ueber save_json() VOR
+    # der Sidecar-Statusdatei und VOR dem Return des Exitcodes.
+    assert output_path.exists(), (
+        "api_results.json muss auch bei Totalausfall aller Module existieren -- "
+        "commands/search.md liest ab Schritt 6 direkt daraus (#890)"
+    )
+    assert json.loads(output_path.read_text(encoding="utf-8")) == [], (
+        "bei Totalausfall aller Module ist die Paperliste leer, aber die Datei "
+        "selbst (gueltiges JSON) muss trotzdem geschrieben sein"
+    )
     status = json.loads((tmp_path / "results_status.json").read_text(encoding="utf-8"))
     assert set(status["failed_modules"]) == {"crossref", "openalex", "arxiv"}
 

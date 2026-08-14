@@ -147,18 +147,23 @@ Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
 Vor der Deduplikation laufen Korpus-Hygiene-Regeln, die entscheiden, was
 überhaupt in den weiteren Prozess gehört — dieser Schritt ist der
 Ankerpunkt dafür (#890). Die inhaltlichen Filterregeln selbst sind ein
-eigener Schnitt und noch nicht Teil dieses Schritts; aktuell reicht die
-Ergebnisliste unverändert durch:
-
-```bash
-cp "$SESSION_DIR/api_results.json" "$SESSION_DIR/prefiltered.json"
-```
+eigener Schnitt und noch nicht Teil dieses Schritts: aktuell gibt es hier
+**keinen Dateizugriff** — `$SESSION_DIR/api_results.json` bleibt unverändert
+liegen, und Schritt 6 liest direkt daraus. Ein reiner Kopierbefehl auf eine
+Zwischendatei (`prefiltered.json`) wuerde nur eine zusaetzliche
+`allowed-tools`-Bash-Regel fuer eine Operation erzwingen, die inhaltlich
+nichts tut — unnoetige Angriffsflaeche fuer einen No-Op. Sobald echte
+Filterregeln implementiert werden, laufen sie ueber ein Python-Skript (wie
+`dedup.py`, `scoring.py` etc.), das unter der bereits vorhandenen
+`Bash(~/.academic-research/venv/bin/python *)`-Regel schreibt — dann
+schreibt dieser Schritt nach `$SESSION_DIR/prefiltered.json`, und Schritt 6
+liest von dort.
 
 ### Schritt 6: Deduplikation
 
 ```bash
 ~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/dedup.py \
-  --papers "$SESSION_DIR/prefiltered.json" \
+  --papers "$SESSION_DIR/api_results.json" \
   --output "$SESSION_DIR/deduped.json"
 ```
 
