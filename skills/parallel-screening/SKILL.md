@@ -87,15 +87,10 @@ Unterkommandos: `pending`, `waves`, `merge`, `counters`, `open-cases`.
 
 ## Parallelitäts-Limit
 
-Vorrang, absteigend:
-
-1. Argument im Skill-Aufruf (`resolve_max_parallel(explicit=…)`)
-2. Umgebungsvariable `ACADEMIC_RESEARCH_MAX_PARALLEL`
-3. `config/parallel_agents.json` → `max_parallel_agents`
-4. Default `4`
-
-Über allem steht ein harter Deckel (`MAX_PARALLEL_HARD_CAP = 8`), damit eine
-verrutschte Konfiguration nicht dreißig Agents gleichzeitig startet.
+Vorrang: `resolve_max_parallel(explicit=…)` > `ACADEMIC_RESEARCH_MAX_PARALLEL` >
+`config/parallel_agents.json` → `max_parallel_agents` > Default `4`. Darüber ein
+harter Deckel (`MAX_PARALLEL_HARD_CAP = 8`), damit eine verrutschte
+Konfiguration nicht dreißig Agents gleichzeitig startet.
 
 ## Ablauf Screening
 
@@ -111,6 +106,10 @@ um, sodass wahrscheinlich relevante Treffer zuerst kommen. Er sortiert nur —
 kein Ausschluss, keine Kürzung, kein automatischer Abbruch. `reorder_pending`
 und `progress_report` kommen aus `scripts/active_learning.py` (gleicher
 `sys.path`-Eintrag wie oben). Details → `references/active-learning.md`.
+
+### Schritt 0: Vorfilter (#892)
+
+`screening_prefilter.py` schließt mechanisch aus → `references/prefilter.md`.
 
 ### Schritt 1: Offene Fälle bestimmen
 
