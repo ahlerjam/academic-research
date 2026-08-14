@@ -14,28 +14,19 @@ allowed-tools:
 > und befolge alle dort definierten Blöcke (Vorbedingungen, Keine Fabrikation,
 > Aktivierung, Abgrenzung), bevor du fortfährst.
 
-## Workflow
+## Trigger-Wrapper
 
-`/academic-research:latex --kapitel <n>|all --output <datei.tex> [--bib <datei.bib>] [--template <uni>]`
-ruft `${CLAUDE_PLUGIN_ROOT}/skills/latex-export/scripts/export_thesis.py` auf:
+Dieser Skill fängt natürlichsprachige LaTeX-Export-Anfragen ab und leitet an
+den Command weiter: Lies `commands/latex.md` vollständig und führe dessen
+Schritte 1–4 aus, so als wäre `/academic-research:latex` mit den erkannten
+Argumenten aufgerufen worden. `commands/latex.md` ist die einzige Quelle für
+Ablauflogik, Fehlerpfade und Renderer-Details — sie wird hier nicht dupliziert.
 
-1. Kapitel aus `kapitel/` auflösen (`<n>` oder `all`, numerisch sortiert)
-2. `render_tex.py` je Kapitel → `.tex` (Pandoc bevorzugt, Custom-Fallback), verkettet
-3. Optional: Uni-Template `~/.academic-research/library-profiles/<uni>.tex.template`
-   (`%%CONTENT%%`-Platzhalter; fehlt sie, Export ohne Vorlage)
-4. `build_bib.py` → `.bib` aus Vault, Pfad unabhängig von `--output`
+## Abgrenzung
 
-## Abgrenzung zu citation-extraction und word-export
-
-`latex-export` = vollständiger `.bib`-Dump aller Vault-Papers + `.tex`-Konvertierung.
-`citation-extraction` = Einzelzitat aus PDF (one-shot), keine Vault-weite Bibliography.
-`word-export` = Word/PDF statt `.tex`/`.bib`, siehe dort.
-
-## Fehlerpfade
-
-- **Pandoc fehlt:** Custom-Renderer-Fallback (kein Absturz). Pandoc installieren empfehlen.
-- **Vault leer:** Leere `.bib` + Meldung „Vault leer – Papers via `add` hinzufügen."
-- **Template nicht gefunden:** Ausgabe ohne Vorlage + Meldung „Template `<uni>` fehlt."
+`latex-export` erzeugt `.tex`/`.bib` aus dem Vault. Für Word/PDF siehe
+`word-export`, für ein Einzelzitat aus einer PDF (one-shot, keine
+Vault-weite Bibliography) siehe `citation-extraction`.
 
 ## Verbatim-Guard
 

@@ -1,8 +1,12 @@
-"""Regressions-Tests fuer skills/word-export/SKILL.md (Issue #446).
+"""Regressions-Tests fuer skills/word-export/SKILL.md und commands/word.md (Issue #446).
 
-Prueft AC1 (echte Formatvorlagen statt manuellem Fett/Groesse), AC6
-(verstaendliche Fehlermeldung statt Stacktrace bei fehlendem Backend) und die
-dokumentierte Abgrenzung zu latex-export/citation-extraction/submission-checker.
+Seit #843 ist `skills/word-export/SKILL.md` ein reiner Trigger-Wrapper ohne
+eigene Ablauflogik (Muster `literature-excel` -> `commands/excel.md`); AC1
+(echte Formatvorlagen statt manuellem Fett/Groesse), AC6 (verstaendliche
+Fehlermeldung statt Stacktrace bei fehlendem Backend) und die dokumentierte
+Abgrenzung zu latex-export/citation-extraction/submission-checker werden
+dafuer jetzt gegen `commands/word.md` geprueft. Der Backend-Herkunftsblock
+(`TestBackendBlockParityWithCommand`) bleibt gegen beide Dateien geprueft.
 """
 
 from pathlib import Path
@@ -20,6 +24,11 @@ BLOCK_END = "<!-- docx-backend:end -->"
 @pytest.fixture(scope="module")
 def skill_text():
     return SKILL_MD.read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def command_text():
+    return COMMAND_MD.read_text(encoding="utf-8")
 
 
 def _backend_block(path: Path) -> str:
@@ -41,58 +50,58 @@ class TestFrontmatter:
 class TestFormatvorlagenPflicht:
     """AC1: echte Formatvorlagen (HeadingLevel) statt manuellem Fett/Groesse."""
 
-    def test_heading_level_mentioned(self, skill_text):
-        assert "HeadingLevel" in skill_text, (
-            "SKILL.md muss HeadingLevel.* (echte Formatvorlagen) vorschreiben."
+    def test_heading_level_mentioned(self, command_text):
+        assert "HeadingLevel" in command_text, (
+            "commands/word.md muss HeadingLevel.* (echte Formatvorlagen) vorschreiben."
         )
 
-    def test_no_manual_bold_size_instruction(self, skill_text):
-        assert "manuell" in skill_text.lower() and (
-            "fett" in skill_text.lower()
-            or "größe" in skill_text.lower()
-            or "groesse" in skill_text.lower()
-        ), "SKILL.md muss manuelles Fett/Groesse explizit ausschliessen."
+    def test_no_manual_bold_size_instruction(self, command_text):
+        assert "manuell" in command_text.lower() and (
+            "fett" in command_text.lower()
+            or "größe" in command_text.lower()
+            or "groesse" in command_text.lower()
+        ), "commands/word.md muss manuelles Fett/Groesse explizit ausschliessen."
 
-    def test_table_of_contents_mentioned(self, skill_text):
-        lower = skill_text.lower()
+    def test_table_of_contents_mentioned(self, command_text):
+        lower = command_text.lower()
         assert "inhaltsverzeichnis" in lower or "toc" in lower
 
-    def test_title_page_mentioned(self, skill_text):
-        assert "Titelblatt" in skill_text
+    def test_title_page_mentioned(self, command_text):
+        assert "Titelblatt" in command_text
 
-    def test_eidesstattliche_erklaerung_mentioned(self, skill_text):
-        assert "eidesstattlich" in skill_text.lower()
+    def test_eidesstattliche_erklaerung_mentioned(self, command_text):
+        assert "eidesstattlich" in command_text.lower()
 
 
 class TestAbgrenzung:
-    def test_latex_export_mentioned(self, skill_text):
-        assert "latex-export" in skill_text
+    def test_latex_export_mentioned(self, command_text):
+        assert "latex-export" in command_text
 
-    def test_citation_extraction_mentioned(self, skill_text):
-        assert "citation-extraction" in skill_text
+    def test_citation_extraction_mentioned(self, command_text):
+        assert "citation-extraction" in command_text
 
-    def test_submission_checker_mentioned(self, skill_text):
-        assert "submission-checker" in skill_text
+    def test_submission_checker_mentioned(self, command_text):
+        assert "submission-checker" in command_text
 
-    def test_abgrenzung_section_exists(self, skill_text):
-        assert "## Abgrenzung" in skill_text
+    def test_abgrenzung_section_exists(self, command_text):
+        assert "## Abgrenzung" in command_text
 
 
 class TestFehlerpfade:
-    def test_error_section_exists(self, skill_text):
-        assert "## Fehlerpfade" in skill_text
+    def test_error_section_exists(self, command_text):
+        assert "## Fehlerpfade" in command_text
 
-    def test_backend_missing_documented(self, skill_text):
-        assert "Backend fehlt" in skill_text
+    def test_backend_missing_documented(self, command_text):
+        assert "Backend fehlt" in command_text
 
-    def test_vault_empty_documented(self, skill_text):
-        assert "Vault leer" in skill_text
+    def test_vault_empty_documented(self, command_text):
+        assert "Vault leer" in command_text
 
-    def test_template_missing_documented(self, skill_text):
-        assert "Template" in skill_text and "fehlt" in skill_text
+    def test_template_missing_documented(self, command_text):
+        assert "Template" in command_text and "fehlt" in command_text
 
-    def test_style_rules_missing_documented(self, skill_text):
-        assert "StyleRulesNotFoundError" in skill_text
+    def test_style_rules_missing_documented(self, command_text):
+        assert "StyleRulesNotFoundError" in command_text
 
 
 class TestBackendBlockParityWithCommand:
