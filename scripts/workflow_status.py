@@ -113,43 +113,24 @@ def compute_status(context_text: str | None, phases: list[dict]) -> dict | None:
     if context_text is None:
         return None
 
+    # current_phase ist die erste Phase mit unerfuellter Vorbedingung, in
+    # Listenreihenfolge; done_phases sind schlicht alle Phasen davor (deckt
+    # sich mit den Docstring-Feldbeschreibungen oben). Sind ALLE Phasen
+    # erfuellt, bleibt current_phase None und done_phases enthaelt alle
+    # Phasen (AC: keine aktuelle Phase mehr uebrig, siehe
+    # test_all_phases_satisfied_yields_no_current_phase).
     current_phase: dict | None = None
-    done_phases: list[dict] = []
+    current_index: int | None = None
 
     for i, phase in enumerate(phases):
         if not _preconditions_satisfied(context_text, phase):
-            # Vorbedingungen nicht erfuellt: diese Phase ist die aktuelle
             current_phase = phase
+            current_index = i
             break
 
-        # Vorbedingungen erfuellt: Diese Phase ist "freigeschaltet"
-        # Pruefer nur die ERSTE Phase mit diesen Vorbedingungen als aktuell,
-        # nicht alle.
-        phase_preconditions = tuple(
-            (c.get("field"), c.get("expected")) for c in phase.get("preconditions") or []
-        )
-
-        # Wenn es eine naechste Phase gibt, pruefer ihre Vorbedingungen
-        if i + 1 < len(phases):
-            next_phase = phases[i + 1]
-            next_preconditions = tuple(
-                (c.get("field"), c.get("expected")) for c in next_phase.get("preconditions") or []
-            )
-            if phase_preconditions != next_preconditions:
-                # Naechste Phase hat andere Vorbedingungen:
-                # Diese Phase ist die erste mit aktuellen Vorbedingungen
-                if current_phase is None:
-                    current_phase = phase
-                # Markiere alle vorherigen Phasen (mit anderen VB) als erledigt
-                done_phases.append(phase)
-            else:
-                # Naechste Phase hat gleiche Vorbedingungen:
-                # Diese Phase ist die erste, die nächste übernimmt
-                if current_phase is None:
-                    current_phase = phase
-        else:
-            # Letzte Phase: Markiere als erledigt
-            done_phases.append(phase)
+    done_phases: list[dict] = (
+        list(phases) if current_index is None else list(phases[:current_index])
+    )
 
     next_step = None
     remaining_until_export: list[dict] = []
