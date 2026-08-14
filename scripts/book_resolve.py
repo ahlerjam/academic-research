@@ -13,6 +13,8 @@ import argparse
 import json
 import sys
 
+from text_utils import parse_author_name
+
 try:
     import requests
     from lxml import etree
@@ -106,11 +108,18 @@ def _isbn_matches(requested: str, candidates: list) -> bool:
 
 
 def _parse_name(raw: str) -> dict:
-    """Wandelt 'Nachname, Vorname' in CSL-Name-Dict um."""
-    parts = raw.split(",", 1)
-    if len(parts) == 2:
-        return {"family": parts[0].strip(), "given": parts[1].strip()}
-    return {"literal": raw.strip()}
+    """Wandelt 'Nachname, Vorname' in CSL-Name-Dict um.
+
+    Duenner Wrapper um den geteilten Parser :func:`text_utils.parse_author_name`
+    (Issue #908, DRY -- vorher eine zweite, unabhaengige Split-Implementierung).
+    """
+    parsed = parse_author_name(raw)
+    if parsed.parsed and parsed.family:
+        result: dict = {"family": parsed.family}
+        if parsed.given:
+            result["given"] = parsed.given
+        return result
+    return {"literal": parsed.literal or raw.strip()}
 
 
 def _dnb_record_to_csl(record_el) -> dict:
