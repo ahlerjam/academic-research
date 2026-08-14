@@ -114,27 +114,49 @@ def load_current_module() -> Any:
 
 
 def normalize_record(record: dict[str, Any]) -> dict[str, Any]:
-    """Kanonisiere den EINEN Ausgabewert, dessen Reihenfolge nicht vom Inhalt
-    abhaengt: `merge_group()` baut `source_modules` als
-    `list({...})` aus einem Set von Strings (`scripts/dedup.py`). Die
-    Iterationsreihenfolge eines String-Sets haengt am `PYTHONHASHSEED` und
-    unterscheidet sich damit zwischen zwei Prozessen — nachgestellt:
-    `PYTHONHASHSEED=7 python3 -c 'print(list({"dblp","arxiv"}))'` liefert
-    `['dblp', 'arxiv']`, mit `PYTHONHASHSEED=12` `['arxiv', 'dblp']`.
+    """Kanonisiere einen `deduplicate()`-Ausgabedatensatz fuer den Vergleich
+    gegen die eingefrorene Vor-#890-Golden-Datei (`d141b09`).
 
-    Das ist eine Prozess-Eigenschaft, die #890 nicht eingefuehrt hat: die
-    Vor-#890-Fassung `d141b09` enthaelt dieselbe Zeile. Auf der realen
-    Treffermenge betraf es 47 der 1390 Gruppen, ausschliesslich im Feld
-    `source_modules` und in keiner einzigen Gruppenzugehoerigkeit — die
-    Gruppierung selbst ist von Set-Reihenfolgen unabhaengig
-    (`_get_cluster_ids()` nutzt Sets nur fuer Schnittmengen-Tests). Ohne
-    diese Kanonisierung waere jeder eingefrorene Golden-Vergleich zufaellig
-    rot, ohne dass sich am Dedup-Verhalten etwas geaendert haette.
+    Dies ist die EINE Kanonisierungsfunktion fuer diesen Vergleich —
+    `tests/test_dedup.py` importiert sie direkt (`from
+    scripts.dev.verify_dedup_890_hitset import canonical`), statt eine eigene
+    Kopie zu pflegen. Zwei Abweichungen zwischen der historischen und der
+    aktuellen Fassung sind bekannt und müssen hier ausgeglichen werden, sonst
+    ist der Vergleich falsch-rot, ohne dass sich am Dedup-*Verhalten* etwas
+    geaendert haette:
+
+    1. `source_modules`-Reihenfolge: `merge_group()` baut dieses Feld als
+       `list({...})` aus einem Set von Strings (`scripts/dedup.py`). Die
+       Iterationsreihenfolge eines String-Sets haengt am `PYTHONHASHSEED` und
+       unterscheidet sich damit zwischen zwei Prozessen — nachgestellt:
+       `PYTHONHASHSEED=7 python3 -c 'print(list({"dblp","arxiv"}))'` liefert
+       `['dblp', 'arxiv']`, mit `PYTHONHASHSEED=12` `['arxiv', 'dblp']`. Das
+       ist eine Prozess-Eigenschaft, die #890 nicht eingefuehrt hat: die
+       Vor-#890-Fassung `d141b09` enthaelt dieselbe Zeile. Auf der realen
+       Treffermenge betraf es 47 der 1390 Gruppen, ausschliesslich im Feld
+       `source_modules` und in keiner einzigen Gruppenzugehoerigkeit — die
+       Gruppierung selbst ist von Set-Reihenfolgen unabhaengig
+       (`_get_cluster_ids()` nutzt Sets nur fuer Schnittmengen-Tests).
+
+    2. `found_via_known_item`: Die Golden-Datei ist bei `d141b09` eingefroren
+       — VOR #890 UND VOR #886. #886 (Known-Item-Suche, seither in main und
+       ueber den Merge auch in diesem Branch) fuegt dieses Feld seither an
+       JEDEM Ausgabedatensatz von `deduplicate()` an (auf dieser Fixture
+       immer `false`, da sie keine Known-Item-Treffer enthaelt) —
+       `scripts/dedup.py::merge_group()`. Das ist eine Schema-Erweiterung
+       durch eine voellig unabhaengige, orthogonal gemergte Aenderung, keine
+       Folge der #890-Blocking-Logik. Beleg: nach Ausschluss dieses einen
+       Feldes sind `actual` und `expected` auf der realen 1957-Titel-Menge
+       bytegleich (1390 von 1390 Gruppen) — die Gruppierung selbst ist also
+       unveraendert.
+
+    Ohne beide Ausschluesse waere der Vergleich strukturell IMMER rot: Feld 1
+    zufallsabhaengig, Feld 2 deterministisch (jeder aktuelle Datensatz traegt
+    es, kein Golden-Datensatz).
     """
-    if "source_modules" not in record:
-        return record
-    normalized = dict(record)
-    normalized["source_modules"] = sorted(record["source_modules"])
+    normalized = {k: v for k, v in record.items() if k != "found_via_known_item"}
+    if "source_modules" in normalized:
+        normalized["source_modules"] = sorted(normalized["source_modules"])
     return normalized
 
 

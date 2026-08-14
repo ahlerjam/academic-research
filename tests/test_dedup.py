@@ -14,6 +14,17 @@ from typing import Any
 
 import pytest
 
+# _canonical_dedup_result: Kanonisierung fuer den AC3-Golden-Vergleich
+# (source_modules-Sortierung, Ausschluss von found_via_known_item) lebt
+# EINMAL in scripts/dev/verify_dedup_890_hitset.py::canonical() -- demselben
+# Skript, das `compare`/`golden` fuer die manuelle AC3-Verifikation nutzt.
+# Frueher hatte dieser Test eine eigene Kopie, die beim #886-Merge gepatcht
+# wurde, waehrend die Skript-Fassung unveraendert blieb -- das Skript
+# verglich seither IMMER mit ABWEICHUNG (PR #927-Review P1). Ein gemeinsamer
+# Import schliesst dieses Auseinanderlaufen strukturell aus: eine Wahrheit
+# statt zwei.
+from scripts.dev.verify_dedup_890_hitset import canonical as _canonical_dedup_result
+
 from dedup import _canonical_sort_key, _length_bound_ok, deduplicate, merge_group
 from text_utils import normalize_doi
 
@@ -1155,37 +1166,9 @@ def _load_json_gz(path: Path) -> list[dict[str, Any]]:
     return payload
 
 
-def _canonical_dedup_result(payload: list[dict[str, Any]]) -> list[str]:
-    """Vergleichsform fuer zwei Dedup-Ergebnisse.
-
-    `source_modules` wird sortiert, weil `merge_group()` diese Liste als
-    `list({...})` aus einem String-Set baut: die Iterationsreihenfolge eines
-    String-Sets haengt am `PYTHONHASHSEED` und unterscheidet sich damit
-    zwischen zwei Prozessen (nachstellbar:
-    `PYTHONHASHSEED=7 python3 -c 'print(list({"dblp","arxiv"}))'` gegen
-    `PYTHONHASHSEED=12 ...`). Das ist keine Folge von #890 — dieselbe Zeile
-    steht schon in `d141b09` — und beruehrt keine Gruppenzugehoerigkeit,
-    sondern nur die Reihenfolge innerhalb dieses einen Ausgabefeldes. Ohne
-    diese Kanonisierung waere der Golden-Vergleich zufaellig rot.
-
-    `found_via_known_item` wird aus dem Vergleich ausgeschlossen: Die
-    Golden-Datei ist bei `d141b09` eingefroren (vor #890 UND vor #886). #886
-    (Known-Item-Suche, in main gelandet und beim Merge von main in diesen
-    Branch mitgekommen) fuegt dieses Feld seither an JEDEM Datensatz von
-    `deduplicate()` an (hier immer `false`, da die Fixture keine
-    Known-Item-Treffer enthaelt). Das ist eine Schema-Erweiterung durch eine
-    voellig unabhaengige, orthogonal gemergte Aenderung — keine Folge der
-    #890-Blocking-Logik. Beleg: nach Ausschluss dieses einen Feldes sind
-    `actual` und `expected` bytegleich (1390 von 1390 Gruppen), die
-    Gruppierung selbst ist also unveraendert.
-    """
-    normalized = []
-    for record in payload:
-        record = {k: v for k, v in record.items() if k != "found_via_known_item"}
-        if "source_modules" in record:
-            record = {**record, "source_modules": sorted(record["source_modules"])}
-        normalized.append(json.dumps(record, sort_keys=True, default=str))
-    return sorted(normalized)
+# _canonical_dedup_result == scripts.dev.verify_dedup_890_hitset.canonical,
+# importiert oben (source_modules-Sortierung, Ausschluss von
+# found_via_known_item) -- siehe Import-Kommentar am Dateianfang.
 
 
 def test_dedup_real_hitset_2026_08_12_matches_pre_890_output():
