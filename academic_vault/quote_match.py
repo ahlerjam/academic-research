@@ -57,8 +57,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from rapidfuzz import fuzz, process
-
 from .verbatim import normalize_text, normalize_weak
 
 QuoteWordingStatus = Literal["exact", "normalized", "ellipsis", "deviation", "absent"]
@@ -319,6 +317,16 @@ def _ellipsis_match(candidate: str, entries: list[_PreparedQuote]) -> QuoteWordi
 
 def _fuzzy_match(candidate: str, entries: list[_PreparedQuote]) -> QuoteWordingMatch | None:
     """Zuordnung ueber rapidfuzz; ``None``, wenn nichts eindeutig passt."""
+    # Lazy import (#846-Folgefix): NUR dieser Fuzzy-Zweig braucht rapidfuzz.
+    # _substring_match()/_ellipsis_match() (davor in match_candidate()
+    # versucht) kommen mit reinem difflib/String-Vergleich aus -- ein
+    # exaktes oder Auslassungs-Zitat wird also verifiziert, selbst wenn
+    # rapidfuzz im aktiven venv fehlt. Erst ein Kandidat, der WIRKLICH
+    # Fuzzy-Zuordnung braucht, loest hier ModuleNotFoundError aus -- und nur
+    # DESSEN Eintrag wird dadurch in server.py::match_quote_wording() (dort
+    # per-Kandidat try/except) zu {"error": ...}, nicht der ganze Batch.
+    from rapidfuzz import fuzz, process
+
     full = normalize_text(candidate)
     folded = full.casefold()
     if len(folded) < MIN_FUZZY_CANDIDATE_LEN or not entries:

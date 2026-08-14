@@ -25,15 +25,21 @@
  * Jede Bypass-Nutzung wird nach stderr gewarnt UND in eine Logdatei
  * angehängt (siehe VAULT_GUARD_BYPASS_LOG, Issue #381).
  *
- * Fail-open (zwei unterschiedliche, bewusst getrennt formulierte Fälle,
- * Issue #381 — Vermischung war Ursache des ursprünglichen Bugs):
+ * Fail-open vs. fail-closed (drei unterschiedliche, bewusst getrennt
+ * formulierte Faelle, Issue #381 + #846-Folgefix — Vermischung war Ursache
+ * des ursprünglichen Bugs UND des Folgefunds):
  *   1. "DB fehlt" — erwartbar bei einem frischen Projekt ohne Vault-DB.
- *      Wortlaut: "Vault-DB nicht gefunden ... Bypass aktiv."
- *   2. "Lookup-Fehler bei vorhandener DB" — unerwartet (z. B. korrupte
- *      Datei, kaputte Query). Bleibt fail-open (kein Regressionsverlust
- *      für Scope "Out"), aber sichtbar anderer Wortlaut, damit ein
- *      stiller Bypass bei kaputter DB nicht mit dem harmlosen
- *      "frisches Projekt"-Fall verwechselt wird.
+ *      Wortlaut: "Vault-DB nicht gefunden ... Bypass aktiv." Bleibt fail-open.
+ *   2. "Lookup-Fehler bei vorhandener DB" — die DB existiert, ist aber
+ *      selbst das Problem (korrupte Datei, kaputte Query). Bleibt fail-open
+ *      (kein Regressionsverlust für Scope "Out", Issue #381 AC2) — ein
+ *      Befund UEBER die DB, sichtbar anderer Wortlaut als Fall 1.
+ *   3. "Lookup-APPARAT kaputt trotz vorhandener DB" — fehlendes Python-Modul
+ *      (z. B. rapidfuzz fehlt im aktiven venv) oder kein lauffaehiger
+ *      Interpreter. Das ist KEIN Befund ueber die DB, sondern "nicht
+ *      prüfbar" — anders als Fall 1/2 bleibt dieser Fall NICHT fail-open,
+ *      sonst wuerde ein fehlendes Paket jedes erfundene Zitat durchwinken
+ *      (#846-Folgefund, siehe tests/test_review_fix_verbatim_guard.py).
  */
 
 import { existsSync, appendFileSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
@@ -303,6 +309,42 @@ function warnFailOpen(context, kind, detail) {
 }
 
 // ---------------------------------------------------------------------------
+// Fail-CLOSED bei kaputtem Lookup-APPARAT (#846-Folgefund)
+// ---------------------------------------------------------------------------
+
+/**
+ * Erkennt, ob eine Fehlermeldung den Lookup-APPARAT selbst betrifft
+ * (fehlendes Python-Modul, z. B. rapidfuzz, oder ein kompletter
+ * Interpreter-Ausfall) statt eine Eigenschaft der Vault-DB (korrupte Datei,
+ * kaputte Query). Nur diese Klasse darf NICHT fail-open behandelt werden:
+ * ein fehlendes Paket bedeutet "nicht prüfbar", nicht "kein Befund" — sonst
+ * würde z. B. ein venv ohne rapidfuzz jedes erfundene Zitat durchwinken
+ * (CI-Regression aus PR #939, Issue #846).
+ *
+ * Bewusst eng gefasst (nur ModuleNotFoundError/ImportError): eine korrupte
+ * DB wirft andere Exception-Typen (sqlite3.DatabaseError etc.) und bleibt
+ * damit unveraendert im fail-open-Pfad (Issue #381 AC2,
+ * tests/test_issue_381_verbatim_guard_failopen.py).
+ */
+function isApparatusError(detail) {
+  return /^(ModuleNotFoundError|ImportError)\b/.test(String(detail ?? ''));
+}
+
+/**
+ * Wie warnFailOpen(), aber fail-CLOSED: schreibt eine BLOCKIERT-Meldung
+ * nach stderr und gibt false zurueck (kein Bypass). Fuer den Fall, dass der
+ * Lookup-Apparat selbst kaputt ist (siehe isApparatusError) — die DB mag
+ * vorhanden und intakt sein, aber der Prozess kann sie nicht befragen.
+ */
+function warnFailClosedApparatus(context, detail) {
+  process.stderr.write(
+    `[${context}] BLOCKIERT: Lookup-Apparat nicht einsatzbereit trotz vorhandener DB `
+    + `(${detail}). Kein Bypass — gilt als NICHT geprueft (venv/Abhaengigkeiten pruefen).\n`
+  );
+  return false; // fail-closed
+}
+
+// ---------------------------------------------------------------------------
 // Vault-/Figure-Lookup via EINEN Python-Subprozess (gebuendelt)
 // ---------------------------------------------------------------------------
 
@@ -361,8 +403,11 @@ function readBatchFlags(values, expected, context) {
   }
   return values.map((value) => {
     if (typeof value === 'boolean') return value;
+    const detail = value?.error || 'unerwarteter Ergebniswert';
+    // Fall 3: Lookup-Apparat kaputt (fehlendes Modul) — fail-CLOSED, kein Bypass.
+    if (isApparatusError(detail)) return warnFailClosedApparatus(context, detail);
     // Fall 2: DB vorhanden, aber Exception fuer GENAU diesen Eintrag.
-    return warnFailOpen(context, 'lookup-error', value?.error || 'unerwarteter Ergebniswert');
+    return warnFailOpen(context, 'lookup-error', detail);
   });
 }
 
@@ -371,9 +416,12 @@ function readBatchFlags(values, expected, context) {
  *
  * Anders als bei den Figuren ist ein Zitat-Ergebnis ein Statusobjekt, kein
  * Boolean. Nicht deutbare Eintraege (``{error}``, fehlende/kaputte Antwortform)
- * werden zu ``{status: 'open'}`` — der fail-open-Fall, mit derselben
- * Warnung wie bisher, damit ein kaputter Lookup nicht als "verifiziert" gilt
- * und die uebrigen Ergebnisse nicht entwertet.
+ * werden entweder zu ``{status: 'open'}`` (fail-open, Fall 2 — DB-seitiger
+ * Fehler) oder zu ``{status: 'unverifiable'}`` (fail-CLOSED, Fall 3 —
+ * Lookup-Apparat kaputt, siehe isApparatusError), je nach Fehlerart. Beide
+ * Faelle loggen dieselbe Art Warnung wie bisher, damit ein kaputter Lookup
+ * nie stillschweigend als "verifiziert" gilt und die uebrigen Ergebnisse
+ * nicht entwertet.
  */
 function readQuoteResults(values, expected, context) {
   if (expected === 0) return [];
@@ -383,7 +431,12 @@ function readQuoteResults(values, expected, context) {
   }
   return values.map((value) => {
     if (value && typeof value === 'object' && typeof value.status === 'string') return value;
-    warnFailOpen(context, 'lookup-error', value?.error || 'unerwarteter Ergebniswert');
+    const detail = value?.error || 'unerwarteter Ergebniswert';
+    if (isApparatusError(detail)) {
+      warnFailClosedApparatus(context, detail);
+      return { status: 'unverifiable', detail };
+    }
+    warnFailOpen(context, 'lookup-error', detail);
     return { status: 'open' };
   });
 }
@@ -426,12 +479,18 @@ function lookupBatch(spanTexts, figureRefs, wordingLimit) {
     label: 'Vault-Guard',
   });
   if (output === null) {
-    // Kein Interpreter konnte den Vault oeffnen (Kaskade in runVaultPython
-    // hat den Grund bereits auf stderr protokolliert) — unerwartet.
+    // KEIN Interpreter der Kaskade (runVaultPython) konnte ueberhaupt
+    // starten (Details bereits auf stderr protokolliert) — das ist der
+    // Apparat-kaputt-Fall in Reinform ("kaputter Interpreter", Fall 3):
+    // fail-CLOSED statt Bypass, sonst wuerde ein kaputtes PATH-python3
+    // (o. ae.) jedes erfundene Zitat durchwinken (#846-Folgefund).
     const detail = 'kein Interpreter konnte den Vault oeffnen';
-    if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', detail);
-    if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', detail);
-    return allOpen();
+    if (spanTexts.length > 0) warnFailClosedApparatus('Vault-Guard', detail);
+    if (figureRefs.length > 0) warnFailClosedApparatus('Figure-Guard', detail);
+    return {
+      quotes: spanTexts.map(() => ({ status: 'unverifiable', detail })),
+      figures: figureRefs.map(() => false),
+    };
   }
 
   let parsed;
@@ -456,8 +515,12 @@ function lookupBatch(spanTexts, figureRefs, wordingLimit) {
  * Status, die den Zitat-Check passieren lassen:
  *   - ``exact``/``normalized``/``ellipsis`` — Wortlaut belegt (ggf. nur
  *     typografisch/durch Auslassung abweichend);
- *   - ``open`` — fail-open, weil der Lookup fuer diesen Eintrag scheiterte.
+ *   - ``open`` — fail-open, weil DIE DB (nicht der Apparat) fuer diesen
+ *     Eintrag scheiterte (Fall 1/2, siehe warnFailOpen).
  * ``deviation`` und ``absent`` fuehren zur Meldung (siehe main()).
+ * ``unverifiable`` (Fall 3, Lookup-Apparat kaputt, #846-Folgefund) ist
+ * BEWUSST NICHT hier drin — es blockiert wie ``absent``, aber mit eigener
+ * Meldung (siehe main()).
  */
 const PASSING_QUOTE_STATUSES = new Set(['exact', 'normalized', 'ellipsis', 'open']);
 
@@ -1123,6 +1186,25 @@ async function main() {
       const msg = wordingDeviationMessage(span, result, filePath, content, blocking);
       process.stderr.write(`${msg}\n`);
       if (!blocking) continue;
+      console.log(JSON.stringify({ decision: 'block', reason: msg }));
+      process.exit(2);
+    }
+
+    if (result.status === 'unverifiable') {
+      // Lookup-Apparat kaputt (Fall 3, #846-Folgefund) — KEIN Bestandsbefund
+      // ("nicht im Vault"), sondern ein Werkzeugausfall. Blockiert IMMER,
+      // unabhaengig von wordingMode: ACADEMIC_VERBATIM_WORDING=report
+      // schwaecht nur die Wortlaut-STRENGE ab, nicht die Frage, ob ueberhaupt
+      // geprueft werden konnte.
+      const truncated = span.text.length > 80 ? span.text.slice(0, 77) + '...' : span.text;
+      const msg = [
+        `[Vault-Guard] BLOCKIERT: Zitat NICHT prüfbar — Lookup-Apparat kaputt trotz vorhandener Vault-DB.`,
+        `Zitat: "${truncated}"`,
+        `Ursache: ${result.detail || 'unbekannt'}`,
+        `Kein Bestandsbefund — die Prüfumgebung (Python-venv/Abhängigkeiten) reparieren `
+          + `und den Write erneut versuchen. Bypass: <!-- vault-guard: skip --> nur für Ausnahmefälle.`,
+      ].join('\n');
+      process.stderr.write(msg + '\n');
       console.log(JSON.stringify({ decision: 'block', reason: msg }));
       process.exit(2);
     }
