@@ -119,6 +119,23 @@ diagnostizierbar. Bei dedizierten Agenten entfaellt das Feld.
 - `status: captcha` -- **SOFORT stoppen**, `{status: captcha}` zurueckgeben
 - `status: metadata_only` -- Merken (`oa_had_metadata_only = true`), naechste Site versuchen
 - `status: no_match` -- Naechste Site versuchen
+- `status: pickup_required` -- Merken (`oa_pickup_hint = pickup_hint` aus der
+  Antwort, falls vorhanden), naechste Site versuchen. Eine spaetere Site kann
+  den Volltext noch liefern; bleibt es bis zum Ende dabei, traegt der
+  Master-Output `pickup_required` samt dem gemerkten Hinweis.
+- `status: auth_required` -- Wie in Schritt 5: `Agent(auth-helper)` mit
+  `target_url` aus der Antwort und dem bekannten `profile_path`, danach die
+  Site **einmalig** erneut aufrufen (mit `session_context`). Kein zweiter
+  Retry. Bei `{status: captcha}` des auth-helper sofort stoppen, bei
+  `{status: auth_failed}` die Site als `pickup_required` werten und zur
+  naechsten gehen.
+
+Die letzten beiden Zweige sind mit der Konsolidierung noetig geworden: Die
+Site-Aufrufe laufen jetzt ueber den `generic-fetcher`, der beide Stati kennt
+(die abgeloesten Site-Agenten meldeten sie nicht). Ohne eigenen Zweig fielen
+sie in den `no_match`-Fall — ein lizenzierter Treffer hinter einer Anmeldung
+gaelte als nicht vorhanden, und ein bereits ermittelter `pickup_hint` ginge
+verloren.
 
 **edition-Feld durchreichen (Issue #450 AC4):** Enthaelt die Antwort bei
 `status: success` ein `edition`-Feld (HathiTrust, Internet Archive und MDZ
@@ -299,6 +316,10 @@ Freie Stufe (7 Sites, Schritt 3):
   -- Eine gibt captcha --> status: captcha (sofort)
   -- Alle no_match (kein metadata_only) --> weiter zum Fallback (Schritt 5)
   -- Mindestens eine metadata_only --> weiter zur Verlags-Stufe
+  -- pickup_required --> pickup_hint merken, naechste Site; bleibt es dabei,
+                         traegt der Master-Output pickup_required
+  -- auth_required --> auth-helper --> genau ein Retry (mit session_context)
+                       --> danach success, oder pickup_required und naechste Site
 
 Verlags-Stufe (Schritt 4):
   -- Eine gibt success --> status: success

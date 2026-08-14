@@ -41,19 +41,14 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { join, dirname, basename, isAbsolute } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, basename, isAbsolute } from 'node:path';
 import * as os from 'node:os';
-import { runVaultPython } from './lib/vault-bridge.mjs';
+import { ensureQuoteBatch } from './lib/vault-bridge.mjs';
 import { isProtectedPath } from './lib/protected-path.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
 // ---------------------------------------------------------------------------
-
-const HOOK_DIR = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = dirname(HOOK_DIR);
-const VAULT_SRC = REPO_ROOT;
 
 // Kanonischer DB-Default (Single Source of Truth, Issue #190) — identisch zu
 // verbatim-guard.mjs und mid-session-reinforcement.mjs.
@@ -395,32 +390,25 @@ function findAnchoredQuotes(pair) {
 // Vault-Lookup (Tri-State: found | not-found | unavailable)
 // ---------------------------------------------------------------------------
 
-// Interpreter-Kaskade (ACADEMIC_PYTHON, $VIRTUAL_ENV/bin/python, kanonisches
-// Setup-venv, PATH-Fallback) kommt aus hooks/lib/vault-bridge.mjs::runVaultPython()
-// (#382 fuer die Kaskade selbst; hier verwendet statt einer eigenen Kopie).
+// Der eigene Interpreterstart je Write ist seit Issue #844 durch den mit
+// verbatim-guard.mjs und context-fidelity-guard.mjs geteilten Batch-Cache
+// ersetzt (hooks/lib/vault-bridge.mjs::ensureQuoteBatch(), das intern weiter
+// runVaultPython() aus derselben Bruecke nutzt — #382 fuer die
+// Interpreter-Kaskade selbst).
 
-const PY_LOOKUP = [
-  'import sys, json',
-  `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-  'from academic_vault.server import search_quote_text, get_quote',
-  'db_path = sys.argv[1]',
-  'out = []',
-  'for span in json.loads(sys.argv[2]):',
-  '    hits = search_quote_text(db_path, span, 1)',
-  '    if not hits:',
-  '        out.append({"found": False})',
-  '        continue',
-  '    record = get_quote(db_path, hits[0]["quote_id"]) or {}',
-  '    out.append({',
-  '        "found": True,',
-  '        "quote_id": hits[0]["quote_id"],',
-  '        "paper_id": record.get("paper_id") or hits[0].get("paper_id"),',
-  '        "context_before": record.get("context_before"),',
-  '        "context_after": record.get("context_after"),',
-  '        "printed_page": record.get("printed_page"),',
-  '    })',
-  'print(json.dumps(out))',
-].join('\n');
+/**
+ * Deutet einen Cache-Eintrag (ensureQuoteBatch) in dieselbe Record-Form wie
+ * PY_LOOKUP: ``{found: false}`` oder ``{found: true, quote_id, paper_id,
+ * context_before, context_after, printed_page}``. Ein `{error}`-Eintrag
+ * (Lookup fuer GENAU dieses Zitat gescheitert) zaehlt hier als "nicht
+ * gefunden" — der Aufrufer warnt nur (kein Block), ein stiller
+ * Fail-open-Fund waere ohnehin harmlos.
+ */
+function fromCacheRecord(entry) {
+  if (entry === undefined || entry === null || entry.error) return { found: false };
+  const { found, quote_id, paper_id, context_before, context_after, printed_page } = entry;
+  return { found, quote_id, paper_id, context_before, context_after, printed_page };
+}
 
 /**
  * Schlaegt mehrere Spans in EINEM Subprozess nach (ein Python-Start pro
@@ -428,29 +416,39 @@ const PY_LOOKUP = [
  * hooks/lib/vault-bridge.mjs, mit LOOKUP_BUDGET_MS als Gesamtbudget ueber alle
  * Interpreter-Kandidaten, damit das 15-s-Hook-Timeout in hooks.json haelt.
  *
+ * Nutzt zuerst den mit verbatim-guard.mjs und context-fidelity-guard.mjs
+ * geteilten Batch-Cache (Issue #844, vault-bridge.mjs::ensureQuoteBatch) —
+ * liefert der einen `null` (nicht verfuegbar), faellt dieser Guard
+ * unveraendert auf den eigenen Direktaufruf zurueck.
+ *
  * @returns {{status: 'ok', results: object[]} | {status: 'unavailable'}}
  */
-function lookupQuotes(spanTexts) {
+function lookupQuotes(spanTexts, ctx = {}) {
   if (spanTexts.length === 0) return { status: 'ok', results: [] };
   if (!existsSync(VAULT_DB)) {
     debug(`Vault-DB nicht gefunden (${VAULT_DB}) — Claim-Drift-Pruefung uebersprungen.`);
     return { status: 'unavailable' };
   }
 
-  const output = runVaultPython(PY_LOOKUP, [VAULT_DB, JSON.stringify(spanTexts)], {
-    timeout: LOOKUP_BUDGET_MS,
+  const batch = ensureQuoteBatch({
+    filePath: ctx.filePath,
+    toolName: ctx.toolName,
+    toolInput: ctx.toolInput,
+    vaultDb: VAULT_DB,
+    quoteTexts: spanTexts,
     budget: LOOKUP_BUDGET_MS,
     label: 'Claim-Drift',
   });
-  if (output === null) return { status: 'unavailable' };
-
-  try {
-    const parsed = JSON.parse(output.trim());
-    if (Array.isArray(parsed)) return { status: 'ok', results: parsed };
-    debug('Vault-Lookup: unerwartete Antwort.');
-  } catch (err) {
-    debug(`Vault-Antwort nicht lesbar: ${err.message}`);
+  if (batch) {
+    return { status: 'ok', results: spanTexts.map((text) => fromCacheRecord(batch.quotes[text])) };
   }
+
+  // ensureQuoteBatch() hat bereits EINEN vollen runVaultPython-Versuch (mit
+  // LOOKUP_BUDGET_MS) unternommen und ist gescheitert — ein zweiter eigener
+  // Versuch mit derselben Interpreter-Kaskade und demselben Budget wuerde nur
+  // das Zeitbudget verdoppeln (tests/test_review_fix_hook_budget.py), ohne
+  // die Erfolgsaussicht zu aendern. Also direkt fail-open (AC3, Issue #844).
+  debug('Batch-Lookup nicht verfuegbar (Vault-Bridge fehlgeschlagen) — Claim-Drift-Pruefung uebersprungen.');
   return { status: 'unavailable' };
 }
 
@@ -539,7 +537,7 @@ async function main() {
   }
   if (candidates.length === 0) process.exit(0);
 
-  const lookup = lookupQuotes(candidates);
+  const lookup = lookupQuotes(candidates, { filePath, toolName, toolInput });
   if (lookup.status !== 'ok') process.exit(0); // Ohne Datenbasis wird nicht geraten.
 
   const findings = [];
