@@ -63,6 +63,17 @@ Das Approval-Gate nach Phase 1 (Query-Expansion + Treffer-Preview) läuft seit
 #537 standardmäßig; `--interactive=off` ist das Opt-out, nicht-interaktive
 Läufe bleiben gate-frei.
 
+Die Bewertungskette läuft seit #892 in drei Stufen: **Vorranking** (Schritt 7,
+`scoring.prescore()` über die vier gerechneten Dimensionen — die Relevanz
+existiert dort noch nicht), **mechanischer Vorfilter** (Schritt 9,
+`screening_prefilter.py`: Zeitraum/Sprache/Publikationstyp aus dem
+`screening_filters`-Block in `./academic_context.md`) und erst danach das
+**Relevanz-Scoring** auf der Restmenge (Schritt 10). Ein Treffer, den die
+Kriterien eindeutig verfehlt, kostet damit keinen Modellaufruf; jeder
+Ausschluss steht mit Kriteriumsnamen im Grund in `excluded_sources`, und die
+PRISMA-Zähler kommen aus dem Ledger statt aus einer Handzählung. Ohne
+Filterblock ist der Vorfilter ein No-Op.
+
 | Mode | Module | Top-N | Beschreibung |
 |------|--------|-------|-------------|
 | `quick` | 4 APIs | 15 | Schnelle Suche |

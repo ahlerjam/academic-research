@@ -32,7 +32,7 @@ gespeichert:
 |--------|-----------|
 | `n_identified` | Gesamtzahl identifizierter Treffer (alle Module summiert) |
 | `n_after_dedup` | Nach Deduplikation verbleibende Records |
-| `n_excluded_screening` | Beim Titel/Abstract-Screening ausgeschlossen (relevance-scorer < 0.5) |
+| `n_excluded_screening` | Beim Titel/Abstract-Screening ausgeschlossen — mechanisch **und** per Modellurteil (#892) |
 | `n_excluded_eligibility` | Bei der Volltextprüfung ausgeschlossen (quality-reviewer: Reject) |
 | `n_included` | Schließlich eingeschlossene Studien |
 | `n_unclear_screening` | Optional: am Material nicht entscheidbar, wartet auf den Menschen (#460) |
@@ -61,7 +61,8 @@ Zählwerte bitten oder aus dem angezeigten Ergebnis-Summary ableiten.
 ### Schritt 1.5: Ausschlussgründe aus dem Vault holen
 
 PRISMA 2020 verlangt zur Eligibility-Stufe Gründe, nicht nur eine Zahl:
-`vault.list_excluded_sources()` liefert `paper_id` + `reason`. Nach `reason`
+`vault.list_excluded_sources()` liefert `paper_id` + `reason` — seit #892 auch
+für die mechanischen Ausschlüsse (Grund mit Kriteriumsnamen). Nach `reason`
 gruppieren und zählen → Aufschlüsselung des Eligibility-Knotens („off-topic 7,
 kein Volltext 3"). Einträge ohne Grund als „nicht dokumentiert" ausweisen, nicht
 raten. Liegt die Zahl der Vault-Ausschlüsse deutlich über
