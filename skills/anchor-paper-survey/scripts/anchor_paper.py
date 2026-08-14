@@ -521,7 +521,7 @@ def _filter_and_dedupe(
 ) -> list[dict]:
     """Entfernt das Anker-Paper aus der Rohtrefferliste und dedupliziert den
     Rest ueber die kanonische Repo-Pipeline (``scripts/dedup.py::deduplicate``,
-    siehe auch ``commands/search.md`` Schritt 5).
+    siehe auch ``commands/search.md`` Schritt 6).
 
     Ohne diesen Schritt zaehlt sich das Anker-Paper als eigene "verwandte
     Arbeit" (die Folge-Suche fragt woertlich nach dem Anker-Titel bzw. holt

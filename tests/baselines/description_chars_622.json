@@ -1,6 +1,6 @@
 {
   "_comment": "Issue #622: Summe der Zeichenlaenge aller SKILL.md-description-Felder OHNE disable-model-invocation:true. Vorher/Nachher-Referenz fuer die Listing-Groesse (AC4). Aktualisieren bei jeder Aenderung an Skill-Anzahl, Descriptions oder disable-model-invocation-Markierungen.",
-  "measured_at": "2026-08-10",
-  "skill_count_without_flag": 45,
-  "total_description_chars": 27338
+  "measured_at": "2026-08-13",
+  "skill_count_without_flag": 46,
+  "total_description_chars": 27770
 }

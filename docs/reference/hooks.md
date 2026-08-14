@@ -18,7 +18,8 @@ diese Datei — die Tabelle unten gibt ihren Inhalt wieder und wird von
 | `UserPromptSubmit` | `nli-quote-scan.mjs` | Nachreichen offener Zitatscan-Befunde (nur Abholung, kein neuer Scan) |
 | `SessionStart` (kein Matcher) | *(Inline-Bash)* | Prüft, ob `~/.academic-research/venv` existiert und die Kernpakete importierbar sind |
 | `SessionStart` (kein Matcher) | `bypass-log-report.mjs` | Meldet neue Nutzungen des `vault-guard`-Bypass-Markers seit der letzten Session |
-| `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction |
+| `SessionStart` (kein Matcher) | `scripts/workflow_status.py` (Python, kein `.mjs`) | Meldet Phasenstand + nächsten Schritt aus `academic_context.md` gegen `config/workflow-phases.json` (Issue #877); fail-silent wie die Nachbar-Kommandos — kein Kontext, keine Ausgabe |
+| `SessionStart` (`matcher: "compact"`) | `mid-session-reinforcement.mjs` | Erinnerung an Anti-Fabrikations-Regeln nach Compaction; hängt seit #877 einen dritten, optionalen Phasenstand-Block (`scripts/workflow_status.py`) hinter die Decision-Blöcke an |
 | `Stop` | *(Inline-Bash)* | Hinweis bei ungesicherten `academic_context.md`-Änderungen |
 | `Stop` | `session-snapshot.mjs` | Vault-Snapshot pro Sitzung (#625, PR #650) — zusätzlich zum `PreCompact`-Snapshot, unabhängig davon; pro Sitzung maximal einmal exportiert (Drosselung nach session_id) |
 

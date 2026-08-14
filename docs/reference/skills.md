@@ -6,7 +6,7 @@ Skills sind **selbstaktivierend**: Claude erkennt das passende Keyword und lädt
 Anleitung von selbst. Du musst nichts aufrufen — es reicht, in normalem Deutsch zu sagen,
 was du brauchst.
 
-Insgesamt **45 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
+Insgesamt **46 Skills** mit eigener `SKILL.md` (das ist der Claude-Code-Discovery-Count).
 Das Verzeichnis `skills/_common/` enthält nur geteilte Markdown-Fragmente und zählt nicht
 als Skill.
 
@@ -28,6 +28,7 @@ lässt sich ein stiller Fehlschlag nicht von einem Erfolg unterscheiden.
 | `advisor` | *„Gliederung"*, *„Exposé"*, *„Struktur"* | Baut Gliederungen und Exposés im Dialog (7-Kriterien-Check) | Gliederungs- oder Exposé-Entwurf, `academic_context.md` | Review mit PASS/FAIL je Kriterium, auf Wunsch Exposé-Text, Gliederung zurück in den Kontext geschrieben | Rückmeldung ohne PASS/FAIL-Urteil, oder es kommt Kapitelprosa statt Struktur |
 | `methodology-advisor` | *„welche Methodik"*, *„Forschungsdesign"* | Berät bei Methodenwahl (4-Dimensionen-Scoring) | Formulierte Forschungsfrage | Methodenvergleich mit Score je Dimension und ausformulierter Begründung | Empfehlung ohne Scoring-Matrix oder ohne Bezug zur Fragestellung |
 | `topic-brainstorm` | *„welches Thema"*, *„Themenfindung"* | 3–5 Kandidaten mit Feasibility/Novelty/Career-Fit | Fachgebiet und Interessen; kein Kontext nötig | 3–5 Themenkandidaten mit Score je Dimension, danach Übergabe an `research-question-refiner` | Weniger als drei Kandidaten, oder Kandidaten ohne Score |
+| `workflow-status` | *„wo stehe ich"*, *„was ist der naechste Schritt"*, *„wie geht es weiter"*, *„Stand der Arbeit"* | Meldet aktuelle Phase, nächsten Schritt (mit Auslöser Claude/Operator) und Restkette bis Export gegen `config/workflow-phases.json` | `academic_context.md` im Projekt; kein Command nötig | Phase, nächster Schritt samt Auslöser, Restkette bis Export im Gespräch | Kein Kontext vorhanden → keine Ausgabe statt einer Phase (Issue #877) |
 
 ## Literatur-Skills
 

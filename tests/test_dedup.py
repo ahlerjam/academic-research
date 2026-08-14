@@ -1,8 +1,31 @@
 """Tests for dedup.py — paper deduplication."""
 
+import gzip
 import itertools
+import json
+import os
+import random
+import subprocess
+import sys
+import time
+from difflib import SequenceMatcher
+from pathlib import Path
+from typing import Any
 
-from dedup import deduplicate, merge_group
+import pytest
+
+# _canonical_dedup_result: Kanonisierung fuer den AC3-Golden-Vergleich
+# (source_modules-Sortierung, Ausschluss von found_via_known_item) lebt
+# EINMAL in scripts/dev/verify_dedup_890_hitset.py::canonical() -- demselben
+# Skript, das `compare`/`golden` fuer die manuelle AC3-Verifikation nutzt.
+# Frueher hatte dieser Test eine eigene Kopie, die beim #886-Merge gepatcht
+# wurde, waehrend die Skript-Fassung unveraendert blieb -- das Skript
+# verglich seither IMMER mit ABWEICHUNG (PR #927-Review P1). Ein gemeinsamer
+# Import schliesst dieses Auseinanderlaufen strukturell aus: eine Wahrheit
+# statt zwei.
+from scripts.dev.verify_dedup_890_hitset import canonical as _canonical_dedup_result
+
+from dedup import _canonical_sort_key, _length_bound_ok, deduplicate, merge_group
 from text_utils import normalize_doi
 
 
@@ -785,3 +808,413 @@ def test_dedup_bridge_record_group_membership_permutation_invariant():
         assert membership == first, (
             f"permutation {perm} yields different group membership: {membership} != {first}"
         )
+
+
+# ---------------------------------------------------------------------------
+# #890 — Blocking vor der Titel-Paarbildung
+# ---------------------------------------------------------------------------
+
+
+def test_length_bound_ok_matches_ratio_upper_bound():
+    """`_length_bound_ok` ist ein notwendiges (nicht hinreichendes) Kriterium:
+    kein Paar, dessen tatsaechliches `ratio()` den Threshold erreicht, darf
+    vom Bound ausgeschlossen werden (mathematischer Beweis aus dem Plan-
+    Kommentar: ratio() <= 2*min(la,lb)/(la+lb))."""
+    threshold = 0.85
+    # Gleich lang: 2*min/max = 1.0 >= threshold -> immer erlaubt.
+    assert _length_bound_ok(10, 10, threshold) is True
+    # Extrem verschieden lang: 2*10/210 << threshold -> ausgeschlossen.
+    assert _length_bound_ok(10, 200, threshold) is False
+    # Randomisierter Brute-Force-Vergleich: fuer 500 zufaellige Laengenpaare
+    # darf _length_bound_ok niemals False liefern, wenn ein reales
+    # Titelpaar dieser Laengen den Threshold erreichen KOENNTE (oberste
+    # erreichbare ratio() bei diesen Laengen ist genau 2*min/(la+lb)).
+    rng = random.Random(42)
+    for _ in range(500):
+        la = rng.randint(1, 200)
+        lb = rng.randint(1, 200)
+        max_possible_ratio = 2 * min(la, lb) / (la + lb)
+        bound_says_possible = _length_bound_ok(la, lb, threshold)
+        if max_possible_ratio >= threshold:
+            assert bound_says_possible is True, (la, lb, max_possible_ratio)
+        else:
+            assert bound_says_possible is False, (la, lb, max_possible_ratio)
+
+
+def test_length_bound_ok_rejects_zero_length():
+    assert _length_bound_ok(0, 5, 0.85) is False
+    assert _length_bound_ok(0, 0, 0.85) is False
+
+
+_DEVOPS_VOCAB = [
+    "devops",
+    "governance",
+    "cloud",
+    "security",
+    "framework",
+    "large",
+    "organizations",
+    "study",
+    "systematic",
+    "review",
+    "empirical",
+    "analysis",
+    "continuous",
+    "delivery",
+    "pipeline",
+    "risk",
+    "compliance",
+    "architecture",
+    "microservices",
+    "agile",
+]
+
+
+def _brute_force_title_pairs(
+    papers: list[dict[str, Any]], threshold: float
+) -> set[tuple[int, int]]:
+    """Referenzimplementierung: alle Paare per unbeschraenktem O(n^2)-Scan
+    und vollem `SequenceMatcher.ratio()` — das Verhalten vor #890 (siehe
+    `d141b09:scripts/dedup.py`, verschachtelte Doppelschleife ueber
+    `canonical_order`).
+
+    WICHTIG (Bugfix nach False-Positive-Fund bei der #890-Fix-Runde):
+    `SequenceMatcher(a, b).ratio() != SequenceMatcher(b, a).ratio()` im
+    Allgemeinen (empirisch verifiziert, keine symmetrische Kennzahl trotz
+    des Namens). `deduplicate()` weist deshalb bewusst `seq1`/`seq2` nach
+    `canonical_order`-POSITION zu (niedrigere Position = `seq1`), NICHT
+    nach roher Listen-Reihenfolge — das war schon vor #890 so (#707) und
+    ist die Grundlage der Bridge-Record-Determinismus-Garantie. Eine
+    Referenz, die stattdessen rohe Listen-Reihenfolge fuer die a/b-Rollen
+    verwendet, ist bei manchen Titelpaaren nahe der Schwelle eine ANDERE
+    (falsche) Rechnung als das, was `deduplicate()` selbst berechnet, und
+    erzeugt dadurch Schein-Abweichungen, die keine echten Blocking-Fehler
+    sind (verifiziert: die alte UND die neue Implementierung liefern fuer
+    einen so gefundenen Fall IDENTISCHE Gruppen — nur die alte, rohe-Index-
+    basierte Referenz in dieser Testdatei war falsch). Diese Funktion
+    repliziert deshalb exakt dieselbe canonical-order-basierte Rollenwahl
+    wie `deduplicate()` (`_canonical_sort_key` + `normalize_doi`), um eine
+    tatsaechlich faire Referenz zu sein."""
+    working: list[dict[str, Any]] = []
+    for paper in papers:
+        paper_copy = dict(paper)
+        paper_copy["doi"] = normalize_doi(paper.get("doi"))
+        working.append(paper_copy)
+    canonical_order = sorted(range(len(working)), key=lambda idx: _canonical_sort_key(working[idx]))
+
+    titles = [(paper.get("title") or "").strip() for paper in working]
+    pairs = set()
+    for a in range(len(canonical_order)):
+        i = canonical_order[a]
+        if not titles[i]:
+            continue
+        for b in range(a + 1, len(canonical_order)):
+            j = canonical_order[b]
+            if not titles[j]:
+                continue
+            ratio = SequenceMatcher(None, titles[i].lower(), titles[j].lower()).ratio()
+            if ratio >= threshold:
+                pairs.add((i, j))
+    return pairs
+
+
+def _generate_near_duplicate_titles(
+    count: int, vocab: list[str], seed: int, min_words: int = 2, max_words: int = 12
+) -> list[str]:
+    """Synthetische Titelmenge mit ~30% Near-Duplicate-Clustern (ein Wort
+    ersetzt) — dasselbe Muster wie die reale 12.08.2026-Messung, aber frei
+    skalierbar und ohne Fixture-Ladezeit. Der Abgleich auf der REALEN
+    Treffermenge vom 12.08.2026 steht in
+    `test_dedup_real_hitset_2026_08_12_matches_pre_890_output` (#890 AC3);
+    die synthetischen Mengen ergaenzen ihn um viele unabhaengige Stichproben,
+    sie ersetzen ihn nicht mehr."""
+    rng = random.Random(seed)
+
+    def random_title(word_count: int) -> str:
+        return " ".join(rng.choice(vocab) for _ in range(word_count)).title()
+
+    titles: list[str] = []
+    while len(titles) < count:
+        base = random_title(rng.randint(min_words, max_words))
+        titles.append(base)
+        if rng.random() < 0.3 and len(titles) < count:
+            words = base.split()
+            if words:
+                words[rng.randrange(len(words))] = rng.choice(vocab).title()
+                titles.append(" ".join(words))
+    return titles[:count]
+
+
+def _assert_blocking_matches_brute_force(titles: list[str], threshold: float = 0.85) -> None:
+    """AC3-Aequivalenz-Kern: die geblockte `deduplicate()`-Fassung muss
+    dieselben Gruppen liefern wie eine reine Brute-Force-Referenz ueber
+    alle Paare, unabhaengig von der internen Gruppen-Reihenfolge."""
+    papers = [
+        {"doi": None, "title": t, "authors": [f"tracer-{idx}"], "citations": 0}
+        for idx, t in enumerate(titles)
+    ]
+    brute_pairs = _brute_force_title_pairs(papers, threshold)
+
+    # Union-Find ueber die Brute-Force-Paare als Referenzgruppierung
+    # (ignoriert die ID-Konfliktregel bewusst, da hier keine IDs vorkommen).
+    parent = list(range(len(titles)))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    for i, j in brute_pairs:
+        union(i, j)
+
+    expected_groups: dict[int, set[int]] = {}
+    for idx in range(len(titles)):
+        expected_groups.setdefault(find(idx), set()).add(idx)
+    # Jeder Titel bekommt einen eindeutigen "Autor" als Tracer, damit sich
+    # die Gruppenzugehoerigkeit nach dem Merge ueber die konsolidierte
+    # Autorenliste rekonstruieren laesst (merge_group() verliert die
+    # Einzeltitel, nicht aber die Autoren).
+    expected_id_groups = {frozenset(group) for group in expected_groups.values()}
+
+    result = deduplicate(papers, threshold=threshold)
+
+    result_id_groups = set()
+    for paper in result:
+        ids = {int(a.removeprefix("tracer-")) for a in paper["authors"]}
+        result_id_groups.add(frozenset(ids))
+
+    assert result_id_groups == expected_id_groups, (
+        f"Gruppierung weicht ab: geblockt={sorted(map(sorted, result_id_groups))}, "
+        f"brute-force={sorted(map(sorted, expected_id_groups))}"
+    )
+
+
+def test_dedup_blocking_loses_no_merge_vs_brute_force():
+    """AC3-Aequivalenztest (Basisgroesse): 80 synthetische Titel mit
+    gestreuten Laengen und Near-Duplicate-Clustern."""
+    titles = _generate_near_duplicate_titles(80, _DEVOPS_VOCAB, seed=7)
+    _assert_blocking_matches_brute_force(titles)
+
+
+def test_dedup_blocking_loses_no_merge_vs_brute_force_multi_seed():
+    """AC3-Aequivalenztest, verschaerft: drei unabhaengige Seeds bei 300
+    Titeln (mehr Near-Duplicate-Cluster, breitere Laengenstreuung) gegen
+    dieselbe Brute-Force-Referenz — damit kein einzelner Lauf einen
+    Blocking-Fehler verdecken kann. Ergaenzung zum Abgleich auf der realen
+    12.08.2026-Treffermenge
+    (`test_dedup_real_hitset_2026_08_12_matches_pre_890_output`), der die
+    woertliche AC3-Pruefung leistet."""
+    for seed in (11, 23, 42):
+        titles = _generate_near_duplicate_titles(300, _DEVOPS_VOCAB, seed=seed)
+        _assert_blocking_matches_brute_force(titles)
+
+
+def _naive_pair_count(titles: list[str], threshold: float = 0.85) -> int:
+    """Referenzimplementierung OHNE Laengen-Blocking (Vor-#890-Verhalten):
+    alle Paare `O(n^2)` gegeneinander per `SequenceMatcher.ratio()` pruefen.
+    Dient ausschliesslich als Zeitreferenz fuer den Speedup-Vergleich unten,
+    nicht als Korrektheits-Orakel (dafuer: `_assert_blocking_matches_brute_force`)."""
+    count = 0
+    n = len(titles)
+    for i in range(n):
+        if not titles[i]:
+            continue
+        for j in range(i + 1, n):
+            if not titles[j]:
+                continue
+            if SequenceMatcher(None, titles[i].lower(), titles[j].lower()).ratio() >= threshold:
+                count += 1
+    return count
+
+
+def test_dedup_blocking_performance_smoke():
+    """AC1, belastbar gegen Runner-Streuung.
+
+    Eine Wanduhr-Schranke ist auf gemeinsam genutzten CI-Runnern unzuverlaessig:
+    derselbe 500-Titel-Fall brauchte in der CI zwischen 10.3s und 14.1s (Faktor
+    ~1.4x Streuung fuer identischen Input) und riss damit die alte 10s-Schranke,
+    obwohl der Code nichts Langsameres tut als vorher (lokal, unbelastet: 1.4s).
+    Statt eines Sekundenlimits misst dieser Test deshalb das *Verhaeltnis*
+    zwischen der aktuellen Blocking-Implementierung und der naiven
+    `O(n^2)`-Paarbildung von vor #890 (`_naive_pair_count`) -- auf derselben
+    Maschine, im selben Prozess, unmittelbar nacheinander gemessen. Beide
+    Messungen erfahren dieselbe Runner-Auslastung; der Quotient bleibt damit
+    weitgehend unabhaengig von der Tagesform des Runners und misst genau das,
+    was AC1 zusagt: eine Beschleunigung durch das Laengen-Blocking, nicht die
+    absolute Rechenleistung der CI-Maschine gerade jetzt.
+
+    Datensatz: derselbe `_generate_near_duplicate_titles`-Generator wie in den
+    AC3-Aequivalenztests -- Titel mit engen Near-Duplicate-Clustern, wie sie
+    beim Dedup echter Paper-Treffer tatsaechlich vorkommen (siehe auch die
+    reale 12.08.2026-Treffermenge in
+    `test_dedup_real_hitset_2026_08_12_matches_pre_890_output`). Ein
+    urspruenglich hier verwendeter Generator mit gleichverteilt zufaelligen
+    Wortlisten (3-15 Woerter aus 60-Wort-Vokabular) erzeugte eine sehr breite
+    Laengenstreuung (18-104 Zeichen) und damit ein fuer das Laengen-Blocking
+    ungewoehnlich unguenstiges Worst-Case-Muster (nur ~63% der Paare wurden
+    herausgefiltert, Faktor nur ~4x) -- kein realistisches Bild fuer
+    Paper-Titel, bei denen aehnliche Titel auch aehnlich lang sind.
+
+    Lokal (unbelastete Maschine, 5 unabhaengige Seeds) liegt der Faktor bei
+    500 Titeln stabil zwischen ~19x und ~24x. Die Schwelle von 5x laesst
+    grosszuegigen Puffer nach unten (>3.7x Sicherheitsabstand zum schlechtesten
+    beobachteten Wert), bleibt aber weit oberhalb dessen, was eine echte
+    Regression (z. B. ein Laengenfenster, das wieder nahezu alle Paare
+    durchlaesst) noch erreichen koennte.
+    """
+    titles = _generate_near_duplicate_titles(500, _DEVOPS_VOCAB, seed=99)
+    papers = [{"doi": None, "title": t, "authors": [], "citations": 0} for t in titles]
+
+    start = time.monotonic()
+    deduplicate(papers)
+    blocked_elapsed = time.monotonic() - start
+
+    start = time.monotonic()
+    _naive_pair_count(titles)
+    naive_elapsed = time.monotonic() - start
+
+    speedup = naive_elapsed / blocked_elapsed
+    assert speedup >= 5.0, (
+        f"Blocking nur {speedup:.1f}x schneller als naive O(n^2)-Paarbildung "
+        f"(blocked={blocked_elapsed:.2f}s, naiv={naive_elapsed:.2f}s) -- "
+        "AC1 erwartet eine deutliche, messbare Beschleunigung."
+    )
+
+
+def test_dedup_blocking_performance_2000_titles_ac1():
+    """AC1-Regressionswaechter bei Zielgroesse: 2000 Titel mit demselben
+    Vokabular/Near-Duplicate-Muster wie die AC3-Aequivalenztests.
+
+    Absolute Wanduhr-Schranke bewusst als grober Backstop, nicht als
+    praeziser Speedup-Nachweis (der steht in
+    `test_dedup_blocking_performance_smoke`) -- ein Live-Vergleich gegen die
+    naive `O(n^2)`-Variante bei voller Zielgroesse waere selbst zu teuer fuer
+    einen Routine-Lauf: `_naive_pair_count` braucht bei 2000 Titeln gemessen
+    ~91s.
+
+    Schwelle 60s statt der urspruenglichen 10s, mit Beleg statt Wunschdenken:
+    - Lokal, unbelastete Maschine: ~4.5s.
+    - Beobachtete Werte auf gemeinsam genutzten CI-Runnern (derselbe Input,
+      3 Python-Versionen, alte 10s-Schranke): 11.6s / 31.8s / 40.8s -- allein
+      diese Streuung (>3x) zeigt geteilte, unterschiedlich belastete Runner,
+      keine Code-Regression.
+    - Eine echte Regression auf O(n^2)-Verhalten braeuchte bei dieser
+      Groessenordnung ~91s (siehe oben) -- 60s liegt mit Puffer oberhalb der
+      schlechtesten beobachteten CI-Streuung (40.8s) und deutlich unterhalb
+      dessen, was ein echter Blocking-Ausfall kosten wuerde.
+    """
+    titles = _generate_near_duplicate_titles(2000, _DEVOPS_VOCAB, seed=1)
+    papers = [{"doi": None, "title": t, "authors": [], "citations": 0} for t in titles]
+
+    start = time.monotonic()
+    deduplicate(papers)
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 60.0, f"2000 Titel dauerten {elapsed:.1f}s (Ziel < 60s)"
+
+
+def test_dedup_blocking_keeps_pair_exactly_on_the_length_bound():
+    """Pinnt den Gleitkomma-Rand in `_blocked_candidate_pairs` (#890).
+
+    `la * (2 - threshold) / threshold` ist eine Gleitkomma-Division und kann
+    am exakten Rand nach UNTEN abweichen: fuer `la=17, threshold=0.85` ergibt
+    sie `22.999999999999996` statt `23.0`, worauf `bisect_right` einen Titel
+    der Laenge 23 aus dem Fenster wirft — obwohl `_length_bound_ok(17, 23,
+    0.85)` (dieselbe Ungleichung ohne Division) `True` liefert und das Paar
+    mit `ratio() == 0.85` genau auf der Schwelle liegt und gemergt gehoert.
+
+    Der Fall stammt aus einem 100-Seed-Stresslauf der #890-Fix-Runde; ohne
+    diesen Test blieb er ungedeckt: mit entferntem Sicherheits-Epsilon lief
+    die uebrige Dedup-Suite (inklusive der Multi-Seed-Brute-Force-Tests und
+    des Abgleichs auf der realen Treffermenge) unveraendert gruen."""
+    short, long = "Devops Systematic", "Devops Large Systematic"
+    assert (len(short), len(long)) == (17, 23)
+    assert SequenceMatcher(None, short.lower(), long.lower()).ratio() == 0.85
+    assert _length_bound_ok(17, 23, 0.85) is True
+
+    papers = [
+        {"doi": None, "title": short, "authors": ["a"], "citations": 0},
+        {"doi": None, "title": long, "authors": ["b"], "citations": 0},
+    ]
+    result = deduplicate(papers)
+
+    assert len(result) == 1, "Paar exakt auf der Schwelle wurde nicht zusammengefuehrt"
+
+
+# ---------------------------------------------------------------------------
+# AC3 auf der REALEN Treffermenge vom 12.08.2026 (#890)
+# ---------------------------------------------------------------------------
+
+_HITSET_DIR = Path(__file__).resolve().parent / "fixtures" / "dedup_890"
+_HITSET_PATH = _HITSET_DIR / "hitset_2026-08-12.json.gz"
+_GOLDEN_PATH = _HITSET_DIR / "golden_pre_890_output.json.gz"
+_VERIFY_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "dev" / "verify_dedup_890_hitset.py"
+)
+
+
+def _load_json_gz(path: Path) -> list[dict[str, Any]]:
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    assert isinstance(payload, list)
+    return payload
+
+
+# _canonical_dedup_result == scripts.dev.verify_dedup_890_hitset.canonical,
+# importiert oben (source_modules-Sortierung, Ausschluss von
+# found_via_known_item) -- siehe Import-Kommentar am Dateianfang.
+
+
+def test_dedup_real_hitset_2026_08_12_matches_pre_890_output():
+    """AC3 woertlich: auf der REALEN Treffermenge vom 12.08.2026 findet die
+    neue Fassung dieselben Zusammenfuehrungen wie die alte.
+
+    Eingabe ist `tests/fixtures/dedup_890/hitset_2026-08-12.json.gz` — die
+    1957 Treffer aus `all_raw.json` des Laufs
+    `~/.academic-research/sessions/2026-08-12T10-25-52Z/`, also genau die
+    Menge hinter der zweiten Messung im Issue („1957 Titel"); die 1603 der
+    ersten Messung (`prefiltered.json`) sind eine Teilmenge davon. Herkunft
+    und Feldreduktion: `tests/fixtures/dedup_890/README.md`.
+
+    Erwartung ist das eingefrorene Ergebnis der Fassung VOR #890
+    (`d141b09:scripts/dedup.py`, der #707-Stand aus PR #758), erzeugt mit
+    `scripts/dev/verify_dedup_890_hitset.py golden` — geladen aus der
+    Git-Historie, nicht nachgebaut.
+    """
+    papers = _load_json_gz(_HITSET_PATH)
+    assert len(papers) == 1957, "Fixture ist nicht mehr die reale 12.08.2026-Treffermenge"
+
+    expected = _load_json_gz(_GOLDEN_PATH)
+    actual = deduplicate(papers)
+
+    assert len(actual) == len(expected), (
+        f"Gruppenzahl weicht ab: neu={len(actual)}, vor-#890={len(expected)}"
+    )
+    assert _canonical_dedup_result(actual) == _canonical_dedup_result(expected)
+
+
+@pytest.mark.skipif(
+    os.environ.get("DEDUP_890_LIVE_REFERENCE") != "1",
+    reason="Rechnet die Vor-#890-Fassung live nach (~2,5 min); opt-in via DEDUP_890_LIVE_REFERENCE=1",
+)
+def test_dedup_real_hitset_golden_reproduces_from_pre_890_implementation():
+    """Beleg, dass die eingefrorene Golden-Datei nicht veraltet ist: laesst
+    `d141b09:scripts/dedup.py` frisch ueber dieselbe Fixture laufen und
+    vergleicht das Ergebnis sowohl gegen die aktuelle Fassung (im selben
+    Prozess, ohne jede Kanonisierung) als auch gegen die eingefrorene Datei.
+    Braucht Git-Historie bis `d141b09` (in einem flachen Checkout nicht
+    vorhanden — dann schlaegt `git show` fehl und der Test meldet das als
+    Fehler, statt eine Aussage vorzutaeuschen)."""
+    result = subprocess.run(
+        [sys.executable, str(_VERIFY_SCRIPT), "compare", "--live"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

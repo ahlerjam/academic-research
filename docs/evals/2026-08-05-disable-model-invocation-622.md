@@ -115,6 +115,11 @@ Fehlschläge und eine Trigger-Kollision zwischen `humanizer-de` und
 oder demarkiert — die Zählbasis (45 automatisch wählbare Skills) bleibt
 unverändert.
 
+**Update (Issue #877, 2026-08-13):** Neuer Skill `workflow-status` (kein
+`disable-model-invocation: true`) erhöht die Zählbasis auf 46 automatisch
+wählbare Skills. Neue Summe: 46 Skills, 27770 Zeichen description-Text
+(vorher 27338). Kein bestehender Skill wurde markiert oder demarkiert.
+
 ## Erreichbarkeit per `/name`
 
 Entfällt inhaltlich (0 Skills markiert, also keine Skills, deren

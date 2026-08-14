@@ -1,0 +1,10 @@
+{
+  "component": "workflow-status",
+  "component_type": "skill",
+  "prompts": [
+    {"id": "ws-01", "input": "Wo stehe ich gerade in meiner Bachelorarbeit?", "expected": {"type": "substring", "value": "Thema finden"}, "mode": "with_skill"},
+    {"id": "ws-02", "input": "Was ist der naechste Schritt in meinem Workflow, und wer macht ihn?", "expected": {"type": "regex", "value": "(Claude|Operator)"}, "mode": "both"},
+    {"id": "ws-03", "input": "Wo stehe ich gerade?", "expected": {"type": "regex", "value": "(kein|noch nicht|nicht vorhanden|academic_context)"}, "mode": "with_skill", "cwd": "none"},
+    {"id": "ws-04", "input": "Wie weit bin ich mit meiner Arbeit, bis zur Abgabe?", "expected": {"type": "substring", "value": "Export"}, "mode": "with_skill"}
+  ]
+}
