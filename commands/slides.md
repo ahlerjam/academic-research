@@ -72,8 +72,10 @@ Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzur
 
 ### Schritt 2 — Skill laden
 
-Skill `skills/slide-export/SKILL.md` wird geladen (Backend-Präflight,
-Fehlerpfade, Abgrenzung zu `word-export`/`latex-export`).
+Skill `skills/slide-export/SKILL.md` wird geladen (nur Trigger-Wrapper,
+prüft Vorbedingungen über `skills/_common/preamble.md`). Ablauflogik,
+Fehlerpfade und Abgrenzung zu `word-export`/`latex-export` stehen
+ausschließlich in diesem Command (siehe unten).
 
 ### Schritt 3 — Folien-Zwischenrepräsentation bauen
 
@@ -116,6 +118,30 @@ ein vollständiger, in PowerPoint öffenbarer Foliensatz.
 ### Schritt 6 — Ergebnis zeigen
 
 Pfad der erzeugten `.pptx`, Anzahl Folien.
+
+## Abgrenzung
+
+- **`word-export`**: gleiche Kapitel-Quelle, aber Fließtext-Renderer (`.docx`/PDF)
+  statt Folien. Beide teilen die Kapitel-Auflösung aus `latex-export`, nicht
+  die Rendering-Logik — docx-Fließtext und pptx-Folien sind strukturell zu
+  verschieden für einen gemeinsamen Renderer.
+- **`latex-export`**: kein Bezug zu Folien; nur Kapitel-Quelle ist geteilt.
+- Kein eigenes Literaturverzeichnis auf Folien — Zitate/Quellen bleiben in den
+  Kapiteln, `slide-export` reduziert auf die Kernaussage.
+
+## Fehlerpfade
+
+- **Backend fehlt:** Siehe „Slide-Backend" oben — Abbruch mit Installationshinweis,
+  kein roher Tool-Fehler.
+- **Kapitel ohne Kernaussage:** `core_statement` ist leer (kein Fließtext-Absatz
+  gefunden) — Rückfrage an den User statt Platzhalter-Fabrikation.
+- **Unbekanntes `--kapitel`:** `resolve_chapters()` wirft `ChapterResolutionError`
+  mit den verfügbaren Kapiteln in der Meldung (identisch zu `latex-export`).
+- **Kein Kapitel in `kapitel/`:** `ChapterResolutionError` mit „Kein Kapitel in
+  '<dir>' gefunden" statt Stacktrace.
+- **`python-pptx` fehlt:** `render_pptx.py` meldet „FEHLER: Das Python-Paket
+  'python-pptx' ist nicht installiert …" mit Nachinstallations-Hinweis statt
+  eines `ImportError`-Tracebacks (AC6).
 
 ## Abhängigkeiten
 
