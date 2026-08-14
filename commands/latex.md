@@ -51,8 +51,10 @@ Exportiert Kapitel des aktuellen Projekts als `.tex`-Dateien und generiert eine 
 
 ### Schritt 2 — Skill laden
 
-Skill `skills/latex-export/SKILL.md` wird geladen (Vorbedingungen,
-Fehlerpfade, Abgrenzung zu `citation-extraction`).
+Skill `skills/latex-export/SKILL.md` wird geladen (nur Trigger-Wrapper,
+prüft Vorbedingungen über `skills/_common/preamble.md`). Ablauflogik,
+Fehlerpfade und Abgrenzung stehen ausschließlich in diesem Command
+(siehe unten).
 
 ### Schritt 3 — Export ausführen
 
@@ -79,6 +81,18 @@ Bei Erfolg (Exit-Code 0): Pfade von `.tex` und `.bib` sowie Kapitelanzahl
 ausgeben. Erschien eine Template-Fallback-Meldung auf stderr, diese
 zusätzlich anzeigen. Bei Exit-Code ≠ 0: die vom Skript ausgegebene
 `FEHLER:`-Meldung (z. B. unbekanntes Kapitel) unverändert weitergeben.
+
+## Abgrenzung zu citation-extraction und word-export
+
+`latex-export` = vollständiger `.bib`-Dump aller Vault-Papers + `.tex`-Konvertierung.
+`citation-extraction` = Einzelzitat aus PDF (one-shot), keine Vault-weite Bibliography.
+`word-export` = Word/PDF statt `.tex`/`.bib`, siehe dort.
+
+## Fehlerpfade
+
+- **Pandoc fehlt:** Custom-Renderer-Fallback (kein Absturz). Pandoc installieren empfehlen.
+- **Vault leer:** Leere `.bib` + Meldung „Vault leer – Papers via `add` hinzufügen."
+- **Template nicht gefunden:** Ausgabe ohne Vorlage + Meldung „Template `<uni>` fehlt."
 
 ## Renderer
 
