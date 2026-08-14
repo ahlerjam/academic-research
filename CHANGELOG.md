@@ -56,6 +56,50 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
     (die Priorisierung sagt, womit angefangen wird, nicht wann aufgehört
     werden darf) und die Autonomie des Screening-Laufs (#880).
 
+### Changed
+
+- **`academic_vault/db.py` in Repository-Module pro Aggregat aufgeteilt (#841):**
+  Die monolithische Klasse `VaultDB` (3.279 Zeilen, CRUD für über 20 Entitäten
+  in einer Datei — das größte Merge-Konflikt- und Regressionsrisiko des Repos)
+  ist ein reiner Move in elf Aggregat-Mixins unter
+  `academic_vault/repositories/` geworden (`papers`, `quotes`, `notes`,
+  `fulltext`, `tables`, `figures`, `empirics`, `decisions`, `appraisal`,
+  `chunks`, `vectors`; kein Methodenkörper wurde inhaltlich verändert).
+  `db.py` bleibt als Fassade (530 Zeilen) mit Connection-/Transaktions-Kern
+  (`_connection`, WAL, `__enter__`/`__exit__`), `init_schema()`, dem
+  Vault-Lock-Guard `_raise_if_locked()` und der Vektorbreite des Bestands
+  (`_expected_embedding_dim`/`_assert_vector_dim`) — genau die fünf
+  Primitive, die `repositories/_base.py::ConnectionHost` als Kontrakt
+  deklariert. Bewusst **Mixin-Komposition statt Objekt-Delegation**: dadurch
+  bleibt jede Methode direkt an `VaultDB` erreichbar, kein Aufrufer
+  (`server.py`, `ingest.py`, `health.py`, `migrate.py`, Evals, ~40
+  Testdateien) ändert sich, und Klassen-Patches wie
+  `monkeypatch.setattr(db_module.VaultDB, "_papers_snapshot", …)`
+  (`tests/test_issue_378_citation_guard.py`) greifen unverändert. Die reinen
+  Text-/Namens-/Pfad-Helfer (`normalize_family_name`, `csl_*`,
+  `paper_cited_in_chapters`, `escape_like`, `_sanitize_fts5_query`,
+  `project_slug`, `default_db_path`, …) liegen jetzt in
+  `academic_vault/vault_text.py`, die schema-nahen Konstanten (`VALID_*`,
+  `CURRENT_SCHEMA_VERSION`, Sentinel `_UNSET`, vec0-DDL) in
+  `academic_vault/vault_schema.py` — beide werden von `db.py` per `__all__`
+  re-exportiert, jeder bisherige `from academic_vault.db import …` bleibt
+  gültig. Neuer mypy-Override (`disallow_untyped_defs = true` für
+  `academic_vault.repositories.*`) macht „vollständig typannotiert"
+  maschinell prüfbar. Zwei bestehende Guards wurden auf den neuen Modulbaum
+  **ausgeweitet, nicht abgeschwächt**:
+  `tests/test_issue_214_code_hygiene.py::test_like_queries_use_escape_clause`
+  scannt jetzt `db.py` **und** `repositories/*.py` auf die ESCAPE-Pflicht
+  (`like_count > 0` bleibt bestehen), und
+  `tests/test_issue_539_drop_dead_tables.py` globt `rglob("*.py")` statt
+  `glob("*.py")`, damit kein Unterpaket dem Tote-Tabellen-Guard entkommt.
+  Nachweis: `tests/test_issue_841_vault_repositories.py` (Zeilenbudget je
+  Modul ≤ 1.200, Fassade ≤ 900, kein Repository öffnet eine eigene
+  Connection, ein Schreibaufruf je Aggregat teilt sich genau **eine**
+  Connection der Fassade, jeder Aggregat-Schreibpfad wirft weiterhin
+  `VaultLockedError` bei gesperrtem Vault, alle bisher exportierten Namen
+  bleiben importierbar).
+
+
 ### Added
 
 - **Wortlaut-Prüfung wörtlicher Zitate im Write-Pfad (#846):**
