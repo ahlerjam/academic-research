@@ -8,30 +8,62 @@ damit wir sie mit unittest.mock testen koennen ohne echte Subagenten aufzurufen.
 import datetime
 import re
 
+GUIDE_DIR = "config/browser_guides"
+
 # Subagent-Reihenfolgen (aus L0-Notes und Spec G.md)
-# Issue #450: hathitrust-fetcher/internetarchive-fetcher/mdz-fetcher werden ans
-# Ende der OA-Liste angehaengt (lizenzfrei, daher weiterhin vor allen
-# Verlags-Subagenten -- Feinsortierung unter den 7 freien Quellen ist reine
-# Listenreihenfolge und risikolos aenderbar).
-OA_SUBAGENTS = [
-    "doabooks-fetcher",
-    "oapen-fetcher",
-    "tib-fetcher",
-    "kvk-fetcher",
-    "hathitrust-fetcher",
-    "internetarchive-fetcher",
-    "mdz-fetcher",
+# Issue #450: hathitrust/internetarchive/mdz stehen am Ende der OA-Liste
+# (lizenzfrei, daher weiterhin vor allen Verlags-Subagenten).
+# Issue #840: die sechs Sites ohne dedizierten Agenten laufen ueber den
+# parametrisierten generic-fetcher ("Ultimate Fetcher") mit `site_config`.
+# Die REIHENFOLGE bleibt unveraendert -- sie traegt die #450-AC3-Invariante.
+OA_SITES = [
+    {"site": "doab", "site_config": f"{GUIDE_DIR}/doab.md"},
+    {"site": "oapen", "site_config": f"{GUIDE_DIR}/oapen.md"},
+    {"site": "tib", "subagent": "tib-fetcher"},
+    {"site": "kvk", "site_config": f"{GUIDE_DIR}/kvk.md"},
+    {"site": "hathitrust", "site_config": f"{GUIDE_DIR}/hathitrust.md"},
+    {"site": "internetarchive", "site_config": f"{GUIDE_DIR}/internetarchive.md"},
+    {"site": "mdz", "site_config": f"{GUIDE_DIR}/mdz.md"},
 ]
 
 PUBLISHER_DOMAIN_MAP = {
-    "link.springer.com": "springer-book",
-    "degruyter.com": "degruyter",
-    "nationallizenzen.de": "nationallizenzen",
-    "ebookcentral.proquest.com": "ebook-central",
-    "cambridge.org": "cambridge-core",
-    "academic.oup.com": "oxford-academic",
-    "jstor.org": "jstor",
+    "link.springer.com": {"site": "springer", "subagent": "springer-book"},
+    "degruyter.com": {"site": "degruyter", "subagent": "degruyter"},
+    "nationallizenzen.de": {
+        "site": "nationallizenzen",
+        "site_config": f"{GUIDE_DIR}/nationallizenzen.md",
+    },
+    "ebookcentral.proquest.com": {
+        "site": "ebook-central",
+        "site_config": f"{GUIDE_DIR}/ebook-central.md",
+    },
+    "cambridge.org": {"site": "cambridge", "subagent": "cambridge-core"},
+    "academic.oup.com": {"site": "oxford", "subagent": "oxford-academic"},
+    "jstor.org": {"site": "jstor", "subagent": "jstor"},
 }
+
+
+def subagent_for(entry: dict) -> str:
+    """Der Agent, den book-fetcher fuer diesen Site-Eintrag aufruft."""
+    return entry.get("subagent", "generic-fetcher")
+
+
+def is_free_tier_call(subagent: str, payload: dict) -> bool:
+    """True, wenn dieser Dispatch zur freien Stufe (Schritt 3) gehoert.
+
+    Seit #840 reicht der Agent-Name dafuer nicht mehr: `generic-fetcher` wird
+    sowohl fuer sechs freie Sites (je mit eigener `site_config`) als auch als
+    guide-freier Fallback in Schritt 5 aufgerufen. Unterscheidungsmerkmal ist
+    die `site_config` im Payload.
+    """
+    for entry in OA_SITES:
+        if subagent_for(entry) != subagent:
+            continue
+        if "site_config" not in entry:
+            return True
+        if payload.get("site_config") == entry["site_config"]:
+            return True
+    return False
 
 
 class BookFetcherRouter:
@@ -108,8 +140,28 @@ class BookFetcherRouter:
     def _ts(self) -> str:
         return datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
 
-    def _try_entry(self, subagent: str, status: str) -> dict:
-        return {"subagent": subagent, "status": status, "ts": self._ts()}
+    def _try_entry(self, subagent: str, status: str, site: str | None = None) -> dict:
+        entry = {"subagent": subagent, "status": status, "ts": self._ts()}
+        if site is not None:
+            # Issue #840: mehrere tries-Eintraege lauten `generic-fetcher` --
+            # erst `site` macht die Kette wieder eindeutig diagnostizierbar.
+            entry["site"] = site
+        return entry
+
+    @staticmethod
+    def _site_payload(payload_base: dict, entry: dict) -> dict:
+        """Payload je Site: dedizierte Agenten unveraendert, der Ultimate
+        Fetcher zusaetzlich mit `site_config`."""
+        payload = dict(payload_base)
+        if "site_config" in entry:
+            payload["site_config"] = entry["site_config"]
+        return payload
+
+    @staticmethod
+    def _site_of(entry: dict) -> str | None:
+        """`site` nur fuer generic-fetcher-Dispatches; dedizierte Agenten
+        tragen ihren Namen bereits im `subagent`-Feld."""
+        return entry["site"] if "site_config" in entry else None
 
     def fetch(self, identifier_raw: str, output_path: str) -> dict:
         """
@@ -134,18 +186,26 @@ class BookFetcherRouter:
         # Schritt 1: OA-Subagenten
         # ----------------------------------------------------------
         oa_any_metadata_only = False
-        for subagent in OA_SUBAGENTS:
-            resp = self.dispatch_subagent(subagent, payload_base)
+        for entry in OA_SITES:
+            subagent = subagent_for(entry)
+            site = self._site_of(entry)
+            resp = self.dispatch_subagent(subagent, self._site_payload(payload_base, entry))
             status = resp.get("status", "no_match")
-            tries.append(self._try_entry(subagent, status))
+            tries.append(self._try_entry(subagent, status, site))
 
             if status == "success":
-                return {
+                result = {
                     "status": "success",
                     "source": subagent,
-                    "file_path": resp.get("pdf_path"),
+                    "file_path": self._pdf_path(resp),
                     "tries": tries,
                 }
+                if site is not None:
+                    result["site"] = site
+                if resp.get("edition"):
+                    # Issue #450 AC4: unveraendert durchreichen, nie selbst erzeugen.
+                    result["edition"] = resp["edition"]
+                return result
 
             if status == "captcha":
                 return {
@@ -164,9 +224,8 @@ class BookFetcherRouter:
         # Schritt 2: Verlags-Subagenten (nur wenn OA metadata_only und lizenziert)
         # ----------------------------------------------------------
         if oa_any_metadata_only:
-            publisher_subagents = self._get_licensed_publisher_subagents()
-            for pub_subagent in publisher_subagents:
-                result = self._try_publisher(pub_subagent, payload_base, tries)
+            for entry in self._get_licensed_publisher_subagents():
+                result = self._try_publisher(entry, payload_base, tries)
                 if result is not None:
                     return result
 
@@ -226,6 +285,19 @@ class BookFetcherRouter:
     def _pdf_path(resp: dict):
         """Der Agent-Prompt nennt das Feld `file_path`; Altfixtures nutzen `pdf_path`."""
         return resp.get("file_path") or resp.get("pdf_path")
+
+    def _publisher_success(self, pub_subagent: str, site, resp: dict, tries: list) -> dict:
+        result = {
+            "status": "success",
+            "source": pub_subagent,
+            "file_path": self._pdf_path(resp),
+            "tries": tries,
+        }
+        if site is not None:
+            result["site"] = site
+        if resp.get("edition"):
+            result["edition"] = resp["edition"]
+        return result
 
     def _try_generic(self, payload: dict, tries: list) -> dict:
         """Ruft generic-fetcher auf und loest `auth_required` mit genau EINEM Retry auf.
@@ -307,30 +379,26 @@ class BookFetcherRouter:
         return None
 
     def _get_licensed_publisher_subagents(self) -> list:
-        """Gibt die Verlags-Subagenten zurueck, deren Host in licensed_sites ist."""
-        result = []
-        for domain, subagent in PUBLISHER_DOMAIN_MAP.items():
-            if domain in self.licensed_sites:
-                result.append(subagent)
-        return result
+        """Gibt die Verlags-Eintraege zurueck, deren Host in licensed_sites ist."""
+        return [
+            entry for domain, entry in PUBLISHER_DOMAIN_MAP.items() if domain in self.licensed_sites
+        ]
 
-    def _try_publisher(self, pub_subagent: str, payload_base: dict, tries: list):
+    def _try_publisher(self, entry: dict, payload_base: dict, tries: list):
         """
         Versucht einen Verlags-Subagenten. Handhabt auth_required mit auth-helper-Retry.
 
         Gibt das finale Ergebnis zurueck wenn erfolgreich/captcha, sonst None.
         """
-        resp = self.dispatch_subagent(pub_subagent, payload_base)
+        pub_subagent = subagent_for(entry)
+        site = self._site_of(entry)
+        payload = self._site_payload(payload_base, entry)
+        resp = self.dispatch_subagent(pub_subagent, payload)
         status = resp.get("status", "no_match")
-        tries.append(self._try_entry(pub_subagent, status))
+        tries.append(self._try_entry(pub_subagent, status, site))
 
         if status == "success":
-            return {
-                "status": "success",
-                "source": pub_subagent,
-                "file_path": resp.get("pdf_path"),
-                "tries": tries,
-            }
+            return self._publisher_success(pub_subagent, site, resp, tries)
 
         if status == "captcha":
             return {
@@ -363,17 +431,12 @@ class BookFetcherRouter:
 
             if auth_status == "authenticated":
                 # Einmaliger Retry
-                retry_resp = self.dispatch_subagent(pub_subagent, payload_base)
+                retry_resp = self.dispatch_subagent(pub_subagent, payload)
                 retry_status = retry_resp.get("status", "no_match")
-                tries.append(self._try_entry(pub_subagent, retry_status))
+                tries.append(self._try_entry(pub_subagent, retry_status, site))
 
                 if retry_status == "success":
-                    return {
-                        "status": "success",
-                        "source": pub_subagent,
-                        "file_path": retry_resp.get("pdf_path"),
-                        "tries": tries,
-                    }
+                    return self._publisher_success(pub_subagent, site, retry_resp, tries)
 
                 if retry_status == "captcha":
                     return {

@@ -35,16 +35,67 @@ Alternativ via HAN-Proxy: `han_login.md` zuerst ausführen, dann
 - Online-Reader ("Read Online") ist kein Download-Äquivalent — nicht verwenden.
 - DRM-Hinweis prüfen: "Adobe DRM" bedeutet verschlüsseltes PDF.
 
-## Pickup-Triggers
+## Lizenz-Prüfung (ZUERST, vor jeder Navigation)
 
-- `status: pickup_required` wenn:
-  - Nur Online-Reader verfügbar (kein "Full Book Download"-Button).
-  - DRM-PDF mit Adobe-Encryption (nicht archivierbar).
-  - Download-Limit erreicht (z. B. "You have reached the maximum number of
-    checkouts").
-  - Session-Timeout während Download.
-- `status: captcha` wenn CAPTCHA sichtbar.
-- `status: no_match` wenn ISBN nicht im Katalog.
+`~/.academic-research/library-profiles/active.yaml` lesen und prüfen, ob
+`ebookcentral.proquest.com` in `licensed_sites` steht.
+
+Steht es **nicht** drin: sofort stoppen mit
+`{"status": "metadata_only", "url": "https://ebookcentral.proquest.com"}`.
+
+**Sonderfall HAN:** Manche Institutionen haben Ebook Central nur über HAN
+eingerichtet. Ist `proxy_pattern` gesetzt und `auth_type: HAN`, läuft der
+Zugang über den HAN-Flow (via `auth-helper`), nicht über den Direktaufruf.
+
+## Auth-Delegation
+
+Ebook Central verlangt **immer** einen Login. Auth-Trigger: "Sign in"-Button
+ohne eingeloggten Zustand, "Sign in through your institution", Login-Wall nach
+einem Navigationsversuch ohne Session, oder eine HAN-Proxy-URL aus
+`proxy_pattern`.
+
+Der Login wird **vollständig an `auth-helper` delegiert** (`target_url:
+https://ebookcentral.proquest.com`, `profile_path` = aktives Uni-Profil) —
+hier werden nie selbst Credentials verarbeitet. Auth-Methode ist Shibboleth
+ODER HAN, abhängig von `auth_type` im Profil.
+
+Antworten des `auth-helper`:
+
+- `authenticated` → weiter zur Discovery.
+- `not_required` (`auth_type: oa-only`) → weiter zur Discovery (unerwarteter
+  OA-Zustand; wie `authenticated` behandeln).
+- `auth_failed` → `pickup_required` mit `reason: "auth_failed: <grund>"`.
+- `captcha` → `captcha`.
+
+## Download-Prüfung vor dem Klick
+
+- **DRM:** "Adobe DRM" / "Adobe Digital Editions" sichtbar → das PDF ist
+  verschlüsselt und nicht archivierbar → `pickup_required` mit
+  `reason: "DRM-PDF (Adobe Digital Editions) — nicht archivierbar"`.
+  Nicht herunterladen.
+- **Download-Limit:** "You have reached the maximum number of checkouts" →
+  `pickup_required` mit `reason: "Download-Limit erreicht"`.
+- Sonst "Full Book Download" klicken und die Datei verifizieren.
+- Fehlt "Full Book Download", ist aber "Download Chapter" vorhanden:
+  kapitelweiser Fallback, Ergebnis `success` mit `"chapter_only": true`.
+
+## Status-Vokabular
+
+| Beobachtung | Status | Feld |
+|---|---|---|
+| "Full Book Download" geglückt und verifiziert | `success` | `file_path`, `url` = Detailseite |
+| Kapitelweiser Fallback | `success` | zusätzlich `"chapter_only": true` |
+| `ebookcentral.proquest.com` fehlt in `licensed_sites` | `metadata_only` | `url` |
+| DRM-PDF, Download-Limit, Session-Timeout, kein Download-Button nach Auth, nur Online-Reader | `pickup_required` | `url`, `reason` |
+| CAPTCHA sichtbar | `captcha` | `reason` |
+| ISBN nicht im Katalog | `no_match` | `reason` |
+
+## Verbote (site-spezifisch)
+
+- **"Read Online" ist kein Download** — der Online-Reader wird nie als
+  PDF-Ersatz verwendet, weder per Screenshot noch seitenweise.
+- Keine eigene Credential-Verarbeitung — Auth geht ausschließlich über
+  `auth-helper`.
 
 ## Bekannte Fallstricke
 

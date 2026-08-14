@@ -1,5 +1,7 @@
 {
   "status": "metadata_only",
-  "source_subagent": "doabooks-fetcher",
-  "url": "https://www.doabooks.org/handle/11514/12345"
+  "source": "generic-fetcher",
+  "site": "doab",
+  "url": "https://www.doabooks.org/handle/11514/12345",
+  "reason": "Zugriffsstufe: nur Metadaten — kein Volltext-Link"
 }

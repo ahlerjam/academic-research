@@ -16,8 +16,13 @@
   },
   "ac1_ledger": {
     "required": "mindestens 2 von 3 Anbietern real belegen",
-    "pdf_verified": ["fa-02", "fa-03"],
-    "blocked_verified": ["fa-01"],
+    "pdf_verified": [
+      "fa-02",
+      "fa-03"
+    ],
+    "blocked_verified": [
+      "fa-01"
+    ],
     "conclusion": "2 von 3 Anbietern (Internet Archive, MDZ) liefern real ein PDF. HathiTrust ist als gesperrt belegt statt als 'nicht geprueft' offengelassen."
   },
   "runs": [
@@ -62,12 +67,17 @@
         "consequence": "status: captcha waere fuer diesen Fall die falsche Meldung. agents/hathitrust-fetcher.md braucht dafuer eine eigene Regel — sonst faellt der Fall in keinen der fuenf Status."
       },
       "volatile_fields_excluded": {
-        "fields": ["IP address", "Cloudflare Ray ID"],
+        "fields": [
+          "IP address",
+          "Cloudflare Ray ID"
+        ],
         "reason": "Beide Angaben stehen auf der Sperrseite und wirken wie harte Evidenz, sind aber pro Request neu — und die Client-IP hat in einem oeffentlichen Repo ohnehin nichts verloren. In der eingecheckten Fixture sind sie neutralisiert (REDACTED-*), damit niemand versucht, gegen sie zu vergleichen. Dass die Ray ID rotiert, wird nicht behauptet, sondern gefahren: tests/test_issue_450_live_fetch.py::test_hathitrust_ray_id_rotates holt die Seite zweimal.",
         "evidence_is_instead": "Status 403, Seitentitel und die vier Stabil-Marker im DOM. Diese Signale sind bei jedem Abruf identisch."
       },
       "why_this_still_satisfies_ac1": "AC1 laesst ein korrekt diagnostiziertes Zugriffshindernis als Erfuellung gelten und verlangt reale Belege nur fuer 2 von 3 Anbietern. Die beiden PDF-Belege liefern fa-02 und fa-03; fuer HathiTrust ist das Hindernis benannt, mit Statuscode belegt und ausdruecklich nicht umgangen.",
-      "notes": "Der 403 belegt NICHT, dass HathiTrust-Volltexte generell unerreichbar sind — ueber einen echten Browser im Menschentempo (der Weg, den agents/hathitrust-fetcher.md beschreibt) kann derselbe Inhalt zugaenglich sein. Belegt ist allein: der direkte, anonyme Zugriff auf den Download-Endpunkt wird gesperrt. Genau deshalb bleibt der Agent bei browser-use und erhoeht nicht das Tempo."
+      "notes": "Der 403 belegt NICHT, dass HathiTrust-Volltexte generell unerreichbar sind — ueber einen echten Browser im Menschentempo (der Weg, den agents/hathitrust-fetcher.md beschreibt) kann derselbe Inhalt zugaenglich sein. Belegt ist allein: der direkte, anonyme Zugriff auf den Download-Endpunkt wird gesperrt. Genau deshalb bleibt der Agent bei browser-use und erhoeht nicht das Tempo.",
+      "site": "hathitrust",
+      "agent_note_840": "Aufgezeichnet mit dem damaligen Agenten hathitrust-fetcher. Seit Issue #840 fuehrt derselbe Zugriffsweg ueber den Ultimate Fetcher generic-fetcher mit site_config config/browser_guides/hathitrust.md. Der historische Datensatz bleibt unveraendert; fuer die Kopplung an den Eval-Fall ist das additive Feld 'site' massgeblich."
     },
     {
       "agent": "internetarchive-fetcher",
@@ -110,18 +120,25 @@
           "collection_contains": "inlibrary"
         },
         "url": "https://archive.org/download/prideprejudice00austrich/prideprejudice00austrich.pdf",
-        "http_status_allowed": [401, 403],
+        "http_status_allowed": [
+          401,
+          403
+        ],
         "http_status_allowed_reason": "archive.org hat zwischen den beiden Aufzeichnungen den Statuscode fuer denselben CDL-Fehlerpfad gewechselt: 401 am 2026-07-31, 403 am 2026-08-10 (Issue #799, Live-Lauf im woechentlichen Workflow). Fuer die Gegenprobe zaehlt nicht die konkrete Zahl, sondern dass der Zugriff abgewiesen wird und kein PDF herausgeht — ein einzelner fest verdrahteter Code waere beim naechsten Anbieterwechsel wieder falsch.",
         "http_status_last_observed": 403,
         "http_status_last_observed_at": "2026-08-10",
         "note": "Gleich geformte Download-URL, Controlled-Digital-Lending-Item: der Zugriff wird abgewiesen (401 oder 403) statt eines PDF. Der Dateiliste dieses Items liegt zusaetzlich eine Variante mit format 'ACS Encrypted PDF' bei. Damit ist die Abweisung der reale Fehlerpfad des Agenten — nicht 429 und nicht ein fehlender Download-Link."
       },
       "volatile_fields_excluded": {
-        "fields": ["CDN-Hostname des 302-Ziels"],
+        "fields": [
+          "CDN-Hostname des 302-Ziels"
+        ],
         "reason": "archive.org beantwortet die Download-URL mit einem 302 auf einen zugewiesenen Speicherknoten; im Testlauf am 2026-07-31 kamen dabei Knoten in verschiedenen Regionen zurueck. Der konkrete Hostname des Umleitungsziels ist darum kein Beleg — festgehalten wird die stabile Einstiegs-URL. Dass das Ziel ein zugewiesener Knoten und nicht der Einstiegs-Host ist, wird nicht behauptet, sondern gefahren: tests/test_issue_450_live_fetch.py::test_internet_archive_redirects_to_an_assigned_node. Ob innerhalb weniger Sekunden zwei verschiedene Knoten zurueckkommen, ist dabei ausdruecklich NICHT zugesichert und wird darum auch nicht geprueft.",
         "evidence_is_instead": "Die stabile /download/-URL, Status, Content-Type, Byte-Zahl, sha256 und die Dokument-Metadaten des PDF."
       },
-      "notes": "Der Titel wurde bewusst als historische Erstausgabe (1813) gewaehlt: er belegt zugleich AC4, denn 'edition' stammt aus dem Metadatensatz des Digitalisats und nicht aus der Eingabe."
+      "notes": "Der Titel wurde bewusst als historische Erstausgabe (1813) gewaehlt: er belegt zugleich AC4, denn 'edition' stammt aus dem Metadatensatz des Digitalisats und nicht aus der Eingabe.",
+      "site": "internetarchive",
+      "agent_note_840": "Aufgezeichnet mit dem damaligen Agenten internetarchive-fetcher. Seit Issue #840 fuehrt derselbe Zugriffsweg ueber den Ultimate Fetcher generic-fetcher mit site_config config/browser_guides/internetarchive.md. Der historische Datensatz bleibt unveraendert; fuer die Kopplung an den Eval-Fall ist das additive Feld 'site' massgeblich."
     },
     {
       "agent": "mdz-fetcher",
@@ -175,11 +192,16 @@
       },
       "whole_work_note": "Das Gesamtwerk kam als eine Datei mit 471 Seiten und rund 148 MiB an — MDZ stellt es serverseitig zusammen und liefert es ohne Wartezimmer und ohne Auftragsverfahren aus. Nicht zu verwechseln mit DaFo (hochaufloesende Bilder plus OCR), das MDZ auf der Seite 'Download Options' ausdruecklich als Bestellung mit Mailadresse und Bereitstellung binnen bis zu vier Wochen fuehrt; DaFo ist fuer diesen Agenten kein Weg.",
       "volatile_fields_excluded": {
-        "fields": ["Job-Praefix im Dateinamen des zusammengestellten PDF", "/ID-Array im PDF-Trailer"],
+        "fields": [
+          "Job-Praefix im Dateinamen des zusammengestellten PDF",
+          "/ID-Array im PDF-Trailer"
+        ],
         "reason": "MDZ legt das Ergebnis unter /pdf/<job-praefix>bsb10125025.pdf ab; das Praefix wird pro Zusammenstellung neu vergeben. Ein festgehaltener Wert waere darum kein Beleg. Dass es rotiert, wird nicht behauptet, sondern gefahren: tests/test_issue_450_live_fetch.py::test_mdz_job_prefix_rotates. Das /ID-Array ist aus demselben Grund aus der Pruefsumme herausgerechnet.",
         "evidence_is_instead": "Status, Content-Type, Byte-Zahl, Seitenzahl und der normalisierte sha256."
       },
-      "notes": "Das Digitalisat traegt 1864 (Dieterichsche Buchhandlung), nicht 1812. Wer 'Kinder- und Hausmärchen' eingibt und daraus 1812 ableitet, traegt eine Jahresangabe in den Vault, die zum gelieferten Digitalisat nicht passt — genau der Fehler, den AC4 verbietet."
+      "notes": "Das Digitalisat traegt 1864 (Dieterichsche Buchhandlung), nicht 1812. Wer 'Kinder- und Hausmärchen' eingibt und daraus 1812 ableitet, traegt eine Jahresangabe in den Vault, die zum gelieferten Digitalisat nicht passt — genau der Fehler, den AC4 verbietet.",
+      "site": "mdz",
+      "agent_note_840": "Aufgezeichnet mit dem damaligen Agenten mdz-fetcher. Seit Issue #840 fuehrt derselbe Zugriffsweg ueber den Ultimate Fetcher generic-fetcher mit site_config config/browser_guides/mdz.md. Der historische Datensatz bleibt unveraendert; fuer die Kopplung an den Eval-Fall ist das additive Feld 'site' massgeblich."
     }
   ]
 }
