@@ -75,8 +75,10 @@ Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzur
 
 ### Schritt 2 — Skill laden
 
-Skill `skills/word-export/SKILL.md` wird geladen (Backend-Präflight,
-Fehlerpfade, Abgrenzung zu `latex-export`/`citation-extraction`/`submission-checker`).
+Skill `skills/word-export/SKILL.md` wird geladen (nur Trigger-Wrapper,
+prüft Vorbedingungen über `skills/_common/preamble.md`). Ablauflogik,
+Fehlerpfade und Abgrenzung zu `latex-export`/`citation-extraction`/
+`submission-checker` stehen ausschließlich in diesem Command (siehe unten).
 
 ### Schritt 3 — Kapitel + Bibliografie vorbereiten
 
@@ -120,8 +122,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/word-export/scripts/render_docx.py" \
 ```
 
 Das Skript erzeugt die Datei deterministisch (kein Freihand-Rendern): echte
-Formatvorlagen `Heading 1`…`Heading 6` aus den Markdown-Ebenen `#`…`######`,
-Word-native Inhaltsverzeichnis-Feldfunktion, Titelblatt aus `context`,
+Formatvorlagen `HeadingLevel.HEADING_1`…`HEADING_6` aus den Markdown-Ebenen
+`#`…`######`, niemals manuelles Fett/Größe. Dazu Word-native
+Inhaltsverzeichnis-Feldfunktion, Titelblatt aus `context`,
 Literaturverzeichnis **zeichengenau** aus `bibliography` und eidesstattliche
 Erklärung. Bei `--format pdf` konvertiert es dieselbe `.docx` per
 `soffice --headless --convert-to pdf`; fehlt LibreOffice, bleibt die `.docx`
@@ -140,6 +143,38 @@ bereits eine vollständige, in Word öffenbare Datei.
 ### Schritt 6 — Ergebnis zeigen
 
 Pfad(e) der erzeugten Datei(en), Kapitelanzahl, Anzahl Literatureinträge.
+
+## Abgrenzung
+
+- **`latex-export`**: paralleler Renderer für `.tex`/`.bib`, teilt sich die
+  Vault-Bibliografie-Auswahl. Für LaTeX/biblatex → `latex-export`.
+- **`citation-extraction`**: definiert die Zitierstil-Regeln (`references/*.md`).
+  `word-export` lädt diese Regeln, definiert keine eigenen.
+- **`slide-export`**: Foliensatz aus denselben Kapiteln, eigener Skill (siehe dort).
+- **`submission-checker`**: prüft die fertige Abgabedatei gegen Hochschul-Formalia
+  (Seitenränder, Pflichtabschnitte). `word-export` erzeugt die Formatvorlagen-
+  Struktur, die `submission-checker` danach prüft — keine doppelte
+  Formalia-Logik.
+
+## Fehlerpfade
+
+- **Backend fehlt:** Siehe „Word-Backend" oben — Abbruch mit Installationshinweis,
+  kein roher Tool-Fehler.
+- **Vault leer:** Leeres Literaturverzeichnis + Meldung „Vault leer – Papers via
+  `add` hinzufügen." (kein Abbruch, Kapitel werden trotzdem exportiert).
+- **Template nicht gefunden:** Titelblatt ohne Hochschulvorlage (generischer
+  Platzhalter) + Meldung „Template `<uni>` fehlt.“ — kein Absturz.
+- **`soffice`/LibreOffice fehlt (`--format pdf`):** `.docx` wird trotzdem
+  geschrieben, PDF-Konvertierung übersprungen + Meldung „LibreOffice (`soffice`)
+  nicht gefunden — PDF-Konvertierung übersprungen, `.docx` verfügbar."
+- **Zitierstil-Referenzdatei fehlt:** `collect_references.load_style_rules()`
+  wirft `StyleRulesNotFoundError` mit lesbarer Meldung statt Stacktrace.
+- **`python-docx` fehlt:** `render_docx.py` meldet „FEHLER: Das Python-Paket
+  'python-docx' ist nicht installiert …" mit Nachinstallations-Hinweis statt
+  eines `ImportError`-Tracebacks (AC6).
+- **`bibliography` fehlt trotz gefüllten Vaults:** `render_docx.py` bricht mit
+  `FEHLER:` ab und nennt den fehlenden Schritt. Bewusst kein Fallback: ein
+  Literaturverzeichnis in einem nicht belegten Format wäre Fabrikation.
 
 ## Abhängigkeiten
 
