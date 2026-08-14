@@ -104,6 +104,17 @@ Warte auf das Ergebnis. Das Ergebnis hat immer das Schema:
 }
 ```
 
+   **Schlaegt der `vault_add_paper`-Aufruf fehl** (Issue #884): der Vault
+   prueft `pdf_path` selbst gegen die Magic-Bytes `%PDF`, bevor er den
+   Eintrag schreibt — unabhaengig davon, was der Subagent bereits selbst
+   geprueft hat. Meldet das Tool einen Fehler ("keine gueltige PDF-Datei"),
+   ist die unter `file_path` gespeicherte Datei trotz `status: success`
+   des Subagenten keine echte PDF (z. B. eine HTML-Fehlerseite, die eine
+   vorgelagerte Pruefung durchgerutscht ist). In diesem Fall: **keinen**
+   Vault-Eintrag anlegen, dem User den Fehlertext des Tools als Grund
+   melden statt `status: success` zu behaupten, und den Fund wie
+   `pickup_required` behandeln.
+
    `result.edition` (von book-fetcher gemeldet, Freitext "Jahr/Ausgabe/Verlag
    DIESES Digitalisats" — siehe `agents/book-fetcher.md`/
    `agents/hathitrust-fetcher.md` etc.) NICHT unveraendert als Freitext-Blob

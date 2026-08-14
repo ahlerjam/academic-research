@@ -123,7 +123,16 @@ setzen, Download-Link per `click_at_xy(...)` klicken, warten bis keine
 `.crdownload`-Teildatei mehr liegt — vollstaendiges Rezept in
 `config/browser_guides/_cli.md`.
 
-Verifiziere nach Download: Datei existiert und hat Groesse > 0 Bytes.
+Verifiziere nach Download (Issue #884 — die groesste Luecke im Repo war
+hier: bislang keinerlei Inhaltspruefung, nur „existiert"):
+- Datei existiert.
+- Erste 4 Bytes = `%PDF` (Read-Tool). Eine HTML-Fehlerseite (z.B. `<html>`)
+  darf NICHT als PDF gespeichert bleiben.
+- Groesse >= 2 KB.
+
+Erfuellt die Datei eine der Bedingungen nicht: Datei loeschen, Schritt als
+gescheitert werten (siehe Output-Schema unten, `status: error` mit Grund),
+NICHT `status: success` melden.
 
 ---
 
