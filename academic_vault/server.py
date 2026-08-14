@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from . import quote_match
 from . import retraction as _retraction
 from .db import (
     _UNSET,
@@ -1866,6 +1865,14 @@ def match_quote_wording(
         ``{"error": "..."}``, wenn genau dieser Kandidat scheitert -- ein
         kaputter Eintrag entwertet den Batch nicht.
     """
+    # Lazy import: quote_match zieht rapidfuzz nach (Muster wie
+    # _verify_local_verbatim/#512, resolve_quote_context/#520) -- ein
+    # Modulkopf-Import haette rapidfuzz zur harten Voraussetzung jedes
+    # server.py-Imports gemacht, u.a. im schlanken MCP-Smoke-Test-venv
+    # (nur mcp==1.28.1, siehe ci.yml), und dort den Serverstart zum Absturz
+    # gebracht.
+    from . import quote_match
+
     db = VaultDB(db_path)
     _ensure_schema_for_read(db_path)
     snapshot = db.quotes_snapshot_for_wording(
