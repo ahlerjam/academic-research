@@ -62,6 +62,13 @@ VALID_DECISIONS: dict[str, tuple[str, ...]] = {
 #: Felder, die eine Einzelfall-Rückgabe des Subagents mitbringen darf.
 OPTIONAL_DECISION_FIELDS = ("criterion", "confidence", "evidence")
 
+#: Herkunft einer Ledger-Zeile (#892). ``rule`` markiert einen mechanischen
+#: Ausschluss aus dem Vorfilter: er zählt in PRISMA voll mit, ist aber kein
+#: Gutachterurteil und bleibt aus Paarbildung/Kappa/Dissens heraus.
+DECIDED_BY_AGENT = "agent"
+DECIDED_BY_RULE = "rule"
+DECIDED_BY_HUMAN = "human"
+
 # ---------------------------------------------------------------------------
 # Parallelitäts-Limit
 # ---------------------------------------------------------------------------
@@ -244,6 +251,7 @@ def record_decision(
     wave: int = 1,
     round: int = 1,  # noqa: A002 - Fachbegriff aus dem Issue, siehe SKILL.md
     db_path: str | None = None,
+    decided_by: str = DECIDED_BY_AGENT,
 ) -> dict[str, Any]:
     """Protokolliert eine Einzelfall-Entscheidung und schreibt die Zielstruktur.
 
@@ -261,6 +269,17 @@ def record_decision(
     wäre ein voreiliger Vault-Schreibzugriff, den ein späterer Dissens nicht
     mehr zurücknehmen kann. Der Vault-Schreibzugriff läuft dort stattdessen
     über ``commit_double_screening()`` nach Auflösung aller Dissensfälle.
+
+    ``decided_by`` unterscheidet die Herkunft der Zeile (#892):
+    ``"agent"`` (Default, ein Modellurteil) oder ``"rule"`` (ein mechanischer
+    Ausschluss aus ``screening_prefilter.py``). Regel-Zeilen zählen in
+    ``merge()``/PRISMA voll mit, bleiben aber aus Paarbildung, Kappa und
+    Dissens heraus — ein Kriterienabgleich ist kein zweiter Gutachter, und
+    seine Zeile darf die Übereinstimmungsmessung nicht verfälschen.
+
+    Für Regel-Ausschlüsse ist ``db_path`` auch bei aktivem Doppel-Screening
+    korrekt: es gibt für sie keine zweite Runde und damit keinen Dissens, der
+    einen Vault-Eintrag nachträglich zurücknehmen müsste.
     """
     validated = validate_decision(decision, stage=stage)
     paper_id = validated["paper_id"]
@@ -282,7 +301,7 @@ def record_decision(
         "agent": agent,
         "wave": int(wave),
         "round": round,
-        "decided_by": "agent",
+        "decided_by": decided_by,
         "ts": int(time.time()),
     }
     path = ledger_path(session_dir)
@@ -438,13 +457,32 @@ def merge(session_dir: str | Path, stage: str = STAGE_SCREENING) -> dict[str, li
 # ---------------------------------------------------------------------------
 
 
+def rule_rows(session_dir: str | Path, stage: str = STAGE_SCREENING) -> dict[str, dict[str, Any]]:
+    """Mechanische Ausschlüsse einer Stufe nach ``paper_id`` (#892).
+
+    Sie stammen aus ``screening_prefilter.py``, nicht aus einem Gutachter —
+    darum werden sie überall dort gesondert behandelt, wo zwei Urteile
+    verglichen werden.
+    """
+    return {
+        entry["paper_id"]: entry
+        for entry in read_ledger(session_dir)
+        if entry.get("stage") == stage and entry.get("decided_by") == DECIDED_BY_RULE
+    }
+
+
 def _double_screening_pairs(
     session_dir: str | Path, stage: str = STAGE_SCREENING
 ) -> dict[str, dict[int | str, dict[str, Any]]]:
-    """Gruppiert Ledger-Zeilen einer Stufe nach ``paper_id`` -> ``round`` -> Zeile."""
+    """Gruppiert Gutachter-Zeilen einer Stufe nach ``paper_id`` -> ``round`` -> Zeile.
+
+    Mechanische Zeilen (``decided_by == "rule"``, #892) bleiben draußen: sie
+    sind kein Runden-Urteil, und ein Kriterienabgleich, der als „Runde 1"
+    gälte, würde Kappa, Paarbildung und Dissens verfälschen.
+    """
     by_paper: dict[str, dict[int | str, dict[str, Any]]] = {}
     for entry in read_ledger(session_dir):
-        if entry.get("stage") != stage:
+        if entry.get("stage") != stage or entry.get("decided_by") == DECIDED_BY_RULE:
             continue
         by_paper.setdefault(entry["paper_id"], {})[_row_round(entry)] = entry
     return by_paper
@@ -557,8 +595,13 @@ def merge_double(session_dir: str | Path, stage: str = STAGE_SCREENING) -> dict[
 
     Papiere mit nur einer Runde (Runde 2 noch offen) tauchen in keinem Bucket
     auf — sie sind schlicht noch nicht konsolidierbar.
+
+    Mechanische Ausschlüsse (#892) haben keine zweite Runde und werden darum
+    direkt in ``exclude`` übernommen. Sie sind entschieden — sonst fehlten sie
+    im PRISMA-Fluss, obwohl sie protokolliert im Ledger stehen.
     """
     buckets: dict[str, list[str]] = {"include": [], "exclude": [], "unclear": [], "dissent": []}
+    buckets["exclude"].extend(sorted(rule_rows(session_dir, stage=stage)))
     for paper_id, rounds in _double_screening_pairs(session_dir, stage=stage).items():
         r1, r2 = rounds.get(1), rounds.get(2)
         if r1 is None or r2 is None:
@@ -591,7 +634,14 @@ def commit_double_screening(
     if db_path:
         # Lookup-Datenstruktur nach paper_id für Gründe
         pairs = _double_screening_pairs(session_dir, stage=stage)
+        rules = rule_rows(session_dir, stage=stage)
         for paper_id in buckets["exclude"]:
+            # Mechanischer Ausschluss (#892): der Grund steht in der Regel-Zeile,
+            # es gibt keine Runden zu konsolidieren.
+            rule = rules.get(paper_id)
+            if rule is not None:
+                _add_excluded_source(db_path, paper_id, f"{stage}: {rule.get('reason', '')}")
+                continue
             # Bestimme den verwendeten Grund basierend auf Konsolidierungslogik
             rounds = pairs.get(paper_id, {})
             r1, r2 = rounds.get(1), rounds.get(2)

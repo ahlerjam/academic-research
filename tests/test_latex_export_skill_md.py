@@ -1,4 +1,9 @@
-"""Regressions-Tests fuer skills/latex-export/SKILL.md (#170).
+"""Regressions-Tests fuer commands/latex.md (#170, umgezogen von SKILL.md in #843).
+
+`skills/latex-export/SKILL.md` ist seit #843 ein reiner Trigger-Wrapper ohne
+eigene Ablauflogik (Muster `literature-excel` -> `commands/excel.md`); die
+hier geprueften Inhalte (Skript-Pfade, Abgrenzung, Fehlerpfade) leben jetzt
+in `commands/latex.md`.
 
 Prueft:
 - Skript-Pfade enthalten ${CLAUDE_PLUGIN_ROOT} (nicht relativ)
@@ -11,12 +16,12 @@ from pathlib import Path
 
 import pytest
 
-SKILL_MD = Path(__file__).parent.parent / "skills" / "latex-export" / "SKILL.md"
+COMMAND_MD = Path(__file__).parent.parent / "commands" / "latex.md"
 
 
 @pytest.fixture(scope="module")
 def skill_text():
-    return SKILL_MD.read_text(encoding="utf-8")
+    return COMMAND_MD.read_text(encoding="utf-8")
 
 
 class TestSkriptPfade:
@@ -25,7 +30,7 @@ class TestSkriptPfade:
     def test_render_tex_uses_plugin_root(self, skill_text):
         """render_tex.py-Pfad muss ${CLAUDE_PLUGIN_ROOT} enthalten."""
         assert "${CLAUDE_PLUGIN_ROOT}" in skill_text, (
-            "SKILL.md: Skript-Pfade sollen ${CLAUDE_PLUGIN_ROOT}/... verwenden, "
+            "commands/latex.md: Skript-Pfade sollen ${CLAUDE_PLUGIN_ROOT}/... verwenden, "
             "nicht relative Pfade wie 'skills/latex-export/scripts/render_tex.py'."
         )
 
@@ -39,7 +44,7 @@ class TestSkriptPfade:
             skill_text,
         )
         assert bare_relative is None, (
-            "SKILL.md: relativer Pfad 'skills/latex-export/scripts/' gefunden "
+            "commands/latex.md: relativer Pfad 'skills/latex-export/scripts/' gefunden "
             "ohne '${CLAUDE_PLUGIN_ROOT}/' Praefix."
         )
 
@@ -48,20 +53,20 @@ class TestAbgrenzungCitationExtraction:
     """citation-extraction-Abgrenzung muss explizit dokumentiert sein."""
 
     def test_citation_extraction_mentioned(self, skill_text):
-        """SKILL.md muss 'citation-extraction' erwaehnen."""
+        """commands/latex.md muss 'citation-extraction' erwaehnen."""
         assert "citation-extraction" in skill_text, (
-            "SKILL.md: Abgrenzung zu citation-extraction fehlt. "
+            "commands/latex.md: Abgrenzung zu citation-extraction fehlt. "
             "Wann latex-export vs. citation-extraction verwenden? Undokumentiert."
         )
 
     def test_abgrenzung_section_or_hint_present(self, skill_text):
-        """SKILL.md muss einen Abgrenzungshinweis zu citation-extraction enthalten."""
+        """commands/latex.md muss einen Abgrenzungshinweis zu citation-extraction enthalten."""
         lower = skill_text.lower()
         has_abgrenzung = (
             "abgrenzung" in lower or "nicht triggern" in lower or "vs." in lower or "statt" in lower
         ) and "citation-extraction" in skill_text
         assert has_abgrenzung, (
-            "SKILL.md: Kein Abgrenzungshinweis zu citation-extraction gefunden. "
+            "commands/latex.md: Kein Abgrenzungshinweis zu citation-extraction gefunden. "
             "Ergaenze z.B. einen 'Nicht triggern fuer' oder 'Abgrenzung'-Abschnitt."
         )
 
@@ -82,7 +87,7 @@ class TestFehlerpfade:
             )
         )
         assert has_pandoc_error, (
-            "SKILL.md: Kein Pandoc-not-found-Fehlerpfad dokumentiert. "
+            "commands/latex.md: Kein Pandoc-not-found-Fehlerpfad dokumentiert. "
             "Ergaenze Fehlerpfad-Sektion mit Pandoc-Detection und Custom-Renderer-Fallback."
         )
 
@@ -99,7 +104,7 @@ class TestFehlerpfade:
             or ("vault" in lower and ("leer" in lower or "empty" in lower))
         )
         assert has_vault_empty, (
-            "SKILL.md: Kein Vault-leer-Fehlerpfad dokumentiert. "
+            "commands/latex.md: Kein Vault-leer-Fehlerpfad dokumentiert. "
             "Ergaenze Fallback wenn Vault keine Papers enthaelt."
         )
 
@@ -117,7 +122,7 @@ class TestFehlerpfade:
             )
         )
         assert has_template_error, (
-            "SKILL.md: Kein Template-not-found-Fehlerpfad dokumentiert. "
+            "commands/latex.md: Kein Template-not-found-Fehlerpfad dokumentiert. "
             "Ergaenze Fallback wenn uni-Template nicht gefunden wird."
         )
 
@@ -132,5 +137,5 @@ class TestFehlerpfade:
             or "## fallbacks" in lower
         )
         assert has_section, (
-            "SKILL.md: Keine Fehlerpfad-/Troubleshooting-Sektion (## Fehlerpfade o.ae.) gefunden."
+            "commands/latex.md: Keine Fehlerpfad-/Troubleshooting-Sektion (## Fehlerpfade o.ae.) gefunden."
         )
