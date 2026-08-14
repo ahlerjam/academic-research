@@ -104,11 +104,22 @@ def connection_ready(checks: dict[str, bool]) -> bool:
 
 
 def preflight_ready(checks: dict[str, bool]) -> bool:
-    """Entschaerfte Pruefung fuer Preflight: True nur, wenn der Daemon bereits
-    laeuft (und damit prinzipiell verbinden kann). Active-Connections koennen
-    noch nicht da sein, wenn der Nutzer den Chrome-Dialog noch nicht bestaetigt
-    hat — das ist kein Grund, den Browser-Lauf abzubrechen."""
-    return bool(checks.get("daemon_alive"))
+    """Pruefung fuer Preflight: der Daemon muss laufen, UND falls der Doctor
+    etwas zu aktiven Verbindungen sagt, muss das ein ``[ok]`` sein.
+
+    Issue #907 trat exakt im Zustand ``daemon alive`` + ``[FAIL] active
+    browser connections — 0`` auf (P1-Review PR #923) — dieser Zustand darf
+    nicht mehr als bereit gelten, sonst startet der Modul-Loop trotzdem und
+    stirbt mittendrin mit ``permission-blocked``. Fehlt die
+    ``active_browser_connections``-Zeile im Doctor-Snapshot dagegen
+    komplett (kein Key, z.B. andere CLI-Version), bleibt der lenient
+    Fallback auf ``daemon_alive`` bestehen — dafuer war die urspruengliche
+    Kulanz gedacht, nicht fuer ein explizites ``[FAIL]``."""
+    if not checks.get("daemon_alive"):
+        return False
+    if "active_browser_connections" not in checks:
+        return True
+    return bool(checks["active_browser_connections"])
 
 
 def cloud_available(checks: dict[str, bool]) -> bool:
@@ -117,18 +128,38 @@ def cloud_available(checks: dict[str, bool]) -> bool:
     return bool(checks.get("browser_use_cloud_auth"))
 
 
-def choose_method(interactive: bool, checks: dict[str, bool]) -> str:
+CLOUD_NOT_AUTHENTICATED_MESSAGE = (
+    "Cloud-Browser nicht verfuegbar: 'browser-use auth login' ausfuehren und "
+    "danach erneut '--setup --force' aufrufen. Bleibe vorerst beim vermerkten "
+    "Weg."
+)
+
+
+def choose_method(
+    interactive: bool,
+    checks: dict[str, bool],
+    current_method: str | None = None,
+) -> str:
     """Ermittelt den Verbindungsweg. Cloud wird ausschliesslich bei
     explizitem interaktivem Opt-in gewaehlt (Issue #907 AC5) — nie als
     automatischer/nicht-interaktiver Default, selbst wenn Cloud-Auth laut
-    Doctor bereits verfuegbar waere."""
-    if connection_ready(checks):
-        return METHOD_LOCAL
+    Doctor bereits verfuegbar waere.
+
+    ``current_method`` ist der zuvor vermerkte Weg (falls vorhanden). Die
+    fruehere connection_ready-Abkuerzung (sofort METHOD_LOCAL, ohne
+    Rueckfrage) griff auch interaktiv — dadurch kam ein interaktives
+    ``--setup --force`` bei zufaellig gerade verbundenem lokalem Chrome nie
+    zum Prompt und ueberschrieb einen vermerkten Cloud-Weg stillschweigend
+    mit local_chrome (P1-Review PR #923). Die Abkuerzung gilt jetzt nur noch
+    im nicht-interaktiven Fall."""
     if not interactive:
         return METHOD_LOCAL
     answer = input(PROMPT).strip()
-    if answer == "2" and cloud_available(checks):
-        return METHOD_CLOUD
+    if answer == "2":
+        if cloud_available(checks):
+            return METHOD_CLOUD
+        print(CLOUD_NOT_AUTHENTICATED_MESSAGE)
+        return current_method if current_method in (METHOD_LOCAL, METHOD_CLOUD) else METHOD_LOCAL
     return METHOD_LOCAL
 
 
@@ -184,14 +215,15 @@ def main(
         return 0
 
     force = "--force" in args
-    if not force:
-        existing = load_state(path)
-        if existing is not None and existing.get("method"):
-            print(f"✅ Browser-Verbindungsweg bereits eingerichtet: {existing['method']}")
-            return 0
+    existing = load_state(path)
+    if not force and existing is not None and existing.get("method"):
+        print(f"✅ Browser-Verbindungsweg bereits eingerichtet: {existing['method']}")
+        return 0
+
+    current_method = existing.get("method") if isinstance(existing, dict) else None
 
     checks = parse_doctor(runner())
-    method = choose_method(interactive=is_interactive, checks=checks)
+    method = choose_method(interactive=is_interactive, checks=checks, current_method=current_method)
     record_method(method, checks, path=path)
 
     if method == METHOD_LOCAL and not connection_ready(checks):

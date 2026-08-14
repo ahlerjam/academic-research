@@ -82,8 +82,10 @@ def check(state: dict | None, checks: dict[str, bool]) -> tuple[bool, str]:
     # Default/METHOD_LOCAL (und jeder unbekannte/kuenftige Wert faellt
     # sicherheitshalber auf den lokalen Pfad zurueck statt stillschweigend
     # als Erfolg zu gelten).
-    # Fuer Preflight: daemon_alive genuegt (active_browser_connections koennen
-    # noch nicht da sein nach Setup, bis der Chrome-Dialog bestaetigt ist).
+    # preflight_ready() verlangt daemon_alive UND (falls im Doctor-Snapshot
+    # vorhanden) ein explizites [ok] bei active_browser_connections — der
+    # Zustand aus Issue #907 ([ok] daemon alive + [FAIL] active connections)
+    # gilt seit dem P1-Fix (PR #923 Review) nicht mehr als bereit.
     if preflight_ready(checks):
         return True, "ok"
     return False, LOCAL_BLOCKED_MESSAGE

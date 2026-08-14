@@ -88,6 +88,54 @@ def test_cloud_available_true_when_doctor_reports_ok():
 
 
 # ---------------------------------------------------------------------------
+# preflight_ready(): P1-Regression PR #923 Review — der Zustand, der #907
+# ausgeloest hat (Daemon laeuft, aber active_browser_connections explizit
+# False), darf nicht mehr als bereit gelten.
+# ---------------------------------------------------------------------------
+
+DOCTOR_DAEMON_OK_NO_ACTIVE_CONNECTIONS = """
+  [ok  ] chrome running
+  [ok  ] daemon alive
+  [FAIL] active browser connections — 0
+  [FAIL] Browser Use cloud auth — optional: browser-harness auth login
+"""
+
+DOCTOR_DAEMON_OK_CONNECTIONS_LINE_MISSING = """
+  [ok  ] chrome running
+  [ok  ] daemon alive
+  [FAIL] Browser Use cloud auth — optional: browser-harness auth login
+"""
+
+
+def test_preflight_ready_false_when_active_connections_explicitly_false():
+    """Genau der Zustand aus Issue #907: '[ok] chrome running'/'daemon alive'
+    bei gleichzeitig '[FAIL] active browser connections — 0'. Der Key ist
+    im Doctor-Snapshot vorhanden (nicht fehlend) und explizit False -> nicht
+    bereit."""
+    checks = bcs.parse_doctor(DOCTOR_DAEMON_OK_NO_ACTIVE_CONNECTIONS)
+    assert checks["active_browser_connections"] is False
+    assert bcs.preflight_ready(checks) is False
+
+
+def test_preflight_ready_falls_back_to_daemon_alive_when_key_missing():
+    """Fehlt die active-connections-Zeile im Doctor-Output komplett (kein
+    Key im Snapshot), bleibt der lenient Fallback auf daemon_alive bestehen
+    (P1-Empfehlung PR #923: 'nur bei fehlendem Key auf daemon_alive
+    zurueckfallen')."""
+    checks = bcs.parse_doctor(DOCTOR_DAEMON_OK_CONNECTIONS_LINE_MISSING)
+    assert "active_browser_connections" not in checks
+    assert bcs.preflight_ready(checks) is True
+
+
+def test_preflight_ready_true_when_daemon_and_connections_ok():
+    assert bcs.preflight_ready(bcs.parse_doctor(DOCTOR_READY)) is True
+
+
+def test_preflight_ready_false_when_daemon_down():
+    assert bcs.preflight_ready(bcs.parse_doctor(DOCTOR_BLOCKED)) is False
+
+
+# ---------------------------------------------------------------------------
 # choose_method(): AC5 — Cloud ist nie automatischer Default
 # ---------------------------------------------------------------------------
 
@@ -115,6 +163,69 @@ def test_choose_method_interactive_default_answer_is_local(monkeypatch):
     checks = bcs.parse_doctor(DOCTOR_CLOUD_READY)
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: "")
     assert bcs.choose_method(interactive=True, checks=checks) == bcs.METHOD_LOCAL
+
+
+# ---------------------------------------------------------------------------
+# choose_method(): P1-Regression PR #923 Review — '--setup --force' konnte
+# den Weg nicht aendern, weil die connection_ready-Abkuerzung den Prompt bei
+# bereits verbundenem lokalem Chrome immer uebersprang, auch interaktiv.
+# ---------------------------------------------------------------------------
+
+DOCTOR_LOCAL_AND_CLOUD_READY = DOCTOR_READY.replace(
+    "[FAIL] Browser Use cloud auth — optional: browser-harness auth login",
+    "[ok  ] Browser Use cloud auth",
+)
+
+
+def test_choose_method_interactive_prompts_even_when_local_already_connected(monkeypatch):
+    """Vorher: connection_ready(checks) == True liess choose_method() sofort
+    METHOD_LOCAL zurueckgeben, OHNE jemals zu fragen — auch interaktiv, auch
+    mit --force. Damit konnte ein Nutzer den Weg nie mehr aendern, sobald
+    Chrome zufaellig gerade verbunden war."""
+    checks = bcs.parse_doctor(DOCTOR_READY)  # connection_ready(checks) is True
+    asked = {"value": False}
+
+    def fake_input(*_a: object, **_k: object) -> str:
+        asked["value"] = True
+        return "1"
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    bcs.choose_method(interactive=True, checks=checks)
+    assert asked["value"] is True
+
+
+def test_choose_method_explicit_cloud_without_auth_prints_reason_instead_of_silent_fallback(
+    monkeypatch, capsys
+):
+    """Waehlt der Nutzer explizit '2', ist Cloud aber nicht authentifiziert,
+    darf choose_method() nicht wortlos auf local_chrome zurueckfallen."""
+    checks = bcs.parse_doctor(DOCTOR_BLOCKED)  # cloud_available(checks) is False
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: "2")
+    result = bcs.choose_method(interactive=True, checks=checks)
+    assert result == bcs.METHOD_LOCAL
+    out = capsys.readouterr().out
+    assert "auth login" in out.lower()
+
+
+def test_main_force_interactive_does_not_silently_overwrite_recorded_cloud_with_local(
+    tmp_path, monkeypatch
+):
+    """Integrationstest auf main()-Ebene: ein bereits vermerkter Cloud-Weg
+    darf durch '--setup --force' nicht stillschweigend auf local_chrome
+    zurueckfallen, nur weil Chrome gerade zufaellig lokal verbunden ist."""
+    state_path = tmp_path / "browser_connection.json"
+    bcs.record_method(bcs.METHOD_CLOUD, checks={}, path=state_path)
+
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: "2")
+    exit_code = bcs.main(
+        ["--setup", "--force"],
+        state_path=state_path,
+        doctor_runner=lambda: DOCTOR_LOCAL_AND_CLOUD_READY,
+        interactive=True,
+    )
+    assert exit_code == 0
+    state = bcs.load_state(state_path)
+    assert state["method"] == bcs.METHOD_CLOUD
 
 
 # ---------------------------------------------------------------------------
