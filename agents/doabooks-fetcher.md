@@ -16,6 +16,9 @@ browser-guide: config/browser_guides/doab.md
 
 # doabooks-fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst directory.doabooks.org wie ein Mensch. Nur browser-use.
 Kein direkter REST-API-Aufruf — auch wenn DOAB eine REST-API hat, nutzt du nur den Browser.
 
@@ -33,12 +36,12 @@ ABER: Nicht alle Eintraege haben einen direkten Download-Link — manche haben n
 
 ## Standard-Flow
 
-1. `browser-use open https://www.doabooks.org`
+1. `new_tab("https://www.doabooks.org")`
 2. Suchfeld: ISBN (bevorzugt), DOI oder Titel eingeben
-3. `browser-use state` → Suchergebnisse pruefen
+3. Suchergebnisse per `js(...)` pruefen
    - Bei 0 Treffern: `{"status": "no_match", "source_subagent": "doabooks-fetcher", "reason": "0 Treffer auf DOAB"}`
 4. Auf Treffer klicken → Metadaten-Detailseite
-5. `browser-use state` → Volltext-Link suchen:
+5. Volltext-Link ueber den AX-Baum suchen:
    - Felder: "PDF", "Download", "Publisher URL", externer Repository-Link
    - Kein Volltext-Link vorhanden → `{"status": "metadata_only", "source_subagent": "doabooks-fetcher", "url": "<detailseite-url>"}`
 6. Volltext-Link anklicken → Navigation zum externen Provider
@@ -46,7 +49,7 @@ ABER: Nicht alle Eintraege haben einen direkten Download-Link — manche haben n
    - OAPEN-Link → Download-Button auf OAPEN-Seite klicken
    - Springer/Verlag-Link → Download-Button auf Verlagsseite
    - Unbekannter Provider → DOM nach PDF-Link durchsuchen
-8. `browser-use download <pdf-link-idx> --to <output_path>`
+8. PDF-Link per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
 9. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
 
 ## OA-Filter-Logik

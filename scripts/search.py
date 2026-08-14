@@ -240,7 +240,13 @@ def _reconstruct_abstract(inverted_index: dict | None) -> str | None:
 
 
 def search_openalex(query: str, limit: int) -> list[dict[str, Any]]:
-    """Search OpenAlex works endpoint."""
+    """Search OpenAlex works endpoint.
+
+    Nutzt bewusst den `search=`-Query-Parameter, nicht die deprecated
+    Filter-Suchsyntax (`filter=default.search:`/`filter=title.search:`) --
+    siehe docs/decisions/0002-openalex-search-syntax-semantic-pricing.md
+    (#850). Beleg: https://help.openalex.org/guides/searching, Stand
+    2026-08-14."""
     url = "https://api.openalex.org/works"
     with httpx.Client(timeout=TIMEOUT) as client:
         resp = client.get(url, params={"search": query, "per-page": limit})

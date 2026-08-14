@@ -18,6 +18,9 @@ browser-guide: config/browser_guides/internetarchive.md
 
 # internetarchive-fetcher
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst archive.org (und optional openlibrary.org fuer Discovery) wie ein
 Mensch. Nur browser-use — kein curl, kein wget.
 
@@ -36,16 +39,16 @@ downloadbar — Zugriffsstufe pro Treffer aktiv pruefen.
 
 ## Standard-Flow
 
-1. `browser-use open "https://openlibrary.org/search?q=<query>"`
+1. `new_tab("https://openlibrary.org/search?q=<query>")`
    (query = ISBN, Titel oder Autor, URL-encoded; bevorzugt fuer saubere
    Edition-Metadaten)
-2. `browser-use state` → Trefferliste lesen, passende Edition waehlen
+2. Trefferliste per `js(...)` lesen, passende Edition waehlen
    - Bei 0 Treffern dort: alternativ
-     `browser-use open "https://archive.org/search?query=<query>&sin=TXT"`
+     `new_tab("https://archive.org/search?query=<query>&sin=TXT")`
    - Bei weiterhin 0 Treffern: `{"status": "no_match", "source_subagent": "internetarchive-fetcher", "reason": "0 Treffer auf archive.org/openlibrary.org"}`
 3. Zur Archive.org-Item-Detailseite navigieren
    (`archive.org/details/<identifier>`)
-4. `browser-use state` → Zugriffssignal pruefen:
+4. Zugriffssignal per `page_info()` / `js(...)` pruefen:
    - "Download Options"-Block mit PDF-Link, KEIN "Borrow"-Button → frei
    - "Borrow"-Button + In-Browser-Reader → Controlled Digital Lending
    - Der Borrow-Button ist ein Layout-Merkmal und kann fehlen, obwohl das Item
@@ -57,7 +60,7 @@ downloadbar — Zugriffsstufe pro Treffer aktiv pruefen.
 5. Frei verfuegbar:
    - "Download Options" → ggf. "SHOW ALL" klicken → `*.pdf`-Eintrag waehlen
      (nicht `_djvu.txt`, nicht `_abbyy.gz`)
-   - `browser-use download <pdf-link-idx> --to <output_path>`
+   - PDF-Link per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
 6. CDL/"Borrow"-Titel: **NICHT** den In-Browser-Reader oeffnen, **NICHT**
    versuchen Seiten zu exportieren → direkt `metadata_only`
 7. Validation bei Download: erste 4 Bytes = `%PDF`, Groesse > 10 KB
