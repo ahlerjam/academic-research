@@ -13,7 +13,7 @@ Diagramm zeigt nur das Zusammenspiel, nicht jeden einzelnen Baustein.
 
 ```mermaid
 graph TD
-    U[Du in Claude Code] --> CMD[12 Slash-Commands]
+    U[Du in Claude Code] --> CMD[13 Slash-Commands]
     U --> SK[46 Skills<br/>selbstaktivierend]
     CMD --> AG[29 Agents / Subagents]
     SK --> AG

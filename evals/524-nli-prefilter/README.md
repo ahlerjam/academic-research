@@ -38,6 +38,20 @@ zitiert englische Quellen).
 > (`config/parallel_agents.json` → `nli_prefilter_enabled: true`).
 > Bedienung und gemessene Laufzeit: `docs/reference/hooks.md`, Abschnitt
 > „NLI-Zitatscan".
+>
+> **Update #899 (13.08.2026):** Am realen Kapitel meldete der Scan 20 von 21
+> Zitaten als verdächtig (praktisch alle Fehlalarme) — Ursache war nicht die
+> Schwelle, sondern dass Zuschreibungssätze ("X berichtet, dass '…'") blind
+> gegen Entailment geprüft wurden (NLI misst Satzfolgerung, nicht
+> Zitattreue) sowie eine Satzzuordnung, die bei Zitaten mit eigenen
+> Satzzeichen oder direkt nach einer Markdown-Überschrift den falschen
+> Nachbarsatz heranzog. Beides ist in `academic_vault/nli_prefilter.py`
+> behoben (Zuschreibungssätze nur bei lexikalischem Negationsmarker
+> verdächtig, `claim_sentence_for_span` liefert nur noch den vollständig
+> umschließenden Satz oder `None`). Nachher: 0 von 21. Die Schwelle
+> `DEFAULT_THRESHOLD = 0.95` blieb unverändert — Details:
+> `docs/reference/hooks.md`, Abschnitt „NLI-Zitatscan", und der
+> Issue-#899-Kommentar.
 
 ## Ergebnis auf einen Blick
 

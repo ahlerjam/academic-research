@@ -126,16 +126,17 @@ Pro Modul:
 
 1. Lies den Guide aus `${CLAUDE_PLUGIN_ROOT}/config/browser_guides/<modul>.md` (URL, Auth-Typ, Anti-Scraping-Hinweise, datenbankspezifische Fallen).
 2. Bei Auth-Modulen (`ebscohost`, `proquest`, `opac`): folge zuerst `${CLAUDE_PLUGIN_ROOT}/config/browser_guides/han_login.md`.
-3. Steuere den Browser mit dem globalen `browser-use`-Skill (CLI-basiert, index-orientiert, keine CSS-Selektoren):
-   - `browser-use open <URL>` — Seite laden
-   - `browser-use state` — klickbare Elemente mit Index abrufen
-   - Query-Feld per Index identifizieren: `browser-use input <idx> "<QUERY>"`
-   - Suche auslösen (Enter oder Submit-Button per Index klicken): `browser-use click <idx>`
-   - Nach Warten auf Laden: `browser-use state` erneut, um Ergebnislisten auszulesen
+3. Steuere den Browser über die `browser-use`-CLI. **Aufrufform, Helfer,
+   Element-Adressierung und Download stehen in
+   `${CLAUDE_PLUGIN_ROOT}/config/browser_guides/_cli.md`** — dort nachlesen
+   statt raten. Kurz: `new_tab(<URL>)` → `wait_for_load()` → Suchfeld per
+   `fill_input(<selector>, <QUERY>)` + `press_key("Enter")` → Trefferliste per
+   `js(...)` auslesen. Buttons ohne stabilen Selektor über den AX-Baum
+   (`Accessibility.getFullAXTree` → `DOM.getBoxModel` → `click_at_xy`).
    - Bei Bedarf paginieren — maximal 2 Seiten pro Modul
 4. Ergebnisse ins `api_results.json`-Schema normalisieren (`title`, `authors`, `year`, `venue`, `doi`, `url`, `source_module`, `snippet`) und an die bestehende Ergebnisliste anhängen.
 5. Fehlerbehandlung:
-   - CAPTCHA erkannt → `browser-use screenshot` machen, User informieren, Teilergebnisse behalten.
+   - CAPTCHA erkannt → `capture_screenshot(path=…)`, User informieren, Teilergebnisse behalten.
    - Login schlägt fehl → Modul überspringen, Warnung loggen, mit nächstem Modul weitermachen.
    - Rate-Limit → 30s Pause, einmal wiederholen, dann Modul überspringen.
 
@@ -149,17 +150,68 @@ Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
   --output "$SESSION_DIR/deduped.json"
 ```
 
-### Schritt 6: Ranking (5D-Scoring + Cluster)
+### Schritt 6: Known-Item-Suche (#886)
+
+Die thematischen Queries treffen strukturbedingt oft nicht die benannten
+Grundlagenarbeiten eines Feldes — wer nach „multi-agent coordination failure
+modes" sucht, findet nicht „MetaGPT". Dieser Schritt sucht deshalb gezielt
+nach benannten Werken, statt sich auf die thematische Suche zu verlassen.
+
+```bash
+~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/known_item_search.py \
+  --deduped "$SESSION_DIR/deduped.json" \
+  --queries-file "$SESSION_DIR/queries.json" \
+  --modules crossref,openalex \
+  --report-output "$SESSION_DIR/known_item_report.json"
+```
+
+Kandidaten kommen aus zwei Quellen:
+
+1. **`known_works_queries`** aus `$SESSION_DIR/queries.json` (vom
+   `query-generator`, Schritt 2) — Titelsuchen nach seminalen Werken mit
+   Begründung.
+2. **Zitationsheuristik** — die meistzitierten Treffer der bisherigen
+   thematischen Suche als Titel-Query, plus deren häufigste gemeinsame
+   OpenAlex-`referenced_works` (eng begrenzter Lookup auf wenige Top-Treffer,
+   **kein** vollständiges Snowballing über die ganze Menge — das ist ein
+   eigener Arbeitsschritt und bewusst Out-of-Scope).
+
+Fällt die Query-Erweiterung aus (#881: `queries.json` fehlt oder
+`known_works_queries` ist leer), läuft der Schritt trotzdem — nur eben
+ausschließlich mit der Zitationsheuristik. `known_item_report.json` nennt in
+diesem Fall den Grund explizit im Feld `fallback_reason`.
+
+Treffer werden mit `found_via_known_item: true` markiert, an
+`$SESSION_DIR/deduped.json` angehängt und `dedup.py` erneut darüber laufen
+gelassen (idempotent) — die Markierung übersteht dabei auch einen Merge mit
+einem unmarkierten thematischen Duplikat (Konsolidierungsregel analog
+`is_retracted`, #618).
+
+Der Schritt meldet immer, wonach er gesucht hat (`searched_for` in
+`known_item_report.json`) und was er gefunden hat (`found` je Kandidat) —
+**auch ein Nulltreffer ist ein valides, gemeldetes Ergebnis**: er sagt etwas
+über das Feld aus (z. B. weil eine Titel-Query gegen die Volltextsuche der
+Module nicht exakt genug matcht) und darf nicht als „Werk existiert nicht"
+fehlinterpretiert werden.
+
+Im Report/Digest ausweisen:
+
+1. Wonach gesucht wurde (Kandidaten-Queries + Quelle: `known_works_queries`
+   vs. Zitationsheuristik).
+2. Was gefunden wurde, inkl. expliziter Nulltreffer.
+3. Bei Fallback: den Grund aus `fallback_reason`.
+
+### Schritt 7: Ranking (5D-Scoring + Cluster)
 
 Die Heuristik-Dimensionen (Aktualität, Qualität, Autorität, Zugang) werden von `scripts/scoring.py` berechnet (siehe `commands/score.md` → „Schritt 3+4: 4 weitere Dimensionen berechnen..."). Gesamtscore wie dort, Clusterzuweisung ebenfalls. Das Resultat in `$SESSION_DIR/ranked.json` schreiben.
 
-### Schritt 7: Interactive Mode — Phase 1 (Approval-Gate, Default)
+### Schritt 8: Interactive Mode — Phase 1 (Approval-Gate, Default)
 
-Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 9, damit der
+Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 10, damit der
 User Query-Expansion und Trefferlage sieht, bevor das teure LLM-Relevanz-Scoring
 startet.
 
-Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 8):
+Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 9):
 
 - `--interactive=off` — das dokumentierte Opt-out, stellt das Verhalten vor #537 her.
 - Nicht-interaktive bzw. headless Läufe (kein `AskUserQuestion`-Kanal verfügbar,
@@ -190,7 +242,10 @@ Anzeigen:
    unmarkiert, `is_retracted` fehlend/`null` ebenfalls unmarkiert und darf
    NICHT wie „nicht zurückgezogen" dargestellt werden — die Drei-Werte-Semantik
    (zurückgezogen / nicht zurückgezogen / unbekannt) muss in der Tabelle
-   erkennbar bleiben.
+   erkennbar bleiben. Treffer mit `found_via_known_item: true` (Schritt 6)
+   erhalten ein sichtbares Badge „🎯 Known-Item" in derselben Tabelle, damit
+   erkennbar bleibt, welche Treffer aus der gezielten Suche nach
+   Grundlagenarbeiten stammen statt aus der thematischen Suche.
 
 Dann **Approval-Gate via `AskUserQuestion`**:
 
@@ -202,7 +257,7 @@ Optionen:
 
 Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
 
-### Schritt 8: PRISMA-Zähler speichern
+### Schritt 9: PRISMA-Zähler speichern
 
 ```bash
 ~/.academic-research/venv/bin/python -c "
@@ -232,7 +287,7 @@ im Ledger protokolliert — dann statt der Handzählung:
   > "$SESSION_DIR/prisma_counters.json"
 ```
 
-### Schritt 9: Relevanz-Scoring
+### Schritt 10: Relevanz-Scoring
 
 Den `relevance-scorer`-Agent in Batches von 10 Papers starten. Das gilt
 unabhängig von der Treffermenge: auch 50, 100 oder mehr Paper laufen über
@@ -243,7 +298,7 @@ speichern.
 Das Scoring läuft vollständig in der Sitzung, ohne eigenen Modellzugang und
 ohne asynchrone Abholung (#632).
 
-### Schritt 10: Session-Index aktualisieren
+### Schritt 11: Session-Index aktualisieren
 
 Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
 im Index unter `~/.academic-research/session_index.json` fortgeschrieben
@@ -273,13 +328,15 @@ Paper (fällt das Scoring aus, ersatzweise `$SESSION_DIR/ranked.json`). Die
 Anzahl beschaffter Volltexte wird automatisch aus `$SESSION_DIR/pdfs/*.pdf`
 gezählt.
 
-### Schritt 11: Ergebnisse anzeigen
+### Schritt 12: Ergebnisse anzeigen
 
 Eine formatierte Tabelle mit Rang, Titel, Jahr, Score, Cluster und Quellmodul ausgeben.
-Treffer mit `is_retracted: true` wie in Schritt 7 sichtbar markieren („⚠ Retracted");
+Treffer mit `is_retracted: true` wie in Schritt 8 sichtbar markieren („⚠ Retracted");
 `is_retracted: false` unmarkiert, fehlend/`null` ebenfalls unmarkiert und nicht als
 „nicht zurückgezogen" ausweisen (#618). Der Hinweis führt zu keinem automatischen
-Ausschluss — die Entscheidung trifft der Mensch.
+Ausschluss — die Entscheidung trifft der Mensch. Treffer mit
+`found_via_known_item: true` erhalten dasselbe „🎯 Known-Item"-Badge wie in
+Schritt 8 (#886).
 Pfad des Session-Verzeichnisses melden.
 
 Die Kontext-Datei `./literature_state.md` im Projekt-Ordner mit neuen Statistiken aktualisieren, falls akademischer Kontext vorliegt.

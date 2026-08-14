@@ -1,5 +1,8 @@
 # KVK — Karlsruher Virtueller Katalog — Browser-Guide
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://kvk.bibliothek.kit.edu
 **Auth:** keine für Metadaten-Abfrage; Fernleihe/Bestellung verlangen Bibliothekskonto
 **Anti-Scraping:** niedrig — KVK ist öffentlicher Dienst.
@@ -16,11 +19,11 @@ Für Fernleihe / Direktbestellung (nicht automatisiert):
 
 ## Discovery-Pfad
 
-1. `browser-use open https://kvk.bibliothek.kit.edu`
+1. `new_tab("https://kvk.bibliothek.kit.edu")`
 2. Suchformular ausfüllen: ISBN (bevorzugt), Titel oder Autor.
 3. Datenbanken auswählen (Standard: HEIDI, BVB, GBV, SWB — alle aktivieren).
 4. "Suchen"-Button klicken.
-5. `browser-use state` → Ergebnisliste mit Bibliotheksbeständen prüfen.
+5. Ergebnisliste mit Bibliotheksbeständen per `js(...)` prüfen.
 6. Für jeden Treffer: Bibliotheks-Name, Standort, Signatur notieren.
 
 ## Volltext-Lokation

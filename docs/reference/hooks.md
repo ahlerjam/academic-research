@@ -640,6 +640,30 @@ berührt die Sitzung nicht.
   Rule-of-Three-Obergrenze von ~10 % für unentdeckte Fehlerraten — die
   abschließende inhaltliche Prüfung bleibt beim `quote-fidelity-auditor`.
 
+**Kalibrierung: Zuschreibungssätze, Satzzuordnung, Sprachenpaar (#899).** Ein
+Kapitelsatz der Form „X berichtet, dass ‚…'" ist eine Zuschreibung, keine
+logische Folgerung — NLI misst aber genau Satzfolgerung. Enthält der
+Kapitelsatz das Zitat selbst (praktisch immer der Fall, weil der Kapitelsatz
+der Satz UM die gefundene Zitat-Spanne ist), gilt er nur dann als
+verdächtig, wenn er einen lexikalischen Widerspruchs-/Negationsmarker trägt
+(kuratierte Liste, Deutsch und Englisch, `NEGATION_MARKERS` in
+`nli_prefilter.py`) — sonst wird die NLI-Prüfung für dieses Item ohne
+Scorer-Aufruf übersprungen. Die Satzzuordnung (`claim_sentence_for_span`)
+liefert nur noch den Satz, der die **gesamte** Zitat-Spanne umschließt, und
+behandelt Markdown-Strukturzeilen (Überschriften, Listenpunkte, Leerzeilen)
+als harte Blockgrenzen; findet sich keine eindeutig umschließende
+Satzgrenze, liefert die Funktion `None` statt eines Zeichenfenster-
+Rateversuchs — das betroffene Item bleibt im Prüfpfad, wird aber nicht per
+NLI bewertet. Gemessen am lokalen Referenzkapitel (12.08.2026): 20 von 21
+Zitaten vorher als verdächtig gemeldet, 0 von 21 danach (echter
+`BgeM3ZeroshotScorer`). Die Schwelle `DEFAULT_THRESHOLD = 0.95` bleibt
+unverändert — die gemessenen Fehlalarme gingen auf die
+Attributions-/Satzzuordnungslogik zurück, nicht auf eine für das Sprachenpaar
+(deutscher Kapitelsatz, meist englischer Quellkontext) falsch kalibrierte
+Schwelle; eine gezielte Schwellenmessung am Sprachenpaar war mangels
+negationsmarkierter Fälle im lokalen Referenzkapitel nicht möglich (siehe
+Issue-#899-Kommentar).
+
 **Regression-Harness:** `bash scripts/dev/test-nli-quote-scan-hook.sh` (fährt
 den Hook als echten Prozess mit Stub-Interpreter; CI-blockierend, analog
 `test-pretooluse-blocker.sh`).
