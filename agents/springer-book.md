@@ -12,6 +12,9 @@ browser-guide: config/browser_guides/springer.md
 
 # springer-book
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst link.springer.com wie ein Mensch. Nur browser-use — kein curl, kein wget.
 
 **Lies zuerst:** `config/browser_guides/springer.md` (Buch-Download-Block)
@@ -38,21 +41,19 @@ Wenn NICHT enthalten:
 
 ## Discovery-Flow
 
-1. ```
-   browser-use open https://link.springer.com/search?query=<URL-encoded-query>&content-type=Book
-   ```
+1. `new_tab("https://link.springer.com/search?query=<URL-encoded-query>&content-type=Book")`
    (query = ISBN, DOI oder Titel, URL-encoded; bei ISBN bevorzugt)
-2. `browser-use state` → Treffer-Liste lesen
+2. Treffer-Liste per `js(...)` lesen
 3. Plausibelsten Treffer waehlen: Titel + Autor + Jahr matcht Input
    - Bei 0 Treffern:
      ```json
      {"status": "no_match", "source_subagent": "springer-book", "reason": "0 Treffer fuer <query>"}
      ```
-4. `browser-use click <idx>` auf Buch-Titel → `/book/...`-Seite
+4. Buch-Titel ueber den AX-Baum finden und `click_at_xy(...)` → `/book/...`-Seite
 
 ## Paywall-Erkennung und Auth-Trigger
 
-Auf der Buchseite `browser-use state` pruefen:
+Auf der Buchseite den Seitenzustand (`page_info()`, `js(...)`) pruefen:
 
 **Auth-Trigger-Bedingungen** (eine davon genuegt):
 - "Access options"-Button sichtbar (statt Download-Button)
@@ -81,12 +82,9 @@ auth-helper gibt zurueck:
 
 Nach erfolgreicher Auth oder bei OA-Buch:
 
-1. `browser-use state` → "Download book PDF"-Button suchen
+1. "Download book PDF"-Button ueber den AX-Baum suchen
 2. Button gefunden:
-   ```
-   browser-use click <download-btn-idx>
-   browser-use download <pdf-idx> --to <output_path>
-   ```
+   Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`).
 3. PDF-Validierung:
    ```python
    # Read tool: erste 4 Bytes pruefen

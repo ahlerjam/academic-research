@@ -1,11 +1,14 @@
 # JSTOR — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://www.jstor.org
 **Auth:** Shibboleth/OpenAthens (Institutionszugang) ODER kein Login für
 OA-Titel
 **Anti-Scraping:** HOCH — JSTORs Nutzungsbedingungen (`about.jstor.org/terms`)
 untersagen ausdrücklich automatisiertes/systematisches Herunterladen,
-Web-Scraping und Bulk-Extraktion. Nur menschliches Tempo über browser-use,
+Web-Scraping und Bulk-Extraktion. Nur menschliches Tempo über die CLI,
 niemals Skript-Schleifen über mehrere Titel.
 
 ## Login-Flow
@@ -17,9 +20,9 @@ DRM.
 
 **Für lizenzierte Titel (Institutionszugang):**
 
-1. `browser-use open https://www.jstor.org`
+1. `new_tab("https://www.jstor.org")`
 2. "Log In"-Button oben rechts klicken.
-3. `browser-use state` → "Access through your institution" suchen, klicken
+3. "Access through your institution" über den AX-Baum finden und klicken
    (führt zu `jstor.org/institutionSearch`).
 4. Institution im Suchfeld eingeben und auswählen.
 5. Hochschul-Login-Formular ausfüllen (Credentials aus Uni-Profil,
@@ -33,7 +36,7 @@ frei — nur der Institution-Pfad tut das.
 ## Discovery-Pfad
 
 1. Suchfeld im Header: Titel, ISBN oder DOI eingeben.
-2. `browser-use state` → Filter "Item Type: Book" setzen.
+2. Filter "Item Type: Book" setzen.
 3. "Open Access"-Badge in Ergebniszeile prüfen.
 4. Auf Treffer klicken → Buchdetailseite öffnet (`/stable/<id>` oder
    `/book/<id>`).
@@ -47,7 +50,7 @@ frei — nur der Institution-Pfad tut das.
 - **JSTOR liefert Bücher überwiegend kapitelweise** — ein einzelner
   "Gesamtbuch-Download"-Button ist der Ausnahmefall, nicht die Regel. Jedes
   heruntergeladene Kapitel zählt als Erfolg mit `chapter_only: true`.
-- `browser-use state` → Button-Index identifizieren.
+- Button über den AX-Baum finden.
 
 ## Tempo und Anti-Scraping
 
@@ -62,7 +65,7 @@ frei — nur der Institution-Pfad tut das.
   - Auth-Wall / "Access options" statt Download-Button sichtbar.
   - Institutionszugang nicht konfiguriert oder Shibboleth fehlgeschlagen.
   - Nur Online-Lese-Option vorhanden (kein PDF-Download).
-- `status: captcha` wenn CAPTCHA in `browser-use state` erkennbar →
+- `status: captcha` wenn CAPTCHA in `page_info()` erkennbar →
   Screenshot sichern, User informieren.
 - `status: no_match` wenn Suche 0 Treffer liefert.
 

@@ -8,10 +8,15 @@ im Korpus landen. Deckt die Wege ab, die vor diesem Issue ungeprueft waren:
 2. ``academic_vault.server.add_paper``/``update_pdf_path`` (Vault-Gate) --
    war komplett ungeprueft; schliesst zugleich die Wege ueber
    ``commands/fetch.md`` und manuelle/direkte Aufrufe.
+3. Der arXiv-Direktweg (Tier 0, Issue #885) -- kam nach #884 dazu und ist der
+   einzige Tier, dessen PDF-Adresse geraten und von keinem Nachweisdienst
+   bestaetigt wird. Er muss derselben Pruefung unterliegen wie jeder andere
+   Tier (siehe ``TestArxivDirectTierIsGated``).
 """
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -292,3 +297,117 @@ class TestUpdatePdfPathVaultGate:
             csl_json='{"type": "article-journal", "title": "T"}',
         )
         update_pdf_path(db_path, "p7", str(tmp_path / "spaeter.pdf"))
+
+
+# ---------------------------------------------------------------------------
+# arXiv-Direktweg (Tier 0, Issue #885) unterliegt demselben Gate
+# ---------------------------------------------------------------------------
+
+#: DOI im arXiv-Muster -- loest in resolve_pdf_url() Tier 0 aus.
+ARXIV_DOI = "10.48550/arxiv.2301.12345"
+ARXIV_PDF_URL = "https://arxiv.org/pdf/2301.12345"
+
+
+class _FakeResolveClient:
+    """httpx.Client-Ersatz fuer ``action_resolve``.
+
+    ``get()`` wirft: beweist, dass Tier 0 ohne Nachweisdienst auskommt
+    (Issue #885). ``stream()`` liefert den vorgegebenen Rumpf unter HTTP 200
+    -- so wie arxiv.org es bei einer Fehler-/Rate-Limit-Seite taete.
+    """
+
+    def __init__(self, chunks: list[bytes]):
+        self._chunks = chunks
+        self.streamed_urls: list[str] = []
+
+    def get(self, *args, **kwargs):
+        raise AssertionError("Tier 0 darf keinen Nachweisdienst befragen (Issue #885)")
+
+    def stream(self, method, url, timeout=None):
+        self.streamed_urls.append(url)
+        return _FakeStreamResponse(self._chunks)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+
+def _run_action_resolve(tmp_path, monkeypatch, chunks: list[bytes]):
+    """Faehrt ``action_resolve`` fuer ein arXiv-DOI-Paper mit gefaktem Client."""
+    import pdf as pdf_module
+
+    papers_path = tmp_path / "papers.json"
+    papers_path.write_text(
+        json.dumps([{"doi": ARXIV_DOI, "title": "An arXiv paper", "type": "article-journal"}]),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "pdfs"
+    status_path = tmp_path / "pdf_status.json"
+
+    client = _FakeResolveClient(chunks)
+    monkeypatch.setattr(pdf_module.httpx, "Client", lambda *a, **kw: client)
+
+    rc = pdf_module.action_resolve(
+        str(papers_path), str(output_dir), str(status_path), "test@example.com"
+    )
+    assert rc == 0
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    return client, output_dir, status[ARXIV_DOI]
+
+
+class TestArxivDirectTierIsGated:
+    """Semantische Klammer zwischen #884 und #885.
+
+    Tier 0 baut die PDF-Adresse allein aus der DOI -- kein Nachweisdienst
+    bestaetigt, dass dort wirklich ein PDF liegt. Genau deshalb muss dieser
+    Weg durch ``download_pdf()`` laufen. Faellt die Pruefung dort weg oder
+    speichert Tier 0 kuenftig an ``download_pdf()`` vorbei, werden diese
+    Tests rot.
+    """
+
+    def test_arxiv_direct_html_200_is_rejected_and_no_file_written(self, tmp_path, monkeypatch):
+        """Kernfall aus #884 auf dem neuen Weg aus #885: arxiv.org liefert
+        HTTP 200 mit einer HTML-Seite -- die darf nicht im PDF-Verzeichnis
+        der Session landen."""
+        client, output_dir, entry = _run_action_resolve(
+            tmp_path, monkeypatch, [b"<!DOCTYPE html><html><body>Rate limited</body></html>"]
+        )
+
+        # Der Weg war wirklich Tier 0 (sonst prueft der Test etwas anderes).
+        assert client.streamed_urls == [ARXIV_PDF_URL]
+        assert entry["source"] == "arxiv_direct"
+
+        assert entry["success"] is False
+        assert entry["pdf_path"] is None
+        assert "Not a valid PDF" in entry["error"]
+        assert list(output_dir.glob("*.pdf")) == []
+
+    def test_arxiv_direct_truncated_pdf_is_rejected(self, tmp_path, monkeypatch):
+        """Auch die Mindestgroesse aus #884 gilt auf dem arXiv-Direktweg."""
+        import pdf as pdf_module
+
+        client, output_dir, entry = _run_action_resolve(
+            tmp_path, monkeypatch, [b"%PDF-1.4\n" + b"x" * 50]
+        )
+
+        assert client.streamed_urls == [ARXIV_PDF_URL]
+        assert entry["source"] == "arxiv_direct"
+        assert entry["success"] is False
+        assert "zu klein" in entry["error"]
+        assert str(pdf_module.MIN_PDF_SIZE) in entry["error"]
+        assert list(output_dir.glob("*.pdf")) == []
+
+    def test_arxiv_direct_real_pdf_still_succeeds(self, tmp_path, monkeypatch):
+        """Gegenprobe: #885 bleibt funktionsfaehig -- ein echtes arXiv-PDF
+        wird ohne Nachweisdienst beschafft und geschrieben."""
+        body = b"%PDF-1.4\n" + b"x" * 4000
+        client, output_dir, entry = _run_action_resolve(tmp_path, monkeypatch, [body])
+
+        assert client.streamed_urls == [ARXIV_PDF_URL]
+        assert entry["source"] == "arxiv_direct"
+        assert entry["success"] is True
+        written = list(output_dir.glob("*.pdf"))
+        assert len(written) == 1
+        assert written[0].read_bytes() == body

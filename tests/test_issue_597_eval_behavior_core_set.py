@@ -70,18 +70,43 @@ def _pytest_step() -> dict:
 
 
 def test_workflow_has_weekly_schedule_trigger_alongside_workflow_dispatch():
+    """AC1: mindestens EIN woechentlicher Cron neben workflow_dispatch.
+
+    Seit Issue #848 kann ein zweiter, taeglicher Smoke-Cron danebenstehen
+    (dow == '*', s. test_workflow_has_daily_smoke_schedule_trigger unten) --
+    dieser Guard sucht darum gezielt nach einem woechentlichen Eintrag
+    (fixer Wochentag) statt anzunehmen, dass genau ein Cron existiert."""
     trigger = _trigger(_load_workflow())
     assert "workflow_dispatch" in trigger, (
         "eval-behavior.yml muss workflow_dispatch behalten (Issue #597, AC1/AC3)."
     )
     assert "schedule" in trigger, "eval-behavior.yml braucht einen schedule-Trigger (AC1)."
     crons = [entry.get("cron") for entry in trigger["schedule"]]
-    assert len(crons) == 1, f"Erwartet genau einen Cron-Eintrag, bekam {crons!r}."
-    fields = crons[0].split()
-    assert len(fields) == 5, f"Kein gueltiger 5-Felder-Cron-Ausdruck: {crons[0]!r}."
-    minute, hour, dom, month, dow = fields
-    assert dow != "*", f"Wochentag-Feld darf nicht '*' sein (waere taeglich): {crons[0]!r}."
-    assert minute != "*" and hour != "*", f"Uhrzeit muss fixiert sein: {crons[0]!r}."
+    assert crons, "eval-behavior.yml braucht mindestens einen Cron-Eintrag (Issue #597 AC1)."
+    weekly_crons = []
+    for cron in crons:
+        fields = cron.split()
+        assert len(fields) == 5, f"Kein gueltiger 5-Felder-Cron-Ausdruck: {cron!r}."
+        minute, hour, dom, month, dow = fields
+        assert minute != "*" and hour != "*", f"Uhrzeit muss fixiert sein: {cron!r}."
+        if dow != "*":
+            weekly_crons.append(cron)
+    assert len(weekly_crons) == 1, (
+        f"Erwartet genau einen woechentlichen Cron-Eintrag (fixer Wochentag), gefunden: "
+        f"{weekly_crons!r} von insgesamt {crons!r} (Issue #597 AC1)."
+    )
+
+
+def test_workflow_has_daily_smoke_schedule_trigger():
+    """Issue #848 AC1: zusaetzlich zum woechentlichen Cron ein taeglicher
+    Smoke-Cron (dow == '*', jeden Tag)."""
+    trigger = _trigger(_load_workflow())
+    crons = [entry.get("cron") for entry in trigger.get("schedule", [])]
+    daily_crons = [c for c in crons if c.split()[4] == "*"]
+    assert len(daily_crons) == 1, (
+        f"Erwartet genau einen taeglichen Cron-Eintrag (Wochentag '*'), gefunden: "
+        f"{daily_crons!r} von insgesamt {crons!r} (Issue #848 AC1)."
+    )
 
 
 # --------------------------------------------------------------------------- #
