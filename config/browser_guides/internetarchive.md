@@ -52,7 +52,7 @@ Massen-Downloads können gedrosselt werden.
 | "Download Options"-Block mit PDF-Link, kein "Borrow"-Button | frei/gemeinfrei | PDF-Download versuchen → `success` |
 | "Borrow"-Button, In-Browser-Reader (BookReader) | Controlled Digital Lending — urheberrechtlich geschützt | `metadata_only` mit `reason: "Zugriffsstufe: Borrow/CDL — kein PDF-Export"` |
 | Metadatenfeld `access-restricted-item: true` (meist zusammen mit Sammlung `inlibrary`) | Controlled Digital Lending — gilt auch dann, wenn eine PDF-Datei gelistet ist und kein Borrow-Button sichtbar ist | `metadata_only`, gar nicht erst herunterladen |
-| Download bricht mit HTTP 401 ab | dasselbe wie oben, nur später bemerkt | `metadata_only` mit `reason: "Zugriffsstufe: Borrow/CDL — HTTP 401, kein PDF-Export"`, **kein** Retry |
+| Download bricht mit HTTP 401 **oder 403** ab | dasselbe wie oben, nur später bemerkt | `metadata_only` mit `reason: "Zugriffsstufe: Borrow/CDL — HTTP <Code>, kein PDF-Export"`, **kein** Retry |
 | Nur Metadaten-Item ohne Datei-Liste | kein Volltext vorhanden | `metadata_only` mit `reason: "Zugriffsstufe: nur Metadaten"` |
 
 ## Ausgabe-/Jahresangabe
@@ -88,8 +88,12 @@ verschiedener Auflagen) — das Jahr des tatsächlich gewählten Scans übernehm
   Variante mit Format "ACS Encrypted PDF" (`*_encrypted.pdf`) ist DRM-geschützt
   und kommt nie in Frage; sie tritt typischerweise bei CDL-Items auf.
 - Ein CDL-Item kann sein reguläres PDF im Listing zeigen, ohne es
-  herauszugeben — der Download endet dann mit HTTP 401. Deshalb vor dem
-  Download `access-restricted-item` prüfen und nicht auf das Fehlen des
+  herauszugeben — der Download endet dann mit HTTP 401 oder 403. Deshalb vor
+  dem Download `access-restricted-item` prüfen und nicht auf das Fehlen des
   Borrow-Buttons vertrauen (real gemessen, siehe
-  `evals/free-archive-fetchers/live-verification.json`, Lauf `fa-02`).
+  `evals/free-archive-fetchers/live-verification.json`, Lauf `fa-02`,
+  `access_control_counter_example`). archive.org hat den Statuscode für
+  denselben Fehlerpfad bereits einmal gewechselt (401 → 403, Issue #799) —
+  beide zählen als dieselbe Rechteentscheidung, nicht als Störung und nicht
+  als Rate-Limit. Den Download deshalb **nicht** wiederholen.
 - Rate-Limiting bei vielen Downloads kurz hintereinander — 2-3 Sekunden Pause.

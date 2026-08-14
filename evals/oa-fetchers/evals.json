@@ -18,7 +18,7 @@
   {
     "id": "oa-02",
     "description": "OAPEN-Fetcher: OA-Buch via DOI — erwartet success (OAPEN ist reine OA-Plattform)",
-    "agent": "oapen-fetcher",
+    "agent": "generic-fetcher",
     "input": {
       "doi": "10.26530/oapen_1002221",
       "title": "The Transformation of Research in the South",
@@ -26,40 +26,55 @@
     },
     "expected": {
       "status": "success",
-      "source_subagent": "oapen-fetcher",
-      "pdf_path_non_empty": true
+      "source": "generic-fetcher",
+      "site": "oapen",
+      "file_path_non_empty": true
     },
-    "fallback_acceptable": "metadata_only"
+    "fallback_acceptable": "metadata_only",
+    "site": "oapen",
+    "site_config": "config/browser_guides/oapen.md"
   },
   {
     "id": "oa-03",
     "description": "DOAB-Fetcher: OA-Buch via DOAB-Eintrag — erwartet success oder begruendetes metadata_only",
-    "agent": "doabooks-fetcher",
+    "agent": "generic-fetcher",
     "input": {
       "isbn": "978-3-030-68953-1",
       "title": "Open Access in der Wissenschaft",
       "output_path": "/tmp/eval-oa-03.pdf"
     },
     "expected": {
-      "status_in": ["success", "metadata_only"],
-      "source_subagent": "doabooks-fetcher"
+      "status_in": [
+        "success",
+        "metadata_only"
+      ],
+      "source": "generic-fetcher",
+      "site": "doab"
     },
-    "note": "DOAB ist Aggregator — metadata_only ist akzeptabel wenn kein Volltext-Link vorhanden"
+    "note": "DOAB ist Aggregator — metadata_only ist akzeptabel wenn kein Volltext-Link vorhanden",
+    "site": "doab",
+    "site_config": "config/browser_guides/doab.md"
   },
   {
     "id": "oa-04",
     "description": "KVK-Fetcher: Buch mit Bibliotheks-Nachweis — erwartet metadata_only + Standort-Info",
-    "agent": "kvk-fetcher",
+    "agent": "generic-fetcher",
     "input": {
       "isbn": "978-3-16-148410-0",
       "title": "Einfuehrung in die Rechtswissenschaft",
       "output_path": "/tmp/eval-oa-04.pdf"
     },
     "expected": {
-      "status_in": ["metadata_only", "success"],
-      "source_subagent": "kvk-fetcher",
-      "reason_non_empty_if_metadata_only": true
+      "status_in": [
+        "metadata_only",
+        "success"
+      ],
+      "reason_non_empty_if_metadata_only": true,
+      "source": "generic-fetcher",
+      "site": "kvk"
     },
-    "note": "KVK liefert Standort-Info in reason-Feld bei metadata_only"
+    "note": "KVK liefert Standort-Info in reason-Feld bei metadata_only",
+    "site": "kvk",
+    "site_config": "config/browser_guides/kvk.md"
   }
 ]

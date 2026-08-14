@@ -40,15 +40,44 @@ nach Shibboleth-Auth gewährt.
   - De Gruyter → `degruyter.md`
   - Wiley → verlagseigene URL-Muster
 
-## Pickup-Triggers
+## Lizenz-Prüfung (ZUERST, vor jeder Navigation)
 
-- `status: pickup_required` wenn:
-  - Hochschule nicht in der betreffenden Nationallizenz enthalten.
-  - Shibboleth-Flow schlägt fehl (IdP nicht erreichbar, falsche Credentials).
-  - Erscheinungsjahr außerhalb des Nationallizenz-Zeitraums (meist vor 2015).
-  - Verlag gibt trotz Auth Access-Denied zurück.
-- `status: captcha` wenn Verlag CAPTCHA zeigt nach Auth.
-- `status: no_match` wenn Titel nicht im Nationallizenzen-Katalog.
+`~/.academic-research/library-profiles/active.yaml` lesen und prüfen, ob
+`nationallizenzen.de` in `licensed_sites` steht.
+
+Steht es **nicht** drin: sofort stoppen mit
+`{"status": "metadata_only", "url": "https://www.nationallizenzen.de"}`.
+Der Master entscheidet über den Fallback — hier wird nichts anonym versucht.
+
+## Auth-Delegation
+
+Auf der Ziel-Verlagsseite gilt als **Auth-Trigger**: "Sign in via institution" /
+"Institutional login" sichtbar, Auth-Wall bzw. "Access options" statt
+Download-Button, kein PDF-Download trotz Nationallizenzen-Referenz, oder eine
+Login-Wall nach der Weiterleitung vom Portal.
+
+Der Auth-Flow wird **vollständig an `auth-helper` delegiert** (`target_url` =
+aktuelle Verlagsseiten-URL, `profile_path` = aktives Uni-Profil) — hier werden
+nie selbst Credentials verarbeitet. Auth-Methode ist ausschließlich
+DFN-AAI/Shibboleth; die konkrete Variante steht als `auth_type` im Profil.
+
+Antworten des `auth-helper`:
+
+- `authenticated` → weiter zum Download.
+- `not_required` (`auth_type: oa-only`) → weiter zum Download (OA-Zugang ohne Login).
+- `auth_failed` → `pickup_required` mit `reason: "auth_failed: <grund>"`.
+- `captcha` → `captcha`.
+
+## Status-Vokabular
+
+| Beobachtung | Status | Feld |
+|---|---|---|
+| Download nach Auth geglückt und verifiziert | `success` | `file_path`, `url` = Verlagsseite |
+| `nationallizenzen.de` fehlt in `licensed_sites` | `metadata_only` | `url` |
+| Hochschule nicht in dieser Nationallizenz enthalten | `metadata_only` | fehlende Lizenz im `reason` nennen |
+| Titel nicht im Nationallizenzen-Katalog / Neuerscheinung außerhalb des Zeitraums | `no_match` | `reason` |
+| Shibboleth-Flow scheitert, Verlag verweigert trotz Auth, kein Download-Button nach Auth | `pickup_required` | `url`, `reason` |
+| Verlag zeigt CAPTCHA | `captcha` | `reason` |
 
 ## Bekannte Fallstricke
 

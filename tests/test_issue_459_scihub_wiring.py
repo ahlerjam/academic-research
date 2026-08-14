@@ -20,8 +20,7 @@ from unittest.mock import patch
 
 import yaml
 
-from tests.helpers.book_fetcher_router import OA_SUBAGENTS as _OA_SUBAGENTS_LIST
-from tests.helpers.book_fetcher_router import BookFetcherRouter
+from tests.helpers.book_fetcher_router import OA_SITES, BookFetcherRouter, is_free_tier_call
 
 REPO_ROOT = pathlib.Path(__file__).parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "book_fetcher_mocks"
@@ -31,10 +30,11 @@ FETCH_COMMAND = REPO_ROOT / "commands" / "fetch.md"
 CHAPTER_WRITER_SKILL = REPO_ROOT / "skills" / "chapter-writer" / "SKILL.md"
 CITATION_EXTRACTION_SKILL = REPO_ROOT / "skills" / "citation-extraction" / "SKILL.md"
 
-# Issue #450: OA_SUBAGENTS wuchs von 4 auf 7 (hathitrust-fetcher,
-# internetarchive-fetcher, mdz-fetcher) -- gemeinsame Quelle statt lokaler
-# Kopie, damit diese Fixtures nicht erneut aus dem Tritt geraten.
-OA_SUBAGENTS = set(_OA_SUBAGENTS_LIST)
+# Issue #450: die freie Stufe wuchs von 4 auf 7 Sites.
+# Issue #840: sechs davon laufen ueber generic-fetcher mit site_config -- der
+# Agent-Name allein unterscheidet sie nicht mehr vom Fallback aus Schritt 5,
+# deshalb `is_free_tier_call` aus der gemeinsamen Quelle statt einer Namensmenge.
+FREE_TIER_SITE_COUNT = len(OA_SITES)
 
 
 def _load_json(name):
@@ -53,8 +53,8 @@ def _all_oa_and_generic_no_match_dispatcher(final_generic_status_name, extra=Non
 
     def side_effect(subagent, payload):
         calls.append((subagent, dict(payload)))
-        if subagent in OA_SUBAGENTS:
-            return {"status": "no_match", "source_subagent": subagent}
+        if is_free_tier_call(subagent, payload):
+            return {"status": "no_match", "source": subagent}
         if subagent == "generic-fetcher":
             return generic_resp
         if extra and subagent in extra:
@@ -162,8 +162,8 @@ class TestScihubSkippedWhenOptinFalseOrMissing(unittest.TestCase):
         generic_resp = _load_json("generic_pickup.json")
 
         def side_effect(subagent, payload):
-            if subagent in OA_SUBAGENTS:
-                return {"status": "no_match", "source_subagent": subagent}
+            if is_free_tier_call(subagent, payload):
+                return {"status": "no_match", "source": subagent}
             if subagent == "generic-fetcher":
                 return generic_resp
             raise AssertionError(f"Unexpected: {subagent}")
@@ -184,8 +184,8 @@ class TestScihubSuccessSkipsPublisherAndOaOnRetry(unittest.TestCase):
         generic_resp = _load_json("generic_pickup.json")
 
         def side_effect(subagent, payload):
-            if subagent in OA_SUBAGENTS:
-                return {"status": "no_match", "source_subagent": subagent}
+            if is_free_tier_call(subagent, payload):
+                return {"status": "no_match", "source": subagent}
             if subagent == "generic-fetcher":
                 return generic_resp
             if subagent == "scihub-fetcher":

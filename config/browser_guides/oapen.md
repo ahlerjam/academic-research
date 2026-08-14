@@ -29,13 +29,26 @@ Kein Login erforderlich. Alle Inhalte sind Open Access.
 - PDF liegt direkt auf OAPEN-Servern — keine Weiterleitung zu externen Seiten.
 - Dateiname: meist `<handle>.pdf` oder titelbasiert.
 
-## Pickup-Triggers
+## OA-Invariante
 
-- `status: pickup_required` wenn:
-  - Download-Button fehlt (seltener Fehlerfall).
-  - Server-Fehler 5xx oder leere Download-Antwort.
-  - Handle-URL gibt 404 zurück (Buch entfernt oder umgezogen).
-- `status: no_match` wenn Suche 0 Treffer liefert.
+oapen.org hostet ausschließlich Open-Access-Bücher. Jeder gefundene Treffer ist
+per Definition OA — kein separater OA-Filter nötig, kein Login (OAPEN kennt für
+den Volltextzugriff kein Auth-Konzept).
+
+## Status-Vokabular
+
+| Beobachtung | Status | Feld |
+|---|---|---|
+| "Download PDF" vorhanden, Download geglückt und verifiziert | `success` | `file_path` |
+| Detailseite ohne Download-Button (seltener Fehlerfall) | `metadata_only` | `url` = Detailseite |
+| Server-Fehler 5xx oder leere Download-Antwort | `metadata_only` | `url` = Detailseite |
+| Handle-URL gibt 404 (Buch entfernt/umgezogen), auch nach DOI-Zweitversuch | `no_match` | `reason` |
+| Suche liefert 0 Treffer | `no_match` | `reason: "0 Treffer auf oapen.org"` |
+
+## Verbote (site-spezifisch)
+
+- Keine OAPEN-API-Endpunkte direkt aufrufen — nur der Browser-Weg.
+- Kein Login-Versuch: OAPEN benötigt keine Authentifizierung.
 
 ## Bekannte Fallstricke
 

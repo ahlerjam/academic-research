@@ -28,33 +28,49 @@ Für Fernleihe / Direktbestellung (nicht automatisiert):
 
 ## Volltext-Lokation
 
-KVK liefert **keinen Volltext** — gibt ausschließlich Standort-Informationen zurück.
+KVK ist ein **Meta-Katalog über 80+ Bibliotheken und kein Volltext-Host**: er
+weist Bestände nach, hostet aber selbst nichts. Ein `success` ist hier die
+Ausnahme und entsteht nur über einen externen Volltext-Link aus der Trefferliste.
 
-Output-Format für Pickup-Liste:
+### OA-/Volltext-Filter
 
-```json
-{
-  "status": "pickup_required",
-  "kvk_hits": [
-    {
-      "library": "Bayerische Staatsbibliothek",
-      "location": "München",
-      "call_number": "4 Ph.pr. 123",
-      "loan_type": "vor_ort"
-    }
-  ]
-}
+KVK zeigt physische UND digitale Bestände gemischt. Priorisierung:
+
+1. "Volltext"-Links oder "Online-Zugriff"-Buttons zuerst suchen.
+2. Explizit als "Open Access" markierte Treffer bevorzugen.
+3. "Online-Ressource" ohne Preisangabe = OA-Kandidat.
+4. Nur Print-Nachweis → Standort-Info sammeln.
+
+Bei gefundenem Volltext-Link: Link öffnen, auf der Zielseite herunterladen,
+Download nach `<output_path>` (Rezept in `_cli.md`), Datei verifizieren.
+
+### Standort-Info
+
+Ohne Volltext-Link werden die Standorte gesammelt (Bibliotheksname, Ort,
+Signatur, Ausleihtyp) und als kompakter String im `reason`-Feld zurückgegeben.
+Der Master entscheidet, ob und wie sie in die Pickup-Liste wandern.
+
+```
+"Standorte: BSB München (4 Ph.pr. 123, Lesesaal), UB Berlin (Ausleihe), HU Berlin (Fernleihe)"
 ```
 
-Master-Agent entscheidet, welche Bibliotheken in die Pickup-Liste aufgenommen werden.
+## Status-Vokabular
 
-## Pickup-Triggers
+| Beobachtung | Status | Feld |
+|---|---|---|
+| Externer Volltext-Link gefunden, Download geglückt und verifiziert | `success` | `file_path` |
+| Nur Bibliotheks-/Print-Nachweis (Regelfall) | `metadata_only` | `url` = KVK-Ergebnisseite, `reason: "Standorte: ..."` |
+| 0 Treffer in allen Datenbanken | `no_match` | `reason: "0 Treffer in KVK für <query>"` |
 
-- KVK-Subagent liefert **immer** `status: pickup_required` — KVK ist
-  Standort-Finder, kein Downloader.
-- Pickup-Daten enthalten: Bibliotheksname, Ort, Signatur, Ausleihbarkeit
-  (Lesesaal, Ausleihe, Fernleihe).
-- `status: no_match` wenn KVK 0 Treffer in allen Datenbanken liefert.
+Der Regelfall ist `metadata_only`, **nicht** `pickup_required`: KVK ist
+Standort-Finder, und der Master braucht den Unterschied für seine Verlags-Stufe.
+
+## Verbote (site-spezifisch)
+
+- **Kein automatisches Auslösen von Fernleihe oder Bestellformularen.** Das
+  Fernleihe-Formular wird nie abgeschickt — nur die Standort-Info wird gemeldet.
+- Kein Login in Bibliotheks-Portale (nur Metadaten, kein Bestellen).
+- Keine erfundenen Standorte oder Signaturen.
 
 ## Bekannte Fallstricke
 
