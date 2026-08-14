@@ -35,6 +35,12 @@ except ImportError:  # pragma: no cover
 
 TIMEOUT = 30.0
 PDF_MAGIC = b"%PDF"
+#: Issue #884: eine Datei mit gueltigem %PDF-Kopf, die trotzdem nur wenige
+#: hundert Bytes gross ist, ist kein Volltext -- typischerweise ein
+#: abgebrochener/korrupter Download. Gilt fuer FRISCH heruntergeladene Dateien
+#: (``download_pdf``); ``is_valid_pdf_file`` fuer bereits vorhandene lokale
+#: Dateien prueft bewusst NUR die Magic-Bytes, siehe dort.
+MIN_PDF_SIZE = 2048
 
 BIOMED_DOI_PREFIXES: list[str] = [
     "10.1016/j.",  # Elsevier Biomedical
@@ -56,6 +62,35 @@ def is_valid_pdf(content: bytes) -> bool:
     return len(content) >= 4 and content[:4] == PDF_MAGIC
 
 
+def is_valid_pdf_file(path: str) -> bool:
+    """Return True if ``path`` does not (yet) exist or is a plausible PDF.
+
+    Engste gemeinsame Stelle (Issue #884) fuer Beschaffungswege, die eine
+    bereits auf der Platte liegende Datei als ``pdf_path`` in den Vault
+    einreichen (``academic_vault.server.add_paper``/``update_pdf_path``).
+
+    Ein (noch) fehlender Pfad gilt als gueltig -- das ist ein bestehender,
+    gewollter Zustand (Metadaten-only-Eintrag, Download folgt spaeter oder
+    ``pickup_required``) und keine Faelschung.
+
+    Prueft bewusst NUR die Magic-Bytes (``%PDF``), OHNE die Mindestgroesse
+    aus ``MIN_PDF_SIZE``: die schuetzt gegen abgebrochene/korrupte FRISCHE
+    Downloads (siehe ``download_pdf``), traefe hier aber auch reale, kurze
+    Fachtexte (z.B. Konferenz-Abstracts) und bestehende Test-Fixtures unter
+    2 KB als False Positive. Die Magic-Byte-Pruefung allein deckt den in
+    Issue #884 beschriebenen Kernfall vollstaendig ab: eine HTML-Fehlerseite
+    beginnt nie mit ``%PDF``, unabhaengig von ihrer Groesse.
+    """
+    if not os.path.isfile(path):
+        return True
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(4)
+    except OSError:
+        return False
+    return is_valid_pdf(head)
+
+
 def tier_arxiv_direct(doi: str | None) -> str | None:
     """Tier 0: Bildet die arXiv-PDF-Adresse direkt aus der DOI, ohne einen
     Nachweisdienst zu befragen (Issue #885).
@@ -63,6 +98,13 @@ def tier_arxiv_direct(doi: str | None) -> str | None:
     Nutzt arxiv_latex.arxiv_id_from_doi() wieder, damit das
     arXiv-DOI-Muster (`10.48550/arxiv.<id>`) nur an einer Stelle im Repo
     lebt. Keine Netzwerk-I/O -- kann folglich nie einen Fehler werfen.
+
+    Weil die Adresse hier *geraten* und nicht von einem Nachweisdienst
+    bestaetigt wird, ist dieser Weg besonders auf die Integritaetspruefung
+    aus Issue #884 angewiesen: liefert arxiv.org unter HTTP 200 eine
+    HTML-Fehler-/Rate-Limit-Seite statt des PDFs, faengt ``download_pdf()``
+    das ab (Magic-Bytes + ``MIN_PDF_SIZE``), bevor die Datei geschrieben
+    wird. Tier 0 darf deshalb NIE an ``download_pdf()`` vorbei speichern.
 
     Args:
         doi: DOI-String, roh oder bereits normalisiert; `None` erlaubt.
@@ -88,12 +130,20 @@ def download_pdf(client: httpx.Client, pdf_url: str, output_path: str) -> None:
         with client.stream("GET", pdf_url, timeout=TIMEOUT) as resp:
             resp.raise_for_status()
             chunks: list[bytes] = []
+            total = 0
             for chunk in resp.iter_bytes():
                 if not chunk:
                     continue
                 if not chunks and not is_valid_pdf(chunk):
                     raise ValueError(f"Not a valid PDF: {pdf_url!r}")
                 chunks.append(chunk)
+                total += len(chunk)
+            if total < MIN_PDF_SIZE:
+                # Issue #884: Magic-Bytes allein reichen nicht -- ein
+                # abgebrochener/korrupter Download kann mit gueltigem %PDF-
+                # Kopf enden, aber nach wenigen hundert Bytes abreissen. Das
+                # ist kein Volltext.
+                raise ValueError(f"PDF zu klein ({total} Bytes < {MIN_PDF_SIZE}): {pdf_url!r}")
         with open(output_path, "wb") as fh:
             for chunk in chunks:
                 fh.write(chunk)

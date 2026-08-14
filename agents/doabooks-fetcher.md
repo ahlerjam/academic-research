@@ -50,7 +50,7 @@ ABER: Nicht alle Eintraege haben einen direkten Download-Link — manche haben n
    - Springer/Verlag-Link → Download-Button auf Verlagsseite
    - Unbekannter Provider → DOM nach PDF-Link durchsuchen
 8. PDF-Link per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
-9. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+9. Validation: erste 4 Bytes = `%PDF`, Groesse >= 2 KB
 
 ## OA-Filter-Logik
 

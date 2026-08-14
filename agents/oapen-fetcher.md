@@ -45,7 +45,7 @@ Jeder gefundene Treffer ist per Definition OA — kein separater OA-Filter noeti
 5. "Download PDF"-Button ueber den AX-Baum suchen
    - Button-Index identifizieren
 6. Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`)
-7. Validation: erste 4 Bytes = `%PDF`, Groesse > 10 KB
+7. Validation: erste 4 Bytes = `%PDF`, Groesse >= 2 KB
 
 ## Output-Schema
 
