@@ -19,12 +19,22 @@ Vertragslage (siehe AGENTS.md/Issue #877):
   - Jeder Fehlerpfad (fehlende/kaputte academic_context.md, fehlende/kaputte
     workflow-phases.json) degradiert lautlos -- keine Exception dringt nach
     aussen, exit 0 immer.
-  - 'checked_partial' wird beim Auswerten von "erledigten Phasen" konservativ
-    behandelt: nicht als erledigt gewertet, nur eine gesetzte Checkbox zaehlt
-    (Learning #876: binaere Checkboxen kennen kein echtes "teilweise").
   - is_entry_point hat keine Eindeutigkeits-Garantie -- die Auswertung
     verlaesst sich nicht auf genau eine Startphase, sondern iteriert die
     Phasenliste schlicht in der gegebenen Reihenfolge.
+
+Bewusst reduzierter Geltungsbereich (Convergence-Alert auf PR #930, Issue
+#946): config/workflow-phases.json modelliert je Phase nur eine
+EINTRITTSBEDINGUNG, kein Abschlusskriterium. "Was ist erledigt" daraus
+abzuleiten ist eine Naeherung, die in Sonderfaellen bricht (Kohorten
+mehrerer Phasen mit identischer Vorbedingung, offenes Kettenende) -- jeder
+Versuch, das hier nachzumodellieren, hat in Review-Runden wiederholt neue
+Bruchstellen aufgedeckt. Dieses Modul behauptet deshalb nur noch, was aus
+den Eintrittsbedingungen direkt und ohne Sonderfall-Logik folgt: die
+aktuelle Phase (erste mit unerfuellter Eintrittsbedingung) und deren
+Position in der Kette. KEINE Aussage ueber "erledigt"/"abgeschlossen" fuer
+vorangehende Phasen -- echte Abschlusserkennung mit eigenen Belegen ist
+Issue #946.
 """
 
 from __future__ import annotations
@@ -89,32 +99,6 @@ def _preconditions_satisfied(context_text: str, phase: dict) -> bool:
     )
 
 
-def _precondition_tuple(phase: dict) -> tuple[tuple[str, str], ...]:
-    return tuple(
-        (cond.get("field"), cond.get("expected")) for cond in phase.get("preconditions") or []
-    )
-
-
-def _cohorts(phases: list[dict]) -> list[tuple[int, int]]:
-    """Gruppiert aufeinanderfolgende Phasen mit IDENTISCHER Vorbedingung zu
-    Kohorten -- Liste von (start, end)-Indexpaaren (end exklusiv).
-
-    config/workflow-phases.json bildet 23 einzeln benannte Walkthrough-
-    Schritte auf deutlich weniger Checkpoints ab (z. B. teilen sich sechs
-    Phasen -- literature-search bis reading-notes -- die Vorbedingung
-    'Gliederung steht: checked'). Innerhalb einer solchen Kohorte hat KEINE
-    Phase eine individuelle Abschluss-Evidenz; die einzige Evidenz, dass die
-    Kohorte tatsaechlich abgeschlossen (nicht nur betretbar) ist, ist die
-    Vorbedingung der naechsten, andersartigen Phase (siehe compute_status)."""
-    cohorts: list[tuple[int, int]] = []
-    start = 0
-    for i in range(1, len(phases) + 1):
-        if i == len(phases) or _precondition_tuple(phases[i]) != _precondition_tuple(phases[start]):
-            cohorts.append((start, i))
-            start = i
-    return cohorts
-
-
 def _trigger_for(phase: dict) -> str:
     """Wer loest den Schritt aus: 'Claude' bei einem selbst-aktivierenden
     Skill, sonst 'Operator' (expliziter Slash-Command oder direkter
@@ -130,51 +114,42 @@ def compute_status(context_text: str | None, phases: list[dict]) -> dict | None:
 
     Rueckgabe bei vorhandenem Kontext:
       {
-        "current_phase": dict | None,      # erste Phase mit unerfuellter Vorbedingung
-        "done_phases": [dict, ...],        # alle Phasen davor
+        "current_phase": dict | None,         # erste Phase mit unerfuellter
+                                               # Eintrittsbedingung
+        "phases_before_current": [dict, ...], # Phasen VOR current_phase in
+                                               # der Kette -- eine reine
+                                               # Positionsangabe, KEINE
+                                               # Abschluss-Behauptung (#946)
         "next_step": {..., "trigger": "Claude"|"Operator"} | None,
         "remaining_until_export": [dict, ...],  # current_phase .. 'export' inklusive
       }
+
+    Absichtlich NICHT Teil dieser Funktion: eine Aussage darueber, ob eine
+    Phase "erledigt"/"abgeschlossen" ist. config/workflow-phases.json
+    modelliert nur Eintrittsbedingungen; mehrere Phasen koennen sich
+    dieselbe teilen (z. B. sechs Phasen mit 'Gliederung steht: checked'),
+    ohne dass eine erfuellte Eintrittsbedingung belegt, dass die zugehoerige
+    Arbeit stattgefunden hat. Echte Abschlusserkennung mit eigenen Belegen
+    ist Issue #946.
     """
     if context_text is None:
         return None
 
-    # current_phase ist die erste Phase der ersten NICHT abgeschlossenen
-    # Kohorte; done_phases sind alle Phasen davor (deckt sich mit den
-    # Docstring-Feldbeschreibungen oben). Sind ALLE Kohorten abgeschlossen,
-    # bleibt current_phase None und done_phases enthaelt alle Phasen (AC:
-    # keine aktuelle Phase mehr uebrig, siehe
-    # test_all_phases_satisfied_yields_no_current_phase).
-    #
-    # Eine Kohorte mit genau EINER Phase gilt als abgeschlossen, sobald ihre
-    # EIGENE Vorbedingung erfuellt ist (Regelfall). Eine Kohorte mit MEHREREN
-    # Phasen (identische Vorbedingung, z. B. sechs Phasen teilen sich
-    # 'Gliederung steht: checked') hat dagegen keine individuelle
-    # Abschluss-Evidenz je Mitglied -- ihre eigene Vorbedingung ist nur das
-    # gemeinsame EINTRITTS-Gate. Als abgeschlossen gilt sie erst, wenn die
-    # Vorbedingung der naechsten, andersartigen Phase erfuellt ist (Review-
-    # Fund PR #930: eine fruehere Fassung wertete faelschlich die eigene,
-    # geteilte Vorbedingung als Abschluss -- damit fielen sechs Phasen aus
-    # der Kette, siehe TestComputeStatusAgainstRealConfig). Bei der letzten
-    # Kohorte (kein 'danach' vorhanden) bleibt nur die eigene Vorbedingung.
-    cohorts = _cohorts(phases)
+    # current_phase: erste Phase mit unerfuellter Eintrittsbedingung, in
+    # Listenreihenfolge. Bleibt None, wenn keine solche Phase existiert (AC:
+    # siehe test_all_phases_satisfied_yields_no_current_phase) -- das
+    # bedeutet nur "keine offene Eintrittsbedingung mehr gefunden", nicht
+    # "alles erledigt".
     current_phase: dict | None = None
     current_index: int | None = None
 
-    for k, (start, end) in enumerate(cohorts):
-        if end - start == 1:
-            cohort_done = _preconditions_satisfied(context_text, phases[start])
-        elif k + 1 < len(cohorts):
-            cohort_done = _preconditions_satisfied(context_text, phases[cohorts[k + 1][0]])
-        else:
-            cohort_done = _preconditions_satisfied(context_text, phases[start])
-
-        if not cohort_done:
-            current_phase = phases[start]
-            current_index = start
+    for i, phase in enumerate(phases):
+        if not _preconditions_satisfied(context_text, phase):
+            current_phase = phase
+            current_index = i
             break
 
-    done_phases: list[dict] = (
+    phases_before_current: list[dict] = (
         list(phases) if current_index is None else list(phases[:current_index])
     )
 
@@ -203,7 +178,7 @@ def compute_status(context_text: str | None, phases: list[dict]) -> dict | None:
 
     return {
         "current_phase": current_phase,
-        "done_phases": done_phases,
+        "phases_before_current": phases_before_current,
         "next_step": next_step,
         "remaining_until_export": remaining_until_export,
     }
@@ -229,7 +204,10 @@ def format_lines(status: dict | None, full: bool = False) -> list[str]:
     lines: list[str] = []
     current = status.get("current_phase")
     if current is None:
-        lines.append("[flowkit] Phase: alle Phasen bis Export abgeschlossen")
+        # Keine Phase mit unerfuellter Eintrittsbedingung mehr gefunden --
+        # das ist KEINE Aussage darueber, dass die Arbeit selbst fertig ist
+        # (#946: config/workflow-phases.json kennt kein Abschlusskriterium).
+        lines.append("[flowkit] Phase: keine offene Eintrittsbedingung mehr gefunden")
         return lines
 
     lines.append(f"[flowkit] Phase: {current.get('title')}")

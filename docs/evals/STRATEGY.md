@@ -38,7 +38,7 @@ LLM-Qualität gemessen.
 **Heutiger Stand** (Issue #619/#677, reproduzierbar mit `uv run pytest
 tests/evals/ -q` ohne installierte `claude`-CLI im PATH — `claude_cli_available()`
 gatet den Guard zusätzlich, Issue #631; der frühere parallele
-`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `520 passed, 208 skipped`.
+`ANTHROPIC_API_KEY`-Pfad ist mit #716 entfallen): `529 passed, 199 skipped`.
 Die Skip-Zahl ist mit #823 von 195 auf 197 gestiegen, weil der neue
 Negativfall `pc-03` (`evals/plagiarism-check/evals.json`, `cwd: "none"`)
 genau zwei zusätzliche Skips erzeugt: einen Mode-Filter-Skip in
@@ -47,17 +47,17 @@ genau zwei zusätzliche Skips erzeugt: einen Mode-Filter-Skip in
 Lauf mit aus dem `PATH` entfernter `claude`-CLI, je einmal auf `main`
 (`426 passed, 195 skipped`) und auf dem Branch (`436 passed, 197 skipped`);
 keine bestehende Prüfung wurde stillgelegt.
-Mit #877 ist die Zahl weiter auf `520 passed, 208 skipped` gestiegen: der
-neue Skill `workflow-status` bringt eigene `evals/workflow-status/
-trigger_evals.json` (10 `should_trigger`/10 `should_not_trigger`, je
-API-gatet in `test_triggers.py`) und `evals.json` (4 Quality-Prompts) mit,
-und seit dem letzten dokumentierten Stand sind ausserdem mehrere weitere
-Issues in `main` gemergt (u. a. #841, #844, #884, #892), die eigene
-`tests/evals/`-Suiten ergaenzt haben. Belegt durch einen echten Lauf mit aus
-dem `PATH` entfernter `claude`-CLI: `1 failed, 519 passed, 208 skipped` (der
-eine Fehlschlag ist dieser Guard-Test selbst, der die veraltete Zahl gegen
-den realen Lauf haelt -- ohne ihn: `519 passed, 208 skipped`, plus dieser
-Test selbst als bestandener macht `520 passed`).
+Mit #877 ist die Zahl zwischenzeitlich auf 208 gestiegen: der neue Skill
+`workflow-status` bringt eigene `evals/workflow-status/trigger_evals.json`
+(10 `should_trigger`/10 `should_not_trigger`, je API-gatet in
+`test_triggers.py`) und `evals.json` (4 Quality-Prompts) mit. Seither ist in
+`main` #840 gemergt (Fetcher-Konsolidierung: acht dedizierte Fetcher-Agenten
+-- doabooks, ebook-central, hathitrust, internetarchive, kvk, mdz,
+nationallizenzen, oapen -- zu einem generischen Fetcher zusammengefasst) und
+hat mehr API-gatete Skips entfernt, als #877 hinzugefuegt hat: aktueller
+Stand `529 passed, 199 skipped`, belegt durch einen echten Lauf mit aus dem
+`PATH` entfernter `claude`-CLI (`528 passed, 199 skipped` ohne diesen
+Guard-Test selbst, `+1` fuer ihn als bestandener Test).
 Seit #390 sind weitere Suiten dazugekommen (u. a.
 #524, #626, #628, #630, #721); die Skip-Zahl ist gegenüber dem #390-Snapshot
 gestiegen, weil jede neue `structural`-Komponente eigene API-gatete Tests
