@@ -15,7 +15,7 @@ Diagramm zeigt nur das Zusammenspiel, nicht jeden einzelnen Baustein.
 graph TD
     U[Du in Claude Code] --> CMD[13 Slash-Commands]
     U --> SK[46 Skills<br/>selbstaktivierend]
-    CMD --> AG[29 Agents / Subagents]
+    CMD --> AG[21 Agents / Subagents]
     SK --> AG
     AG --> V[(Vault<br/>SQLite + FTS5 + vec0)]
     CMD --> V
@@ -59,7 +59,7 @@ schließt sich beim Nutzer, nicht bei einer Datei.
 Session-Lifecycle-Events (`PreCompact`, `SessionStart`, `Stop`) und schreiben Snapshots
 beziehungsweise Reports, ohne in den hier gezeigten Schreibpfad einzugreifen — sie stehen
 vollständig im [Hooks-Stack](hooks.md), nicht in diesem Bild. Ebenfalls draußen: die
-29 Agents und 46 Skills einzeln benannt, das Zusammenspiel der 15 Suchquellen im Detail
+21 Agents und 46 Skills einzeln benannt, das Zusammenspiel der 15 Suchquellen im Detail
 (siehe [Suchquellen, Scoring, Cluster](search.md)) und die MCP-Tool-Signaturen des Vaults
 (siehe [Vault-MCP-Server](vault.md)) — ein Diagramm über alle Einzelteile ist unlesbar und
 beim nächsten neuen Skill veraltet.

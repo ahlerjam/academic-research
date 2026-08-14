@@ -157,11 +157,15 @@ def _agent_dispatch_values(text: str) -> dict[str, str]:
         cells = [c.strip() for c in stripped.strip("|").split("|")]
         if not cells:
             continue
-        if cells[0] == "Agent":
-            header_idx = cells.index("Dispatch") if "Dispatch" in cells else None
-            continue
         if set("".join(cells)) <= {"-", ":", ""}:
             continue  # Trennzeile
+        # Kopfzeile: erste Zelle ohne Backticks. Datenzeilen fuehren immer einen
+        # `code`-Bezeichner. Seit #840 steht in agents.md eine zweite Tabelle
+        # (Site-Configs des Ultimate Fetchers) ohne Dispatch-Spalte -- ohne
+        # diesen Reset zoege sie den Index der vorherigen Tabelle mit.
+        if not cells[0].startswith("`"):
+            header_idx = cells.index("Dispatch") if "Dispatch" in cells else None
+            continue
         if header_idx is None or header_idx >= len(cells):
             continue
         name = cells[0].strip("`")
