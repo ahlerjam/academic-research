@@ -265,7 +265,10 @@ def test_apply_pending_migrations_drops_dead_tables(legacy_v3_db: str) -> None:
 def test_no_dead_table_references_outside_migration_code() -> None:
     """Wer die Namen wieder in schema.sql/db.py/server.py schreibt, faellt hier auf."""
     package_dir = Path(__file__).resolve().parents[1] / "academic_vault"
-    sources = sorted(package_dir.glob("*.py")) + [package_dir / "schema.sql"]
+    # rglob statt glob (Issue #841): seit der Aufteilung von db.py liegen die
+    # CRUD-Module in academic_vault/repositories/ — ein Unterpaket entkaeme dem
+    # Guard sonst. Ausweitung des Pruefbereichs, keine Abschwaechung.
+    sources = sorted(package_dir.rglob("*.py")) + [package_dir / "schema.sql"]
 
     offenders: list[str] = []
     for source in sources:
@@ -274,7 +277,7 @@ def test_no_dead_table_references_outside_migration_code() -> None:
         text = source.read_text(encoding="utf-8")
         for lineno, line in enumerate(text.splitlines(), start=1):
             if "glossary" in line or "style_overrides" in line:
-                offenders.append(f"{source.name}:{lineno}: {line.strip()}")
+                offenders.append(f"{source.relative_to(package_dir)}:{lineno}: {line.strip()}")
 
     assert offenders == [], (
         f"Tote Tabellennamen ausserhalb von migrate.py gefunden (#539): {offenders}"

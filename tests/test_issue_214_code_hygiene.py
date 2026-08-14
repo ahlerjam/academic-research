@@ -25,6 +25,15 @@ _WORKTREE_ROOT = Path(__file__).parent.parent
 _DB_SRC_PATH = _WORKTREE_ROOT / "academic_vault" / "db.py"
 _README_PATH = _WORKTREE_ROOT / "README.md"
 
+# Seit Issue #841 liegen die CRUD-Methoden (und damit alle LIKE-Suchen) in den
+# Aggregat-Modulen unter academic_vault/repositories/. Der Scan deckt db.py UND
+# diese Module ab — eine Ausweitung des Pruefbereichs, keine Abschwaechung: die
+# ESCAPE-Pflicht gilt danach fuer mehr Dateien als vorher.
+_LIKE_SCAN_PATHS = [
+    _DB_SRC_PATH,
+    *sorted((_WORKTREE_ROOT / "academic_vault" / "repositories").glob("*.py")),
+]
+
 
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen
@@ -67,12 +76,14 @@ def test_escape_like_helper_exists_and_escapes_wildcards():
 
 
 def test_like_queries_use_escape_clause():
-    """Alle LIKE-Suchen in db.py tragen eine ESCAPE-Klausel im SQL."""
-    src = _DB_SRC_PATH.read_text(encoding="utf-8")
+    """Alle LIKE-Suchen der Vault-DB-Schicht tragen eine ESCAPE-Klausel im SQL."""
+    src = "\n".join(path.read_text(encoding="utf-8") for path in _LIKE_SCAN_PATHS)
     # Jede LIKE ?-Stelle muss von einer ESCAPE-Klausel begleitet sein.
     like_count = len(re.findall(r"LIKE\s+\?", src))
     escape_count = len(re.findall(r"LIKE\s+\?\s+ESCAPE\s+", src))
-    assert like_count > 0, "Erwartete mindestens eine LIKE ?-Suche in db.py"
+    assert like_count > 0, (
+        "Erwartete mindestens eine LIKE ?-Suche in db.py/academic_vault/repositories/"
+    )
     assert escape_count == like_count, (
         f"{like_count} LIKE ?-Stellen, aber nur {escape_count} mit ESCAPE-Klausel"
     )
