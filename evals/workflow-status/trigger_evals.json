@@ -1,0 +1,5 @@
+{
+  "component": "workflow-status",
+  "should_trigger": ["Wo stehe ich gerade in meiner Arbeit?", "Was ist der naechste Schritt?", "Wie geht es jetzt weiter?", "Wie ist der aktuelle Stand der Arbeit?", "In welcher Phase bin ich gerade?", "Zeig mir meinen Workflow-Status", "Welche Phase laeuft gerade?", "What's my current phase in the thesis workflow?", "What should I do next?", "Wo genau stehe ich im Ablauf meiner Bachelorarbeit?"],
+  "should_not_trigger": ["Pruefe meine Gliederung", "Ich fange gerade mit meiner Bachelorarbeit an", "Suche mir 20 Paper zu Zero Trust", "Schreib mir das Methodikkapitel", "Pruefe auf Plagiate", "Erzeuge Abstract und Keywords", "Gib mir einen Titel-Vorschlag", "Exportiere meine Literaturliste als Excel", "Formatiere dieses Zitat im APA-Stil", "Schaerfe meine Forschungsfrage"]
+}

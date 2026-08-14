@@ -525,6 +525,7 @@ COMPONENT_PROFILES: dict[str, str] = {
     "submission-checker": "context-fs",
     "title-generator": "context-fs",
     "topic-brainstorm": "context-fs",
+    "workflow-status": "context-fs",
     "zotero-import": "context-fs",
     # bare -- offene Aufgabe ohne Referenzloesung, ODER ruft call_claude gar
     # nicht auf (reiner Schema-/Netz-Test bzw. rein offline messender Runner).
