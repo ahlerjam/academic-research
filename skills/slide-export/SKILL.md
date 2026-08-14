@@ -15,51 +15,14 @@ allowed-tools:
 > und befolge alle dort definierten Blöcke (Vorbedingungen, Keine Fabrikation,
 > Aktivierung, Abgrenzung), bevor du fortfährst.
 
-## Workflow
+## Trigger-Wrapper
 
-`/academic-research:slides --kapitel <n>|all --output <datei.pptx> [--kolloquium|--konferenz]`:
-
-1. Backend-Verfügbarkeit prüfen (Abschnitt „Slide-Backend" unten) — vor dem
-   ersten `document-skills:pptx`-Aufruf.
-2. Folien-Zwischenrepräsentation bauen — **eine echte CLI, kein Inline-Python**:
-
-   ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts/build_slide_deck.py" \
-     --kapitel "$KAPITEL" --payload "$PAYLOAD" --rahmen "$RAHMEN"
-   ```
-
-   Exit-Code ≠ 0 → die `FEHLER:`-Meldung des Skripts unverändert weitergeben
-   (kein Stacktrace). Kapitel-Auflösung ist `export_thesis.resolve_chapters()` —
-   dieselbe `--kapitel <n>|all`-Semantik wie `latex-export`/`word-export`, kein
-   zweiter Nachbau.
-3. Die Payload enthält `slides[]` mit
-   pro Kapitel-Datei genau einem Eintrag `{title, core_statement, source}` —
-   `title` aus der ersten H1-Überschrift (Fallback: Dateiname), `core_statement`
-   aus dem ersten Fließtext-Satz nach der Überschrift. Kapitel ohne Fließtext
-   (nur Überschrift/Liste) liefern einen leeren `core_statement` — das Skript
-   meldet das auf stderr; in dem Fall den User um eine Kernaussage bitten statt
-   eine zu erfinden (Preamble „Keine Fabrikation").
-4. Foliensatz rendern — **wieder eine echte CLI, kein Freihand-Rendern**:
-
-   ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/slide-export/scripts/render_pptx.py" \
-     --payload "$PAYLOAD" --output "$OUTPUT"
-   ```
-
-   `render_pptx.py` ist hier, was `render_tex.py` für `latex-export` ist:
-   Repo-Code erzeugt das Deck deterministisch — nur deshalb ist es prüfbar
-   (`tests/test_issue_446_render_pipeline.py` öffnet es wieder). Ein Slide je
-   Eintrag, `title` als Folientitel, `core_statement` als einzige zentrale
-   Aussage (kein Fließtext-Absatz auf der Folie). Kapitel ohne Kernaussage
-   ergeben eine Folie mit leerem Rumpf + Meldung auf stderr — nachfragen statt
-   erfinden.
-5. `--kolloquium`/`--konferenz` steuern nur den Rahmen: `render_pptx.py` stellt
-   Deckblatt und Agenda-Folie voran; die Kern-Extraktion bleibt gleich.
-6. Optional: `document-skills:pptx` auf das **erzeugte** Deck anwenden, wenn eine
-   Designvorlage oder Bildfolien gewünscht sind (Design-Leitplanken für
-   Kernaussage-Folien kommen von dort, hier nicht dupliziert). Ohne diesen
-   Schritt ist das Ergebnis aus Schritt 4 bereits ein vollständiger, in
-   PowerPoint öffenbarer Foliensatz.
+Dieser Skill fängt natürlichsprachige Foliensatz-Anfragen ab und leitet an den
+Command weiter: Lies `commands/slides.md` vollständig und führe dessen
+Schritte 1–6 aus, so als wäre `/academic-research:slides` mit den erkannten
+Argumenten aufgerufen worden. `commands/slides.md` ist die einzige Quelle für
+Ablauflogik, Fehlerpfade und Abgrenzung (u. a. eine Kernaussage pro Folie) —
+sie wird hier nicht dupliziert.
 
 ## Slide-Backend
 
@@ -86,24 +49,7 @@ Falls nicht, brich mit dieser Meldung ab, statt einen rohen Tool-Fehler durchzur
 
 ## Abgrenzung
 
-- **`word-export`**: gleiche Kapitel-Quelle, aber Fließtext-Renderer (`.docx`/PDF)
-  statt Folien. Beide teilen die Kapitel-Auflösung aus `latex-export`, nicht
-  die Rendering-Logik — docx-Fließtext und pptx-Folien sind strukturell zu
-  verschieden für einen gemeinsamen Renderer.
-- **`latex-export`**: kein Bezug zu Folien; nur Kapitel-Quelle ist geteilt.
-- Kein eigenes Literaturverzeichnis auf Folien — Zitate/Quellen bleiben in den
-  Kapiteln, `slide-export` reduziert auf die Kernaussage.
-
-## Fehlerpfade
-
-- **Backend fehlt:** Siehe „Slide-Backend" oben — Abbruch mit Installationshinweis,
-  kein roher Tool-Fehler.
-- **Kapitel ohne Kernaussage:** `core_statement` ist leer (kein Fließtext-Absatz
-  gefunden) — Rückfrage an den User statt Platzhalter-Fabrikation.
-- **Unbekanntes `--kapitel`:** `resolve_chapters()` wirft `ChapterResolutionError`
-  mit den verfügbaren Kapiteln in der Meldung (identisch zu `latex-export`).
-- **Kein Kapitel in `kapitel/`:** `ChapterResolutionError` mit „Kein Kapitel in
-  '<dir>' gefunden" statt Stacktrace.
-- **`python-pptx` fehlt:** `render_pptx.py` meldet „FEHLER: Das Python-Paket
-  'python-pptx' ist nicht installiert …" mit Nachinstallations-Hinweis statt
-  eines `ImportError`-Tracebacks (AC6).
+`slide-export` erzeugt einen Foliensatz mit einer Kernaussage pro Folie aus
+denselben Kapiteln wie `word-export` (Fließtext-Renderer, `.docx`/PDF) und
+`latex-export` (kein Bezug zu Folien, nur Kapitel-Quelle geteilt). Kein
+eigenes Literaturverzeichnis auf Folien.
