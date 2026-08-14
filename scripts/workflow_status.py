@@ -31,10 +31,10 @@ mehrerer Phasen mit identischer Vorbedingung, offenes Kettenende) -- jeder
 Versuch, das hier nachzumodellieren, hat in Review-Runden wiederholt neue
 Bruchstellen aufgedeckt. Dieses Modul behauptet deshalb nur noch, was aus
 den Eintrittsbedingungen direkt und ohne Sonderfall-Logik folgt: die
-aktuelle Phase (erste mit unerfuellter Eintrittsbedingung) und deren
-Position in der Kette. KEINE Aussage ueber "erledigt"/"abgeschlossen" fuer
-vorangehende Phasen -- echte Abschlusserkennung mit eigenen Belegen ist
-Issue #946.
+aktuelle Phase (der Vorgaenger der ersten Phase mit unerfuellter
+Eintrittsbedingung -- siehe compute_status()) und deren Position in der
+Kette. KEINE Aussage ueber "erledigt"/"abgeschlossen" fuer vorangehende
+Phasen -- echte Abschlusserkennung mit eigenen Belegen ist Issue #946.
 """
 
 from __future__ import annotations
@@ -114,8 +114,10 @@ def compute_status(context_text: str | None, phases: list[dict]) -> dict | None:
 
     Rueckgabe bei vorhandenem Kontext:
       {
-        "current_phase": dict | None,         # erste Phase mit unerfuellter
-                                               # Eintrittsbedingung
+        "current_phase": dict | None,         # Vorgaenger der ersten Phase
+                                               # mit unerfuellter Eintritts-
+                                               # bedingung -- die Phase, die
+                                               # noch zu tun ist
         "phases_before_current": [dict, ...], # Phasen VOR current_phase in
                                                # der Kette -- eine reine
                                                # Positionsangabe, KEINE
@@ -135,19 +137,32 @@ def compute_status(context_text: str | None, phases: list[dict]) -> dict | None:
     if context_text is None:
         return None
 
-    # current_phase: erste Phase mit unerfuellter Eintrittsbedingung, in
-    # Listenreihenfolge. Bleibt None, wenn keine solche Phase existiert (AC:
-    # siehe test_all_phases_satisfied_yields_no_current_phase) -- das
-    # bedeutet nur "keine offene Eintrittsbedingung mehr gefunden", nicht
-    # "alles erledigt".
-    current_phase: dict | None = None
-    current_index: int | None = None
-
+    # Die Eintrittsbedingung von Phase N ist in config/workflow-phases.json
+    # durchgaengig das Arbeitsergebnis von Phase N-1 (z. B. topic-finding
+    # braucht "Universitaet: filled" -- geliefert von context-setup). Die
+    # erste Phase mit unerfuellter Eintrittsbedingung ist deshalb NICHT die
+    # aktuelle Phase -- die kann man ja gerade NICHT betreten. Zu tun ist ihr
+    # Vorgaenger. Bei mehreren Phasen mit identischem, unerfuelltem Gate
+    # (Kohorte) liefert der Vorwaertsscan automatisch die ERSTE davon, weil
+    # er beim ersten Fehlschlag abbricht -- der Vorgaenger davon ist damit
+    # exakt der einer einzelnen Phase.
+    first_unmet_index: int | None = None
     for i, phase in enumerate(phases):
         if not _preconditions_satisfied(context_text, phase):
-            current_phase = phase
-            current_index = i
+            first_unmet_index = i
             break
+
+    current_phase: dict | None = None
+    current_index: int | None = None
+    if first_unmet_index is not None:
+        # Randfall: phases[0] (Startphase) hat vertragsgemaess IMMER
+        # preconditions: [] und damit nie ein unerfuelltes Gate (siehe
+        # config/workflow-phases.json-Kommentar) -- first_unmet_index ist
+        # also praktisch nie 0. Rein defensiv (kaputte/fremde Phasenliste)
+        # faellt dieser Fall auf die Phase selbst zurueck statt auf einen
+        # nicht existierenden Vorgaenger.
+        current_index = max(first_unmet_index - 1, 0)
+        current_phase = phases[current_index]
 
     phases_before_current: list[dict] = (
         list(phases) if current_index is None else list(phases[:current_index])

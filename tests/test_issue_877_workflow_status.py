@@ -1,16 +1,21 @@
 """Tests fuer scripts/workflow_status.py (Issue #877).
 
 Werten `academic_context.md` gegen `config/workflow-phases.json` aus: aktuelle
-Phase (erste Phase mit unerfuellter Eintrittsbedingung), deren Position in
-der Kette, naechster Schritt inkl. Ausloeser (Claude/Operator), Restkette
-bis 'export'. Jeder Fehlerpfad (fehlende/kaputte Datei) degradiert lautlos --
-kein Ausnahmefall darf nach aussen dringen.
+Phase, deren Position in der Kette, naechster Schritt inkl. Ausloeser
+(Claude/Operator), Restkette bis 'export'. Jeder Fehlerpfad (fehlende/kaputte
+Datei) degradiert lautlos -- kein Ausnahmefall darf nach aussen dringen.
 
 Bewusst reduzierter Geltungsbereich (Convergence-Alert auf PR #930, Issue
 #946): config/workflow-phases.json modelliert nur Eintrittsbedingungen, kein
 Abschlusskriterium. compute_status() behauptet deshalb NICHT, dass Phasen vor
 current_phase "erledigt" sind -- `phases_before_current` ist eine reine
 Positionsangabe. Echte Abschlusserkennung ist Issue #946.
+
+Siebte Review-Runde (Off-by-one, ebenfalls auf PR #930): die Vorbedingung von
+Phase N ist in config/workflow-phases.json durchgaengig das Arbeitsergebnis
+von Phase N-1. current_phase ist deshalb NICHT die erste Phase mit
+unerfuellter Eintrittsbedingung selbst (die kann man ja gerade nicht
+betreten) -- sondern ihr Vorgaenger, die Phase, die noch zu tun ist.
 """
 
 from __future__ import annotations
@@ -138,62 +143,76 @@ class TestComputeStatus:
         assert status is not None
         # Universität gefuellt -> topic-finding-Vorbedingung erfuellt, Thema
         # gefuellt -> research-question-Vorbedingung erfuellt, "Gliederung
-        # steht" nicht angehakt -> literature-search ist die erste offene Phase.
-        assert status["current_phase"]["id"] == "literature-search"
+        # steht" nicht angehakt -> literature-search ist die erste Phase mit
+        # unerfuellter Vorbedingung. Zu tun ist aber ihr Vorgaenger:
+        # research-question hat "Thema" schon erfuellt, aber "Gliederung
+        # steht" ist NICHT das Ergebnis von research-question -- dennoch ist
+        # research-question in dieser reduzierten Testkette (kein eigener
+        # 'Gliederung schreiben'-Schritt) der unmittelbare Vorgaenger.
+        assert status["current_phase"]["id"] == "research-question"
+        assert status["next_step"]["trigger"] == "Claude"
         assert [p["id"] for p in status["phases_before_current"]] == [
             "context-setup",
             "topic-finding",
-            "research-question",
         ]
 
     def test_no_context_returns_none(self) -> None:
         assert ws.compute_status(None, PHASES) is None
 
-    def test_fresh_stub_stops_at_second_phase(self) -> None:
+    def test_fresh_stub_reports_context_setup_as_current_phase(self) -> None:
+        # Universität ist TODO -> topic-finding hat die erste unerfuellte
+        # Vorbedingung. Zu tun ist ihr Vorgaenger: context-setup selbst --
+        # die Startphase, die man IMMER betreten kann (preconditions: []).
         status = ws.compute_status(FRESH_STUB_CONTEXT, PHASES)
         assert status is not None
-        assert status["current_phase"]["id"] == "topic-finding"
-        assert [p["id"] for p in status["phases_before_current"]] == ["context-setup"]
+        assert status["current_phase"]["id"] == "context-setup"
+        assert status["phases_before_current"] == []
 
     def test_garbled_context_does_not_raise_and_yields_conservative_result(self) -> None:
         garbled = "\x00\x01 not markdown at all {{{ ]]] üöä \n\n---"
         status = ws.compute_status(garbled, PHASES)
         assert status is not None
-        assert status["current_phase"]["id"] == "topic-finding"
+        assert status["current_phase"]["id"] == "context-setup"
 
     def test_next_step_trigger_is_claude_when_skill_present(self) -> None:
         status = ws.compute_status(FRESH_STUB_CONTEXT, PHASES)
         assert status["next_step"]["trigger"] == "Claude"
-        assert status["next_step"]["id"] == "topic-finding"
+        assert status["next_step"]["id"] == "context-setup"
 
     def test_next_step_trigger_is_operator_when_only_command_present(self) -> None:
-        status = ws.compute_status(PARTIAL_CONTEXT, PHASES)
-        assert status["next_step"]["trigger"] == "Operator"
-        assert status["next_step"]["id"] == "literature-search"
-
-    def test_next_step_trigger_is_operator_when_neither_skill_nor_command(self) -> None:
-        # vault-query hat weder skills noch commands -> direkter MCP-Zugriff,
-        # Ausloeser bleibt Operator.
-        vault_only_context = PARTIAL_CONTEXT.replace(
-            "- [ ] Gliederung steht", "- [x] Gliederung steht"
-        )
-        status = ws.compute_status(vault_only_context, PHASES)
-        assert status["current_phase"]["id"] == "vault-query"
-        assert status["next_step"]["trigger"] == "Operator"
-
-    def test_checked_partial_precondition_keeps_vault_query_as_current_phase(self) -> None:
-        # "Literatur gesammelt" ist NICHT angehakt -> vault-query bleibt die
-        # aktuelle Phase, taucht also nicht in phases_before_current auf (es
-        # liegt nicht davor, es IST die aktuelle Phase).
+        # Gliederung steht angehakt -> vault-query hat die erste unerfuellte
+        # Vorbedingung; ihr Vorgaenger literature-search hat nur den Command
+        # /search, keinen Skill -> Operator.
         context = PARTIAL_CONTEXT.replace("- [ ] Gliederung steht", "- [x] Gliederung steht")
         status = ws.compute_status(context, PHASES)
+        assert status["current_phase"]["id"] == "literature-search"
+        assert status["next_step"]["trigger"] == "Operator"
+
+    def test_next_step_trigger_is_operator_when_neither_skill_nor_command(self) -> None:
+        # Gliederung UND Literatur angehakt -> export hat die erste
+        # unerfuellte Vorbedingung; ihr Vorgaenger vault-query hat weder
+        # skills noch commands -> direkter MCP-Zugriff, Ausloeser Operator.
+        context = PARTIAL_CONTEXT.replace(
+            "- [ ] Gliederung steht", "- [x] Gliederung steht"
+        ).replace("- [ ] Literatur gesammelt", "- [x] Literatur gesammelt")
+        status = ws.compute_status(context, PHASES)
         assert status["current_phase"]["id"] == "vault-query"
+        assert status["next_step"]["trigger"] == "Operator"
+
+    def test_checked_partial_gate_is_not_satisfied_by_an_empty_checkbox(self) -> None:
+        # Gliederung angehakt, Literatur NICHT angehakt -> vault-querys
+        # 'checked_partial'-Vorbedingung darf NICHT als erfuellt durchgehen,
+        # sonst wuerde current_phase faelschlich bis export weiterwandern.
+        # current_phase bleibt literature-search (Vorgaenger von vault-query).
+        context = PARTIAL_CONTEXT.replace("- [ ] Gliederung steht", "- [x] Gliederung steht")
+        status = ws.compute_status(context, PHASES)
+        assert status["current_phase"]["id"] == "literature-search"
         assert "vault-query" not in [p["id"] for p in status["phases_before_current"]]
 
     def test_remaining_until_export_lists_phases_in_order_through_export(self) -> None:
         status = ws.compute_status(PARTIAL_CONTEXT, PHASES)
         ids = [p["id"] for p in status["remaining_until_export"]]
-        assert ids == ["literature-search", "vault-query", "export"]
+        assert ids == ["research-question", "literature-search", "vault-query", "export"]
         # reproducible-freeze liegt hinter 'export' -> nicht mehr enthalten.
         assert "reproducible-freeze" not in ids
 
@@ -218,18 +237,23 @@ def _real_phases() -> list[dict]:
 
 
 def _real_context(
-    *, gliederung: bool = False, literatur: bool = False, kapitel: bool = False
+    *,
+    universitaet: bool = True,
+    forschungsfrage: bool = True,
+    gliederung: bool = False,
+    literatur: bool = False,
+    kapitel: bool = False,
 ) -> str:
     def box(v: bool) -> str:
         return "x" if v else " "
 
     return f"""\
 ## Profil
-- Universität: FH Leibniz Hannover
+- Universität: {"FH Leibniz Hannover" if universitaet else "TODO"}
 
 ## Arbeit
 - Thema: DevOps Governance in KMU
-- Forschungsfrage: Welche Faktoren erklären DevOps-Adoption in KMU?
+- Forschungsfrage: {"Welche Faktoren erklären DevOps-Adoption in KMU?" if forschungsfrage else "TODO"}
 
 ## Fortschritt
 - [x] Thema festgelegt
@@ -242,23 +266,22 @@ def _real_context(
 
 class TestComputeStatusAgainstRealConfig:
     """Reduzierter Geltungsbereich nach Convergence-Alert auf PR #930 (Issue
-    #946): die reale config/workflow-phases.json hat echte Mehrphasen-
-    Kohorten -- mehrere aufeinanderfolgende Phasen mit identischer
-    Vorbedingung (z. B. teilen sich sechs Phasen -- literature-search bis
-    reading-notes -- das Eintritts-Gate 'Gliederung steht: checked'). Eine
-    Kohorte hat keine individuelle Abschluss-Evidenz je Mitglied; eine
-    erfuellte (geteilte) Eintrittsbedingung belegt nur "betretbar", nicht
-    "die Arbeit ist getan". Mehrere Anlaeufe, das ueber Kohorten-Logik
-    nachzumodellieren, haben in Review-Runden wiederholt neue Bruchstellen
-    aufgedeckt (Kohorten selbst, dann Einzelphasen, dann Kettenende).
+    #946): die reale config/workflow-phases.json hat kein Abschlusskriterium
+    je Phase, nur Eintrittsbedingungen. compute_status() behauptet deshalb
+    bewusst NICHTS mehr ueber "erledigt" -- phases_before_current ist eine
+    reine Positionsangabe. Echte Abschlusserkennung mit eigenen Belegen ist
+    Issue #946.
 
-    compute_status() behauptet deshalb ab jetzt bewusst NICHTS mehr ueber
-    "erledigt" -- phases_before_current ist eine reine Positionsangabe
-    (Phasen, die in phases[] vor current_phase stehen), keine Abschluss-
-    Behauptung. Diese Tests laufen weiterhin gegen die ECHTE Config (nicht
-    nur die 7-Phasen-Testfixture) und belegen genau das: keine Phase gilt
-    hier je als "erledigt", weil dieses Konzept aus der Funktion entfernt
-    wurde. Echte Abschlusserkennung mit eigenen Belegen ist Issue #946.
+    Siebte Review-Runde (Off-by-one, ebenfalls PR #930): die Vorbedingung von
+    Phase N ist durchgaengig das Arbeitsergebnis von Phase N-1 (topic-finding
+    braucht "Universitaet: filled" -- geliefert von context-setup;
+    outline-and-expose braucht "Forschungsfrage: filled" -- geliefert von
+    research-question). Die erste Phase mit unerfuellter Eintrittsbedingung
+    ist deshalb NICHT die aktuelle Phase (die kann man ja gerade nicht
+    betreten) -- current_phase ist ihr Vorgaenger. Sind mehrere
+    aufeinanderfolgende Phasen von einem gemeinsamen, unerfuellten Gate
+    betroffen (Kohorte, z. B. sechs Phasen mit 'Gliederung steht: checked'),
+    ist der Vorgaenger des ERSTEN Mitglieds gemeint, nicht des letzten.
     """
 
     def test_status_has_no_completion_claiming_field(self) -> None:
@@ -276,35 +299,51 @@ class TestComputeStatusAgainstRealConfig:
         }
         assert "done_phases" not in status
 
-    def test_current_phase_is_first_phase_with_unmet_precondition_across_a_shared_gate(
-        self,
-    ) -> None:
-        """Sechs Phasen teilen sich die Eintrittsbedingung 'Gliederung steht:
-        checked'. Ist sie erfuellt, hat jede der sechs -- individuell
-        geprueft -- eine erfuellte EIGENE Eintrittsbedingung; current_phase
-        wandert deshalb korrekt bis zur naechsten Phase mit einer ANDEREN,
-        noch unerfuellten Eintrittsbedingung (vault-query, 'Literatur
-        gesammelt'). Das ist keine Abschluss-Behauptung ueber die sechs
-        Phasen -- nur, dass ihre eigene Eintrittsbedingung erfuellt ist."""
+    def test_review_finding_fresh_stub_reports_context_setup_not_topic_finding(self) -> None:
+        """Der vom Review genannte Fall: frischer Stub, 'Universitaet: TODO'.
+        topic-finding hat die erste unerfuellte Eintrittsbedingung -- zu tun
+        ist aber context-setup (die Startphase selbst), nicht topic-finding.
+        """
         phases = _real_phases()
-        context = _real_context(gliederung=True, literatur=False, kapitel=False)
+        context = _real_context(universitaet=False)
         status = ws.compute_status(context, phases)
-        assert status["current_phase"]["id"] == "vault-query"
+        assert status["current_phase"]["id"] == "context-setup"
+        assert status["phases_before_current"] == []
 
-        cohort_ids = [
+    def test_review_finding_missing_forschungsfrage_reports_research_question(self) -> None:
+        """Zweiter vom Review genannter Fall: 'Forschungsfrage: TODO'.
+        outline-and-expose hat die erste unerfuellte Eintrittsbedingung --
+        zu tun ist ihr Vorgaenger research-question ('Forschungsfrage
+        schärfen'), der Skill, der 'Forschungsfrage' tatsaechlich fuellt."""
+        phases = _real_phases()
+        context = _real_context(forschungsfrage=False)
+        status = ws.compute_status(context, phases)
+        assert status["current_phase"]["id"] == "research-question"
+
+    def test_shared_gate_cohort_reports_predecessor_of_first_member_not_last(self) -> None:
+        """Sechs Phasen (literature-search bis reading-notes) teilen sich
+        die unerfuellte Eintrittsbedingung 'Gliederung steht: checked'. Der
+        Vorwaertsscan muss beim ERSTEN Mitglied (literature-search)
+        abbrechen -- current_phase ist dessen Vorgaenger (methodology-choice),
+        NICHT der Vorgaenger eines spaeteren Kohorten-Mitglieds wie
+        reading-notes (das waere source-quality-check)."""
+        phases = _real_phases()
+        context = _real_context(gliederung=False, literatur=False, kapitel=False)
+        status = ws.compute_status(context, phases)
+        assert status["current_phase"]["id"] == "methodology-choice"
+        before_ids = [p["id"] for p in status["phases_before_current"]]
+        assert "outline-and-expose" in before_ids
+        # Keines der sechs Kohorten-Mitglieder liegt schon davor -- sie
+        # gehoeren noch zur Restkette, nicht zur Vorgeschichte.
+        for phase_id in [
             "literature-search",
             "reading-list-import",
             "book-acquisition",
             "screening",
             "source-quality-check",
             "reading-notes",
-        ]
-        before_ids = [p["id"] for p in status["phases_before_current"]]
-        for phase_id in cohort_ids:
-            assert phase_id in before_ids, (
-                f"{phase_id} sollte in phases_before_current stehen (reine "
-                "Positionsangabe -- es liegt vor vault-query in der Kette)."
-            )
+        ]:
+            assert phase_id not in before_ids
 
     def test_phases_before_current_is_exactly_the_positional_slice(self) -> None:
         """phases_before_current ist ausschliesslich eine Positionsangabe:
@@ -363,10 +402,11 @@ class TestFormatLines:
         status = ws.compute_status(PARTIAL_CONTEXT, PHASES)
         lines = ws.format_lines(status, full=False)
         assert any(
-            line.startswith("[flowkit] Phase:") and "Literatur suchen" in line for line in lines
+            line.startswith("[flowkit] Phase:") and "Forschungsfrage schärfen" in line
+            for line in lines
         )
         assert any(
-            line.startswith("[flowkit] Naechster Schritt:") and "Operator" in line for line in lines
+            line.startswith("[flowkit] Naechster Schritt:") and "Claude" in line for line in lines
         )
 
     def test_full_mode_lists_remaining_phases_through_export(self) -> None:
