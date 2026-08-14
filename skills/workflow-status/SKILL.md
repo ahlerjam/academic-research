@@ -30,7 +30,7 @@ Kurzfassung) und der Compaction-Block von `mid-session-reinforcement.mjs`
 
 ## Ablauf
 
-1. Führe `${CLAUDE_PLUGIN_ROOT}/scripts/workflow_status.py --project-dir . --plugin-root "${CLAUDE_PLUGIN_ROOT}" --full` aus.
+1. Führe `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/workflow_status.py" --project-dir . --plugin-root "${CLAUDE_PLUGIN_ROOT}" --full` aus.
 2. Keine Ausgabe (leerer stdout)? Dann existiert entweder keine
    `./academic_context.md` oder sie ist beschädigt/unvollständig — beides
    ist kein Fehler. Antworte in diesem Fall, dass noch kein auswertbarer

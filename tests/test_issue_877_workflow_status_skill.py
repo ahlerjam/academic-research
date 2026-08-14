@@ -6,6 +6,7 @@ Formulierungen aus dem Issue) wird ohne eigenen Command beantwortet.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -61,6 +62,24 @@ def test_skill_references_full_flag_of_workflow_status_script() -> None:
     text = SKILL_PATH.read_text(encoding="utf-8")
     assert "workflow_status.py" in text
     assert "--full" in text
+
+
+def test_skill_invokes_script_via_python_interpreter() -> None:
+    """Review-Fund (PR #930): scripts/workflow_status.py hat kein
+    Executable-Bit und keinen wirksamen Shebang bei direktem Aufruf ueber das
+    Bash-Tool. Der Skill muss das Skript deshalb explizit ueber einen
+    Python-Interpreter aufrufen (Muster: hooks/hooks.json ruft dasselbe
+    Skript mit vorangestelltem 'python3' auf), statt es wie ein eigenes
+    Kommando zu starten."""
+    text = SKILL_PATH.read_text(encoding="utf-8")
+    match = re.search(r"`([^`]*workflow_status\.py[^`]*)`", text)
+    assert match, "Kein Aufruf-Kommando fuer workflow_status.py im Skill-Text gefunden"
+    command = match.group(1)
+    prefix = command.split("workflow_status.py", 1)[0]
+    assert re.search(r"\bpython3?\b", prefix), (
+        f"workflow_status.py wird ohne vorangestellten Python-Interpreter aufgerufen: "
+        f"{command!r} -- das Skript ist nicht ausfuehrbar (kein Executable-Bit)."
+    )
 
 
 def test_skill_mentions_trigger_attribution() -> None:

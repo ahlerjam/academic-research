@@ -10,11 +10,13 @@ darf nach aussen dringen.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 MODULE_PATH = REPO_ROOT / "scripts" / "workflow_status.py"
+REAL_PHASES_PATH = REPO_ROOT / "config" / "workflow-phases.json"
 
 
 def _load_module():
@@ -198,6 +200,161 @@ class TestComputeStatus:
         assert status["current_phase"] is None
         assert status["next_step"] is None
         assert status["remaining_until_export"] == []
+
+
+def _real_phases() -> list[dict]:
+    return json.loads(REAL_PHASES_PATH.read_text(encoding="utf-8"))["phases"]
+
+
+def _real_context(
+    *, gliederung: bool = False, literatur: bool = False, kapitel: bool = False
+) -> str:
+    def box(v: bool) -> str:
+        return "x" if v else " "
+
+    return f"""\
+## Profil
+- Universität: FH Leibniz Hannover
+
+## Arbeit
+- Thema: DevOps Governance in KMU
+- Forschungsfrage: Welche Faktoren erklären DevOps-Adoption in KMU?
+
+## Fortschritt
+- [x] Thema festgelegt
+- [x] Forschungsfrage formuliert
+- [{box(gliederung)}] Gliederung steht
+- [{box(literatur)}] Literatur gesammelt
+- [{box(kapitel)}] Kapitel geschrieben
+"""
+
+
+class TestComputeStatusAgainstRealConfig:
+    """Review-Fund (PR #930): die reale config/workflow-phases.json hat echte
+    Mehrphasen-Kohorten -- mehrere aufeinanderfolgende Phasen mit identischer
+    Vorbedingung (z. B. 'Gliederung steht: checked' gilt fuer sechs Phasen:
+    literature-search, reading-list-import, book-acquisition, screening,
+    source-quality-check, reading-notes). Eine Kohorte hat aber keine eigene,
+    individuelle Abschluss-Evidenz je Mitglied -- die einzige verfuegbare
+    Evidenz, dass die Kohorte tatsaechlich abgeschlossen ist (nicht nur
+    betretbar), ist die Vorbedingung der naechsten, andersartigen Phase
+    (hier: vault-querys 'Literatur gesammelt'). Ein Fix, der jede Phase nur
+    gegen ihre EIGENE (geteilte) Vorbedingung prueft, haelt die ganze
+    Kohorte faelschlich fuer erledigt, sobald deren gemeinsames Eintritts-Gate
+    erfuellt ist -- die sechs Phasen 'fallen aus der Kette', weil das Tool
+    sofort zu vault-query springt, obwohl keine der sechs Aktivitaeten
+    stattgefunden hat.
+    """
+
+    def test_multi_phase_cohort_stays_undone_until_next_stage_precondition_met(self) -> None:
+        phases = _real_phases()
+        # Gliederung steht ist das GEMEINSAME Eintritts-Gate von sechs Phasen;
+        # Literatur gesammelt (die Vorbedingung von vault-query, der ersten
+        # Phase NACH der Kohorte) ist noch nicht erfuellt -- keine der sechs
+        # Kohorten-Phasen darf schon als erledigt gelten.
+        context = _real_context(gliederung=True, literatur=False, kapitel=False)
+        status = ws.compute_status(context, phases)
+        assert status is not None
+
+        cohort_ids = [
+            "literature-search",
+            "reading-list-import",
+            "book-acquisition",
+            "screening",
+            "source-quality-check",
+            "reading-notes",
+        ]
+        done_ids = {p["id"] for p in status["done_phases"]}
+        for phase_id in cohort_ids:
+            assert phase_id not in done_ids, (
+                f"{phase_id} faelschlich als erledigt markiert, obwohl 'Literatur "
+                "gesammelt' (Vorbedingung der Folgephase vault-query) noch nicht "
+                "erfuellt ist -- die Kohorte 'Gliederung steht' faellt aus der Kette."
+            )
+        assert status["current_phase"]["id"] == "literature-search", (
+            "current_phase muss das erste Mitglied der noch nicht erledigten "
+            f"Kohorte sein, ist aber {status['current_phase']['id']!r}."
+        )
+        # Positional muessen alle sechs trotzdem in der Restkette auftauchen.
+        remaining_ids = [p["id"] for p in status["remaining_until_export"]]
+        for phase_id in cohort_ids:
+            assert phase_id in remaining_ids, f"{phase_id} fehlt in remaining_until_export."
+
+    def test_multi_phase_cohort_becomes_done_once_next_stage_precondition_met(self) -> None:
+        # Sobald 'Literatur gesammelt' (die Vorbedingung von vault-query, der
+        # ersten Phase NACH der 'Gliederung steht'-Kohorte) erfuellt ist, ist
+        # deren Arbeit nachweislich abgeschlossen -- jetzt duerfen alle sechs
+        # Phasen als erledigt gelten.
+        phases = _real_phases()
+        context = _real_context(gliederung=True, literatur=True, kapitel=False)
+        status = ws.compute_status(context, phases)
+        done_ids = {p["id"] for p in status["done_phases"]}
+        for phase_id in [
+            "literature-search",
+            "reading-list-import",
+            "book-acquisition",
+            "screening",
+            "source-quality-check",
+            "reading-notes",
+        ]:
+            assert phase_id in done_ids, f"{phase_id} sollte jetzt erledigt sein."
+        # vault-query (Vorbedingung 'Literatur gesammelt: checked_partial',
+        # ebenfalls erfuellt) ist damit ebenfalls erledigt.
+        assert "vault-query" in done_ids
+        # Die naechste Kohorte (study-comparison bis chapter-writing) teilt
+        # sich 'Literatur gesammelt: checked' als EIGENE Vorbedingung -- die
+        # ist zwar auch erfuellt, aber das ist wieder nur ihr Eintritts-Gate.
+        # Abschluss-Evidenz ist erst 'Kapitel geschrieben' (Vorbedingung von
+        # anti-ai-audit, der ersten Phase danach) -- die fehlt noch, also
+        # bleibt study-comparison (das erste Mitglied dieser naechsten
+        # Kohorte) die aktuelle Phase, nicht anti-ai-audit.
+        assert status["current_phase"]["id"] == "study-comparison"
+        for phase_id in ["scoring-and-excel-export", "literature-gap-analysis"]:
+            assert phase_id not in done_ids, (
+                f"{phase_id} faelschlich als erledigt markiert -- 'Kapitel "
+                "geschrieben' (Vorbedingung der Folgephase anti-ai-audit) ist "
+                "noch nicht erfuellt."
+            )
+
+    def test_downstream_cohort_becomes_done_once_final_stage_precondition_met(self) -> None:
+        # Alles erfuellt (inkl. 'Kapitel geschrieben') -> auch die
+        # study-comparison-Kohorte ist jetzt erledigt, current_phase wird
+        # None (keine Kohorte bleibt offen).
+        phases = _real_phases()
+        context = _real_context(gliederung=True, literatur=True, kapitel=True)
+        status = ws.compute_status(context, phases)
+        assert status["current_phase"] is None
+        assert len(status["done_phases"]) == len(phases)
+
+    def test_no_real_phase_before_export_ever_disappears_from_the_chain(self) -> None:
+        """Jede Phase bis einschliesslich 'export' muss in JEDEM Fortschritts-
+        zustand entweder in done_phases, current_phase oder
+        remaining_until_export auftauchen -- keine darf spurlos verschwinden.
+        ('reproducible-freeze' liegt per Vertrag (Docstring) hinter 'export'
+        und ist bewusst ausgenommen, siehe
+        test_remaining_until_export_lists_phases_in_order_through_export.)
+        """
+        phases = _real_phases()
+        all_ids_before_export = [
+            p["id"] for p in phases[: [p["id"] for p in phases].index("export") + 1]
+        ]
+        for gliederung in (False, True):
+            for literatur in (False, True):
+                for kapitel in (False, True):
+                    context = _real_context(
+                        gliederung=gliederung, literatur=literatur, kapitel=kapitel
+                    )
+                    status = ws.compute_status(context, phases)
+                    covered = {p["id"] for p in status["done_phases"]}
+                    if status["current_phase"] is not None:
+                        covered.add(status["current_phase"]["id"])
+                    covered |= {p["id"] for p in status["remaining_until_export"]}
+                    missing = set(all_ids_before_export) - covered
+                    assert not missing, (
+                        f"Zustand (gliederung={gliederung}, literatur={literatur}, "
+                        f"kapitel={kapitel}): Phasen fehlen komplett aus der Kette: "
+                        f"{sorted(missing)}"
+                    )
 
 
 class TestFormatLines:

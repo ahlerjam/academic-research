@@ -89,6 +89,32 @@ def _preconditions_satisfied(context_text: str, phase: dict) -> bool:
     )
 
 
+def _precondition_tuple(phase: dict) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (cond.get("field"), cond.get("expected")) for cond in phase.get("preconditions") or []
+    )
+
+
+def _cohorts(phases: list[dict]) -> list[tuple[int, int]]:
+    """Gruppiert aufeinanderfolgende Phasen mit IDENTISCHER Vorbedingung zu
+    Kohorten -- Liste von (start, end)-Indexpaaren (end exklusiv).
+
+    config/workflow-phases.json bildet 23 einzeln benannte Walkthrough-
+    Schritte auf deutlich weniger Checkpoints ab (z. B. teilen sich sechs
+    Phasen -- literature-search bis reading-notes -- die Vorbedingung
+    'Gliederung steht: checked'). Innerhalb einer solchen Kohorte hat KEINE
+    Phase eine individuelle Abschluss-Evidenz; die einzige Evidenz, dass die
+    Kohorte tatsaechlich abgeschlossen (nicht nur betretbar) ist, ist die
+    Vorbedingung der naechsten, andersartigen Phase (siehe compute_status)."""
+    cohorts: list[tuple[int, int]] = []
+    start = 0
+    for i in range(1, len(phases) + 1):
+        if i == len(phases) or _precondition_tuple(phases[i]) != _precondition_tuple(phases[start]):
+            cohorts.append((start, i))
+            start = i
+    return cohorts
+
+
 def _trigger_for(phase: dict) -> str:
     """Wer loest den Schritt aus: 'Claude' bei einem selbst-aktivierenden
     Skill, sonst 'Operator' (expliziter Slash-Command oder direkter
@@ -113,19 +139,39 @@ def compute_status(context_text: str | None, phases: list[dict]) -> dict | None:
     if context_text is None:
         return None
 
-    # current_phase ist die erste Phase mit unerfuellter Vorbedingung, in
-    # Listenreihenfolge; done_phases sind schlicht alle Phasen davor (deckt
-    # sich mit den Docstring-Feldbeschreibungen oben). Sind ALLE Phasen
-    # erfuellt, bleibt current_phase None und done_phases enthaelt alle
-    # Phasen (AC: keine aktuelle Phase mehr uebrig, siehe
+    # current_phase ist die erste Phase der ersten NICHT abgeschlossenen
+    # Kohorte; done_phases sind alle Phasen davor (deckt sich mit den
+    # Docstring-Feldbeschreibungen oben). Sind ALLE Kohorten abgeschlossen,
+    # bleibt current_phase None und done_phases enthaelt alle Phasen (AC:
+    # keine aktuelle Phase mehr uebrig, siehe
     # test_all_phases_satisfied_yields_no_current_phase).
+    #
+    # Eine Kohorte mit genau EINER Phase gilt als abgeschlossen, sobald ihre
+    # EIGENE Vorbedingung erfuellt ist (Regelfall). Eine Kohorte mit MEHREREN
+    # Phasen (identische Vorbedingung, z. B. sechs Phasen teilen sich
+    # 'Gliederung steht: checked') hat dagegen keine individuelle
+    # Abschluss-Evidenz je Mitglied -- ihre eigene Vorbedingung ist nur das
+    # gemeinsame EINTRITTS-Gate. Als abgeschlossen gilt sie erst, wenn die
+    # Vorbedingung der naechsten, andersartigen Phase erfuellt ist (Review-
+    # Fund PR #930: eine fruehere Fassung wertete faelschlich die eigene,
+    # geteilte Vorbedingung als Abschluss -- damit fielen sechs Phasen aus
+    # der Kette, siehe TestComputeStatusAgainstRealConfig). Bei der letzten
+    # Kohorte (kein 'danach' vorhanden) bleibt nur die eigene Vorbedingung.
+    cohorts = _cohorts(phases)
     current_phase: dict | None = None
     current_index: int | None = None
 
-    for i, phase in enumerate(phases):
-        if not _preconditions_satisfied(context_text, phase):
-            current_phase = phase
-            current_index = i
+    for k, (start, end) in enumerate(cohorts):
+        if end - start == 1:
+            cohort_done = _preconditions_satisfied(context_text, phases[start])
+        elif k + 1 < len(cohorts):
+            cohort_done = _preconditions_satisfied(context_text, phases[cohorts[k + 1][0]])
+        else:
+            cohort_done = _preconditions_satisfied(context_text, phases[start])
+
+        if not cohort_done:
+            current_phase = phases[start]
+            current_index = start
             break
 
     done_phases: list[dict] = (
