@@ -25,21 +25,33 @@
  * Jede Bypass-Nutzung wird nach stderr gewarnt UND in eine Logdatei
  * angehängt (siehe VAULT_GUARD_BYPASS_LOG, Issue #381).
  *
- * Fail-open vs. fail-closed (drei unterschiedliche, bewusst getrennt
- * formulierte Faelle, Issue #381 + #846-Folgefix — Vermischung war Ursache
- * des ursprünglichen Bugs UND des Folgefunds):
+ * Fail-open vs. fail-closed (VIER unterschiedliche, bewusst getrennt
+ * formulierte Faelle, Issue #381 + #846-Folgefixe — Vermischung war Ursache
+ * des ursprünglichen Bugs und BEIDER Folgefunde):
  *   1. "DB fehlt" — erwartbar bei einem frischen Projekt ohne Vault-DB.
  *      Wortlaut: "Vault-DB nicht gefunden ... Bypass aktiv." Bleibt fail-open.
  *   2. "Lookup-Fehler bei vorhandener DB" — die DB existiert, ist aber
  *      selbst das Problem (korrupte Datei, kaputte Query). Bleibt fail-open
  *      (kein Regressionsverlust für Scope "Out", Issue #381 AC2) — ein
  *      Befund UEBER die DB, sichtbar anderer Wortlaut als Fall 1.
- *   3. "Lookup-APPARAT kaputt trotz vorhandener DB" — fehlendes Python-Modul
- *      (z. B. rapidfuzz fehlt im aktiven venv) oder kein lauffaehiger
- *      Interpreter. Das ist KEIN Befund ueber die DB, sondern "nicht
- *      prüfbar" — anders als Fall 1/2 bleibt dieser Fall NICHT fail-open,
- *      sonst wuerde ein fehlendes Paket jedes erfundene Zitat durchwinken
- *      (#846-Folgefund, siehe tests/test_review_fix_verbatim_guard.py).
+ *   3. "Lookup-APPARAT kaputt trotz vorhandener DB" — KEIN Kandidat der
+ *      Interpreter-Kaskade lief ueberhaupt an (fehlendes Python-Modul wie
+ *      rapidfuzz, kein Interpreter gefunden/startbar). Das ist KEIN Befund
+ *      ueber die DB, sondern "nicht prüfbar" — anders als Fall 1/2 bleibt
+ *      dieser Fall NICHT fail-open, sonst wuerde ein fehlendes Paket jedes
+ *      erfundene Zitat durchwinken (#846-Folgefund Nr. 1, siehe
+ *      tests/test_review_fix_verbatim_guard.py).
+ *   4. "Zeit-/Formatproblem trotz lauffaehigem Apparat" — mindestens EIN
+ *      Interpreter-Kandidat ist tatsaechlich gestartet, hat aber sein
+ *      Zeitlimit gerissen (Timeout je Kandidat oder Gesamtbudget erschoepft
+ *      — bei ~5000 Vault-Zitaten allein ~1,35 s reine Python-Zeit laut
+ *      scripts/dev/bench_hook_guards_batch.mjs, unter Last reicht das fuer
+ *      einen Timeout), oder er hat geantwortet, aber nicht mit verwertbarem
+ *      JSON. Das ist eine Aussage ueber die MASCHINE/das Antwortformat, NICHT
+ *      ueber die Verfuegbarkeit des Apparats — bleibt deshalb fail-open wie
+ *      vor #846, sonst wuerde eine langsame Maschine (grosser Vault, Last)
+ *      JEDEN Write blockieren (#846-Folgefund Nr. 2, Deep Review zu PR #939,
+ *      siehe hooks/lib/vault-bridge.mjs::runVaultPython() Diagnostics).
  */
 
 import { existsSync, appendFileSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
@@ -451,8 +463,14 @@ function cachedFigureFlag(entry, context) {
  * Zweifel ``absent`` (Block), nie still durchgewunken. Liefert der Cache
  * `null` (nicht verfuegbar oder fehlgeschlagen), faellt dieser Guard NICHT
  * mehr auf einen zweiten eigenen Direktaufruf zurueck (der wuerde nur das
- * Zeitbudget verdoppeln, siehe unten) — stattdessen fail-CLOSED fuer die
- * "kein Interpreter"-Klasse (Fall 3, #846-Folgefund).
+ * Zeitbudget verdoppeln, siehe unten) — die Reaktion haengt dann von
+ * ``diagnostics.reason`` ab (Deep-Review-Finding zu PR #939, #846-Folgefund
+ * Nr. 2): NUR ``'no-interpreter'`` (kein Kandidat der Kaskade lief
+ * ueberhaupt an) ist fail-CLOSED. ``'timeout'``/``'budget'``/
+ * ``'parse-error'``/``'shape-error'``/``'missing-db'`` sind Aussagen ueber
+ * die MASCHINE oder das Antwortformat, nicht ueber den Vault, und bleiben
+ * fail-open wie vor #846 -- sonst wuerde eine langsame Maschine (grosser
+ * Vault, Last) jeden Write blockieren, obwohl der Apparat funktioniert.
  */
 function lookupBatch(spanTexts, figureRefs, ctx) {
   const allOpen = () => ({
@@ -470,6 +488,7 @@ function lookupBatch(spanTexts, figureRefs, ctx) {
     return allOpen();
   }
 
+  const diagnostics = {};
   const batch = ensureQuoteBatch({
     filePath: ctx.filePath,
     toolName: ctx.toolName,
@@ -481,6 +500,7 @@ function lookupBatch(spanTexts, figureRefs, ctx) {
     isQuoteNegative: isCachedQuoteNegative,
     budget: VAULT_LOOKUP_BUDGET_MS,
     label: 'Vault-Guard',
+    diagnostics,
   });
   if (batch) {
     return {
@@ -490,23 +510,38 @@ function lookupBatch(spanTexts, figureRefs, ctx) {
   }
 
   // ensureQuoteBatch() hat bereits EINEN vollen runVaultPython-Versuch (mit
-  // VAULT_LOOKUP_BUDGET_MS) unternommen und ist gescheitert — KEIN
-  // Interpreter der Kaskade konnte ueberhaupt starten (Details bereits auf
-  // stderr protokolliert). Das ist der Apparat-kaputt-Fall in Reinform
-  // ("kaputter Interpreter", Fall 3): fail-CLOSED statt Bypass, sonst wuerde
-  // ein kaputtes PATH-python3 (o. ae.) jedes erfundene Zitat durchwinken
-  // (#846-Folgefund). Ein zweiter eigener Versuch mit derselben
-  // Interpreter-Kaskade und demselben Budget wuerde nur das Zeitbudget
-  // verdoppeln (Finding: Hook-Timeout-Test
+  // VAULT_LOOKUP_BUDGET_MS) unternommen und ist gescheitert. Ein zweiter
+  // eigener Versuch mit derselben Interpreter-Kaskade und demselben Budget
+  // wuerde nur das Zeitbudget verdoppeln (Finding: Hook-Timeout-Test
   // tests/test_review_fix_hook_budget.py), ohne die Erfolgsaussicht zu
-  // aendern — derselbe Fehler traete erneut auf.
-  const detail = 'kein Interpreter konnte den Vault oeffnen';
-  if (spanTexts.length > 0) warnFailClosedApparatus('Vault-Guard', detail);
-  if (figureRefs.length > 0) warnFailClosedApparatus('Figure-Guard', detail);
-  return {
-    quotes: spanTexts.map(() => ({ status: 'unverifiable', detail })),
-    figures: figureRefs.map(() => false),
-  };
+  // aendern.
+  //
+  // NUR "kein Interpreter der Kaskade lief ueberhaupt an" ist der
+  // Apparat-kaputt-Fall in Reinform ("kaputter Interpreter", Fall 3):
+  // fail-CLOSED statt Bypass, sonst wuerde ein kaputtes PATH-python3 (o. ae.)
+  // jedes erfundene Zitat durchwinken (#846-Folgefund Nr. 1). Ein Timeout
+  // oder erschoepftes Budget bedeutet dagegen, dass MINDESTENS EIN
+  // Interpreter tatsaechlich lief, aber nicht rechtzeitig fertig wurde
+  // (grosser Vault + Last, siehe scripts/dev/bench_hook_guards_batch.mjs) —
+  // das ist der Apparat, der FUNKTIONIERT, nur zu langsam ist. Genauso ein
+  // Antwortformat-Fehler (JSON-Parse/-Form): der Interpreter lief und
+  // antwortete, nur nicht verwertbar. Beides fail-CLOSED zu behandeln
+  // wuerde jeden Write unter Last blockieren (Deep-Review-Finding Nr. 2 zu
+  // PR #939) -- bleibt deshalb fail-open wie vor #846.
+  if (diagnostics.reason === 'no-interpreter') {
+    const detail = 'kein Interpreter konnte den Vault oeffnen';
+    if (spanTexts.length > 0) warnFailClosedApparatus('Vault-Guard', detail);
+    if (figureRefs.length > 0) warnFailClosedApparatus('Figure-Guard', detail);
+    return {
+      quotes: spanTexts.map(() => ({ status: 'unverifiable', detail })),
+      figures: figureRefs.map(() => false),
+    };
+  }
+
+  const detail = `Batch-Lookup fehlgeschlagen (${diagnostics.reason || 'unbekannter Grund'})`;
+  if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', detail);
+  if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', detail);
+  return allOpen();
 }
 
 // ---------------------------------------------------------------------------
