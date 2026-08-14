@@ -257,6 +257,87 @@ def load_profile(path: str | Path | None) -> dict[str, Any]:
     return {"half_life_years": half_life, "weights": weights}
 
 
+#: Die vier *gerechneten* Dimensionen -- alles ausser der Relevanz (#892).
+PRESCORE_DIMENSIONS = ("recency", "quality", "authority", "access")
+
+
+def prescore_weights(profile: dict[str, Any] | None = None) -> dict[str, float]:
+    """Die vier gerechneten Gewichte, auf Summe 1.0 renormiert (#892).
+
+    Das Vorranking laeuft, **bevor** der ``relevance-scorer`` gelaufen ist --
+    die Relevanzdimension existiert dort noch nicht. Statt sie mit 0 zu
+    besetzen (was jede Arbeit gleichmaessig um 0.35 nach unten zoege und den
+    Wertebereich staucht), faellt sie ganz heraus und die verbleibenden vier
+    Gewichte werden auf 1.0 renormiert. Ihr Verhaeltnis untereinander bleibt
+    damit exakt das des 5D-Scores.
+
+    Ist die Summe der vier Gewichte 0 (kaputtes Profil), gilt Gleichverteilung
+    -- kein ZeroDivisionError.
+    """
+    weights = profile["weights"] if profile is not None else DEFAULT_WEIGHTS
+    raw = {dim: float(weights.get(dim, DEFAULT_WEIGHTS[dim])) for dim in PRESCORE_DIMENSIONS}
+    total = sum(raw.values())
+    if total <= 0:
+        return {dim: 1.0 / len(PRESCORE_DIMENSIONS) for dim in PRESCORE_DIMENSIONS}
+    return {dim: value / total for dim, value in raw.items()}
+
+
+def prescore(
+    paper: dict,
+    current_year: int | None = None,
+    profile: dict[str, Any] | None = None,
+) -> float:
+    """4D-Vorranking ohne Relevanz (#892).
+
+    ``prescore = w_recency*recency + w_quality*quality + w_authority*authority
+                 + w_access*access`` mit den renormierten Gewichten aus
+    :func:`prescore_weights`.
+
+    Bewusst **kein** ``relevance``-Parameter: der Wert entsteht erst im
+    Relevanz-Schritt, und ein Ranking, das ihn hier schon braeuchte, wuerde
+    mit einer Zahl rechnen, die es noch nicht gibt. Ergebnis in [0, 1].
+    """
+    weights = prescore_weights(profile)
+    half_life = profile["half_life_years"] if profile is not None else DEFAULT_HALF_LIFE_YEARS
+    r = recency(paper.get("year"), current_year, half_life)
+    q = quality(
+        paper.get("citations"),
+        paper.get("year"),
+        current_year,
+        paper.get("citations_normalized"),
+    )
+    a = authority(paper.get("venue"))
+    ac = access(paper)
+    value = (
+        weights["recency"] * r
+        + weights["quality"] * q.value
+        + weights["authority"] * a
+        + weights["access"] * ac
+    )
+    return max(0.0, min(value, 1.0))
+
+
+def prescore_paper(
+    paper: dict,
+    current_year: int | None = None,
+    profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Wie :func:`prescore`, aber mit Provenienz fuer den CLI-JSON-Output."""
+    half_life = profile["half_life_years"] if profile is not None else DEFAULT_HALF_LIFE_YEARS
+    q = quality(
+        paper.get("citations"),
+        paper.get("year"),
+        current_year,
+        paper.get("citations_normalized"),
+    )
+    return {
+        "prescore": prescore(paper, current_year, profile),
+        "quality_source": q.source,
+        "recency_half_life_years": half_life,
+        "weights": prescore_weights(profile),
+    }
+
+
 def total_score(
     relevance: float,
     paper: dict,
@@ -323,24 +404,43 @@ def score_paper(
     }
 
 
-def main(argv: list[str]) -> int:
+def _resolve_profile_path(raw: str | None) -> str | Path | None:
+    if raw:
+        return raw
+    if DEFAULT_ACTIVE_PROFILE_PATH.exists():
+        return DEFAULT_ACTIVE_PROFILE_PATH
+    return None
+
+
+def _main_prescore(argv: list[str]) -> int:
+    """CLI-Zweig ``prescore`` (#892): Vorranking ohne Relevanzargument."""
     if len(argv) < 3:
         print(
-            "Usage: python3 scoring.py '<paper-json>' <relevance> [current_year] [profile_path]",
+            "Usage: python3 scoring.py prescore '<paper-json>' [current_year] [profile_path]",
+            file=sys.stderr,
+        )
+        return 2
+    paper = json.loads(argv[2])
+    current_year = int(argv[3]) if len(argv) > 3 and argv[3] else None
+    profile = load_profile(_resolve_profile_path(argv[4] if len(argv) > 4 else None))
+    print(json.dumps(prescore_paper(paper, current_year, profile)))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) > 1 and argv[1] == "prescore":
+        return _main_prescore(argv)
+    if len(argv) < 3:
+        print(
+            "Usage: python3 scoring.py '<paper-json>' <relevance> [current_year] [profile_path]\n"
+            "       python3 scoring.py prescore '<paper-json>' [current_year] [profile_path]",
             file=sys.stderr,
         )
         return 2
     paper = json.loads(argv[1])
     relevance = float(argv[2])
     current_year = int(argv[3]) if len(argv) > 3 and argv[3] else None
-    profile_path: str | Path | None
-    if len(argv) > 4 and argv[4]:
-        profile_path = argv[4]
-    elif DEFAULT_ACTIVE_PROFILE_PATH.exists():
-        profile_path = DEFAULT_ACTIVE_PROFILE_PATH
-    else:
-        profile_path = None
-    profile = load_profile(profile_path)
+    profile = load_profile(_resolve_profile_path(argv[4] if len(argv) > 4 else None))
     result = score_paper(relevance, paper, current_year, profile)
     print(json.dumps(result))
     return 0
