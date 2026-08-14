@@ -1,0 +1,7 @@
+{
+  "status": "success",
+  "source": "generic-fetcher",
+  "site": "doab",
+  "file_path": "/tmp/test_book.pdf",
+  "url": "https://www.doabooks.org/handle/11514/12345"
+}

@@ -25,19 +25,26 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / "agents"
 
-#: Neun Browser-use-Fetcher-Subagenten mit eigener Download-Selbstpruefung
+#: Browser-use-Fetcher-Subagenten mit eigener Download-Selbstpruefung
 #: (Issue #884 Plan). Vereinheitlicht auf die 2-KB-Schwelle von
 #: ``scripts.pdf.MIN_PDF_SIZE`` -- vorher uneinheitlich (sechs auf "> 10 KB",
 #: generic-fetcher auf "> 0 Bytes", scihub-fetcher ganz ohne Groessenpruefung).
-UNIFIED_THRESHOLD_AGENTS = (
-    "doabooks-fetcher",
-    "hathitrust-fetcher",
-    "internetarchive-fetcher",
-    "kvk-fetcher",
-    "mdz-fetcher",
-    "oapen-fetcher",
-    "tib-fetcher",
-    "generic-fetcher",
+#:
+#: Bewusst AUS DEM DATEIBESTAND ermittelt statt hartkodiert: #840 hat die
+#: Site-Fetcher in den generic-fetcher konsolidiert, ihr Site-Wissen liegt
+#: jetzt in ``config/browser_guides/``. Eine feste Namensliste haette den Test
+#: mit ``FileNotFoundError`` brechen lassen -- ein Fehlschlag, der nichts ueber
+#: die Schwelle aussagt. Dynamisch geprueft wird weiterhin JEDER vorhandene
+#: Fetcher-Prompt; verschwindet einer, faellt seine Pruefung mit ihm weg,
+#: kommt einer dazu, ist er automatisch mit erfasst.
+#: Ausgenommen, weil sie keine eigene Groessen-Selbstpruefung tragen:
+#: ``scihub-fetcher`` hat einen eigenen, strengeren Test (Magic-Bytes, s. u.),
+#: ``book-fetcher`` laedt selbst gar nichts herunter -- er orchestriert die
+#: Site-Stufen und den generic-fetcher, die Pruefung sitzt dort.
+_NO_OWN_DOWNLOAD_CHECK = {"scihub-fetcher", "book-fetcher"}
+
+UNIFIED_THRESHOLD_AGENTS = tuple(
+    sorted(p.stem for p in AGENTS_DIR.glob("*-fetcher.md") if p.stem not in _NO_OWN_DOWNLOAD_CHECK)
 )
 
 

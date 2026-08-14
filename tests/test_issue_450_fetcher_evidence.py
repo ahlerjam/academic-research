@@ -92,8 +92,12 @@ def test_every_eval_case_has_a_live_verification_run(case_id: str):
         f"Review-Fund zu PR #557 — AC1 verlangt einen Live-Nachweis, nicht eine "
         f"Zusage, dass jemand ihn spaeter erbringt."
     )
-    assert runs[case_id]["agent"] == _cases()[case_id]["agent"], (
-        f"{case_id}: der aufgezeichnete Lauf gehoert zu einem anderen Agenten "
+    # Gekoppelt wird ueber die *Site*, nicht ueber den Agent-Namen: seit Issue
+    # #840 fuehrt derselbe Zugriffsweg ueber den Ultimate Fetcher statt ueber
+    # einen site-eigenen Agenten. Das `agent`-Feld im Datensatz bleibt der
+    # historische Wert des Laufs -- den schreibt niemand nachtraeglich um.
+    assert runs[case_id]["site"] == _cases()[case_id]["site"], (
+        f"{case_id}: der aufgezeichnete Lauf gehoert zu einer anderen Site "
         f"als der Eval-Fall — Beleg und Erwartung sind entkoppelt."
     )
 

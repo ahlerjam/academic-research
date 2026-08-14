@@ -35,7 +35,7 @@
     {
       "id": "pf-03",
       "description": "nationallizenzen: Buch ueber Nationallizenzen-Portal (Duncker & Humblot hist.)",
-      "agent": "nationallizenzen",
+      "agent": "generic-fetcher",
       "input": {
         "isbn": "9783428139521",
         "output_path": "/tmp/pf-03-nationallizenzen.pdf"
@@ -45,12 +45,14 @@
         "path": "$.status",
         "check": "exists"
       },
-      "notes": "Nationallizenzen-Zugang. Erwartet status in Enum; metadata_only wenn Profil keine NL enthaelt."
+      "notes": "Nationallizenzen-Zugang. Erwartet status in Enum; metadata_only wenn Profil keine NL enthaelt.",
+      "site": "nationallizenzen",
+      "site_config": "config/browser_guides/nationallizenzen.md"
     },
     {
       "id": "pf-04",
       "description": "ebook-central: MIT Press Buch auf Ebook Central",
-      "agent": "ebook-central",
+      "agent": "generic-fetcher",
       "input": {
         "isbn": "9780262036603",
         "output_path": "/tmp/pf-04-ebook-central.pdf"
@@ -60,7 +62,9 @@
         "path": "$.status",
         "check": "exists"
       },
-      "notes": "Ebook Central (ProQuest) Test. Erwartet status in Enum; pickup_required wenn DRM."
+      "notes": "Ebook Central (ProQuest) Test. Erwartet status in Enum; pickup_required wenn DRM.",
+      "site": "ebook-central",
+      "site_config": "config/browser_guides/ebook-central.md"
     },
     {
       "id": "pf-05",

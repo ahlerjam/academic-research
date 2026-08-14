@@ -12,7 +12,12 @@ from unittest.mock import patch
 
 import yaml
 
-from tests.helpers.book_fetcher_router import OA_SUBAGENTS, BookFetcherRouter
+from tests.helpers.book_fetcher_router import (
+    OA_SITES,
+    BookFetcherRouter,
+    is_free_tier_call,
+    subagent_for,
+)
 
 # Path to fixtures
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "book_fetcher_mocks"
@@ -62,22 +67,27 @@ class TestBookFetcherRouting(unittest.TestCase):
         profile = _load_yaml(profile_file)
         return BookFetcherRouter(profile=profile)
 
-    def test_isbn_routes_to_doabooks_first(self):
-        """ISBN input: doabooks-fetcher is first subagent called; on success, returns immediately."""
+    def test_isbn_routes_to_doab_first(self):
+        """ISBN input: DOAB ist die erste Station der freien Stufe und laeuft seit
+        #840 ueber den Ultimate Fetcher mit `site_config`; bei success wird sofort
+        zurueckgegeben."""
         router = self._make_router()
-        doabooks_resp = _load_json("doabooks_success.json")
+        doab_resp = _load_json("doab_success.json")
 
-        with patch.object(router, "dispatch_subagent", return_value=doabooks_resp) as mock_dispatch:
+        with patch.object(router, "dispatch_subagent", return_value=doab_resp) as mock_dispatch:
             result = router.fetch("978-3-16-148410-0", output_path="/tmp/out.pdf")
 
         self.assertEqual(result["status"], "success")
-        self.assertEqual(result["source"], "doabooks-fetcher")
-        self.assertEqual(result["tries"][0]["subagent"], "doabooks-fetcher")
+        self.assertEqual(result["source"], "generic-fetcher")
+        self.assertEqual(result["site"], "doab")
+        self.assertEqual(result["tries"][0]["subagent"], "generic-fetcher")
+        self.assertEqual(result["tries"][0]["site"], "doab")
         self.assertEqual(result["tries"][0]["status"], "success")
         # Only one subagent call (success on first try)
         self.assertEqual(mock_dispatch.call_count, 1)
-        first_call_args = mock_dispatch.call_args_list[0]
-        self.assertEqual(first_call_args[0][0], "doabooks-fetcher")
+        subagent, payload = mock_dispatch.call_args_list[0][0]
+        self.assertEqual(subagent, "generic-fetcher")
+        self.assertEqual(payload["site_config"], "config/browser_guides/doab.md")
 
     def test_all_oa_metadata_only_then_springer_success(self):
         """OA subagents all return metadata_only; Springer (licensed) returns success."""
@@ -90,11 +100,10 @@ class TestBookFetcherRouting(unittest.TestCase):
         springer_success = _load_json("springer_success.json")
 
         call_count = [0]
-        oa_subagents = set(OA_SUBAGENTS)
 
         def side_effect(subagent, payload):
             call_count[0] += 1
-            if subagent in oa_subagents:
+            if is_free_tier_call(subagent, payload):
                 return dict(meta_only, source_subagent=subagent)
             if subagent == "springer-book":
                 return springer_success
@@ -105,15 +114,19 @@ class TestBookFetcherRouting(unittest.TestCase):
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["source"], "springer-book")
-        # tries must show all 7 OA subagents first, then springer-book (Issue #450 AC3:
-        # freie Archive nachweislich vor lizenzpflichtigen Verlagen)
+        # tries must show all 7 free-tier sites first, then springer-book
+        # (Issue #450 AC3: freie Archive nachweislich vor lizenzpflichtigen Verlagen)
         subagent_sequence = [t["subagent"] for t in result["tries"]]
         self.assertEqual(
-            subagent_sequence[:7],
-            OA_SUBAGENTS,
+            subagent_sequence[: len(OA_SITES)],
+            [subagent_for(entry) for entry in OA_SITES],
+        )
+        self.assertEqual(
+            [t.get("site") for t in result["tries"][: len(OA_SITES)]],
+            [entry["site"] if "site_config" in entry else None for entry in OA_SITES],
         )
         self.assertIn("springer-book", subagent_sequence)
-        self.assertNotIn("springer-book", subagent_sequence[:7])
+        self.assertNotIn("springer-book", subagent_sequence[: len(OA_SITES)])
 
     def test_auth_required_triggers_auth_helper_then_retry(self):
         """Springer returns auth_required -> auth-helper called -> springer retried -> success."""
@@ -122,11 +135,10 @@ class TestBookFetcherRouting(unittest.TestCase):
         auth_req = _load_json("springer_auth_required.json")
         auth_ok = _load_json("auth_helper_authenticated.json")
         springer_ok = _load_json("springer_success.json")
-        oa_subagents = set(OA_SUBAGENTS)
         springer_calls = [0]
 
         def side_effect(subagent, payload):
-            if subagent in oa_subagents:
+            if is_free_tier_call(subagent, payload):
                 return dict(meta_only, source_subagent=subagent)
             if subagent == "springer-book":
                 springer_calls[0] += 1
@@ -166,10 +178,9 @@ class TestBookFetcherRouting(unittest.TestCase):
             "reason": "0 results",
         }
         generic_resp = _load_json("generic_pickup.json")
-        oa_subagents = set(OA_SUBAGENTS)
 
         def side_effect(subagent, payload):
-            if subagent in oa_subagents:
+            if is_free_tier_call(subagent, payload):
                 return dict(no_match, source_subagent=subagent)
             if subagent == "generic-fetcher":
                 return generic_resp
@@ -190,7 +201,6 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
     """Issue #449: Cambridge Core, Oxford Academic, JSTOR als Verlags-Subagenten."""
 
     NEW_AGENTS = ("cambridge-core", "oxford-academic", "jstor")
-    OA_SUBAGENTS = set(OA_SUBAGENTS)
 
     def _router(self, profile_file):
         return BookFetcherRouter(profile=_load_yaml(profile_file))
@@ -198,14 +208,14 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
     def test_licensed_publisher_subagents_include_new_agents_when_licensed(self):
         """AC2 (positiv): Bei passender Lizenz stehen die drei neuen Subagenten in der Kandidatenliste."""
         router = self._router("active_profile_new_publishers.yaml")
-        subagents = router._get_licensed_publisher_subagents()
+        subagents = [subagent_for(e) for e in router._get_licensed_publisher_subagents()]
         for name in self.NEW_AGENTS:
             self.assertIn(name, subagents)
 
     def test_licensed_publisher_subagents_exclude_new_agents_when_not_licensed(self):
         """AC2: Ohne passende Lizenz im Uni-Profil werden die neuen Subagenten nicht dispatcht."""
         router = self._router("active_profile_no_licensed.yaml")
-        subagents = router._get_licensed_publisher_subagents()
+        subagents = [subagent_for(e) for e in router._get_licensed_publisher_subagents()]
         for name in self.NEW_AGENTS:
             self.assertNotIn(name, subagents)
 
@@ -215,7 +225,7 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
         cambridge_success = _load_json("cambridge_core_success.json")
 
         def side_effect(subagent, payload):
-            if subagent in self.OA_SUBAGENTS:
+            if is_free_tier_call(subagent, payload):
                 return dict(meta_only, source_subagent=subagent)
             if subagent == "cambridge-core":
                 return cambridge_success
@@ -234,7 +244,7 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
         oxford_success = _load_json("oxford_academic_success.json")
 
         def side_effect(subagent, payload):
-            if subagent in self.OA_SUBAGENTS:
+            if is_free_tier_call(subagent, payload):
                 return dict(meta_only, source_subagent=subagent)
             if subagent == "cambridge-core":
                 # Kommt in PUBLISHER_DOMAIN_MAP vor oxford-academic -- wird zuerst
@@ -257,7 +267,7 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
         jstor_success = _load_json("jstor_success.json")
 
         def side_effect(subagent, payload):
-            if subagent in self.OA_SUBAGENTS:
+            if is_free_tier_call(subagent, payload):
                 return dict(meta_only, source_subagent=subagent)
             if subagent in ("cambridge-core", "oxford-academic"):
                 # Kommen in PUBLISHER_DOMAIN_MAP vor jstor -- werden zuerst
@@ -289,7 +299,7 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
 
         def side_effect(subagent, payload):
             called.append(subagent)
-            if subagent in self.OA_SUBAGENTS:
+            if is_free_tier_call(subagent, payload):
                 return dict(meta_only, source_subagent=subagent)
             if subagent == "generic-fetcher":
                 return generic_resp
@@ -306,8 +316,6 @@ class TestNewPublisherFetchersRouting(unittest.TestCase):
 class TestGenericFetcherAuthRoute(unittest.TestCase):
     """Issue #448: generic-fetcher meldet auth_required -> auth-helper -> genau ein Retry."""
 
-    OA_SUBAGENTS = set(OA_SUBAGENTS)
-
     def _router(self):
         return BookFetcherRouter(profile=_load_yaml("active_profile_no_licensed.yaml"))
 
@@ -320,7 +328,7 @@ class TestGenericFetcherAuthRoute(unittest.TestCase):
 
         def side_effect(subagent, payload):
             calls.append((subagent, dict(payload)))
-            if subagent in self.OA_SUBAGENTS:
+            if is_free_tier_call(subagent, payload):
                 return {"status": "no_match", "source_subagent": subagent}
             if subagent == "generic-fetcher":
                 generic_calls[0] += 1
@@ -350,8 +358,12 @@ class TestGenericFetcherAuthRoute(unittest.TestCase):
                 ("generic-fetcher", "success"),
             ],
         )
-        # Genau ein Retry -- nicht mehr.
-        generic_calls = [c for c in calls if c[0] == "generic-fetcher"]
+        # Genau ein Retry -- nicht mehr. Gezaehlt werden nur die Fallback-Aufrufe
+        # aus Schritt 5 (ohne site_config); die Site-Aufrufe der freien Stufe
+        # laufen seit #840 ebenfalls ueber generic-fetcher.
+        generic_calls = [
+            c for c in calls if c[0] == "generic-fetcher" and "site_config" not in c[1]
+        ]
         self.assertEqual(len(generic_calls), 2, generic_calls)
         # Der auth-helper bekommt die Profil-Route aus der auth_required-Antwort.
         auth_call = next(c for c in calls if c[0] == "auth-helper")
@@ -389,7 +401,7 @@ class TestGenericFetcherAuthRoute(unittest.TestCase):
 
         def side_effect(subagent, payload):
             seen.append((subagent, dict(payload)))
-            if subagent in self.OA_SUBAGENTS:
+            if is_free_tier_call(subagent, payload):
                 return {"status": "no_match", "source_subagent": subagent}
             if subagent == "generic-fetcher":
                 return _load_json("generic_pickup.json")
@@ -398,7 +410,9 @@ class TestGenericFetcherAuthRoute(unittest.TestCase):
         with patch.object(router, "dispatch_subagent", side_effect=side_effect):
             router.fetch("Advanced Topics in AI", output_path="/tmp/out.pdf")
 
-        generic_payloads = [p for name, p in seen if name == "generic-fetcher"]
+        generic_payloads = [
+            p for name, p in seen if name == "generic-fetcher" and "site_config" not in p
+        ]
         self.assertEqual(len(generic_payloads), 1)
         self.assertNotIn("session_context", generic_payloads[0])
 
