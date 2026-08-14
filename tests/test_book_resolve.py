@@ -468,3 +468,22 @@ def test_isbn_csl_has_required_fields():
 
     assert result.get("type") in ("book", "chapter")
     assert result.get("title"), "title darf nicht leer sein"
+
+
+def test_parse_name_splits_family_given():
+    """Issue #908: _parse_name() nutzt den geteilten Parser aus text_utils
+    (DRY) -- 'Nachname, Vorname' wird weiterhin korrekt zerlegt."""
+    import book_resolve
+
+    assert book_resolve._parse_name("Tschaetsch, Heinz") == {
+        "family": "Tschaetsch",
+        "given": "Heinz",
+    }
+
+
+def test_parse_name_unparseable_falls_back_to_literal():
+    """Issue #908: ein Name ohne Komma (z.B. Organisation) wird nicht
+    geraten, sondern als literal durchgereicht."""
+    import book_resolve
+
+    assert book_resolve._parse_name("Deutsche Bundesbank") == {"literal": "Deutsche Bundesbank"}
