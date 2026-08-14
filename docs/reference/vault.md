@@ -600,23 +600,47 @@ einer realen Installation dennoch, läuft der bestehende Volltextpfad unverände
 | `no-textlayer` | Keine Zeichen im PDF (Scan) — erst OCR, dann erneut extrahieren. |
 | `backend-missing` | pdfplumber nicht installiert; `message` nennt die Nachinstallation. |
 
+**Confidence-Signal je Tabelle (Issue #847)**
+
+`status` gilt fürs ganze PDF; ob eine einzelne erkannte Tabelle vertrauenswürdig ist,
+sagen zwei zusätzliche Felder je Tabelle — `vault.list_tables()` und `vault.get_table_cell()`
+geben sie durch:
+
+| `detection` | `confidence` | Bedeutung |
+|---|---|---|
+| `lines` | `high` | pdfplumber hat gezeichnete Linien gefunden (Default-Pfad, unverändert seit #630). |
+| `text-strategy` | `low` | Fallback, nur wenn eine Seite über Linien nichts liefert: Spalten werden über Textausrichtung erkannt (`vertical_strategy="text"`). Heuristisch — ein Kandidat wird verworfen (Seite bleibt `no-tables`), wenn eine Zelle mehr als zwei Wörter trägt (Merkmal von Fließtext) oder zu wenige Datenzeilen/Spalten übrig bleiben. |
+
+`extract_tables_for_paper()`/`vault.extract_tables` melden zusätzlich
+`low_confidence_tables` — die Anzahl der Tabellen mit `confidence="low"` im aktuellen
+Lauf, damit ein Aufrufer unsichere Fälle sieht, ohne jede Tabelle einzeln zu inspizieren
+(AC3).
+
 **Bekannte Grenzen**
 
-Beide Fälle sind als Fixture abgedeckt (`tests/fixtures/tables/`) und ihr tatsächlicher
+Alle drei Fälle sind als Fixture abgedeckt (`tests/fixtures/tables/`) und ihr tatsächlicher
 Ist-Zustand ist in `tests/test_issue_630_table_extraction.py` festgeschrieben — nicht
 schöngefärbt:
 
 - **Verbundene Kopfzellen** (`merged_header.pdf`): Eine über zwei Spalten laufende
   Kopfzelle wird als *eine* breite Zelle geliefert; die von ihr geschluckte Position
-  erscheint in `rows` als `null` und taucht in `cells` gar nicht auf (eine Zelle ohne
-  eigene Bounding-Box wäre kein Beleg). Die Datenzeilen darunter bleiben davon unberührt
-  und korrekt zugeordnet. Wer die Spaltenüberschrift braucht, liest sie aus der zweiten
+  erscheint in `rows` weiterhin als `null` — aber nicht mehr stillschweigend: in `cells`
+  taucht sie mit `value=null` und `merged_into=<Spalte der breiten Nachbarzelle>` auf statt
+  ganz zu fehlen (Issue #847 — ein geratener Wert wäre trotzdem kein Beleg, das Signal
+  macht die Lücke nur explizit). Die Datenzeilen darunter bleiben davon unberührt und
+  korrekt zugeordnet. Wer die Spaltenüberschrift braucht, liest sie aus der zweiten
   Kopfzeile.
 - **Zweispaltiges Layout** (`two_column_layout.pdf`): Eine Tabelle in der linken Spalte
-  wird korrekt erkannt und der Fließtext der rechten Spalte gerät nicht hinein — weil
-  pdfplumber per Default über *gezeichnete Linien* erkennt und nicht über Textausrichtung.
-  Die Kehrseite derselben Voreinstellung: eine Tabelle **ohne** Gitterlinien (reine
-  Whitespace-Ausrichtung, in Preprints verbreitet) wird nicht gefunden und meldet
+  wird korrekt erkannt (`detection="lines"`, `confidence="high"`) und der Fließtext der
+  rechten Spalte gerät nicht hinein — weil pdfplumber per Default über *gezeichnete
+  Linien* erkennt und nicht über Textausrichtung.
+- **Gitterlinienlose Tabellen** (`gridless_table.pdf`, Issue #847): Eine Tabelle ohne
+  gezeichnete Linien (reine Whitespace-Ausrichtung, in Preprints verbreitet) wird über
+  den Text-Strategie-Fallback erkannt, aber mit `confidence="low"` markiert — die
+  Erkennung bleibt eine Schwellenwert-Heuristik ohne Anspruch auf allgemeine Gültigkeit,
+  kein gelöstes Problem. Eine Zelle mit mehr als zwei Wörtern lässt den Kandidaten
+  komplett verwerfen, damit Fließtext (z. B. eine zweispaltige Diskussion ohne Tabelle)
+  nicht fälschlich als Tabelle gemeldet wird — in diesem Fall bleibt der Status
   `no-tables`.
 
 Eine extrahierte Zahl ist ein **Vorschlag mit Beleg**, keine übernommene Tatsache:
