@@ -3462,9 +3462,13 @@ def extract_tables_for_paper(
         backend: ``"auto"`` oder ``"pdfplumber"``.
 
     Returns:
-        ``{"paper_id", "status", "message", "backend", "tables", "cells"}``.
-        ``status`` ist ``"ok"``, ``"no-tables"``, ``"no-textlayer"`` oder
-        ``"backend-missing"``; ``tables``/``cells`` sind Anzahlen.
+        ``{"paper_id", "status", "message", "backend", "tables", "cells",
+        "low_confidence_tables"}``. ``status`` ist ``"ok"``, ``"no-tables"``,
+        ``"no-textlayer"`` oder ``"backend-missing"``; ``tables``/``cells``
+        sind Anzahlen. ``low_confidence_tables`` (Issue #847) zaehlt die
+        Tabellen mit ``confidence="low"`` (Text-Strategie-Fallback) -- so
+        sieht ein Aufrufer unsichere Faelle, ohne jede Tabelle einzeln zu
+        inspizieren (AC3).
 
     Raises:
         ValueError: Paper unbekannt oder ohne ``pdf_path``.
@@ -3493,6 +3497,7 @@ def extract_tables_for_paper(
         "backend": result["backend"],
         "tables": len(found),
         "cells": sum(len(table["cells"]) for table in found),
+        "low_confidence_tables": sum(1 for table in found if table.get("confidence") == "low"),
     }
 
 

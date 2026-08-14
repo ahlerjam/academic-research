@@ -38,6 +38,9 @@ maxTurns: 12
 
 # auth-helper — Authentifizierungs-Subagent
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 **Sicherheits-Policy (nicht verhandelbar):**
 - Credentials (Benutzername, Passwort) NIEMALS in Outputs, JSON-Antworten, oder Zwischenmeldungen ausgeben.
 - Session-Cookies NIEMALS serialisieren oder als Text ausgeben.
@@ -91,11 +94,12 @@ Die tatsaechlichen Credential-Werte (Passwort, Benutzername) werden NICHT in die
 #### Credentials in ENV-Variablen laden (NICHT in den Prompt)
 
 **Sicherheits-Kern (Fix #193):** Credential-Werte duerfen NIEMALS als Text in den
-browser-use-Prompt (Reasoning-Stream des LLM) gelangen — sonst leaken sie via
-Trace-Logs, Hook-Captures oder Error-Messages. Stattdessen werden sie in lokale
-Shell-ENV-Variablen geladen und ueber den deterministischen `browser-use input`-Befehl
-direkt in die Formular-Felder getippt. Der Wert wird von der Shell expandiert und
-erreicht das LLM nie.
+Prompt (Reasoning-Stream des LLM) gelangen — sonst leaken sie via Trace-Logs,
+Hook-Captures oder Error-Messages. Stattdessen werden sie in lokale
+Shell-ENV-Variablen geladen und im Heredoc-Skript ueber `os.environ` an
+`fill_input(...)` gereicht. Der Wert erreicht weder das LLM noch — dank des
+gequoteten Delimiters `<<'PY'` — die sichtbare Kommandozeile. Aufrufform,
+Helfer und die Credential-Regel stehen in `config/browser_guides/_cli.md`.
 
 ```bash
 # Benutzername/Passwort aus dem Profil in ENV-Variablen laden — KEIN echo/print der Werte.
@@ -156,93 +160,109 @@ Baue die HAN-Proxy-URL aus `proxy_pattern` und dem Ziel-Hostnamen.
 Voraussetzung: `BROWSER_USE_USER` / `BROWSER_USE_PASS` sind bereits in der Shell gesetzt
 (siehe "Credentials in ENV-Variablen laden"). Die Werte werden NICHT in den Prompt geschrieben.
 
-```bash
-# 1. Seite oeffnen und Formular-Struktur lesen (KEINE Credentials im Prompt).
-browser-use open "<proxy_url aus proxy_pattern>"
-browser-use state    # liefert die Element-Indizes der Login-Felder
+Alle drei Schritte laufen im Heredoc-Aufruf nach `config/browser_guides/_cli.md`.
+
+```python
+# 1. Seite oeffnen und Formular-Struktur lesen (KEINE Credentials im Skript).
+ensure_real_tab()
+new_tab("<proxy_url aus proxy_pattern>")
+wait_for_load()
+print(
+    js("[...document.querySelectorAll('input')].map(i => ({name: i.name, type: i.type, id: i.id}))")
+)
 ```
 
-```bash
-# 2. Credentials deterministisch in die Felder tippen — Wert kommt aus der ENV-Var,
-#    von der Shell expandiert, NICHT ueber das LLM. <user_idx>/<pass_idx>/<submit_idx>
-#    stammen aus dem vorigen `state`-Output.
-browser-use input <user_idx> "$BROWSER_USE_USER" \
-  && browser-use input <pass_idx> "$BROWSER_USE_PASS" \
-  && browser-use click <submit_idx>
+```python
+# 2. Credentials deterministisch in die Felder schreiben — der Wert wird IM
+#    Skript aus der ENV-Var gelesen und beruehrt weder Prompt noch Kommandozeile.
+#    Die Selektoren stammen aus Schritt 1.
+import os
+
+fill_input("<user_selector>", os.environ["BROWSER_USE_USER"])
+fill_input("<pass_selector>", os.environ["BROWSER_USE_PASS"])
+press_key("Enter")
+wait_for_load()
 ```
 
-```bash
-# 3. Ergebnis pruefen — der Prompt enthaelt KEINE Credentials.
-browser-use "
-Pruefe den aktuellen browser-use state: Wurde zur Ziel-Site weitergeleitet?
-Antworte NUR mit einem dieser Strings (ohne Credentials):
-  LOGIN_SUCCESS
-  LOGIN_FAILED: <Fehlertext, keine Zugangsdaten>
-  CAPTCHA_REQUIRED
-"
+```python
+# 3. Ergebnis pruefen — die Ausgabe enthaelt KEINE Credentials.
+print(page_info())
 ```
+
+Aus der Ausgabe von Schritt 3 ableiten — Ziel-Site erreicht → `LOGIN_SUCCESS`;
+Fehlermeldung der Login-Seite → `LOGIN_FAILED: <Fehlertext, keine Zugangsdaten>`;
+CAPTCHA sichtbar → `CAPTCHA_REQUIRED`.
 
 #### Shibboleth-Login (inkl. DFN-AAI)
 
 Voraussetzung: `BROWSER_USE_USER` / `BROWSER_USE_PASS` sind in der Shell gesetzt.
 
-```bash
-# 1. Navigieren + ggf. WAYF-Einrichtung waehlen. <uni> ist KEIN Credential und
-#    darf im Prompt stehen. Danach das Login-Formular per state lesen.
-browser-use open "<auth_url aus Profil>"
-browser-use "
-Falls eine WAYF-/Einrichtungs-Auswahlseite erscheint: Waehle die Einrichtung mit
-Namen/Schluessel '<uni>' aus und folge zum Login-Formular.
-Antworte NUR mit: WAYF_DONE oder NO_WAYF
-"
-browser-use state    # Element-Indizes der Shibboleth-Login-Felder lesen
+Alle drei Schritte laufen im Heredoc-Aufruf nach `config/browser_guides/_cli.md`.
+
+```python
+# 1. Navigieren. <uni> ist KEIN Credential und darf im Klartext stehen.
+ensure_real_tab()
+new_tab("<auth_url aus Profil>")
+wait_for_load()
+print(page_info())
 ```
 
-```bash
+Erscheint eine WAYF-/Einrichtungs-Auswahlseite: die Einrichtung mit
+Namen/Schluessel `<uni>` ueber den AX-Baum finden, per `click_at_xy(...)`
+auswaehlen und zum Login-Formular folgen. Danach die Formular-Struktur lesen
+(`js("[...document.querySelectorAll('input')].map(i => ({name: i.name, type: i.type}))")`).
+
+```python
 # 2. Credentials deterministisch eingeben — Werte aus ENV-Vars, nie im Prompt.
-browser-use input <user_idx> "$BROWSER_USE_USER" \
-  && browser-use input <pass_idx> "$BROWSER_USE_PASS" \
-  && browser-use click <submit_idx>
+import os
+
+fill_input("<user_selector>", os.environ["BROWSER_USE_USER"])
+fill_input("<pass_selector>", os.environ["BROWSER_USE_PASS"])
+press_key("Enter")
+wait_for_load()
 ```
 
-```bash
-# 3. Ergebnis pruefen (kein Credential im Prompt).
-browser-use "
-Pruefe den browser-use state: Wurde nach dem Login zur Ziel-Site weitergeleitet?
-Antworte NUR:
-  LOGIN_SUCCESS
-  LOGIN_FAILED: <Fehlermeldung ohne Zugangsdaten>
-  CAPTCHA_REQUIRED
-"
+```python
+# 3. Ergebnis pruefen (kein Credential in der Ausgabe).
+print(page_info())
 ```
+
+Ableitung wie beim HAN-Login: `LOGIN_SUCCESS` / `LOGIN_FAILED: <Fehlermeldung
+ohne Zugangsdaten>` / `CAPTCHA_REQUIRED`.
 
 #### EZproxy-Login
 
 Voraussetzung: `BROWSER_USE_USER` / `BROWSER_USE_PASS` sind in der Shell gesetzt.
 
-```bash
+Alle drei Schritte laufen im Heredoc-Aufruf nach `config/browser_guides/_cli.md`.
+
+```python
 # 1. Login-Seite oeffnen und Formular-Struktur lesen.
-browser-use open "<auth_url aus Profil>"
-browser-use state    # Element-Indizes der Login-Felder lesen
+ensure_real_tab()
+new_tab("<auth_url aus Profil>")
+wait_for_load()
+print(
+    js("[...document.querySelectorAll('input')].map(i => ({name: i.name, type: i.type, id: i.id}))")
+)
 ```
 
-```bash
+```python
 # 2. Credentials deterministisch eingeben — Werte aus ENV-Vars, nie im Prompt.
-browser-use input <user_idx> "$BROWSER_USE_USER" \
-  && browser-use input <pass_idx> "$BROWSER_USE_PASS" \
-  && browser-use click <submit_idx>
+import os
+
+fill_input("<user_selector>", os.environ["BROWSER_USE_USER"])
+fill_input("<pass_selector>", os.environ["BROWSER_USE_PASS"])
+press_key("Enter")
+wait_for_load()
 ```
 
-```bash
-# 3. Ergebnis pruefen (kein Credential im Prompt).
-browser-use "
-Pruefe den browser-use state: Wurde zur Ziel-Site weitergeleitet?
-Antworte NUR:
-  LOGIN_SUCCESS
-  LOGIN_FAILED: <Fehlermeldung>
-  CAPTCHA_REQUIRED
-"
+```python
+# 3. Ergebnis pruefen (kein Credential in der Ausgabe).
+print(page_info())
 ```
+
+Ableitung wie beim HAN-Login: `LOGIN_SUCCESS` / `LOGIN_FAILED: <Fehlermeldung>` /
+`CAPTCHA_REQUIRED`.
 
 ### Schritt 5: Ergebnis zurueckgeben
 
@@ -289,7 +309,8 @@ Wenn `browser-use` meldet, dass eine Session abgelaufen ist oder ein erneuter Lo
 
 ## Sicherheits-Checkliste (vor jedem Output pruefen)
 
-- [ ] Credentials NUR via ENV-Var (`BROWSER_USE_USER`/`BROWSER_USE_PASS`) + `browser-use input` — NIE im browser-use-Prompt-Text
+- [ ] Credentials NUR via ENV-Var (`BROWSER_USE_USER`/`BROWSER_USE_PASS`) + `os.environ` in `fill_input(...)` — NIE im Prompt-Text und nie im Skripttext
+- [ ] Heredoc-Delimiter gequotet (`<<'PY'`), damit die Shell die Credential-Variablen nicht in die Kommandozeile expandiert
 - [ ] Kein `echo`/`print` der Credential-ENV-Variablen
 - [ ] Nach dem Login: `unset BROWSER_USE_USER BROWSER_USE_PASS`
 - [ ] Kein Passwort-String im Output

@@ -249,6 +249,11 @@ CREATE TABLE IF NOT EXISTS paper_fulltext (
 --              Positionen unter verbundenen Zellen)
 -- cells_json = je Zelle {row, col, value, bbox} fuer den Beleg auf Zellebene
 -- UNIQUE(paper_id, page, table_index) macht die Re-Extraktion idempotent.
+-- confidence/detection (Issue #847): je Tabelle statt eines einzigen
+-- PDF-weiten Status. detection ∈ {'lines','text-strategy'}, confidence ∈
+-- {'high','low'} -- siehe academic_vault/tables.py Modul-Docstring.
+-- DEFAULT 'lines'/'high' fuer Bestandszeilen, die vor #847 ohne dieses Feld
+-- entstanden sind (Migration: migrate.add_paper_tables_confidence_columns()).
 CREATE TABLE IF NOT EXISTS paper_tables (
   table_id     TEXT PRIMARY KEY,
   paper_id     TEXT NOT NULL REFERENCES papers(paper_id) ON DELETE CASCADE,
@@ -261,6 +266,8 @@ CREATE TABLE IF NOT EXISTS paper_tables (
   rows_json    TEXT NOT NULL,
   cells_json   TEXT NOT NULL,
   extracted_at INTEGER NOT NULL,
+  confidence   TEXT NOT NULL DEFAULT 'high' CHECK(confidence IN ('high','low')),
+  detection    TEXT NOT NULL DEFAULT 'lines' CHECK(detection IN ('lines','text-strategy')),
   UNIQUE(paper_id, page, table_index)
 );
 

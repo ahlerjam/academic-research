@@ -12,15 +12,23 @@ Schritt 1.
 
 ## Was das Plugin nicht kann
 
-- **Tabellen nicht bei jedem PDF strukturerhaltend extrahieren.** Das Backend `pdfplumber`
-  ist seit Issue #723 Pflicht-Dependency (`pyproject.toml`), läuft also nach jedem Setup
-  ohne Zusatzschritt mit. Die verbleibende Grenze ist strukturell, nicht paketierungsbedingt:
-  verbundene Kopfzellen, zweispaltiges Layout und Tabellen ohne Gitterlinien lassen sich
-  nicht sicher auflösen — `docs/reference/vault.md`, Abschnitt „Tabellenextraktion". Fehlt
-  das Paket in einer realen Installation dennoch, liefert `vault.extract_tables` den Status
-  `backend-missing` statt Zahlen — `academic_vault/tables.py`. Die `meta-analysis`-Pipeline
-  übernimmt Effektstärken (`yi`, `vi`) ohnehin nur aus einem vom Nutzer bestätigten
-  Eingabe-JSON, nie automatisch aus einer erkannten Tabelle — `scripts/meta_analysis.py`.
+- **Tabellen nicht bei jedem PDF sicher strukturerhaltend extrahieren.** Das Backend
+  `pdfplumber` ist seit Issue #723 Pflicht-Dependency (`pyproject.toml`), läuft also nach
+  jedem Setup ohne Zusatzschritt mit. Seit Issue #847 trägt jede erkannte Tabelle ein
+  eigenes `confidence`/`detection`-Signal (`high`/`lines` für den Linien-Pfad,
+  `low`/`text-strategy` für den Fallback über Textausrichtung bei gitterlinienlosen
+  Tabellen) statt eines einzigen PDF-weiten Status — `vault.extract_tables` meldet
+  zusätzlich `low_confidence_tables`, damit unsichere Treffer erkennbar sind, ohne jede
+  Tabelle einzeln zu prüfen. Die verbleibende Grenze ist strukturell, nicht
+  paketierungsbedingt: eine über zwei Spalten laufende Kopfzelle liefert weiterhin keinen
+  erratenen Wert für die geschluckte Position (dafür jetzt ein explizites
+  `merged_into`-Signal statt eines stummen Gaps), und der Text-Strategie-Fallback ist eine
+  Schwellenwert-Heuristik ohne Anspruch auf allgemeine Gültigkeit — `docs/reference/vault.md`,
+  Abschnitt „Tabellenextraktion". Fehlt das Paket in einer realen Installation dennoch,
+  liefert `vault.extract_tables` den Status `backend-missing` statt Zahlen —
+  `academic_vault/tables.py`. Die `meta-analysis`-Pipeline übernimmt Effektstärken (`yi`,
+  `vi`) ohnehin nur aus einem vom Nutzer bestätigten Eingabe-JSON, nie automatisch aus einer
+  erkannten Tabelle — `scripts/meta_analysis.py`.
 - **Kein unbegrenztes Kontextfenster beim Embedding.** Das Chunking-Fenster ist mit 512
   Tokens fest verdrahtet (`academic_vault/chunking.py`, `MODEL_MAX_TOKENS`) — bewusst
   unabhängig davon, wie groß das Kontextfenster des konfigurierten Modells tatsächlich ist
