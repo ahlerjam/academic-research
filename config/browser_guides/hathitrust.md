@@ -1,5 +1,8 @@
 # HathiTrust — Browser-Guide (Buch-Download)
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://babel.hathitrust.org (Katalog: https://catalog.hathitrust.org)
 **Auth:** keine für gemeinfreie Volltexte; HathiTrust-Konto (kostenlos, i.d.R.
 institutionell via Shibboleth) nur für "Search-only"-Titel mit eingeschränktem
@@ -9,7 +12,7 @@ gelegentlich temporäre 429-Sperren bei zu vielen Seitenabrufen kurz hintereinan
 
 ## Login-Flow
 
-1. `browser-use open https://catalog.hathitrust.org`
+1. `new_tab("https://catalog.hathitrust.org")`
 2. Für **Full-View**-Titel (gemeinfrei, "Full view"-Badge): kein Login nötig.
 3. Für **Search-only**-Titel: Login nur relevant, wenn eine Institution mit
    Shibboleth-Föderation konfiguriert ist — hier NICHT versuchen, da
@@ -18,9 +21,9 @@ gelegentlich temporäre 429-Sperren bei zu vielen Seitenabrufen kurz hintereinan
 
 ## Discovery-Pfad
 
-1. Katalogsuche: `browser-use open "https://catalog.hathitrust.org/Search/Home?lookfor=<query>&type=all"`
+1. Katalogsuche: `new_tab("https://catalog.hathitrust.org/Search/Home?lookfor=<query>&type=all")`
    (query = ISBN, Titel oder Autor, URL-encoded)
-2. `browser-use state` → Trefferliste lesen.
+2. Trefferliste per `js(...)` lesen.
 3. Access-Badge pro Treffer prüfen: **"Full view"** vs. **"Limited (search-only)"**
    vs. **"Full view (original from ...)"**.
 4. Auf Treffer klicken → Katalog-Detailseite mit Digitalisat-Liste (mehrere
@@ -39,7 +42,7 @@ gelegentlich temporäre 429-Sperren bei zu vielen Seitenabrufen kurz hintereinan
   die Ganzbuch-Option wählen.
 - Bestätigungsdialog ("Are you a human?" / Download-Größe-Warnung) bestätigen,
   falls vorhanden — kein CAPTCHA-Umgehen, nur normaler Klick-Dialog.
-- `browser-use download <link-idx> --to <output_path>`
+- Download-Link klicken, Ablage nach `<output_path>` (Rezept in `_cli.md`).
 - Große Werke (>500 Seiten) können HathiTrust serverseitig als Hintergrundjob
   zusammenstellen ("Your PDF is being prepared") — auf Fertigstellung warten
   und danach erneut versuchen.
@@ -68,7 +71,7 @@ des tatsächlich heruntergeladenen Scans übernehmen.
   - "Full view"-Digitalisat vorhanden, aber Download-Menü liefert keinen
     PDF-Link (seltener Rand-Fall).
 - `status: captcha` wenn ein echtes CAPTCHA (nicht der normale
-  Bestätigungsdialog) in `browser-use state` sichtbar ist.
+  Bestätigungsdialog) in `page_info()` sichtbar ist.
 - `status: no_match` wenn Katalogsuche 0 Treffer liefert.
 - **HTTP 403 / Plattform-Sperre:** Zeigt die Seite "Page Blocked" bzw.
   "Error - Blocked from HathiTrust", ist das weder ein CAPTCHA noch ein

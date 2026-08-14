@@ -1,5 +1,8 @@
 # Springer Link — Navigation Guide
 
+> **Aufrufform der CLI:** `config/browser_guides/_cli.md` — Heredoc-Aufruf,
+> Helfer, Element-Adressierung, Download. Dieser Guide enthält nur Site-Wissen.
+
 **URL:** https://link.springer.com
 **Auth:** keine für Metadaten; Volltext je nach Lizenz (Open Access oder Campus-Zugriff)
 **Max. Ergebnisse:** 20
@@ -8,7 +11,7 @@
 ## Hinweise
 
 - Suchleiste im Header; Direkt-URL `?query=<QUERY>&content-type=Article` für nur-Article-Ergebnisse.
-- Jede Ergebniszeile enthält Open-Access-Indikator ("Open Access" als Badge) — bei `browser-use state` als Text sichtbar.
+- Jede Ergebniszeile enthält Open-Access-Indikator ("Open Access" als Badge) — per `js(...)` als Text auslesbar.
 - DOI steht in der URL der Detailseite (`/article/10.xxxx/...`).
 - Für Volltext-PDF: Button "Download PDF" auf Detailseite. Bei fehlender Berechtigung stattdessen "Access options"-Button.
 
@@ -33,7 +36,7 @@ Für Campus-lizenzierte Bücher:
 
 1. Suche auf `https://link.springer.com` mit Filter `content-type=Book`:
    `https://link.springer.com/search?query=<TITEL>&content-type=Book`
-2. `browser-use state` → Treffer prüfen; OA-Badge erkennen.
+2. Treffer per `js(...)` prüfen; OA-Badge erkennen.
 3. Auf Buchtitel klicken → `/book/<doi>`-Seite öffnet.
 4. Alternativ per DOI-Direktlink oder ISBN-Lookup via
    `https://link.springer.com/search?query=<ISBN>`.
@@ -41,7 +44,7 @@ Für Campus-lizenzierte Bücher:
 ### Volltext-Lokation
 
 - Auf der Buchseite (`/book/...`): Button "Download book PDF" suchen.
-- `browser-use state` → Button-Index identifizieren, klicken.
+- Button über den AX-Baum finden und mit `click_at_xy(...)` klicken.
 - Falls Vollbuch-Download nicht verfügbar: kapitelweiser Download über
   "Download chapter PDF" auf den Kapitel-Unterseiten.
 - Buch-DOI (`/book/10.xxxx/...`) und Kapitel-DOI (`/chapter/10.xxxx/...`)

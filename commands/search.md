@@ -126,16 +126,17 @@ Pro Modul:
 
 1. Lies den Guide aus `${CLAUDE_PLUGIN_ROOT}/config/browser_guides/<modul>.md` (URL, Auth-Typ, Anti-Scraping-Hinweise, datenbankspezifische Fallen).
 2. Bei Auth-Modulen (`ebscohost`, `proquest`, `opac`): folge zuerst `${CLAUDE_PLUGIN_ROOT}/config/browser_guides/han_login.md`.
-3. Steuere den Browser mit dem globalen `browser-use`-Skill (CLI-basiert, index-orientiert, keine CSS-Selektoren):
-   - `browser-use open <URL>` — Seite laden
-   - `browser-use state` — klickbare Elemente mit Index abrufen
-   - Query-Feld per Index identifizieren: `browser-use input <idx> "<QUERY>"`
-   - Suche auslösen (Enter oder Submit-Button per Index klicken): `browser-use click <idx>`
-   - Nach Warten auf Laden: `browser-use state` erneut, um Ergebnislisten auszulesen
+3. Steuere den Browser über die `browser-use`-CLI. **Aufrufform, Helfer,
+   Element-Adressierung und Download stehen in
+   `${CLAUDE_PLUGIN_ROOT}/config/browser_guides/_cli.md`** — dort nachlesen
+   statt raten. Kurz: `new_tab(<URL>)` → `wait_for_load()` → Suchfeld per
+   `fill_input(<selector>, <QUERY>)` + `press_key("Enter")` → Trefferliste per
+   `js(...)` auslesen. Buttons ohne stabilen Selektor über den AX-Baum
+   (`Accessibility.getFullAXTree` → `DOM.getBoxModel` → `click_at_xy`).
    - Bei Bedarf paginieren — maximal 2 Seiten pro Modul
 4. Ergebnisse ins `api_results.json`-Schema normalisieren (`title`, `authors`, `year`, `venue`, `doi`, `url`, `source_module`, `snippet`) und an die bestehende Ergebnisliste anhängen.
 5. Fehlerbehandlung:
-   - CAPTCHA erkannt → `browser-use screenshot` machen, User informieren, Teilergebnisse behalten.
+   - CAPTCHA erkannt → `capture_screenshot(path=…)`, User informieren, Teilergebnisse behalten.
    - Login schlägt fehl → Modul überspringen, Warnung loggen, mit nächstem Modul weitermachen.
    - Rate-Limit → 30s Pause, einmal wiederholen, dann Modul überspringen.
 
