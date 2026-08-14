@@ -12,6 +12,9 @@ browser-guide: config/browser_guides/ebook-central.md
 
 # ebook-central
 
+**CLI-Aufrufform:** `config/browser_guides/_cli.md` — Heredoc-Aufruf, vorimportierte
+Helfer, Element-Adressierung ueber den AX-Baum, Download-Rezept.
+
 Du bedienst ebookcentral.proquest.com wie ein Mensch. Nur browser-use — kein curl, kein wget.
 
 **Lies zuerst:** `config/browser_guides/ebook-central.md`
@@ -69,7 +72,7 @@ auth-helper gibt zurueck:
 Nach erfolgreicher Auth:
 
 1. Suchfeld: Titel, Autor oder ISBN eingeben
-2. `browser-use state` → Suchergebnisse pruefen
+2. Suchergebnisse per `js(...)` pruefen
 3. Filter: "Subject", "Publication Date", "Language" bei Bedarf
 4. Trefferdetailseite oeffnen → Lizenz- und Download-Optionen pruefen
 
@@ -80,7 +83,7 @@ Bei 0 Treffern:
 
 ## Download-Pruefung und DRM-Sonderfall
 
-Auf Detailseite `browser-use state` pruefen:
+Auf der Detailseite den Seitenzustand (`page_info()`, `js(...)`) pruefen:
 
 **DRM-Pruefung (vor Download):**
 - "Adobe DRM" oder "Adobe Digital Editions" sichtbar → DRM-PDF
@@ -98,10 +101,7 @@ Auf Detailseite `browser-use state` pruefen:
 **Download-Flow (ohne DRM, ohne Limit):**
 1. "Full Book Download"-Button suchen
 2. Button gefunden:
-   ```
-   browser-use click <full-book-download-idx>
-   browser-use download <pdf-idx> --to <output_path>
-   ```
+   Vollbuch-Download-Button per `click_at_xy(...)` klicken, Download nach `<output_path>` (Rezept in `config/browser_guides/_cli.md`).
 3. PDF-Validierung: erste 4 Bytes `%PDF`, Groesse > 10 KB
 4. Falls "Full Book Download" fehlt, aber "Download Chapter" vorhanden:
    - Kapitelweiser Fallback

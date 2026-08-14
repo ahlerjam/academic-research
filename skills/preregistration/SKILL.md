@@ -145,8 +145,10 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/preregistration/scripts/render_protocol.py 
   update-context --plan preregistration_plan.json --context ./academic_context.md
 ```
 
-Schreibt `suchstrategie`, `einschlusskriterien` und `ausschlusskriterien` aus
-dem Plan strukturiert in die Sections `### Suchstrategie` und
+Schreibt `suchstrategie`, `einschlusskriterien`, `ausschlusskriterien` und —
+falls im Plan vorhanden — den `screening_filters`-Block (Quelle des
+Vorfilters, #892) aus dem Plan strukturiert in die Sections
+`### Suchstrategie` und
 `### Ein-/Ausschlusskriterien` von `./academic_context.md` — alle anderen
 Sections bleiben unverändert. Existiert `./academic_context.md` noch nicht,
 bricht der Schritt ab: erst den `academic-context`-Skill laufen lassen. Ab

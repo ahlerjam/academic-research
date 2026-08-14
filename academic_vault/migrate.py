@@ -776,6 +776,7 @@ def apply_pending_migrations(db_path: str) -> None:
     add_empirical_tables(db_path)
     add_embedding_meta_table(db_path)
     add_paper_tables_table(db_path)
+    add_paper_tables_confidence_columns(db_path)
     add_retraction_checked_at_column(db_path)
     add_quote_audit_columns(db_path)
     add_table_values_table(db_path)
@@ -848,6 +849,37 @@ def add_paper_tables_table(db_path: str) -> None:
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_paper_tables_paper ON paper_tables(paper_id)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def add_paper_tables_confidence_columns(db_path: str) -> None:
+    """Fuegt ``confidence``/``detection`` zu ``paper_tables`` hinzu. Idempotent. (#847)
+
+    Bestandszeilen aus der Zeit vor #847 sind ausnahmslos ueber den
+    Linien-Pfad entstanden (der Text-Strategie-Fallback existierte noch
+    nicht) -- DEFAULT 'high'/'lines' beschreibt sie deshalb korrekt, keine
+    Rueckwirkungsluecke.
+    """
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        try:
+            conn.execute(
+                "ALTER TABLE paper_tables ADD COLUMN confidence TEXT NOT NULL "
+                "DEFAULT 'high' CHECK(confidence IN ('high','low'))"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
+        try:
+            conn.execute(
+                "ALTER TABLE paper_tables ADD COLUMN detection TEXT NOT NULL "
+                "DEFAULT 'lines' CHECK(detection IN ('lines','text-strategy'))"
+            )
+        except _sqlite3.OperationalError:
+            pass  # Spalte existiert bereits -- idempotent
         conn.commit()
     finally:
         conn.close()

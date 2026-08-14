@@ -245,6 +245,15 @@ def merge_group(group: list[dict[str, Any]]) -> dict[str, Any]:
     else:
         merged["is_retracted"] = None
 
+    # Known-item marker: True beats False across the whole group, same rule
+    # as is_retracted above (#618) -- otherwise the Known-Item-Suche-Treffer
+    # (#886) verliert seine Markierung, sobald der "beste" Repraesentant
+    # zufaellig das unmarkierte thematische Duplikat ist.
+    if any(p.get("found_via_known_item") for p in group):
+        merged["found_via_known_item"] = True
+    else:
+        merged["found_via_known_item"] = False
+
     # Track all source modules
     sources = list({p.get("source_module", "") for p in group if p.get("source_module")})
     if len(sources) > 1:

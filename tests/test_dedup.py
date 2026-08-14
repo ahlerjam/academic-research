@@ -1099,9 +1099,21 @@ def _canonical_dedup_result(payload: list[dict[str, Any]]) -> list[str]:
     steht schon in `d141b09` — und beruehrt keine Gruppenzugehoerigkeit,
     sondern nur die Reihenfolge innerhalb dieses einen Ausgabefeldes. Ohne
     diese Kanonisierung waere der Golden-Vergleich zufaellig rot.
+
+    `found_via_known_item` wird aus dem Vergleich ausgeschlossen: Die
+    Golden-Datei ist bei `d141b09` eingefroren (vor #890 UND vor #886). #886
+    (Known-Item-Suche, in main gelandet und beim Merge von main in diesen
+    Branch mitgekommen) fuegt dieses Feld seither an JEDEM Datensatz von
+    `deduplicate()` an (hier immer `false`, da die Fixture keine
+    Known-Item-Treffer enthaelt). Das ist eine Schema-Erweiterung durch eine
+    voellig unabhaengige, orthogonal gemergte Aenderung — keine Folge der
+    #890-Blocking-Logik. Beleg: nach Ausschluss dieses einen Feldes sind
+    `actual` und `expected` bytegleich (1390 von 1390 Gruppen), die
+    Gruppierung selbst ist also unveraendert.
     """
     normalized = []
     for record in payload:
+        record = {k: v for k, v in record.items() if k != "found_via_known_item"}
         if "source_modules" in record:
             record = {**record, "source_modules": sorted(record["source_modules"])}
         normalized.append(json.dumps(record, sort_keys=True, default=str))
