@@ -1224,6 +1224,18 @@ async function main() {
         ? ['Hinweis: Der Wortlaut-Abgleich lief für dieses Zitat nicht — Prüfkontingent '
           + `${wordingLimit} erschöpft (ACADEMIC_CITATION_MAX_PER_WRITE).`]
         : []),
+      // Deep-Review-Finding zu #846: der Vault-Snapshot deckelt bei mehr als
+      // 5000 laengenpassenden Zitaten (MAX_SNAPSHOT_QUOTES,
+      // academic_vault/repositories/quotes.py). Ein "absent" aus einem
+      // gekappten Snapshot ist KEIN verlaesslicher "nicht im Vault"-Befund —
+      // das Zitat kann jenseits des Schnitts durchaus vorhanden sein. Muss
+      // sichtbar sein, sonst liest sich ein moeglicher Fehlalarm wie ein
+      // sicherer Fund.
+      ...(result.snapshot_capped
+        ? ['Hinweis: Der Vault-Snapshot für den Wortlaut-Abgleich war GEKAPPT '
+          + '(mehr als 5000 längenpassende Zitate im Vault) — der Bestand wurde '
+          + 'nur TEILWEISE geprüft. Dieses Zitat kann trotzdem im Vault stehen.']
+        : []),
       `Bitte Zitat über vault.add_quote() oder den quote-extractor einpflegen.`,
     ].join('\n');
     process.stderr.write(msg + '\n');

@@ -52,6 +52,7 @@ Bewusste Grenzen (dokumentiert in ``docs/guide/limits.md``):
 
 from __future__ import annotations
 
+import bisect
 import difflib
 import re
 from dataclasses import dataclass, field
@@ -107,6 +108,7 @@ class QuoteWordingMatch:
     ratio: float = 0.0
     case_only: bool = False
     quota_capped: bool = False
+    snapshot_capped: bool = False
     diff: list[dict[str, str]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -120,6 +122,7 @@ class QuoteWordingMatch:
             "ratio": round(self.ratio, 2),
             "case_only": self.case_only,
             "quota_capped": self.quota_capped,
+            "snapshot_capped": self.snapshot_capped,
             "diff": self.diff,
         }
 
@@ -315,6 +318,52 @@ def _ellipsis_match(candidate: str, entries: list[_PreparedQuote]) -> QuoteWordi
     return None
 
 
+def _folded_offset_table(text: str) -> list[int]:
+    """Praefixsummen der EINZELN gefalteten Zeichenlaengen von ``text``.
+
+    ``table[i]`` ist die Laenge von ``"".join(ch.casefold() for ch in
+    text[:i])`` -- und, weil ``str.casefold()`` bei zusammengesetzten Strings
+    nachweislich mit der zeichenweisen Faltung uebereinstimmt (kein
+    Kontexteinfluss ueber Zeichengrenzen hinweg, anders als z. B.
+    tuerkisches ``i``/``I`` bei ``lower()``), identisch mit der Laenge von
+    ``text[:i].casefold()``. ``str.casefold()`` spaltet NIE ein Zeichen in
+    mehrere auf umgekehrt (``ß`` -> ``ss``, ``ﬁ`` -> ``fi`` -- immer 1:N, nie
+    N:1), die Tabelle ist deshalb monoton nicht-fallend.
+    """
+    table = [0]
+    total = 0
+    for ch in text:
+        total += len(ch.casefold())
+        table.append(total)
+    return table
+
+
+def _map_folded_span_to_original(text: str, folded_start: int, folded_end: int) -> tuple[int, int]:
+    """Bildet einen Offset-Bereich im GEFALTETEN ``text`` auf das Original ab.
+
+    Deep-Review-Finding zu #846: ``fuzz.partial_ratio_alignment()`` liefert
+    Offsets relativ zum gefalteten (``str.casefold()``) Vergleichstext -- fuer
+    die case-insensitive Zuordnung noetig (Modul-Dokstring: reiner
+    Gross-/Kleinschreibungs-Unterschied ist ``normalized``, kein Block).
+    ``casefold()`` ist NICHT laengentreu: ``ß`` -> ``ss`` und Ligaturen wie
+    ``ﬁ`` -> ``fi`` VERLAENGERN den Text. Ein ungemuenzter Offset-Uebernahme
+    (vorheriger Stand) zeigt ab dem ersten solchen Zeichen auf die FALSCHE
+    Stelle im Original-Vault-Text -- eine falsche Fundstelle ist in einem
+    Zitat-Belegwerkzeug schlimmer als gar keine (daher dieser Fix statt eines
+    blossen Hinweises).
+
+    Nutzt :func:`_folded_offset_table` (monoton nicht-fallende Praefixsummen)
+    und bildet per Bisektion zurueck: der Original-Index, dessen gefaltete
+    Expansion die angefragte Position ENTHAELT.
+    """
+    table = _folded_offset_table(text)
+    start = bisect.bisect_right(table, folded_start) - 1
+    end = bisect.bisect_left(table, folded_end)
+    start = max(0, min(start, len(text)))
+    end = max(start, min(end, len(text)))
+    return start, end
+
+
 def _fuzzy_match(candidate: str, entries: list[_PreparedQuote]) -> QuoteWordingMatch | None:
     """Zuordnung ueber rapidfuzz; ``None``, wenn nichts eindeutig passt."""
     # Lazy import (#846-Folgefix): NUR dieser Fuzzy-Zweig braucht rapidfuzz.
@@ -359,11 +408,17 @@ def _fuzzy_match(candidate: str, entries: list[_PreparedQuote]) -> QuoteWordingM
             return None
 
     alignment = fuzz.partial_ratio_alignment(folded, best.folded)
-    excerpt = (
-        _expand_to_word_bounds(best.full, alignment.dest_start, alignment.dest_end)
-        if alignment is not None
-        else best.full
-    )
+    if alignment is not None:
+        # alignment.dest_* sind Offsets in best.FOLDED (fuer die
+        # Case-insensitive Zuordnung), nicht in best.full -- casefold() ist
+        # nicht laengentreu (z. B. 'ß' -> 'ss'), deshalb erst zurueckbilden
+        # (siehe _map_folded_span_to_original) statt direkt zu uebernehmen.
+        orig_start, orig_end = _map_folded_span_to_original(
+            best.full, alignment.dest_start, alignment.dest_end
+        )
+        excerpt = _expand_to_word_bounds(best.full, orig_start, orig_end)
+    else:
+        excerpt = best.full
     diff = _word_diff(full, excerpt)
     if not diff:
         # Kein Wort weicht ab -> reine Darstellungsvariante, die die billigen
@@ -388,7 +443,10 @@ def _fuzzy_match(candidate: str, entries: list[_PreparedQuote]) -> QuoteWordingM
 
 
 def match_candidate(
-    entries: list[_PreparedQuote], candidate: str, allow_fuzzy: bool = True
+    entries: list[_PreparedQuote],
+    candidate: str,
+    allow_fuzzy: bool = True,
+    snapshot_capped: bool = False,
 ) -> QuoteWordingMatch:
     """Bestimmt den Wortlaut-Status EINES Kandidaten gegen den Snapshot.
 
@@ -399,6 +457,16 @@ def match_candidate(
             (Pruefkontingent) -- die billigen Stufen laufen weiter, ein nicht
             belegtes Zitat bleibt also ``absent`` und wird NICHT still
             durchgewunken.
+        snapshot_capped: ``True``, wenn der Vault mehr laengenpassende Zitate
+            hatte, als :meth:`academic_vault.repositories.quotes.QuotesRepo.
+            quotes_snapshot_for_wording` gelesen hat (Deep-Review-Finding zu
+            #846). Faerbt NUR ein ``absent``-Ergebnis: ein Treffer (exact/
+            normalized/ellipsis/deviation) ist unabhaengig vom Cap belastbar
+            -- das Zitat WURDE gefunden. Ein ``absent`` trotz Cap ist dagegen
+            kein verlaesslicher "nicht im Vault"-Befund, sondern "im
+            gepruefen Ausschnitt nicht gefunden" -- der Aufrufer (Hook) muss
+            das unterscheidbar melden koennen statt einen Fehlalarm als
+            sicheren Befund auszugeben.
 
     Raises:
         TypeError: wenn ``candidate`` kein String ist (der Aufrufer faengt das
@@ -417,4 +485,9 @@ def match_candidate(
         fuzzy = _fuzzy_match(candidate, entries)
         if fuzzy is not None:
             return fuzzy
-    return QuoteWordingMatch(status="absent", candidate=full, quota_capped=not allow_fuzzy)
+    return QuoteWordingMatch(
+        status="absent",
+        candidate=full,
+        quota_capped=not allow_fuzzy,
+        snapshot_capped=snapshot_capped,
+    )

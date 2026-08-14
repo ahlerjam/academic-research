@@ -1875,7 +1875,11 @@ def match_quote_wording(
 
     db = VaultDB(db_path)
     _ensure_schema_for_read(db_path)
-    snapshot = db.quotes_snapshot_for_wording(
+    # snapshot_truncated (Deep-Review-Finding zu #846): True, wenn der Vault
+    # mehr laengenpassende Zitate hatte, als MAX_SNAPSHOT_QUOTES zulaesst --
+    # ein "absent" aus einem gekappten Snapshot ist kein verlaesslicher
+    # "nicht im Vault"-Befund (siehe match_candidate()-Docstring).
+    snapshot, snapshot_truncated = db.quotes_snapshot_for_wording(
         min_length=quote_match.min_snapshot_length(candidates),
         limit=quote_match.MAX_SNAPSHOT_QUOTES,
     )
@@ -1886,7 +1890,12 @@ def match_quote_wording(
         allow_fuzzy = wording_limit is None or index < wording_limit
         try:
             results.append(
-                quote_match.match_candidate(entries, candidate, allow_fuzzy=allow_fuzzy).as_dict()
+                quote_match.match_candidate(
+                    entries,
+                    candidate,
+                    allow_fuzzy=allow_fuzzy,
+                    snapshot_capped=snapshot_truncated,
+                ).as_dict()
             )
         except Exception as exc:  # pragma: no cover - Defensivpfad je Eintrag
             results.append({"error": f"{type(exc).__name__}: {exc}"})
