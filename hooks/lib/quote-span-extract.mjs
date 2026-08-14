@@ -142,10 +142,30 @@ export function claimDriftQuoteTexts(toolName, toolInput) {
  * Zitat-Textmenge — das ist die Obermenge, die
  * `vault-bridge.mjs::ensureQuoteBatch()` beim ersten Cache-Miss in EINEM
  * Vault-Aufruf vorlaedt.
+ *
+ * `limit` deckelt die Obermenge. Ohne Deckel skaliert sie mit der GANZEN
+ * Datei statt mit dem, was die Guards ueberhaupt pruefen duerfen (ihre
+ * Kontingente CLAIM_DRIFT_MAX_LOOKUPS / CONTEXT_FIDELITY_MAX_QUOTES) — ein
+ * Kapitel mit 80 Zitaten schickte 80 Texte in den Vault, von denen die Guards
+ * hoechstens 20 nachschlagen. Den konkreten Wert setzt der einzige Aufrufer
+ * (`vault-bridge.mjs::prefetchLimit()`), damit die Kontingent-Kenntnis an
+ * einer Stelle liegt.
+ *
+ * Gekappt wird von hinten: die Reihenfolge ist Dokumentreihenfolge des
+ * geschriebenen Texts zuerst (der Bedarf von verbatim-guard und
+ * context-fidelity-guard, die beide vom Dateianfang her arbeiten), erst danach
+ * die claim-drift-Texte. Faellt ein Guard-Bedarf trotzdem aus dem Deckel,
+ * kostet das nur die Optimierung: der Guard sieht einen fehlenden Schluessel
+ * und faellt auf seinen eigenen `runVaultPython`-Call zurueck (siehe
+ * Kopfkommentar).
+ *
+ * @param {number} [limit] Obergrenze; ohne Angabe ungedeckelt.
  */
-export function unionQuoteTexts(toolName, toolInput) {
-  return dedupe([
+export function unionQuoteTexts(toolName, toolInput, limit = Infinity) {
+  const texts = dedupe([
     ...writtenQuoteTexts(toolName, toolInput),
     ...claimDriftQuoteTexts(toolName, toolInput),
   ]);
+  if (!Number.isFinite(limit) || limit < 0) return texts;
+  return texts.slice(0, limit);
 }

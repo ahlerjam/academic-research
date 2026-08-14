@@ -43,10 +43,19 @@ Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionier
   nicht an eine feste `hooks.json`-Reihenfolge gekoppelt. Fail-open bleibt
   unveraendert: ein kaputter/unschreibbarer Cache oder eine fehlgeschlagene
   Interpreter-Kaskade blockiert keinen Write, mit identischem Wortlaut wie vor
-  #844. Blockier-/Warn-Semantik der drei Guards unveraendert. Latenz-/
-  Subprozess-Nachweis (echter Codepfad): `node scripts/dev/bench_hook_guards_batch.mjs`
-  — Median 3 Subprozesse/Write → 1 Subprozess/Write, ~2,5x schnellerer
-  Gesamtdurchlauf im lokalen Testlauf (Rohzahlen im PR).
+  #844. Blockier-/Warn-Semantik der drei Guards unveraendert. **Negativ-Treffer
+  werden nie aus dem Cache bedient:** genau sie loesen den Block aus — und damit
+  den Retry, bei dem der Nutzer die Ursache schon behoben hat (Zitat
+  nachgetragen). Ein gecachter Negativ-Treffer haette denselben Write die volle
+  TTL weiter blockiert, weil der Schluessel nur an Pfad + `tool_input` haengt.
+  **Die vorgeladene Obermenge ist auf die Guard-Kontingente gedeckelt**
+  (`CLAIM_DRIFT_MAX_LOOKUPS`/`CONTEXT_FIDELITY_MAX_QUOTES`, plus dem eigenen
+  Bedarf des Aufrufers) — vorher skalierte sie mit der ganzen Datei statt mit
+  dem, was die Guards ueberhaupt nachschlagen. Latenz-/Subprozess-Nachweis
+  (echter Codepfad, jetzt zusaetzlich mit einem Kapitel >= 50 Zitaten):
+  `node scripts/dev/bench_hook_guards_batch.mjs` — Median 3 Subprozesse/Write →
+  1 Subprozess/Write in beiden Kapitelgroessen, ~2,1x (60 Zitate) bis ~2,7x
+  (1 Zitat) schnellerer Gesamtdurchlauf im lokalen Testlauf (Rohzahlen im PR).
 
 ### Fixed
 

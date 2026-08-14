@@ -558,8 +558,29 @@ unabhängigen Guards vermischen) teilen sie sich seit #844 einen dateibasierten 
   in **einem** `runVaultPython`-Aufruf vor und schreibt das Ergebnis unter
   `~/.academic-research/hook-batch-cache/<schlüssel>.json` (TTL 20 s, 0600-Rechte,
   Verzeichnis via `HOOK_BATCH_CACHE_DIR` überschreibbar).
+- **Deckel der Obermenge**: `vault-bridge.mjs::prefetchLimit()` begrenzt den Prefetch auf
+  `max(CLAIM_DRIFT_MAX_LOOKUPS, CONTEXT_FIDELITY_MAX_QUOTES, eigener Bedarf des
+  Aufrufers)`. Ohne Deckel skalierte er mit der **ganzen Datei** statt mit dem, was die
+  Guards überhaupt nachschlagen dürfen: ein Kapitel mit 80 Zitaten schickte 80 Texte in
+  den Vault, obwohl `context-fidelity-guard.mjs` höchstens 20 davon prüft. Der eigene
+  Bedarf des Aufrufers geht zuerst in die Menge und kann deshalb nie weggedeckelt werden;
+  fällt ein *fremder* Guard-Bedarf aus dem Deckel, kostet das nur die Optimierung (der
+  Guard sieht einen fehlenden Schlüssel und macht seinen eigenen Lookup).
 - **Konsumenten**: die beiden anderen Guards lesen bei Cache-Hit nur noch die Datei —
   kein Subprozess.
+- **Negativ-Treffer sind nie cachebar**: ein Eintrag wird nur bedient, wenn er für die
+  angefragten Texte *keinen* Negativ-Treffer enthält (`null` bei Zitaten, `false` bei
+  Figures). Genau diese Einträge lösen den Block aus — und ein Block löst den Retry aus,
+  bei dem der Nutzer die Ursache bereits behoben hat (Zitat nachgetragen, Abbildung
+  eingepflegt). Da der Schlüssel nur an Pfad + `tool_input` hängt, ist er beim Retry
+  identisch; ein gecachter Negativ-Treffer hätte denselben Write die volle TTL weiter
+  blockiert. Bewusst **nicht** über die Vault-DB-Mtime im Schlüssel gelöst: die Vault-DB
+  läuft im WAL-Modus (`PRAGMA journal_mode=WAL`, `academic_vault/db.py`), ein Commit
+  landet in `vault.db-wal` und lässt die Mtime von `vault.db` bis zum Checkpoint
+  unverändert — die Invalidierung würde genau im Retry-Fall lautlos ausbleiben. Preis:
+  im (selteneren) Blockfall fällt der Write auf das Verhalten vor #844 zurück, ein Lookup
+  je Guard. `{error: …}`-Einträge bleiben cachebar — sie sind fail-open (Warnung statt
+  Block) und erzeugen deshalb keinen klebrigen Blocker.
 - **Fail-open**: jeder Fehler auf diesem Pfad (Cache nicht schreibbar, korrupte
   Cache-Datei, Interpreter-Kaskade scheitert) liefert `null` zurück; der jeweilige Guard
   behandelt das identisch zu "kein Cache vorhanden" (fail-open, kein Block). Ein zweiter
@@ -573,7 +594,10 @@ unabhängigen Guards vermischen) teilen sie sich seit #844 einen dateibasierten 
   `runVaultPython`-Call).
 
 Latenz-/Subprozess-Nachweis (echter Codepfad, kein Mikrobenchmark):
-`node scripts/dev/bench_hook_guards_batch.mjs --reps 10`.
+`node scripts/dev/bench_hook_guards_batch.mjs --reps 10`. Gemessen werden zwei
+Kapitelgrößen — ein kleines Kapitel (1 Zitat) und ein großes (`--large-quotes`, Default
+60, Minimum 50); das große ist der Fall, in dem die Obermenge früher mit der Dateigröße
+statt mit den Guard-Kontingenten skalierte.
 
 ### Intervall-Zähler und Hook-Timeout
 

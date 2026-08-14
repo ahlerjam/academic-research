@@ -45,18 +45,9 @@ CHAPTER_OLD = (
 CHAPTER_NEW = CHAPTER_OLD.replace("moderaten", "starken")
 
 
-def _make_vault(tmp_path: Path, name: str = "batch_cache_vault.db") -> str:
-    from academic_vault.db import VaultDB
-    from academic_vault.server import add_paper, add_quote
+def _add_vault_quote(db_path: str) -> None:
+    from academic_vault.server import add_quote
 
-    db_path = str(tmp_path / name)
-    db = VaultDB(db_path)
-    db.init_schema()
-    add_paper(
-        db_path=db_path,
-        paper_id=PAPER_ID,
-        csl_json=json.dumps({"title": "Lesekompetenz", "type": "article-journal"}),
-    )
     add_quote(
         db_path=db_path,
         paper_id=PAPER_ID,
@@ -66,6 +57,27 @@ def _make_vault(tmp_path: Path, name: str = "batch_cache_vault.db") -> str:
         context_before="Vorheriger Satz zur Einordnung.",
         context_after="Nachfolgender Satz mit Einschraenkung.",
     )
+
+
+def _make_vault(
+    tmp_path: Path,
+    name: str = "batch_cache_vault.db",
+    *,
+    with_quote: bool = True,
+) -> str:
+    from academic_vault.db import VaultDB
+    from academic_vault.server import add_paper
+
+    db_path = str(tmp_path / name)
+    db = VaultDB(db_path)
+    db.init_schema()
+    add_paper(
+        db_path=db_path,
+        paper_id=PAPER_ID,
+        csl_json=json.dumps({"title": "Lesekompetenz", "type": "article-journal"}),
+    )
+    if with_quote:
+        _add_vault_quote(db_path)
     return db_path
 
 
@@ -213,6 +225,140 @@ def test_corrupt_cache_file_does_not_block_write(tmp_path):
     assert result.returncode == 0, (
         f"Korrupte Fremd-Cache-Datei darf verbatim-guard.mjs nicht blockieren: "
         f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Negativ-Treffer duerfen nicht klebrig sein (Deep-Review-Finding zu #844)
+# ---------------------------------------------------------------------------
+
+
+def test_corrected_retry_after_vault_change_is_not_blocked_by_cached_negative(tmp_path):
+    """Ein Negativ-Treffer darf NICHT aus dem Cache bedient werden.
+
+    Genau diese Eintraege fuehren zum Block — und damit zum Retry des Nutzers,
+    der die Ursache zwischenzeitlich behebt (Zitat in den Vault eingetragen).
+    Wuerde der Cache den Negativ-Treffer weiterreichen, bliebe derselbe Write
+    fuer die volle TTL blockiert, ohne erkennbaren Grund.
+    """
+    vault_db = _make_vault(tmp_path, name="batch_cache_vault_retry.db", with_quote=False)
+    marker_file = tmp_path / "python-calls-retry.log"
+    wrapper = tmp_path / "counting-python-retry"
+    _write_counting_wrapper(wrapper, marker_file)
+    env = _base_env(tmp_path, vault_db, marker_file, wrapper)
+
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": str(tmp_path / "kapitel" / "kap-retry.md"),
+            "content": CHAPTER_NEW,
+        },
+    }
+
+    first = _run_hook(VERBATIM_HOOK, payload, env)
+    assert first.returncode == 2, (
+        "Vorbedingung: ein Zitat ohne Vault-Eintrag muss blockieren "
+        f"(returncode={first.returncode}, stdout={first.stdout!r}, stderr={first.stderr!r})"
+    )
+
+    # Nutzer behebt die Ursache: Zitat wandert in den Vault.
+    _add_vault_quote(vault_db)
+
+    second = _run_hook(VERBATIM_HOOK, payload, env)
+    assert second.returncode == 0, (
+        "Der korrigierte Retry muss durchgehen — ein gecachter Negativ-Treffer "
+        "darf denselben Write nicht erneut blockieren "
+        f"(returncode={second.returncode}, stdout={second.stdout!r}, stderr={second.stderr!r})"
+    )
+
+
+def test_positive_batch_entries_stay_cached_after_a_negative_hit(tmp_path):
+    """Nur der Negativ-Fall umgeht den Cache — ein rein positiver Write
+    bleibt bei EINEM Subprozess fuer alle drei Guards (AC1 unveraendert)."""
+    vault_db = _make_vault(tmp_path, name="batch_cache_vault_positive.db")
+    marker_file = tmp_path / "python-calls-positive.log"
+    wrapper = tmp_path / "counting-python-positive"
+    _write_counting_wrapper(wrapper, marker_file)
+    env = _base_env(tmp_path, vault_db, marker_file, wrapper)
+
+    payload = {
+        "tool_name": "Edit",
+        "tool_input": {
+            "file_path": str(tmp_path / "kapitel" / "kap-positive.md"),
+            "old_string": CHAPTER_OLD,
+            "new_string": CHAPTER_NEW,
+        },
+    }
+    for hook in (VERBATIM_HOOK, CLAIM_DRIFT_HOOK, CONTEXT_FIDELITY_HOOK):
+        result = _run_hook(hook, payload, env)
+        assert result.returncode == 0, result.stderr
+
+    calls = marker_file.read_text(encoding="utf-8").splitlines()
+    assert len(calls) == 1, (
+        f"Positive Treffer muessen weiter aus dem Cache kommen — {len(calls)} Starts."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prefetch-Obermenge ist durch die Guard-Kontingente gedeckelt
+# (Deep-Review-Finding zu #844, hooks/lib/quote-span-extract.mjs)
+# ---------------------------------------------------------------------------
+
+MANY_QUOTES_COUNT = 80
+MANY_QUOTE_TEXTS = [
+    f"Zitat Nummer {i:03d} mit ausreichender Laenge fuer den Guard."
+    for i in range(MANY_QUOTES_COUNT)
+]
+MANY_QUOTES_CHAPTER = "## Ergebnisse\n\n" + "\n\n".join(
+    f'Einleitender Satz {i}. "{text}" Nachfolgender Satz {i}.'
+    for i, text in enumerate(MANY_QUOTE_TEXTS)
+)
+
+
+def _write_payload_logging_wrapper(path: Path, payload_file: Path) -> None:
+    """Interpreter-Wrapper, der das JSON-Payload des Batch-Aufrufs (argv[3] des
+    Interpreters == sys.argv[2] des Snippets) protokolliert."""
+    path.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$4" >> "{payload_file}"\nexec "{sys.executable}" "$@"\n'
+    )
+    path.chmod(0o755)
+
+
+def test_prefetch_superset_is_capped_by_guard_quotas(tmp_path):
+    """Die vorgeladene Obermenge skaliert mit den Guard-Kontingenten, nicht mit
+    der Dateigroesse: context-fidelity-guard prueft hoechstens
+    CONTEXT_FIDELITY_MAX_QUOTES (20) Zitate — der gemeinsame Prefetch darf fuer
+    ein Kapitel mit 80 Zitaten nicht alle 80 in den Vault schicken."""
+    vault_db = _make_vault(tmp_path, name="batch_cache_vault_cap.db")
+    payload_file = tmp_path / "python-payloads.log"
+    wrapper = tmp_path / "payload-logging-python"
+    _write_payload_logging_wrapper(wrapper, payload_file)
+    env = _base_env(tmp_path, vault_db, payload_file, wrapper)
+
+    payload = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": str(tmp_path / "kapitel" / "kap-cap.md"),
+            "content": MANY_QUOTES_CHAPTER,
+        },
+    }
+    result = _run_hook(CONTEXT_FIDELITY_HOOK, payload, env)
+    assert result.returncode == 0, result.stderr
+
+    payloads = [
+        json.loads(line)
+        for line in payload_file.read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("{")
+    ]
+    assert len(payloads) == 1, f"Erwartet genau EINEN Vault-Batch-Aufruf, war: {len(payloads)}"
+    quotes = payloads[0]["quotes"]
+    assert len(quotes) <= 20, (
+        f"Prefetch-Obermenge ignoriert die Guard-Kontingente: {len(quotes)} Zitate "
+        f"fuer ein Kapitel mit {MANY_QUOTES_COUNT} Zitaten (Kontingent: 20)."
+    )
+    # Der eigene Bedarf des Aufrufers darf durch die Deckelung nie wegfallen.
+    assert set(MANY_QUOTE_TEXTS[:20]) <= set(quotes), (
+        "Die Deckelung darf die Zitate des aufrufenden Guards nicht verdraengen."
     )
 
 

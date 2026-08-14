@@ -172,6 +172,10 @@ export function runVaultPython(pyCode, args = [], options = {}) {
 // gekoppelt, sondern an "wer zuerst einen Cache-Miss sieht" — robust gegen
 // kuenftige hooks.json-Reihenfolge-Aenderungen.
 //
+// Negativ-Treffer werden NIE aus dem Cache bedient (siehe usableCacheEntry()
+// unten): genau sie fuehren zum Block — und damit zum Retry des Nutzers, der
+// die Ursache zwischenzeitlich behebt.
+//
 // Fail-open (durchgaengig): jeder Fehler auf diesem Pfad (Cache-Verzeichnis
 // nicht schreibbar, korrupte Cache-Datei, Python-Aufruf schlaegt fehl) gibt
 // `null` zurueck. Die Aufrufer (die drei Guards) behandeln `null` exakt wie
@@ -230,6 +234,67 @@ function writeBatchCache(key, data) {
   } catch {
     // best-effort — ein Cache-Schreibfehler darf keinen Guard blockieren.
   }
+}
+
+/**
+ * Prueft, ob ein Cache-Eintrag fuer die angefragten Schluessel BEDIENBAR ist.
+ *
+ * Zwei Gruende, warum er es nicht ist:
+ *   1. Ein Schluessel fehlt — die Naeherung in quote-span-extract.mjs hat den
+ *      Text nicht vorhergesagt (bekannter Fall, siehe dortiger Kopfkommentar).
+ *   2. Der Eintrag ist ein NEGATIV-Treffer (`null` bei Zitaten, `false` bei
+ *      Figures). Nur diese Eintraege loesen einen Block aus — und ein Block
+ *      loest den Retry aus, bei dem der Nutzer die Ursache bereits behoben
+ *      hat (Zitat nachgetragen, Abbildung eingepflegt). Ein aus dem Cache
+ *      bedienter Negativ-Treffer wuerde denselben Write fuer die volle TTL
+ *      weiter blockieren, obwohl der Vault die Antwort inzwischen kennt: der
+ *      Cache-Schluessel haengt nur an Pfad + tool_input, die beim Retry
+ *      identisch sind.
+ *
+ * Bewusst NICHT ueber die Vault-DB-Mtime im Cache-Schluessel geloest: die
+ * Vault-DB laeuft im WAL-Modus (`PRAGMA journal_mode=WAL`,
+ * academic_vault/db.py), ein Commit landet also in `vault.db-wal` und laesst
+ * die Mtime von `vault.db` bis zum Checkpoint unveraendert — die Invalidierung
+ * wuerde genau im Retry-Fall lautlos ausbleiben. Zusaetzlich zur ohnehin
+ * grenzwertigen Zeitstempel-Granularitaet. Positiv-Treffer bleiben cachebar
+ * und tragen den Performance-Gewinn aus #844; nur der (seltenere) Blockfall
+ * faellt auf das Verhalten vor #844 zurueck: ein Lookup je Guard.
+ *
+ * `{error: ...}`-Eintraege gelten als bedienbar — sie sind fail-open (Warnung
+ * statt Block) und erzeugen deshalb keinen klebrigen Blocker.
+ */
+function usableCacheEntry(obj, keys, isNegative) {
+  return keys.every((key) => {
+    if (!Object.prototype.hasOwnProperty.call(obj || {}, key)) return false;
+    return !isNegative(obj[key]);
+  });
+}
+
+/**
+ * Deckel fuer die vorgeladene Zitat-Obermenge: die Kontingente der Guards, die
+ * ueberhaupt aus dem Cache bedient werden koennen, plus der eigene Bedarf des
+ * Aufrufers (der darf nie wegfallen — sonst faellt der Aufrufer sofort in
+ * seinen eigenen Lookup zurueck und der Prefetch war umsonst).
+ *
+ * Ohne Deckel skalierte der Prefetch mit der GANZEN Datei statt mit dem, was
+ * die Guards ueberhaupt pruefen duerfen: ein Kapitel mit 80 Zitaten schickte
+ * 80 Texte in den Vault, obwohl context-fidelity-guard hoechstens
+ * CONTEXT_FIDELITY_MAX_QUOTES und claim-drift-guard hoechstens
+ * CLAIM_DRIFT_MAX_LOOKUPS davon nachschlaegt.
+ *
+ * Die Env-Namen/Defaults sind absichtlich die der Guards (dort dokumentiert);
+ * ein Import waere ein Zyklus (die Guards importieren diese Datei).
+ */
+export function prefetchLimit(ownCount = 0) {
+  const positiveInt = (raw, fallback) => {
+    const parsed = parseInt(raw ?? '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  return Math.max(
+    positiveInt(process.env.CLAIM_DRIFT_MAX_LOOKUPS, 10),
+    positiveInt(process.env.CONTEXT_FIDELITY_MAX_QUOTES, 20),
+    ownCount,
+  );
 }
 
 /**
@@ -305,28 +370,27 @@ export function ensureQuoteBatch(params) {
 
   const key = batchCacheKey(filePath, toolInput);
   const cached = readBatchCache(key);
-  const hasAllKeys = (obj, keys) => keys.every(
-    (k) => Object.prototype.hasOwnProperty.call(obj || {}, k),
-  );
   if (
     cached
-    && hasAllKeys(cached.quotes, quoteTexts)
-    && hasAllKeys(cached.figures, figureTexts)
+    && usableCacheEntry(cached.quotes, quoteTexts, (v) => v === null)
+    && usableCacheEntry(cached.figures, figureTexts, (v) => v === false)
   ) {
     return cached;
   }
 
-  // Miss (oder unvollstaendiger Treffer): dieser Aufrufer wird Producer.
-  // Obermenge = Vereinigung aller drei Guard-Bedarfe (quote-span-extract.mjs)
-  // UND der eigenen Zitat-/Figure-Texte (garantiert deren Abdeckung, auch
-  // wenn die Naeherung sie verfehlt haette).
+  // Miss (unvollstaendiger Treffer oder Negativ-Treffer): dieser Aufrufer wird
+  // Producer. Obermenge = eigene Zitat-Texte (zuerst — der Deckel unten darf
+  // sie nie verdraengen) plus die Vereinigung aller drei Guard-Bedarfe
+  // (quote-span-extract.mjs), gedeckelt auf die Guard-Kontingente.
+  const ownQuotes = [...new Set(quoteTexts)];
+  const limit = prefetchLimit(ownQuotes.length);
   let unionQuotes;
   try {
-    unionQuotes = unionQuoteTexts(toolName, toolInput);
+    unionQuotes = unionQuoteTexts(toolName, toolInput, limit);
   } catch {
     unionQuotes = [];
   }
-  const allQuotes = [...new Set([...unionQuotes, ...quoteTexts])];
+  const allQuotes = [...new Set([...ownQuotes, ...unionQuotes])].slice(0, limit);
   const allFigures = [...new Set(figureTexts)];
 
   if (!existsSync(vaultDb)) return null;
