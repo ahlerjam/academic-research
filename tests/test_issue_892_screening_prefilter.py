@@ -143,7 +143,7 @@ def test_prescore_cli_needs_no_relevance_argument():
 def test_search_md_ranking_step_scores_without_relevance():
     """AC1: der Ranking-Schritt in commands/search.md nennt die Relevanz nicht mehr."""
     text = SEARCH_MD.read_text(encoding="utf-8")
-    ranking = _section(text, "### Schritt 7:")
+    ranking = _section(text, "### Schritt 8:")
     assert "prescore" in ranking, "Ranking-Schritt muss auf das 4D-Vorranking verweisen"
     assert "5D" not in ranking, "der 5D-Gesamtscore darf hier noch nicht gerechnet werden"
     assert "relevance-scorer" not in ranking
@@ -603,7 +603,7 @@ def test_prisma_counters_come_from_the_ledger_alone(tmp_path):
 
 def test_search_md_prefers_ledger_counters():
     """AC4: die Handzaehlung ist in commands/search.md nur noch der Fallback."""
-    counters_section = _section(SEARCH_MD.read_text(encoding="utf-8"), "### Schritt 11:")
+    counters_section = _section(SEARCH_MD.read_text(encoding="utf-8"), "### Schritt 12:")
     ledger_pos = counters_section.find("screening_ledger.py")
     manual_pos = counters_section.find("build_prisma_counters")
     assert ledger_pos != -1 and manual_pos != -1

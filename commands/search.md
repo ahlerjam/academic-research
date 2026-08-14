@@ -174,7 +174,24 @@ Pro Modul:
 
 Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
 
-### Schritt 5: Deduplikation
+### Schritt 5: Vorfilterung
+
+Vor der Deduplikation laufen Korpus-Hygiene-Regeln, die entscheiden, was
+überhaupt in den weiteren Prozess gehört — dieser Schritt ist der
+Ankerpunkt dafür (#890). Die inhaltlichen Filterregeln selbst sind ein
+eigener Schnitt und noch nicht Teil dieses Schritts: aktuell gibt es hier
+**keinen Dateizugriff** — `$SESSION_DIR/api_results.json` bleibt unverändert
+liegen, und Schritt 6 liest direkt daraus. Ein reiner Kopierbefehl auf eine
+Zwischendatei (`prefiltered.json`) wuerde nur eine zusaetzliche
+`allowed-tools`-Bash-Regel fuer eine Operation erzwingen, die inhaltlich
+nichts tut — unnoetige Angriffsflaeche fuer einen No-Op. Sobald echte
+Filterregeln implementiert werden, laufen sie ueber ein Python-Skript (wie
+`dedup.py`, `scoring.py` etc.), das unter der bereits vorhandenen
+`Bash(~/.academic-research/venv/bin/python *)`-Regel schreibt — dann
+schreibt dieser Schritt nach `$SESSION_DIR/prefiltered.json`, und Schritt 6
+liest von dort.
+
+### Schritt 6: Deduplikation
 
 ```bash
 ~/.academic-research/venv/bin/python ${CLAUDE_PLUGIN_ROOT}/scripts/dedup.py \
@@ -182,7 +199,7 @@ Ergebnisse an `$SESSION_DIR/api_results.json` anhängen.
   --output "$SESSION_DIR/deduped.json"
 ```
 
-### Schritt 6: Known-Item-Suche (#886)
+### Schritt 7: Known-Item-Suche (#886)
 
 Die thematischen Queries treffen strukturbedingt oft nicht die benannten
 Grundlagenarbeiten eines Feldes — wer nach „multi-agent coordination failure
@@ -233,7 +250,7 @@ Im Report/Digest ausweisen:
 2. Was gefunden wurde, inkl. expliziter Nulltreffer.
 3. Bei Fallback: den Grund aus `fallback_reason`.
 
-### Schritt 7: Vorranking (4D `prescore` + Cluster)
+### Schritt 8: Vorranking (4D `prescore` + Cluster)
 
 An dieser Stelle gibt es noch **keine** Relevanzbewertung — die entsteht erst in
 Schritt 11. Ein Ranking, das sie hier schon bräuchte, würde mit einer Zahl
@@ -252,18 +269,18 @@ Clusterzuweisung wie in `commands/score.md`. Alles Weitere bis Schritt 11
 sortiert nach `prescore`.
 
 Der gewichtete Gesamtscore über alle fünf Dimensionen (`scoring.total_score()`,
-siehe `commands/score.md`) entsteht erst in Schritt 10, sobald die Relevanz
+siehe `commands/score.md`) entsteht erst in Schritt 11, sobald die Relevanz
 tatsächlich vorliegt.
 
-### Schritt 8: Interactive Mode — Phase 1 (Approval-Gate, Default)
+### Schritt 9: Interactive Mode — Phase 1 (Approval-Gate, Default)
 
-Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 10, damit der
+Dieses Gate läuft **standardmäßig** — es steht bewusst vor Schritt 11, damit der
 User Query-Expansion und Trefferlage sieht, bevor das teure LLM-Relevanz-Scoring
-startet. Die Vorschau ordnet nach `prescore` aus Schritt 7 (`run_interactive_phase1`
+startet. Die Vorschau ordnet nach `prescore` aus Schritt 8 (`run_interactive_phase1`
 fällt auf ein altes `score`-Feld zurück, falls die `ranked.json` aus einem Lauf vor
 #892 stammt).
 
-Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 9):
+Gate-freie Pfade (Schritt komplett überspringen, direkt weiter mit Schritt 10):
 
 - `--interactive=off` — das dokumentierte Opt-out, stellt das Verhalten vor #537 her.
 - Nicht-interaktive bzw. headless Läufe (kein `AskUserQuestion`-Kanal verfügbar,
@@ -294,7 +311,7 @@ Anzeigen:
    unmarkiert, `is_retracted` fehlend/`null` ebenfalls unmarkiert und darf
    NICHT wie „nicht zurückgezogen" dargestellt werden — die Drei-Werte-Semantik
    (zurückgezogen / nicht zurückgezogen / unbekannt) muss in der Tabelle
-   erkennbar bleiben. Treffer mit `found_via_known_item: true` (Schritt 6)
+   erkennbar bleiben. Treffer mit `found_via_known_item: true` (Schritt 7)
    erhalten ein sichtbares Badge „🎯 Known-Item" in derselben Tabelle, damit
    erkennbar bleibt, welche Treffer aus der gezielten Suche nach
    Grundlagenarbeiten stammen statt aus der thematischen Suche.
@@ -309,7 +326,7 @@ Optionen:
 
 Bei "Weiter": Phase 2 (Deep-Investigation) starten = vollständiges Scoring + Kapitelplanung.
 
-### Schritt 9: Mechanischer Vorfilter
+### Schritt 10: Mechanischer Vorfilter
 
 Was die Ein-/Ausschlusskriterien **eindeutig** entscheiden, entscheidet ein
 Kriterienabgleich — nicht das Modell. Eine Arbeit, die den Zeitraum, die
@@ -338,7 +355,7 @@ Der Schritt liest den eingezäunten `screening_filters`-Block aus der Section
 
 Jeder mechanische Ausschluss steht danach mit Kriteriumsnamen im Grund im
 Ledger (`decided_by: "rule"`) und in `excluded_sources` — mechanische und
-Modell-Ausschlüsse liegen im selben Protokoll, aus dem Schritt 11 die
+Modell-Ausschlüsse liegen im selben Protokoll, aus dem Schritt 12 die
 PRISMA-Zähler zieht.
 
 Fail-open, in beide Richtungen:
@@ -353,27 +370,27 @@ Fail-open, in beide Richtungen:
 Abschaltbar per `--no-prefilter` bzw. `screening_prefilter: false` in
 `config/parallel_agents.json`.
 
-### Schritt 10: Relevanz-Scoring
+### Schritt 11: Relevanz-Scoring
 
 Den `relevance-scorer`-Agent in Batches von 10 Papers starten. Grundlage ist die
 Restmenge aus `$SESSION_DIR/to_screen.json`, in deren `prescore`-Reihenfolge:
-Was der Vorfilter in Schritt 9 bereits entschieden hat, taucht hier nicht mehr
+Was der Vorfilter in Schritt 10 bereits entschieden hat, taucht hier nicht mehr
 auf (`screening_ledger.pending()` überspringt protokollierte IDs). Läuft das
 Screening über den `parallel-screening`-Skill, kommt die Wellenplanung von dort.
 
 Erst hier existiert die Relevanz — und erst hier entsteht der gewichtete
 Gesamtscore über alle fünf Dimensionen (`scoring.total_score()`), der das
-Vorranking aus Schritt 7 ablöst. Top-N nach Modus wählen (quick=15,
+Vorranking aus Schritt 8 ablöst. Top-N nach Modus wählen (quick=15,
 standard=25, deep=40). Als `$SESSION_DIR/papers.json` speichern.
 
 Das Scoring läuft vollständig in der Sitzung, ohne eigenen Modellzugang und
 ohne asynchrone Abholung (#632).
 
-### Schritt 11: PRISMA-Zähler speichern
+### Schritt 12: PRISMA-Zähler speichern
 
 Die Zähler kommen aus dem Ausschlussprotokoll, nicht aus einer getrennt
-geführten Zählung — mechanische Ausschlüsse aus Schritt 9 und Modell-Urteile
-aus Schritt 10 stehen beide im selben Ledger (#892):
+geführten Zählung — mechanische Ausschlüsse aus Schritt 10 und Modell-Urteile
+aus Schritt 11 stehen beide im selben Ledger (#892):
 
 ```bash
 ~/.academic-research/venv/bin/python \
@@ -404,7 +421,7 @@ save_prisma_counters('$SESSION_DIR', counters)
 Die Zähler werden in beiden Fällen in `$SESSION_DIR/prisma_counters.json`
 gespeichert.
 
-### Schritt 12: Session-Index aktualisieren
+### Schritt 13: Session-Index aktualisieren
 
 Damit `/history` diesen Lauf findet, wird die Session am Ende jedes Suchlaufs
 im Index unter `~/.academic-research/session_index.json` fortgeschrieben
@@ -434,15 +451,15 @@ Paper (fällt das Scoring aus, ersatzweise `$SESSION_DIR/ranked.json`). Die
 Anzahl beschaffter Volltexte wird automatisch aus `$SESSION_DIR/pdfs/*.pdf`
 gezählt.
 
-### Schritt 13: Ergebnisse anzeigen
+### Schritt 14: Ergebnisse anzeigen
 
 Eine formatierte Tabelle mit Rang, Titel, Jahr, Score, Cluster und Quellmodul ausgeben.
-Treffer mit `is_retracted: true` wie in Schritt 8 sichtbar markieren („⚠ Retracted");
+Treffer mit `is_retracted: true` wie in Schritt 9 sichtbar markieren („⚠ Retracted");
 `is_retracted: false` unmarkiert, fehlend/`null` ebenfalls unmarkiert und nicht als
 „nicht zurückgezogen" ausweisen (#618). Der Hinweis führt zu keinem automatischen
 Ausschluss — die Entscheidung trifft der Mensch. Treffer mit
 `found_via_known_item: true` erhalten dasselbe „🎯 Known-Item"-Badge wie in
-Schritt 8 (#886).
+Schritt 9 (#886).
 Pfad des Session-Verzeichnisses melden.
 
 Die Kontext-Datei `./literature_state.md` im Projekt-Ordner mit neuen Statistiken aktualisieren, falls akademischer Kontext vorliegt.

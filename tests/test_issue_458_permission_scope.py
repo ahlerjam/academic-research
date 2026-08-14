@@ -190,6 +190,73 @@ def test_bash_pattern_matches_helper_rejects_non_matches():
 
 
 # ---------------------------------------------------------------------------
+# P1-Fix (PR #927-Review): Schritt 5 (Vorfilterung, #890) rief `cp
+# "$SESSION_DIR/api_results.json" "$SESSION_DIR/prefiltered.json"` auf, ohne
+# dass allowed-tools eine passende Bash(cp:*)-Regel enthielt. Im echten Lauf
+# waere der Aufruf blockiert worden (oder haette eine Rueckfrage ausgeloest),
+# der Workflow aber trotzdem weitergelaufen -- Schritt 6 (Deduplikation)
+# haette dann eine nicht (vollstaendig) vorhandene Datei gelesen. Loesung:
+# statt einer neuen Bash-Regel den Zwischenschritt ganz vermeiden -- Schritt 5
+# ist ohnehin ein reiner Pass-through-Platzhalter (die inhaltlichen
+# Filterregeln sind noch nicht implementiert), Schritt 6 liest jetzt direkt
+# aus api_results.json. Eine Regel weniger im Frontmatter ist eine
+# Angriffsflaeche weniger.
+# ---------------------------------------------------------------------------
+
+
+def test_search_command_prefiltering_step_has_no_bash_code_block():
+    """Schritt 5 (Vorfilterung) darf keinen ```bash```-Codeblock mehr enthalten
+    -- der fruehere `cp`-Aufruf war von keiner allowed-tools-Regel gedeckt."""
+    content = SEARCH_COMMAND_MD.read_text(encoding="utf-8")
+    step5_start = content.index("### Schritt 5: Vorfilterung")
+    step6_start = content.index("### Schritt 6: Deduplikation")
+    step5_body = content[step5_start:step6_start]
+
+    assert "```bash" not in step5_body, (
+        "Schritt 5 (Vorfilterung) sollte keinen Bash-Codeblock mehr enthalten -- "
+        "der fruehere `cp`-Aufruf dorthin war von keiner allowed-tools-Regel "
+        "gedeckt (PR #927-Review P1)"
+    )
+    assert "cp " not in step5_body, "kein cp-Aufruf mehr in Schritt 5 erwartet"
+
+
+def test_search_command_dedup_step_reads_api_results_directly():
+    """Schritt 6 (Deduplikation) liest direkt aus api_results.json -- die
+    Zwischendatei prefiltered.json (und der sie erzeugende `cp`-Aufruf, s.o.)
+    entfaellt ersatzlos."""
+    content = SEARCH_COMMAND_MD.read_text(encoding="utf-8")
+    step6_start = content.index("### Schritt 6: Deduplikation")
+    step7_start = content.index("### Schritt 7:")
+    step6_body = content[step6_start:step7_start]
+
+    assert '--papers "$SESSION_DIR/api_results.json"' in step6_body, (
+        "Schritt 6 muss --papers direkt gegen api_results.json aufrufen (#890)"
+    )
+    assert "prefiltered.json" not in step6_body, (
+        "prefiltered.json sollte in Schritt 6 nicht mehr referenziert werden (#890)"
+    )
+
+
+def test_search_command_has_no_ungoverned_cp_calls_anywhere():
+    """Gegenprobe ueber die gesamte Datei: `cp ` als eigenstaendiger
+    Bash-Aufruf darf nirgends mehr vorkommen, solange allowed-tools keine
+    Bash(cp:*)-Regel deklariert (PR #927-Review P1)."""
+    content = SEARCH_COMMAND_MD.read_text(encoding="utf-8")
+    bash_patterns = _bash_patterns_in_allowed_tools(SEARCH_COMMAND_MD)
+    assert not any(p.rstrip("*").strip() == "cp" or p.startswith("cp ") for p in bash_patterns), (
+        "sollte keine Bash(cp:*)-Regel brauchen, solange kein cp im Body steht"
+    )
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("cp ") or stripped == "cp":
+            raise AssertionError(
+                f"ungedeckter cp-Aufruf in commands/search.md: {line!r} -- "
+                "allowed-tools enthaelt keine Bash(cp:*)-Regel (PR #927-Review P1)"
+            )
+
+
+# ---------------------------------------------------------------------------
 # pending_permissions()
 # ---------------------------------------------------------------------------
 
