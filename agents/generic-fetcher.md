@@ -105,11 +105,13 @@ pruefst du die Datei unter `output_path` mit dem `Read`-Tool auf **alle drei**
 Punkte:
 
 1. Die Datei existiert.
-2. Sie ist groesser als null Bytes.
+2. Sie ist mindestens 2 KB gross (Issue #884 — eine kleinere Datei mit
+   gueltigem `%PDF-`-Kopf ist typischerweise ein abgebrochener/korrupter
+   Download, kein Volltext).
 3. Ihre ersten Bytes sind `%PDF-`.
 
 - Alle drei erfuellt → `decision: downloaded`; die `observation` nennt Pfad und
-  Groesse in Bytes (z. B. `PDF gespeichert unter /tmp/x.pdf (1161 Bytes,
+  Groesse in Bytes (z. B. `PDF gespeichert unter /tmp/x.pdf (412873 Bytes,
   beginnt mit %PDF-)`). Erst jetzt `status: success` mit `file_path`.
 - Ein Punkt nicht erfuellt → die unbrauchbare Datei loeschen (sie darf nicht als
   Volltext liegen bleiben), `decision: download_failed`, `status:
@@ -228,7 +230,7 @@ Zugangs-Gate UND Host lizenziert?
 PDF-Link ODER eingebettetes PDF?
   Ja → open_access → Download                  (decision: pdf_link_detected
                                                 bzw. embedded_pdf_detected)
-       Datei geprueft (existiert, > 0 Bytes, beginnt mit %PDF-)?
+       Datei geprueft (existiert, >= 2 KB, beginnt mit %PDF-)?
          Ja → success                          (decision: downloaded)
          Nein → Datei loeschen, pickup_required (decision: download_failed)
 Paywall-Signal?
@@ -385,7 +387,7 @@ maschinell nachvollziehbar sein.
 {
   "status": "pickup_required",
   "source": "generic-fetcher",
-  "reason": "Datei unter /tmp/example.pdf bestand die Pruefung nicht (existiert / > 0 Bytes / beginnt mit %PDF-) — gespeichert wurde eine HTML-Fehlerseite",
+  "reason": "Datei unter /tmp/example.pdf bestand die Pruefung nicht (existiert / >= 2 KB / beginnt mit %PDF-) — gespeichert wurde eine HTML-Fehlerseite",
   "tries": [
     {
       "step": 1,

@@ -51,7 +51,7 @@ import {
 } from './lib/citation-parse.mjs';
 import { loadConfig, resolveCitations } from './lib/citation-cascade.mjs';
 import { isProtectedPath, isMarkdownOrTexFile, chapterDirLabel } from './lib/protected-path.mjs';
-import { runVaultPython } from './lib/vault-bridge.mjs';
+import { runVaultPython, ensureQuoteBatch } from './lib/vault-bridge.mjs';
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -345,114 +345,116 @@ function warnFailClosedApparatus(context, detail) {
 }
 
 // ---------------------------------------------------------------------------
-// Vault-/Figure-Lookup via EINEN Python-Subprozess (gebuendelt)
+// Vault-/Figure-Lookup ueber den geteilten Batch-Cache (Issue #844)
 // ---------------------------------------------------------------------------
+//
+// Der fruehere eigene PY_BATCH_LOOKUP-Subprozess-Aufruf (ein Interpreterstart
+// je Write fuer Quotes+Figures dieses Guards) ist durch
+// hooks/lib/vault-bridge.mjs::ensureQuoteBatch() ersetzt — geteilt mit
+// claim-drift-guard.mjs und context-fidelity-guard.mjs, EIN Subprozess je
+// Write statt einem je Guard (siehe lookupBatch() unten). Der geteilte
+// Batch-Script (hooks/lib/vault-bridge.mjs::PY_QUOTE_FIGURE_BATCH) traegt
+// seit #846 zusaetzlich den vollen Wortlaut-Status je Zitat (Feld
+// ``wording``) — ohne dieses Feld haette dieser Guard einen ZWEITEN, eigenen
+// Subprozess gebraucht und damit #844s AC1 (hoechstens EIN Subprozess fuer
+// alle drei Guards) wieder aufgeweicht.
 
 /**
- * Schlaegt ALLE Quote-Spans und ALLE Figure-Referenzen eines Writes in EINEM
- * Subprozess nach (Muster aus claim-drift-guard.mjs::PY_LOOKUP). Ein
- * Interpreterstart je Aufruf statt einem je Span — sonst summieren sich
- * Interpreterstart + academic_vault-Import ueber das Hook-Timeout hinaus.
- *
- * Jeder Eintrag wird EINZELN in try/except gekapselt: faellt ein Lookup aus,
- * betrifft das genau diesen Eintrag (``{"error": ...}``) und nicht den ganzen
- * Batch — das entspricht dem frueheren Verhalten, bei dem ein Subprozess je
- * Span lief und nur dieser eine fail-open wurde. Fuer die Zitate uebernimmt
- * ``match_quote_wording()`` diese Kapselung je Kandidat selbst; scheitert
- * schon der gemeinsame Snapshot (korrupte DB), traegt jeder Kandidat denselben
- * Fehler — derselbe fail-open-Ausgang wie zuvor.
- *
- * Zitate liefern seit Issue #846 KEIN Boolean mehr, sondern ein Statusobjekt
- * (exact/normalized/ellipsis/deviation/absent). Figuren bleiben Boolean —
- * ``find_figure_by_caption`` ist unveraendert.
+ * Status, ab denen ein GECACHTER Zitat-Eintrag NICHT aus dem Cache bedient
+ * werden darf (Issue #846-Ergaenzung zu usableCacheEntry()/Issue #844): wie
+ * bei der alten Boolean-Semantik (``found === false``) fuehren diese
+ * Wortlaut-Status zu einem BLOCK — und ein Block darf nie klebrig aus dem
+ * Cache kommen, sonst bleibt ein laengst behobener Write bis zum TTL-Ablauf
+ * blockiert (siehe usableCacheEntry()-Docstring in vault-bridge.mjs).
  */
-const PY_BATCH_LOOKUP = [
-  'import sys, json',
-  `sys.path.insert(0, ${JSON.stringify(VAULT_SRC)})`,
-  'from academic_vault.server import match_quote_wording, find_figure_by_caption',
-  'db_path = sys.argv[1]',
-  'payload = json.loads(sys.argv[2])',
-  'out = {"quotes": [], "figures": []}',
-  'try:',
-  '    out["quotes"] = match_quote_wording(',
-  '        db_path, payload["quotes"], wording_limit=payload.get("wording_limit")',
-  '    )',
-  'except Exception as exc:',
-  '    detail = "%s: %s" % (type(exc).__name__, exc)',
-  '    out["quotes"] = [{"error": detail} for _ in payload["quotes"]]',
-  'for needle in payload["figures"]:',
-  '    try:',
-  '        out["figures"].append(bool(find_figure_by_caption(db_path, needle)))',
-  '    except Exception as exc:',
-  '        out["figures"].append({"error": "%s: %s" % (type(exc).__name__, exc)})',
-  'print(json.dumps(out))',
-].join('\n');
+const CACHE_BLOCKING_WORDING_STATUSES = new Set(['absent', 'deviation']);
 
 /**
- * Deutet die Ergebnisliste EINER Sorte (Quotes oder Figures) aus dem Batch.
- * ``true`` heisst "nicht blockieren" — entweder Treffer im Vault oder
- * fail-open nach einem Fehler. Fehler werden je Eintrag gemeldet, damit ein
- * einzelner kaputter Lookup nicht die uebrigen Ergebnisse entwertet und
- * umgekehrt kein Eintrag stillschweigend als verifiziert gilt.
+ * Negativ-Praedikat fuer Zitate, das an ``ensureQuoteBatch({isQuoteNegative})``
+ * uebergeben wird (Issue #846). Zusaetzlich zur alten Boolean-Semantik
+ * (``found === false``/``null``/``{error}``) gilt auch ein blockierender
+ * Wortlaut-Status (``absent``/``deviation``) sowie ein fehlendes oder
+ * kaputtes ``wording``-Feld als negativ — sonst koennte ein frueherer
+ * Cache-Eintrag ohne dieses Feld (oder mit gescheitertem Wortlaut-Lookup)
+ * faelschlich als "bedienbar" durchgehen.
  */
-function readBatchFlags(values, expected, context) {
-  if (expected === 0) return [];
-  if (!Array.isArray(values) || values.length !== expected) {
-    warnFailOpen(context, 'lookup-error', `unerwartete Antwortform (erwartet ${expected} Ergebnisse)`);
-    return Array.from({ length: expected }, () => true);
-  }
-  return values.map((value) => {
-    if (typeof value === 'boolean') return value;
-    const detail = value?.error || 'unerwarteter Ergebniswert';
-    // Fall 3: Lookup-Apparat kaputt (fehlendes Modul) — fail-CLOSED, kein Bypass.
-    if (isApparatusError(detail)) return warnFailClosedApparatus(context, detail);
-    // Fall 2: DB vorhanden, aber Exception fuer GENAU diesen Eintrag.
-    return warnFailOpen(context, 'lookup-error', detail);
-  });
+function isCachedQuoteNegative(entry) {
+  if (entry === null || entry === undefined) return true;
+  if (entry.found === false) return true;
+  if (entry.error) return true;
+  const wording = entry.wording;
+  if (!wording || typeof wording !== 'object') return true;
+  if (wording.error) return true;
+  return CACHE_BLOCKING_WORDING_STATUSES.has(wording.status);
 }
 
 /**
- * Deutet die Zitat-Ergebnisse aus dem Batch (Issue #846).
- *
- * Anders als bei den Figuren ist ein Zitat-Ergebnis ein Statusobjekt, kein
- * Boolean. Nicht deutbare Eintraege (``{error}``, fehlende/kaputte Antwortform)
- * werden entweder zu ``{status: 'open'}`` (fail-open, Fall 2 — DB-seitiger
- * Fehler) oder zu ``{status: 'unverifiable'}`` (fail-CLOSED, Fall 3 —
- * Lookup-Apparat kaputt, siehe isApparatusError), je nach Fehlerart. Beide
- * Faelle loggen dieselbe Art Warnung wie bisher, damit ein kaputter Lookup
- * nie stillschweigend als "verifiziert" gilt und die uebrigen Ergebnisse
- * nicht entwertet.
+ * Deutet den Wortlaut-Status EINES Zitat-Eintrags aus dem geteilten
+ * Batch-Cache (Issue #844 + #846). Jeder Eintrag traegt unter ``.wording``
+ * das Statusobjekt aus ``match_quote_wording()``
+ * (exact/normalized/ellipsis/deviation/absent) oder ``{error}`` bei einem
+ * Fehler fuer GENAU diesen Kandidaten (z. B. fehlendes rapidfuzz nur fuer den
+ * Fuzzy-Pfad, siehe quote_match.py::_fuzzy_match — ein exaktes Zitat bleibt
+ * davon unberuehrt). Fehlt der Schluessel komplett, fehlt ``.wording``, oder
+ * meldet es einen Fehler, unterscheidet dieselbe Fall-2/Fall-3-Logik wie
+ * zuvor beim eigenen Direktaufruf: Lookup-APPARAT kaputt (fail-CLOSED,
+ * ``unverifiable``) vs. sonstiger Fehler (fail-open, ``open``).
  */
-function readQuoteResults(values, expected, context) {
-  if (expected === 0) return [];
-  if (!Array.isArray(values) || values.length !== expected) {
-    warnFailOpen(context, 'lookup-error', `unerwartete Antwortform (erwartet ${expected} Ergebnisse)`);
-    return Array.from({ length: expected }, () => ({ status: 'open' }));
-  }
-  return values.map((value) => {
-    if (value && typeof value === 'object' && typeof value.status === 'string') return value;
-    const detail = value?.error || 'unerwarteter Ergebniswert';
-    if (isApparatusError(detail)) {
-      warnFailClosedApparatus(context, detail);
-      return { status: 'unverifiable', detail };
-    }
-    warnFailOpen(context, 'lookup-error', detail);
+function cachedQuoteWording(entry, context) {
+  if (entry === undefined) {
+    warnFailOpen(context, 'lookup-error', 'Zitat fehlt im geteilten Batch-Cache');
     return { status: 'open' };
-  });
+  }
+  const wording = entry.wording;
+  if (wording && typeof wording === 'object' && typeof wording.status === 'string') {
+    return wording;
+  }
+  const detail = wording?.error || entry.error || 'unerwarteter Ergebniswert (kein Wortlaut-Status)';
+  if (isApparatusError(detail)) {
+    warnFailClosedApparatus(context, detail);
+    return { status: 'unverifiable', detail };
+  }
+  warnFailOpen(context, 'lookup-error', detail);
+  return { status: 'open' };
+}
+
+/**
+ * Deutet EINEN Figure-Eintrag aus dem geteilten Batch-Cache (ensureQuoteBatch)
+ * — `undefined` (Schluessel fehlt trotz Zusicherung), Boolean (Treffer/kein
+ * Treffer) oder `{error}` (Lookup fuer GENAU diesen Eintrag gescheitert).
+ * ``true`` heisst "nicht blockieren"; ein Apparat-Fehler (siehe
+ * isApparatusError) blockiert fail-CLOSED wie beim Zitat-Pfad, ein sonstiger
+ * Fehler bleibt fail-open (Issue #381/#844).
+ */
+function cachedFigureFlag(entry, context) {
+  if (entry === undefined) {
+    return warnFailOpen(context, 'lookup-error', 'Figure-Referenz fehlt im geteilten Batch-Cache');
+  }
+  if (typeof entry === 'boolean') return entry;
+  const detail = entry?.error || 'unerwarteter Ergebniswert';
+  if (isApparatusError(detail)) return warnFailClosedApparatus(context, detail);
+  return warnFailOpen(context, 'lookup-error', detail);
 }
 
 /**
  * Sucht alle Zitat-Texte und Figure-Referenzen im Vault.
  * Rueckgabe: ``{quotes: object[], figures: boolean[]}`` in Eingabereihenfolge.
  * Bei den Figuren heisst ``true`` "kein Block" (Treffer oder fail-open), bei
- * den Zitaten entscheidet der Status (siehe readQuoteResults).
+ * den Zitaten entscheidet der Status (siehe cachedQuoteWording()).
  *
- * ``wordingLimit`` ist das Pruefkontingent fuer die teure Wortlaut-Zuordnung
- * (Issue #846) — ueberzaehlige Spans laufen nur noch durch den billigen
- * Bestands-Abgleich und bleiben im Zweifel ``absent`` (Block), nie still
- * durchgewunken.
+ * Nutzt zuerst den geteilten Batch-Cache (Issue #844,
+ * hooks/lib/vault-bridge.mjs::ensureQuoteBatch) — geteilt mit
+ * claim-drift-guard.mjs und context-fidelity-guard.mjs, EIN Subprozess je
+ * Write statt einem je Guard. ``ctx.wordingLimit`` (Issue #846) ist das
+ * Pruefkontingent fuer die teure Wortlaut-Zuordnung — ueberzaehlige Spans
+ * laufen nur noch durch den billigen Bestands-Abgleich und bleiben im
+ * Zweifel ``absent`` (Block), nie still durchgewunken. Liefert der Cache
+ * `null` (nicht verfuegbar oder fehlgeschlagen), faellt dieser Guard NICHT
+ * mehr auf einen zweiten eigenen Direktaufruf zurueck (der wuerde nur das
+ * Zeitbudget verdoppeln, siehe unten) — stattdessen fail-CLOSED fuer die
+ * "kein Interpreter"-Klasse (Fall 3, #846-Folgefund).
  */
-function lookupBatch(spanTexts, figureRefs, wordingLimit) {
+function lookupBatch(spanTexts, figureRefs, ctx) {
   const allOpen = () => ({
     quotes: spanTexts.map(() => ({ status: 'open' })),
     figures: figureRefs.map(() => true),
@@ -468,42 +470,42 @@ function lookupBatch(spanTexts, figureRefs, wordingLimit) {
     return allOpen();
   }
 
-  const payload = JSON.stringify({
-    quotes: spanTexts,
-    figures: figureRefs,
-    wording_limit: wordingLimit ?? null,
-  });
-  const output = runVaultPython(PY_BATCH_LOOKUP, [VAULT_DB, payload], {
-    timeout: VAULT_LOOKUP_BUDGET_MS,
+  const batch = ensureQuoteBatch({
+    filePath: ctx.filePath,
+    toolName: ctx.toolName,
+    toolInput: ctx.toolInput,
+    vaultDb: VAULT_DB,
+    quoteTexts: spanTexts,
+    figureTexts: figureRefs,
+    wordingLimit: ctx.wordingLimit ?? null,
+    isQuoteNegative: isCachedQuoteNegative,
     budget: VAULT_LOOKUP_BUDGET_MS,
     label: 'Vault-Guard',
   });
-  if (output === null) {
-    // KEIN Interpreter der Kaskade (runVaultPython) konnte ueberhaupt
-    // starten (Details bereits auf stderr protokolliert) — das ist der
-    // Apparat-kaputt-Fall in Reinform ("kaputter Interpreter", Fall 3):
-    // fail-CLOSED statt Bypass, sonst wuerde ein kaputtes PATH-python3
-    // (o. ae.) jedes erfundene Zitat durchwinken (#846-Folgefund).
-    const detail = 'kein Interpreter konnte den Vault oeffnen';
-    if (spanTexts.length > 0) warnFailClosedApparatus('Vault-Guard', detail);
-    if (figureRefs.length > 0) warnFailClosedApparatus('Figure-Guard', detail);
+  if (batch) {
     return {
-      quotes: spanTexts.map(() => ({ status: 'unverifiable', detail })),
-      figures: figureRefs.map(() => false),
+      quotes: spanTexts.map((text) => cachedQuoteWording(batch.quotes[text], 'Vault-Guard')),
+      figures: figureRefs.map((text) => cachedFigureFlag(batch.figures[text], 'Figure-Guard')),
     };
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(output.trim());
-  } catch (err) {
-    if (spanTexts.length > 0) warnFailOpen('Vault-Guard', 'lookup-error', err.message);
-    if (figureRefs.length > 0) warnFailOpen('Figure-Guard', 'lookup-error', err.message);
-    return allOpen();
-  }
+  // ensureQuoteBatch() hat bereits EINEN vollen runVaultPython-Versuch (mit
+  // VAULT_LOOKUP_BUDGET_MS) unternommen und ist gescheitert — KEIN
+  // Interpreter der Kaskade konnte ueberhaupt starten (Details bereits auf
+  // stderr protokolliert). Das ist der Apparat-kaputt-Fall in Reinform
+  // ("kaputter Interpreter", Fall 3): fail-CLOSED statt Bypass, sonst wuerde
+  // ein kaputtes PATH-python3 (o. ae.) jedes erfundene Zitat durchwinken
+  // (#846-Folgefund). Ein zweiter eigener Versuch mit derselben
+  // Interpreter-Kaskade und demselben Budget wuerde nur das Zeitbudget
+  // verdoppeln (Finding: Hook-Timeout-Test
+  // tests/test_review_fix_hook_budget.py), ohne die Erfolgsaussicht zu
+  // aendern — derselbe Fehler traete erneut auf.
+  const detail = 'kein Interpreter konnte den Vault oeffnen';
+  if (spanTexts.length > 0) warnFailClosedApparatus('Vault-Guard', detail);
+  if (figureRefs.length > 0) warnFailClosedApparatus('Figure-Guard', detail);
   return {
-    quotes: readQuoteResults(parsed?.quotes, spanTexts.length, 'Vault-Guard'),
-    figures: readBatchFlags(parsed?.figures, figureRefs.length, 'Figure-Guard'),
+    quotes: spanTexts.map(() => ({ status: 'unverifiable', detail })),
+    figures: figureRefs.map(() => false),
   };
 }
 
@@ -1158,8 +1160,12 @@ async function main() {
 
   // EIN Subprozess fuer alle Spans und Referenzen zusammen (Regression aus dem
   // ersten Fix: je Span ein eigener Interpreterstart sprengte das 30-s-Timeout).
+  // Zitat-Texte laufen zuerst ueber den geteilten Batch-Cache (Issue #844);
+  // wordingLimit reist im ctx-Objekt mit (Issue #846, siehe lookupBatch()).
   const lookups = lookupBatch(
-    spans.map((s) => s.text), figures.map((f) => f.text), wordingLimit,
+    spans.map((s) => s.text),
+    figures.map((f) => f.text),
+    { filePath, toolName, toolInput, wordingLimit },
   );
 
   const wordingMode = wordingPolicy();

@@ -2235,6 +2235,14 @@ def add_paper(
     (Issue #372, abschaltbar via ``VAULT_AUTO_EMBED=0``).
     """
     validate_csl_json(csl_json)
+    # _maybe_extract_fulltext() erwartet str | None -- Sentinel ("nicht
+    # uebergeben") ist fuer die Volltextextraktion aequivalent zu "kein
+    # PDF-Pfad angegeben". isinstance() statt "is _UNSET", damit mypy den
+    # else-Zweig zuverlaessig auf "str | None" narrowed.
+    resolved_pdf_path: str | None = None if isinstance(pdf_path, _Unset) else pdf_path
+    # Vault-Gate (Issue #884): VOR dem DB-Write, sonst wirkungslos wie der
+    # bestehende Silent-Catch in _maybe_extract_fulltext().
+    _reject_invalid_pdf_path(resolved_pdf_path)
     db = VaultDB(db_path)
     db.init_schema()
     db.add_paper(
@@ -2253,11 +2261,6 @@ def add_paper(
         provenance=provenance,
         source_kind=source_kind,
     )
-    # _maybe_extract_fulltext() erwartet str | None -- Sentinel ("nicht
-    # uebergeben") ist fuer die Volltextextraktion aequivalent zu "kein
-    # PDF-Pfad angegeben". isinstance() statt "is _UNSET", damit mypy den
-    # else-Zweig zuverlaessig auf "str | None" narrowed.
-    resolved_pdf_path: str | None = None if isinstance(pdf_path, _Unset) else pdf_path
     _maybe_extract_fulltext(db_path, paper_id, resolved_pdf_path)
     _maybe_ingest_embeddings(db_path, paper_id)
 
@@ -2362,8 +2365,44 @@ def set_ocr_done(db_path: str, paper_id: str, value: int = 1) -> None:
     db.set_ocr_done(paper_id, value)
 
 
+def _reject_invalid_pdf_path(pdf_path: str | None) -> None:
+    """Weist einen ``pdf_path`` zurueck, der keine plausible PDF-Datei ist.
+
+    Issue #884: engste gemeinsame Stelle vor jedem Vault-Write in
+    ``add_paper()``/``update_pdf_path()``. Schliesst die zuvor komplett
+    ungeprueften Beschaffungswege ``commands/fetch.md`` (Schritt 4,
+    ``vault_add_paper`` ohne eigene Dateipruefung) und manuelle/direkte
+    Aufrufe von ``vault_add_paper``/``vault_update_pdf_path``.
+
+    Greift nur, wenn ``pdf_path`` gesetzt und nicht leer ist -- Metadaten-
+    only-Eintraege (kein PDF, ``pickup_required``) bleiben unveraendert
+    moeglich. Ein (noch) nicht vorhandener Pfad wird NICHT abgelehnt (siehe
+    ``scripts.pdf.is_valid_pdf_file``) -- nur eine bereits vorhandene, aber
+    ungueltige Datei (z.B. eine als PDF gespeicherte HTML-Fehlerseite).
+    """
+    if not pdf_path:
+        return
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _repo_root = _Path(__file__).resolve().parent.parent
+    _scripts_dir = _repo_root / "scripts"
+    for _p in (_repo_root, _scripts_dir):
+        if str(_p) not in _sys.path:
+            _sys.path.insert(0, str(_p))
+    from scripts.pdf import is_valid_pdf_file
+
+    if not is_valid_pdf_file(pdf_path):
+        raise ValueError(
+            f"pdf_path {pdf_path!r} ist keine gueltige PDF-Datei (Magic-Bytes "
+            "'%PDF' fehlen) -- Issue #884: eine HTML-Fehlerseite darf nicht als "
+            "Volltext im Vault landen."
+        )
+
+
 def update_pdf_path(db_path: str, paper_id: str, new_path: str) -> None:
     """Aktualisiert pdf_path fuer ein Paper im Vault."""
+    _reject_invalid_pdf_path(new_path)
     db = VaultDB(db_path)
     db.init_schema()
     db.update_pdf_path(paper_id, new_path)
