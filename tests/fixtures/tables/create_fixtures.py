@@ -13,13 +13,15 @@ echte Stroke-Pfade (``m``/``l``/``S``) in den Content-Stream — ein reines
 Text-PDF wie die verbatim-Fixtures wuerde ohne Linien gar nicht als Tabelle
 erkannt und die Tests haengen sonst an einer Text-Heuristik (flaky).
 
-Vier Fixtures:
+Fuenf Fixtures:
   - results_table.pdf     mehrspaltige Ergebnistabelle mit vollstaendigem
                           Gitter (Studie / N / d / 95%-CI)
   - two_column_layout.pdf zweispaltiger Fliesstext mit einer Tabelle in der
                           linken Spalte (Layout-Stressfall)
   - merged_header.pdf     Tabelle mit verbundener Kopfzelle: in der Kopfzeile
                           fehlt die mittlere Trennlinie
+  - gridless_table.pdf    Tabelle ohne gezeichnete Linien, nur spaltenbuendiger
+                          Text (Issue #847, Text-Strategie-Fallback)
   - no_table.pdf          reiner Fliesstext ohne jede Linie
   - scan_no_textlayer.pdf leere Seite ohne Text-Layer (Scan-Simulation)
 
@@ -79,6 +81,20 @@ TWO_COL_ROW_Y = [640.0, 616.0, 592.0]
 TWO_COL_TABLE_ROWS: list[list[str]] = [
     ["Studie", "N"],
     ["Smith 2020", "120"],
+]
+
+# --- Gitterlinienlose Tabelle (gridless_table.pdf, Issue #847) ------------
+# Reine Textspalten ohne gezeichnete Linien -- pdfplumber muss ueber die
+# text-Strategie (Spaltenausrichtung) statt ueber Linien erkennen. Vier
+# Zeilen (Kopfzeile + 3 Datenzeilen), damit ``min_words_vertical=3`` je
+# Spalte greift.
+GRIDLESS_COLUMN_X = [72.0, 220.0, 320.0]
+GRIDLESS_ROW_Y = [640.0, 616.0, 592.0, 568.0]
+GRIDLESS_ROWS: list[list[str]] = [
+    ["Studie", "N", "d"],
+    ["Smith 2020", "120", "0.42"],
+    ["Jones 2021", "84", "0.31"],
+    ["Lee 2019", "210", "0.55"],
 ]
 
 NO_TABLE_TEXT = [
@@ -227,6 +243,13 @@ def create_two_column_layout_pdf(path: Path) -> None:
     path.write_bytes(_build_pdf([ops]))
 
 
+def create_gridless_table_pdf(path: Path) -> None:
+    """Tabelle ohne gezeichnete Linien -- nur spaltenbuendiger Text (Issue #847)."""
+    ops = [_text_op(72, 750, "Tabelle 3: gitterlinienlose Ergebnisse", size=12)]
+    ops += _table_text_ops(GRIDLESS_COLUMN_X, GRIDLESS_ROW_Y, GRIDLESS_ROWS)
+    path.write_bytes(_build_pdf([ops]))
+
+
 def create_no_table_pdf(path: Path) -> None:
     """Reiner Fliesstext ohne Linien: 'keine Tabelle erkannt' muss sichtbar sein."""
     ops = _column_text_ops(72, 720, NO_TABLE_TEXT)
@@ -242,6 +265,7 @@ if __name__ == "__main__":
     create_results_table_pdf(OUT / "results_table.pdf")
     create_merged_header_pdf(OUT / "merged_header.pdf")
     create_two_column_layout_pdf(OUT / "two_column_layout.pdf")
+    create_gridless_table_pdf(OUT / "gridless_table.pdf")
     create_no_table_pdf(OUT / "no_table.pdf")
     create_scan_pdf(OUT / "scan_no_textlayer.pdf")
     print(f"Fixtures erstellt in {OUT}")
