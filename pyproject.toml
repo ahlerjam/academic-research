@@ -105,7 +105,7 @@ dev = [
     "pytest-cov>=7.0",
     # CI-Pins (blockierendes Format-Gate): Bump nur mit Nachformatierung, vgl. ci.yml
     "ruff==0.16.0",
-    "mypy==2.3.0",
+    "mypy==2.3.1",
     "vulture>=2.16",
 ]
 # tables: seit #723 leerer Alias, KEIN eigenstaendiges Extra mehr. pdfplumber
