@@ -1,0 +1,9 @@
+id: PY-CLASS-FROZEN
+valid:
+  - "class A(BaseModel):\n    model_config = ConfigDict(frozen=True)\n    x: int"
+  - "class B(BaseModel, frozen=True):\n    x: int"
+  - "class Port(Protocol):\n    def get(self) -> int: ..."
+invalid:
+  - "class D:\n    pass"
+  - "class E(BaseModel):\n    x: int"
+  - "class F(BaseModel, frozen=False):\n    x: int"

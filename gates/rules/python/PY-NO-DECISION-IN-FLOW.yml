@@ -1,0 +1,10 @@
+id: PY-NO-DECISION-IN-FLOW
+language: python
+severity: error
+message: comparison or boolean logic inside a flow.
+note: "Why: a flow sequences load, decide and apply; decisions live in the core where they are tested. Fix: move the comparison into a decide_* function and match on its result"
+rule:
+  any:
+    - kind: comparison_operator
+    - kind: boolean_operator
+    - kind: conditional_expression

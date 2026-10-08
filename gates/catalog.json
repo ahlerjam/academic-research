@@ -1,0 +1,548 @@
+[
+ {
+  "id": "GATES-ROLES",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "drift.d1",
+  "fixture": "test:gates/tests/test_gates.py",
+  "fixture_mode": "test",
+  "adr": 2,
+  "why": "a rule binds to a role and the role comes from the path, so an unmapped file escapes every rule",
+  "fix": "move the file under a role path or ask the operator to extend gates/roles.json",
+  "agents_md": "Every source file has a role from gates/roles.json."
+ },
+ {
+  "id": "GATES-CONTROLS",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "manifest",
+  "fixture": "test:gates/tests/test_gates.py",
+  "fixture_mode": "test",
+  "adr": 3,
+  "why": "the controls protect themselves; an agent must not weaken the gates it is judged by",
+  "fix": "restore the control file and deliver the change as a patch for the operator",
+  "agents_md": "Never edit operator-only files."
+ },
+ {
+  "id": "BASH-GUARD",
+  "component": "*",
+  "roles": "*",
+  "carrier": "bash",
+  "carrier_ref": "gates/bash_rules.json",
+  "fixture": "test:gates/tests/guard-bash.cases.tsv",
+  "fixture_mode": "test",
+  "adr": 3,
+  "why": "force pushes, skipped hooks and mutating API calls bypass review",
+  "fix": "use the allowed alternative named in the message",
+  "agents_md": "Never force-push, skip hooks or call gh api with a mutating method."
+ },
+ {
+  "id": "WRITE-SECRET",
+  "component": "*",
+  "roles": "*",
+  "carrier": "bash",
+  "carrier_ref": "gates/bash_rules.json",
+  "fixture": "test:gates/tests/test_gates.py",
+  "fixture_mode": "test",
+  "adr": null,
+  "why": "a secret in a file ends up in git history",
+  "fix": "read the value from the environment or a secret store"
+ },
+ {
+  "id": "AGENTS-MD",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "agents_md",
+  "fixture": "gates/fixtures/AGENTS-MD/",
+  "fixture_mode": "repo",
+  "adr": 1,
+  "why": "prose and gates drift apart unless every rule line names its gate",
+  "fix": "end the rule line with (gate: ID) or (review); the operator edits AGENTS.md",
+  "agents_md": "Keep AGENTS.md under 100 lines with a gate id or (review) on every rule line."
+ },
+ {
+  "id": "ADR-FORMAT",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "adr",
+  "fixture": "gates/fixtures/ADR-FORMAT/",
+  "fixture_mode": "repo",
+  "adr": null,
+  "why": "decisions are found by make adr-find only when every record has the same shape",
+  "fix": "use make adr-new, keep frontmatter id, title, status, tags, stay under 50 lines, run make decisions",
+  "agents_md": "One ADR per decision; ask before writing one."
+ },
+ {
+  "id": "SUPPRESS-COUNT",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "suppress.count",
+  "fixture": "gates/fixtures/SUPPRESS-COUNT/",
+  "fixture_mode": "repo",
+  "adr": 1,
+  "why": "an inline suppression turns a gate green without fixing the finding",
+  "fix": "fix the finding; only the operator raises gates/suppress-baseline.json",
+  "agents_md": "Never weaken, suppress or bypass a gate."
+ },
+ {
+  "id": "PY-CORE-NO-RAISE",
+  "component": "backend-py",
+  "roles": [
+   "core"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-CORE-NO-RAISE.yml",
+  "fixture": "gates/fixtures/PY-CORE-NO-RAISE/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "a core returns rejections as values so every caller decides",
+  "fix": "return the rejection as a value (a frozen model or None)",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Never raise in a core."
+ },
+ {
+  "id": "PY-CORE-IMPORTS",
+  "component": "backend-py",
+  "roles": [
+   "core"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-CORE-IMPORTS.yml",
+  "fixture": "gates/fixtures/PY-CORE-IMPORTS/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "a core stays testable without starting anything",
+  "fix": "pass data in as arguments; the flow calls adapters",
+  "example": "backend/app/health/core.py",
+  "agents_md": "A core imports no adapter, wiring, logging or IO library."
+ },
+ {
+  "id": "PY-TRY-ONLY-ADAPTER",
+  "component": "backend-py",
+  "roles": [
+   "flow",
+   "core",
+   "api",
+   "wiring"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-TRY-ONLY-ADAPTER.yml",
+  "fixture": "gates/fixtures/PY-TRY-ONLY-ADAPTER/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "only an adapter knows how its foreign system fails",
+  "fix": "let the adapter return a value for the failure and branch on that value",
+  "example": "backend/app/health/flow.py",
+  "agents_md": "try/except only in adapters."
+ },
+ {
+  "id": "PY-CLASS-FROZEN",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-CLASS-FROZEN.yml",
+  "fixture": "gates/fixtures/PY-CLASS-FROZEN/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "mutable objects hide state changes from the reader",
+  "fix": "use a frozen Pydantic model or a Protocol port",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Classes only as frozen models or Protocol ports."
+ },
+ {
+  "id": "PY-COMMENT-FORM",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "test"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-COMMENT-FORM.yml",
+  "fixture": "gates/fixtures/PY-COMMENT-FORM/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "comments drift from code; facts the code cannot show are the exception",
+  "fix": "delete the comment or write one '# constraint: <fact>' line",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Comments only as '# constraint:' or tool directives."
+ },
+ {
+  "id": "PY-NO-PRINT",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-NO-PRINT.yml",
+  "fixture": "gates/fixtures/PY-NO-PRINT/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "output goes through structured logs",
+  "fix": "log one JSON event with the outcome from the flow",
+  "example": "backend/app/health/flow.py",
+  "agents_md": "Log, never print."
+ },
+ {
+  "id": "PY-NO-ADD-API-ROUTE",
+  "component": "backend-py",
+  "roles": [
+   "api"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-NO-ADD-API-ROUTE.yml",
+  "fixture": "gates/fixtures/PY-NO-ADD-API-ROUTE/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "routes are found by reading decorators and carry an operation_id",
+  "fix": "declare the route with @router.<method>(..., operation_id=...)",
+  "example": "backend/app/health/api.py",
+  "agents_md": "Routes only with a router decorator."
+ },
+ {
+  "id": "PY-NO-ANY",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-NO-ANY.yml",
+  "fixture": "gates/fixtures/PY-NO-ANY/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "Any switches the type checker off",
+  "fix": "name the real type, a Protocol or a union",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Any is forbidden."
+ },
+ {
+  "id": "PY-NO-DECISION-IN-FLOW",
+  "component": "backend-py",
+  "roles": [
+   "flow"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/python/PY-NO-DECISION-IN-FLOW.yml",
+  "fixture": "gates/fixtures/PY-NO-DECISION-IN-FLOW/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "a flow sequences load, decide and apply; decisions live in the core where they are tested",
+  "fix": "move the comparison into a decide_* function and match on its result",
+  "example": "backend/app/health/flow.py",
+  "agents_md": "A flow never compares or branches on its own."
+ },
+ {
+  "id": "PY-SUPPRESS",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "test"
+  ],
+  "carrier": "text",
+  "carrier_ref": "",
+  "fixture": "gates/fixtures/PY-SUPPRESS/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "a blanket or file-wide suppression turns a gate green without a fix; type: ignore is off in pyrightconfig.json",
+  "fix": "fix the finding; a targeted `# noqa: CODE` or `# pyright: ignore[rule]` counts against gates/suppress-baseline.json, which only the operator raises",
+  "example": "backend/app/health/core.py",
+  "agents_md": "No blanket noqa, type: ignore, pyright mode comment, ruff: noqa, bare ruff: ignore or ast-grep-ignore.",
+  "pattern": "#\\s*noqa\\b(?!\\s*:)|#\\s*type:\\s*ignore\\b|#\\s*pyright:(?!\\s*(ignore\\s*\\[|strict\\s*$))|#\\s*ruff:\\s*noqa\\b|#\\s*ruff:\\s*ignore\\b(?!\\s*\\[)|ast-grep-ignore",
+  "what": "inline suppression"
+ },
+ {
+  "id": "PY-NO-SKIP",
+  "component": "backend-py",
+  "roles": [
+   "test"
+  ],
+  "carrier": "text",
+  "carrier_ref": "",
+  "fixture": "gates/fixtures/PY-NO-SKIP/",
+  "fixture_mode": "file",
+  "adr": null,
+  "why": "a skipped, expected-to-fail or deselected test is green without running; pytest hooks in tests change what runs",
+  "fix": "make the test pass or delete it in a reviewed change; put shared setup into fixtures, not pytest_* hooks",
+  "example": "backend/tests/test_health.py",
+  "agents_md": "Never skip, xfail or deselect a test.",
+  "pattern": "pytest\\.mark\\.(skip|skipif|xfail)\\b|\\bpytest\\.(skip|xfail|importorskip)\\s*\\(|\\bunittest\\.skip|\\.skipTest\\s*\\(|__test__\\s*=\\s*False|^[ \\t]*(async[ \\t]+)?def[ \\t]+pytest_\\w+|^[ \\t]*pytest_\\w+[ \\t]*=|\\bpytest_plugins\\b",
+  "what": "test switched off"
+ },
+ {
+  "id": "PY-TESTS-RAN",
+  "component": "backend-py",
+  "roles": [
+   "test"
+  ],
+  "carrier": "make",
+  "carrier_ref": "mk/backend-py.mk",
+  "fixture": "gates/fixtures/PY-TESTS-RAN/",
+  "fixture_mode": "command",
+  "adr": null,
+  "why": "a run that skipped, deselected or only collected tests ends green without proving anything",
+  "fix": "make every collected test run and pass; never steer pytest from a config file or plugin of your own",
+  "example": "backend/tests/test_health_core.py",
+  "agents_md": "Every collected test runs and passes.",
+  "selftest": {
+   "cmd": [
+    "make",
+    "-s",
+    "test-core-backend-py"
+   ],
+   "requires": [
+    "backend/.venv"
+   ],
+   "copy": [
+    "backend/uv.lock"
+   ],
+   "expect": "\\[PY-TESTS-RAN\\]"
+  }
+ },
+ {
+  "id": "PY-COMMENT-RUN",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "test"
+  ],
+  "carrier": "text",
+  "carrier_ref": "",
+  "fixture": "gates/fixtures/PY-COMMENT-RUN/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "a comment never needs a second line",
+  "fix": "keep one '# constraint:' line or delete the comment",
+  "example": "backend/app/health/core.py",
+  "agents_md": "A comment never continues on the next line.",
+  "pattern": "^[ \\t]*#[^\\n]*\\n[ \\t]*#",
+  "what": "comment continues on the next line"
+ },
+ {
+  "id": "PY-NO-ARG-MUTATION",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "gate",
+  "carrier_ref": "pyast.argument_mutation",
+  "fixture": "gates/fixtures/PY-NO-ARG-MUTATION/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "a function that mutates its argument surprises every caller",
+  "fix": "return a new value instead",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Never mutate an argument."
+ },
+ {
+  "id": "PY-BUDGET-FUNCTION",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "gate",
+  "carrier_ref": "budgets.function",
+  "fixture": "gates/fixtures/PY-BUDGET-FUNCTION/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "long functions hide decisions",
+  "fix": "split the function along its decisions",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Functions stay within the role budget."
+ },
+ {
+  "id": "PY-BUDGET-MODULE",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "gate",
+  "carrier_ref": "budgets.module",
+  "fixture": "gates/fixtures/PY-BUDGET-MODULE/",
+  "fixture_mode": "file",
+  "adr": 2,
+  "why": "long modules mix topics",
+  "fix": "split into core_<topic>.py or a new feature",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Modules stay within the role budget."
+ },
+ {
+  "id": "PY-LAYOUT",
+  "component": "backend-py",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "layout",
+  "fixture": "gates/fixtures/PY-LAYOUT/",
+  "fixture_mode": "repo",
+  "adr": 2,
+  "why": "a feature is found in one place with a fixed set of files",
+  "fix": "use only __init__, api, core, core_<topic> and flow in a feature package",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Only the allowed files in a feature."
+ },
+ {
+  "id": "PY-DECIDE-TESTED",
+  "component": "backend-py",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "tests_duty.decide",
+  "fixture": "gates/fixtures/PY-DECIDE-TESTED/",
+  "fixture_mode": "repo",
+  "adr": 2,
+  "why": "every decision is proven by a test that checks its result",
+  "fix": "assert on the result of the decide_* or translate_* call in the same test, directly or through a variable",
+  "example": "backend/tests/test_health_core.py",
+  "agents_md": "The result of every decide_* and adapter translate_* flows into an assert."
+ },
+ {
+  "id": "PY-BEHAVIOUR",
+  "component": "backend-py",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "tests_duty.behaviour",
+  "fixture": "gates/fixtures/PY-BEHAVIOUR/",
+  "fixture_mode": "repo",
+  "adr": 2,
+  "why": "a feature is only proven through its observable behaviour",
+  "fix": "add tests/test_<feature>.py with one behaviour test",
+  "example": "backend/tests/test_health.py",
+  "agents_md": "One behaviour test per feature."
+ },
+ {
+  "id": "PY-CORE-PURE",
+  "component": "backend-py",
+  "roles": "*",
+  "carrier": "import-linter",
+  "carrier_ref": "backend/.importlinter",
+  "fixture": "gates/fixtures/PY-CORE-PURE/",
+  "fixture_mode": "command",
+  "adr": 2,
+  "why": "a core stays testable without starting anything",
+  "fix": "remove the import; pass data in from the flow",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Cores import no adapter, wiring or IO library.",
+  "selftest": {
+   "cmd": [
+    "lint-imports",
+    "--config",
+    ".importlinter"
+   ],
+   "cwd": "component",
+   "expect": "\\[PY-CORE-PURE\\] feature cores are pure BROKEN"
+  }
+ },
+ {
+  "id": "PY-FEATURES-INDEPENDENT",
+  "component": "backend-py",
+  "roles": "*",
+  "carrier": "import-linter",
+  "carrier_ref": "backend/.importlinter",
+  "fixture": "gates/fixtures/PY-FEATURES-INDEPENDENT/",
+  "fixture_mode": "command",
+  "adr": 2,
+  "why": "features stay separable; facts travel through a database row",
+  "fix": "hand the fact over through the database; the reader decides",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Never import one feature from another.",
+  "selftest": {
+   "cmd": [
+    "lint-imports",
+    "--config",
+    ".importlinter"
+   ],
+   "cwd": "component",
+   "expect": "\\[PY-FEATURES-INDEPENDENT\\] features never import each other BROKEN"
+  }
+ },
+ {
+  "id": "PY-DIFF-TESTED",
+  "component": "backend-py",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "tests_duty.diff",
+  "fixture": "test:gates/tests/test_repo_rules.py",
+  "fixture_mode": "test",
+  "adr": 2,
+  "why": "a changed decision needs a changed test",
+  "fix": "change the test that calls the decision together with the core",
+  "example": "backend/app/health/core.py"
+ },
+ {
+  "id": "PY-DOCSTRING",
+  "component": "backend-py",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "ruff",
+  "carrier_ref": "backend/ruff.toml",
+  "codes": [
+   "D102",
+   "D103"
+  ],
+  "fixture": "gates/fixtures/PY-DOCSTRING/",
+  "fixture_mode": "file",
+  "adr": null,
+  "why": "the one-sentence docstring is the contract a reader and a reviewing agent check the code against",
+  "fix": "add a one-sentence docstring that says what the function returns or does",
+  "example": "backend/app/health/core.py",
+  "agents_md": "Every public function has a one-sentence docstring."
+ },
+ {
+  "id": "GATES-RATCHET",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "guard",
+  "fixture": "test:gates/tests/test_repo_rules.py",
+  "fixture_mode": "test",
+  "adr": null,
+  "why": "a gate may only grow; changing or deleting one weakens it",
+  "fix": "add a new rule with test, fixture and catalog entry instead of changing an existing one",
+  "agents_md": "You may add a gate; never change or delete one."
+ }
+]

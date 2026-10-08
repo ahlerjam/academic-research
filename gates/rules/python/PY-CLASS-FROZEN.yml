@@ -1,0 +1,35 @@
+id: PY-CLASS-FROZEN
+language: python
+severity: error
+message: class that is neither a frozen Pydantic model nor a Protocol port.
+note: "Why: mutable objects hide state changes from the reader. Fix: use a frozen Pydantic model or a Protocol port"
+rule:
+  kind: class_definition
+  not:
+    any:
+      - has:
+          field: superclasses
+          has:
+            kind: identifier
+            regex: ^Protocol$
+      - has:
+          field: superclasses
+          has:
+            kind: keyword_argument
+            all:
+              - has: {field: name, regex: ^frozen$}
+              - has: {field: value, kind: "true"}
+      - has:
+          field: body
+          has:
+            kind: assignment
+            stopBy: end
+            all:
+              - has: {field: left, regex: ^model_config$}
+              - has:
+                  field: right
+                  stopBy: end
+                  kind: keyword_argument
+                  all:
+                    - has: {field: name, regex: ^frozen$}
+                    - has: {field: value, kind: "true"}

@@ -1,0 +1,7 @@
+id: PY-TRY-ONLY-ADAPTER
+language: python
+severity: error
+message: try/except outside an adapter.
+note: "Why: only an adapter knows how its foreign system fails. Fix: let the adapter return a value for the failure and branch on that value"
+rule:
+  kind: try_statement

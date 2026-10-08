@@ -1,0 +1,153 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(AGENTS.md)",
+      "Edit(CLAUDE.md)",
+      "Edit(NORTHSTAR.md)",
+      "Edit(Makefile)",
+      "Edit(mk/**)",
+      "Edit(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Edit(.claude/rules/**)",
+      "Edit(.claude/skills/**)",
+      "Edit(.claude/agents/**)",
+      "Edit(.claude/commands/**)",
+      "Edit(.claude/hooks/**)",
+      "Edit(.mcp.json)",
+      "Edit(.github/**)",
+      "Edit(**/.editorconfig)",
+      "Edit(**/ruff.toml)",
+      "Edit(**/.ruff.toml)",
+      "Edit(**/pyrightconfig.json)",
+      "Edit(**/.importlinter)",
+      "Edit(**/pytest.ini)",
+      "Edit(**/pytest.toml)",
+      "Edit(**/.pytest.toml)",
+      "Edit(compose*.yaml)",
+      "Edit(compose*.yml)",
+      "Edit(docker-compose*.yaml)",
+      "Edit(docker-compose*.yml)",
+      "Edit(gates/gate.py)",
+      "Edit(gates/lib/**)",
+      "Edit(gates/tests/**)",
+      "Edit(gates/facts/**)",
+      "Edit(gates/templates/**)",
+      "Edit(gates/roles.json)",
+      "Edit(gates/dispatch.json)",
+      "Edit(gates/controls.json)",
+      "Edit(gates/bash_rules.json)",
+      "Edit(gates/project.json)",
+      "Edit(gates/sgconfig.yml)",
+      "Edit(gates/suppress-baseline.json)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*credentials*)",
+      "Read(**/secrets*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/gates/gate.py\"; [ -f \"$f\" ] && command -v python3 >/dev/null 2>&1 && exec python3 -I \"$f\" hook session-start; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/gates/gate.py\"; [ -f \"$f\" ] && command -v python3 >/dev/null 2>&1 && exec python3 -I \"$f\" hook subagent-start; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/gates/gate.py\"; if [ -f \"$f\" ] && command -v python3 >/dev/null 2>&1; then python3 -I \"$f\" hook pre-bash; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 2 ] || { echo \"[gates] gate.py ended with exit $rc; blocked as a precaution\" >&2; rc=2; }; exit $rc; else echo \"[gates] gates/gate.py or python3 missing; blocked as a precaution\" >&2; exit 2; fi",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/gates/gate.py\"; if [ -f \"$f\" ] && command -v python3 >/dev/null 2>&1; then python3 -I \"$f\" hook pre-write; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 2 ] || { echo \"[gates] gate.py ended with exit $rc; blocked as a precaution\" >&2; rc=2; }; exit $rc; else echo \"[gates] gates/gate.py or python3 missing; blocked as a precaution\" >&2; exit 2; fi",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/gates/gate.py\"; [ -f \"$f\" ] && command -v python3 >/dev/null 2>&1 && exec python3 -I \"$f\" hook post-edit; exit 0",
+            "timeout": 30,
+            "statusMessage": "gates: format and rules"
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/gates/gate.py\"; [ -f \"$f\" ] && command -v python3 >/dev/null 2>&1 && exec python3 -I \"$f\" hook post-batch; exit 0",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(cat); d=\"$CLAUDE_PROJECT_DIR\"; f=\"$d/gates/gate.py\"; if [ ! -f \"$f\" ] || ! command -v python3 >/dev/null 2>&1; then echo \"[gates] gates/gate.py or python3 missing; blocked as a precaution\" >&2; exit 2; fi; r=$(git -C \"$d\" rev-parse -q --verify \"origin/main^{commit}\" 2>/dev/null || git -C \"$d\" rev-parse -q --verify \"refs/gates/baseline^{commit}\" 2>/dev/null || git -C \"$d\" rev-parse -q --verify \"HEAD^{commit}\" 2>/dev/null); bad=\"\"; if [ -z \"$r\" ]; then bad=\" (no commit)\"; echo \"[gates] [GATES-BASELINE] no commit to verify the gate code against\" >&2; else for g in $( (git -C \"$d\" ls-tree -r --name-only \"$r\" -- gates/gate.py gates/lib; cd \"$d\" && ls gates/gate.py gates/lib/*.py) 2>/dev/null | sort -u); do [ \"$(git -C \"$d\" hash-object --no-filters \"$d/$g\" 2>/dev/null)\" = \"$(git -C \"$d\" rev-parse -q --verify \"$r:$g\" 2>/dev/null)\" ] || { bad=\"$bad $g\"; echo \"[gates] [GATES-CONTROLS] $g differs from $r; the gate code must match the reference\" >&2; }; done; fi; if [ -n \"$bad\" ]; then gd=$(git -C \"$d\" rev-parse --absolute-git-dir 2>/dev/null) && mkdir -p \"$gd/gates\" && { cp \"$gd/index\" \"$gd/gates/wrapper-index\" 2>/dev/null; t=$(GIT_INDEX_FILE=\"$gd/gates/wrapper-index\" git -C \"$d\" add -A 2>/dev/null && GIT_INDEX_FILE=\"$gd/gates/wrapper-index\" git -C \"$d\" write-tree 2>/dev/null); }; h=\"$t$bad\"; case \"$p\" in *'\"stop_hook_active\": true'*|*'\"stop_hook_active\":true'*) if [ -n \"$t\" ] && [ \"$(cat \"$gd/gates/wrapper-red-stop\" 2>/dev/null)\" = \"$h\" ]; then echo '{\"systemMessage\": \"gates: the gate code differs from the reference or has none and the agent stopped again without any change; stop released, the operator decides\"}'; exit 0; fi;; esac; [ -z \"$t\" ] || printf '%s' \"$h\" > \"$gd/gates/wrapper-red-stop\"; exit 2; fi; printf '%s' \"$p\" | python3 -I -X pycache_prefix=/dev/null/gates \"$f\" hook stop; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 2 ] || { echo \"[gates] gate.py ended with exit $rc; blocked as a precaution\" >&2; rc=2; }; exit $rc",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(cat); d=\"$CLAUDE_PROJECT_DIR\"; f=\"$d/gates/gate.py\"; if [ ! -f \"$f\" ] || ! command -v python3 >/dev/null 2>&1; then echo \"[gates] gates/gate.py or python3 missing; blocked as a precaution\" >&2; exit 2; fi; r=$(git -C \"$d\" rev-parse -q --verify \"origin/main^{commit}\" 2>/dev/null || git -C \"$d\" rev-parse -q --verify \"refs/gates/baseline^{commit}\" 2>/dev/null || git -C \"$d\" rev-parse -q --verify \"HEAD^{commit}\" 2>/dev/null); bad=\"\"; if [ -z \"$r\" ]; then bad=\" (no commit)\"; echo \"[gates] [GATES-BASELINE] no commit to verify the gate code against\" >&2; else for g in $( (git -C \"$d\" ls-tree -r --name-only \"$r\" -- gates/gate.py gates/lib; cd \"$d\" && ls gates/gate.py gates/lib/*.py) 2>/dev/null | sort -u); do [ \"$(git -C \"$d\" hash-object --no-filters \"$d/$g\" 2>/dev/null)\" = \"$(git -C \"$d\" rev-parse -q --verify \"$r:$g\" 2>/dev/null)\" ] || { bad=\"$bad $g\"; echo \"[gates] [GATES-CONTROLS] $g differs from $r; the gate code must match the reference\" >&2; }; done; fi; if [ -n \"$bad\" ]; then gd=$(git -C \"$d\" rev-parse --absolute-git-dir 2>/dev/null) && mkdir -p \"$gd/gates\" && { cp \"$gd/index\" \"$gd/gates/wrapper-index\" 2>/dev/null; t=$(GIT_INDEX_FILE=\"$gd/gates/wrapper-index\" git -C \"$d\" add -A 2>/dev/null && GIT_INDEX_FILE=\"$gd/gates/wrapper-index\" git -C \"$d\" write-tree 2>/dev/null); }; h=\"$t$bad\"; case \"$p\" in *'\"stop_hook_active\": true'*|*'\"stop_hook_active\":true'*) if [ -n \"$t\" ] && [ \"$(cat \"$gd/gates/wrapper-red-subagent-stop\" 2>/dev/null)\" = \"$h\" ]; then echo '{\"systemMessage\": \"gates: the gate code differs from the reference or has none and the agent stopped again without any change; stop released, the operator decides\"}'; exit 0; fi;; esac; [ -z \"$t\" ] || printf '%s' \"$h\" > \"$gd/gates/wrapper-red-subagent-stop\"; exit 2; fi; printf '%s' \"$p\" | python3 -I -X pycache_prefix=/dev/null/gates \"$f\" hook subagent-stop; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 2 ] || { echo \"[gates] gate.py ended with exit $rc; blocked as a precaution\" >&2; rc=2; }; exit $rc",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "ConfigChange": [
+      {
+        "matcher": "project_settings|local_settings|skills",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(cat); d=\"$CLAUDE_PROJECT_DIR\"; f=\"$d/gates/gate.py\"; if [ ! -f \"$f\" ] || ! command -v python3 >/dev/null 2>&1; then echo \"[gates] gates/gate.py or python3 missing; blocked as a precaution\" >&2; exit 2; fi; r=$(git -C \"$d\" rev-parse -q --verify \"origin/main^{commit}\" 2>/dev/null || git -C \"$d\" rev-parse -q --verify \"refs/gates/baseline^{commit}\" 2>/dev/null || git -C \"$d\" rev-parse -q --verify \"HEAD^{commit}\" 2>/dev/null); bad=\"\"; if [ -z \"$r\" ]; then bad=\" (no commit)\"; echo \"[gates] [GATES-BASELINE] no commit to verify the gate code against\" >&2; else for g in $( (git -C \"$d\" ls-tree -r --name-only \"$r\" -- gates/gate.py gates/lib; cd \"$d\" && ls gates/gate.py gates/lib/*.py) 2>/dev/null | sort -u); do [ \"$(git -C \"$d\" hash-object --no-filters \"$d/$g\" 2>/dev/null)\" = \"$(git -C \"$d\" rev-parse -q --verify \"$r:$g\" 2>/dev/null)\" ] || { bad=\"$bad $g\"; echo \"[gates] [GATES-CONTROLS] $g differs from $r; the gate code must match the reference\" >&2; }; done; fi; if [ -n \"$bad\" ]; then exit 2; fi; printf '%s' \"$p\" | python3 -I -X pycache_prefix=/dev/null/gates \"$f\" hook config-change; rc=$?; [ \"$rc\" -eq 0 ] || [ \"$rc\" -eq 2 ] || { echo \"[gates] gate.py ended with exit $rc; blocked as a precaution\" >&2; rc=2; }; exit $rc",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

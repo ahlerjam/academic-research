@@ -1,0 +1,7 @@
+id: PY-NO-ADD-API-ROUTE
+language: python
+severity: error
+message: route registered with add_api_route.
+note: "Why: routes are found by reading decorators and carry an operation_id. Fix: declare the route with @router.<method>(..., operation_id=...)"
+rule:
+  pattern: $R.add_api_route($$$ARGS)

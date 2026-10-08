@@ -1,0 +1,9 @@
+id: PY-COMMENT-FORM
+language: python
+severity: error
+message: comment that is not a '# constraint:' line or a tool directive.
+note: "Why: comments drift from code; facts the code cannot show are the exception. Fix: delete the comment or write one '# constraint: <fact>' line"
+rule:
+  kind: comment
+  not:
+    regex: ^#(!|\s*constraint:\s\S|\s*fmt:\s*(off|on|skip)\s*$|\s*noqa\b|\s*type:\s*ignore\b|\s*pyright:|\s*ruff:)

@@ -1,0 +1,15 @@
+{
+ "event": "pre-write",
+ "expect_exit": 0,
+ "payload": {
+  "session_id": "session-1",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "cwd": "$ROOT",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+   "file_path": "$ROOT/probe/data.txt",
+   "content": "value\n"
+  }
+ }
+}

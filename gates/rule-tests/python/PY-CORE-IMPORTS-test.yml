@@ -1,0 +1,17 @@
+id: PY-CORE-IMPORTS
+valid:
+  - "from pydantic import BaseModel"
+  - "from app.health.core import Facts"
+  - "import dataclasses"
+  - "from app import health"
+  - "from . import core_rules"
+  - "from ..health import core"
+invalid:
+  - "from app.adapters.db import load"
+  - "import logging"
+  - "import os.path"
+  - "from httpx import Client"
+  - "from app import adapters"
+  - "from app import settings as conf"
+  - "from .. import adapters"
+  - "from ..adapters.db import load"

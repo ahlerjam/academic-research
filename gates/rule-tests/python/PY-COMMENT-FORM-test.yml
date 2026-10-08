@@ -1,0 +1,11 @@
+id: PY-COMMENT-FORM
+valid:
+  - "x = 1  # constraint: the API returns seconds, not milliseconds"
+  - "# fmt: off\nx = 1"
+  - "#!/usr/bin/env python3\nx = 1"
+  - "# pyright: strict\nx = 1"
+  - "import os  # ruff: ignore[F401]"
+  - "x = 1  # noqa: E501"
+invalid:
+  - "# compute x\nx = 1"
+  - "x = 1  # TODO"

@@ -1,0 +1,7 @@
+id: PY-CORE-NO-RAISE
+language: python
+severity: error
+message: raise inside a core.
+note: "Why: a core returns rejections as values so every caller decides. Fix: return the rejection as a value (a frozen model or None)"
+rule:
+  kind: raise_statement

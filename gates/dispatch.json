@@ -1,0 +1,44 @@
+{
+ "mode": "strict",
+ "entries": [
+  {
+   "glob": "decisions/*.md|AGENTS.md|CLAUDE.md|gates/**|.claude/**|.github/**|Makefile|mk/**",
+   "tier": "s1",
+   "check": [
+    [
+     "@repo"
+    ]
+   ]
+  },
+  {
+   "glob": "backend/**/*.py",
+   "tier": "s0",
+   "cwd": "component",
+   "format": [
+    "ruff",
+    "format",
+    "{file}"
+   ],
+   "format_check": [
+    "ruff",
+    "format",
+    "--check",
+    "{file}"
+   ],
+   "check": [
+    [
+     "ruff",
+     "check",
+     "--ignore",
+     "F401",
+     "--output-format",
+     "concise",
+     "{file}"
+    ],
+    [
+     "@rules"
+    ]
+   ]
+  }
+ ]
+}

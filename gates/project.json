@@ -1,0 +1,14 @@
+{
+ "name": "academic-research",
+ "doc_lang": "en",
+ "flowkit": false,
+ "github": true,
+ "operator_login": "ahlerjam",
+ "default_branch": "main",
+ "agent_identity": "bot",
+ "sandbox": false,
+ "components": [
+  "backend-py"
+ ],
+ "extra_settings": {}
+}

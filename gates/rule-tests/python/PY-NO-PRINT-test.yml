@@ -1,0 +1,5 @@
+id: PY-NO-PRINT
+valid:
+  - "logger.info('done')"
+invalid:
+  - "print('done')"

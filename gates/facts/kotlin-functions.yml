@@ -1,0 +1,6 @@
+id: fact-kotlin-functions
+language: kotlin
+severity: hint
+message: function
+rule:
+  kind: function_declaration

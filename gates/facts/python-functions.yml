@@ -1,0 +1,6 @@
+id: fact-python-functions
+language: python
+severity: hint
+message: function
+rule:
+  kind: function_definition

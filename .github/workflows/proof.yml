@@ -1,0 +1,18 @@
+name: proof
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: stage to prove
+        required: true
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Prove the stage on real infrastructure (the operator fills this in)
+        run: |
+          echo "stage ${{ inputs.stage }}: no proof defined yet" >&2
+          exit 1

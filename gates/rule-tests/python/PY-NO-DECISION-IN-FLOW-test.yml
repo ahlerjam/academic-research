@@ -1,0 +1,7 @@
+id: PY-NO-DECISION-IN-FLOW
+valid:
+  - "def run() -> None:\n    match decide_next(load()):\n        case Done():\n            return None"
+invalid:
+  - "def run(x: int) -> None:\n    if x > 1:\n        apply(x)"
+  - "def run(a: bool, b: bool) -> bool:\n    return a and b"
+  - "def run(a: bool) -> int:\n    return 1 if a else 2"

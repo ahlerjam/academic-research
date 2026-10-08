@@ -1,0 +1,7 @@
+id: PY-NO-PRINT
+language: python
+severity: error
+message: print in application code.
+note: "Why: output goes through structured logs. Fix: log one JSON event with the outcome from the flow"
+rule:
+  pattern: print($$$ARGS)

@@ -1,0 +1,3 @@
+{
+ "reason": "rendered by agent-repo: no inline suppression is accepted yet; only the operator raises a count (make suppress-baseline REASON=<issue>)"
+}

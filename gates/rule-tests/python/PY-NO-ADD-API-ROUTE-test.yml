@@ -1,0 +1,5 @@
+id: PY-NO-ADD-API-ROUTE
+valid:
+  - "@router.get('/health', operation_id='health')\ndef health() -> dict[str, str]:\n    return {}"
+invalid:
+  - "router.add_api_route('/health', health)"

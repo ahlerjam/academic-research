@@ -1,0 +1,16 @@
+id: PY-NO-ANY
+language: python
+severity: error
+message: typing.Any used.
+note: "Why: Any switches the type checker off. Fix: name the real type, a Protocol or a union"
+rule:
+  any:
+    - pattern: typing.Any
+    - kind: identifier
+      regex: ^Any$
+      inside:
+        any:
+          - kind: type
+          - kind: import_from_statement
+          - kind: subscript
+        stopBy: end

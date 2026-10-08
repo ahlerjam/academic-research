@@ -1,0 +1,35 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+      - run: npm install --global @ast-grep/cli@0.45.3
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+      - run: make setup
+      - run: make check-repo gates-selftest
+  backend-py:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+      - run: npm install --global @ast-grep/cli@0.45.3
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+      - run: make setup-gates setup-backend-py
+      - run: make lint-backend-py typecheck-backend-py test-core-backend-py test-backend-py
+  gate:
+    if: always()
+    needs: [gates, backend-py]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job above succeeded (the one required check of the ruleset)
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
+      - run: echo "all gate jobs green"

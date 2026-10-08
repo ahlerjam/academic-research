@@ -1,0 +1,43 @@
+{
+ "answers": {
+  "agent_identity": "bot",
+  "agents": true,
+  "budgets": "strict",
+  "components": [
+   "python"
+  ],
+  "details": {
+   "python_db": "none",
+   "python_framework": "fastapi"
+  },
+  "doc_lang": "en",
+  "flowkit": false,
+  "project_name": "academic-research",
+  "ratchet": true,
+  "remote": {
+   "kind": "github",
+   "operator_login": "ahlerjam"
+  },
+  "repo_form": "monorepo",
+  "sandbox": false,
+  "scope": "proof",
+  "seed_adrs": true,
+  "versions": {
+   "actions-checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+   "actions-setup-node": "949feb2413d6458794dcd2491c4babbbce0c15c1",
+   "ast-grep": "0.45.3",
+   "astral-setup-uv": "c18668ad3cf93ea998bef934396af7bb5c839dc7",
+   "fastapi": "0.142.4",
+   "httpx": "0.28.1",
+   "import-linter": "2.15",
+   "postgres": "18",
+   "pydantic": "2.13.5",
+   "pyright": "1.1.414",
+   "pytest": "9.1.1",
+   "python": "3.14",
+   "ruff": "0.16.10"
+  }
+ },
+ "rendered_on": "2026-10-08",
+ "skill_hash": "825e02eb0123c01ce30d581dd60132797969f6bfde2659f1300ff0fbfeeed385"
+}

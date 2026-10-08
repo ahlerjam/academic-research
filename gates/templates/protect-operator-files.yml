@@ -1,0 +1,53 @@
+name: protect-operator-files
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  protect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Control files only change by the operator
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATOR_LOGIN: ${{ vars.OPERATOR_LOGIN }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          CONTROL_GLOBS: '__CONTROL_GLOBS__'
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess, sys
+          def api(path, jq):
+              out = subprocess.run(["gh", "api", "--paginate", path, "--jq", jq], capture_output=True, text=True, check=True)
+              return [line for line in out.stdout.splitlines() if line]
+          def rx(glob):
+              out, i = "", 0
+              while i < len(glob):
+                  if glob.startswith("**/", i): out, i = out + "(?:.*/)?", i + 3
+                  elif glob.startswith("**", i): out, i = out + ".*", i + 2
+                  elif glob[i] == "*": out, i = out + "[^/]*", i + 1
+                  else: out, i = out + re.escape(glob[i]), i + 1
+              return re.compile(out + "$")
+          operator = os.environ["OPERATOR_LOGIN"].strip()
+          if not operator:
+              sys.exit("repository variable OPERATOR_LOGIN is empty; set it, the check stays red until then")
+          globs = [rx(g) for g in json.loads(os.environ["CONTROL_GLOBS"])]
+          control = lambda f: any(g.match(f) for g in globs)
+          repo, pr = os.environ["REPO"], os.environ["PR"]
+          touched = [f for f in api(f"repos/{repo}/pulls/{pr}/files", ".[].filename") if control(f)]
+          problems = []
+          if touched and os.environ["AUTHOR"] != operator:
+              problems.append(f"{os.environ['AUTHOR']} changed control files: {', '.join(touched)}")
+          for sha in api(f"repos/{repo}/pulls/{pr}/commits", ".[].sha"):
+              message = "\n".join(api(f"repos/{repo}/commits/{sha}", ".commit.message"))
+              if re.search(r"(?im)^co-authored-by:.*(claude|noreply@anthropic\.com)", message):
+                  files = [f for f in api(f"repos/{repo}/commits/{sha}", ".files[].filename") if control(f)]
+                  if files:
+                      problems.append(f"agent commit {sha[:8]} changed control files: {', '.join(files)}")
+          if problems:
+              sys.exit("\n".join(problems))
+          print("control files untouched or changed by the operator")
+          PY

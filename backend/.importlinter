@@ -1,0 +1,30 @@
+[importlinter]
+root_package = app
+include_external_packages = True
+
+[importlinter:contract:core-pure]
+name = [PY-CORE-PURE] feature cores are pure
+type = forbidden
+source_modules =
+    app.*.core
+forbidden_modules =
+    app.adapters
+    app.app
+    app.settings
+    logging
+    httpx
+    fastapi
+    starlette
+
+[importlinter:contract:features-independent]
+name = [PY-FEATURES-INDEPENDENT] features never import each other
+type = independence
+modules =
+    app.*
+ignore_imports =
+    app.** -> app.adapters
+    app.** -> app.adapters.**
+    app.app -> app.**
+    app.settings -> app.**
+    app.export_openapi -> app.**
+unmatched_ignore_imports_alerting = none

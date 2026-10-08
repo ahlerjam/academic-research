@@ -1,0 +1,87 @@
+{
+  "ignore": [
+    "**/generated/**",
+    "gates/fixtures/**"
+  ],
+  "components": {
+    "backend-py": {
+      "lang": "python",
+      "dir": "backend",
+      "root": "backend/app",
+      "package": "app",
+      "roles": {
+        "test": [
+          "../tests/**/*.py"
+        ],
+        "wiring": [
+          "__init__.py",
+          "app.py",
+          "settings.py",
+          "export_openapi.py",
+          "*/__init__.py"
+        ],
+        "adapter": [
+          "adapters/*.py"
+        ],
+        "core": [
+          "*/core.py",
+          "*/core_*.py"
+        ],
+        "flow": [
+          "*/flow.py"
+        ],
+        "api": [
+          "*/api.py"
+        ]
+      },
+      "feature_layout": {
+        "files": [
+          "__init__.py",
+          "api.py",
+          "core.py",
+          "core_*.py",
+          "flow.py"
+        ]
+      },
+      "non_feature": [
+        "adapters"
+      ],
+      "behaviour_test": "../tests/test_{feature}.py",
+      "fingerprint_files": [
+        "uv.lock",
+        "pyproject.toml",
+        "pytest.ini",
+        "ruff.toml",
+        "pyrightconfig.json",
+        ".importlinter"
+      ]
+    }
+  },
+  "budgets": {
+    "core": {
+      "function_lines": 40,
+      "module_lines": 600
+    },
+    "flow": {
+      "function_lines": 40,
+      "module_lines": 600
+    },
+    "api": {
+      "function_lines": 40,
+      "module_lines": 600
+    },
+    "ui": {
+      "function_lines": 40,
+      "module_lines": 600
+    },
+    "adapter": {
+      "function_lines": 40,
+      "module_lines": 600
+    },
+    "wiring": {
+      "function_lines": 40,
+      "module_lines": 600
+    }
+  },
+  "shared_fingerprint": []
+}

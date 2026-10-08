@@ -1,0 +1,4 @@
+ruleDirs:
+  - rules/python
+testConfigs:
+  - testDir: rule-tests/python

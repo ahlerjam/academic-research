@@ -1,0 +1,9 @@
+id: PY-NO-ANY
+valid:
+  - "def f(x: int) -> int:\n    return x"
+  - "Anything = 1"
+invalid:
+  - "from typing import Any"
+  - "def f(x: Any) -> int:\n    return 1"
+  - "def f(x: typing.Any) -> int:\n    return 1"
+  - "def f(x: dict[str, Any]) -> int:\n    return 1"

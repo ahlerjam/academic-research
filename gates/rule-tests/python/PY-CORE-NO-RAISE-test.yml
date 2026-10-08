@@ -1,0 +1,5 @@
+id: PY-CORE-NO-RAISE
+valid:
+  - "def decide(x: int) -> int:\n    return x"
+invalid:
+  - "def decide(x: int) -> int:\n    raise ValueError(x)"

@@ -1,0 +1,23 @@
+id: PY-CORE-IMPORTS
+language: python
+severity: error
+message: a core imports an adapter, the wiring, logging or an IO library.
+note: "Why: a core stays testable without starting anything. Fix: pass data in as arguments; the flow calls adapters"
+rule:
+  any:
+    - kind: import_statement
+      has:
+        kind: dotted_name
+        regex: ^(app\.(adapters|app|settings)|logging|httpx|requests|fastapi|starlette|sqlalchemy|subprocess|socket|os|shutil)(\.|$)
+    - kind: import_from_statement
+      has:
+        field: module_name
+        regex: ^(app\.(adapters|app|settings)|\.\.+(adapters|app|settings)|logging|httpx|requests|fastapi|starlette|sqlalchemy|subprocess|socket|os|shutil)(\.|$)
+    - kind: import_from_statement
+      all:
+        - has:
+            field: module_name
+            regex: ^(app|\.\.+)$
+        - has:
+            field: name
+            regex: ^(adapters|app|settings)(\.|\s|$)

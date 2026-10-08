@@ -1,0 +1,5 @@
+id: PY-TRY-ONLY-ADAPTER
+valid:
+  - "def load() -> int:\n    return 1"
+invalid:
+  - "def load() -> int:\n    try:\n        return 1\n    except OSError:\n        return 0"
