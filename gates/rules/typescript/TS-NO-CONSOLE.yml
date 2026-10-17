@@ -1,0 +1,7 @@
+id: TS-NO-CONSOLE
+language: typescript
+severity: error
+message: console output.
+note: "Why: output goes through the structured JSON logger. Fix: log one JSON event with status and duration_ms through the logger port"
+rule:
+  pattern: console.$METHOD($$$)

@@ -1,0 +1,12 @@
+id: TS-NO-DECISION-IN-FLOW
+language: typescript
+severity: error
+message: comparison, boolean logic or ternary inside a flow.
+note: "Why: a flow sequences load, decide and apply; decisions live in the core where they are tested. Fix: move the comparison into a decide* function in core and switch on its result kind"
+rule:
+  any:
+    - kind: ternary_expression
+    - kind: binary_expression
+      has:
+        field: operator
+        regex: ^(===|!==|==|!=|<|>|<=|>=|&&|\|\|)$

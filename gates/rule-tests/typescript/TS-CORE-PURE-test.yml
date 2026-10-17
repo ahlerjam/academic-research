@@ -1,0 +1,6 @@
+id: TS-CORE-PURE
+valid:
+  - "import type { Probe } from \"./probe.ts\";\n/** Selftest fixture function. */\nexport function decideP(p: Probe): Probe {\n  return p;\n}"
+invalid:
+  - "import { readFileSync } from \"node:fs\";\nexport const r = readFileSync;"
+  - "import { Hono } from \"hono\";\nexport const h = Hono;"

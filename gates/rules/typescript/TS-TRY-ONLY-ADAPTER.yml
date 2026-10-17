@@ -1,0 +1,7 @@
+id: TS-TRY-ONLY-ADAPTER
+language: typescript
+severity: error
+message: try/catch outside an adapter.
+note: "Why: only an adapter knows how its foreign system fails. Fix: let the adapter return a value for the failure and switch on that value"
+rule:
+  kind: try_statement

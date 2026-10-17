@@ -1,0 +1,459 @@
+[
+ {
+  "id": "GATES-ROLES",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "drift.d1",
+  "fixture": "test:gates/tests/test_gates.py",
+  "fixture_mode": "test",
+  "adr": 2,
+  "why": "a rule binds to a role and the role comes from the path, so an unmapped file escapes every rule",
+  "fix": "move the file under a role path or ask the operator to extend gates/roles.json",
+  "agents_md": "Every source file has a role from gates/roles.json."
+ },
+ {
+  "id": "GATES-CONTROLS",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "manifest",
+  "fixture": "test:gates/tests/test_gates.py",
+  "fixture_mode": "test",
+  "adr": 3,
+  "why": "the controls protect themselves; an agent must not weaken the gates it is judged by",
+  "fix": "restore the control file and deliver the change as a patch for the operator",
+  "agents_md": "Never edit operator-only files."
+ },
+ {
+  "id": "BASH-GUARD",
+  "component": "*",
+  "roles": "*",
+  "carrier": "bash",
+  "carrier_ref": "gates/bash_rules.json",
+  "fixture": "test:gates/tests/guard-bash.cases.tsv",
+  "fixture_mode": "test",
+  "adr": 3,
+  "why": "force pushes, skipped hooks and mutating API calls bypass review",
+  "fix": "use the allowed alternative named in the message",
+  "agents_md": "Never force-push, skip hooks or call gh api with a mutating method."
+ },
+ {
+  "id": "WRITE-SECRET",
+  "component": "*",
+  "roles": "*",
+  "carrier": "bash",
+  "carrier_ref": "gates/bash_rules.json",
+  "fixture": "test:gates/tests/test_gates.py",
+  "fixture_mode": "test",
+  "adr": null,
+  "why": "a secret in a file ends up in git history",
+  "fix": "read the value from the environment or a secret store"
+ },
+ {
+  "id": "AGENTS-MD",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "agents_md",
+  "fixture": "gates/fixtures/AGENTS-MD/",
+  "fixture_mode": "repo",
+  "adr": 1,
+  "why": "prose and gates drift apart unless every rule line names its gate",
+  "fix": "end the rule line with (gate: ID) or (review); the operator edits AGENTS.md",
+  "agents_md": "Keep AGENTS.md under 100 lines with a gate id or (review) on every rule line."
+ },
+ {
+  "id": "ADR-FORMAT",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "adr",
+  "fixture": "gates/fixtures/ADR-FORMAT/",
+  "fixture_mode": "repo",
+  "adr": null,
+  "why": "decisions are found by make adr-find only when every record has the same shape",
+  "fix": "use make adr-new, keep frontmatter id, title, status, tags, stay under 50 lines, run make decisions",
+  "agents_md": "One ADR per decision; ask before writing one."
+ },
+ {
+  "id": "SUPPRESS-COUNT",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "suppress.count",
+  "fixture": "gates/fixtures/SUPPRESS-COUNT/",
+  "fixture_mode": "repo",
+  "adr": 1,
+  "why": "an inline suppression turns a gate green without fixing the finding",
+  "fix": "fix the finding; only the operator raises gates/suppress-baseline.json",
+  "agents_md": "Never weaken, suppress or bypass a gate."
+ },
+ {
+  "id": "TS-CORE-NO-THROW",
+  "component": "core",
+  "roles": [
+   "core"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-CORE-NO-THROW.yml",
+  "fixture": "gates/fixtures/TS-CORE-NO-THROW/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "a core returns rejections as values so every caller decides",
+  "fix": "return a { kind: \"rejected\", reason } value",
+  "agents_md": "Never throw in a core; return the rejection as a value."
+ },
+ {
+  "id": "TS-TRY-ONLY-ADAPTER",
+  "component": "*",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "wiring",
+   "ui"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-TRY-ONLY-ADAPTER.yml",
+  "fixture": "gates/fixtures/TS-TRY-ONLY-ADAPTER/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "only an adapter knows how its foreign system fails",
+  "fix": "let the adapter return a value for the failure and switch on that value",
+  "agents_md": "try/catch only in adapters."
+ },
+ {
+  "id": "TS-CORE-DETERMINISTIC",
+  "component": "core",
+  "roles": [
+   "core"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-CORE-DETERMINISTIC.yml",
+  "fixture": "gates/fixtures/TS-CORE-DETERMINISTIC/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "a core decides the same way for the same input, so tests and golden files are stable",
+  "fix": "pass the time, ids or settings in as arguments from the flow",
+  "agents_md": "A core reads no clock, randomness, process or console."
+ },
+ {
+  "id": "TS-CORE-PURE",
+  "component": "core",
+  "roles": [
+   "core"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-CORE-PURE.yml",
+  "fixture": "gates/fixtures/TS-CORE-PURE/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "a core stays testable without starting anything",
+  "fix": "pass data in from the flow; a core imports only other core modules",
+  "agents_md": "A core imports only other core modules."
+ },
+ {
+  "id": "TS-IO-ONLY-ADAPTER",
+  "component": "*",
+  "roles": [
+   "flow",
+   "api",
+   "ui"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-IO-ONLY-ADAPTER.yml",
+  "fixture": "gates/fixtures/TS-IO-ONLY-ADAPTER/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "IO lives in one adapter per foreign system so it can be faked and allow-listed",
+  "fix": "add or extend an adapter (server src/adapters/, web src/lib/api.ts) and pass it in",
+  "agents_md": "File system, process, network and fetch only in adapters."
+ },
+ {
+  "id": "TS-NO-DECISION-IN-FLOW",
+  "component": "server",
+  "roles": [
+   "flow"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-NO-DECISION-IN-FLOW.yml",
+  "fixture": "gates/fixtures/TS-NO-DECISION-IN-FLOW/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "a flow sequences load, decide and apply; decisions live in the core where they are tested",
+  "fix": "move the comparison into a decide* function in core and switch on its result kind",
+  "agents_md": "A flow never compares or branches; it switches on a decide result."
+ },
+ {
+  "id": "TS-NO-ANY",
+  "component": "*",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "ui",
+   "test"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-NO-ANY.yml",
+  "fixture": "gates/fixtures/TS-NO-ANY/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "any switches the type checker off",
+  "fix": "name the real type, unknown plus a type guard, or a union",
+  "agents_md": "any is forbidden."
+ },
+ {
+  "id": "TS-NO-CONSOLE",
+  "component": "*",
+  "roles": [
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "ui"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-NO-CONSOLE.yml",
+  "fixture": "gates/fixtures/TS-NO-CONSOLE/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "output goes through the structured JSON logger",
+  "fix": "log one JSON event with status and duration_ms through the logger port",
+  "agents_md": "Log through the logger port, never console."
+ },
+ {
+  "id": "TS-NO-INNERHTML",
+  "component": "web",
+  "roles": [
+   "ui",
+   "adapter",
+   "wiring"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-NO-INNERHTML.yml",
+  "fixture": "gates/fixtures/TS-NO-INNERHTML/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "imported PDFs, transcripts and model output are untrusted; HTML strings open XSS",
+  "fix": "build nodes with createElement and textContent",
+  "agents_md": "Never inject HTML strings into the DOM."
+ },
+ {
+  "id": "TS-DOC",
+  "component": "*",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "ui"
+  ],
+  "carrier": "ast-grep",
+  "carrier_ref": "gates/rules/typescript/TS-DOC.yml",
+  "fixture": "gates/fixtures/TS-DOC/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "the one-sentence doc comment is the contract a reader and a reviewing agent check the code against",
+  "fix": "add /** one sentence that says what it returns or does */ above the export",
+  "agents_md": "Every exported function has a one-sentence JSDoc line."
+ },
+ {
+  "id": "TS-SUPPRESS",
+  "component": "*",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "ui",
+   "test"
+  ],
+  "carrier": "text",
+  "carrier_ref": "",
+  "fixture": "gates/fixtures/TS-SUPPRESS/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "a blanket suppression turns a gate green without a fix",
+  "fix": "fix the finding; a targeted `// eslint-disable-next-line <rule>` counts against gates/suppress-baseline.json, which only the operator raises",
+  "agents_md": "No blanket eslint-disable, @ts-ignore, @ts-nocheck, @ts-expect-error, prettier-ignore or ast-grep-ignore.",
+  "pattern": "eslint-disable(?!-next-line\\s+[@a-z])|@ts-(ignore|nocheck|expect-error)|ast-grep-ignore|prettier-ignore",
+  "what": "inline suppression"
+ },
+ {
+  "id": "TS-NO-SKIP",
+  "component": "*",
+  "roles": [
+   "test"
+  ],
+  "carrier": "text",
+  "carrier_ref": "",
+  "fixture": "gates/fixtures/TS-NO-SKIP/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "a skipped, focused or todo test is green without running",
+  "fix": "make the test pass or delete it in a reviewed change",
+  "agents_md": "Never skip, focus or todo a test.",
+  "pattern": "\\b(it|test|describe|suite)\\.(skip|only|todo|fails|skipIf|runIf)\\b|\\b(xit|xdescribe|xtest|fit|fdescribe)\\s*\\(",
+  "what": "test switched off"
+ },
+ {
+  "id": "TS-COMMENT-FORM",
+  "component": "*",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "ui",
+   "test"
+  ],
+  "carrier": "text",
+  "carrier_ref": "",
+  "fixture": "gates/fixtures/TS-COMMENT-FORM/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "comments drift from code; facts the code cannot show are the exception",
+  "fix": "delete the comment, write one `// constraint: <fact>` line, or a /** JSDoc */ on an export",
+  "agents_md": "Comments only as `// constraint:`, JSDoc on exports, or tool directives.",
+  "pattern": "^[ \\t]*//(?!\\s*(constraint: |@ts-|@vitest-environment\\b|eslint-disable))|^[ \\t]*/\\*(?!\\*)",
+  "what": "free comment"
+ },
+ {
+  "id": "TS-BUDGET-FUNCTION",
+  "component": "*",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "ui"
+  ],
+  "carrier": "gate",
+  "carrier_ref": "budgets.function",
+  "fixture": "gates/fixtures/TS-BUDGET-FUNCTION/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "long functions hide decisions",
+  "fix": "split the function along its decisions",
+  "agents_md": "Functions stay within the role budget in gates/roles.json."
+ },
+ {
+  "id": "TS-BUDGET-MODULE",
+  "component": "*",
+  "roles": [
+   "core",
+   "flow",
+   "api",
+   "adapter",
+   "wiring",
+   "ui"
+  ],
+  "carrier": "gate",
+  "carrier_ref": "budgets.module",
+  "fixture": "gates/fixtures/TS-BUDGET-MODULE/",
+  "fixture_mode": "file",
+  "adr": 4,
+  "why": "long modules mix topics",
+  "fix": "split the module by topic",
+  "agents_md": "Modules stay within the role budget in gates/roles.json."
+ },
+ {
+  "id": "TS-LAYOUT",
+  "component": "server",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "layout",
+  "fixture": "gates/fixtures/TS-LAYOUT/",
+  "fixture_mode": "repo",
+  "adr": 4,
+  "why": "a server feature is found in one place with a fixed set of files",
+  "fix": "use only api.ts and flow.ts in a server feature; decisions go to packages/core",
+  "agents_md": "A server feature holds only api.ts and flow.ts."
+ },
+ {
+  "id": "TS-BEHAVIOUR",
+  "component": "server",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "tests_duty.behaviour",
+  "fixture": "gates/fixtures/TS-BEHAVIOUR/",
+  "fixture_mode": "repo",
+  "adr": 4,
+  "why": "a feature is only proven through its observable behaviour",
+  "fix": "add packages/server/test/<feature>.behaviour.test.ts with one asserting test",
+  "agents_md": "One behaviour test per server feature."
+ },
+ {
+  "id": "TS-DECIDE-TESTED",
+  "component": "core",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "tests_duty.decide",
+  "fixture": "gates/fixtures/TS-DECIDE-TESTED/",
+  "fixture_mode": "repo",
+  "adr": 4,
+  "why": "every decision is proven by a test that checks its result",
+  "fix": "assert on the result of the decide* call in a test, directly or through a variable",
+  "agents_md": "The result of every decide* flows into an expect."
+ },
+ {
+  "id": "TS-TRANSLATE-TESTED",
+  "component": "server",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "tests_duty.decide",
+  "fixture": "gates/fixtures/TS-TRANSLATE-TESTED/",
+  "fixture_mode": "repo",
+  "adr": 4,
+  "why": "every adapter translation of a foreign answer is proven by a test",
+  "fix": "assert on the result of the translate* call in a test",
+  "agents_md": "The result of every adapter translate* flows into an expect."
+ },
+ {
+  "id": "TS-FEATURES-INDEPENDENT",
+  "component": "server",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "feature_imports.cross",
+  "fixture": "gates/fixtures/TS-FEATURES-INDEPENDENT/",
+  "fixture_mode": "repo",
+  "adr": 4,
+  "why": "features stay separable; facts travel through the database",
+  "fix": "hand the fact over through the database or a core function",
+  "agents_md": "Never import one server feature from another."
+ },
+ {
+  "id": "TS-ADAPTER-NO-FEATURE",
+  "component": "server",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "feature_imports.adapter",
+  "fixture": "gates/fixtures/TS-ADAPTER-NO-FEATURE/",
+  "fixture_mode": "repo",
+  "adr": 4,
+  "why": "an adapter talks to one foreign system and knows no feature",
+  "fix": "move the feature logic into the flow; the adapter returns plain values",
+  "agents_md": "An adapter never imports a feature."
+ },
+ {
+  "id": "GATES-RATCHET",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "guard",
+  "fixture": "test:gates/tests/test_repo_rules.py",
+  "fixture_mode": "test",
+  "adr": null,
+  "why": "a gate may only grow; changing or deleting one weakens it",
+  "fix": "add a new rule with test, fixture and catalog entry instead of changing an existing one",
+  "agents_md": "You may add a gate; never change or delete one."
+ }
+]

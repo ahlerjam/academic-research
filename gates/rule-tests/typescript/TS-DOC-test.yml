@@ -1,0 +1,6 @@
+id: TS-DOC
+valid:
+  - "/** Selftest fixture function. */\nexport function a(): number {\n  return 1;\n}"
+invalid:
+  - "export function a(): number {\n  return 1;\n}"
+  - "export const b = (): number => 1;"

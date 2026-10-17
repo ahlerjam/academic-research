@@ -1,0 +1,7 @@
+id: TS-CORE-NO-THROW
+language: typescript
+severity: error
+message: throw inside a core.
+note: "Why: a core returns rejections as values so every caller decides. Fix: return a { kind: \"rejected\", reason } value"
+rule:
+  kind: throw_statement

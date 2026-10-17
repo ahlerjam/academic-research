@@ -1,0 +1,5 @@
+id: TS-NO-CONSOLE
+valid:
+  - "/** Selftest fixture function. */\nexport function run(): number {\n  return 1;\n}"
+invalid:
+  - "console.log(\"x\");"

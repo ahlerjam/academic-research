@@ -1,0 +1,5 @@
+id: TS-NO-INNERHTML
+valid:
+  - "/** Selftest fixture function. */\nexport function show(el: HTMLElement, text: string): void {\n  el.textContent = text;\n}"
+invalid:
+  - "/** Selftest fixture function. */\nexport function show(el: HTMLElement, html: string): void {\n  el.innerHTML = html;\n}"

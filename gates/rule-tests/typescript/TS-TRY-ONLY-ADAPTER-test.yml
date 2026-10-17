@@ -1,0 +1,5 @@
+id: TS-TRY-ONLY-ADAPTER
+valid:
+  - "/** Selftest fixture function. */\nexport function run(): number {\n  return 1;\n}"
+invalid:
+  - "/** Selftest fixture function. */\nexport function run(): number {\n  try {\n    return 1;\n  } catch {\n    return 0;\n  }\n}"

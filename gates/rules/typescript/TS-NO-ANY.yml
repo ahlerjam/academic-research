@@ -1,0 +1,8 @@
+id: TS-NO-ANY
+language: typescript
+severity: error
+message: the type any.
+note: "Why: any switches the type checker off. Fix: name the real type, unknown plus a type guard, or a union"
+rule:
+  kind: predefined_type
+  regex: ^any$

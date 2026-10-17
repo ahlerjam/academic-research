@@ -1,0 +1,9 @@
+id: TS-CORE-DETERMINISTIC
+valid:
+  - "/** Selftest fixture function. */\nexport function decideAge(now: number, then: number): number {\n  return now - then;\n}"
+invalid:
+  - "export const t = Date.now();"
+  - "export const r = Math.random();"
+  - "export const d = new Date();"
+  - "export const e = process.env;"
+  - "console.log(1);"

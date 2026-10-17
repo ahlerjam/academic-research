@@ -1,0 +1,12 @@
+{
+  "name": "@academic-research/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@academic-research/core": "workspace:*"
+  }
+}

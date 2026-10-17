@@ -1,0 +1,4 @@
+ruleDirs:
+  - rules/typescript
+testConfigs:
+  - testDir: rule-tests/typescript

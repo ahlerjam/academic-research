@@ -1,0 +1,7 @@
+id: TS-NO-DECISION-IN-FLOW
+valid:
+  - "/** Selftest fixture function. */\nexport function run(r: { kind: \"a\" } | { kind: \"b\" }): number {\n  switch (r.kind) {\n    case \"a\":\n      return 1;\n    case \"b\":\n      return 2;\n  }\n}"
+invalid:
+  - "/** Selftest fixture function. */\nexport function run(x: number): boolean {\n  return x > 1;\n}"
+  - "/** Selftest fixture function. */\nexport function run(a: boolean, b: boolean): boolean {\n  return a && b;\n}"
+  - "/** Selftest fixture function. */\nexport function run(a: boolean): number {\n  return a ? 1 : 2;\n}"

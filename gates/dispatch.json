@@ -1,0 +1,64 @@
+{
+ "mode": "strict",
+ "entries": [
+  {
+   "glob": "decisions/*.md|AGENTS.md|CLAUDE.md|gates/**|.claude/**|.github/**|Makefile|mk/**",
+   "tier": "s1",
+   "check": [
+    [
+     "@repo"
+    ]
+   ]
+  },
+  {
+   "glob": "packages/**/*.ts",
+   "tier": "s0",
+   "format": [
+    "prettier",
+    "--write",
+    "--log-level",
+    "warn",
+    "{file}"
+   ],
+   "format_check": [
+    "prettier",
+    "--check",
+    "--log-level",
+    "warn",
+    "{file}"
+   ],
+   "check": [
+    [
+     "eslint",
+     "--format",
+     "json",
+     "--max-warnings",
+     "0",
+     "--no-warn-ignored",
+     "{file}"
+    ],
+    [
+     "@rules"
+    ]
+   ]
+  },
+  {
+   "glob": "packages/**/*.css|packages/**/*.html|packages/**/*.json",
+   "tier": "s0",
+   "format": [
+    "prettier",
+    "--write",
+    "--log-level",
+    "warn",
+    "{file}"
+   ],
+   "format_check": [
+    "prettier",
+    "--check",
+    "--log-level",
+    "warn",
+    "{file}"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+id: TS-CORE-PURE
+language: typescript
+severity: error
+message: a core imports IO, server, web or a framework.
+note: "Why: a core stays testable without starting anything. Fix: pass data in from the flow; a core imports only other core modules"
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    regex: ^['"]((node:).*|fs|fs/promises|path|os|child_process|net|http|https|crypto|hono|@hono/.*|yjs|@hocuspocus/.*|@anthropic-ai/.*|@academic-research/(server|web)|(\.\./)+(server|web)/.*)['"]$

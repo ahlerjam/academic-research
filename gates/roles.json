@@ -1,0 +1,63 @@
+{
+  "ignore": [
+    "**/generated/**",
+    "gates/fixtures/**",
+    "fixtures/**",
+    "**/*.d.ts",
+    "**/vite.config.ts",
+    "**/playwright.config.ts"
+  ],
+  "components": {
+    "core": {
+      "lang": "typescript",
+      "dir": "packages/core",
+      "root": "packages/core/src",
+      "roles": {
+        "test": ["../test/**/*.ts"],
+        "wiring": ["index.ts"],
+        "core": ["**/*.ts"]
+      },
+      "fingerprint_files": ["package.json", "tsconfig.json"]
+    },
+    "server": {
+      "lang": "typescript",
+      "dir": "packages/server",
+      "root": "packages/server/src",
+      "roles": {
+        "test": ["../test/**/*.ts"],
+        "migration": ["../migrations/*.sql"],
+        "wiring": ["app.ts", "main.ts", "settings.ts"],
+        "adapter": ["adapters/*.ts"],
+        "flow": ["*/flow.ts"],
+        "api": ["*/api.ts"]
+      },
+      "feature_layout": {
+        "files": ["api.ts", "flow.ts"]
+      },
+      "non_feature": ["adapters"],
+      "behaviour_test": "../test/{feature}.behaviour.test.ts",
+      "fingerprint_files": ["package.json", "tsconfig.json"]
+    },
+    "web": {
+      "lang": "typescript",
+      "dir": "packages/web",
+      "root": "packages/web/src",
+      "roles": {
+        "test": ["../test/**/*.ts", "../e2e/**/*.ts"],
+        "wiring": ["main.ts"],
+        "adapter": ["lib/api.ts"],
+        "ui": ["**/*.ts", "**/*.css"]
+      },
+      "fingerprint_files": ["package.json", "tsconfig.json", "index.html"]
+    }
+  },
+  "budgets": {
+    "core": { "function_lines": 40, "module_lines": 400 },
+    "flow": { "function_lines": 30, "module_lines": 300 },
+    "api": { "function_lines": 30, "module_lines": 300 },
+    "ui": { "function_lines": 60, "module_lines": 500 },
+    "adapter": { "function_lines": 40, "module_lines": 400 },
+    "wiring": { "function_lines": 40, "module_lines": 200 }
+  },
+  "shared_fingerprint": ["pnpm-lock.yaml", "package.json", "tsconfig.base.json", "eslint.config.js"]
+}
