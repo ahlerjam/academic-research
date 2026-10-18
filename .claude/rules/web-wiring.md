@@ -1,6 +1,7 @@
 ---
 paths:
   - "packages/web/src/main.ts"
+  - "packages/web/index.html"
 ---
 
 # web / wiring
