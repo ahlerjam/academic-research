@@ -42,10 +42,10 @@ Hypotheses, checked by T23 and T44:
 
 ## Stages
 
-| Stage | Outcome | Proof |
+| Stage (milestone) | Outcome | Proof |
 | --- | --- | --- |
 | 1 | Write and compile one real chapter locally: structured editor, Zotero and PDFs, anchored citations (quote or paraphrase) with hover and quote check, LaTeX/PDF with template, trace check, versions and backup, install | `proof.yml` stage 1 green; the operator writes and exports a real chapter (T23) |
-| v0.1 | First public release: all of stage 1 plus the wishlist with library links and a library profile, and open-source basics (security policy, contributing guide, release, demo project) | stage 1 done, wishlist export with links for a configured library, T44a done, tag `v0.1.0` |
+| v0.1 | First public release: the whole product, every milestone in this table green (M1 = stage 1 with the wishlist and a library profile, M2a, M2b, M3, M5), plus open-source basics and the release pipeline | every milestone proof green on main, T44a and T44c done, tag `v0.1.0` (ADR-0021) |
 | 2a | Own data and sources without a model: live numbers, result tables, transcript quotes, deletion path for interview data, source search on click and legal open-access download | `proof.yml` stage 2a green; a chapter with a live number, a result table and a transcript quote, exported without a model call; a search that adds an open-access PDF with its provenance |
 | 2b | Copilot through the Claude Code plugin: chat, autocomplete and agents in the web app, proposals with review and provenance, AI-usage annex | `proof.yml` stage 2b green; bridge test per supported Claude Code version; validator and injection fixtures; recall@10 >= 0.8; annex test |
 | 3 | Friends: shared projects through a sync server, auth, people and agents writing at once with block-level colours, comments, examiner | `proof.yml` stage 3 green; two users and an agent on one project; byte-identical mixed-author export |
