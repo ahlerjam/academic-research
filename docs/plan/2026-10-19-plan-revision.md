@@ -11,7 +11,7 @@ operator's decisions recorded below.
 
 | # | Decision | Record |
 | --- | --- | --- |
-| 1 | v0.1 is stage 1 complete plus the wishlist with library links and open-source basics | NORTHSTAR (PR #63) |
+| 1 | v0.1 was first set to stage 1 plus the wishlist; later the same day the operator made v0.1 the whole product (row 16) | NORTHSTAR (PR #63), ADR-0021 |
 | 2 | A citation anchor is a text range, for a direct quote (`quote`) and for a paraphrase (`locus`) | ADR-0014 |
 | 3 | AI runs in the user's own Claude Code session through an `academic-research` plugin (mod bridge, MCP tools, skills, agents); the app holds no model key | ADR-0013, supersedes ADR-0008 |
 | 4 | The product is a web app with the full editor beside a chat, task and proposal panel; the Claude Code session is the engine | ADR-0013 |
@@ -61,12 +61,15 @@ Rules that follow from it:
 
 ## 3. Goals and stages
 
-- Goal G7 Sourcing is added (plan section 2). The wishlist and the library profile ship in v0.1;
-  search on a click and legal open-access download ship in stage 2a.
+- Goal G7 Sourcing is added (plan section 2): wishlist and library profile in milestone M1,
+  search on a click and legal open-access download in milestone M2a.
+- Stages become internal milestones M1, M2a, M2b, M3 and M5, each with its proof; v0.1 is tagged
+  only when every milestone is green (ADR-0021). Stage 4 follows v0.1 unless the operator moves it.
 - Stage 2 splits into 2a (own data and sources without a model) and 2b (copilot through the plugin).
 - Stage 3 keeps collaboration with block-level authorship colours; each co-author runs their own
   Claude Code. The hosted profile becomes a sync and storage server.
-- Stage 5 stays a design task; provenance and the disclosure annex are mandatory there.
+- Stage 5 is part of v0.1: the whole-thesis pipeline runs on resumable jobs (ADR-0020), designed
+  from measured costs (T45); provenance and the disclosure annex are mandatory there.
 
 ## 4. Architecture changes for stage 1
 
@@ -102,9 +105,11 @@ Numbers refer to the review (artifact "Plankritik academic-research", section 4)
 
 ## 6. v0.1 and waves
 
-v0.1 needs 35 work packages plus the wishlist (N1) and the library profile (N2), in nine waves;
-the ticket rework maps them to issues with wave labels and one epic per capability. Search and
-download (N6 to N8), the relevance filter and the screening log follow in stage 2a.
+Milestone M1 needs 35 work packages plus the wishlist (N1) and the library profile (N2), in nine
+waves. M2a adds own data, search and download (N6 to N8), the relevance filter and the screening
+log; M2b the plugin, bridge and all AI functions; M3 shared projects, roles and concurrent agents;
+M5 the whole-thesis pipeline. The ticket rework maps every ticket to a milestone label, a wave
+label and one epic per capability; v0.1 is the sum of all milestones (ADR-0021).
 
 ## 7. Open questions for the operator
 
