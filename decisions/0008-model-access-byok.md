@@ -1,7 +1,7 @@
 ---
 id: 8
 title: The copilot calls the Anthropic Messages API with each user's own key
-status: accepted
+status: superseded
 tags: [copilot, llm, security, tokens, terms]
 ---
 
