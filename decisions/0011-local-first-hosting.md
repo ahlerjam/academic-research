@@ -1,7 +1,7 @@
 ---
 id: 11
 title: Local-first on 127.0.0.1; a hosted profile for trusted friends comes later
-status: accepted
+status: superseded
 tags: [hosting, security, auth, install]
 ---
 

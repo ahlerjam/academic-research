@@ -1,6 +1,6 @@
 # academic-research: Plan (accepted 2026-10-17)
 
-Status: accepted. The operator mandated an autonomous setup on 2026-10-17 ("work fully autonomously, make every open decision yourself"); every open fork of the draft was decided by the setup agent as a builder's call (section 10) and recorded as an ADR in `decisions/`. The operator can overturn any call with a new ADR. Supersedes `docs/plan/2026-10-08-belegnetz-design.md`. The authoritative ticket text lives in the GitHub issues (label `stage-N`, one tracking issue per stage); section 12 keeps the draft for traceability.
+Status: accepted, amended by `docs/plan/2026-10-19-plan-revision.md` (that file wins where the two disagree). The operator mandated an autonomous setup on 2026-10-17 ("work fully autonomously, make every open decision yourself"); every open fork of the draft was decided by the setup agent as a builder's call (section 10) and recorded as an ADR in `decisions/`. The operator can overturn any call with a new ADR. Supersedes `docs/plan/2026-10-08-belegnetz-design.md`. The authoritative ticket text lives in the GitHub issues (label `stage-N`, one tracking issue per stage); section 12 keeps the draft for traceability.
 
 ## 1. Intent & wedge
 
