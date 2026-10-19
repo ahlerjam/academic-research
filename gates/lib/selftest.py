@@ -222,7 +222,7 @@ def unit_tests(tree: str) -> Result:
     result = unittest.TextTestRunner(stream=open(os.devnull, "w"), verbosity=0).run(suite)
     ok = result.wasSuccessful()
     detail = f"{result.testsRun} tests" + ("" if ok else f", {len(result.failures)} failures, {len(result.errors)} errors: "
-                                           + "; ".join(str(t[0]) for t in (result.failures + result.errors)[:5]))
+                                           + "; ".join(f"{t[0]}: {t[1].strip().splitlines()[-1]}" for t in (result.failures + result.errors)[:5]))
     return Result("unit-tests", "pass" if ok else "fail", detail)
 
 

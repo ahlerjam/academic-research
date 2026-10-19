@@ -69,10 +69,10 @@ Rules for agents in this repository. Reasons live in `decisions/`; the plan in `
 ## Product invariants (plan §2 anti-goals)
 
 - Nothing reaches the document unchecked: quotes, pages, numbers and cite keys come from code, never from model text. (review)
-- No authorship marker ever reaches `.tex`, `.pdf` or PDF metadata. (review)
+- No automatic authorship or AI marker reaches `.tex`, `.pdf`, docx or PDF metadata; a disclosure annex appears only on the user's request. (review)
 - Every untrusted string that reaches LaTeX passes `escapeLatex` in core. (review)
-- Keys (LLM, Zotero) never reach logs, errors, the client bundle, Yjs, exports or backups. (review)
-- No feature outside the plan's goals G1-G6; a new idea becomes an issue for the operator, not code. (review)
+- Keys and tokens (Zotero, sync server, bridge token) never reach logs, errors, the client bundle, Yjs, exports or backups. (review)
+- No feature outside the plan's goals G1-G7; a new idea becomes an issue for the operator, not code. (review)
 
 ## Ratchet
 
