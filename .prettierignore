@@ -1,0 +1,9 @@
+pnpm-lock.yaml
+gates/
+fixtures/
+decisions/
+docs/
+coverage/
+dist/
+.claude/
+*.md

@@ -1,0 +1,11 @@
+id: TS-NO-INNERHTML
+language: typescript
+severity: error
+message: HTML string injection into the DOM.
+note: "Why: imported PDFs, transcripts and model output are untrusted; HTML strings open XSS. Fix: build nodes with createElement and textContent"
+rule:
+  any:
+    - pattern: $EL.innerHTML = $V
+    - pattern: $EL.outerHTML = $V
+    - pattern: $EL.insertAdjacentHTML($$$)
+    - pattern: document.write($$$)

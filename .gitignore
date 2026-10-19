@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+coverage
+test-results
+playwright-report
+.vite
+__pycache__
+*.pyc
+.env
+.env.*
+.claude/settings.local.json
+*.proposed
+.DS_Store
+/data/

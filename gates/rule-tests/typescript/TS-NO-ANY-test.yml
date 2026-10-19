@@ -1,0 +1,5 @@
+id: TS-NO-ANY
+valid:
+  - "/** Selftest fixture function. */\nexport function id(x: unknown): unknown {\n  return x;\n}"
+invalid:
+  - "/** Selftest fixture function. */\nexport function id(x: any): unknown {\n  return x;\n}"

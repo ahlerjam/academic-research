@@ -1,0 +1,14 @@
+{
+ "event": "subagent-stop",
+ "expect_exit": 0,
+ "payload": {
+  "session_id": "session-1",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "cwd": "$ROOT",
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_id": "agent-1",
+  "agent_type": "general-purpose",
+  "agent_transcript_path": "/tmp/agent.jsonl"
+ }
+}

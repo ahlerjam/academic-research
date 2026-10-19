@@ -1,0 +1,5 @@
+packages:
+  - packages/*
+# constraint: supply-chain hygiene, a dependency version must be public for 7 days before install
+minimumReleaseAge: 10080
+strictPeerDependencies: true

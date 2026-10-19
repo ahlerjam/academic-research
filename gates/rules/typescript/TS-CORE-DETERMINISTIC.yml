@@ -1,0 +1,14 @@
+id: TS-CORE-DETERMINISTIC
+language: typescript
+severity: error
+message: clock, randomness, process or console inside a core.
+note: "Why: a core decides the same way for the same input, so tests and golden files are stable. Fix: pass the time, ids or settings in as arguments from the flow"
+rule:
+  any:
+    - pattern: Date.now()
+    - pattern: new Date($$$)
+    - pattern: Math.random()
+    - pattern: performance.now()
+    - pattern: crypto.randomUUID()
+    - pattern: process.$PROP
+    - pattern: console.$METHOD($$$)

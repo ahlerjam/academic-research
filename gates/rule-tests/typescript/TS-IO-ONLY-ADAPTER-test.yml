@@ -1,0 +1,7 @@
+id: TS-IO-ONLY-ADAPTER
+valid:
+  - "import { decideHealth } from \"@academic-research/core\";\nexport const f = decideHealth;"
+invalid:
+  - "import { readFile } from \"node:fs/promises\";\nexport const r = readFile;"
+  - "import { spawn } from \"child_process\";\nexport const s = spawn;"
+  - "export const x = fetch(\"https://example.org\");"

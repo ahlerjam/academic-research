@@ -1,0 +1,10 @@
+id: fact-typescript-functions
+language: typescript
+severity: hint
+message: function
+rule:
+  any:
+    - kind: function_declaration
+    - kind: method_definition
+    - kind: arrow_function
+    - kind: function_expression

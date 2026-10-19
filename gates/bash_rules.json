@@ -1,0 +1,43 @@
+{
+  "protected_branches": "main|master",
+  "rules": [
+    {"id": "BASH-FORCE-PUSH", "pattern": "^git push\\b.*(\\s--force(-with-lease|-if-includes)?\\b|\\s-[a-zA-Z]*f[a-zA-Z]*(\\s|$)|\\s\\+\\S)",
+     "message": "force push rewrites shared history; push a new commit or ask the operator"},
+    {"id": "BASH-NO-VERIFY", "pattern": "^git\\b.*\\s--no-v(e(r(i(fy?)?)?)?)?(\\s|$)",
+     "message": "--no-verify skips the hooks; fix the finding instead"},
+    {"id": "BASH-NO-VERIFY", "pattern": "^git commit\\b.*\\s-[a-zA-Z]*n[a-zA-Z]*(\\s|$)",
+     "message": "git commit -n skips the hooks; fix the finding instead"},
+    {"id": "BASH-PROTECTED-PUSH", "pattern": "^git push\\b.*\\s\\+?([\\w./-]*:)?(refs/heads/)?(main|master)(\\s|$)",
+     "message": "push to a protected branch; push a feature branch and open a pull request"},
+    {"id": "BASH-GH-API-MUTATION", "pattern": "^gh api\\b.*(\\s(-X|--method)\\s*=?\\s*(POST|PUT|PATCH|DELETE)\\b|\\s(-f|-F|--field|--raw-field|--input)(\\s|=))",
+     "message": "gh api with a mutating method; use a read-only call or ask the operator"},
+    {"id": "BASH-PUSH-ALL", "pattern": "^git push\\b.*\\s--(mirror|all|prune)\\b",
+     "message": "pushing every ref can overwrite or delete protected branches; push one feature branch"},
+    {"id": "BASH-ADMIN-MERGE", "pattern": "^gh pr merge\\b.*\\s--admin\\b",
+     "message": "--admin bypasses branch protection; wait for the required checks and reviews"},
+    {"id": "BASH-HOOKS-PATH", "pattern": "(?i)^git config\\b.*core\\.hookspath",
+     "message": "changing core.hooksPath switches the git hooks off; ask the operator"},
+    {"id": "BASH-HOOKS-PATH", "scope": "raw", "pattern": "(?i)\\bgit\\b[^;&|\\n]*\\s-c\\s*core\\.hookspath", "message": "git -c core.hooksPath switches the git hooks off; ask the operator"},
+    {"id": "BASH-SHELL-STDIN", "scope": "raw", "pattern": "\\|\\s*(sudo\\s+|env\\s+|exec\\s+)*(\\S*/)?(ba|z|da|k)?sh(\\s+-[a-zA-Z]+)*\\s*($|[;&|)])|\\b(ba|z|da|k)?sh(\\s+-[a-zA-Z]+)*\\s+<<", "message": "a command piped or fed into a shell is hidden from the guard; run the command directly"},
+    {"id": "BASH-OPERATOR-VERB", "pattern": "(^|\\s)\\S*gate\\.py\\s+(baseline|anchor|suppress-baseline)\\b|(^|\\s)\\S*gate\\.py\\s+sync\\b(?!.*--check)|^make\\b(.*\\s)?(controls-baseline|controls-anchor|suppress-baseline|sync)(\\s|$)", "message": "re-baselining, anchoring and syncing the controls is the operator's step; deliver a patch and ask"},
+    {"id": "BASH-GATE-ANCHOR", "pattern": "^git (update-ref|replace|symbolic-ref\\b.*refs/remotes)\\b|^git remote\\s+(remove|rm|rename|set-url|set-head)\\b|^git config\\b(?!.*\\s(--get\\S*|--list|-l)(\\s|$)).*\\bremote\\.|^git branch\\b(?=.*\\s(-[a-zA-Z]*r|--remotes)\\b)(?=.*\\s(-[a-zA-Z]*[dD]|--delete)\\b)", "message": "moving or removing the reference the gates compare against is the operator's step; ask"},
+    {"id": "BASH-ASSUME-UNCHANGED", "pattern": "^git update-index\\b.*--(no-)?(assume-unchanged|skip-worktree)",
+     "message": "hiding changes from git hides them from the gates; ask the operator"},
+    {"id": "BASH-PIPE-TO-SHELL", "scope": "raw", "pattern": "\\b(curl|wget)\\b[^|;&]*\\|\\s*(sudo\\s+)?(ba|z|da)?sh\\b",
+     "message": "piping a download into a shell runs unreviewed code; download, read, then run"},
+    {"id": "BASH-GATES-OFFLINE", "scope": "raw", "pattern": "\\bGATES_OFFLINE\\s*=",
+     "message": "GATES_OFFLINE turns missing tools into skips; run the gates as they are"},
+    {"id": "BASH-SECRET-VENDOR", "scope": "raw", "pattern": "\\b(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}|sk-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,})",
+     "message": "a token with a known vendor prefix ends up in logs; read it from the environment"},
+    {"id": "BASH-SECRET-LITERAL", "scope": "raw", "pattern": "(?i)\\b[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL)[A-Z0-9_]*\\s*=\\s*['\"]?[A-Za-z0-9+/_.~-]{16,}",
+     "message": "a secret literal in a command ends up in logs; read it from the environment"}
+  ],
+  "write_rules": [
+    {"id": "WRITE-SECRET-LITERAL", "pattern": "(?i)\\b[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL)[A-Z0-9_]*['\"]?\\s*[=:]\\s*['\"][A-Za-z0-9+/_.~-]{16,}['\"]",
+     "message": "a secret literal must not be written into a file; read it from the environment or a secret store"},
+    {"id": "WRITE-SECRET-VENDOR", "pattern": "\\b(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}|sk-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,})",
+     "message": "a token with a known vendor prefix must not be written into a file"},
+    {"id": "WRITE-PRIVATE-KEY", "pattern": "-----BEGIN [A-Z ]*PRIVATE KEY-----",
+     "message": "a private key must not be written into a file"}
+  ]
+}

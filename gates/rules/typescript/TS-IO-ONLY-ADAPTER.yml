@@ -1,0 +1,12 @@
+id: TS-IO-ONLY-ADAPTER
+language: typescript
+severity: error
+message: file system, process, network or fetch outside an adapter.
+note: "Why: IO lives in one adapter per foreign system so it can be faked and allow-listed. Fix: add or extend an adapter (server src/adapters/, web src/lib/api.ts) and pass it in"
+rule:
+  any:
+    - kind: import_statement
+      has:
+        kind: string
+        regex: ^['"](node:)?(fs|fs/promises|child_process|net|http|https|dgram|worker_threads|dns|tls)['"]$
+    - pattern: fetch($$$)

@@ -1,0 +1,20 @@
+id: TS-DOC
+language: typescript
+severity: error
+message: an exported function without a JSDoc line.
+note: "Why: the one-sentence doc comment is the contract a reader and a reviewing agent check the code against. Fix: add /** one sentence that says what it returns or does */ above the export"
+rule:
+  kind: export_statement
+  any:
+    - has:
+        kind: function_declaration
+    - has:
+        kind: lexical_declaration
+        has:
+          kind: variable_declarator
+          has:
+            kind: arrow_function
+  not:
+    follows:
+      kind: comment
+      stopBy: neighbor

@@ -1,0 +1,5 @@
+id: TS-CORE-NO-THROW
+valid:
+  - "/** Selftest fixture function. */\nexport function decideX(n: number): number {\n  return n;\n}"
+invalid:
+  - "/** Selftest fixture function. */\nexport function decideX(n: number): number {\n  throw new Error(String(n));\n}"
