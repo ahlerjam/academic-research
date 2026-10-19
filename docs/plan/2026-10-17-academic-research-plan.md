@@ -15,8 +15,9 @@ Goals (v1, each done fully):
 - G4 Copilot: find citations, chat with literature and data, section/TOC drafts, next sentence. All edits arrive as proposals.
 - G5 Collaboration for friends with authorship colours (absent from export), named versions, backup/restore, offline local mode.
 - G6 Supervisor: reproducible rule findings plus advisory LLM findings.
+- G7 Sourcing: a wishlist for every source without a PDF, with links into the user's configured library (DOI, OpenURL link resolver, JOP/ZDB, catalogue template, WorldCat, interlibrary loan) and exports (HTML, CSV, RIS, CSL-JSON, BibTeX), all built by core without a network call (v0.1); source search on click over open metadata services (OpenAlex, Crossref, DNB, K10plus, EconBiz) with deterministic dedupe and legal open-access download with provenance (stage 2a). Operator decision 2026-10-19; design memo: research workflow wf_82b92c7e-f95.
 
-Non-goals (operator, binding): supervisor submission package, reading-bridge cards, interview coding (Mayring), defense training, literature radar, argument map, gamification, MCP server, docx output, custom text format, git as sync engine.
+Non-goals (operator, binding): supervisor submission package, reading-bridge cards, interview coding (Mayring), defense training, literature radar (no background search, subscriptions or alerts; search runs only on a click), argument map, gamification, MCP server, an own docx writer (docx comes through Pandoc from the generated LaTeX, operator decision 2026-10-19), custom text format, git as sync engine, automated download behind a library login.
 
 Anti-goals (failure even if it works):
 - A1 A quote, page number, statistic or quoted string reaches the document unchecked (enforced for free text by the proposal-time validator, T25, not only for cite keys).
@@ -25,7 +26,7 @@ Anti-goals (failure even if it works):
 - A4 Silent fuzzy-accept of a quote, a guessed page, a silent in-place re-extraction.
 - A5 Data loss: a crash or accept-all that cannot be restored.
 - A6 A secret (LLM key, Zotero key) in logs, error reports, client bundle, Yjs, shared DB rows, exports or backups next to its master key.
-- A7 Feature sprawl: any v1 item outside G1-G6.
+- A7 Feature sprawl: any v1 item outside G1-G7.
 - A8 Examiner results that differ between runs and block export.
 - A9 A hover card or trace check that silently fails for a co-author who lacks the PDF (it must degrade visibly, T38).
 - A10 The tool is correct but joyless: slow open, laggy ghost text, no keyboard flow (UX budgets in section 7).
@@ -178,7 +179,7 @@ Stage 4, "open-source readiness" (T44). Stage 5, "staged, not cut" (T45 and sect
 
 ## 9. Explicitly later (staged, not cut)
 
-Ghostwriting whole theses (T45 plans the orchestrated pipeline; the build follows measured copilot cost); hardened hosted isolation (gVisor/VM); Python stats and .sav beyond T35's scope; dense retrieval; passkeys; review baselines and reviewed-ticks; client-side offline persistence for hosted mode; git export of named versions; source discovery and fetch; Zotero local API; local-model adapter; docx transcripts and audio; OCR for scanned PDFs; shared operator key (needs terms answer); .tex import best effort; desktop packaging; span-level authorship; extraction versioning with re-verify reports and an analysis-engine abstraction (build on the first re-extraction or inferential test).
+Ghostwriting whole theses (T45 plans the orchestrated pipeline; the build follows measured copilot cost); hardened hosted isolation (gVisor/VM); Python stats and .sav beyond T35's scope; dense retrieval; passkeys; review baselines and reviewed-ticks; client-side offline persistence for hosted mode; git export of named versions; Zotero local API; local-model adapter; docx transcripts and audio; OCR for scanned PDFs; shared operator key (needs terms answer); .tex import best effort; desktop packaging; span-level authorship; extraction versioning with re-verify reports and an analysis-engine abstraction (build on the first re-extraction or inferential test).
 
 ## 10. Builder's calls (decided 2026-10-17)
 
@@ -191,7 +192,7 @@ Ghostwriting whole theses (T45 plans the orchestrated pipeline; the build follow
 | F5 Authorship granularity | block-level from the change log; span-level later, measured | 0010 |
 | F6 Inferential statistics | the operator answers in T07 (label `needs-operator`); T35 enters stage 2 only if needed | - |
 | F7 Spell and grammar | browser spellcheck in stage 1; LanguageTool decision in T34 after a measurement | - |
-| F8 Source discovery and fetch | not in v1; Zotero plus manual PDF upload (staged later, section 9) | - |
+| F8 Source discovery and fetch | superseded 2026-10-19 by G7: wishlist with library links in v0.1, search on click and legal open-access download in stage 2a | - |
 | F9 Git as history engine | no; change log plus named snapshots, optional one-way git export later | 0010 |
 | F10 Shared sources in collaboration | owner plus `share_with_project` flag; visible degradation for others | 0011 |
 | F11 University template | operator supplies it when available (T07/T19, `needs-operator`); default class + biblatex-apa until then | 0007 |
