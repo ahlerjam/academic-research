@@ -19,10 +19,16 @@ operator's decisions recorded below.
 | 6 | Sourcing: search on a click, legal open-access download, wishlist with links for any library, relevance filter with a screening log | ADR-0015, goal G7 |
 | 7 | SQLite stays; no vector database; local embeddings only if retrieval measurement in T27 stays below recall@10 0.8 | ADR-0006 |
 | 8 | Hard guarantees block export; paraphrase sense and relevance are advisory | ADR-0016 |
-| 9 | docx only through Pandoc from the generated LaTeX | NORTHSTAR, plan section 2 |
-| 10 | UI in German and English, German default, through message codes | this file |
+| 9 | docx only through Pandoc from the generated LaTeX | NORTHSTAR, ADR-0022 |
+| 10 | UI in German and English, German default, through message codes | ADR-0023 |
 | 11 | No separate agent identity on GitHub; no thesis deadline is tracked | this file |
-| 12 | Stage 3: every co-author uses their own Claude Code; a small sync server shares the project | this file |
+| 12 | Stage 3: every co-author uses their own Claude Code; a small sync server shares the project | ADR-0018, supersedes ADR-0011 |
+| 13 | People write through Yjs, agents through block proposals with claims and conflict detection | ADR-0017 |
+| 14 | The mod bridges web app and Claude Code with an automatic token; skills start from the web chat | ADR-0019 |
+| 15 | Autonomous work runs as resumable jobs with a plan-limit pause; accept-all needs a green check | ADR-0020 |
+| 16 | v0.1 is the whole product; stages become internal milestones with their own proofs | ADR-0021 |
+| 17 | LaTeX and PDF primary, docx through Pandoc, PDF/A and export bundle as options | ADR-0022 |
+| 18 | Message codes with German and English text, German default | ADR-0023 |
 
 ## 2. Target picture
 
