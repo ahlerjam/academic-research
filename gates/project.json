@@ -5,7 +5,7 @@
  "github": true,
  "operator_login": "ahlerjam",
  "default_branch": "main",
- "agent_identity": "bot",
+ "agent_identity": "operator",
  "sandbox": false,
  "components": [
   "core",
