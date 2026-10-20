@@ -107,7 +107,7 @@ def verified(event: str, default_branch: str) -> str:
     """Return the wrapper that checks gates/gate.py and gates/lib against the reference commit before it runs."""
     stop = event in ("stop", "subagent-stop")
     return (VERIFIED.replace("{gone}", GONE if stop else "").replace("{release}", RELEASE if stop else "")
-            .replace("{ref}", f"origin/{default_branch}").replace("{event}", event))
+            .replace("{ref}", f"refs/remotes/origin/{default_branch}").replace("{event}", event))
 
 
 def settings(tree: str) -> str:
