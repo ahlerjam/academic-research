@@ -10,11 +10,13 @@ cross-references as typed nodes and generates LaTeX, PDF and docx through the un
 any common citation style. Every citation can carry an anchored passage, for a direct quote as well
 as for a paraphrase: source, printed page and the exact text range. Quotes, pages, numbers and cite
 keys are checked by code, never by a model; what is not anchored is listed, and a broken trace
-blocks the export. Hovering a citation shows the anchored passage with its printed page; a direct
+blocks the export (only a quote from a print-only source without a stored copy may pass, marked
+not checked, after a logged confirmation). Hovering a citation shows the anchored passage with its printed page; a direct
 quote is additionally checked verbatim. A number is a live reference to an analysis of the
 author's own data; an interview quote points at a transcript line, without writing code.
 The tool helps to find and obtain sources: on a click it searches open metadata services, downloads
-what is legally open access, and puts everything else on a wishlist with links into the author's
+what is legally open access, captures web pages, laws and print sources with a stored copy, and
+puts everything else on a wishlist with links into the author's
 own library (DOI, link resolver, catalogue, interlibrary loan), configurable for any library.
 The AI is the author's own Claude Code, connected through an academic-research plugin: a chat,
 autocomplete and agents beside the editor suggest the next sentence, research sources, draft
@@ -33,8 +35,8 @@ fully. Plan: `docs/plan/2026-10-17-academic-research-plan.md` with
 
 Hypotheses, checked by T23 and T44:
 
-- Students writing a bachelor or master thesis in German or English who keep their sources in
-  Zotero or as PDFs and write in APA or another author-date style; footnote styles follow once
+- Students writing a bachelor or master thesis in German or English who keep their sources as
+  PDFs, BibTeX or RIS (Zotero follows after v0.1) and write in APA or another author-date style; footnote styles follow once
   spike T05 has shown them. The AI features need Claude Code; everything else works without it.
 - Their co-authors and friends, each with their own Claude Code, sharing a project (stage 3).
 - Not yet: users without any compile path (Docker, host TeX, or an external TeX for the export
@@ -44,12 +46,12 @@ Hypotheses, checked by T23 and T44:
 
 | Stage (milestone) | Outcome | Proof |
 | --- | --- | --- |
-| 1 | Write and compile one real chapter locally: structured editor, Zotero and PDFs, anchored citations (quote or paraphrase) with hover and quote check, LaTeX/PDF with template, trace check, versions and backup, install | `proof.yml` stage 1 green; the operator writes and exports a real chapter (T23) |
-| v0.1 | First public release: the whole product, every milestone in this table green (M1 = stage 1 with the wishlist and a library profile, M2a, M2b, M3, M5), plus open-source basics and the release pipeline | every milestone proof green on main, T44a and T44c done, tag `v0.1.0` (ADR-0021) |
+| 1 | Write and compile one real chapter locally: structured editor, PDFs and BibTeX/RIS import, anchored citations (quote or paraphrase) with hover and quote check, LaTeX/PDF with template, trace check, versions and backup, install | `proof.yml` stage 1 green; an agent writes and exports a real chapter from CC-licensed sources and the operator reviews it (T23) |
+| v0.1 | First public release: the whole product, every milestone in this table green (M1 = stage 1 with the wishlist and a library profile, M2a, M2b, M3, M5 with stage 4), plus open-source basics and the release pipeline | every milestone proof green on main, T44, T44a and T44c done, tag `v0.1.0` (ADR-0027) |
 | 2a | Own data and sources without a model: live numbers, result tables, transcript quotes, deletion path for interview data, source search on click and legal open-access download | `proof.yml` stage 2a green; a chapter with a live number, a result table and a transcript quote, exported without a model call; a search that adds an open-access PDF with its provenance |
 | 2b | Copilot through the Claude Code plugin: chat, autocomplete and agents in the web app, proposals with review and provenance, AI-usage annex | `proof.yml` stage 2b green; bridge test per supported Claude Code version; validator and injection fixtures; recall@10 >= 0.8; annex test |
 | 3 | Friends: shared projects through a sync server, auth, people and agents writing at once with block-level colours, comments, examiner | `proof.yml` stage 3 green; two users and an agent on one project; byte-identical mixed-author export |
-| 4 | Open-source readiness | licence report, tested install docs on three OSes |
+| 4 (in M5) | Open-source readiness | licence report, tested install docs on three OSes |
 | 5 | Whole-thesis drafting, designed from measured costs | written design approved by the operator |
 
 ## Non-goals
@@ -63,8 +65,8 @@ Hypotheses, checked by T23 and T44:
 - No AI edit outside a proposal; Claude never operates the web app to change the thesis.
 - No fuzzy acceptance of a quote, no model judgement as an export gate, no printed page without a
   derivation or a user setting.
-- No telemetry; outbound connections only on the user's click and only to Zotero, open metadata and
-  open-access services; model calls run only in the user's own Claude Code session; thesis text
+- No telemetry; outbound connections only on the user's click and only to open metadata, open-access and
+  legal-text services and to a web page the user captures; model calls run only in the user's own Claude Code session; thesis text
   never goes to a search service.
 - No mobile or tablet layout in v1; desktop browsers only.
 - No feature outside the plan's goals G1-G7.
