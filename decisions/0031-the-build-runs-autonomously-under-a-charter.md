@@ -22,7 +22,7 @@ One lead session runs `/goal` with `docs/autonomy/lead-goal.md`, takes the order
 validated verbs of `ops/conductor/gh_ops.py`; workflows and subagents return actions and change
 nothing themselves. GitHub merges a pull request by auto-merge once `gate` and `protect` are green,
 never with `--admin`. An hourly routine takes over when the lead's lease on `conductor/state` is
-older than two hours. `release.yml` publishes only after a green dry run of the same commit, green
+older than one hour. `release.yml` publishes only after a green dry run of the same commit, green
 proofs and the panel's `verdict: release`. The agent, workflow and lead-kit files are kernel files,
 so whoever builds cannot change what checks it. Whoever writes code does not write its tests,
 whoever reviews does not write, whoever judges has done neither.

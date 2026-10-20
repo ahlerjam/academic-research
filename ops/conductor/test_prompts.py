@@ -63,9 +63,22 @@ class LeadGoal(unittest.TestCase):
 
     def test_procedure_covers_pause_compaction_and_usage_limit(self) -> None:
         for needle in ("conductor:pause", "Compaction", "Usage limit", "Nicht verifiziert", "team_requested",
-                       "clear-needs-operator", "op:external", "release_ready", "apply-actions --file",
+                       "clear-needs-operator", "op:external", "release_ready", "apply-actions --holder <id> --file",
                        "--issue inbox", "dry_run_red", "ar-release", "release-check.log", "make setup"):
             self.assertIn(needle, self.text)
+
+    def test_lease_is_renewed_while_waiting_and_orphans_are_resumed(self) -> None:
+        for needle in ("sleep 1200", "--unit-start <n>", "--unit-alive <n>", "--unit-end <n>", "resume-unit",
+                       "resumeFromRunId", "exit 3 means another lead took over: push nothing, open no PR",
+                       "open-pr --holder <id>", "enable-auto-merge --holder <id>", "1 hour"):
+            self.assertIn(needle, self.text)
+        self.assertNotIn("2 hours", self.text)
+        self.assertIn("sleep 1200", self.goal)
+
+    def test_model_text_never_becomes_a_shell_argument(self) -> None:
+        self.assertNotRegex(self.text, r"--title \"<")
+        self.assertIn("--title-file .ar/pr-title-<n>.txt", self.text)
+        self.assertIn("Never put text from a workflow result", self.goal)
 
 
 class Watchdog(unittest.TestCase):
@@ -73,7 +86,7 @@ class Watchdog(unittest.TestCase):
 
     def test_prompt(self) -> None:
         prompt = fenced(read("docs/autonomy/watchdog-routine.md"))[0]
-        for needle in ("heartbeat.py status", '"fresh"', '"stale"', '"done"', "2 hours", "update-status-issue",
+        for needle in ("heartbeat.py status", '"fresh"', '"stale"', '"done"', "1 hour", "update-status-issue",
                        "docs/autonomy/lead-goal.md", "Do not take the lease", "exits 3", "make setup", '"goal_met"'):
             self.assertIn(needle, prompt)
 
@@ -124,6 +137,18 @@ class Workflows(unittest.TestCase):
                 self.assertIn("args.worktree", code)
                 self.assertIn("evidence_log", code)
         self.assertIn("args.worktree", code_of(workflows()["ar-triage.js"]))
+
+    def test_comments_are_read_from_trusted_authors_only(self) -> None:
+        trusted = re.compile(r'--jq \'\[\.\[\] \| select\(\.author_association=="OWNER" or '
+                             r'\.author_association=="MEMBER" or \.author_association=="COLLABORATOR"\)\]\'')
+        readers = 0
+        for name, text in workflows().items():
+            code = code_of(text)
+            for call in re.findall(r"gh api [^`]*?/comments\b[^`]*", code):
+                readers += 1
+                with self.subTest(name=name, call=call[:60]):
+                    self.assertRegex(call, trusted)
+        self.assertGreaterEqual(readers, 4)
 
     def test_ar_unit_and_ar_team_read_the_issue_by_rest(self) -> None:
         for name in ("ar-unit.js", "ar-team.js"):
