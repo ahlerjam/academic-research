@@ -1,0 +1,57 @@
+{
+ "stage": "2a",
+ "milestone": "M2a",
+ "issue": 101,
+ "outcome": "Own data and sources without a model: live numbers, result tables, transcript quotes, deletion path for interview data, source search on click and legal open-access download",
+ "proof": "a chapter with a live number, a result table and a transcript quote, exported without a model call; a search that adds an open-access PDF with its provenance",
+ "contracts": [
+  {
+   "id": "S2A-EXPORT-WITHOUT-MODEL",
+   "northstar": "a chapter with a live number, a result table and a transcript quote, exported without a model call",
+   "evidence": "e2e",
+   "artefact": "tex",
+   "negative": "A transcript quote altered by one word in the document is reported and the export is blocked.",
+   "source": "#101 AC2, AC3, AC11"
+  },
+  {
+   "id": "S2A-DATUM-STALE",
+   "northstar": "A number is a live reference to an analysis of the author's own data",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A dataset value changed without re-running the analysis is reported as stale-datum and the export is blocked.",
+   "source": "#101 AC4"
+  },
+  {
+   "id": "S2A-DELETION-SENTINEL",
+   "northstar": "deletion path for interview data",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "After the transcript holding a sentinel is deleted with purge from history, a byte search finds the sentinel in none of the database, WAL, FTS index, snapshots and backup, and every tquote to it is reported stale and blocks the export.",
+   "source": "#101 AC5, AC6"
+  },
+  {
+   "id": "S2A-OA-DOWNLOAD",
+   "northstar": "a search that adds an open-access PDF with its provenance",
+   "evidence": "e2e",
+   "artefact": "pdf",
+   "negative": "A closed record is put on the wishlist and not downloaded, and a download that fails the content-type check becomes blocked with its landing page.",
+   "source": "#101 AC7, AC8"
+  },
+  {
+   "id": "S2A-SEARCH-ON-CLICK",
+   "northstar": "thesis text never goes to a search service",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "While a chapter holding a sentinel sentence is open, the search fake records no request before the click and never receives the sentinel.",
+   "source": "#101 AC9, AC11"
+  },
+  {
+   "id": "S2A-CAPTURE-COPY",
+   "northstar": "captures web pages, laws and print sources with a stored copy",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A quote with one changed word against the captured copy fails the trace check.",
+   "source": "#101 AC14; operator answer 49"
+  }
+ ]
+}

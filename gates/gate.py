@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single entry point of the gates: hook, check, lint, drift, sync, baseline, anchor, selftest, bench, doctor, adr."""
+"""Single entry point of the gates: hook, check, lint, drift, sync, baseline, anchor, selftest, bench, doctor, adr, migration, proof-verify."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lib import adr, catalog, doctor, drift, engine, findings, gitx, guard, hooks, manifest  # noqa: E402
-from lib import repo, roles, selftest, suppress, sync  # noqa: E402
+from lib import migrations, proofs, repo, roles, selftest, suppress, sync  # noqa: E402
 
 
 def _tree() -> str:
@@ -66,6 +66,10 @@ def main(argv: list) -> int:
     adr_p.add_argument("--tag", default="")
     adr_p.add_argument("--query", default="")
     adr_p.add_argument("--title", default="")
+    mig_p = sub.add_parser("migration")
+    mig_p.add_argument("action", choices=["new"])
+    mig_p.add_argument("--name", default="")
+    sub.add_parser("proof-verify").add_argument("--stage", required=True, choices=proofs.STAGES)
     args = parser.parse_args(argv)
     if args.cmd == "hook":
         return hooks.main(args.event)
@@ -137,6 +141,17 @@ def main(argv: list) -> int:
         with open(os.path.join(gitx.state_dir(tree), "setup.json"), "w", encoding="utf-8") as handle:
             json.dump({"at": time.time()}, handle)
         return 0
+    if args.cmd == "migration":
+        if not args.name.strip():
+            sys.stderr.write("migration new needs NAME=<snake_case>\n")
+            return 2
+        print(migrations.new(tree, args.name.strip()))
+        return 0
+    if args.cmd == "proof-verify":
+        found, lines = proofs.verify(tree, args.stage)
+        for line in lines:
+            print(line)
+        return _finish(tree, f"proof-verify-{args.stage}", found, started)
     if args.cmd == "adr":
         lang = (adr.project(tree) or {}).get("doc_lang", "en")
         if args.action == "index":

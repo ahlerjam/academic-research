@@ -1,0 +1,32 @@
+{
+ "stage": "4",
+ "milestone": "M5",
+ "issue": null,
+ "outcome": "Open-source readiness",
+ "proof": "licence report, tested install docs on three OSes",
+ "contracts": [
+  {
+   "id": "S4-LICENCE-REPORT",
+   "northstar": "licence report",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A dependency with a licence outside the allowlist turns the licence report red.",
+   "source": "NORTHSTAR stage 4"
+  },
+  {
+   "id": "S4-INSTALL-DOCS",
+   "northstar": "tested install docs on three OSes",
+   "evidence": "e2e",
+   "artefact": "text",
+   "negative": "The install smoke started on a port that is already in use fails with a message naming the port instead of binding another one.",
+   "source": "NORTHSTAR stage 4; operator patch item 2 (--strictPort)"
+  },
+  {
+   "id": "S4-INSTALL-OTHER-OSES",
+   "northstar": "tested install docs on three OSes",
+   "evidence": "operator",
+   "operator": "The operator dispatches the install-smoke OS matrix and links the green macOS and Windows runs in the release ticket.",
+   "source": "NORTHSTAR stage 4; operator patch item 14"
+  }
+ ]
+}
