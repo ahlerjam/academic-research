@@ -1,7 +1,7 @@
 ---
 id: 21
 title: v0.1 is the whole product; stages become internal milestones with their own proofs
-status: accepted
+status: superseded
 tags: [release, scope, stages, proof]
 ---
 

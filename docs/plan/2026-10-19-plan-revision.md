@@ -113,9 +113,28 @@ label and one epic per capability; v0.1 is the sum of all milestones (ADR-0021).
 
 ## 7. Open questions for the operator
 
-- Whether the plugin's use of the user's plan is within Anthropic's terms for a distributed
-  open-source project (ADR-0013); a request to Anthropic is recommended.
-- Rights review of the open-access licence allowlist before automated download (ADR-0015).
-- JOP registration (SID) for availability checks; the TIB link resolver address.
-- AI Act Article 50 classification before the copilot ships.
-- Whether prompts and answers are stored per project (opt-in) or only model, feature and time.
+Answered on 2026-10-20, see §8. Still open: the TIB link resolver address (checked with the
+profile's test link, ADR-0015) and the operator's request to Anthropic about the plugin's use of
+the user's plan (ADR-0013); M2b is built in parallel and does not wait for the answer.
+
+## 8. Decisions of 2026-10-20
+
+| Topic | Decision | Record |
+| --- | --- | --- |
+| UI layer | Vanilla TypeScript DOM with a tested element builder; one ADR with message rendering, keyboard and layout as its rules; the agent proposes window width and shortcuts | ADR-UI (#67) |
+| Templates | T07 writes generic memos with placeholders; universities follow later as profiles | T07 (#5) |
+| Anthropic terms | The operator asks Anthropic; M2b is built in parallel | ADR-0013 |
+| Personal data, prompts | Per-project opt-in for each, off by default | ADR-0025 |
+| Sources without DOI or ISBN | Captured with a stored copy (web snapshot, law XML, scan), by form or with the assistant; only print-only quotes without a copy are "not checked" with a logged export confirmation | ADR-0024, N13 |
+| docx | In M1 through Pandoc (T19b, T22) | ADR-0022 |
+| Citation suggestion | Off by default; when switched on, Haiku may only reorder deterministic candidates | B4 (#71) |
+| Stage 4 | Part of M5 and of v0.1 | ADR-0027 |
+| New tickets | Methodology checklists (N14) and grey-literature capture (N13); no JOP check, no citation graph | ADR-0027 |
+| Zotero | After v0.1 (`milestone:later`, #53) | ADR-0027 |
+| S1 | Closed | ADR-0027 |
+| T23 | An agent writes the dogfood chapter from CC-licensed articles; the operator reviews it | T23 (#25) |
+| Plugin | `packages/plugin` in the workspace and the install entry point; bridge tested on the current and previous stable Claude Code | ADR-0028 |
+| LanguageTool | Kept as an optional, switchable check after measurement | T34 (#37) |
+| Gold set | An agent writes 30 questions from CC-licensed articles, a second agent checks them | T27 (#30) |
+| Legal review | The operator checked open-access download, AI Act and library links for personal use; no further memos | N7, N8, N2 |
+| Agent identity | Agents work as the operator; ADR-0003's last sentence is replaced | ADR-0026 |
