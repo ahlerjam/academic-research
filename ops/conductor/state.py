@@ -5,11 +5,13 @@ Usage (read-only, prints JSON):
     python3 -I ops/conductor/state.py --status-body   # markdown body for the status issue
 
 Inputs, all through `gh api` GET: unit issues (label `unit`, hidden header `<!-- unit: {...} -->`), open and
-recently merged pull requests into main with their check runs, the status issue (kill switch `conductor:pause`),
-legacy `needs-operator` tickets, the dispatched proof.yml and release.yml runs on main (read the same way
-release.yml reads them: newest completed run per run name), the head of main, `docs/autonomy/progress.json` on
-the state branch (usage-limit stops), CHANGELOG, the release verdict and the release tag. Pure decisions sit at
-the top, the GitHub reads below.
+recently merged pull requests into main with their check runs, the status issue, every issue open or closed
+with the kill switch `conductor:pause`, legacy `needs-operator` tickets, the dispatched proof.yml and release.yml
+runs on main (read the same way release.yml reads them: newest completed run per run name), the head of main,
+`docs/autonomy/progress.json` on the state branch (lease, units the lease holder reports alive, usage-limit
+stops), CHANGELOG, the release verdict and the release tag. A `state:building` unit without a PR whose workflow
+the live lease holder has not reported within `orphan_after_s` is an orphan: the next step resumes it. Pure
+decisions sit at the top, the GitHub reads below.
 """
 
 from __future__ import annotations
@@ -36,6 +38,8 @@ FAIL_CONCLUSIONS = ("failure", "timed_out", "action_required", "startup_failure"
 INFRA_CONCLUSIONS = ("cancelled",)
 BLOCKING_LABELS = ("needs-operator", "state:parked", "state:stuck")
 ANTHROPIC_KEEP_LABEL = "op:external"
+PAUSE_LABEL = "conductor:pause"
+FUTURE_SLACK_S = 300.0
 
 
 # ---------------------------------------------------------------- pure decisions
@@ -45,6 +49,45 @@ def load_config(path: Optional[str] = None) -> dict:
     """Read ops/conductor/config.json (or the given file)."""
     with open(path or os.path.join(HERE, "config.json"), encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _epoch(value: object) -> Optional[float]:
+    """Return a number of epoch seconds, or None for anything else."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def lease_future(progress: dict, now: float) -> bool:
+    """Return whether the lease names a beat further ahead than the clock slack; such a lease never expires (corrupt)."""
+    lease = progress.get("lease") if isinstance(progress.get("lease"), dict) else {}
+    beat = _epoch(lease.get("beat_at"))
+    return bool(lease.get("holder")) and beat is not None and beat > now + FUTURE_SLACK_S
+
+
+def lease_age(progress: dict, now: float) -> Optional[float]:
+    """Return the age of the lease in seconds, or None without a valid lease (missing, or a beat in the future)."""
+    lease = progress.get("lease") if isinstance(progress.get("lease"), dict) else {}
+    beat = _epoch(lease.get("beat_at"))
+    if not lease.get("holder") or beat is None or lease_future(progress, now):
+        return None
+    return max(0.0, now - beat)
+
+
+def live_units(progress: dict, now: float, lease_max_age_s: float, orphan_after_s: float) -> List[int]:
+    """Return the units whose workflow the live lease holder reported alive within orphan_after_s."""
+    age = lease_age(progress, now)
+    if age is None or age > lease_max_age_s:
+        return []
+    holder = progress["lease"]["holder"]
+    units = progress.get("units") if isinstance(progress.get("units"), dict) else {}
+    out = []
+    for key, rec in units.items():
+        beat = _epoch(rec.get("beat_at")) if isinstance(rec, dict) else None
+        if (beat is not None and str(key).isdigit() and rec.get("holder") == holder
+                and -FUTURE_SLACK_S <= now - beat <= orphan_after_s):
+            out.append(int(key))
+    return sorted(out)
 
 
 def glob_regex(glob: str) -> "re.Pattern[str]":
@@ -415,7 +458,7 @@ def legacy_operator(issues: Sequence[dict]) -> List[dict]:
 def next_steps(s: dict) -> List[dict]:
     """Order the lead's next actions; the lead takes the first one it can do and re-runs state.py afterwards."""
     if s["paused"]:
-        return [{"do": "pause", "why": "label conductor:pause on the status issue"}]
+        return [{"do": "pause", "why": "label conductor:pause on an issue"}]
     if s["goal_met"]:
         return [{"do": "stop", "why": "v" + s["release"]["version"] + " released and every milestone proof green"}]
     steps: List[dict] = []
@@ -424,7 +467,10 @@ def next_steps(s: dict) -> List[dict]:
             steps.append({"do": "rerun", "pr": pr["number"], "unit": pr["unit"], "runs": pr["infra_runs"]})
         elif pr["action"] != "wait":
             steps.append({"do": pr["action"], "pr": pr["number"], "unit": pr["unit"]})
-    idle = not s["ready"] and not s["in_flight"] and not s["prs"]
+    for number in s["orphans"]:
+        steps.append({"do": "resume-unit", "unit": number,
+                      "why": "state:building without a PR and without a live workflow of the lease holder"})
+    idle = not s["ready"] and not s["in_flight"] and not s["prs"] and not s["orphans"]
     rel = s["release"]
     if rel["release_ready"] and not rel["running"]:
         steps.append({"do": "dispatch-release", "dry_run": False, "version": rel["version"]})
@@ -542,20 +588,23 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
               and unit_of_branch(p.get("head", {}).get("ref", ""), cfg["unit_branch_prefix"])]
     status_issues = [i for i in github.get_all(t, f"repos/{repo}/issues?state=open&labels=conductor")
                      if i.get("title") == cfg["status_title"] and "pull_request" not in i]
-    paused = any("conductor:pause" in label_names(i) for i in status_issues)
+    paused = bool(github.get_all(t, f"repos/{repo}/issues?state=all&labels={PAUSE_LABEL}"))
     legacy = legacy_operator([i for i in github.get_all(t, f"repos/{repo}/issues?state=open&labels=needs-operator")
                               if "pull_request" not in i])
+    alive = set(live_units(progress, now, float(cfg["lease_max_age_s"]), float(cfg["orphan_after_s"])))
 
     open_units = [u for u in units if u["open"]]
     cycles = find_cycles(open_units)
     in_cycle = {n for c in cycles for n in c}
-    in_flight, ready, blocked = [], [], []
+    in_flight, ready, blocked, orphans = [], [], [], []
     for u in open_units:
         u["blocked_by"] = [{"issue": d, "status": dep_status(d, issues)} for d in u["deps"]
                            if dep_status(d, issues) != "done"]
         hit = [lab for lab in BLOCKING_LABELS if lab in u["labels"]]
-        if "state:building" in u["labels"] or u["number"] in pr_units:
+        if u["number"] in pr_units or ("state:building" in u["labels"] and u["number"] in alive):
             in_flight.append(u)
+        elif "state:building" in u["labels"]:
+            orphans.append(u["number"])
         elif not u["header_ok"]:
             blocked.append(dict(u, why="no unit header"))
         elif u["workflow"] is None:
@@ -603,6 +652,7 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
         "status_issue": status_issues[0]["number"] if status_issues else None,
         "wip": wip, "slots": slots,
         "in_flight": [{"unit": u["number"], "kind": u["kind"], "paths": u["paths"]} for u in in_flight],
+        "orphans": sorted(orphans),
         "ready": [u["number"] for u in sorted(ready, key=lambda u: priority_key(u, desc, cfg["slices"]))],
         "pick": [{"number": u["number"], "title": u["title"], "kind": u["kind"], "workflow": u["workflow"],
                   "slice": u["slice"], "risk": u["risk"], "tags": u["tags"], "paths": u["paths"]} for u in pick],
@@ -612,7 +662,7 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
         "next_milestone": next_open["stage"] if next_open else None,
         "release": release, "forecast": fc,
         "last_merged": {"pr": last["number"], "head": last["head"]["ref"], "at": last["merged_at"]} if last else None,
-        "progress_corrupt": bool(progress.get("corrupt")),
+        "progress_corrupt": bool(progress.get("corrupt")) or lease_future(progress, now),
     }
     state["goal_met"] = released and all(m["green"] for m in milestones)
     state["next"] = next_steps(state)
@@ -633,7 +683,8 @@ def render_status(s: dict) -> str:
         "# Conductor status",
         "",
         f"- Paused: {'yes' if s['paused'] else 'no'}; goal met: {'yes' if s['goal_met'] else 'no'}",
-        f"- In flight: {', '.join('#' + str(u['unit']) for u in s['in_flight']) or 'none'}; WIP {s['wip']}",
+        f"- In flight: {', '.join('#' + str(u['unit']) for u in s['in_flight']) or 'none'}; WIP {s['wip']}; "
+        f"orphaned: {', '.join('#' + str(n) for n in s['orphans']) or 'none'}",
         f"- Ready: {', '.join('#' + str(n) for n in s['ready']) or 'none'}; blocked: {len(s['blocked'])}",
         f"- Open PRs: {', '.join('#' + str(p['number']) + ' ' + p['verdict'] for p in s['prs']) or 'none'}",
         f"- Last merged: {('#' + str(last['pr']) + ' at ' + last['at']) if last else 'none'}",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 import state
-from test_state import NOW, unit, world
+from test_state import NOW, live, unit, world
 
 CFG = state.load_config()
 
@@ -36,15 +36,17 @@ class Kinds(unittest.TestCase):
         many = [{"number": 80 + i, "merged_at": "2027-01-14T00:00:00Z", "head": {"ref": f"claude/unit-{40 + i}-x"}}
                 for i in range(3)]
         g = world([unit(1, kind="plan", labels=["kind:plan", "state:building"], paths=[]),
-                   unit(2, paths=["packages/core/**"])], merged=many)
+                   unit(2, paths=["packages/core/**"])], merged=many, progress=live([1]))
         s = state.compute(g, CFG, NOW)
+        self.assertEqual([u["unit"] for u in s["in_flight"]], [1])
         self.assertEqual([u["number"] for u in s["pick"]], [2])
         self.assertEqual(s["deferred_overlap"], [])
 
     def test_build_unit_without_paths_still_blocks_other_builds(self) -> None:
         many = [{"number": 80 + i, "merged_at": "2027-01-14T00:00:00Z", "head": {"ref": f"claude/unit-{40 + i}-x"}}
                 for i in range(3)]
-        g = world([unit(1, labels=["state:building"], paths=[]), unit(2, paths=["packages/core/**"])], merged=many)
+        g = world([unit(1, labels=["state:building"], paths=[]), unit(2, paths=["packages/core/**"])], merged=many,
+                  progress=live([1]))
         s = state.compute(g, CFG, NOW)
         self.assertEqual(s["pick"], [])
         self.assertEqual(s["deferred_overlap"], [2])

@@ -4,12 +4,16 @@ Usage:
     python3 -I ops/conductor/heartbeat.py new-holder          # once per lead session; prints and caches the id
     python3 -I ops/conductor/heartbeat.py whoami              # the cached holder id of this checkout
     python3 -I ops/conductor/heartbeat.py status              # watch done|fresh|stale plus the progress (read-only)
-    python3 -I ops/conductor/heartbeat.py beat --holder H [--unit-in-flight N ...] [--next-step T] [--note T]
-        [--run proof:1=RUN_ID] [--limit-stop] [--state-file .ar/state.json] [--goal-met]
+    python3 -I ops/conductor/heartbeat.py beat --holder H [--unit-start N] [--unit-alive N] [--unit-end N]
+        [--clear-units] [--next-step T] [--note T] [--run proof:1=RUN_ID] [--limit-stop]
+        [--state-file .ar/state.json] [--goal-met]
 
 The branch holds one file and is written with git plumbing (hash-object, mktree, commit-tree) and a plain,
 never forced push, so the lead's working tree is untouched. A rejected push means another writer won: the
-beat re-reads and decides again. A second lead takes over only when the lease is older than 2 hours.
+beat re-reads and decides again. A second lead takes over only when the lease is older than
+`lease_max_age_s` (1 hour); a beat time further in the future than 5 minutes is corrupt and frees the lease.
+`units` records, per unit, the holder whose workflow runs it and when that holder last saw it alive; state.py
+treats a building unit without such a fresh record as an orphan to resume.
 Exit codes: 0 done, 1 git error (a refused push counts), 3 the lease belongs to another holder.
 """
 
@@ -37,6 +41,9 @@ RUN_RX = re.compile(r"^(proof:[0-9][a-z]?|release-dry:[0-9]+\.[0-9]+\.[0-9]+)=([
 NOTES_KEEP = 20
 PUSH_TRIES = 3
 REJECTED = ("non-fast-forward", "fetch first", "[rejected]", "stale info", "cannot lock ref")
+# constraint: a fresh routine VM may have no git identity and commit-tree then fails; this identity applies only
+# when git config names no user and the environment sets none, so a configured identity always wins.
+IDENTITY = ("academic-research conductor", "conductor@users.noreply.github.com")
 
 
 class GitError(Exception):
@@ -46,17 +53,9 @@ class GitError(Exception):
 # ---------------------------------------------------------------- pure decisions
 
 
-def lease_age(progress: dict, now: float) -> Optional[float]:
-    """Return the age of the lease in seconds, or None without a lease."""
-    lease = progress.get("lease") if isinstance(progress.get("lease"), dict) else None
-    if not lease or not lease.get("holder"):
-        return None
-    return max(0.0, now - float(lease.get("beat_at") or 0))
-
-
 def decide_lease(progress: dict, holder: Optional[str], now: float, max_age_s: float) -> dict:
-    """Decide free, own, takeover (lease older than max_age_s) or held for one would-be holder."""
-    age = lease_age(progress, now)
+    """Decide free (no lease, or a corrupt future beat), own, takeover (older than max_age_s) or held."""
+    age = state.lease_age(progress, now)
     current = (progress.get("lease") or {}).get("holder") if age is not None else None
     if age is None:
         kind = "free"
@@ -88,9 +87,22 @@ def apply_beat(progress: dict, holder: str, now: float, updates: dict) -> dict:
         takeovers = out.get("takeovers") if isinstance(out.get("takeovers"), list) else []
         takeovers.append({"from": old.get("holder"), "to": holder, "at": now})
         out["takeovers"] = takeovers[-NOTES_KEEP:]
-    for key in ("unit_in_flight", "next_step", "forecast", "last_merged"):
+    out.pop("unit_in_flight", None)
+    for key in ("next_step", "forecast", "last_merged"):
         if key in updates:
             out[key] = updates[key]
+    units = {} if updates.get("clear_units") or not isinstance(out.get("units"), dict) else dict(out["units"])
+    for number in updates.get("unit_end", []):
+        units.pop(str(number), None)
+    for number in updates.get("unit_start", []):
+        units[str(number)] = {"holder": holder, "started_at": now, "beat_at": now}
+    for number in updates.get("unit_alive", []):
+        rec = units.get(str(number))
+        if isinstance(rec, dict) and rec.get("holder") == holder:
+            units[str(number)] = dict(rec, beat_at=now)
+        else:
+            units[str(number)] = {"holder": holder, "started_at": now, "beat_at": now}
+    out["units"] = units
     if updates.get("runs"):
         runs = out.get("runs") if isinstance(out.get("runs"), dict) else {}
         runs.update(updates["runs"])
@@ -121,10 +133,21 @@ def parse_runs(items: Sequence[str]) -> Dict[str, str]:
 # ---------------------------------------------------------------- git
 
 
-def git(repo: str, args: Sequence[str], stdin: Optional[str] = None) -> subprocess.CompletedProcess:
+def git(repo: str, args: Sequence[str], stdin: Optional[str] = None,
+        extra_env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
     """Run git in repo without raising, with English messages so rejections can be recognised."""
     env = dict(os.environ, LC_ALL="C", LANGUAGE="C")
+    for key, value in (extra_env or {}).items():
+        env.setdefault(key, value)
     return subprocess.run(["git", *args], cwd=repo, input=stdin, capture_output=True, text=True, timeout=120, env=env)
+
+
+def identity_env(repo: str) -> Dict[str, str]:
+    """Return the fallback identity for commit-tree when git config names no user, else nothing."""
+    if git(repo, ["config", "user.name"]).stdout.strip() and git(repo, ["config", "user.email"]).stdout.strip():
+        return {}
+    return {"GIT_AUTHOR_NAME": IDENTITY[0], "GIT_COMMITTER_NAME": IDENTITY[0],
+            "GIT_AUTHOR_EMAIL": IDENTITY[1], "GIT_COMMITTER_EMAIL": IDENTITY[1]}
 
 
 def _ok(proc: subprocess.CompletedProcess, what: str) -> str:
@@ -169,7 +192,7 @@ def commit_file(repo: str, parent: Optional[str], path: str, text: str, message:
         entry = f"040000 tree {tree}\t{name}\n"
     root = _ok(git(repo, ["mktree"], stdin=entry), "mktree")
     args = ["commit-tree", root, "-m", message] + (["-p", parent] if parent else [])
-    return _ok(git(repo, args), "commit-tree")
+    return _ok(git(repo, args, extra_env=identity_env(repo)), "commit-tree")
 
 
 def push(repo: str, commit: str, branch: str) -> str:
@@ -194,7 +217,7 @@ def holder_file(repo: str) -> str:
 
 
 def beat(repo: str, cfg: dict, holder: str, now: float, updates: dict) -> dict:
-    """Renew the lease and merge updates; refuse when another holder owns a lease of at most 2 hours."""
+    """Renew the lease and merge updates; refuse when another holder owns a lease of at most lease_max_age_s."""
     if not HOLDER_RX.match(holder or ""):
         raise ValueError(f"--holder must match {HOLDER_RX.pattern}")
     for _ in range(PUSH_TRIES):
@@ -222,8 +245,14 @@ def status(repo: str, cfg: dict, now: float) -> dict:
 def _updates(a: argparse.Namespace) -> dict:
     """Collect the beat updates from the command line."""
     up: dict = {}
-    if a.unit_in_flight is not None:
-        up["unit_in_flight"] = sorted(set(a.unit_in_flight))
+    for key in ("unit_start", "unit_alive", "unit_end"):
+        values = getattr(a, key) or []
+        if any(n < 1 for n in values):
+            raise ValueError(f"--{key.replace('_', '-')} must be a positive unit number")
+        if values:
+            up[key] = sorted(set(values))
+    if a.clear_units:
+        up["clear_units"] = True
     if a.next_step:
         up["next_step"] = a.next_step[:500]
     if a.note:
@@ -257,27 +286,32 @@ def _holder_verb(repo: str, create: bool) -> dict:
         return {"holder": handle.read().strip() or None}
 
 
-def main(argv: Optional[Sequence[str]] = None, repo: Optional[str] = None, cfg: Optional[dict] = None) -> int:
-    """Run one heartbeat verb and print JSON."""
+def main(argv: Optional[Sequence[str]] = None, repo: Optional[str] = None, cfg: Optional[dict] = None,
+         now: Optional[float] = None) -> int:
+    """Run one heartbeat verb and print JSON; the clock is always the real one except when a test passes now."""
     p = argparse.ArgumentParser(prog="heartbeat.py", description=__doc__.splitlines()[0])
-    p.add_argument("--now", type=float, default=None, help="epoch seconds (tests only)")
     sub = p.add_subparsers(dest="verb", required=True)
     sub.add_parser("new-holder")
     sub.add_parser("whoami")
     sub.add_parser("status")
     b = sub.add_parser("beat")
     b.add_argument("--holder", required=True)
-    b.add_argument("--unit-in-flight", type=int, action="append")
+    b.add_argument("--unit-start", type=int, action="append", help="a workflow for this unit starts now")
+    b.add_argument("--unit-alive", type=int, action="append", help="the workflow for this unit still runs")
+    b.add_argument("--unit-end", type=int, action="append", help="the unit's PR is open or its card is filed")
+    b.add_argument("--clear-units", action="store_true", help="forget every unit record")
     b.add_argument("--next-step")
     b.add_argument("--note")
     b.add_argument("--run", action="append")
     b.add_argument("--limit-stop", action="store_true")
     b.add_argument("--goal-met", action="store_true")
     b.add_argument("--state-file")
+    for verb_parser in [p] + list(sub.choices.values()):
+        verb_parser.allow_abbrev = False
     a = p.parse_args(argv)
     cfg = cfg or state.load_config()
     repo = repo or os.getcwd()
-    now = a.now if a.now is not None else time.time()
+    now = now if now is not None else time.time()
     try:
         if a.verb in ("new-holder", "whoami"):
             out = _holder_verb(repo, a.verb == "new-holder")

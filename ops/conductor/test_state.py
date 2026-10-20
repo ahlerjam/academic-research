@@ -48,7 +48,7 @@ def runs_path(workflow: str) -> str:
 
 
 def world(units, prs=(), merged=(), progress=None, status_labels=(), legacy=(), files=None, release=None,
-          runs=None, main_sha=MAIN_SHA) -> FakeGitHub:
+          runs=None, main_sha=MAIN_SHA, paused=()) -> FakeGitHub:
     """Build a fake GitHub with the given objects and empty defaults for everything else."""
     g = FakeGitHub()
     g.set("issues?state=all&labels=unit", list(units))
@@ -61,6 +61,8 @@ def world(units, prs=(), merged=(), progress=None, status_labels=(), legacy=(), 
     status_issue = {"number": 5, "title": "Conductor status", "state": "open",
                     "labels": [{"name": "conductor"}] + [{"name": n} for n in status_labels]}
     g.set("issues?state=open&labels=conductor", [status_issue])
+    g.set("issues?state=all&labels=conductor:pause",
+          ([status_issue] if "conductor:pause" in status_labels else []) + list(paused))
     g.set("issues?state=open&labels=needs-operator", list(legacy))
     if progress is not None:
         g.set_file("docs/autonomy/progress.json", "conductor/state", json.dumps(progress))
@@ -150,7 +152,8 @@ class PathOverlap(unittest.TestCase):
     def test_overlap_with_unit_in_flight_defers(self) -> None:
         many = [pr(80 + i, f"claude/unit-{40 + i}-x", f"m{i}", merged_at=iso(NOW - DAY)) for i in range(3)]
         g = world([unit(1, labels=["state:building"], paths=["packages/core/**"]),
-                   unit(2, paths=["packages/core/src/a.ts"]), unit(3, paths=["packages/web/**"])], merged=many)
+                   unit(2, paths=["packages/core/src/a.ts"]), unit(3, paths=["packages/web/**"])], merged=many,
+                  progress=live([1]))
         s = state.compute(g, CFG, NOW)
         self.assertEqual([u["unit"] for u in s["in_flight"]], [1])
         self.assertEqual([u["number"] for u in s["pick"]], [3])
@@ -177,6 +180,53 @@ class PathOverlap(unittest.TestCase):
         self.assertEqual([u["unit"] for u in s["in_flight"]], [1])
         self.assertEqual(s["slots"], 0)
         self.assertEqual(s["pick"], [])
+
+
+def live(numbers, holder="lead-a", beat=NOW - 600, unit_beat=NOW - 600, unit_holder=None) -> dict:
+    """Build progress.json with a lease and unit records the given holder reported alive."""
+    return {"lease": {"holder": holder, "acquired_at": NOW - DAY, "beat_at": beat},
+            "units": {str(n): {"holder": unit_holder or holder, "started_at": NOW - DAY, "beat_at": unit_beat}
+                      for n in numbers}}
+
+
+class Orphans(unittest.TestCase):
+    """A building unit without a PR counts as in flight only while the live lease holder reports its workflow."""
+
+    def building(self, progress) -> dict:
+        g = world([unit(1, labels=["state:building"], paths=["a/**"]), unit(2, paths=["b/**"])], progress=progress)
+        return state.compute(g, CFG, NOW)
+
+    def test_a_live_unit_is_in_flight(self) -> None:
+        s = self.building(live([1]))
+        self.assertEqual(([u["unit"] for u in s["in_flight"]], s["orphans"], s["slots"]), ([1], [], 0))
+        self.assertEqual([x["do"] for x in s["next"]], ["wait"])
+
+    def test_orphans_are_resumed_instead_of_waited_for(self) -> None:
+        cases = {
+            "no progress at all": None,
+            "no unit record": live([]),
+            "record of another holder": live([1], unit_holder="lead-old"),
+            "workflow not reported for over an hour": live([1], unit_beat=NOW - CFG["orphan_after_s"] - 1),
+            "lease stale after a recycled VM": live([1], beat=NOW - CFG["lease_max_age_s"] - 1),
+            "lease beat in the future": live([1], beat=NOW + 10_000),
+        }
+        for why, progress in cases.items():
+            with self.subTest(why=why):
+                s = self.building(progress)
+                self.assertEqual((s["in_flight"], s["orphans"]), ([], [1]))
+                self.assertEqual(s["next"][0]["do"], "resume-unit")
+                self.assertEqual(s["next"][0]["unit"], 1)
+                self.assertNotIn("plan", [x["do"] for x in s["next"]])
+
+    def test_a_building_unit_with_an_open_pr_is_never_an_orphan(self) -> None:
+        g = world([unit(1, labels=["state:building"], paths=["a/**"])],
+                  prs=[(pr(30, "claude/unit-1-x", "s1"), checks(("gate", "in_progress", None)))])
+        s = state.compute(g, CFG, NOW)
+        self.assertEqual(([u["unit"] for u in s["in_flight"]], s["orphans"]), ([1], []))
+
+    def test_a_future_lease_marks_the_progress_corrupt(self) -> None:
+        self.assertTrue(self.building(live([1], beat=NOW + 301))["progress_corrupt"])
+        self.assertFalse(self.building(live([1], beat=NOW + 299))["progress_corrupt"])
 
 
 class PullRequests(unittest.TestCase):
@@ -356,6 +406,13 @@ class Operator(unittest.TestCase):
         s = state.compute(g, CFG, NOW)
         self.assertTrue(s["paused"])
         self.assertEqual([x["do"] for x in s["next"]], ["pause"])
+
+    def test_a_closed_or_renamed_issue_with_the_pause_label_still_pauses(self) -> None:
+        for issue in ({"number": 5, "title": "Conductor status", "state": "closed", "labels": [{"name": "conductor:pause"}]},
+                      {"number": 9, "title": "anything", "state": "open", "labels": [{"name": "conductor:pause"}]}):
+            with self.subTest(issue=issue["number"]):
+                s = state.compute(world([unit(1)], paused=[issue]), CFG, NOW)
+                self.assertEqual([x["do"] for x in s["next"]], ["pause"])
 
     def test_legacy_tickets_clear_except_the_anthropic_request(self) -> None:
         legacy = [{"number": 99, "title": "OP-1", "state": "open", "labels": [{"name": "needs-operator"}]},
