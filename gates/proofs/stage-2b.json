@@ -74,8 +74,8 @@
    "id": "S2B-BRIDGE-REAL",
    "northstar": "bridge test per supported Claude Code version",
    "evidence": "operator",
-   "operator": "Before each release the operator runs scripts/bridge/run-bridge-test-real.sh for the current and the previous stable Claude Code release and pastes the bridge-test V real lines into the release ticket.",
-   "source": "#102 AC3, AC17; operator answer 45"
+   "operator": "Before each release the lead session runs scripts/bridge/run-bridge-test-real.sh for the current and the previous stable Claude Code release under the operator's Claude Code login (docs/autonomy/charter.md section 3, real runs) and pastes the bridge-test V real lines into the release ticket; the release panel (.claude/workflows/ar-release.js) checks them. Whether that login reaches a nested claude process in the cloud VM is Nicht verifiziert; without the lines the panel holds the release.",
+   "source": "#102 AC3, AC17; operator answer 45; operator decisions 4 and 8 of 2026-10-20"
   }
  ]
 }

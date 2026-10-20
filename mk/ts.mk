@@ -38,8 +38,11 @@ test-e2e: ## Browser end-to-end tests (Playwright, added with the first UI ticke
 test-acceptance: ## Slice acceptance specs in packages/web/e2e/scenario (heavy, not in the stop gate)
 	@if [ -d packages/web/e2e/scenario ]; then $(BIN)/playwright test -c packages/web/playwright.config.ts packages/web/e2e/scenario/; else echo "test-acceptance: no scenario specs yet"; fi
 
-proof: ## Run the proof specs of one stage and write proof-out/<id>.json: make proof STAGE=<1|2a|2b|3|4|5>
+# constraint: proof-verify takes PASS only from the runner's JSON report proof-out/stage-<s>.report.json (gates/proofs/README.md)
+proof: ## Run the proof specs of one stage; writes proof-out/stage-<s>.report.json and proof-out/<id>.json: make proof STAGE=<1|2a|2b|3|4|5>
 	@case "$(STAGE)" in 1|2a|2b|3|4|5) ;; *) echo "proof: STAGE must be one of 1 2a 2b 3 4 5"; exit 1;; esac
 	@specs=$$(ls packages/web/e2e/proof/stage-$(STAGE)*.spec.ts 2>/dev/null); \
 		test -n "$$specs" || { echo "packages/web/e2e/proof:1 [GATES-INFRA] proof: no spec for stage $(STAGE)"; exit 1; }; \
-		rm -rf proof-out && mkdir proof-out && PROOF_OUT="$(CURDIR)/proof-out" $(BIN)/playwright test -c packages/web/playwright.config.ts $$specs
+		rm -rf proof-out && mkdir proof-out && PROOF_OUT="$(CURDIR)/proof-out" \
+		PLAYWRIGHT_JSON_OUTPUT_FILE="$(CURDIR)/proof-out/stage-$(STAGE).report.json" \
+		$(BIN)/playwright test -c packages/web/playwright.config.ts --reporter=json $$specs

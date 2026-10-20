@@ -290,5 +290,6 @@ def verify(tree: str, stage: str) -> Tuple[List[Finding], List[str]]:
         found += mine
         lines.append(f"{'FAIL' if mine or report is None else 'PASS'} {cid}")
     if any(line.startswith("OPEN") for line in lines):
-        lines.append(f"Stage {stage} counts as done only when the operator closes the OPEN items; they never pass here.")
+        lines.append(f"Stage {stage}: the OPEN items never pass here; the judge panel rules on each by the text above "
+                     "and records it in its ticket and in docs/release/<version>.md (docs/autonomy/charter.md section 3).")
     return found, lines

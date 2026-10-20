@@ -2,8 +2,8 @@
 
 Operator file. One `stage-<s>.json` per NORTHSTAR stage (`1`, `2a`, `2b`, `3`, `4`, `5`). A milestone is
 done only when `python3 -I gates/gate.py proof-verify --stage <s>` is green on main after
-`make proof STAGE=<s>` (workflow `proof.yml`), and the operator has closed every `OPEN (operator)` item.
-The contract grows only through the operator.
+`make proof STAGE=<s>` (workflow `proof.yml`), and the judge panel has ruled on every `OPEN (operator)` item
+(`docs/autonomy/charter.md` section 3). The contract grows only through the operator.
 
 ## Contract file
 
@@ -13,12 +13,16 @@ The contract grows only through the operator.
 - `evidence: "e2e"` needs `artefact` (one of the kinds below) and `negative` (the mandatory negative case:
   a deliberately wrong input or fault and the rejection that must follow). `threshold`
   (`{"metric", "min"}`) makes a measured number part of the contract.
-- `evidence: "operator"` needs `operator` (what the operator does). proof-verify prints it as OPEN and never
-  counts it as passed.
+- `evidence: "operator"` (the name predates operator decision 6 of 2026-10-20) needs `operator`: what happens
+  outside the runner and who records it. proof-verify prints it as OPEN and never counts it as passed; the
+  judge panel (`ar-judge`, and `ar-release` before a release) rules on it and records the verdict in the
+  ticket and in `docs/release/<version>.md`.
 
 ## What a proof spec delivers
 
-Specs live in `packages/web/e2e/proof/` and run through `make proof STAGE=<s>`.
+Specs live in `packages/web/e2e/proof/` and run through `make proof STAGE=<s>`, which collects only the files
+`packages/web/e2e/proof/stage-<s>*.spec.ts`; name a spec `stage-<s>-<topic>.spec.ts` (for example
+`stage-1-quote-exact.spec.ts`). The contract id goes into the test title, never only into the file name.
 
 1. **Runner report.** `make proof` writes the Playwright JSON report to `proof-out/stage-<s>.report.json`.
    PASS comes only from this report, never from a file a spec writes.

@@ -25,8 +25,8 @@
    "id": "S4-INSTALL-OTHER-OSES",
    "northstar": "tested install docs on three OSes",
    "evidence": "operator",
-   "operator": "The operator dispatches the install-smoke OS matrix and links the green macOS and Windows runs in the release ticket.",
-   "source": "NORTHSTAR stage 4; operator patch item 14"
+   "operator": "The release panel (.claude/workflows/ar-release.js) checks the install docs for macOS and Windows: it links a green install run per OS where one exists and otherwise writes 'Nicht verifiziert: no runner for <OS>' in docs/release/<version>.md. No OS-matrix workflow exists yet; adding one is a kernel change (.github/**), filed as an op:kernel issue, never a unit.",
+   "source": "NORTHSTAR stage 4; operator patch item 14 (install-smoke optional, not built); operator decision 8 of 2026-10-20"
   }
  ]
 }
