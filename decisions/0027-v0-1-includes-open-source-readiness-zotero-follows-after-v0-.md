@@ -18,8 +18,9 @@ proof in `proof.yml` is green on main. Stage 4 (licence report, tested install o
 systems, T44) is part of M5, so tag `v0.1.0` requires every milestone, the open-source basics
 (T44a), the release pipeline (T44c) and T44. The Zotero adapter (T13) carries the label
 `milestone:later` and is tracked in #53; nothing in v0.1 depends on it, and cite keys, CSL items and
-imports live in the library core (T13a) and manual sources (T14). S1 is closed. Methodology
-checklists (N14) join M2b. Issues carry a milestone label and a wave label; each capability has an
+imports live in the library core (T13a) and manual sources (T14). S1 is closed. The engine for
+inferential statistics (T35) also moves to `milestone:later`, because v0.1 computes descriptive
+statistics only. Methodology checklists (N14) join M3, after the review skill of T43. Issues carry a milestone label and a wave label; each capability has an
 epic.
 
 Rejected: a public release per stage (ADR-0021); Zotero in M1 without a user who tests it.
