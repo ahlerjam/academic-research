@@ -16,7 +16,8 @@ Decision: The plugin lives in `packages/plugin` of the pnpm workspace, shares th
 `packages/core` and runs under the same gates; it gets its own role in `gates/roles.json` through an
 operator patch. It is also the install entry point: the user installs the plugin, and one command
 of it downloads the app release, checks Docker or host TeX and Pandoc, starts the local web app and
-opens its guided setup. The bridge test runs against the current and the previous stable Claude
+opens its guided setup. A Docker image of the whole app ships in addition for users who prefer a
+container; it publishes its port on 127.0.0.1 only. The bridge test runs against the current and the previous stable Claude
 Code release; an older version is detected at start and shown with a hint to update.
 
 Rejected: a separate plugin repository (types and gates twice); native installers per operating

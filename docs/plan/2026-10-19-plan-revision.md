@@ -138,3 +138,19 @@ the user's plan (ADR-0013); M2b is built in parallel and does not wait for the a
 | Gold set | An agent writes 30 questions from CC-licensed articles, a second agent checks them | T27 (#30) |
 | Legal review | The operator checked open-access download, AI Act and library links for personal use; no further memos | N7, N8, N2 |
 | Agent identity | Agents work as the operator; ADR-0003's last sentence is replaced | ADR-0026 |
+| rawLatex, injected deletions | AI may propose rawLatex changes for single review only; deletions influenced by external text always need a single review | ADR-0029 |
+| Removed member | Everything the member shared stays shared, marked `owner-removed` | ADR-0030 |
+| Literature text to Claude | No extra switch; only personal data is gated | ADR-0025, T28 |
+| Autocomplete at the plan threshold | Pauses with the jobs at the threshold (default 80 %), can be switched back on | B3 |
+| Imports | Duplicates merge on DOI or valid ISBN, title matches are candidates; valid free cite keys from `.bib` are kept | T14, T13a |
+| `add_to_wishlist` | Creates marked, removable entries directly; P3 allows this exception | N9, P3 |
+| Embeddings | Vectors are not backed up; they are recomputed | N5 |
+| False-alarm limits | The agent proposes them from a measurement; the operator confirms in the PR | T25, T42a |
+| "ebd." at the top of a page | Measured only | T05, T42a |
+| Document language | Follows the interface language; per project changeable | T11 |
+| Compile mode | Per machine, a project may override; an app image ships in v0.1 | T22, ADR-0028 |
+| Licence notice, DCO | "The academic-research contributors"; agent commits carry the operator's sign-off | T44, T44a |
+| Release tag | The release workflow creates the tag after a green verify; the plugin is in the archives | T44c |
+| Update-log compaction | Automatic above a measured size while idle, with a backup first, plus a command | Tx |
+| Ghost text | The operator rates 20 suggestions; the B1 budget and login are approved; P1 proves docx | T32, B1, P1 |
+| Smaller points | Wishlist panel in N1; no more chair profiles now (N10); the v0.1 aggregate check in T44c; the demo shows an anchored cite (T44a); `SOURCE_URL` is the GitHub repository; SECURITY supports the latest 0.x; P2 without T34 and T35; the annex lists decisions on proposals only (P5); CI operating systems and TeX installers are the agent's choice | tickets |
