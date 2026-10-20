@@ -66,7 +66,8 @@ Hypotheses, checked by T23 and T44:
 - No fuzzy acceptance of a quote, no model judgement as an export gate, no printed page without a
   derivation or a user setting.
 - No telemetry; outbound connections only on the user's click and only to open metadata, open-access and
-  legal-text services and to a web page the user captures; model calls run only in the user's own Claude Code session; thesis text
+  legal-text services, to a web page the user captures and to the pinned, hash-checked download of a local
+  embedding model; model calls run only in the user's own Claude Code session; thesis text
   never goes to a search service.
 - No mobile or tablet layout in v1; desktop browsers only.
 - No feature outside the plan's goals G1-G7.
