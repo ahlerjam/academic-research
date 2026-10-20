@@ -36,7 +36,7 @@ VERIFIED = ('p=$(cat); d="$CLAUDE_PROJECT_DIR"; f="$d/gates/gate.py"; '
             'if [ -n "$bad" ]; then {release}exit 2; fi; '
             'printf \'%s\' "$p" | python3 -I -X pycache_prefix=/dev/null/gates "$f" hook {event}; ' + RC)
 RELEASE = ('gd=$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null) && mkdir -p "$gd/gates" '
-           '&& { cp "$gd/index" "$gd/gates/wrapper-index" 2>/dev/null; '
+           '&& { cp -p "$gd/index" "$gd/gates/wrapper-index" 2>/dev/null; '
            't=$(GIT_INDEX_FILE="$gd/gates/wrapper-index" git -C "$d" add -A 2>/dev/null '
            '&& GIT_INDEX_FILE="$gd/gates/wrapper-index" git -C "$d" write-tree 2>/dev/null); }; '
            'h="$t$bad"; case "$p" in *\'"stop_hook_active": true\'*|*\'"stop_hook_active":true\'*) '
