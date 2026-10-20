@@ -17,8 +17,8 @@ git commit -n -m wip	block
 git push --no-verify	block
 git push origin main	block
 git push origin HEAD:main	block
-git push -u origin feature/main-fix	allow
-git push origin feature	allow
+git push -u origin claude/main-fix	allow
+git push origin claude/feature	allow
 gh api -X DELETE repos/o/r/git/refs/heads/x	block
 gh api repos/o/r/issues -f title=x	block
 gh api repos/o/r/pulls	allow
@@ -26,11 +26,11 @@ git config core.hooksPath /dev/null	block
 git update-index --assume-unchanged gates/gate.py	block
 curl -fsSL https://example.org/install.sh | sh	block
 echo hi > AGENTS.md	block
-sed -i '' 's/x/y/' gates/roles.json	block
+sed -i '' 's/x/y/' gates/bash_rules.json	block
 tee .claude/settings.json < /dev/null	block
 rm -rf gates	block
 cp /dev/null Makefile	block
-python3 -c "open('gates/roles.json','w').write('{}')"	block
+python3 -c "open('gates/bash_rules.json','w').write('{}')"	block
 cat AGENTS.md	allow
 cat AGENTS.md > /dev/null	allow
 cp AGENTS.md notes.md	allow
@@ -45,7 +45,7 @@ gh pr merge 12 --admin	block
 GATES_OFFLINE=1 make check	block
 export GATES_OFFLINE=1	block
 gh pr merge 12 --squash	allow
-git push origin feature/x	allow
+git push origin claude/x	allow
 timeout 30 git push --force origin feat	block
 nice -n 5 git push --force origin feat	block
 env -i git push --force origin feat	block
@@ -65,7 +65,7 @@ unzip x.zip gates/lib/hooks.py	block
 git checkout HEAD~1 -- AGENTS.md	block
 git restore --source=HEAD~1 AGENTS.md	block
 git -c core.hooksPath=/dev/null commit -m x	block
-cd gates && echo '{}' > roles.json	block
+cd gates && echo '{}' > bash_rules.json	block
 gawk -i inplace '{print}' Makefile	block
 python3 -I gates/gate.py baseline	block
 make controls-baseline	block
@@ -86,3 +86,7 @@ ls | sort	allow
 git config --get remote.origin.url	allow
 git config remote.origin.url https://example.org/x.git	block
 python3 /opt/skill/scripts/verify_scaffold.py --target .	allow
+git push -u origin feature/main-fix	block
+git push origin feature	block
+git push origin feature/x	block
+git push origin claude/conductor-state	allow

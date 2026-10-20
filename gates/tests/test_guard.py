@@ -201,7 +201,10 @@ class PackageTsconfig(GuardCase):
         extra = {"packages/core/tsconfig.json": json.dumps(CORE_TSCONFIG)}
         if template:
             extra[guard.TEMPLATE] = json.dumps(TEMPLATE)
-        return self.tree(extra)
+        root = self.tree(extra)
+        if not template and os.path.isfile(os.path.join(root, guard.TEMPLATE)):
+            os.remove(os.path.join(root, guard.TEMPLATE))
+        return root
 
     def test_include_is_free(self) -> None:
         root = self.base()
@@ -223,6 +226,7 @@ class PackageTsconfig(GuardCase):
 
     def test_missing_template_is_red(self) -> None:
         root = self.base(template=False)
+        self.assertFalse(os.path.exists(os.path.join(root, guard.TEMPLATE)))
         _dump(root, "packages/extra/tsconfig.json", TEMPLATE)
         self.assertEqual(_whats(root, "packages/extra/tsconfig.json"),
                          [f"cannot compare as plain JSON with {guard.TEMPLATE}"])
