@@ -12,5 +12,16 @@
   "server",
   "web"
  ],
- "extra_settings": {}
+ "extra_settings": {
+  "env": {
+   "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+   "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+   "BASH_DEFAULT_TIMEOUT_MS": "600000"
+  },
+  "attribution": {
+   "commit": "",
+   "pr": "",
+   "sessionUrl": false
+  }
+ }
 }
