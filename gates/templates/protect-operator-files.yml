@@ -34,7 +34,14 @@ jobs:
               sys.exit("no kernel globs embedded; the check stays red")
           control = lambda f: any(g.match(f) for g in globs)
           repo, pr = os.environ["REPO"], os.environ["PR"]
-          names = api(f"repos/{repo}/pulls/{pr}/files", ".[] | .filename, (.previous_filename // empty)")
+          rows = api(f"repos/{repo}/pulls/{pr}/files", '.[] | [.filename, (.previous_filename // "")] | @json')
+          listed = [json.loads(row) for row in rows]
+          changed = int(json.loads(api(f"repos/{repo}/pulls/{pr}", ".changed_files")[0]))
+          # constraint: the files endpoint lists at most 3000 files (GitHub REST docs), so a PR with more, or with
+          # more changed files than were listed, could hide a kernel path behind filler; fail closed.
+          if changed >= 3000 or changed > len(listed):
+              sys.exit(f"the PR changes {changed} files and {len(listed)} were listed; too many to check, the check stays red")
+          names = [name for pair in listed for name in pair if name]
           touched = sorted({f for f in names if control(f)})
           if touched:
               sys.exit("kernel paths changed (the operator merges these with a bypass, never this check): " + ", ".join(touched))
