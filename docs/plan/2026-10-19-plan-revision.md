@@ -113,9 +113,44 @@ label and one epic per capability; v0.1 is the sum of all milestones (ADR-0021).
 
 ## 7. Open questions for the operator
 
-- Whether the plugin's use of the user's plan is within Anthropic's terms for a distributed
-  open-source project (ADR-0013); a request to Anthropic is recommended.
-- Rights review of the open-access licence allowlist before automated download (ADR-0015).
-- JOP registration (SID) for availability checks; the TIB link resolver address.
-- AI Act Article 50 classification before the copilot ships.
-- Whether prompts and answers are stored per project (opt-in) or only model, feature and time.
+Answered on 2026-10-20, see §8. Still open: the TIB link resolver address (checked with the
+profile's test link, ADR-0015) and the operator's request to Anthropic about the plugin's use of
+the user's plan (ADR-0013); M2b is built in parallel and does not wait for the answer.
+
+## 8. Decisions of 2026-10-20
+
+| Topic | Decision | Record |
+| --- | --- | --- |
+| UI layer | Vanilla TypeScript DOM with a tested element builder; one ADR with message rendering, keyboard and layout as its rules; the agent proposes window width and shortcuts | ADR-UI (#67) |
+| Templates | T07 writes generic memos with placeholders; universities follow later as profiles | T07 (#5) |
+| Anthropic terms | The operator asks Anthropic; M2b is built in parallel | ADR-0013 |
+| Personal data, prompts | Per-project opt-in for each, off by default | ADR-0025 |
+| Sources without DOI or ISBN | Captured with a stored copy (web snapshot, law XML, scan), by form or with the assistant; only print-only quotes without a copy are "not checked" with a logged export confirmation | ADR-0024, N13 |
+| docx | In M1 through Pandoc (T19b, T22) | ADR-0022 |
+| Citation suggestion | Off by default; when switched on, Haiku may only reorder deterministic candidates | B4 (#71) |
+| Stage 4 | Part of M5 and of v0.1 | ADR-0027 |
+| New tickets | Methodology checklists (N14) and grey-literature capture (N13); no JOP check, no citation graph | ADR-0027 |
+| Zotero | After v0.1 (`milestone:later`, #53) | ADR-0027 |
+| S1 | Closed | ADR-0027 |
+| T23 | An agent writes the dogfood chapter from CC-licensed articles; the operator reviews it | T23 (#25) |
+| Plugin | `packages/plugin` in the workspace and the install entry point; bridge tested on the current and previous stable Claude Code | ADR-0028 |
+| LanguageTool | Kept as an optional, switchable check after measurement | T34 (#37) |
+| Gold set | An agent writes 30 questions from CC-licensed articles, a second agent checks them | T27 (#30) |
+| Legal review | The operator checked open-access download, AI Act and library links for personal use; no further memos | N7, N8, N2 |
+| Agent identity | Agents work as the operator; ADR-0003's last sentence is replaced | ADR-0026 |
+| rawLatex, injected deletions | AI may propose rawLatex changes for single review only; deletions influenced by external text always need a single review | ADR-0029 |
+| Removed member | Everything the member shared stays shared, marked `owner-removed` | ADR-0030 |
+| Literature text to Claude | No extra switch; only personal data is gated | ADR-0025, T28 |
+| Autocomplete at the plan threshold | Pauses with the jobs at the threshold (default 80 %), can be switched back on | B3 |
+| Imports | Duplicates merge on DOI or valid ISBN, title matches are candidates; valid free cite keys from `.bib` are kept | T14, T13a |
+| `add_to_wishlist` | Creates marked, removable entries directly; P3 allows this exception | N9, P3 |
+| Embeddings | Vectors are not backed up; they are recomputed | N5 |
+| False-alarm limits | The agent proposes them from a measurement; the operator confirms in the PR | T25, T42a |
+| "ebd." at the top of a page | Measured only | T05, T42a |
+| Document language | Follows the interface language; per project changeable | T11 |
+| Compile mode | Per machine, a project may override; an app image ships in v0.1 | T22, ADR-0028 |
+| Licence notice, DCO | "The academic-research contributors"; agent commits carry the operator's sign-off | T44, T44a |
+| Release tag | The release workflow creates the tag after a green verify; the plugin is in the archives | T44c |
+| Update-log compaction | Automatic above a measured size while idle, with a backup first, plus a command | Tx |
+| Ghost text | The operator rates 20 suggestions; the B1 budget and login are approved; P1 proves docx | T32, B1, P1 |
+| Smaller points | Wishlist panel in N1; no more chair profiles now (N10); the v0.1 aggregate check in T44c; the demo shows an anchored cite (T44a); `SOURCE_URL` is the GitHub repository; SECURITY supports the latest 0.x; P2 without T34 and T35; the annex lists decisions on proposals only (P5); CI operating systems and TeX installers are the agent's choice | tickets |
