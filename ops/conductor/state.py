@@ -6,8 +6,10 @@ Usage (read-only, prints JSON):
 
 Inputs, all through `gh api` GET: unit issues (label `unit`, hidden header `<!-- unit: {...} -->`), open and
 recently merged pull requests into main with their check runs, the status issue (kill switch `conductor:pause`),
-legacy `needs-operator` tickets, proof and release runs recorded in `docs/autonomy/progress.json` on the state
-branch, CHANGELOG, the release verdict and the release tag. Pure decisions sit at the top, the GitHub reads below.
+legacy `needs-operator` tickets, the dispatched proof.yml and release.yml runs on main (read the same way
+release.yml reads them: newest completed run per run name), the head of main, `docs/autonomy/progress.json` on
+the state branch (usage-limit stops), CHANGELOG, the release verdict and the release tag. Pure decisions sit at
+the top, the GitHub reads below.
 """
 
 from __future__ import annotations
@@ -313,10 +315,18 @@ def proof_prefix(stage: str) -> str:
     return "S" + stage.upper() + "-"
 
 
+def newest_runs(rows: Sequence[dict], title: str) -> Tuple[Optional[dict], bool]:
+    """Return the newest completed run with exactly this run name, and whether one with that name is still running."""
+    named = [r for r in rows if str(r.get("display_title") or "") == title]
+    done = sorted((r for r in named if r.get("status") == "completed"), key=lambda r: str(r.get("created_at") or ""),
+                  reverse=True)
+    return (done[0] if done else None), any(r.get("status") != "completed" for r in named)
+
+
 def stage_status(stage: str, run: Optional[dict], workflow: str, base: str) -> dict:
-    """Judge a recorded run: green only for a successful workflow_dispatch run of the workflow on main."""
+    """Judge a run: green only for a successful workflow_dispatch run of the workflow on main."""
     if run is None:
-        return {"stage": stage, "green": False, "why": "no run recorded"}
+        return {"stage": stage, "green": False, "why": "no completed run"}
     path = str(run.get("path") or "")
     title = str(run.get("display_title") or "")
     named = re.search(r"\bstage\s+([0-9][a-z]?)\b", title, re.I)
@@ -335,27 +345,42 @@ def stage_status(stage: str, run: Optional[dict], workflow: str, base: str) -> d
             "why": "; ".join(problems) or "green"}
 
 
+def dry_run_green(rows: Sequence[dict], version: str, main_sha: Optional[str], workflow: str, base: str) -> bool:
+    """Return whether a successful dry run `release <version> dry_run=true` exists for the current head of main."""
+    title = f"release {version} dry_run=true"
+    for run in rows:
+        if (str(run.get("display_title") or "") == title and main_sha and run.get("head_sha") == main_sha
+                and stage_status("dry-run", run, workflow, base)["green"]):
+            return True
+    return False
+
+
 def changelog_has(text: str, version: str) -> bool:
-    """Return whether a CHANGELOG has a heading for the version."""
-    return bool(re.search(r"^#+\s*\[?v?" + re.escape(version) + r"\]?(\s|$)", text or "", re.M))
+    """Return whether a CHANGELOG has the heading release.yml demands: `## <version>` or `## [<version>]`, v allowed."""
+    return bool(re.search(r"^## \[?v?" + re.escape(version) + r"\]?(\s|$)", text or "", re.M))
 
 
 def verdict_is_release(text: str) -> bool:
-    """Return whether a judge verdict file says `verdict: release`."""
-    return bool(re.search(r"^\s*verdict:\s*release\s*$", text or "", re.M))
+    """Return whether a judge verdict file has exactly one line starting with `verdict:` and it is `verdict: release`."""
+    return [line for line in (text or "").splitlines() if line.startswith("verdict:")] == ["verdict: release"]
 
 
 def release_checks(stages: Sequence[dict], changelog: Optional[str], verdict: Optional[str],
-                   dry_run: Optional[dict], released: bool, version: str, workflow: str, base: str) -> dict:
+                   dry_ok: bool, released: bool) -> dict:
     """Return every release condition with its state; release_ready is their AND (and false once released)."""
     checks = {
         "proofs_green": bool(stages) and all(s["green"] for s in stages),
-        "changelog_entry": changelog_has(changelog or "", version),
+        "changelog_entry": changelog_has(changelog or "", version_of(stages)),
         "judge_verdict": verdict_is_release(verdict or ""),
-        "dry_run_green": stage_status("dry-run", dry_run, workflow, base)["green"],
+        "dry_run_green": dry_ok,
         "not_yet_released": not released,
     }
     return {"checks": checks, "release_ready": all(checks.values())}
+
+
+def version_of(stages: Sequence[dict]) -> str:
+    """Return the release version the stage records carry (set by compute)."""
+    return str(stages[0].get("version", "")) if stages else ""
 
 
 def forecast(merged_at: Sequence[float], now: float, window_days: int, remaining_next: int,
@@ -399,23 +424,28 @@ def next_steps(s: dict) -> List[dict]:
             steps.append({"do": "rerun", "pr": pr["number"], "unit": pr["unit"], "runs": pr["infra_runs"]})
         elif pr["action"] != "wait":
             steps.append({"do": pr["action"], "pr": pr["number"], "unit": pr["unit"]})
-    if s["release"]["release_ready"]:
-        steps.append({"do": "dispatch-release", "dry_run": False, "version": s["release"]["version"]})
-    elif s["release"]["checks"]["proofs_green"]:
-        missing = [k for k, v in s["release"]["checks"].items() if not v]
-        steps.append({"do": "release-prep", "missing": missing})
+    idle = not s["ready"] and not s["in_flight"] and not s["prs"]
+    rel = s["release"]
+    if rel["release_ready"] and not rel["running"]:
+        steps.append({"do": "dispatch-release", "dry_run": False, "version": rel["version"]})
+    elif rel["checks"]["proofs_green"] and not rel["release_ready"] and not rel["running"] and idle:
+        prep = {"do": "release-prep", "missing": [k for k, v in rel["checks"].items() if not v]}
+        if rel["dry_run_red"]:
+            prep["dry_run_red"] = rel["dry_run_red"]
+        steps.append(prep)
     for st in s["milestones"]:
-        if not st["green"] and st["done_units"] > 0 and st["open_units"] == 0:
+        if not st["green"] and not st["running"] and st["done_units"] > 0 and st["open_units"] == 0:
             steps.append({"do": "dispatch-proof", "stage": st["stage"]})
     clear = [x["number"] for x in s["legacy_operator"] if x["action"] == "clear"]
     if clear:
         steps.append({"do": "clear-needs-operator", "issues": clear})
     for unit in s["pick"]:
         steps.append({"do": "start-unit", "unit": unit["number"], "kind": unit["kind"], "workflow": unit["workflow"]})
-    if not s["ready"] and not s["in_flight"] and not s["prs"]:
+    if idle and not rel["checks"]["proofs_green"]:
         steps.append({"do": "plan", "why": "no ready, running or open unit"})
     if not steps:
-        steps.append({"do": "wait", "why": "units in flight or PRs waiting for checks"})
+        steps.append({"do": "wait", "why": "release.yml is running" if rel["running"]
+                      else "units in flight, PRs or proof runs waiting for checks"})
     return steps
 
 
@@ -467,19 +497,22 @@ def _pr_record(t: github.Transport, pr: dict, cfg: dict) -> dict:
     return rec
 
 
-def _run(t: github.Transport, run_id: object) -> Optional[dict]:
-    """Read one Actions run by id, or None."""
-    if not str(run_id or "").isdigit():
-        return None
-    data = github.get(t, f"repos/{t.repo}/actions/runs/{run_id}")
-    return data if isinstance(data, dict) else None
+def dispatched_runs(t: github.Transport, workflow: str, base: str) -> List[dict]:
+    """Read the newest 100 dispatched runs of a workflow on the base branch (an absent workflow means none)."""
+    data = github.get(t, f"repos/{t.repo}/actions/workflows/{workflow}/runs?branch={base}&event=workflow_dispatch"
+                         "&per_page=100")
+    rows = data.get("workflow_runs") if isinstance(data, dict) else None
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
 
-def _milestones(t: github.Transport, cfg: dict, runs: dict, units: Sequence[dict]) -> List[dict]:
-    """Judge every stage's recorded proof run and count its open and done units by proof id prefix."""
+def _milestones(rows: Sequence[dict], cfg: dict, units: Sequence[dict]) -> List[dict]:
+    """Judge every stage by its newest completed `proof stage <s>` run and count its open and done units."""
     out = []
     for stage in cfg["stages"]:
-        st = stage_status(stage, _run(t, runs.get(f"proof:{stage}")), cfg["proof_workflow"], cfg["base"])
+        run, running = newest_runs(rows, f"proof stage {stage}")
+        st = stage_status(stage, run, cfg["proof_workflow"], cfg["base"])
+        st["running"] = running
+        st["version"] = cfg["release_version"]
         prefix = proof_prefix(stage)
         mine = [u for u in units if any(p.upper().startswith(prefix) for p in u["proof"])]
         st["open_units"] = sum(1 for u in mine if u["open"])
@@ -540,18 +573,25 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
     pick, deferred = select_ready(ready, in_flight, slots, open_units, cfg["slices"])
     desc = descendants(open_units)
 
-    runs = progress.get("runs") if isinstance(progress.get("runs"), dict) else {}
-    milestones = _milestones(t, cfg, runs, units)
+    milestones = _milestones(dispatched_runs(t, cfg["proof_workflow"], base), cfg, units)
     version = cfg["release_version"]
     tag = github.get(t, f"repos/{repo}/releases/tags/v{version}")
     released = isinstance(tag, dict) and not tag.get("draft") and not tag.get("prerelease")
     changelog = decode_content(github.get(t, f"repos/{repo}/contents/{cfg['changelog_path']}?ref={base}"))
     verdict_path = cfg["verdict_path"].format(version=version)
     verdict = decode_content(github.get(t, f"repos/{repo}/contents/{verdict_path}?ref={base}"))
-    release = release_checks(milestones, changelog, verdict, _run(t, runs.get(f"release-dry:{version}")),
-                             released, version, cfg["release_workflow"], base)
+    head = github.get(t, f"repos/{repo}/commits/{base}")
+    main_sha = str(head.get("sha")) if isinstance(head, dict) and head.get("sha") else None
+    release_rows = dispatched_runs(t, cfg["release_workflow"], base)
+    dry_ok = dry_run_green(release_rows, version, main_sha, cfg["release_workflow"], base)
+    release = release_checks(milestones, changelog, verdict, dry_ok, released)
     release["version"] = version
     release["released"] = released
+    release["main_sha"] = main_sha
+    release["running"] = any(newest_runs(release_rows, f"release {version} dry_run={d}")[1] for d in ("true", "false"))
+    head_dry, _ = newest_runs([r for r in release_rows if main_sha and r.get("head_sha") == main_sha],
+                              f"release {version} dry_run=true")
+    release["dry_run_red"] = (head_dry.get("html_url") or str(head_dry.get("id"))) if head_dry and not dry_ok else None
 
     next_open = next((m for m in milestones if not m["green"]), None)
     fc = forecast([iso_epoch(p.get("merged_at")) for p in merged], now, int(cfg["forecast_window_days"]),

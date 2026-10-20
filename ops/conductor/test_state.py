@@ -10,6 +10,7 @@ from fake_github import FakeGitHub
 
 NOW = 1_800_000_000.0
 DAY = 86400.0
+MAIN_SHA = "a" * 40
 
 
 def iso(epoch: float) -> str:
@@ -41,8 +42,13 @@ def checks(*rows) -> dict:
     return {"check_runs": [{"name": n, "status": s, "conclusion": c} for n, s, c in rows]}
 
 
+def runs_path(workflow: str) -> str:
+    """Return the dispatched-runs listing path state.py reads for a workflow."""
+    return f"actions/workflows/{workflow}/runs?branch=main&event=workflow_dispatch&per_page=100"
+
+
 def world(units, prs=(), merged=(), progress=None, status_labels=(), legacy=(), files=None, release=None,
-          runs=None) -> FakeGitHub:
+          runs=None, main_sha=MAIN_SHA) -> FakeGitHub:
     """Build a fake GitHub with the given objects and empty defaults for everything else."""
     g = FakeGitHub()
     g.set("issues?state=all&labels=unit", list(units))
@@ -62,15 +68,27 @@ def world(units, prs=(), merged=(), progress=None, status_labels=(), legacy=(), 
         g.set_file(path, "main", text)
     if release is not None:
         g.set("releases/tags/v0.1.0", release)
-    for run_id, run in (runs or {}).items():
-        g.set(f"actions/runs/{run_id}", run)
+    for workflow, rows in (runs or {}).items():
+        g.set(runs_path(workflow), {"total_count": len(rows), "workflow_runs": list(rows)})
+    if main_sha:
+        g.set("commits/main", {"sha": main_sha})
     return g
 
 
-def proof_run(run_id: int, stage: str, branch="main", conclusion="success", path=".github/workflows/proof.yml") -> dict:
-    """Build an Actions run of proof.yml."""
-    return {"id": run_id, "path": path, "head_branch": branch, "event": "workflow_dispatch", "status": "completed",
-            "conclusion": conclusion, "display_title": f"proof stage {stage}", "html_url": f"https://x/runs/{run_id}"}
+def proof_run(run_id: int, stage: str, branch="main", conclusion="success", path=".github/workflows/proof.yml",
+              created=NOW - DAY, status="completed") -> dict:
+    """Build an Actions run of proof.yml with the run name `proof stage <s>`."""
+    return {"id": run_id, "path": path, "head_branch": branch, "event": "workflow_dispatch", "status": status,
+            "conclusion": conclusion if status == "completed" else None, "display_title": f"proof stage {stage}",
+            "html_url": f"https://x/runs/{run_id}", "created_at": iso(created), "head_sha": MAIN_SHA}
+
+
+def dry_run(run_id: int = 200, conclusion="success", sha=MAIN_SHA, title="release 0.1.0 dry_run=true",
+            status="completed") -> dict:
+    """Build a release.yml run with the run name release.yml sets (a dry run unless the title says otherwise)."""
+    return {"id": run_id, "path": ".github/workflows/release.yml", "head_branch": "main", "event": "workflow_dispatch",
+            "status": status, "conclusion": conclusion if status == "completed" else None, "display_title": title,
+            "head_sha": sha, "created_at": iso(NOW - 3600), "html_url": f"https://x/runs/{run_id}"}
 
 
 CFG = state.load_config()
@@ -203,7 +221,7 @@ class PullRequests(unittest.TestCase):
 
 
 class Milestones(unittest.TestCase):
-    """A stage is green only for a recorded, successful, dispatched proof.yml run on main."""
+    """A stage is green only by its newest completed, successful, dispatched `proof stage <s>` run on main."""
 
     def test_stage_status(self) -> None:
         self.assertTrue(state.stage_status("1", proof_run(1, "1"), "proof.yml", "main")["green"])
@@ -221,26 +239,44 @@ class Milestones(unittest.TestCase):
         g = world([unit(1, proof=["S1-QUOTE-EXACT"], state_="closed", reason="completed"), unit(2, proof=["S1-HOVER-PAGE"])])
         self.assertNotIn({"do": "dispatch-proof", "stage": "1"}, state.compute(g, CFG, NOW)["next"])
 
+    def test_newest_completed_run_decides(self) -> None:
+        rows = [proof_run(1, "1", created=NOW - 3 * DAY), proof_run(2, "1", conclusion="failure", created=NOW - DAY)]
+        s = state.compute(world([unit(1, state_="closed", reason="completed")], runs={"proof.yml": rows}), CFG, NOW)
+        self.assertFalse(s["milestones"][0]["green"], "a newer red run beats an older green one")
+        rows = [proof_run(1, "1", conclusion="failure", created=NOW - 3 * DAY), proof_run(2, "1", created=NOW - DAY)]
+        s = state.compute(world([unit(1, state_="closed", reason="completed")], runs={"proof.yml": rows}), CFG, NOW)
+        self.assertTrue(s["milestones"][0]["green"])
+
+    def test_running_proof_is_not_dispatched_again(self) -> None:
+        rows = [proof_run(3, "1", status="in_progress", created=NOW - 60)]
+        g = world([unit(1, proof=["S1-QUOTE-EXACT"], state_="closed", reason="completed")], runs={"proof.yml": rows})
+        s = state.compute(g, CFG, NOW)
+        self.assertTrue(s["milestones"][0]["running"])
+        self.assertNotIn({"do": "dispatch-proof", "stage": "1"}, s["next"])
+
+    def test_other_run_names_do_not_count(self) -> None:
+        other = dict(proof_run(4, "1"), display_title="proof")
+        s = state.compute(world([unit(1)], runs={"proof.yml": [other]}), CFG, NOW)
+        self.assertFalse(s["milestones"][0]["green"])
+
 
 def release_world(**over) -> FakeGitHub:
     """A world in which every release condition holds unless overridden."""
-    runs = {100 + i: proof_run(100 + i, s) for i, s in enumerate(CFG["stages"])}
-    dry = {"id": 200, "path": ".github/workflows/release.yml", "head_branch": "main", "event": "workflow_dispatch",
-           "status": "completed", "conclusion": "success", "display_title": "release"}
-    runs[200] = over.pop("dry", dry)
-    progress = {"runs": {f"proof:{s}": str(100 + i) for i, s in enumerate(CFG["stages"])}}
-    progress["runs"]["release-dry:0.1.0"] = "200"
+    proofs = [proof_run(100 + i, s) for i, s in enumerate(CFG["stages"])] + over.pop("extra_proofs", [])
+    releases = over.pop("dry", [dry_run()])
     files = {"CHANGELOG.md": "# Changelog\n\n## [0.1.0] - 2026-11-30\n- first\n",
-             "docs/release/0.1.0.md": "---\nverdict: release\n---\n"}
+             "docs/release/0.1.0.md": "# Release 0.1.0\n\nverdict: release\n"}
     files.update(over.pop("files", {}))
     for path in over.pop("drop_files", []):
         files.pop(path)
-    return world([unit(1, state_="closed", reason="completed")], progress=progress, files=files, runs=runs,
-                 release=over.pop("release", None))
+    units = [unit(1, state_="closed", reason="completed")] + over.pop("units", [])
+    return world(units, progress={"limit_stops": 0}, files=files,
+                 runs={"proof.yml": proofs, "release.yml": releases}, release=over.pop("release", None),
+                 main_sha=over.pop("main_sha", MAIN_SHA))
 
 
 class Release(unittest.TestCase):
-    """release_ready is the AND of proofs, changelog, verdict, dry run and not-yet-released."""
+    """release_ready is the AND of proofs, changelog, verdict, dry run of main's head and not-yet-released."""
 
     def test_all_conditions_hold(self) -> None:
         s = state.compute(release_world(), CFG, NOW)
@@ -249,25 +285,32 @@ class Release(unittest.TestCase):
 
     def test_each_missing_condition_blocks(self) -> None:
         cases = {
-            "changelog_entry": {"files": {"CHANGELOG.md": "# Changelog\n## [0.0.9]\n"}},
-            "judge_verdict": {"files": {"docs/release/0.1.0.md": "verdict: fix\n"}},
-            "dry_run_green": {"dry": {"id": 200, "path": ".github/workflows/release.yml", "head_branch": "main",
-                                      "event": "workflow_dispatch", "status": "completed", "conclusion": "failure"}},
-            "not_yet_released": {"release": {"tag_name": "v0.1.0", "draft": False, "prerelease": False}},
+            "changelog_entry": [{"files": {"CHANGELOG.md": "# Changelog\n## [0.0.9]\n"}},
+                                {"files": {"CHANGELOG.md": "# Changelog\n### 0.1.0\n"}}],
+            "judge_verdict": [{"files": {"docs/release/0.1.0.md": "verdict: fix\n"}},
+                              {"files": {"docs/release/0.1.0.md": "verdict: release\nverdict: hold\n"}},
+                              {"files": {"docs/release/0.1.0.md": "  verdict: release\n"}}],
+            "dry_run_green": [{"dry": [dry_run(conclusion="failure")]},
+                              {"dry": [dry_run(sha="b" * 40)]},
+                              {"dry": [dry_run(title="release 0.1.0 dry_run=false")]},
+                              {"dry": [dry_run(title="release 0.2.0 dry_run=true")]},
+                              {"dry": []},
+                              {"main_sha": None}],
+            "not_yet_released": [{"release": {"tag_name": "v0.1.0", "draft": False, "prerelease": False}}],
         }
-        for key, over in cases.items():
-            with self.subTest(key=key):
-                s = state.compute(release_world(**over), CFG, NOW)
-                self.assertFalse(s["release"]["release_ready"])
-                self.assertFalse(s["release"]["checks"][key])
+        for key, overs in cases.items():
+            for over in overs:
+                with self.subTest(key=key, over=over):
+                    s = state.compute(release_world(**dict(over)), CFG, NOW)
+                    self.assertFalse(s["release"]["release_ready"])
+                    self.assertFalse(s["release"]["checks"][key])
 
     def test_missing_verdict_file_blocks(self) -> None:
         s = state.compute(release_world(drop_files=["docs/release/0.1.0.md"]), CFG, NOW)
         self.assertFalse(s["release"]["checks"]["judge_verdict"])
 
     def test_one_red_stage_blocks(self) -> None:
-        g = release_world()
-        g.set("actions/runs/101", proof_run(101, "2a", conclusion="failure"))
+        g = release_world(extra_proofs=[proof_run(150, "2a", conclusion="failure", created=NOW - 60)])
         s = state.compute(g, CFG, NOW)
         self.assertFalse(s["release"]["checks"]["proofs_green"])
         self.assertFalse(s["release"]["release_ready"])
@@ -280,6 +323,29 @@ class Release(unittest.TestCase):
     def test_draft_release_is_not_released(self) -> None:
         s = state.compute(release_world(release={"tag_name": "v0.1.0", "draft": True}), CFG, NOW)
         self.assertFalse(s["goal_met"])
+
+    def test_release_prep_only_on_a_quiet_main(self) -> None:
+        s = state.compute(release_world(dry=[]), CFG, NOW)
+        self.assertEqual(s["next"][0], {"do": "release-prep", "missing": ["dry_run_green"]})
+        self.assertNotIn("plan", [x["do"] for x in s["next"]], "no new slice is planned once every proof is green")
+        busy = state.compute(release_world(dry=[], units=[unit(7, paths=["a/**"])]), CFG, NOW)
+        self.assertNotIn("release-prep", [x["do"] for x in busy["next"]])
+        self.assertEqual(busy["next"][0]["do"], "start-unit")
+
+    def test_nothing_is_dispatched_while_release_runs(self) -> None:
+        s = state.compute(release_world(dry=[dry_run(status="in_progress")]), CFG, NOW)
+        self.assertTrue(s["release"]["running"])
+        self.assertEqual(s["next"], [{"do": "wait", "why": "release.yml is running"}])
+        real = release_world(dry=[dry_run(), dry_run(201, title="release 0.1.0 dry_run=false", status="queued")])
+        s = state.compute(real, CFG, NOW)
+        self.assertTrue(s["release"]["release_ready"])
+        self.assertNotIn("dispatch-release", [x["do"] for x in s["next"]])
+
+    def test_red_dry_run_of_the_head_is_named_once(self) -> None:
+        s = state.compute(release_world(dry=[dry_run(conclusion="failure")]), CFG, NOW)
+        self.assertEqual(s["next"][0], {"do": "release-prep", "missing": ["dry_run_green"], "dry_run_red": "https://x/runs/200"})
+        older = state.compute(release_world(dry=[dry_run(conclusion="failure", sha="b" * 40)]), CFG, NOW)
+        self.assertEqual(older["next"][0], {"do": "release-prep", "missing": ["dry_run_green"]})
 
 
 class Operator(unittest.TestCase):
