@@ -12,6 +12,7 @@
   ".claude/agents/**",
   ".claude/commands/**",
   ".claude/hooks/**",
+  ".claude/workflows/**",
   ".mcp.json",
   ".github/**",
   "**/.editorconfig",
@@ -33,17 +34,22 @@
   "gates/tests/**",
   "gates/facts/**",
   "gates/templates/**",
-  "gates/roles.json",
-  "gates/dispatch.json",
+  "gates/proofs/**",
   "gates/bash_rules.json",
   "gates/project.json",
   "gates/sgconfig.yml",
-  "gates/suppress-baseline.json"
+  "gates/suppress-baseline.json",
+  "ops/conductor/**",
+  "docs/autonomy/charter.md"
  ],
  "ratchet": [
   "gates/rules/**",
   "gates/rule-tests/**",
   "gates/fixtures/**",
-  "gates/catalog.json"
+  "gates/catalog.json",
+  "gates/roles.json",
+  "gates/dispatch.json",
+  "packages/web/e2e/proof/**",
+  "docs/review/lenses/**"
  ]
 }
