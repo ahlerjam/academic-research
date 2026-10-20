@@ -52,6 +52,8 @@
   "gates/dispatch.json",
   "packages/web/e2e/proof/**",
   "docs/review/lenses/**",
-  "packages/*/tsconfig.json"
+  "packages/*/tsconfig.json",
+  "docs/product/quality-bar.json",
+  "docs/product/dogfood-scenario.md"
  ]
 }
