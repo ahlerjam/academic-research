@@ -20,7 +20,6 @@
   "pnpm-workspace.yaml",
   "tsconfig.base.json",
   "tsconfig.json",
-  "packages/*/tsconfig.json",
   "eslint.config.mjs",
   ".prettierrc.json",
   ".prettierignore",
@@ -52,6 +51,7 @@
   "gates/roles.json",
   "gates/dispatch.json",
   "packages/web/e2e/proof/**",
-  "docs/review/lenses/**"
+  "docs/review/lenses/**",
+  "packages/*/tsconfig.json"
  ]
 }

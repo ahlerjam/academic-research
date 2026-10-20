@@ -22,6 +22,11 @@ PACKAGE_TSCONFIG = re.compile(r"packages/[^/]+/tsconfig\.json")
 ROLES_GROWING = ("ignore", "components", "budgets", "shared_fingerprint")
 COMPONENT_KEYS = ("lang", "dir", "root", "roles")
 DEFAULT_NON_FEATURE = ["adapters"]
+OPEN_ROLES = ("core", "flow", "api", "ui")
+FILE_ROLES = ("adapter", "wiring")
+EDGE_ROLES = ("test", "migration")
+WILDCARDS = "*?["
+COMMENTS = re.compile(r"/\*.*?\*/|(?<![:\\])//[^\n]*", re.S)
 
 
 def violations(tree: str) -> List[Finding]:
@@ -141,7 +146,7 @@ def _kept_component(name: str, comp: dict, now: Optional[dict]) -> List[str]:
 
 
 def _new_component(name: str, comp: object, old: Dict[str, dict]) -> List[str]:
-    """Return why a new component is malformed or overlaps the directory of an existing one."""
+    """Return why a new component is malformed, overlaps an existing one or leaves its sources without a strict role."""
     if not isinstance(comp, dict) or any(k not in comp for k in COMPONENT_KEYS) or not isinstance(comp["roles"], dict):
         return [f"new component '{name}' needs {', '.join(COMPONENT_KEYS)}"]
     mine = posixpath.normpath(comp["dir"])
@@ -150,24 +155,64 @@ def _new_component(name: str, comp: object, old: Dict[str, dict]) -> List[str]:
         theirs = posixpath.normpath(data.get("dir", "."))
         if theirs in (".", "", mine) or mine.startswith(theirs + "/") or theirs.startswith(mine + "/"):
             out.append(f"new component '{name}' dir '{mine}' overlaps component '{other}'")
+    if not any(str(g).startswith("**/") for role in OPEN_ROLES for g in comp["roles"].get(role, [])):
+        out.append(f"new component '{name}' needs a role {', '.join(OPEN_ROLES)} with a '**/' glob over its sources")
     return out
 
 
+def _glob_rx(glob: str) -> "re.Pattern[str]":
+    """Compile a role glob relative to the component root: '**/' spans directories, '*' and '?' stop at '/'."""
+    out, i = "", 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out, i = out + "(?:[^/]*/)*", i + 3
+        elif glob.startswith("**", i):
+            out, i = out + ".*", i + 2
+        elif glob[i] == "*":
+            out, i = out + "[^/]*", i + 1
+        elif glob[i] == "?":
+            out, i = out + "[^/]", i + 1
+        else:
+            out, i = out + re.escape(glob[i]), i + 1
+    return re.compile(out + "$")
+
+
 def _new_globs(name: str, comp: object, old_roles: Dict[str, list]) -> List[str]:
-    """Return new globs that claim generated code or reach outside their component directory."""
+    """Return new globs that claim generated code, reach outside the component or give future files a laxer role.
+
+    Role priority (gates/lib/roles.py) puts test, wiring, migration and adapter before core, flow, api and ui,
+    so a new glob of those roles would exempt files that do not exist yet from the stricter rules. New globs may
+    therefore add core, flow, api and ui freely; test and migration only outside the source root (test also as
+    `*.test.ts`); adapter and wiring only as single file names that no older glob of the component claims.
+    """
     if not isinstance(comp, dict) or not isinstance(comp.get("roles"), dict):
         return []
     home = posixpath.normpath(comp.get("dir", "."))
+    root = posixpath.normpath(comp.get("root", "."))
+    older = [_glob_rx(str(g)) for globs in old_roles.values() for g in globs]
     out = []
     for role, globs in comp["roles"].items():
         for glob in globs:
             if glob in old_roles.get(role, []):
                 continue
+            label = f"component '{name}' new glob '{glob}'"
             full = posixpath.normpath(posixpath.join(comp.get("root", "."), glob))
             if role == "generated":
-                out.append(f"component '{name}' new glob '{glob}' for role 'generated'; operator only")
+                out.append(f"{label} for role 'generated'; operator only")
             elif home in (".", "") or not full.startswith(home + "/"):
-                out.append(f"component '{name}' new glob '{glob}' reaches outside '{home}'")
+                out.append(f"{label} reaches outside '{home}'")
+            elif role in EDGE_ROLES:
+                inside = full == root or full.startswith(root + "/")
+                if inside and not (role == "test" and glob.endswith(".test.ts")):
+                    out.append(f"{label} for role '{role}' lies inside the source root '{root}'; only paths outside it"
+                               + (" or *.test.ts files" if role == "test" else "") + "; else op:kernel")
+            elif role in FILE_ROLES:
+                if any(c in glob for c in WILDCARDS):
+                    out.append(f"{label} for role '{role}' needs one file name without wildcards; else op:kernel")
+                elif any(rx.match(glob) for rx in older):
+                    out.append(f"{label} for role '{role}' takes a file that an older glob of '{name}' claims; op:kernel")
+            elif role not in OPEN_ROLES:
+                out.append(f"{label} for unknown role '{role}'")
     return out
 
 
@@ -201,24 +246,28 @@ def dispatch_order(old: dict, new: dict) -> List[str]:
                                              and isinstance(e.get("tier"), str))]
 
 
-def _kept_lines(old: str, new: str) -> bool:
-    """Return whether every non-blank old line survives in the new text, in its order."""
-    lines = iter(new.splitlines())
-    return all(line in lines for line in old.splitlines() if line.strip())
+def _appended(old: str, new: str) -> bool:
+    """Return whether new is old with text appended at its end (trailing blank lines of old may change)."""
+    return new.startswith(old.rstrip("\n"))
 
 
 def add_only(tree: str, ref: str) -> List[Finding]:
-    """Proof specs and review lenses only gain lines; every proof file holds at least one expect call."""
+    """Proof specs and review lenses only grow at their end; every proof file holds at least one expect call.
+
+    Text inserted in the middle (an early `return;` in a test body, an exception line between checks) would
+    keep every old line and still change what the file proves, so only appending passes; a new scenario goes
+    into a new file or at the end. Comments do not count as expect calls.
+    """
     found = []
     listed = gitx.run(["git", "ls-tree", "-r", "--name-only", ref, "--"] + list(ADD_ONLY), cwd=tree).stdout.split()
     for rel in listed:
         new = _read(tree, rel)
         if new is None:
             found.append(Finding(rel, 1, RULE, f"deleted against {ref}; this path only grows"))
-        elif not _kept_lines(gitx.show(tree, ref, rel) or "", new):
-            found.append(Finding(rel, 1, RULE, f"lines removed or changed against {ref}; only add lines"))
+        elif not _appended(gitx.show(tree, ref, rel) or "", new):
+            found.append(Finding(rel, 1, RULE, f"changed before its end against {ref}; only append at the end"))
     for rel in gitx.ls(tree, [f"{PROOF_DIR}/**"]):
-        if not EXPECT.search(_read(tree, rel) or ""):
+        if not EXPECT.search(COMMENTS.sub("", _read(tree, rel) or "")):
             found.append(Finding(rel, 1, RULE, "proof file without an expect call"))
     return found
 

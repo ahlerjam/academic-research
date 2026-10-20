@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tests import support  # noqa: E402
 
-from lib import catalog, engine, guard, layout, roles  # noqa: E402
+from lib import catalog, engine, gitx, guard, hooks, layout, manifest, roles  # noqa: E402
 
 TEMPLATE = {"extends": "../../tsconfig.base.json", "compilerOptions": {"types": []}, "include": ["src", "test"]}
 CORE_TSCONFIG = {"extends": "../../tsconfig.base.json", "compilerOptions": {"types": ["vite/client"]}, "include": ["src"]}
@@ -58,11 +58,14 @@ class RolesPartialOrder(GuardCase):
         root = self.tree()
         cfg = _json(root, guard.ROLES)
         cfg["components"]["extra"] = {"lang": "typescript", "dir": "packages/extra", "root": "packages/extra/src",
-                                      "roles": {"test": ["../test/**/*.ts"], "adapter": ["**/*.ts"]}}
-        cfg["components"]["server"]["roles"]["wiring"].append("tools/*.ts")
-        cfg["components"]["server"]["roles"]["wiring"].append("jobs/*.ts")
+                                      "roles": {"test": ["../test/**/*.ts"], "ui": ["**/*.ts"],
+                                                "adapter": ["lib/api.ts", "lib/api.fake.ts"], "wiring": ["main.ts"]}}
+        cfg["components"]["server"]["roles"]["wiring"].append("tools/run.ts")
+        cfg["components"]["server"]["roles"]["adapter"].append("jobs/queue.ts")
         cfg["components"]["server"]["non_feature"].append("tools")
-        cfg["components"]["server"]["roles"]["queue"] = ["queue/*.ts"]
+        cfg["components"]["server"]["roles"].setdefault("core", []).append("rules/*.ts")
+        cfg["components"]["web"]["roles"]["test"].append("views/**/*.test.ts")
+        cfg["components"]["web"]["roles"].setdefault("ui", []).append("panels/**/*.ts")
         cfg["budgets"]["core"]["function_lines"] = 30
         cfg["budgets"]["tool"] = {"function_lines": 20, "module_lines": 100}
         cfg["ignore"].remove("**/playwright.config.ts")
@@ -94,6 +97,27 @@ class RolesPartialOrder(GuardCase):
              lambda c: c["components"]["server"]["roles"]["adapter"].append("../../web/src/**/*.ts")),
             ("component 'server' new glob 'gen/*.ts' for role 'generated'; operator only",
              lambda c: c["components"]["server"]["roles"].update(generated=["gen/*.ts"])),
+            ("component 'web' new glob 'views2/**/*.ts' for role 'test' lies inside the source root",
+             lambda c: c["components"]["web"]["roles"]["test"].append("views2/**/*.ts")),
+            ("component 'server' new glob '../src/x/**/*.ts' for role 'test' lies inside the source root",
+             lambda c: c["components"]["server"]["roles"]["test"].append("../src/x/**/*.ts")),
+            ("component 'server' new glob 'q/*.sql' for role 'migration' lies inside the source root",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("q/*.sql")),
+            ("component 'server' new glob 'newfeat/*.ts' for role 'adapter' needs one file name without wildcards",
+             lambda c: c["components"]["server"]["roles"]["adapter"].append("newfeat/*.ts")),
+            ("component 'server' new glob 'jobs/**' for role 'wiring' needs one file name without wildcards",
+             lambda c: c["components"]["server"]["roles"]["wiring"].append("jobs/**")),
+            ("component 'web' new glob 'views/panel.ts' for role 'adapter' takes a file that an older glob",
+             lambda c: c["components"]["web"]["roles"]["adapter"].append("views/panel.ts")),
+            ("component 'server' new glob 'x/*.ts' for unknown role 'queue'",
+             lambda c: c["components"]["server"]["roles"].update(queue=["x/*.ts"])),
+            ("new component 'lax' needs a role core, flow, api, ui with a '**/' glob",
+             lambda c: c["components"].update(lax={"lang": "typescript", "dir": "packages/lax", "root": "packages/lax/src",
+                                                   "roles": {"test": ["../test/**/*.ts"], "ui": ["views/*.ts"]}})),
+            ("component 'lax2' new glob '**/*.ts' for role 'adapter' needs one file name without wildcards",
+             lambda c: c["components"].update(lax2={"lang": "typescript", "dir": "packages/lax2",
+                                                    "root": "packages/lax2/src",
+                                                    "roles": {"ui": ["**/*.ts"], "adapter": ["**/*.ts"]}})),
         ]
         root = self.tree()
         original = _json(root, guard.ROLES)
@@ -106,16 +130,26 @@ class RolesPartialOrder(GuardCase):
                 self.assertTrue(any(w.startswith(expected) for w in whats), whats)
 
     def test_a_new_glob_that_takes_an_existing_file_is_red(self) -> None:
-        root = self.tree({"packages/core/src/x/thing.ts": "export const thing = 1;\n"})
+        root = self.tree({"packages/web/src/x/thing.ts": "export const thing = 1;\n"})
         cfg = _json(root, guard.ROLES)
-        cfg["components"]["core"]["roles"]["test"].append("x/*.ts")
+        cfg["components"]["web"]["roles"]["core"] = ["x/*.ts"]
         _dump(root, guard.ROLES, cfg)
-        self.assertEqual(_whats(root, guard.ROLES), ["packages/core/src/x/thing.ts moves from core/core to core/test; "
+        self.assertEqual(_whats(root, guard.ROLES), ["packages/web/src/x/thing.ts moves from web/ui to web/core; "
                                                      "only additions are allowed against HEAD"])
-        cfg["components"]["core"]["roles"]["test"].remove("x/*.ts")
-        cfg["components"]["core"]["roles"]["test"].append("y/*.ts")
+        cfg["components"]["web"]["roles"]["core"] = ["y/*.ts"]
         _dump(root, guard.ROLES, cfg)
         self.assertEqual(_whats(root, guard.ROLES), [])
+
+    def test_future_files_never_get_a_laxer_role(self) -> None:
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["web"]["roles"]["test"].append("views2/**/*.ts")
+        cfg["components"]["server"]["roles"]["adapter"].append("newfeat/*.ts")
+        _dump(root, guard.ROLES, cfg)
+        whats = _whats(root, guard.ROLES)
+        self.assertEqual(len(whats), 2, whats)
+        self.assertTrue(any("'views2/**/*.ts' for role 'test'" in w for w in whats), whats)
+        self.assertTrue(any("'newfeat/*.ts' for role 'adapter'" in w for w in whats), whats)
 
     def test_non_feature_only_for_new_directories_with_a_role_glob(self) -> None:
         root = self.tree({"packages/server/src/billing/flow.ts": "export const flow = 1;\n"})
@@ -126,7 +160,7 @@ class RolesPartialOrder(GuardCase):
         cfg["components"]["server"]["non_feature"] = ["adapters", "cli", "dev", "data", "batch"]
         _dump(root, guard.ROLES, cfg)
         self.assertTrue(any("'batch' without a role glob" in w for w in _whats(root, guard.ROLES)))
-        cfg["components"]["server"]["roles"]["wiring"].append("batch/*.ts")
+        cfg["components"]["server"]["roles"]["wiring"].append("batch/run.ts")
         _dump(root, guard.ROLES, cfg)
         self.assertEqual(_whats(root, guard.ROLES), [])
 
@@ -172,13 +206,26 @@ class AddOnlyPaths(GuardCase):
     def base(self) -> str:
         return self.tree({PROOF: PROOF_TEXT, LENS: "# Tests lens\n\n- A test fails on the old code.\n"})
 
-    def test_added_lines_and_new_files_pass(self) -> None:
+    def test_appended_text_and_new_files_pass(self) -> None:
         root = self.base()
-        support.write(root, PROOF, PROOF_TEXT.replace("  await page.goto('/');\n",
-                                                      "  await page.goto('/');\n  await page.reload();\n"))
+        support.write(root, PROOF, PROOF_TEXT + "\ntest('S1-QUOTE-EXACT reload', async ({ page }) => {\n"
+                                                "  await page.reload();\n  await expect(page).toHaveURL('/');\n});\n")
         support.write(root, LENS, "# Tests lens\n\n- A test fails on the old code.\n- A negative case exists.\n")
         support.write(root, "packages/web/e2e/proof/S1-TRACE-BLOCKS.spec.ts", PROOF_TEXT)
         self.assertEqual([f for f in guard.violations(root) if f.path.startswith(guard.ADD_ONLY)], [])
+
+    def test_text_inserted_before_the_end_is_red(self) -> None:
+        root = self.base()
+        support.write(root, PROOF, PROOF_TEXT.replace("  await page.goto('/');\n", "  return;\n  await page.goto('/');\n"))
+        support.write(root, LENS, "# Tests lens\n\n- Findings about X are out of scope.\n- A test fails on the old code.\n")
+        self.assertEqual(_whats(root, PROOF), ["changed before its end against HEAD; only append at the end"])
+        self.assertEqual(_whats(root, LENS), ["changed before its end against HEAD; only append at the end"])
+
+    def test_an_expect_in_a_comment_does_not_count(self) -> None:
+        root = self.base()
+        support.write(root, "packages/web/e2e/proof/S1-NOTE.spec.ts",
+                      "test('S1-NOTE', async () => {\n  // expect(page).toHaveURL('/');\n  /* expect(x) */\n});\n")
+        self.assertEqual(_whats(root, "packages/web/e2e/proof/S1-NOTE.spec.ts"), ["proof file without an expect call"])
 
     def test_removed_changed_deleted_or_expectless_is_red(self) -> None:
         root = self.base()
@@ -187,7 +234,7 @@ class AddOnlyPaths(GuardCase):
         support.write(root, "packages/web/e2e/proof/S1-EMPTY.spec.ts", "test('S1-EMPTY', () => {});\n")
         whats = sorted((f.path, f.what.split(";")[0]) for f in guard.violations(root) if f.path.startswith(guard.ADD_ONLY))
         self.assertEqual(whats, sorted([(LENS, "deleted against HEAD"),
-                                        (PROOF, "lines removed or changed against HEAD"),
+                                        (PROOF, "changed before its end against HEAD"),
                                         (PROOF, "proof file without an expect call"),
                                         ("packages/web/e2e/proof/S1-EMPTY.spec.ts", "proof file without an expect call")]))
         support.write(root, LENS, "- A test fails on the old code.\n# Tests lens\n")
@@ -205,6 +252,19 @@ class PackageTsconfig(GuardCase):
         if not template and os.path.isfile(os.path.join(root, guard.TEMPLATE)):
             os.remove(os.path.join(root, guard.TEMPLATE))
         return root
+
+    def test_package_tsconfigs_are_ratchet_paths_an_agent_may_write(self) -> None:
+        root = self.base()
+        cfg = manifest.controls(root)
+        self.assertIn("packages/*/tsconfig.json", cfg["ratchet"])
+        for rel in ("packages/extra/tsconfig.json", "packages/core/tsconfig.json"):
+            with self.subTest(rel=rel):
+                self.assertFalse(hooks.is_control_path(root, rel))
+        self.assertTrue(hooks.is_control_path(root, "tsconfig.base.json"))
+        _dump(root, "packages/extra/tsconfig.json", TEMPLATE)
+        self.assertEqual(_whats(root, "packages/extra/tsconfig.json"), [])
+        _dump(root, "packages/extra/tsconfig.json", dict(TEMPLATE, compilerOptions={"types": [], "strict": False}))
+        self.assertEqual(_whats(root, "packages/extra/tsconfig.json"), [f"differs from {guard.TEMPLATE} outside 'include'"])
 
     def test_include_is_free(self) -> None:
         root = self.base()
@@ -259,6 +319,25 @@ class Prefill(GuardCase):
         bad = engine.run_tier(root, "scripts/bad.sh", "s0", cfg, entries).findings
         self.assertEqual([(f.path, f.rule) for f in bad], [("scripts/bad.sh", "bash:bash-syntax")])
         self.assertEqual(engine.run_tier(root, "scripts/good.sh", "s0", cfg, entries).findings, [])
+
+
+class BaseRef(GuardCase):
+    """A local branch or tag named origin/main never replaces the remote-tracking ref the gates compare against."""
+
+    def test_a_local_origin_main_does_not_shadow_the_remote(self) -> None:
+        root = self.tree({"probe.txt": "remote\n"})
+        remote = support.git(root, "rev-parse", "HEAD").stdout.strip()
+        support.git(root, "update-ref", "refs/remotes/origin/main", remote)
+        support.write(root, "probe.txt", "evil\n")
+        support.git(root, *support.GIT_ID, "commit", "-q", "-am", "evil")
+        support.git(root, "branch", "origin/main", "HEAD")
+        support.git(root, "tag", "origin/main", "HEAD")
+        self.assertEqual(support.git(root, "show", "origin/main:probe.txt").stdout, "evil\n", "short names are shadowed")
+        ref = gitx.base_ref(root)
+        self.assertEqual(ref, "refs/remotes/origin/main")
+        self.assertEqual(gitx.show(root, ref, "probe.txt"), "remote\n")
+        support.git(root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+        self.assertEqual(gitx.default_ref(root), "refs/remotes/origin/main")
 
 
 if __name__ == "__main__":

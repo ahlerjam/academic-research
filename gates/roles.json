@@ -26,8 +26,8 @@
       "roles": {
         "test": ["../test/**/*.ts"],
         "migration": ["../migrations/*.sql"],
-        "wiring": ["app.ts", "main.ts", "settings.ts", "cli/*.ts", "dev/*.ts"],
-        "adapter": ["adapters/*.ts", "data/*.ts"],
+        "wiring": ["app.ts", "main.ts", "settings.ts", "cli/measureRecall.ts", "dev/ghostMeasure.ts"],
+        "adapter": ["adapters/*.ts", "data/projectScoped.ts"],
         "flow": ["*/flow.ts"],
         "api": ["*/api.ts"]
       },
@@ -65,7 +65,7 @@
           "shared/tokenFile.ts",
           "shared/tokenFile.fake.ts"
         ],
-        "api": ["mcp/tools.ts"]
+        "api": ["mcp/tools.ts", "**/*.ts"]
       },
       "fingerprint_files": ["package.json", "tsconfig.json"]
     }
