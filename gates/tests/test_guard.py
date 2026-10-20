@@ -29,6 +29,7 @@ BAR = {"note": "A value may only be tightened, never loosened.",
                    {"id": "recall-at-10", "label": "recall@10", "unit": "ratio", "direction": "min", "threshold": 0.8}]}
 DOGFOOD_TEXT = "# Dogfood scenario\n\n1. Open the app.\n2. Export the PDF.\n"
 SH_C = ["sh", "-c", "echo pwned > gates/gate.py", "{file}"]
+PWN = ["sh", "-c", "echo pwned > PWNED; exit 0", "{file}"]
 
 
 def _json(root: str, rel: str) -> dict:
@@ -45,6 +46,11 @@ def _dump(root: str, rel: str, data: dict) -> None:
 def _whats(root: str, rel: str) -> List[str]:
     """Return the guard messages about one path."""
     return [f.what for f in guard.violations(root) if f.path == rel and f.rule == "GATES-RATCHET"]
+
+
+def _component(roles_map: dict, lang: str = "typescript", name: str = "newpkg") -> dict:
+    """Return a new component entry below packages/<name>."""
+    return {"lang": lang, "dir": f"packages/{name}", "root": f"packages/{name}/src", "roles": roles_map}
 
 
 class GuardCase(unittest.TestCase):
@@ -68,19 +74,16 @@ class GuardCase(unittest.TestCase):
 
 
 class RolesPartialOrder(GuardCase):
-    """New components, roles, globs and tighter budgets pass; anything that weakens an existing entry is red."""
+    """New roles, globs and tighter budgets pass; anything that weakens an existing entry is red."""
 
     def test_additions_and_tightening_pass(self) -> None:
         root = self.tree()
         cfg = _json(root, guard.ROLES)
-        cfg["components"]["extra"] = {"lang": "typescript", "dir": "packages/extra", "root": "packages/extra/src",
-                                      "roles": {"test": ["../test/**/*.ts"], "ui": ["**/*.ts"],
-                                                "adapter": ["lib/api.ts", "lib/api.fake.ts"], "wiring": ["main.ts"]}}
         cfg["components"]["server"]["roles"]["wiring"].append("tools/run.ts")
         cfg["components"]["server"]["roles"]["adapter"].append("jobs/queue.ts")
         cfg["components"]["server"]["non_feature"].append("tools")
-        cfg["components"]["server"]["roles"].setdefault("core", []).append("rules/*/*.ts")
-        cfg["components"]["web"]["roles"]["test"].append("views/**/*.test.ts")
+        cfg["components"]["core"]["roles"]["core"].append("lib/**/*.ts")
+        cfg["components"]["core"]["roles"]["test"].append("../test/x/**/*.ts")
         cfg["components"]["web"]["roles"].setdefault("ui", []).append("panels/**/*.ts")
         cfg["budgets"]["core"]["function_lines"] = 30
         cfg["budgets"]["tool"] = {"function_lines": 20, "module_lines": 100}
@@ -137,6 +140,40 @@ class RolesPartialOrder(GuardCase):
         ]
         self.assert_each_red(self.tree(), guard.ROLES, cases)
 
+    def test_edge_globs_stay_outside_the_source_root_and_keep_the_rules_they_take(self) -> None:
+        cases = [
+            ("component 'core' new glob '../**/*.logic.ts' for role 'test' lies inside the source root",
+             lambda c: c["components"]["core"]["roles"]["test"].append("../**/*.logic.ts")),
+            ("component 'web' new glob '../**/*.view.ts' for role 'test' lies inside the source root",
+             lambda c: c["components"]["web"]["roles"]["test"].append("../**/*.view.ts")),
+            ("component 'server' new glob '../**/*.q.ts' for role 'migration' lies inside the source root",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../**/*.q.ts")),
+            ("component 'core' new glob '**/*.test.ts' for role 'test' takes paths of role 'core' and drops",
+             lambda c: c["components"]["core"]["roles"]["test"].append("**/*.test.ts")),
+            ("component 'core' new glob '../../core/src/x.ts' is not in normal form",
+             lambda c: c["components"]["core"]["roles"]["test"].append("../../core/src/x.ts")),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["core"]["roles"]["test"].append("../test/x/**/*.ts")
+        cfg["components"]["server"]["roles"]["migration"].append("../migrations/x/*.sql")
+        _dump(root, guard.ROLES, cfg)
+        self.assertEqual(_whats(root, guard.ROLES), [])
+
+    def test_globs_in_normal_form_only(self) -> None:
+        cases = [(f"component 'server' new glob '{glob}' is not in normal form",
+                  lambda c, glob=glob: c["components"]["server"]["roles"]["adapter"].append(glob))
+                 for glob in ("./feat/api.ts", "x/../feat/flow.ts", "feat//api.ts", "feat/", "feat/./api.ts")]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["server"]["roles"]["adapter"].append("./feat/api.ts")
+        _dump(root, guard.ROLES, cfg)
+        support.write(root, "packages/server/src/feat/api.ts", "export const api = 1;\n")
+        place =roles.place_of(root, "packages/server/src/feat/api.ts", roles.load(root))
+        self.assertEqual(place.role if place else None, "adapter", "the glob would have taken a future api file")
+
     def test_a_new_glob_that_takes_an_existing_file_is_red(self) -> None:
         root = self.tree({"packages/server/src/x/api.ts": "export const api = 1;\n"})
         cfg = _json(root, guard.ROLES)
@@ -164,9 +201,9 @@ class RolesPartialOrder(GuardCase):
         cfg = _json(root, guard.ROLES)
         cfg["components"]["web"]["roles"]["core"] = ["view2/**/*.ts"]
         _dump(root, guard.ROLES, cfg)
-        self.assertEqual(_whats(root, guard.ROLES), [
-            "component 'web' new glob 'view2/**/*.ts' for role 'core' takes paths of role 'ui' and drops "
-            "TS-IO-ONLY-ADAPTER, TS-NO-CONSOLE, TS-NO-INNERHTML; else op:kernel; only additions are allowed against HEAD"])
+        self.assertIn("component 'web' new glob 'view2/**/*.ts' for role 'core' takes paths of role 'ui' and drops "
+                      "TS-IO-ONLY-ADAPTER, TS-NO-CONSOLE, TS-NO-INNERHTML; else op:kernel; only additions are allowed "
+                      "against HEAD", _whats(root, guard.ROLES))
         cfg["components"]["web"]["roles"].pop("core")
         cfg["components"]["web"]["roles"]["ui"].append("view2/**/*.ts")
         _dump(root, guard.ROLES, cfg)
@@ -189,13 +226,39 @@ class RolesPartialOrder(GuardCase):
         _dump(root, guard.ROLES, cfg)
         self.assertEqual(_whats(root, guard.ROLES), [], "flow keeps every rule of api")
 
+    def test_core_and_flow_only_where_the_component_has_them(self) -> None:
+        cases = [
+            ("component 'server' new glob 'x/core/*.ts' for role 'core', which component 'server' does not have yet",
+             lambda c: c["components"]["server"]["roles"].update(core=["x/core/*.ts"])),
+            ("component 'web' new glob 'x/flow.ts' for role 'flow', which component 'web' does not have yet",
+             lambda c: c["components"]["web"]["roles"].update(flow=["x/flow.ts"])),
+            ("component 'web' new glob 'x/api.ts' for role 'api', new to 'web', would lose",
+             lambda c: c["components"]["web"]["roles"].update(api=["x/api.ts"])),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+
     def test_new_components_hold_no_core_or_flow(self) -> None:
         cases = [
             (f"new component 'newpkg' role '{role}' would lose the component-bound rules of '{role}'; op:kernel",
-             lambda c, role=role: c["components"].update(newpkg={
-                 "lang": "typescript", "dir": "packages/newpkg", "root": "packages/newpkg/src",
-                 "roles": {role: ["**/*.ts"], "api": ["**/*.ts"]}}))
+             lambda c, role=role: c["components"].update(newpkg=_component({role: ["**/*.ts"], "api": ["**/*.ts"]})))
             for role in ("core", "flow")
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+
+    def test_new_components_keep_the_rules_of_each_role_elsewhere(self) -> None:
+        cases = [
+            ("new component 'newpkg' role 'ui' would lose TS-NO-INNERHTML",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.ts"]}))),
+            ("new component 'newpkg' role 'api' would lose TS-ADAPTER-NO-FEATURE, TS-BEHAVIOUR, TS-FEATURES-INDEPENDENT, "
+             "TS-LAYOUT",
+             lambda c: c["components"].update(newpkg=_component({"api": ["**/*.ts"]}))),
+            ("new component 'newpkg' role 'adapter' would lose",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.ts"], "adapter": ["lib/api.ts"]}))),
+            ("new component 'newpkg' lang 'python' must be the lang of an existing component and match every glob's "
+             "extension (not **/*.ts)",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.ts"]}, lang="python"))),
+            ("new component 'newpkg' lang 'kotlin' must be the lang of an existing component",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.kt"]}, lang="kotlin"))),
         ]
         self.assert_each_red(self.tree(), guard.ROLES, cases)
 
@@ -206,7 +269,9 @@ class RolesPartialOrder(GuardCase):
                  ("gates", "gates/lib/**", True), ("gate*", "gates/lib/**", False),
                  ("**/*.md", "AGENTS.md", True), ("packages/**/*.md", "**/.editorconfig", False),
                  ("packages/[ab]*/x.ts", "packages/a/x.ts", True), ("**/*.sh", ".claude/hooks/**", True),
-                 ("scripts/run.sh", "**/.editorconfig", True), ("scripts/*.sh", "**/.editorconfig", False)]
+                 ("scripts/run.sh", "**/.editorconfig", True), ("scripts/*.sh", "**/.editorconfig", False),
+                 ("packages/core/**/*.logic.ts", "packages/core/src", True),
+                 ("packages/core/test/x/**/*.ts", "packages/core/src", False)]
         for left, right, want in pairs:
             with self.subTest(left=left, right=right):
                 self.assertEqual(guard._overlap(left, right), want)
@@ -246,6 +311,7 @@ class DispatchPartialOrder(GuardCase):
                                 "finding_exits": bash_n["finding_exits"]})
         _dump(root, guard.DISPATCH, data)
         self.assertEqual(_whats(root, guard.DISPATCH), [])
+        self.assertEqual(guard.runnable_dispatch(root), (data["entries"], []))
 
     def test_weakening_is_red(self) -> None:
         cases = [
@@ -281,26 +347,40 @@ class DispatchPartialOrder(GuardCase):
             return lambda d: d["entries"].append({"glob": text, "tier": "s1", "check": [["@rules"]]})
 
         cases = [
-            ("new entry 8 glob part 'gates/lib/**' reaches operator-only '**/.editorconfig', 'gates/lib/**'",
-             glob("gates/lib/**")),
+            ("new entry 8 glob part 'gates/lib/**' reaches operator-only '**/.editorconfig'", glob("gates/lib/**")),
             ("new entry 8 glob part 'Makefile' reaches operator-only 'Makefile', '**/.editorconfig'", glob("packages/**/*.ts|Makefile")),
             ("new entry 8 glob part 'gates' reaches operator-only", glob("gates")),
             ("new entry 8 glob part '**/*.md' reaches operator-only 'AGENTS.md'", glob("**/*.md")),
-            ("new entry 8 glob part './ops/conductor/x.py' reaches operator-only '**/.editorconfig', 'ops/conductor/**'",
+            ("new entry 8 glob part './ops/conductor/x.py' reaches operator-only '**/.editorconfig'",
              glob("./ops/conductor/x.py")),
+            ("new entry 8 glob part 'packages/**/*.cjs' reaches operator-only '**/eslint.config.cjs'",
+             glob("packages/**/*.cjs")),
             ("new entry 8 glob part '../x/*.ts' is empty, absolute, outside", glob("../x/*.ts")),
             ("new entry 8 glob part '' is empty", glob("packages/**/*.ts|")),
             ("new entry 8 glob part '/etc/*' is empty, absolute", glob("/etc/*")),
         ]
         self.assert_each_red(self.tree(), guard.DISPATCH, cases)
 
-    def test_the_rejected_entry_would_run_in_the_post_edit_hook(self) -> None:
+    def test_the_hook_never_runs_a_rejected_entry(self) -> None:
         root = self.tree({"packages/web/src/a.ts": "export const a = 1;\n"})
-        data = _json(root, guard.DISPATCH)
-        data["entries"].append({"glob": "packages/**/*.ts", "tier": "s0", "format": SH_C})
+        base = _json(root, guard.DISPATCH)
+        data = copy.deepcopy(base)
+        data["entries"].append({"glob": "packages/**/*.ts", "tier": "s0", "format": PWN, "check": [PWN]})
         _dump(root, guard.DISPATCH, data)
-        self.assertIn(SH_C, [e.get("format") for e in engine.dispatch_entries(root, "packages/web/src/a.ts", "s0")])
         self.assertTrue(_whats(root, guard.DISPATCH))
+        runnable, held = guard.runnable_dispatch(root)
+        self.assertEqual(runnable, base["entries"])
+        self.assertTrue(held and all("the hook runs only the entries of" in why for why in held), held)
+        self.assertNotIn(PWN, [e.get("format") for e in engine.dispatch_entries(root, "packages/web/src/a.ts", "s0")])
+        payload = {"tool_input": {"file_path": os.path.join(root, "packages/web/src/a.ts")}, "cwd": root}
+        result = support.gate(root, ["hook", "post-edit"], payload)
+        self.assertFalse(os.path.exists(os.path.join(root, "PWNED")), result.stderr)
+        self.assertFalse(os.path.exists(os.path.join(root, "packages/web/src/PWNED")), result.stderr)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("GATES-RATCHET", result.stderr)
+        batch = {"tool_calls": [{"tool_input": {"file_path": os.path.join(root, "packages/web/src/a.ts")}}], "cwd": root}
+        support.gate(root, ["hook", "post-batch"], batch)
+        self.assertFalse(os.path.exists(os.path.join(root, "PWNED")))
 
 
 class QualityBarOrder(GuardCase):
@@ -352,6 +432,13 @@ class QualityBarOrder(GuardCase):
         root = self.base()
         support.write(root, guard.DOGFOOD, DOGFOOD_TEXT.replace("2. Export", "2. Skip the export.\n3. Export"))
         self.assertEqual(_whats(root, guard.DOGFOOD), ["changed before its end against HEAD; only append at the end"])
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT.rstrip("\n") + " Slow machines may take 300 s.\n")
+        self.assertEqual(_whats(root, guard.DOGFOOD), ["changed before its end against HEAD; only append at the end"],
+                         "the last step was lengthened")
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT + "\n\n")
+        self.assertEqual(_whats(root, guard.DOGFOOD), [])
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT.rstrip("\n"))
+        self.assertEqual(_whats(root, guard.DOGFOOD), [])
         os.remove(os.path.join(root, guard.DOGFOOD))
         os.remove(os.path.join(root, guard.QUALITY_BAR))
         self.assertEqual(_whats(root, guard.DOGFOOD), ["deleted against HEAD; this path only grows"])

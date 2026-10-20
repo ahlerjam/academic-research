@@ -8,7 +8,7 @@ import math
 import os
 import posixpath
 import re
-from typing import Callable, Dict, List, Optional, Sequence, Set
+from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from . import catalog, gitx, manifest, roles
 from .findings import Finding
@@ -17,6 +17,7 @@ RULE = "GATES-RATCHET"
 ROLES = "gates/roles.json"
 DISPATCH = "gates/dispatch.json"
 CATALOG = "gates/catalog.json"
+CONTROLS = "gates/controls.json"
 TEMPLATE = "gates/templates/package-tsconfig.json"
 QUALITY_BAR = "docs/product/quality-bar.json"
 DOGFOOD = "docs/product/dogfood-scenario.md"
@@ -32,6 +33,8 @@ CATCH_ALL_ROLES = ("api", "ui")
 KERNEL_ROLES = ("core", "flow")
 FILE_ROLES = ("adapter", "wiring")
 EDGE_ROLES = ("test", "migration")
+LANG_OF = {".ts": "typescript", ".tsx": "typescript", ".mts": "typescript", ".cts": "typescript", ".py": "python",
+           ".kt": "kotlin", ".kts": "kotlin", ".go": "go", ".rs": "rust"}
 WILDCARDS = "*?["
 DISPATCH_KEYS = ("glob", "tier", "format", "format_check", "check", "cwd", "finding_exits")
 DISPATCH_COPIED = ("tier", "format", "format_check", "cwd", "finding_exits")
@@ -73,11 +76,42 @@ def violations(tree: str) -> List[Finding]:
             if now.get(entry["id"]) != entry:
                 found.append(Finding(CATALOG, 1, RULE, f"{entry['id']} removed or changed"))
     entries = json.loads(old_cat) if old_cat else catalog.load(tree)
-    kernel = list(cfg.get("operator_only", []))
+    kernel = _kernel(tree, ref)
     found += _ordered(tree, ref, ROLES, lambda old, new: roles_order(tree, old, new, entries))
     found += _ordered(tree, ref, DISPATCH, lambda old, new: dispatch_order(old, new, kernel))
     found += _ordered(tree, ref, QUALITY_BAR, quality_order)
     return found + add_only(tree, ref) + tsconfigs(tree, ref)
+
+
+def _kernel(tree: str, ref: Optional[str]) -> List[str]:
+    """Return the operator-only globs of the work tree and of the base version together (more globs, stricter)."""
+    kernel = list(manifest.controls(tree).get("operator_only", []))
+    base = _parse(gitx.show(tree, ref, CONTROLS)) if ref else None
+    return kernel + [g for g in (base or {}).get("operator_only", []) if g not in kernel]
+
+
+def runnable_dispatch(tree: str) -> Tuple[List[dict], List[str]]:
+    """Return the dispatch entries a hook may run and why the work tree's appended entries are held back.
+
+    The engine runs every argv of a matching entry, so the hook takes the entries of the base version as they
+    are; the work tree's version runs only when it is a ratchet step of the base (dispatch_order), else the
+    base entries run and the reasons come back as GATES-RATCHET findings. Without a base version (a tree
+    without commits or without the file on its base) the work tree's entries run.
+    """
+    now = _parse(_read(tree, DISPATCH))
+    ref = gitx.base_ref(tree) or ("HEAD" if gitx.head(tree) else None)
+    old = _parse(gitx.show(tree, ref, DISPATCH)) if ref else None
+    if old is None:
+        if now is None:
+            return [], [f"{DISPATCH} is missing or not a JSON object"]
+        return list(now.get("entries", [])), []
+    kept = [e for e in old.get("entries", []) if isinstance(e, dict)]
+    if now is None:
+        return kept, [f"{DISPATCH} is missing or not a JSON object; the version on {ref} runs"]
+    held = dispatch_order(old, now, _kernel(tree, ref))
+    if held:
+        return kept, [f"{why}; the hook runs only the entries of {ref}" for why in held]
+    return [e for e in now.get("entries", []) if isinstance(e, dict)], []
 
 
 def _parse(text: Optional[str]) -> Optional[dict]:
@@ -176,8 +210,8 @@ def roles_order(tree: str, old: dict, new: dict, entries: List[dict]) -> List[st
     for name, comp in old_comps.items():
         out += _kept_component(name, comp, new_comps.get(name))
     for name, comp in new_comps.items():
-        out += [] if name in old_comps else _new_component(name, comp, old_comps)
-        out += _new_globs(name, comp, old_comps.get(name, {}).get("roles", {}), entries, new.get("budgets", {}))
+        out += [] if name in old_comps else _new_component(name, comp, old_comps, entries)
+        out += _new_globs(name, comp, old_comps, entries, new.get("budgets", {}))
     if out:
         return out
     before = roles.index(tree, old)
@@ -217,13 +251,22 @@ def _kept_component(name: str, comp: dict, now: Optional[dict]) -> List[str]:
                   for g in globs if g not in new_roles.get(role, [])]
 
 
-def _new_component(name: str, comp: object, old: Dict[str, dict]) -> List[str]:
+def _floor(entries: List[dict], name: str, role: str, comps: Dict[str, dict]) -> List[str]:
+    """Return the rule ids that bind a role in another existing component but would not bind it in this one."""
+    mine = _rule_ids(entries, name, role)
+    theirs = {rid for other, data in comps.items() if other != name and role in data.get("roles", {})
+              for rid in _rule_ids(entries, other, role)}
+    return sorted(theirs - mine)
+
+
+def _new_component(name: str, comp: object, old: Dict[str, dict], entries: List[dict]) -> List[str]:
     """Return why a new component is malformed, overlaps an existing one or holds sources with fewer rules.
 
     Catalog rules bound to a component never reach a new one, so a new component gets only the rules with
-    component '*'. Core and flow carry their strictest rules per component (TS-CORE-* in core,
-    TS-NO-DECISION-IN-FLOW in server); in a new component they are therefore op:kernel. Its sources need a
-    catch-all api or ui glob.
+    component '*'. Each of its roles must therefore keep every rule that binds the same role in an existing
+    component (TS-CORE-* in core, TS-NO-DECISION-IN-FLOW and the structural rules in server, TS-NO-INNERHTML
+    in web); core and flow are op:kernel in any case. Its lang matches the extension of every glob, and its
+    sources need a catch-all api or ui glob.
     """
     if not isinstance(comp, dict) or any(k not in comp for k in COMPONENT_KEYS) or not isinstance(comp["roles"], dict):
         return [f"new component '{name}' needs {', '.join(COMPONENT_KEYS)}"]
@@ -235,68 +278,91 @@ def _new_component(name: str, comp: object, old: Dict[str, dict]) -> List[str]:
             out.append(f"new component '{name}' dir '{mine}' overlaps component '{other}'")
     out += [f"new component '{name}' role '{role}' would lose the component-bound rules of '{role}'; op:kernel"
             for role in KERNEL_ROLES if comp["roles"].get(role)]
+    for role in comp["roles"]:
+        lost = _floor(entries, name, role, old)
+        if lost:
+            out.append(f"new component '{name}' role '{role}' would lose {', '.join(lost)}, which bind '{role}' in "
+                       "an existing component; op:kernel")
+    langs = {d.get("lang") for d in old.values()}
+    wrong = sorted({str(g) for globs in comp["roles"].values() for g in globs
+                    if LANG_OF.get(posixpath.splitext(str(g))[1], comp["lang"]) != comp["lang"]})
+    if comp["lang"] not in langs or wrong:
+        out.append(f"new component '{name}' lang '{comp['lang']}' must be the lang of an existing component and "
+                   f"match every glob's extension{' (not ' + ', '.join(wrong) + ')' if wrong else ''}")
     if not any(str(g).startswith("**/") for role in CATCH_ALL_ROLES for g in comp["roles"].get(role, [])):
         out.append(f"new component '{name}' needs a role {', '.join(CATCH_ALL_ROLES)} with a '**/' glob over its sources")
     return out
 
 
-def _glob_rx(glob: str) -> "re.Pattern[str]":
-    """Compile a role glob relative to the component root: '**/' spans directories, '*' and '?' stop at '/'."""
-    out, i = "", 0
-    while i < len(glob):
-        if glob.startswith("**/", i):
-            out, i = out + "(?:[^/]*/)*", i + 3
-        elif glob.startswith("**", i):
-            out, i = out + ".*", i + 2
-        elif glob[i] == "*":
-            out, i = out + "[^/]*", i + 1
-        elif glob[i] == "?":
-            out, i = out + "[^/]", i + 1
-        else:
-            out, i = out + re.escape(glob[i]), i + 1
-    return re.compile(out + "$")
+def _plain(glob: str, edge: bool) -> bool:
+    """Return whether a role glob is in normal form: no './', inner '..', empty or trailing segments.
+
+    Test and migration globs may start with one '../' (the component dir outside the source root).
+    """
+    body = glob[3:] if edge and glob.startswith("../") else glob
+    return (bool(body) and "\\" not in glob and not body.startswith(("/", "../")) and body != ".."
+            and posixpath.normpath(body) == body)
 
 
-def _new_globs(name: str, comp: object, old_roles: Dict[str, list], entries: List[dict],
+def _new_globs(name: str, comp: object, comps: Dict[str, dict], entries: List[dict],
                budgets: Dict[str, dict]) -> List[str]:
     """Return new globs that claim generated code, reach outside the component or give future files a laxer role.
 
-    Role priority (gates/lib/roles.py) decides which role a path gets; the catalog decides whether that role is
-    laxer. Test and migration may claim only paths outside the source root (test also `*.test.ts`); adapter and
-    wiring only single file names that no older glob of the component claims; core, flow, api and ui keep every
-    rule id and budget of each lower-priority role whose older globs they overlap ('**/' globs: of every one).
+    Every new glob is in normal form. Role priority (gates/lib/roles.py) decides which role a path gets; the
+    catalog decides whether that role is laxer. Test and migration may claim only paths outside the source
+    root (test also `*.test.ts`) and keep every rule and budget of the older globs they overlap; adapter and
+    wiring only single file names that no older glob of the component claims; core and flow only in a
+    component that has the role; a role new to an existing component keeps every rule of that role elsewhere;
+    core, flow, api and ui keep every rule id and budget of each lower-priority role whose older globs they
+    overlap ('**/' globs: of every one).
     """
     if not isinstance(comp, dict) or not isinstance(comp.get("roles"), dict):
         return []
+    existed = name in comps
+    old_roles: Dict[str, list] = comps.get(name, {}).get("roles", {})
     home = posixpath.normpath(comp.get("dir", "."))
     root = posixpath.normpath(comp.get("root", "."))
-    older = [_glob_rx(str(g)) for globs in old_roles.values() for g in globs]
+    older = [posixpath.normpath(posixpath.join(root, str(g))) for globs in old_roles.values() for g in globs]
     out = []
     for role, globs in comp["roles"].items():
         for glob in globs:
             if glob in old_roles.get(role, []):
                 continue
+            glob = str(glob)
             label = f"component '{name}' new glob '{glob}'"
             full = posixpath.normpath(posixpath.join(comp.get("root", "."), glob))
             if role == "generated":
                 out.append(f"{label} for role 'generated'; operator only")
-            elif home in (".", "") or not full.startswith(home + "/"):
+                continue
+            if home in (".", "") or not full.startswith(home + "/"):
                 out.append(f"{label} reaches outside '{home}'")
-            elif role in EDGE_ROLES:
-                inside = full == root or full.startswith(root + "/")
-                if inside and not (role == "test" and glob.endswith(".test.ts")):
+                continue
+            if not _plain(glob, role in EDGE_ROLES):
+                out.append(f"{label} is not in normal form (no './', inner '..', empty or trailing '/' segments"
+                           + ("; one leading '../' at most" if role in EDGE_ROLES else "") + "); else op:kernel")
+                continue
+            if existed and role in KERNEL_ROLES and not old_roles.get(role):
+                out.append(f"{label} for role '{role}', which component '{name}' does not have yet; op:kernel")
+            if existed and role not in old_roles:
+                lost = _floor(entries, name, role, comps)
+                out += [f"{label} for role '{role}', new to '{name}', would lose {', '.join(lost)}; op:kernel"] if lost else []
+            if role in EDGE_ROLES:
+                if _overlap(full, root) and not (role == "test" and glob.endswith(".test.ts")):
                     out.append(f"{label} for role '{role}' lies inside the source root '{root}'; only paths outside it"
                                + (" or *.test.ts files" if role == "test" else "") + "; else op:kernel")
+                else:
+                    out += [f"{label} for role '{role}' {why}; else op:kernel"
+                            for why in _laxer(name, role, glob, root, old_roles, entries, budgets)]
             elif role in FILE_ROLES:
                 if any(c in glob for c in WILDCARDS):
                     out.append(f"{label} for role '{role}' needs one file name without wildcards; else op:kernel")
-                elif any(rx.match(glob) for rx in older):
+                elif any(_overlap(full, g) for g in older):
                     out.append(f"{label} for role '{role}' takes a file that an older glob of '{name}' claims; op:kernel")
             elif role not in OPEN_ROLES:
                 out.append(f"{label} for unknown role '{role}'")
             else:
                 out += [f"{label} for role '{role}' {why}; else op:kernel"
-                        for why in _laxer(name, role, str(glob), root, old_roles, entries, budgets)]
+                        for why in _laxer(name, role, glob, root, old_roles, entries, budgets)]
     return out
 
 
@@ -307,7 +373,7 @@ def _rule_ids(entries: List[dict], component: str, role: str) -> Set[str]:
 
 def _laxer(name: str, role: str, glob: str, root: str, old_roles: Dict[str, list], entries: List[dict],
            budgets: Dict[str, dict]) -> List[str]:
-    """Return why a new open-role glob would hand paths of a lower-priority role fewer rules or a larger budget."""
+    """Return why a new glob would hand paths of a lower-priority role fewer rules or a larger budget."""
     rank = roles.ROLE_PRIORITY.index(role)
     full = posixpath.normpath(posixpath.join(root, glob))
     mine, out = _rule_ids(entries, name, role), []
@@ -429,8 +495,12 @@ def quality_order(old: dict, new: dict) -> List[str]:
 
 
 def _appended(old: str, new: str) -> bool:
-    """Return whether new is old with text appended at its end (trailing blank lines of old may change)."""
-    return new.startswith(old.rstrip("\n"))
+    """Return whether new is old with whole lines appended at its end (trailing blank lines of old may change).
+
+    The old text must end where a line ends in the new text, so its last line cannot be lengthened.
+    """
+    head = old.rstrip("\n")
+    return not head or new.rstrip("\n") == head or new.startswith(head + "\n")
 
 
 def add_only(tree: str, ref: str) -> List[Finding]:
@@ -438,7 +508,7 @@ def add_only(tree: str, ref: str) -> List[Finding]:
 
     Text inserted in the middle (an early `return;` in a test body, an exception line between checks, a
     skipped dogfood step) would keep every old line and still change what the file proves, so only appending
-    passes; a new scenario goes into a new file or at the end. Comments do not count as expect calls.
+    whole lines passes; a new scenario goes into a new file or at the end. Comments do not count as expect calls.
     """
     found = []
     listed = gitx.run(["git", "ls-tree", "-r", "--name-only", ref, "--"] + list(ADD_ONLY), cwd=tree).stdout.split()

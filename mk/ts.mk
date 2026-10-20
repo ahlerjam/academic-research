@@ -1,5 +1,8 @@
 # TypeScript workspace (every packages/<name> with a tsconfig.json). Operator only.
 TS_PROJECTS := tsconfig.json $(patsubst %/tsconfig.json,%,$(sort $(wildcard packages/*/tsconfig.json)))
+# constraint: --config pins ESLint and Prettier to the root config; without it both load a config next to each file as code
+ESLINT = $(BIN)/eslint --config eslint.config.mjs
+PRETTIER = $(BIN)/prettier --config .prettierrc.json
 # constraint: vitest prints 'skipped' or 'todo' in its summary when a test did not run; every collected test must run
 VITEST = out=$$($(BIN)/vitest run --reporter=default $(1) 2>&1); rc=$$?; \
 	if [ $$rc -ne 0 ] || printf '%s\n' "$$out" | grep -Eq 'Tests .*(skipped|todo)'; then printf '%s\n' "$$out" | tail -n 40; \
@@ -9,12 +12,12 @@ setup-ts: ## TypeScript: install from pnpm-lock.yaml
 	@pnpm install --frozen-lockfile --reporter=silent
 
 fix-ts: ## TypeScript: format and autofix
-	@$(BIN)/prettier --write --log-level warn .
-	@$(BIN)/eslint --fix --max-warnings 0 . || true
+	@$(PRETTIER) --write --log-level warn .
+	@$(ESLINT) --fix --max-warnings 0 . || true
 
 lint-ts: ## TypeScript: format check, ESLint, house rules
-	@$(BIN)/prettier --check --log-level warn . || { echo "[GATES-FORMAT] not formatted; run make fix"; exit 1; }
-	@$(BIN)/eslint --max-warnings 0 .
+	@$(PRETTIER) --check --log-level warn . || { echo "[GATES-FORMAT] not formatted; run make fix"; exit 1; }
+	@$(ESLINT) --max-warnings 0 .
 	@for c in $(COMPONENTS); do $(GATE) lint --component $$c || exit 1; done
 
 typecheck-ts: ## TypeScript: tsc strict for every project
@@ -26,8 +29,8 @@ test-ts: ## TypeScript: every Vitest test, none skipped
 # The stop gate runs make -s check-<component> for every component a change touches.
 check-%:
 	@test -f packages/$*/tsconfig.json || { echo "Makefile:1 [GATES-INFRA] check-$*: there is no component packages/$*"; exit 1; }
-	@$(BIN)/prettier --check --log-level warn packages/$* || { echo "[GATES-FORMAT] not formatted; run make fix"; exit 1; }
-	@$(BIN)/eslint --max-warnings 0 packages/$*
+	@$(PRETTIER) --check --log-level warn packages/$* || { echo "[GATES-FORMAT] not formatted; run make fix"; exit 1; }
+	@$(ESLINT) --max-warnings 0 packages/$*
 	@$(GATE) lint --component $*
 	@$(BIN)/tsc -p packages/$* --pretty false
 	@$(call VITEST,packages/$*/)

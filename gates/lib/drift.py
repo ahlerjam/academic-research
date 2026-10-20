@@ -1,4 +1,4 @@
-"""Drift checks D1 to D16: the gates themselves stay complete, strict and in sync."""
+"""Drift checks D1 to D18: the gates themselves stay complete, strict and in sync."""
 
 from __future__ import annotations
 
@@ -188,7 +188,44 @@ def d16(tree: str) -> List[Finding]:
     return found + manifest.local_findings(tree)
 
 
-CHECKS: List[Callable[[str], List[Finding]]] = [d1, d2_d3, d4, d5, d6, d7, d8, d11, d12, d13, d14, d15, d16]
+LINT_CONFIGS = ["**/eslint.config.*", "**/.eslintrc*", "**/prettier.config.*", "**/.prettierrc*"]
+ROOT_CONFIGS = ("eslint.config.mjs", ".prettierrc.json")
+
+
+def d17(tree: str) -> List[Finding]:
+    """D17: ESLint and Prettier read only the operator's root config; no nested config file or package key exists.
+
+    Both tools look up a config next to the linted file and run it as code; a nested one could switch every
+    rule off for its directory, so the gates pin --config and this check keeps the tree free of them.
+    """
+    found = [Finding(rel, 1, "GATES-D17", "a nested ESLint or Prettier config would replace the operator's root "
+                                          "config for its directory; remove it")
+             for rel in gitx.ls(tree, LINT_CONFIGS) if rel not in ROOT_CONFIGS]
+    for rel in gitx.ls(tree, ["**/package.json", "**/package.yaml"]):
+        text = _read(tree, rel)
+        try:
+            keys = set(json.loads(text)) if rel.endswith(".json") else set(re.findall(r"^([\w-]+):", text, re.M))
+        except (ValueError, TypeError):
+            keys = {"prettier"}
+        if "prettier" in keys:
+            found.append(Finding(rel, 1, "GATES-D17", "a 'prettier' key in a package file is a Prettier config; "
+                                                      "the operator's .prettierrc.json is the only one"))
+    return found
+
+
+TOOL_SHADOWS = ["**/node_modules/**", "**/.venv/**"]
+
+
+def d18(tree: str) -> List[Finding]:
+    """D18: no versioned file sits in a directory the gates resolve tools from (node_modules, .venv)."""
+    tracked = set(gitx.run(["git", "ls-files", "-z", "--"] + [":(glob)" + p for p in TOOL_SHADOWS],
+                           cwd=tree).stdout.split("\0")) - {""}
+    return [Finding(rel, 1, "GATES-D18", "a versioned file in a tool directory would stand in for the installed "
+                                         "tool; install tools from the lockfile instead")
+            for rel in sorted(tracked)]
+
+
+CHECKS: List[Callable[[str], List[Finding]]] = [d1, d2_d3, d4, d5, d6, d7, d8, d11, d12, d13, d14, d15, d16, d17, d18]
 
 
 def violations(tree: str) -> List[Finding]:

@@ -14,7 +14,10 @@ from .findings import Finding
 GENERIC = re.compile(r"^(?P<path>[^\s:][^:]*):(?P<line>\d+)(?::\d+)?:?\s+(?P<code>[A-Za-z][\w/@.-]*)?:?\s*(?P<what>.*)$")
 RUFF = re.compile(r"^(?P<path>[^:]+):(?P<line>\d+):\d+: (?P<code>[A-Z]+\d+) (?P<what>.*)$")
 SQUAWK = re.compile(r"^(?P<path>[^:]+):(?P<line>\d+):\d+: \w+: (?P<code>[\w-]+) (?P<what>.*)$")
-BIN_DIRS = (".venv/bin", "node_modules/.bin", "build/tools", "bin")
+BIN_DIRS = (".venv/bin", "node_modules/.bin")
+GATE_TOOLS = ("ast-grep", "sg", "ruff")
+PINNED_CONFIGS = {"eslint": "eslint.config.mjs", "prettier": ".prettierrc.json"}
+CONFIG_FLAGS = ("-c", "--config", "--no-config-lookup", "--no-config")
 
 
 class Outcome(NamedTuple):
@@ -30,16 +33,35 @@ def offline() -> bool:
 
 
 def resolve(tree: str, comp_dir: str, name: str) -> Optional[str]:
-    """Find a tool in the component, the repo root, then PATH."""
+    """Find a tool in the component's and the repo root's lockfile tool directories, then PATH.
+
+    The gate's own tools (ast-grep, sg, ruff) come from PATH only: a file in the tree, versioned or not,
+    never stands in for the binary that judges the tree.
+    """
     if "/" in name:
         path = os.path.join(tree, comp_dir, name)
         return path if os.access(path, os.X_OK) else None
+    if name in GATE_TOOLS:
+        return shutil.which(name)
     for base in (os.path.join(tree, comp_dir), tree):
         for sub in BIN_DIRS:
             path = os.path.join(base, sub, name)
             if os.access(path, os.X_OK):
                 return path
     return shutil.which(name)
+
+
+def pinned(tree: str, argv: Sequence[str]) -> List[str]:
+    """Return argv with ESLint and Prettier pinned to the operator's root config file.
+
+    Both tools otherwise look up a config file from the linted file's directory upwards and run it as code,
+    so a nested eslint.config.js or prettier.config.mjs would run in the hook and could switch rules off;
+    `--config <file>` skips that lookup. An argv that names its own config flag stays as it is.
+    """
+    name = os.path.basename(argv[0]) if argv else ""
+    if name not in PINNED_CONFIGS or any(a.split("=", 1)[0] in CONFIG_FLAGS for a in argv[1:]):
+        return list(argv)
+    return [argv[0], "--config", os.path.join(tree, PINNED_CONFIGS[name])] + list(argv[1:])
 
 
 def expand(argv: Sequence[str], files: Sequence[str]) -> List[str]:
@@ -138,7 +160,7 @@ def run(tree: str, comp_dir: str, argv: Sequence[str], files: Sequence[str], cod
     cwd_rel = comp_dir if cwd_component else "."
     call_files = [os.path.relpath(os.path.join(tree, f), cwd) for f in files]
     try:
-        proc = subprocess.run([exe] + expand(argv[1:], call_files), cwd=cwd, capture_output=True,
+        proc = subprocess.run([exe] + expand(pinned(tree, argv)[1:], call_files), cwd=cwd, capture_output=True,
                               text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return Outcome([Finding(files[0] if files else ".", 1, "GATES-INFRA",

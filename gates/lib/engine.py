@@ -7,7 +7,7 @@ import os
 import subprocess
 from typing import Dict, List, Optional
 
-from . import budgets, catalog, gitx, pyast, roles, textrules, tools
+from . import budgets, catalog, gitx, guard, pyast, roles, textrules, tools
 from .findings import Finding
 
 
@@ -72,13 +72,16 @@ def file_findings(tree: str, rel: str, place: roles.Place, cfg: dict, entries: L
     return found
 
 
-def dispatch_entries(tree: str, rel: str, tier: str) -> List[dict]:
-    """Return dispatch.json entries of a tier whose glob matches the file."""
-    with open(os.path.join(tree, "gates", "dispatch.json"), encoding="utf-8") as handle:
-        data = json.load(handle)
+def dispatch_entries(tree: str, rel: str, tier: str, runnable: Optional[List[dict]] = None) -> List[dict]:
+    """Return the runnable dispatch.json entries of a tier whose glob matches the file.
+
+    Runnable are the entries guard.runnable_dispatch hands out: the base version's, or the work tree's only
+    when they are a ratchet step of it.
+    """
+    pool = guard.runnable_dispatch(tree)[0] if runnable is None else runnable
     out = []
-    for entry in data["entries"]:
-        if entry.get("tier") != tier:
+    for entry in pool:
+        if entry.get("tier") != tier or not isinstance(entry.get("glob"), str):
             continue
         if rel in set(gitx.ls(tree, entry["glob"].split("|"))):
             out.append(entry)
@@ -99,7 +102,8 @@ def format_check(tree: str, comp_dir: str, argv: List[str], rel: str, cwd_compon
     cwd = os.path.join(tree, comp_dir) if cwd_component else tree
     call = os.path.relpath(os.path.join(tree, rel), cwd)
     try:
-        proc = subprocess.run([exe] + tools.expand(argv[1:], [call]), cwd=cwd, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run([exe] + tools.expand(tools.pinned(tree, argv)[1:], [call]), cwd=cwd, capture_output=True,
+                              text=True, timeout=60)
     except subprocess.TimeoutExpired:
         return [Finding(rel, 1, "GATES-INFRA", f"infrastructure: '{argv[0]}' exceeded 60 s")]
     if proc.returncode == 0:
@@ -112,14 +116,19 @@ def format_check(tree: str, comp_dir: str, argv: List[str], rel: str, cwd_compon
 
 def run_tier(tree: str, rel: str, tier: str, cfg: dict, entries: List[dict],
              do_format: bool = True, check_format: bool = False) -> tools.Outcome:
-    """Format (or, for files written outside Edit, check the format) then check one file with every entry of a tier."""
+    """Format (or, for files written outside Edit, check the format) then check one file with every entry of a tier.
+
+    Only runnable dispatch entries run (guard.runnable_dispatch); a held-back work tree version is a
+    GATES-RATCHET finding, so the post-edit hook blocks and none of its argv runs.
+    """
     place = roles.place_of(tree, rel, cfg)
     owner = place.component if place else roles.component_of_path(cfg, rel)
     comp_dir = roles.component_dir(cfg, owner) if owner else "."
     codes = catalog.code_map(entries)
-    found: List[Finding] = []
+    runnable, held = guard.runnable_dispatch(tree)
+    found: List[Finding] = [Finding(guard.DISPATCH, 1, guard.RULE, why) for why in held]
     skipped: List[str] = []
-    for entry in dispatch_entries(tree, rel, tier):
+    for entry in dispatch_entries(tree, rel, tier, runnable):
         if do_format and entry.get("format"):
             outcome = tools.run(tree, comp_dir, entry["format"], [rel], codes,
                                 cwd_component=entry.get("cwd") == "component")
