@@ -154,3 +154,13 @@ the user's plan (ADR-0013); M2b is built in parallel and does not wait for the a
 | Update-log compaction | Automatic above a measured size while idle, with a backup first, plus a command | Tx |
 | Ghost text | The operator rates 20 suggestions; the B1 budget and login are approved; P1 proves docx | T32, B1, P1 |
 | Smaller points | Wishlist panel in N1; no more chair profiles now (N10); the v0.1 aggregate check in T44c; the demo shows an anchored cite (T44a); `SOURCE_URL` is the GitHub repository; SECURITY supports the latest 0.x; P2 without T34 and T35; the annex lists decisions on proposals only (P5); CI operating systems and TeX installers are the agent's choice | tickets |
+| Statistics | Descriptive only in v0.1; the Python engine T35 moves after v0.1 | T07, T35 |
+| AI declaration | A declaration variant with AI use is allowed as user-chosen text, off by default | T19a |
+| Embedding model | Downloaded only on the user's click from a pinned source with a verified hash, if N5 is needed | N5 |
+| Source search | On by default per project with a notice of what is sent; the same for the assistant's search tools | N7, N9 |
+| Ghost text | On by default unless the measurement says no-go; one setting `autocomplete.enabled` | T32, B2, B3 |
+| Real bridge test | CI tests against the fake host; the real test runs locally before each release | P3 |
+| Minimal TeX | No launcher-managed TeX | T44 |
+| Rerank, citation threshold | Haiku rerank optional and off by default; thresholds proposed by the agent from measurements | T27, B4 |
+| Platforms | macOS on Apple Silicon, Windows x64, Linux x64; Intel Macs best effort, untested | T22, T44, N5 |
+| Smaller points | ADR for `projectScoped` allowed; texts and the folding table are reviewed in the PR; Y2's judgments kept; P2 keeps `capture-source-copy`; the recall@10 gate stays on the synthetic set; known limits of N9 accepted | tickets |
