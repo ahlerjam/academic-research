@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -17,12 +18,19 @@ from test_state import NOW, release_world
 
 CFG = state.load_config()
 REPO = "ahlerjam/academic-research"
+HOLDER = "lead-test"
 
 
 def run(g: FakeGitHub, *argv: str) -> int:
     """Run one verb against the fake, silencing its output."""
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         return gh_ops.run(list(argv), t=g, cfg=CFG, now=NOW)
+
+
+def leased(g: FakeGitHub, holder: str = HOLDER, beat: float = NOW - 60) -> FakeGitHub:
+    """Give the fake a progress.json whose lease belongs to holder."""
+    g.set_file(CFG["progress_path"], CFG["state_branch"], json.dumps({"lease": {"holder": holder, "beat_at": beat}}))
+    return g
 
 
 def open_pr_object(number=7, head="claude/unit-3-x", base="main", fork=False, state_="open") -> dict:
@@ -107,27 +115,51 @@ class Verbs(Files):
                 self.assertEqual(run(g, verb), 2)
                 self.assertEqual(g.calls, [])
 
-    def test_open_pr_only_from_claude_heads_into_main(self) -> None:
-        body = self.file("Closes #3\n")
+    def pr_args(self, head: str = "claude/unit-3-x", title: str = "unit 3\n") -> list:
+        """Return valid open-pr arguments with the title in a file."""
         log = self.file("make check ok\n", "verify.log")
-        sha = hashlib.sha256(open(log, "rb").read()).hexdigest()
+        return ["open-pr", "--holder", HOLDER, "--head", head, "--title-file", self.file(title, "title.txt"),
+                "--body-file", self.file("Closes #3\n"), "--evidence-log", log,
+                "--evidence-sha256", hashlib.sha256(b"make check ok\n").hexdigest()]
+
+    def test_open_pr_only_from_claude_heads_into_main(self) -> None:
         for head in ["main", "feature/x", "claude", "claude/", "conductor/state", "claude/../main", "claude/x.lock",
                      "claude/a b", "refs/heads/claude/x", "claude/" + "x" * 120]:
             with self.subTest(head=head):
-                g = FakeGitHub()
-                self.assertEqual(run(g, "open-pr", "--head", head, "--title", "t", "--body-file", body,
-                                     "--evidence-log", log, "--evidence-sha256", sha), 2)
-                self.assertEqual(g.calls, [])
-        g = FakeGitHub()
-        self.assertEqual(run(g, "open-pr", "--head", "claude/unit-3-x", "--title", "unit 3", "--body-file", body,
-                             "--evidence-log", log, "--evidence-sha256", sha), 0)
-        method, path, sent = g.calls[0]
+                g = leased(FakeGitHub())
+                self.assertEqual(run(g, *self.pr_args(head=head)), 2)
+                self.assertEqual(g.mutations(), [])
+        g = leased(FakeGitHub())
+        self.assertEqual(run(g, *self.pr_args()), 0)
+        method, path, sent = g.mutations()[0]
         self.assertEqual((method, path, sent["base"], sent["head"]), ("POST", f"repos/{REPO}/pulls", "main", "claude/unit-3-x"))
-        self.assertIn(sha, sent["body"])
+        self.assertEqual(sent["title"], "unit 3")
+        self.assertIn(hashlib.sha256(b"make check ok\n").hexdigest(), sent["body"])
+
+    def test_the_pr_title_comes_from_a_file_never_from_the_command_line(self) -> None:
+        g = leased(FakeGitHub())
+        title = 'feat: x"; touch /tmp/pwned; echo "$(id)`id`'
+        self.assertEqual(run(g, *self.pr_args(title=title + "\n")), 0)
+        self.assertEqual(g.mutations()[0][2]["title"], title)
+        for bad in ("two\nlines\n", "\n", "x" * 257):
+            with self.subTest(bad=bad[:10]):
+                g = leased(FakeGitHub())
+                self.assertEqual(run(g, *self.pr_args(title=bad)), 2)
+                self.assertEqual(g.mutations(), [])
+        args = self.pr_args()
+        i = args.index("--title-file")
+        g = leased(FakeGitHub())
+        self.file("x\n", "unit 3")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = gh_ops.run(args[:i] + ["--title", os.path.join(self.dir.name, "unit 3")] + args[i + 2:], t=g, cfg=CFG,
+                              now=NOW)
+        self.assertEqual(code, 2, "--title is no abbreviation of --title-file")
+        self.assertEqual(g.calls, [])
 
     def test_open_pr_refuses_wrong_evidence_and_bad_bodies(self) -> None:
         log = self.file("make check ok\n", "verify.log")
         body = self.file("Closes #3\n")
+        title = self.file("t\n", "title.txt")
         cases = [
             ["--body-file", body, "--evidence-log", log, "--evidence-sha256", "0" * 64],
             ["--body-file", body, "--evidence-log", log + ".missing", "--evidence-sha256", "0" * 64],
@@ -138,37 +170,64 @@ class Verbs(Files):
         ]
         for extra in cases:
             with self.subTest(extra=extra[1]):
-                g = FakeGitHub()
-                self.assertEqual(run(g, "open-pr", "--head", "claude/unit-3-x", "--title", "t", *extra), 2)
-                self.assertEqual(g.calls, [])
+                g = leased(FakeGitHub())
+                self.assertEqual(run(g, "open-pr", "--holder", HOLDER, "--head", "claude/unit-3-x", "--title-file", title,
+                                     *extra), 2)
+                self.assertEqual(g.mutations(), [])
+
+    def test_mutating_lead_verbs_need_the_own_lease(self) -> None:
         g = FakeGitHub()
-        self.assertEqual(run(g, "open-pr", "--head", "claude/unit-3-x", "--title", "two\nlines", "--body-file", body,
-                             "--evidence-log", log, "--evidence-sha256", hashlib.sha256(b"make check ok\n").hexdigest()), 2)
+        g.set("pulls/7", open_pr_object())
+        actions = self.file(json.dumps({"actions": [{"verb": "comment", "issue": 3, "body": "x"}]}), "a.json")
+        verbs = [self.pr_args(), ["enable-auto-merge", "--holder", HOLDER, "--pr", "7"],
+                 ["apply-actions", "--holder", HOLDER, "--file", actions]]
+        leases = {"no progress": None, "another holder": {"lease": {"holder": "lead-other", "beat_at": NOW - 60}},
+                  "a beat in the future": {"lease": {"holder": HOLDER, "beat_at": NOW + 3600}},
+                  "corrupt file": "not json"}
+        for why, progress in leases.items():
+            for argv in verbs:
+                with self.subTest(why=why, verb=argv[0]):
+                    g.calls.clear()
+                    g.answers.pop(f"repos/{REPO}/contents/{CFG['progress_path']}?ref={CFG['state_branch']}", None)
+                    if progress is not None:
+                        g.set_file(CFG["progress_path"], CFG["state_branch"],
+                                   progress if isinstance(progress, str) else json.dumps(progress))
+                    self.assertEqual(run(g, *argv), 2)
+                    self.assertEqual(g.mutations(), [])
+        for argv in verbs:
+            with self.subTest(verb=argv[0], lease="own"):
+                leased(g)
+                g.calls.clear()
+                self.assertEqual(run(g, *argv), 0)
+                self.assertEqual(len(g.mutations()), 1)
 
     def test_auto_merge_only_for_claude_heads_into_main(self) -> None:
         bad = [open_pr_object(head="feature/x"), open_pr_object(base="release"), open_pr_object(fork=True),
                open_pr_object(state_="closed"), open_pr_object(head="conductor/state")]
         for obj in bad:
             with self.subTest(obj=obj["head"]["ref"] + "->" + obj["base"]["ref"]):
-                g = FakeGitHub()
+                g = leased(FakeGitHub())
                 g.set("pulls/7", obj)
-                self.assertEqual(run(g, "enable-auto-merge", "--pr", "7"), 2)
+                self.assertEqual(run(g, "enable-auto-merge", "--holder", HOLDER, "--pr", "7"), 2)
                 self.assertEqual(g.mutations(), [])
-        g = FakeGitHub()
-        self.assertEqual(run(g, "enable-auto-merge", "--pr", "8"), 2)
-        g = FakeGitHub()
+        g = leased(FakeGitHub())
+        self.assertEqual(run(g, "enable-auto-merge", "--holder", HOLDER, "--pr", "8"), 2)
+        g = leased(FakeGitHub())
         g.set("pulls/7", open_pr_object())
-        self.assertEqual(run(g, "enable-auto-merge", "--pr", "7"), 0)
+        self.assertEqual(run(g, "enable-auto-merge", "--holder", HOLDER, "--pr", "7"), 0)
         self.assertEqual(g.mutations(), [("PUT", f"repos/{REPO}/pulls/7/ccr/auto_merge", {"merge_method": "merge"})])
         for value in ["0", "-1", "7; rm", "abc"]:
             with self.subTest(value=value):
-                self.assertEqual(run(FakeGitHub(), "enable-auto-merge", "--pr", value), 2)
+                self.assertEqual(run(leased(FakeGitHub()), "enable-auto-merge", "--holder", HOLDER, "--pr", value), 2)
 
     def test_labels_from_the_catalogue_only(self) -> None:
         g = FakeGitHub()
         self.assertEqual(run(g, "label", "--issue", "3", "--add", "not-a-label"), 2)
         self.assertEqual(run(g, "label", "--issue", "3", "--remove", "needs-operator"), 2)
-        self.assertEqual(run(g, "label", "--issue", "3", "--remove", "conductor:pause"), 2)
+        for name in ("conductor:pause", "conductor", "op:external", "op:kernel", "op:taste"):
+            with self.subTest(remove=name):
+                self.assertEqual(run(g, "label", "--issue", "3", "--remove", name), 2)
+        self.assertEqual(run(g, "label", "--issue", "3", "--add", "conductor"), 2)
         self.assertEqual(run(g, "label", "--issue", "3"), 2)
         self.assertEqual(g.calls, [])
         self.assertEqual(run(g, "label", "--issue", "3", "--add", "state:building", "--remove", "state:ready"), 0)
@@ -192,6 +251,28 @@ class Verbs(Files):
         self.assertEqual(g.mutations(), [])
         self.assertEqual(run(g, "comment", "--issue", "9", "--body-file", body), 0)
         self.assertEqual(run(g, "create-issue", "--title", "x", "--body-file", body, "--label", "unit"), 0)
+
+    def test_operator_issues_are_never_closed(self) -> None:
+        body = self.file("text\n")
+        protected = [
+            {"title": "Conductor status", "labels": [{"name": "conductor"}, {"name": "conductor:pause"}]},
+            {"title": "Conductor status", "labels": []},
+            {"title": "Operator-Inbox", "labels": [{"name": "conductor"}]},
+            {"title": "x", "labels": [{"name": "conductor:pause"}]},
+            {"title": "x", "labels": [{"name": "needs-operator"}]},
+            {"title": "x", "labels": [{"name": "op:kernel"}]},
+            {"title": "Anthropic request: use of the Claude plan by the plugin", "labels": [{"name": "op:external"}]},
+            {"title": "Anthropic request: use of the Claude plan by the plugin", "labels": []},
+        ]
+        for issue in protected:
+            with self.subTest(issue=issue):
+                g = FakeGitHub()
+                g.set("issues/7", dict(issue, number=7, state="open"))
+                self.assertEqual(run(g, "close-issue", "--issue", "7", "--reason", "completed", "--comment-file", body), 2)
+                self.assertEqual(g.mutations(), [])
+        g = FakeGitHub()
+        g.set("issues/7", {"number": 7, "state": "open", "title": "Release 0.1.0", "labels": []})
+        self.assertEqual(run(g, "close-issue", "--issue", "7", "--reason", "completed", "--comment-file", body), 0)
 
     def test_clear_needs_operator_names_the_charter_rule(self) -> None:
         g = FakeGitHub()
@@ -217,6 +298,12 @@ class Verbs(Files):
         g.set("issues/121", {"number": 121, "state": "open", "labels": []})
         self.assertEqual(run(g, "clear-needs-operator", "--issue", "121", "--charter-section", "3",
                              "--reason", "would replace the operator action"), 2)
+        g.set("issues/122", {"number": 122, "state": "open", "labels": [{"name": "needs-operator"}],
+                             "title": "Anthropic request: use of the Claude plan by the plugin"})
+        self.assertEqual(run(g, "clear-needs-operator", "--issue", "122", "--charter-section", "3",
+                             "--reason", "op:external was removed before, the title still names it"), 2)
+        self.assertEqual(run(g, "label", "--issue", "120", "--remove", "op:external"), 2)
+        self.assertEqual(g.mutations(), [])
 
     def test_status_issue_is_updated_or_created(self) -> None:
         body = self.file("status\n")

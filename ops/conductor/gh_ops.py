@@ -12,6 +12,14 @@ apply-actions files what an issue-only workflow (ar-plan, ar-judge, ar-critic, a
 in its `actions` list: create-issue, comment, label and close-issue, validated as a whole before anything is
 sent, in list order, with `{{ref}}` placeholders replaced by the numbers of issues created earlier in the
 same list. Progress is kept next to the action file, so a rerun after an error never files an action twice.
+A close or label action aimed at an existing issue number must name an unprotected unit, critic or hypothesis
+issue (checked by GET before anything is sent).
+
+open-pr, enable-auto-merge and apply-actions take `--holder` and run only while progress.json on the state
+branch shows that holder's lease, so a lead whose lease was taken over cannot act any more. The kill switch and
+the operator's issues stay with the operator: no verb removes `conductor`, `conductor:pause` or an `op:*` label,
+adds `conductor`, or closes an issue with those labels, `needs-operator`, or the title of the status issue, the
+Operator-Inbox or the Anthropic request.
 """
 
 from __future__ import annotations
@@ -37,7 +45,12 @@ HEAD_RX = re.compile(r"^claude/[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9_-][A-Z
 VERSION_RX = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA256_RX = re.compile(r"^[0-9a-f]{64}$")
 CHARTER = "docs/autonomy/charter.md"
-OPERATOR_ONLY_REMOVALS = ("conductor:pause",)
+OPERATOR_ONLY_REMOVALS = ("conductor:pause", "conductor", "op:external", "op:kernel", "op:taste")
+PROTECTED_LABELS = ("conductor", "conductor:pause", "needs-operator")
+ANTHROPIC_TITLE = "Anthropic request:"
+ACTION_TARGET_LABELS = ("unit", "critic", "hypothesis")
+ACTION_TARGET_PREFIXES = ("slice:", "type:")
+HOLDER_VERBS = ("open-pr", "enable-auto-merge", "apply-actions")
 ACTION_VERBS = ("create-issue", "comment", "label", "close-issue")
 REF_RX = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 PLACEHOLDER_RX = re.compile(r"\{\{([^{}]*)\}\}")
@@ -113,6 +126,8 @@ def _label_change(add: Sequence[str], remove: Sequence[str], catalogue: Dict[str
     blocked = [n for n in remove if n in OPERATOR_ONLY_REMOVALS]
     if blocked:
         raise Refused(f"only the operator removes {', '.join(blocked)}")
+    if "conductor" in add:
+        raise Refused("the label conductor marks only the status and inbox issues gh_ops creates itself")
     return add, remove
 
 
@@ -124,9 +139,42 @@ def _issue(t: github.Transport, number: int) -> dict:
     return data
 
 
+def _protected(issue: dict, cfg: dict) -> Optional[str]:
+    """Return why an issue belongs to the operator (status, inbox, Anthropic request, operator labels), or None."""
+    labels = state.label_names(issue)
+    title = str(issue.get("title") or "")
+    hit = [n for n in labels if n in PROTECTED_LABELS or n.startswith("op:")]
+    if hit:
+        return f"it carries {', '.join(hit)}"
+    if title in (cfg["status_title"], cfg["inbox_title"]) or title.startswith(ANTHROPIC_TITLE):
+        return f"its title {title!r} names an operator issue"
+    return None
+
+
+def _check_action_target(t: github.Transport, cfg: dict, number: int, where: str) -> None:
+    """Refuse a model-chosen close or label target unless it is an unprotected unit, critic or hypothesis issue."""
+    issue = _issue(t, number)
+    if "pull_request" in issue:
+        raise Refused(f"{where}: #{number} is a pull request")
+    why = _protected(issue, cfg)
+    if why:
+        raise Refused(f"{where}: #{number} stays with the operator: {why}")
+    labels = state.label_names(issue)
+    if not any(n in ACTION_TARGET_LABELS or n.startswith(ACTION_TARGET_PREFIXES) for n in labels):
+        raise Refused(f"{where}: #{number} is no unit, critic or hypothesis issue")
+
+
+def _require_lease(t: github.Transport, cfg: dict, holder: str, now: float) -> None:
+    """Refuse unless progress.json on the state branch shows this holder's lease (the lead beat before acting)."""
+    progress = state.read_progress(t, cfg)
+    lease = progress.get("lease") if isinstance(progress.get("lease"), dict) else {}
+    if not holder or state.lease_age(progress, now) is None or lease.get("holder") != holder:
+        raise Refused(f"the lease on {cfg['state_branch']} is not held by {holder!r}; run heartbeat.py beat first")
+
+
 def _inbox(t: github.Transport, cfg: dict) -> int:
     """Return the number of the open Operator-Inbox issue, creating it (label conductor) when none exists."""
-    found = [i for i in github.get_all(t, f"repos/{t.repo}/issues?state=open")
+    found = [i for i in github.get_all(t, f"repos/{t.repo}/issues?state=open&labels=conductor")
              if i.get("title") == cfg["inbox_title"] and "pull_request" not in i]
     if found:
         return int(sorted(found, key=lambda i: int(i["number"]))[0]["number"])
@@ -153,11 +201,14 @@ def _do_label(t: github.Transport, number: int, add: Sequence[str], remove: Sequ
     return {"issue": number, "added": list(add), "removed": removed, "absent": absent}
 
 
-def _do_close(t: github.Transport, number: int, reason: str, text: str) -> dict:
-    """Close an issue (never a PR) with an explaining comment."""
+def _do_close(t: github.Transport, cfg: dict, number: int, reason: str, text: str) -> dict:
+    """Close an issue (never a PR, never an operator issue) with an explaining comment."""
     issue = _issue(t, number)
     if "pull_request" in issue:
         raise Refused(f"#{number} is a pull request; gh_ops never closes PRs")
+    why = _protected(issue, cfg)
+    if why:
+        raise Refused(f"#{number} stays with the operator: {why}")
     t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": text})
     t.request("PATCH", f"repos/{t.repo}/issues/{number}", {"state": "closed", "state_reason": reason})
     return {"issue": number, "closed": reason}
@@ -173,7 +224,7 @@ def open_pr(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
     """Open a PR from a claude/* branch into main, after the evidence log matches its recorded hash."""
     if not valid_head(a.head, cfg):
         raise Refused(f"head must be a claude/* branch, got {a.head!r}")
-    title = _title(a.title)
+    title = _title(_body(a.title_file, cfg).rstrip("\n"))
     body = _body(a.body_file, cfg)
     if not SHA256_RX.match(a.evidence_sha256 or ""):
         raise Refused("--evidence-sha256 must be 64 lowercase hex characters")
@@ -235,7 +286,7 @@ def close_issue(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
     number = _number(a.issue, "--issue")
     if a.reason not in ("completed", "not_planned"):
         raise Refused("--reason must be completed or not_planned")
-    return _do_close(t, number, a.reason, _body(a.comment_file, cfg))
+    return _do_close(t, cfg, number, a.reason, _body(a.comment_file, cfg))
 
 
 def clear_needs_operator(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
@@ -250,8 +301,9 @@ def clear_needs_operator(t: github.Transport, cfg: dict, a: argparse.Namespace) 
     labels = state.label_names(issue)
     if "needs-operator" not in labels:
         raise Refused(f"#{number} has no needs-operator label")
-    if state.ANTHROPIC_KEEP_LABEL in labels:
-        raise Refused(f"#{number} carries {state.ANTHROPIC_KEEP_LABEL} (the Anthropic request); it stays with the operator")
+    if state.ANTHROPIC_KEEP_LABEL in labels or str(issue.get("title") or "").startswith(ANTHROPIC_TITLE):
+        raise Refused(f"#{number} is the Anthropic request ({state.ANTHROPIC_KEEP_LABEL} or its title); "
+                      "it stays with the operator")
     body = (f"The lead removes `needs-operator`: {CHARTER} section {a.charter_section} (agents decide without asking) "
             f"replaces the operator action. {reason}")
     t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": body})
@@ -366,6 +418,9 @@ def apply_actions(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict
     except ValueError as err:
         raise Refused(f"action file {a.file} is not JSON: {err}") from err
     actions = plan_actions(data, cfg, load_labels())
+    for i, act in enumerate(actions):
+        if act["verb"] in ("close-issue", "label") and "issue" in act:
+            _check_action_target(t, cfg, int(act["issue"]), f"action {i}")
     done_path = a.file + ".done.json"
     progress = _read_progress(done_path, hashlib.sha256(raw).hexdigest())
     refs: Dict[str, int] = {k: int(v) for k, v in progress["refs"].items()}
@@ -388,7 +443,7 @@ def apply_actions(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict
                 if body:
                     t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": body})
             else:
-                result = _do_close(t, number, act["reason"], body)
+                result = _do_close(t, cfg, number, act["reason"], body)
         progress = {"digest": progress["digest"], "done": i + 1, "refs": refs,
                     "results": list(progress["results"]) + [result]}
         _write_progress(done_path, progress)
@@ -430,6 +485,8 @@ def rerun_failed(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
         raise Refused(f"run {number} does not exist")
     if not valid_head(str(run.get("head_branch") or ""), cfg):
         raise Refused(f"run {number} is not on a claude/* branch")
+    if (run.get("head_repository") or {}).get("full_name") != t.repo:
+        raise Refused(f"run {number} comes from another repository")
     if run.get("status") != "completed" or run.get("conclusion") not in ("cancelled", "failure", "timed_out"):
         raise Refused(f"run {number} is {run.get('status')}/{run.get('conclusion')}; nothing to re-run")
     t.request("POST", f"repos/{t.repo}/actions/runs/{number}/rerun-failed-jobs", {})
@@ -466,12 +523,14 @@ def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="gh_ops.py", description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="verb", required=True)
     s = sub.add_parser("open-pr")
+    s.add_argument("--holder", required=True, help="the lead's holder id; the lease must be its own")
     s.add_argument("--head", required=True)
-    s.add_argument("--title", required=True)
+    s.add_argument("--title-file", required=True, help="file with the one-line PR title (never a shell argument)")
     s.add_argument("--body-file", required=True)
     s.add_argument("--evidence-log", required=True)
     s.add_argument("--evidence-sha256", required=True)
     s = sub.add_parser("enable-auto-merge")
+    s.add_argument("--holder", required=True, help="the lead's holder id; the lease must be its own")
     s.add_argument("--pr", required=True)
     s = sub.add_parser("label")
     s.add_argument("--issue", required=True)
@@ -493,6 +552,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--charter-section", required=True)
     s.add_argument("--reason", required=True)
     s = sub.add_parser("apply-actions")
+    s.add_argument("--holder", required=True, help="the lead's holder id; the lease must be its own")
     s.add_argument("--file", required=True, help='JSON file {"actions": [...]} as an issue-only workflow returned it')
     s = sub.add_parser("dispatch-release")
     s.add_argument("--version", required=True)
@@ -504,6 +564,8 @@ def parser() -> argparse.ArgumentParser:
     s = sub.add_parser("update-status-issue")
     s.add_argument("--body-file", required=True)
     sub.add_parser("ensure-labels")
+    for verb_parser in [p] + list(sub.choices.values()):
+        verb_parser.allow_abbrev = False
     return p
 
 
@@ -522,9 +584,12 @@ def run(argv: Sequence[str], t: Optional[github.Transport] = None, cfg: Optional
         return 2 if exc.code else 0
     cfg = cfg or state.load_config()
     t = t or github.GhTransport(cfg["repo"])
+    now = now if now is not None else time.time()
     try:
+        if a.verb in HOLDER_VERBS:
+            _require_lease(t, cfg, a.holder, now)
         if a.verb == "dispatch-release":
-            out = dispatch_release(t, cfg, a, now if now is not None else time.time())
+            out = dispatch_release(t, cfg, a, now)
         else:
             out = VERBS[a.verb](t, cfg, a)
     except (Refused, github.RouteRefused) as err:

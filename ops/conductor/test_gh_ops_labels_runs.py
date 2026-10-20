@@ -22,9 +22,11 @@ def run(g: FakeGitHub, *argv: str) -> int:
         return gh_ops.run(list(argv), t=g, cfg=CFG)
 
 
-def ci_run(branch: str = "claude/unit-3-x", status: str = "completed", conclusion: str = "cancelled") -> dict:
+def ci_run(branch: str = "claude/unit-3-x", status: str = "completed", conclusion: str = "cancelled",
+           repo: str = REPO) -> dict:
     """Build an Actions run object."""
-    return {"id": 77, "head_branch": branch, "status": status, "conclusion": conclusion}
+    return {"id": 77, "head_branch": branch, "status": status, "conclusion": conclusion,
+            "head_repository": {"full_name": repo}}
 
 
 class Labels(unittest.TestCase):
@@ -58,7 +60,8 @@ class Reruns(unittest.TestCase):
 
     def test_refused_runs(self) -> None:
         for run_obj in (ci_run(branch="main"), ci_run(status="in_progress", conclusion=None),
-                        ci_run(conclusion="success"), ci_run(branch="conductor/state")):
+                        ci_run(conclusion="success"), ci_run(branch="conductor/state"),
+                        ci_run(repo="outsider/academic-research"), dict(ci_run(), head_repository=None)):
             with self.subTest(run=run_obj):
                 g = FakeGitHub()
                 g.set("actions/runs/77", run_obj)
