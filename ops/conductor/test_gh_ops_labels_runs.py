@@ -10,6 +10,7 @@ import unittest
 import gh_ops
 import state
 from fake_github import FakeGitHub
+from test_gh_ops import HOLDER, leased
 from test_state import NOW, pr, unit, world
 
 CFG = state.load_config()
@@ -17,9 +18,9 @@ REPO = "ahlerjam/academic-research"
 
 
 def run(g: FakeGitHub, *argv: str) -> int:
-    """Run one verb against the fake, silencing its output."""
+    """Run one verb against the fake at the test clock, silencing its output."""
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        return gh_ops.run(list(argv), t=g, cfg=CFG)
+        return gh_ops.run(list(argv), t=g, cfg=CFG, now=NOW)
 
 
 def ci_run(branch: str = "claude/unit-3-x", status: str = "completed", conclusion: str = "cancelled",
@@ -33,14 +34,15 @@ class Labels(unittest.TestCase):
     """Removing a label that is not there is no error; other GitHub errors stay errors."""
 
     def test_absent_label_is_reported_not_failed(self) -> None:
-        g = FakeGitHub()
+        g = leased(FakeGitHub())
         g.fail("DELETE", "issues/3/labels/state%3Aready", 404)
-        self.assertEqual(run(g, "label", "--issue", "3", "--add", "state:building", "--remove", "state:ready"), 0)
+        self.assertEqual(run(g, "label", "--holder", HOLDER, "--issue", "3", "--add", "state:building",
+                             "--remove", "state:ready"), 0)
 
     def test_server_error_on_removal_is_exit_1(self) -> None:
-        g = FakeGitHub()
+        g = leased(FakeGitHub())
         g.fail("DELETE", "issues/3/labels/state%3Aready", 500)
-        self.assertEqual(run(g, "label", "--issue", "3", "--remove", "state:ready"), 1)
+        self.assertEqual(run(g, "label", "--holder", HOLDER, "--issue", "3", "--remove", "state:ready"), 1)
 
     def test_catalogue_is_valid_for_github(self) -> None:
         labels = gh_ops.load_labels()
@@ -63,17 +65,17 @@ class Reruns(unittest.TestCase):
                         ci_run(conclusion="success"), ci_run(branch="conductor/state"),
                         ci_run(repo="outsider/academic-research"), dict(ci_run(), head_repository=None)):
             with self.subTest(run=run_obj):
-                g = FakeGitHub()
+                g = leased(FakeGitHub())
                 g.set("actions/runs/77", run_obj)
-                self.assertEqual(run(g, "rerun-failed", "--run", "77"), 2)
+                self.assertEqual(run(g, "rerun-failed", "--holder", HOLDER, "--run", "77"), 2)
                 self.assertEqual(g.mutations(), [])
-        self.assertEqual(run(FakeGitHub(), "rerun-failed", "--run", "78"), 2)
-        self.assertEqual(run(FakeGitHub(), "rerun-failed", "--run", "x"), 2)
+        self.assertEqual(run(leased(FakeGitHub()), "rerun-failed", "--holder", HOLDER, "--run", "78"), 2)
+        self.assertEqual(run(leased(FakeGitHub()), "rerun-failed", "--holder", HOLDER, "--run", "x"), 2)
 
     def test_cancelled_unit_run_is_rerun(self) -> None:
-        g = FakeGitHub()
+        g = leased(FakeGitHub())
         g.set("actions/runs/77", ci_run())
-        self.assertEqual(run(g, "rerun-failed", "--run", "77"), 0)
+        self.assertEqual(run(g, "rerun-failed", "--holder", HOLDER, "--run", "77"), 0)
         self.assertEqual(g.mutations(), [("POST", f"repos/{REPO}/actions/runs/77/rerun-failed-jobs", {})])
 
     def test_state_names_the_cancelled_runs(self) -> None:

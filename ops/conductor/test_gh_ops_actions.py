@@ -11,7 +11,7 @@ from fake_github import FakeGitHub
 from test_gh_ops import HOLDER, Files, leased, run
 
 CARD = '<!-- unit: {"kind":"build","slice":"S1","deps":[{{c1}}],"paths":["a/**"],"proof":[],"risk":"low","tags":[]} -->\nOutcome.'
-STATUS = {"number": 7, "state": "open", "title": "Conductor status",
+STATUS = {"number": 7, "state": "open", "title": "Conductor status", "author_association": "OWNER",
           "labels": [{"name": "conductor"}, {"name": "conductor:pause"}]}
 
 
@@ -23,8 +23,8 @@ def actions(*rows: dict) -> dict:
 def world() -> FakeGitHub:
     """A fake with two existing issues, the lead's lease and no inbox."""
     g = leased(FakeGitHub())
-    g.set("issues/40", {"number": 40, "state": "open", "labels": [{"name": "unit"}]})
-    g.set("issues/41", {"number": 41, "state": "open", "labels": []})
+    g.set("issues/40", {"number": 40, "state": "open", "labels": [{"name": "unit"}], "author_association": "OWNER"})
+    g.set("issues/41", {"number": 41, "state": "open", "labels": [], "author_association": "OWNER"})
     g.set("issues/7", STATUS)
     g.set("issues?state=open&labels=conductor", [STATUS])
     return g
@@ -89,17 +89,29 @@ class ApplyActions(Files):
                 self.assertEqual(g.mutations(), [])
                 self.assertFalse(os.path.exists(path + ".done.json"))
 
-    def test_model_chosen_targets_must_be_unit_critic_or_hypothesis_issues(self) -> None:
+    def test_model_chosen_targets_must_be_trusted_unit_critic_or_hypothesis_issues(self) -> None:
         targets = {
             "status issue with the kill switch": STATUS,
-            "inbox": {"number": 7, "state": "open", "title": "Operator-Inbox", "labels": [{"name": "conductor"}]},
+            "inbox": {"number": 7, "state": "open", "title": "Operator-Inbox", "labels": [{"name": "conductor"}],
+                      "author_association": "OWNER"},
             "Anthropic request": {"number": 7, "state": "open", "title": "Anthropic request: use of the Claude plan",
-                                  "labels": [{"name": "needs-operator"}, {"name": "op:external"}]},
-            "kernel item": {"number": 7, "state": "open", "title": "x", "labels": [{"name": "unit"}, {"name": "op:kernel"}]},
-            "needs-operator ticket": {"number": 7, "state": "open", "title": "x",
+                                  "labels": [{"name": "needs-operator"}, {"name": "op:external"}],
+                                  "author_association": "OWNER"},
+            "kernel item": {"number": 7, "state": "open", "title": "x", "labels": [{"name": "unit"}, {"name": "op:kernel"}],
+                            "author_association": "OWNER"},
+            "needs-operator ticket": {"number": 7, "state": "open", "title": "x", "author_association": "OWNER",
                                       "labels": [{"name": "type:feature"}, {"name": "needs-operator"}]},
-            "unlabelled outsider issue": {"number": 7, "state": "open", "title": "x", "labels": []},
-            "pull request": {"number": 7, "state": "open", "title": "x", "labels": [{"name": "unit"}], "pull_request": {}},
+            "outsider feature issue": {"number": 7, "state": "open", "title": "x", "author_association": "OWNER",
+                                       "labels": [{"name": "type:feature"}]},
+            "unlabelled outsider issue": {"number": 7, "state": "open", "title": "x", "labels": [],
+                                          "author_association": "OWNER"},
+            "unit card of an outsider": {"number": 7, "state": "open", "title": "x", "labels": [{"name": "unit"}],
+                                         "author_association": "NONE"},
+            "hypothesis of a contributor": {"number": 7, "state": "open", "title": "x", "author_association": "CONTRIBUTOR",
+                                            "labels": [{"name": "hypothesis"}, {"name": "slice:S1"}]},
+            "unit card without author": {"number": 7, "state": "open", "title": "x", "labels": [{"name": "unit"}]},
+            "pull request": {"number": 7, "state": "open", "title": "x", "labels": [{"name": "unit"}], "pull_request": {},
+                             "author_association": "OWNER"},
         }
         rows = ({"verb": "close-issue", "issue": 7, "reason": "completed", "body": "No longer reproduces."},
                 {"verb": "label", "issue": 7, "add": ["state:ready"], "remove": ["state:building"]})
@@ -112,14 +124,15 @@ class ApplyActions(Files):
                     path = self.write(actions(first, row), f"t-{len(name)}-{row['verb']}.json")
                     self.assertEqual(apply(g, path), 2)
                     self.assertEqual(g.mutations(), [])
-        for labels in ([{"name": "unit"}], [{"name": "critic"}], [{"name": "hypothesis"}], [{"name": "type:feature"}],
-                       [{"name": "slice:S1"}]):
-            with self.subTest(allowed=labels[0]["name"]):
-                g = world()
-                g.set("issues/9", {"number": 9, "state": "open", "title": "x", "labels": labels})
-                path = self.write(actions({"verb": "close-issue", "issue": 9, "reason": "completed", "body": "done"}),
-                                  f"ok-{labels[0]['name'].replace(':', '-')}.json")
-                self.assertEqual(apply(g, path), 0)
+        for author in ("OWNER", "MEMBER", "COLLABORATOR"):
+            for labels in ([{"name": "unit"}], [{"name": "critic"}], [{"name": "hypothesis"}], [{"name": "slice:S1"}]):
+                with self.subTest(allowed=labels[0]["name"], author=author):
+                    g = world()
+                    g.set("issues/9", {"number": 9, "state": "open", "title": "x", "labels": labels,
+                                       "author_association": author})
+                    path = self.write(actions({"verb": "close-issue", "issue": 9, "reason": "completed", "body": "done"}),
+                                      f"ok-{author}-{labels[0]['name'].replace(':', '-')}.json")
+                    self.assertEqual(apply(g, path), 0)
 
     def test_duplicate_ref_and_too_many_actions_are_refused(self) -> None:
         row = {"verb": "create-issue", "ref": "c1", "title": "t", "body": "x"}
@@ -173,19 +186,19 @@ class Inbox(Files):
         g = world()
         g.set("issues?state=open&labels=conductor", [STATUS, {"number": 12, "title": "Operator-Inbox",
                                                               "labels": [{"name": "conductor"}]}])
-        self.assertEqual(run(g, "comment", "--issue", "inbox", "--body-file", self.file("patch")), 0)
+        self.assertEqual(run(g, "comment", "--holder", HOLDER, "--issue", "inbox", "--body-file", self.file("patch")), 0)
         self.assertEqual([c[1].split("/", 3)[3] for c in g.mutations()], ["issues/12/comments"])
 
     def test_an_outsider_issue_with_the_inbox_title_is_never_used(self) -> None:
         g = world()
         g.set("issues?state=open", [{"number": 3, "title": "Operator-Inbox", "labels": [], "user": {"login": "outsider"}}])
-        self.assertEqual(run(g, "comment", "--issue", "inbox", "--body-file", self.file("patch")), 0)
+        self.assertEqual(run(g, "comment", "--holder", HOLDER, "--issue", "inbox", "--body-file", self.file("patch")), 0)
         create, note = g.mutations()
         self.assertEqual((create[1].split("/", 3)[3], create[2]["labels"]), ("issues", ["conductor"]))
         self.assertEqual(note[1].split("/", 3)[3], "issues/901/comments")
 
     def test_comment_needs_a_number_or_inbox(self) -> None:
-        self.assertEqual(run(world(), "comment", "--issue", "operator", "--body-file", self.file("x")), 2)
+        self.assertEqual(run(world(), "comment", "--holder", HOLDER, "--issue", "operator", "--body-file", self.file("x")), 2)
 
 
 class KillSwitch(Files):
@@ -201,7 +214,7 @@ class KillSwitch(Files):
                 self.assertEqual(apply(g, path), 2)
                 self.assertEqual(g.mutations(), [])
         g = world()
-        self.assertEqual(run(g, "close-issue", "--issue", "7", "--reason", "completed",
+        self.assertEqual(run(g, "close-issue", "--holder", HOLDER, "--issue", "7", "--reason", "completed",
                              "--comment-file", self.file("x")), 2)
         self.assertEqual(g.mutations(), [])
 

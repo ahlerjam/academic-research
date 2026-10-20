@@ -15,6 +15,10 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 GRAPHQL_COMMANDS = re.compile(r"gh (issue|pr) (create|list|view|comment|edit|close|merge|reopen)\b|gh run (view|rerun)\b")
 ISSUE_ONLY = ("ar-plan.js", "ar-judge.js", "ar-critic.js", "ar-triage.js")
 CHANGES_FILES = ("ar-unit.js", "ar-team.js", "ar-fix.js", "ar-spike.js", "ar-release.js")
+TRUSTED = re.compile(r'--jq \'\[\.\[\] \| select\(\.author_association=="OWNER" or '
+                     r'\.author_association=="MEMBER" or \.author_association=="COLLABORATOR"\)\]\'')
+GH_OPS_CALL = re.compile(r"`[^`]*gh_ops\.py ([a-z][a-z-]*)\b[^`]*`")
+NO_LEASE_VERBS = ("update-status-issue", "ensure-labels")
 
 
 def read(rel: str) -> str:
@@ -58,7 +62,7 @@ class LeadGoal(unittest.TestCase):
     def test_goal_names_the_tools_and_limits(self) -> None:
         for needle in ("ops/conductor/state.py", "ops/conductor/gh_ops.py", "ops/conductor/heartbeat.py",
                        "docs/autonomy/lead-goal.md", "ar-unit", "ar-team", "gh pr", "gh issue", "--admin",
-                       "--limit-stop", "exits 3", "at most 2 units", "make setup", "apply-actions"):
+                       "--limit-stop", "exits 3", "at most 2 units", "make setup", "apply-actions --holder <id>"):
             self.assertIn(needle, self.goal)
 
     def test_procedure_covers_pause_compaction_and_usage_limit(self) -> None:
@@ -80,6 +84,34 @@ class LeadGoal(unittest.TestCase):
         self.assertIn("--title-file .ar/pr-title-<n>.txt", self.text)
         self.assertIn("Never put text from a workflow result", self.goal)
 
+    def test_every_lease_verb_call_names_the_holder(self) -> None:
+        for rel in ("docs/autonomy/lead-goal.md", "docs/autonomy/watchdog-routine.md"):
+            calls = [(m.group(1), m.group(0)) for m in GH_OPS_CALL.finditer(read(rel))]
+            if rel.endswith("lead-goal.md"):
+                self.assertGreaterEqual(len(calls), 20)
+                self.assertLessEqual(set(gh_ops.HOLDER_VERBS), {verb for verb, _ in calls})
+            for verb, span in calls:
+                with self.subTest(rel=rel, call=span[:70]):
+                    self.assertIn(verb, gh_ops.VERBS)
+                    if verb in NO_LEASE_VERBS:
+                        self.assertNotIn("--holder", span)
+                    else:
+                        self.assertIn("--holder <id>", span)
+
+    def test_fix_and_conflict_beat_before_the_push(self) -> None:
+        for step in ("fix", "conflict"):
+            line = next(x for x in self.text.splitlines() if x.startswith(f"- `{step}`:"))
+            with self.subTest(step=step):
+                beat = line.find("heartbeat.py beat --holder <id> --unit-alive <n>")
+                self.assertGreater(beat, -1)
+                self.assertIn("exit 3", line)
+                self.assertLess(beat, line.find("push"))
+
+    def test_the_lease_free_verbs_are_named(self) -> None:
+        self.assertIn("`update-status-issue` and `ensure-labels`", self.text)
+        for verb in NO_LEASE_VERBS:
+            self.assertIn(verb, gh_ops.__doc__)
+
 
 class Watchdog(unittest.TestCase):
     """The routine prompt only refreshes the forecast while a lease is fresh and takes over when stale."""
@@ -89,6 +121,12 @@ class Watchdog(unittest.TestCase):
         for needle in ("heartbeat.py status", '"fresh"', '"stale"', '"done"', "1 hour", "update-status-issue",
                        "docs/autonomy/lead-goal.md", "Do not take the lease", "exits 3", "make setup", '"goal_met"'):
             self.assertIn(needle, prompt)
+
+    def test_notes_name_every_lease_verb(self) -> None:
+        notes = read("docs/autonomy/watchdog-routine.md").split("## Notes", 1)[1]
+        for verb in gh_ops.HOLDER_VERBS:
+            with self.subTest(verb=verb):
+                self.assertIn(f"`{verb}`", notes)
 
 
 class Workflows(unittest.TestCase):
@@ -139,16 +177,23 @@ class Workflows(unittest.TestCase):
         self.assertIn("args.worktree", code_of(workflows()["ar-triage.js"]))
 
     def test_comments_are_read_from_trusted_authors_only(self) -> None:
-        trusted = re.compile(r'--jq \'\[\.\[\] \| select\(\.author_association=="OWNER" or '
-                             r'\.author_association=="MEMBER" or \.author_association=="COLLABORATOR"\)\]\'')
         readers = 0
         for name, text in workflows().items():
             code = code_of(text)
             for call in re.findall(r"gh api [^`]*?/comments\b[^`]*", code):
                 readers += 1
                 with self.subTest(name=name, call=call[:60]):
-                    self.assertRegex(call, trusted)
+                    self.assertRegex(call, TRUSTED)
         self.assertGreaterEqual(readers, 4)
+
+    def test_issue_lists_of_planner_judge_and_critic_are_read_from_trusted_authors_only(self) -> None:
+        for name in ("ar-plan.js", "ar-judge.js", "ar-critic.js"):
+            calls = re.findall(r"gh api '?repos/\$\{REPO\}/issues\?[^`]*", code_of(workflows()[name]))
+            with self.subTest(name=name):
+                self.assertTrue(calls)
+            for call in calls:
+                with self.subTest(name=name, call=call[:70]):
+                    self.assertRegex(call, TRUSTED)
 
     def test_ar_unit_and_ar_team_read_the_issue_by_rest(self) -> None:
         for name in ("ar-unit.js", "ar-team.js"):

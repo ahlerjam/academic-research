@@ -12,14 +12,18 @@ apply-actions files what an issue-only workflow (ar-plan, ar-judge, ar-critic, a
 in its `actions` list: create-issue, comment, label and close-issue, validated as a whole before anything is
 sent, in list order, with `{{ref}}` placeholders replaced by the numbers of issues created earlier in the
 same list. Progress is kept next to the action file, so a rerun after an error never files an action twice.
-A close or label action aimed at an existing issue number must name an unprotected unit, critic or hypothesis
-issue (checked by GET before anything is sent).
+A close or label action aimed at an existing issue number must name an unprotected unit, critic, hypothesis or
+slice issue written by OWNER, MEMBER or COLLABORATOR (checked by GET before anything is sent). The verb label
+makes the same check whenever it adds `unit`, `kind:*`, `slice:*`, `hypothesis`, `critic` or `state:ready`, so
+neither a pull request nor an outsider's issue becomes schedulable work.
 
-open-pr, enable-auto-merge and apply-actions take `--holder` and run only while progress.json on the state
-branch shows that holder's lease, so a lead whose lease was taken over cannot act any more. The kill switch and
-the operator's issues stay with the operator: no verb removes `conductor`, `conductor:pause` or an `op:*` label,
-adds `conductor`, or closes an issue with those labels, `needs-operator`, or the title of the status issue, the
-Operator-Inbox or the Anthropic request.
+Every verb except update-status-issue and ensure-labels takes `--holder` and runs only while progress.json on
+the state branch shows that holder's lease, so a lead whose lease was taken over cannot act any more.
+update-status-issue and ensure-labels stay without a lease: the watchdog refreshes the status issue while
+another lead holds the lease, and the label catalogue is idempotent. The kill switch and the operator's issues
+stay with the operator: no verb removes `conductor`, `conductor:pause` or an `op:*` label, adds `conductor`, or
+closes an issue with those labels, `needs-operator`, or the title of the status issue, the Operator-Inbox or
+the Anthropic request.
 """
 
 from __future__ import annotations
@@ -49,8 +53,11 @@ OPERATOR_ONLY_REMOVALS = ("conductor:pause", "conductor", "op:external", "op:ker
 PROTECTED_LABELS = ("conductor", "conductor:pause", "needs-operator")
 ANTHROPIC_TITLE = "Anthropic request:"
 ACTION_TARGET_LABELS = ("unit", "critic", "hypothesis")
-ACTION_TARGET_PREFIXES = ("slice:", "type:")
-HOLDER_VERBS = ("open-pr", "enable-auto-merge", "apply-actions")
+ACTION_TARGET_PREFIXES = ("slice:",)
+SCHEDULING_LABELS = ("unit", "hypothesis", "critic", "state:ready")
+SCHEDULING_PREFIXES = ("kind:", "slice:")
+HOLDER_VERBS = ("open-pr", "enable-auto-merge", "apply-actions", "label", "comment", "create-issue", "close-issue",
+                "clear-needs-operator", "rerun-failed", "dispatch-proof", "dispatch-release")
 ACTION_VERBS = ("create-issue", "comment", "label", "close-issue")
 REF_RX = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 PLACEHOLDER_RX = re.compile(r"\{\{([^{}]*)\}\}")
@@ -152,13 +159,17 @@ def _protected(issue: dict, cfg: dict) -> Optional[str]:
 
 
 def _check_action_target(t: github.Transport, cfg: dict, number: int, where: str) -> None:
-    """Refuse a model-chosen close or label target unless it is an unprotected unit, critic or hypothesis issue."""
+    """Refuse a model-chosen close or label target unless it is an unprotected unit, critic, hypothesis or slice
+    issue written by OWNER, MEMBER or COLLABORATOR."""
     issue = _issue(t, number)
     if "pull_request" in issue:
         raise Refused(f"{where}: #{number} is a pull request")
     why = _protected(issue, cfg)
     if why:
         raise Refused(f"{where}: #{number} stays with the operator: {why}")
+    if not state.trusted(issue):
+        raise Refused(f"{where}: #{number} was written by {issue.get('author_association')!r}, "
+                      f"not by {', '.join(state.TRUSTED_AUTHORS)}")
     labels = state.label_names(issue)
     if not any(n in ACTION_TARGET_LABELS or n.startswith(ACTION_TARGET_PREFIXES) for n in labels):
         raise Refused(f"{where}: #{number} is no unit, critic or hypothesis issue")
@@ -168,7 +179,8 @@ def _require_lease(t: github.Transport, cfg: dict, holder: str, now: float) -> N
     """Refuse unless progress.json on the state branch shows this holder's lease (the lead beat before acting)."""
     progress = state.read_progress(t, cfg)
     lease = progress.get("lease") if isinstance(progress.get("lease"), dict) else {}
-    if not holder or state.lease_age(progress, now) is None or lease.get("holder") != holder:
+    age = state.lease_age(progress, now)
+    if not holder or age is None or age > float(cfg["lease_max_age_s"]) or lease.get("holder") != holder:
         raise Refused(f"the lease on {cfg['state_branch']} is not held by {holder!r}; run heartbeat.py beat first")
 
 
@@ -261,9 +273,11 @@ def enable_auto_merge(t: github.Transport, cfg: dict, a: argparse.Namespace) -> 
 
 
 def label(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
-    """Add or remove labels on an issue or PR; needs-operator leaves only through clear-needs-operator."""
+    """Add or remove labels on an issue or PR; labels that schedule work need a trusted card as target."""
     number = _number(a.issue, "--issue")
     add, remove = _label_change(a.add or [], a.remove or [], load_labels())
+    if any(n in SCHEDULING_LABELS or n.startswith(SCHEDULING_PREFIXES) for n in add):
+        _check_action_target(t, cfg, number, "label")
     return _do_label(t, number, add, remove)
 
 
@@ -519,18 +533,16 @@ def ensure_labels(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict
 
 
 def parser() -> argparse.ArgumentParser:
-    """Build the argument parser with the fixed verb set."""
+    """Build the argument parser with the fixed verb set; every verb in HOLDER_VERBS requires --holder."""
     p = argparse.ArgumentParser(prog="gh_ops.py", description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="verb", required=True)
     s = sub.add_parser("open-pr")
-    s.add_argument("--holder", required=True, help="the lead's holder id; the lease must be its own")
     s.add_argument("--head", required=True)
     s.add_argument("--title-file", required=True, help="file with the one-line PR title (never a shell argument)")
     s.add_argument("--body-file", required=True)
     s.add_argument("--evidence-log", required=True)
     s.add_argument("--evidence-sha256", required=True)
     s = sub.add_parser("enable-auto-merge")
-    s.add_argument("--holder", required=True, help="the lead's holder id; the lease must be its own")
     s.add_argument("--pr", required=True)
     s = sub.add_parser("label")
     s.add_argument("--issue", required=True)
@@ -552,7 +564,6 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--charter-section", required=True)
     s.add_argument("--reason", required=True)
     s = sub.add_parser("apply-actions")
-    s.add_argument("--holder", required=True, help="the lead's holder id; the lease must be its own")
     s.add_argument("--file", required=True, help='JSON file {"actions": [...]} as an issue-only workflow returned it')
     s = sub.add_parser("dispatch-release")
     s.add_argument("--version", required=True)
@@ -564,6 +575,8 @@ def parser() -> argparse.ArgumentParser:
     s = sub.add_parser("update-status-issue")
     s.add_argument("--body-file", required=True)
     sub.add_parser("ensure-labels")
+    for verb in HOLDER_VERBS:
+        sub.choices[verb].add_argument("--holder", required=True, help="the lead's holder id; the lease must be its own")
     for verb_parser in [p] + list(sub.choices.values()):
         verb_parser.allow_abbrev = False
     return p
@@ -571,8 +584,8 @@ def parser() -> argparse.ArgumentParser:
 
 VERBS = {"open-pr": open_pr, "enable-auto-merge": enable_auto_merge, "label": label, "comment": comment,
          "create-issue": create_issue, "close-issue": close_issue, "clear-needs-operator": clear_needs_operator,
-         "apply-actions": apply_actions, "dispatch-proof": dispatch_proof, "rerun-failed": rerun_failed,
-         "update-status-issue": update_status_issue, "ensure-labels": ensure_labels}
+         "apply-actions": apply_actions, "dispatch-release": dispatch_release, "dispatch-proof": dispatch_proof,
+         "rerun-failed": rerun_failed, "update-status-issue": update_status_issue, "ensure-labels": ensure_labels}
 
 
 def run(argv: Sequence[str], t: Optional[github.Transport] = None, cfg: Optional[dict] = None,

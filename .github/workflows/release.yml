@@ -46,11 +46,16 @@ jobs:
           version = os.environ["VERSION"]
           dry_run = os.environ["DRY_RUN"] == "true"
           sha = os.environ["GITHUB_SHA"]
+          owner = os.environ["GH_REPO"].split("/")[0]
           problems = []
 
 
           def out(*cmd):
               return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+          def ok(*cmd):
+              return subprocess.run(cmd, capture_output=True).returncode == 0
 
 
           def runs(workflow, *extra):
@@ -82,11 +87,35 @@ jobs:
           changelog = read("CHANGELOG.md") or ""
           if not re.search(rf"^## \[?v?{re.escape(version)}\]?(\s|$)", changelog, re.M):
               problems.append(f"CHANGELOG.md has no section '## {version}' or '## [{version}]'")
-          verdict = read(f"docs/release/{version}.md")
+          verdict_path = f"docs/release/{version}.md"
+          verdict = read(verdict_path)
           if verdict is None:
-              problems.append(f"docs/release/{version}.md is missing (written by the workflow ar-release)")
-          elif [line for line in verdict.splitlines() if line.startswith("verdict:")] != ["verdict: release"]:
-              problems.append(f"docs/release/{version}.md needs exactly one verdict line and it must be 'verdict: release'")
+              problems.append(f"{verdict_path} is missing (written by the workflow ar-release)")
+          else:
+              if [line for line in verdict.splitlines() if line.startswith("verdict:")] != ["verdict: release"]:
+                  problems.append(f"{verdict_path} needs exactly one verdict line and it must be 'verdict: release'")
+              judged = [line for line in verdict.splitlines() if line.startswith("commit:")]
+              if len(judged) != 1 or not re.fullmatch(r"commit: [0-9a-f]{40}", judged[0]):
+                  problems.append(f"{verdict_path} needs exactly one line 'commit: <40-hex sha of main the panel judged>'")
+              else:
+                  base = judged[0][len("commit: "):]
+                  if not ok("git", "cat-file", "-e", base + "^{commit}"):
+                      problems.append(f"{verdict_path} names commit {base}, which is not a commit of this repository")
+                  elif not ok("git", "merge-base", "--is-ancestor", base, sha):
+                      problems.append(f"the judged commit {base} is not on the history of {sha}")
+                  else:
+                      changed = sorted({p for p in out("git", "diff", "--name-only", "-z", base, sha).split("\0") if p}
+                                       - {verdict_path, "CHANGELOG.md"})
+                      if changed:
+                          problems.append(f"{len(changed)} files changed since the judged commit {base} (first: {changed[0]}); "
+                                          f"only {verdict_path} and CHANGELOG.md may change after the verdict")
+              expected = f"Merge pull request #<n> from {owner}/claude/release-{version}"
+              last = out("git", "log", "--first-parent", "-1", "--format=%P%x00%s", sha, "--", verdict_path).strip()
+              parents, _, subject = last.partition("\0")
+              merge = rf"Merge pull request #[1-9][0-9]* from {re.escape(owner)}/claude/release-{re.escape(version)}"
+              if len(parents.split()) != 2 or not re.fullmatch(merge, subject):
+                  problems.append(f"the last change of {verdict_path} on the first-parent history of {sha} "
+                                  f"is not a merge '{expected}'")
           proof_runs = runs("proof.yml", "--branch", "main")
           for stage in ("1", "2a", "2b", "3", "4", "5"):
               done = sorted((r for r in proof_runs if r["displayTitle"] == f"proof stage {stage}" and r["status"] == "completed"),
