@@ -38,3 +38,5 @@ __pycache__
 *.synctex.gz
 *.toc
 .playwright-mcp/
+.ar/
+proof-out/

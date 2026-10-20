@@ -1,11 +1,13 @@
 # Hooks and CI call only these verbs. Operator only.
-SHELL := /bin/bash
-GATE := python3 -I -B gates/gate.py
-BIN := node_modules/.bin
-COMPONENTS := core server web
+override SHELL := /bin/bash
+override GATE := python3 -I -B gates/gate.py
+override BIN := node_modules/.bin
+COMPONENTS := core server web plugin
+PORT ?= 4317
+WEB_PORT ?= 5173
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-gates doctor fix lint typecheck test test-core test-e2e check check-repo dev \
-	decisions adr-find adr-new sync gates-selftest gates-bench controls-baseline controls-anchor suppress-baseline
+.PHONY: help setup setup-gates doctor fix lint typecheck test test-core test-e2e test-acceptance proof check check-repo dev \
+	decisions adr-find adr-new migration-new conductor-test sync gates-selftest gates-bench controls-baseline controls-anchor suppress-baseline
 
 -include mk/*.mk
 
@@ -41,9 +43,12 @@ check: ## What the stop gate and CI run: lint, typecheck, tests
 check-repo: ## Repo rules, drift checks and the sync check
 	@$(GATE) check-repo >/dev/null || $(GATE) check-repo
 	@$(GATE) drift >/dev/null || $(GATE) drift
+	@if $(MAKE) -n help 2>&1 | grep -Eq '(overriding|ignoring old) (recipe|commands)'; then \
+		echo "Makefile:1 [GATES-INFRA] a recipe is defined twice; a later definition would replace a gate verb"; exit 1; fi
 
-dev: ## Start server and web dev servers on 127.0.0.1
-	@trap 'kill 0' EXIT; node --watch packages/server/src/main.ts & $(BIN)/vite packages/web
+dev: ## Start server and web on 127.0.0.1: make dev [PORT=4317] [WEB_PORT=5173]
+	@trap 'kill 0' EXIT; export PORT=$(PORT) WEB_PORT=$(WEB_PORT); \
+		node --watch packages/server/src/main.ts & $(BIN)/vite packages/web --port $(WEB_PORT) --strictPort
 
 decisions: ## Regenerate decisions/index.md
 	@$(GATE) adr index
@@ -51,8 +56,14 @@ decisions: ## Regenerate decisions/index.md
 adr-find: ## Find decisions: make adr-find TAG=<tag> Q=<text>
 	@$(GATE) adr find --tag "$(TAG)" --query "$(Q)"
 
-adr-new: ## Create the next ADR (ask the operator first): make adr-new TITLE="..."
+adr-new: ## Create the next ADR with status proposed: make adr-new TITLE="..."
 	@$(GATE) adr new --title "$(TITLE)"
+
+migration-new: ## Create the next numbered SQL migration under a lock: make migration-new NAME=<snake_case>
+	@$(GATE) migration new --name "$(NAME)"
+
+conductor-test: ## Unit tests of the conductor (stdlib unittest, no network)
+	@python3 -I -B -m unittest discover -s ops/conductor -t ops/conductor -p 'test_*.py'
 
 sync: ## Operator: regenerate settings.json, rules, CODEOWNERS and rule notes from gates/
 	@$(GATE) sync
