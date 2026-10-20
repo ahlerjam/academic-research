@@ -83,10 +83,11 @@ class ReleaseCheckTest(unittest.TestCase):
 
     def release_tree(self, verdict: str = GOOD_VERDICT, changelog: str = GOOD_CHANGELOG,
                      tags: Optional[List[str]] = None, judged: str = "base", merge: str = RELEASE_MERGE,
-                     after: Optional[List[dict]] = None) -> str:
-        """Build main: base commit, then claude/release-0.1.0 (verdict naming the judged commit, CHANGELOG) merged
-        by a pull request merge (`merge` is its subject, or "ff" for a fast-forward), then the `after` steps
-        ({"files": ..., "branch": ...} merged by a PR, or a plain commit without branch); return the head sha."""
+                     after: Optional[List[dict]] = None, prep: Optional[Dict[str, str]] = None) -> str:
+        """Build main: base commit, then claude/release-0.1.0 (the `prep` files committed first and named "prep",
+        then the verdict naming the judged commit and CHANGELOG) merged by a pull request merge (`merge` is its
+        subject, or "ff" for a fast-forward), then the `after` steps ({"files": ..., "branch": ...} merged by a PR,
+        or a plain commit without branch); return the head sha."""
         os.makedirs(self.tree)
         support.git(self.tree, "init", "-q", "-b", "main")
         base = self.commit({"src/app.ts": "export {};\n"}, "base")
@@ -97,15 +98,17 @@ class ReleaseCheckTest(unittest.TestCase):
             support.git(self.tree, "switch", "-q", "-c", "stray")
             names["stray"] = self.commit({"src/stray.ts": "export {};\n"}, "stray")
             support.git(self.tree, "switch", "-q", "main")
-        files = {"CHANGELOG.md": changelog,
-                 "docs/release/0.1.0.md": "# Release 0.1.0\n\n" + verdict.replace("{base}", names.get(judged, judged)) + "\n"}
+        support.git(self.tree, "switch", "-q", "-c", "claude/release-0.1.0")
+        if prep:
+            names["prep"] = self.commit(prep, "code on the release branch")
+        self.commit({"CHANGELOG.md": changelog,
+                     "docs/release/0.1.0.md": "# Release 0.1.0\n\n" + verdict.replace("{base}", names.get(judged, judged)) + "\n"},
+                    "release 0.1.0")
+        support.git(self.tree, "switch", "-q", "main")
         if merge == "ff":
-            support.git(self.tree, "switch", "-q", "-c", "claude/release-0.1.0")
-            self.commit(files, "release 0.1.0")
-            support.git(self.tree, "switch", "-q", "main")
             support.git(self.tree, "merge", "-q", "--ff-only", "claude/release-0.1.0")
         else:
-            self.merge_branch("claude/release-0.1.0", files, merge)
+            support.git(self.tree, *support.GIT_ID, "merge", "-q", "--no-ff", "-m", merge, "claude/release-0.1.0")
         for step in after or []:
             texts = {rel: text.replace("{base}", base) for rel, text in step["files"].items()}
             if step.get("branch"):
@@ -198,6 +201,14 @@ class ReleaseCheckTest(unittest.TestCase):
     def test_a_judged_commit_outside_the_history_is_red(self) -> None:
         sha = self.release_tree(judged="stray")
         self.assert_red(self.run_check(sha), "is not on the history of")
+
+    def test_a_judged_commit_on_the_release_branch_is_red(self) -> None:
+        sha = self.release_tree(judged="prep", prep={"src/app.ts": "export const unjudged = 1;\n"})
+        self.assert_red(self.run_check(sha), "is not the commit the release PR was merged onto")
+
+    def test_code_on_the_release_branch_is_red_when_main_is_judged(self) -> None:
+        sha = self.release_tree(prep={"src/app.ts": "export const unjudged = 1;\n"})
+        self.assert_red(self.run_check(sha), "changed since the judged commit")
 
     def test_a_code_change_after_the_verdict_is_red(self) -> None:
         sha = self.release_tree(after=[{"files": {"src/app.ts": "export const x = 1;\n"}, "branch": "claude/unit-9-x"}])

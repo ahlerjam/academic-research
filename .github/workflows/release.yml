@@ -92,6 +92,7 @@ jobs:
           if verdict is None:
               problems.append(f"{verdict_path} is missing (written by the workflow ar-release)")
           else:
+              base = None
               if [line for line in verdict.splitlines() if line.startswith("verdict:")] != ["verdict: release"]:
                   problems.append(f"{verdict_path} needs exactly one verdict line and it must be 'verdict: release'")
               judged = [line for line in verdict.splitlines() if line.startswith("commit:")]
@@ -116,6 +117,10 @@ jobs:
               if len(parents.split()) != 2 or not re.fullmatch(merge, subject):
                   problems.append(f"the last change of {verdict_path} on the first-parent history of {sha} "
                                   f"is not a merge '{expected}'")
+              elif base is not None and base != parents.split()[0]:
+                  problems.append(f"the judged commit {base} is not the commit the release PR was merged onto "
+                                  f"({parents.split()[0]}); the panel judges main, the release PR adds only "
+                                  f"{verdict_path} and CHANGELOG.md")
           proof_runs = runs("proof.yml", "--branch", "main")
           for stage in ("1", "2a", "2b", "3", "4", "5"):
               done = sorted((r for r in proof_runs if r["displayTitle"] == f"proof stage {stage}" and r["status"] == "completed"),
