@@ -170,5 +170,28 @@ class ReleaseCheckTest(unittest.TestCase):
         self.assert_red(self.run_check(sha, ref="refs/heads/claude/x"), "a release runs on refs/heads/main only")
 
 
+class Credentials(unittest.TestCase):
+    """No checkout leaves the job token in .git/config, where agent-written build scripts could push with it."""
+
+    def test_every_checkout_drops_its_credentials(self) -> None:
+        with open(WORKFLOW, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+        checkouts = [i for i, line in enumerate(lines) if "uses: actions/checkout@" in line]
+        self.assertEqual(len(checkouts), 3)
+        for i in checkouts:
+            block = []
+            for line in lines[i + 1:]:
+                if line.lstrip().startswith("- "):
+                    break
+                block.append(line.strip())
+            with self.subTest(line=i + 1):
+                self.assertIn("persist-credentials: false", block)
+
+    def test_the_token_reaches_only_the_read_check_and_the_release_step(self) -> None:
+        with open(WORKFLOW, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertEqual(text.count("GH_TOKEN: ${{ github.token }}"), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
