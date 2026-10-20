@@ -24,7 +24,7 @@ Binding are only: `NORTHSTAR.md`, the product invariants in `AGENTS.md`, accepte
 
 ## 4. What stays with the human
 
-Only the request to Anthropic: an agent drafts it, the operator alone sends it, and it never blocks the build. Kernel files are frozen for the whole build (`protect`, the ruleset, and the Claude GitHub App cannot change `.github/**`); a kernel need becomes an `op:kernel` issue with a finished patch, the planner routes around it, and it never blocks a unit. The TIB link check runs without a login and is logged as "checked without login".
+Only the request to Anthropic: an agent drafts it, the operator alone sends it, and it never blocks the build. Kernel files are frozen for the whole build (`protect`, the ruleset, and the Claude GitHub App cannot change `.github/**`); a kernel need becomes an `op:kernel` item with a finished patch on the issue "Operator-Inbox", the planner routes around it, and it never blocks a unit. The TIB link check runs without a login and is logged as "checked without login".
 
 ## 5. Invariants (never yield)
 
@@ -35,7 +35,7 @@ Only the request to Anthropic: an agent drafts it, the operator alone sends it, 
 - Secrets never in logs, bundle, Yjs, exports or backups.
 - The app makes no model call of its own, no telemetry, and uses the network only on a click.
 - Gates only grow.
-- No suppression, no `--no-verify`, no force-push, no mutating `gh api`, no `--admin`, no `bypassPermissions`.
+- No suppression, no `--no-verify`, no force-push, no mutating `gh api` outside the fixed verbs of `ops/conductor/gh_ops.py`, no `--admin`, no `bypassPermissions`.
 - Fixtures only synthetic or CC-licensed.
 
 ## 6. Independence of checking
@@ -44,13 +44,13 @@ Whoever writes code does not write the tests that judge it. Whoever reviews does
 
 ## 7. Done
 
-A unit is done when it is merged with green CI (the job `gates` contains `make gates-selftest`). Evidence is exit codes, log hashes and run URLs that the lead collected itself with `gh api` GET calls. No self-report counts. The build is done when `release.yml` has published v0.1.0.
+A unit is done when it is merged with green CI (the job `gates` contains `make gates-selftest`). Evidence is exit codes, log hashes and run URLs that the lead collected itself with `gh api` GET calls and `shasum`. No self-report counts. The build is done when `release.yml` has published v0.1.0.
 
 ## 8. Runtime
 
 - One lead session in a Claude Code cloud session (environment `academic-research`, setup script `docs/autonomy/cloud-setup.sh`) runs `/goal` with the text of `docs/autonomy/lead-goal.md`. It follows the `next` field printed by `python3 -I ops/conductor/state.py` and never decides the order by itself.
 - Per unit the lead runs the saved workflow `ar-unit` (or `ar-team` for a cross-package contract unit) with subagents, at most two units at a time, each in its own git worktree and on its own `claude/*` branch.
-- Every GitHub mutation goes through `python3 -I ops/conductor/gh_ops.py` and its fixed verbs. Nothing else mutates GitHub: no `gh pr`, `gh issue`, mutating `gh api`, `gh workflow run`, tag push or direct push to `main`.
+- Every GitHub mutation goes through `python3 -I ops/conductor/gh_ops.py` and its fixed verbs. Nothing else mutates GitHub: no `gh pr`, `gh issue`, mutating `gh api`, `gh workflow run`, tag push or direct push to `main`. Workflows and their subagents change nothing on GitHub; they return actions, and the lead files them with `gh_ops.py apply-actions`.
 - The lead writes its lease and progress to `docs/autonomy/progress.json` on the branch `conductor/state` with `ops/conductor/heartbeat.py`. All state lives in GitHub and that file; after every compaction the lead reads both again.
 - An hourly routine with the prompt `docs/autonomy/watchdog-routine.md` refreshes the status issue while the lease is fresh, and becomes the lead with the same goal when the lease is older than two hours.
 - At a usage limit the lead writes a heartbeat and ends its turn; the watchdog resumes. The label `conductor:pause` on the status issue stops new units; running units end regularly. Only the operator removes that label.
