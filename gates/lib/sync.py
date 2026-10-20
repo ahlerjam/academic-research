@@ -51,7 +51,7 @@ FLOWKIT = ('p=$(cat); b="$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-blocker.sh
            'then printf \'%s\' "$p" | python3 -I "$f" hook pre-bash; ' + RC + '; '
            'else echo "[gates] gates/gate.py or python3 missing; blocked as a precaution" >&2; exit 2; fi')
 FLOWKIT_BLOCKER = ".claude/hooks/pretooluse-blocker.sh"
-PRIVATE_READS = ["Read(**/.env)", "Read(**/.env.*)", "Read(**/*credentials*)", "Read(**/secrets*)"]
+PRIVATE_READS = ["Read(**/.env)", "Read(**/.env.*)", "Read(**/*.pem)", "Read(~/.ssh/**)", "Read(~/.config/gh/**)"]
 
 
 def _load(tree: str, rel: str) -> dict:

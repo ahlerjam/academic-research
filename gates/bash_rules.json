@@ -1,5 +1,6 @@
 {
   "protected_branches": "main|master",
+  "push_branches": "claude/.+|conductor/state",
   "rules": [
     {"id": "BASH-FORCE-PUSH", "pattern": "^git push\\b.*(\\s--force(-with-lease|-if-includes)?\\b|\\s-[a-zA-Z]*f[a-zA-Z]*(\\s|$)|\\s\\+\\S)",
      "message": "force push rewrites shared history; push a new commit or ask the operator"},
@@ -9,8 +10,8 @@
      "message": "git commit -n skips the hooks; fix the finding instead"},
     {"id": "BASH-PROTECTED-PUSH", "pattern": "^git push\\b.*\\s\\+?([\\w./-]*:)?(refs/heads/)?(main|master)(\\s|$)",
      "message": "push to a protected branch; push a feature branch and open a pull request"},
-    {"id": "BASH-GH-API-MUTATION", "pattern": "^gh api\\b.*(\\s(-X|--method)\\s*=?\\s*(POST|PUT|PATCH|DELETE)\\b|\\s(-f|-F|--field|--raw-field|--input)(\\s|=))",
-     "message": "gh api with a mutating method; use a read-only call or ask the operator"},
+    {"id": "BASH-GH-API-MUTATION", "pattern": "^gh api\\b(.*\\s(-X|--method)\\s*=?\\s*(?i:POST|PUT|PATCH|DELETE)\\b|.*\\s--input(\\s|=)|(?!.*\\s(-X\\s*|--method(\\s+|=))GET(\\s|$))(?=.*\\s(-[a-zA-Z]*[fF]|--field(\\s|=)|--raw-field(\\s|=)))|(?=.*\\sgraphql(\\s|$))(?=.*\\s(-[a-zA-Z]*[fF]|--field(\\s|=)|--raw-field(\\s|=))))",
+     "message": "gh api with a mutating method; use a read-only call (fields only with an explicit -X GET), ops/conductor/gh_ops.py or ask the operator"},
     {"id": "BASH-PUSH-ALL", "pattern": "^git push\\b.*\\s--(mirror|all|prune)\\b",
      "message": "pushing every ref can overwrite or delete protected branches; push one feature branch"},
     {"id": "BASH-ADMIN-MERGE", "pattern": "^gh pr merge\\b.*\\s--admin\\b",
@@ -30,7 +31,19 @@
     {"id": "BASH-SECRET-VENDOR", "scope": "raw", "pattern": "\\b(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}|sk-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,})",
      "message": "a token with a known vendor prefix ends up in logs; read it from the environment"},
     {"id": "BASH-SECRET-LITERAL", "scope": "raw", "pattern": "(?i)\\b[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL)[A-Z0-9_]*\\s*=\\s*['\"]?[A-Za-z0-9+/_.~-]{16,}",
-     "message": "a secret literal in a command ends up in logs; read it from the environment"}
+     "message": "a secret literal in a command ends up in logs; read it from the environment"},
+    {"id": "BASH-CLAUDE-BYPASS", "pattern": "^(claude|npx|pnpx|bunx|pnpm|yarn|node)\\b.*(\\s--(allow-)?dangerously-skip-permissions\\b|bypassPermissions)",
+     "message": "bypassing the permission checks switches every deny rule off; run claude with the project settings"},
+    {"id": "BASH-RELEASE-DIRECT", "pattern": "^gh workflow run\\b.*(?i:release)|^gh workflow run\\s+(-\\S+\\s+)*\\d+(\\s|$)|^gh release\\s+(create|edit|upload|delete|delete-asset)\\b",
+     "message": "a release runs only through ops/conductor/gh_ops.py dispatch-release; never dispatch or create it directly (name a workflow by file, not by id)"},
+    {"id": "BASH-TAG-PUSH", "pattern": "^git push\\b.*(\\s--(tags|follow-tags)\\b|refs/tags/|\\stag\\s|\\s\\+?([\\w./-]*:)?v\\d)",
+     "message": "pushing a tag starts a release; the release goes through ops/conductor/gh_ops.py dispatch-release only"},
+    {"id": "BASH-TAG-PUSH", "scope": "raw", "pattern": "(?i)\\bgit\\b[^;&|\\n]*\\s-c\\s*['\"]?push\\.followtags",
+     "message": "push.followTags pushes tags with every push; the release goes through ops/conductor/gh_ops.py dispatch-release only"},
+    {"id": "BASH-FETCH-REF", "pattern": "^git fetch\\b.*(refs/remotes/|refs/gates/|:\\S*remotes/)",
+     "message": "fetching into a remote-tracking ref moves the reference the gates compare against; plain git fetch only"},
+    {"id": "BASH-FETCH-REF", "scope": "raw", "pattern": "(?i)\\bgit\\b[^;&|\\n]*\\s-c\\s*['\"]?remote\\.[^\\s=]*\\.(fetch|url|pushurl)\\b",
+     "message": "git -c remote.* rewires where fetch writes or reads; plain git fetch only"}
   ],
   "write_rules": [
     {"id": "WRITE-SECRET-LITERAL", "pattern": "(?i)\\b[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL)[A-Z0-9_]*['\"]?\\s*[=:]\\s*['\"][A-Za-z0-9+/_.~-]{16,}['\"]",

@@ -1,17 +1,22 @@
-"""Migrations: unique gapless numbers, immutable once on the baseline, exactly one Alembic head."""
+"""Migrations: unique gapless numbers, immutable once on the baseline, exactly one Alembic head; numbering under a lock."""
 
 from __future__ import annotations
 
+import fcntl
 import os
+import posixpath
 import re
-from typing import List
+import time
+from typing import List, Set
 
-from . import gitx
+from . import gitx, roles
 from .findings import Finding
 
 SQL_NAME = re.compile(r"^(\d{4})_[a-z0-9_]+\.sql$")
 REVISION = re.compile(r"^revision\s*(?::\s*\w+\s*)?=\s*['\"]([^'\"]+)['\"]", re.MULTILINE)
 DOWN = re.compile(r"^down_revision\s*(?::[^=]+)?=\s*(.+)$", re.MULTILINE)
+SLUG = re.compile(r"^[a-z0-9_]+$")
+LOCK_SECONDS = 30
 
 
 def sql_violations(tree: str, directory: str, rule: str) -> List[Finding]:
@@ -60,3 +65,69 @@ def alembic_violations(tree: str, directory: str, rule: str) -> List[Finding]:
     if revisions and len(heads) != 1:
         return [Finding(directory, 1, rule, f"expected exactly one Alembic head, found {len(heads)}: {', '.join(heads)}")]
     return []
+
+
+def sql_directory(tree: str) -> str:
+    """Return the one repo-relative SQL migration directory: migrations_dir or a plain *.sql migration role glob.
+
+    ValueError when no component or more than one directory qualifies, because `migration new` takes no
+    component and must never guess.
+    """
+    cfg = roles.load(tree)
+    found = set()
+    for name, comp in sorted(cfg["components"].items()):
+        if comp.get("migrations_dir"):
+            found.add(comp["migrations_dir"])
+            continue
+        for glob in roles.patterns(cfg, name, "migration"):
+            folder, base = posixpath.split(glob)
+            if base.endswith(".sql") and not any(c in folder for c in "*?["):
+                found.add(folder)
+    if len(found) != 1:
+        raise ValueError(f"expected exactly one SQL migration directory in gates/roles.json, found {sorted(found)}")
+    return found.pop()
+
+
+def taken_numbers(tree: str, directory: str) -> Set[int]:
+    """Return migration numbers used in any worktree of this repository or on any local or remote branch."""
+    def numbers(names: List[str]) -> Set[int]:
+        return {int(m.group(1)) for m in (SQL_NAME.match(os.path.basename(n)) for n in names) if m}
+
+    found = numbers(os.listdir(os.path.join(tree, directory))) if os.path.isdir(os.path.join(tree, directory)) else set()
+    listing = gitx.run(["git", "worktree", "list", "--porcelain"], cwd=tree).stdout
+    for line in listing.splitlines():
+        folder = os.path.join(line[len("worktree "):], directory) if line.startswith("worktree ") else ""
+        if folder and os.path.isdir(folder):
+            found |= numbers(os.listdir(folder))
+    refs = gitx.run(["git", "for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"], cwd=tree).stdout
+    for ref in refs.split():
+        found |= numbers(gitx.run(["git", "ls-tree", "--name-only", ref, directory + "/"], cwd=tree).stdout.split())
+    return found
+
+
+def new(tree: str, name: str) -> str:
+    """Create the next SQL migration under a lock in the shared git directory and return its repo-relative path.
+
+    The number skips every number in any worktree and on any local or remote branch, so parallel units never
+    draw the same one (the pattern of adr.new); ValueError for a name that is not snake_case or without exactly
+    one migration directory, RuntimeError when another migration new holds the lock for longer than LOCK_SECONDS.
+    """
+    if not SLUG.match(name or ""):
+        raise ValueError("migration name must be snake_case: [a-z0-9_]+")
+    directory = sql_directory(tree)
+    with open(os.path.join(gitx.common_dir(tree), "gates-migration.lock"), "w") as lock:
+        deadline = time.time() + LOCK_SECONDS
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.time() > deadline:
+                    raise RuntimeError("another migration new holds the lock")
+                time.sleep(0.2)
+        number = max(taken_numbers(tree, directory), default=0) + 1
+        rel = f"{directory}/{number:04d}_{name}.sql"
+        os.makedirs(os.path.join(tree, directory), exist_ok=True)
+        with open(os.path.join(tree, rel), "x", encoding="utf-8") as handle:
+            handle.write(f"-- {number:04d}_{name}\n")
+        return rel
