@@ -40,7 +40,9 @@
   "gates/sgconfig.yml",
   "gates/suppress-baseline.json",
   "ops/conductor/**",
-  "docs/autonomy/charter.md"
+  "docs/autonomy/charter.md",
+  "docs/autonomy/lead-goal.md",
+  "docs/autonomy/watchdog-routine.md"
  ],
  "ratchet": [
   "gates/rules/**",
