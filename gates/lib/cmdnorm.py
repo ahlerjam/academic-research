@@ -212,15 +212,85 @@ def _mask_message(seg: List[str]) -> List[str]:
     return out
 
 
+GH_API_VALUE_SHORT = "HfFXpqt"
+GH_API_BOOL_SHORT = "i"
+GH_API_VALUE_LONG = {"--header", "--field", "--raw-field", "--method", "--preview", "--jq", "--template", "--input",
+                     "--hostname", "--cache"}
+GH_API_BOOL_LONG = {"--paginate", "--slurp", "--include", "--silent", "--verbose"}
+
+
+def gh_api_fields(seg: List[str]) -> bool:
+    """Return whether a gh api segment sends fields without its own tokens saying exactly GET (fields mean POST).
+
+    Each flag is read the way gh reads it: a value flag takes the rest of its token or the next token, so text
+    inside a field value (`-f "body=-X GET"`) never counts as a method. Unknown flags, any method token other
+    than exactly GET and the graphql endpoint keep the fields red.
+    """
+    if seg[:2] != ["gh", "api"]:
+        return False
+    fields, unknown, methods, positional = False, False, [], []
+    args = seg[2:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        i += 1
+        if arg == "--":
+            positional += args[i:]
+            break
+        if arg.startswith("--"):
+            name, eq, value = arg.partition("=")
+            if name in GH_API_VALUE_LONG:
+                if not eq:
+                    value = args[i] if i < len(args) else ""
+                    i += 1
+                fields = fields or name in ("--field", "--raw-field")
+                if name == "--method":
+                    methods.append(value)
+            elif name not in GH_API_BOOL_LONG or eq:
+                unknown = True
+            continue
+        if arg.startswith("-") and len(arg) > 1:
+            for j, letter in enumerate(arg[1:], 1):
+                if letter in GH_API_VALUE_SHORT:
+                    value = arg[j + 1:]
+                    if not value:
+                        value = args[i] if i < len(args) else ""
+                        i += 1
+                    fields = fields or letter in "fF"
+                    if letter == "X":
+                        methods.append(value)
+                    break
+                if letter not in GH_API_BOOL_SHORT:
+                    unknown = True
+                    break
+            continue
+        positional.append(arg)
+    if not fields:
+        return False
+    return unknown or not methods or any(m != "GET" for m in methods) or "graphql" in positional
+
+
+TOKEN_CHECKS = {"gh_api_fields": gh_api_fields}
+
+
 def match(command: str, rules: List[dict]) -> List[Tuple[str, str]]:
-    """Return (rule id, message) for every rule a command breaks; unparsable input is checked as full text."""
+    """Return (rule id, message) for every rule a command breaks; unparsable input is checked as full text.
+
+    A rule with scope "tokens" names a check in TOKEN_CHECKS that reads each normalised segment's token list;
+    its "pattern" applies to the text only for input that cannot be split into segments (fail-closed).
+    """
     segs = segments(command)
     pieces = [p.strip() for p in re.split(r"[;&|\n()`]+|\$\(", split_heredocs(command)[0])]
     texts = [raw(" ".join(s)) for s in segs] if segs is not None else [p for p in pieces if p]
     hits = raw_match(command, [r for r in rules if r.get("scope") == "raw"])
-    for rule in (r for r in rules if r.get("scope") != "raw"):
+    for rule in (r for r in rules if r.get("scope") not in ("raw", "tokens")):
         pattern = re.compile(rule["pattern"])
         if any(pattern.search(t) for t in texts):
+            hits.append((rule["id"], rule["message"]))
+    for rule in (r for r in rules if r.get("scope") == "tokens"):
+        check = TOKEN_CHECKS[rule["check"]]
+        if (any(check(s) for s in segs) if segs is not None
+                else any(re.search(rule["pattern"], t) for t in texts)):
             hits.append((rule["id"], rule["message"]))
     return hits
 

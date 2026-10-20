@@ -51,6 +51,47 @@ RULE_CASES = (
     ("gh api -X patch repos/o/r", "BASH-GH-API-MUTATION"),
     ("gh api -X PUT repos/o/r/pulls/3/ccr/auto_merge", "BASH-GH-API-MUTATION"),
     ("gh api -X DELETE repos/o/r/git/refs/heads/x", "BASH-GH-API-MUTATION"),
+    ('gh api repos/o/r/issues -f title=x -f "body=see -X GET docs"', "BASH-GH-API-MUTATION"),
+    ('gh api repos/o/r/actions/workflows/release.yml/dispatches -f ref=main -f inputs[dry_run]=false '
+     '-f inputs[version]=0.1.0 -f "note= -X GET"', "BASH-GH-API-MUTATION"),
+    ('gh api repos/o/r/git/refs -f ref=refs/tags/v0.1.0 -f sha=abc -f "n= -X GET"', "BASH-GH-API-MUTATION"),
+    ("gh api repos/o/r/issues -H -XGET -f title=x", "BASH-GH-API-MUTATION"),
+    ("gh api repos/o/r/issues -f -X GET", "BASH-GH-API-MUTATION"),
+    ("gh api repos/o/r/issues --unknown -X GET -f title=x", "BASH-GH-API-MUTATION"),
+    ("gh api repos/o/r/issues -X GET -X POST -f title=x", "BASH-GH-API-MUTATION"),
+    ("gh api --method=get repos/o/r/issues -f title=x", "BASH-GH-API-MUTATION"),
+    ("timeout 30 gh api repos/o/r/issues -f title=x", "BASH-GH-API-MUTATION"),
+    ("gh label delete conductor:pause --yes", "BASH-GH-MUTATION"),
+    ("gh label edit conductor:pause --name x", "BASH-GH-MUTATION"),
+    ("gh label create conductor --force", "BASH-GH-MUTATION"),
+    ("gh run cancel 123", "BASH-GH-MUTATION"),
+    ("gh run delete 123", "BASH-GH-MUTATION"),
+    ("gh run rerun 123 --failed", "BASH-GH-MUTATION"),
+    ("gh workflow disable protect-operator-files.yml", "BASH-GH-MUTATION"),
+    ("gh workflow enable ci.yml", "BASH-GH-MUTATION"),
+    ("gh variable set RUNNER --body x", "BASH-GH-MUTATION"),
+    ("gh secret set X --body y", "BASH-GH-MUTATION"),
+    ("gh cache delete --all", "BASH-GH-MUTATION"),
+    ("gh repo edit --enable-auto-merge=false", "BASH-GH-MUTATION"),
+    ("gh workflow run -R o/r 12345", "BASH-RELEASE-DIRECT"),
+    ("gh workflow run --repo o/r 12345", "BASH-RELEASE-DIRECT"),
+    ("gh workflow run --ref main 12345 -f dry_run=false", "BASH-RELEASE-DIRECT"),
+    ("gh workflow run rel*.yml", "BASH-RELEASE-DIRECT"),
+    ("gh workflow run ci.yml", "BASH-RELEASE-DIRECT"),
+    ("gh workflow run -R o/r proof.yml", "BASH-RELEASE-DIRECT"),
+    ("claude --settings s.json -p x", "BASH-CLAUDE-BYPASS"),
+    ("claude -p x --settings=/tmp/s.json", "BASH-CLAUDE-BYPASS"),
+    ("git branch origin/main HEAD", "BASH-ORIGIN-REF"),
+    ("git branch -f origin/main claude/x", "BASH-ORIGIN-REF"),
+    ("git branch -m claude/x origin/main", "BASH-ORIGIN-REF"),
+    ("git switch -c origin/main", "BASH-ORIGIN-REF"),
+    ("git checkout -b origin/main", "BASH-ORIGIN-REF"),
+    ("git checkout -B origin/main HEAD", "BASH-ORIGIN-REF"),
+    ("git worktree add ../w -b origin/main", "BASH-ORIGIN-REF"),
+    ("git tag origin/main", "BASH-ORIGIN-REF"),
+    ("git fetch origin +claude/x:origin/main", "BASH-ORIGIN-REF"),
+    ("git fetch origin claude/x:refs/heads/origin/main", "BASH-ORIGIN-REF"),
+    ("git symbolic-ref refs/heads/origin/main refs/heads/claude/x", "BASH-ORIGIN-REF"),
 )
 ALLOWED = (
     "claude -p hi --permission-mode dontAsk",
@@ -70,6 +111,22 @@ ALLOWED = (
     "gh api -XGET repos/o/r/issues -f state=open",
     "gh api repos/o/r/pulls",
     "gh api repos/o/r/pulls/3/ccr/auto_merge",
+    "gh api -X GET -i repos/o/r/issues -F per_page=5 --paginate",
+    "gh api repos/o/r/issues/3/comments --jq '[.[] | select(.author_association==\"OWNER\")]'",
+    "gh label list",
+    "gh run view 123 --log-failed",
+    "gh run list --workflow proof.yml",
+    "gh workflow view release.yml",
+    "gh variable list",
+    "gh repo view",
+    "claude -p hi --settings .claude/settings.json",
+    "git switch -c claude/unit-3-x origin/main",
+    "git worktree add ../ar-wt/u3 -b claude/unit-3-x origin/main",
+    "git checkout origin/main -- README.md",
+    "git branch claude/x",
+    "git fetch origin claude/unit-3-x",
+    "git log origin/main..HEAD",
+    "git diff --name-only origin/main...HEAD",
 )
 
 
@@ -104,7 +161,7 @@ class RuleIds(unittest.TestCase):
 
 
 class PushTargets(unittest.TestCase):
-    """Agent sessions push only claude/* and conductor/state; a tag is never pushed; BASH-PROTECTED-PUSH stays."""
+    """Agent sessions push only claude/* (heartbeat.py writes conductor/state); no tag; BASH-PROTECTED-PUSH stays."""
 
     def setUp(self) -> None:
         self.root = support.make_tree()
@@ -121,7 +178,7 @@ class PushTargets(unittest.TestCase):
 
     def test_allowed_destinations(self) -> None:
         for command in ("git push -u origin claude/unit-12", "git push origin HEAD:claude/unit-12",
-                        "git push origin HEAD:refs/heads/claude/unit-12", "git push origin conductor/state",
+                        "git push origin HEAD:refs/heads/claude/unit-12",
                         "git push origin --delete claude/old", "git push origin :claude/old",
                         "git push origin claude/a claude/b"):
             self.assertEqual(self.rules(command), [], command)
@@ -130,6 +187,8 @@ class PushTargets(unittest.TestCase):
         for command in ("git push origin feature", "git push -u origin feature/main-fix", "git push origin unit/12-x",
                         "git push origin claude/a feature", "git push origin claude/x:release",
                         "git push origin conductor/state-2", "git push origin --delete feature",
+                        "git push origin conductor/state", "git push origin HEAD:conductor/state",
+                        "git push origin abc123:refs/heads/conductor/state",
                         "git push origin HEAD:refs/notes/x", "git push origin \"$BRANCH\""):
             self.assertIn("BASH-PUSH-MAIN-STATE", self.rules(command), command)
 

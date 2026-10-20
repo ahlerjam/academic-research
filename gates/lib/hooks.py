@@ -210,7 +210,8 @@ def push_targets(tree: str, segs: List[List[str]], allowed: str) -> List[tuple]:
         for dst in _push_destinations(tree, refspecs, delete):
             if dst is None or not re.fullmatch(f"(?:{allowed})", dst):
                 hits.append(("BASH-PUSH-MAIN-STATE", f"this pushes to '{dst or 'an unknown branch'}'; agent sessions "
-                                                     "push only claude/* branches (the lead also conductor/state)"))
+                                                     "push only claude/* branches; conductor/state is written only "
+                                                     "by ops/conductor/heartbeat.py"))
         for spec in refspecs:
             src = spec.lstrip("+").split(":", 1)[0]
             tag = gitx.run(["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{src}"], cwd=tree) if src else None

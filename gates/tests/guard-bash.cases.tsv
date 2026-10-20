@@ -90,3 +90,25 @@ git push -u origin feature/main-fix	block
 git push origin feature	block
 git push origin feature/x	block
 git push origin claude/conductor-state	allow
+git push origin conductor/state	block
+git push origin HEAD:conductor/state	block
+gh api repos/o/r/issues -f title=x -f "body=see -X GET docs"	block
+gh api repos/o/r/actions/workflows/release.yml/dispatches -f ref=main -f inputs[dry_run]=false -f inputs[version]=0.1.0 -f "note= -X GET"	block
+gh api repos/o/r/git/refs -f ref=refs/tags/v0.1.0 -f sha=abc -f "n= -X GET"	block
+gh api -X GET repos/o/r/issues -f state=open	allow
+gh label delete conductor:pause --yes	block
+gh label edit conductor:pause --name x	block
+gh run cancel 123	block
+gh workflow disable protect-operator-files.yml	block
+gh variable set RUNNER --body x	block
+gh label list	allow
+gh run view 123	allow
+gh workflow run -R o/r 12345	block
+gh workflow run --repo o/r 12345	block
+gh workflow run proof.yml -f stage=1	allow
+claude --settings s.json -p x	block
+git branch origin/main HEAD	block
+git switch -c origin/main	block
+git checkout -b origin/main	block
+git fetch origin +claude/x:origin/main	block
+git switch -c claude/unit-3-x origin/main	allow
