@@ -23,3 +23,9 @@ Consequence: After every change of a control file the operator runs `make contro
 The protection only holds with a separate agent identity and a branch ruleset with code owner
 review.
 
+Addendum 2026-10-20 (ADR-0031): `protect-operator-files` checks paths, not authorship. Any pull
+request that touches a path in `gates/controls.json` turns the check red for every author, because
+the agent and the operator share one login (ADR-0026) and a login or trailer check proves nothing.
+The operator merges such a pull request through the ruleset bypass, never an agent. `gates/roles.json`
+and `gates/dispatch.json` move to the ratchet: they may only grow, and `guard.py` rejects a change
+that removes or loosens an entry.
