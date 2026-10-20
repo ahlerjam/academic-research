@@ -3,10 +3,15 @@
 Usage: python3 -I ops/conductor/gh_ops.py <verb> [options]   (prints JSON; exit 0 done, 1 GitHub error, 2 refused)
 
 Verbs: open-pr, enable-auto-merge, label, comment, create-issue, close-issue, clear-needs-operator,
-dispatch-release, dispatch-proof, rerun-failed, update-status-issue, ensure-labels. There is no merge verb,
-no settings, ruleset or branch-protection verb, no contents or ref write and no workflow-file change;
+apply-actions, dispatch-release, dispatch-proof, rerun-failed, update-status-issue, ensure-labels. There is no
+merge verb, no settings, ruleset or branch-protection verb, no contents or ref write and no workflow-file change;
 github.check_route refuses those routes a second time. GitHub merges a unit PR itself once auto-merge is on
 and the required checks `gate` and `protect` are green.
+
+apply-actions files what an issue-only workflow (ar-plan, ar-judge, ar-critic, ar-triage, ar-release) returns
+in its `actions` list: create-issue, comment, label and close-issue, validated as a whole before anything is
+sent, in list order, with `{{ref}}` placeholders replaced by the numbers of issues created earlier in the
+same list. Progress is kept next to the action file, so a rerun after an error never files an action twice.
 """
 
 from __future__ import annotations
@@ -33,6 +38,14 @@ VERSION_RX = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 SHA256_RX = re.compile(r"^[0-9a-f]{64}$")
 CHARTER = "docs/autonomy/charter.md"
 OPERATOR_ONLY_REMOVALS = ("conductor:pause",)
+ACTION_VERBS = ("create-issue", "comment", "label", "close-issue")
+REF_RX = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+PLACEHOLDER_RX = re.compile(r"\{\{([^{}]*)\}\}")
+MAX_ACTIONS = 80
+MAX_ACTION_FILE = 2_000_000
+INBOX = "inbox"
+INBOX_BODY = ("Operator inbox of the autonomous build: kernel patches (`op:kernel`) and the request to Anthropic. "
+              "Nothing here blocks the build (docs/autonomy/charter.md section 4).\n")
 
 
 class Refused(Exception):
@@ -65,17 +78,21 @@ def _title(value: str) -> str:
     return value.strip()
 
 
+def _text(text: str, cfg: dict, what: str) -> str:
+    """Validate a non-empty body text within the size limit."""
+    if not isinstance(text, str) or not text.strip():
+        raise Refused(f"{what} is empty")
+    if len(text) > int(cfg["body_max_chars"]):
+        raise Refused(f"{what} exceeds {cfg['body_max_chars']} characters")
+    return text
+
+
 def _body(path: str, cfg: dict) -> str:
     """Read a non-empty body file within the size limit."""
     if not path or not os.path.isfile(path):
         raise Refused(f"body file {path!r} does not exist")
     with open(path, encoding="utf-8") as handle:
-        text = handle.read()
-    if not text.strip():
-        raise Refused(f"body file {path} is empty")
-    if len(text) > int(cfg["body_max_chars"]):
-        raise Refused(f"body file {path} exceeds {cfg['body_max_chars']} characters")
-    return text
+        return _text(handle.read(), cfg, f"body file {path}")
 
 
 def _labels(names: Sequence[str], catalogue: Dict[str, dict]) -> List[str]:
@@ -86,12 +103,70 @@ def _labels(names: Sequence[str], catalogue: Dict[str, dict]) -> List[str]:
     return list(dict.fromkeys(names))
 
 
+def _label_change(add: Sequence[str], remove: Sequence[str], catalogue: Dict[str, dict]) -> tuple:
+    """Validate one label change: known labels, something to do, protected labels never removed."""
+    add, remove = _labels(add, catalogue), _labels(remove, catalogue)
+    if not add and not remove:
+        raise Refused("label needs --add or --remove")
+    if "needs-operator" in remove:
+        raise Refused("needs-operator is removed only by clear-needs-operator, with the charter rule")
+    blocked = [n for n in remove if n in OPERATOR_ONLY_REMOVALS]
+    if blocked:
+        raise Refused(f"only the operator removes {', '.join(blocked)}")
+    return add, remove
+
+
 def _issue(t: github.Transport, number: int) -> dict:
     """Read one issue or refuse when it does not exist."""
     data = github.get(t, f"repos/{t.repo}/issues/{number}")
     if not isinstance(data, dict):
         raise Refused(f"issue #{number} does not exist")
     return data
+
+
+def _inbox(t: github.Transport, cfg: dict) -> int:
+    """Return the number of the open Operator-Inbox issue, creating it (label conductor) when none exists."""
+    found = [i for i in github.get_all(t, f"repos/{t.repo}/issues?state=open")
+             if i.get("title") == cfg["inbox_title"] and "pull_request" not in i]
+    if found:
+        return int(sorted(found, key=lambda i: int(i["number"]))[0]["number"])
+    issue = t.request("POST", f"repos/{t.repo}/issues", {"title": cfg["inbox_title"], "body": INBOX_BODY,
+                                                         "labels": ["conductor"]})
+    if not isinstance(issue, dict) or not issue.get("number"):
+        raise github.GitHubError(0, "creating the inbox issue returned no number")
+    return int(issue["number"])
+
+
+def _do_label(t: github.Transport, number: int, add: Sequence[str], remove: Sequence[str]) -> dict:
+    """Send one validated label change."""
+    if add:
+        t.request("POST", f"repos/{t.repo}/issues/{number}/labels", {"labels": list(add)})
+    removed, absent = [], []
+    for name in remove:
+        try:
+            t.request("DELETE", f"repos/{t.repo}/issues/{number}/labels/{urllib.parse.quote(name, safe='')}")
+            removed.append(name)
+        except github.GitHubError as err:
+            if err.status != 404:
+                raise
+            absent.append(name)
+    return {"issue": number, "added": list(add), "removed": removed, "absent": absent}
+
+
+def _do_close(t: github.Transport, number: int, reason: str, text: str) -> dict:
+    """Close an issue (never a PR) with an explaining comment."""
+    issue = _issue(t, number)
+    if "pull_request" in issue:
+        raise Refused(f"#{number} is a pull request; gh_ops never closes PRs")
+    t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": text})
+    t.request("PATCH", f"repos/{t.repo}/issues/{number}", {"state": "closed", "state_reason": reason})
+    return {"issue": number, "closed": reason}
+
+
+def _do_create(t: github.Transport, title: str, text: str, labels: Sequence[str]) -> dict:
+    """Create one issue and return its number."""
+    issue = t.request("POST", f"repos/{t.repo}/issues", {"title": title, "body": text, "labels": list(labels)})
+    return {"issue": issue.get("number") if isinstance(issue, dict) else None, "labels": list(labels)}
 
 
 def open_pr(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
@@ -137,42 +212,22 @@ def enable_auto_merge(t: github.Transport, cfg: dict, a: argparse.Namespace) -> 
 def label(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
     """Add or remove labels on an issue or PR; needs-operator leaves only through clear-needs-operator."""
     number = _number(a.issue, "--issue")
-    catalogue = load_labels()
-    add, remove = _labels(a.add or [], catalogue), _labels(a.remove or [], catalogue)
-    if not add and not remove:
-        raise Refused("label needs --add or --remove")
-    if "needs-operator" in remove:
-        raise Refused("needs-operator is removed only by clear-needs-operator, with the charter rule")
-    blocked = [n for n in remove if n in OPERATOR_ONLY_REMOVALS]
-    if blocked:
-        raise Refused(f"only the operator removes {', '.join(blocked)}")
-    if add:
-        t.request("POST", f"repos/{t.repo}/issues/{number}/labels", {"labels": add})
-    removed, absent = [], []
-    for name in remove:
-        try:
-            t.request("DELETE", f"repos/{t.repo}/issues/{number}/labels/{urllib.parse.quote(name, safe='')}")
-            removed.append(name)
-        except github.GitHubError as err:
-            if err.status != 404:
-                raise
-            absent.append(name)
-    return {"issue": number, "added": add, "removed": removed, "absent": absent}
+    add, remove = _label_change(a.add or [], a.remove or [], load_labels())
+    return _do_label(t, number, add, remove)
 
 
 def comment(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
-    """Post one comment on an issue or PR."""
-    number = _number(a.issue, "--issue")
-    t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": _body(a.body_file, cfg)})
+    """Post one comment on an issue or PR; `--issue inbox` names the Operator-Inbox issue."""
+    text = _body(a.body_file, cfg)
+    number = _inbox(t, cfg) if a.issue == INBOX else _number(a.issue, "--issue")
+    t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": text})
     return {"issue": number, "commented": True}
 
 
 def create_issue(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
     """Create an issue with labels from labels.json."""
     labels = _labels(a.label or [], load_labels())
-    issue = t.request("POST", f"repos/{t.repo}/issues",
-                      {"title": _title(a.title), "body": _body(a.body_file, cfg), "labels": labels})
-    return {"issue": issue.get("number") if isinstance(issue, dict) else None, "labels": labels}
+    return _do_create(t, _title(a.title), _body(a.body_file, cfg), labels)
 
 
 def close_issue(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
@@ -180,13 +235,7 @@ def close_issue(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
     number = _number(a.issue, "--issue")
     if a.reason not in ("completed", "not_planned"):
         raise Refused("--reason must be completed or not_planned")
-    text = _body(a.comment_file, cfg)
-    issue = _issue(t, number)
-    if "pull_request" in issue:
-        raise Refused(f"#{number} is a pull request; gh_ops never closes PRs")
-    t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": text})
-    t.request("PATCH", f"repos/{t.repo}/issues/{number}", {"state": "closed", "state_reason": a.reason})
-    return {"issue": number, "closed": a.reason}
+    return _do_close(t, number, a.reason, _body(a.comment_file, cfg))
 
 
 def clear_needs_operator(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
@@ -208,6 +257,143 @@ def clear_needs_operator(t: github.Transport, cfg: dict, a: argparse.Namespace) 
     t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": body})
     t.request("DELETE", f"repos/{t.repo}/issues/{number}/labels/needs-operator")
     return {"issue": number, "cleared": "needs-operator"}
+
+
+def _placeholders(text: str, defined: Sequence[str], where: str) -> None:
+    """Refuse a `{{ref}}` placeholder that names no issue created earlier in the list."""
+    for ref in PLACEHOLDER_RX.findall(text or ""):
+        if ref not in defined:
+            raise Refused(f"{where}: placeholder {{{{{ref}}}}} names no issue created earlier in this list")
+
+
+def _target(act: dict, defined: Sequence[str], where: str) -> dict:
+    """Validate the target of a non-create action: exactly one of issue, ref or inbox."""
+    keys = [k for k in ("issue", "ref", INBOX) if act.get(k) not in (None, False, "")]
+    if len(keys) != 1:
+        raise Refused(f"{where}: name exactly one target: issue, ref or inbox")
+    if keys[0] == "issue":
+        value = act["issue"]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise Refused(f"{where}: issue must be a positive integer")
+        return {"issue": value}
+    if keys[0] == "ref":
+        if act["ref"] not in defined:
+            raise Refused(f"{where}: ref {act['ref']!r} names no issue created earlier in this list")
+        return {"ref": act["ref"]}
+    if act[INBOX] is not True:
+        raise Refused(f"{where}: inbox must be true")
+    return {INBOX: True}
+
+
+def plan_actions(data: object, cfg: dict, catalogue: Dict[str, dict]) -> List[dict]:
+    """Validate a whole action list before anything is sent and return it normalised."""
+    if not isinstance(data, dict) or not isinstance(data.get("actions"), list):
+        raise Refused('the action file must hold {"actions": [...]}')
+    actions = data["actions"]
+    if not actions or len(actions) > MAX_ACTIONS:
+        raise Refused(f"the action list must hold 1 to {MAX_ACTIONS} actions")
+    defined: List[str] = []
+    out: List[dict] = []
+    for i, act in enumerate(actions):
+        where = f"action {i}"
+        if not isinstance(act, dict) or act.get("verb") not in ACTION_VERBS:
+            raise Refused(f"{where}: verb must be one of {', '.join(ACTION_VERBS)}")
+        verb = act["verb"]
+        optional = verb == "label" and act.get("body") in (None, "")
+        body = "" if optional else _text(act.get("body"), cfg, f"{where} body")
+        _placeholders(body, defined, where)
+        if verb == "create-issue":
+            ref = act.get("ref")
+            if not isinstance(ref, str) or not REF_RX.match(ref) or ref in defined:
+                raise Refused(f"{where}: create-issue needs a new ref of lowercase letters, digits and dashes")
+            title = act.get("title")
+            _placeholders(title or "", defined, where)
+            _title(PLACEHOLDER_RX.sub("1", title or ""))
+            labels = act.get("labels") or []
+            if not isinstance(labels, list):
+                raise Refused(f"{where}: labels must be a list")
+            out.append({"verb": verb, "ref": ref, "title": title, "body": body,
+                        "labels": _labels([str(x) for x in labels], catalogue)})
+            defined.append(ref)
+            continue
+        rec = dict(_target(act, defined, where), verb=verb, body=body)
+        if verb == "label":
+            add, remove = act.get("add") or [], act.get("remove") or []
+            if not isinstance(add, list) or not isinstance(remove, list):
+                raise Refused(f"{where}: add and remove must be lists")
+            rec["add"], rec["remove"] = _label_change([str(x) for x in add], [str(x) for x in remove], catalogue)
+        elif verb == "close-issue":
+            if act.get("reason") not in ("completed", "not_planned"):
+                raise Refused(f"{where}: reason must be completed or not_planned")
+            rec["reason"] = act["reason"]
+        out.append(rec)
+    return out
+
+
+def _fill(text: str, refs: Dict[str, int]) -> str:
+    """Replace every `{{ref}}` with the number of the issue created for it."""
+    return PLACEHOLDER_RX.sub(lambda m: str(refs[m.group(1)]), text)
+
+
+def _read_progress(path: str, digest: str) -> dict:
+    """Read the progress of an earlier run of the same action file; a changed file is refused."""
+    if not os.path.isfile(path):
+        return {"digest": digest, "done": 0, "refs": {}, "results": []}
+    with open(path, encoding="utf-8") as handle:
+        progress = json.load(handle)
+    if progress.get("digest") != digest:
+        raise Refused(f"the action file changed after a partial run; restore it or remove {path} after checking "
+                      "which actions were filed")
+    return progress
+
+
+def _write_progress(path: str, progress: dict) -> None:
+    """Store the progress after every filed action."""
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(progress, handle, sort_keys=True)
+
+
+def apply_actions(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
+    """File a workflow's action list in order; a rerun continues after the last filed action."""
+    if not a.file or not os.path.isfile(a.file):
+        raise Refused(f"action file {a.file!r} does not exist")
+    if os.path.getsize(a.file) > MAX_ACTION_FILE:
+        raise Refused(f"action file {a.file} exceeds {MAX_ACTION_FILE} bytes")
+    with open(a.file, "rb") as handle:
+        raw = handle.read()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except ValueError as err:
+        raise Refused(f"action file {a.file} is not JSON: {err}") from err
+    actions = plan_actions(data, cfg, load_labels())
+    done_path = a.file + ".done.json"
+    progress = _read_progress(done_path, hashlib.sha256(raw).hexdigest())
+    refs: Dict[str, int] = {k: int(v) for k, v in progress["refs"].items()}
+    start = int(progress["done"])
+    for i in range(start, len(actions)):
+        act = actions[i]
+        body = _fill(act["body"], refs)
+        if act["verb"] == "create-issue":
+            result = _do_create(t, _title(_fill(act["title"], refs)), body, act["labels"])
+            if not result["issue"]:
+                raise github.GitHubError(0, f"action {i}: creating the issue returned no number")
+            refs[act["ref"]] = int(result["issue"])
+        else:
+            number = refs[act["ref"]] if "ref" in act else _inbox(t, cfg) if INBOX in act else int(act["issue"])
+            if act["verb"] == "comment":
+                t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": body})
+                result = {"issue": number, "commented": True}
+            elif act["verb"] == "label":
+                result = _do_label(t, number, act["add"], act["remove"])
+                if body:
+                    t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": body})
+            else:
+                result = _do_close(t, number, act["reason"], body)
+        progress = {"digest": progress["digest"], "done": i + 1, "refs": refs,
+                    "results": list(progress["results"]) + [result]}
+        _write_progress(done_path, progress)
+    return {"applied": len(actions) - start, "skipped_already_filed": start, "refs": refs,
+            "progress_file": done_path}
 
 
 def dispatch_release(t: github.Transport, cfg: dict, a: argparse.Namespace, now: float) -> dict:
@@ -292,7 +478,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--add", action="append")
     s.add_argument("--remove", action="append")
     s = sub.add_parser("comment")
-    s.add_argument("--issue", required=True)
+    s.add_argument("--issue", required=True, help="issue or PR number, or `inbox` for the Operator-Inbox issue")
     s.add_argument("--body-file", required=True)
     s = sub.add_parser("create-issue")
     s.add_argument("--title", required=True)
@@ -306,6 +492,8 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--issue", required=True)
     s.add_argument("--charter-section", required=True)
     s.add_argument("--reason", required=True)
+    s = sub.add_parser("apply-actions")
+    s.add_argument("--file", required=True, help='JSON file {"actions": [...]} as an issue-only workflow returned it')
     s = sub.add_parser("dispatch-release")
     s.add_argument("--version", required=True)
     s.add_argument("--dry-run", required=True)
@@ -321,8 +509,8 @@ def parser() -> argparse.ArgumentParser:
 
 VERBS = {"open-pr": open_pr, "enable-auto-merge": enable_auto_merge, "label": label, "comment": comment,
          "create-issue": create_issue, "close-issue": close_issue, "clear-needs-operator": clear_needs_operator,
-         "dispatch-proof": dispatch_proof, "rerun-failed": rerun_failed, "update-status-issue": update_status_issue,
-         "ensure-labels": ensure_labels}
+         "apply-actions": apply_actions, "dispatch-proof": dispatch_proof, "rerun-failed": rerun_failed,
+         "update-status-issue": update_status_issue, "ensure-labels": ensure_labels}
 
 
 def run(argv: Sequence[str], t: Optional[github.Transport] = None, cfg: Optional[dict] = None,
