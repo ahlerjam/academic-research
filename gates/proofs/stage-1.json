@@ -3,7 +3,7 @@
  "milestone": "M1",
  "issue": 100,
  "outcome": "Write and compile one real chapter locally: structured editor, PDFs and BibTeX/RIS import, anchored citations (quote or paraphrase) with hover and quote check, LaTeX/PDF with template, trace check, versions and backup, install",
- "proof": "an agent writes and exports a real chapter from CC-licensed sources and the operator reviews it (T23)",
+ "proof": "an agent writes and exports a real chapter from CC-licensed sources and an independent judge panel reviews it (T23)",
  "contracts": [
   {
    "id": "S1-QUOTE-EXACT",
@@ -103,10 +103,10 @@
   },
   {
    "id": "S1-T23-REVIEW",
-   "northstar": "the operator reviews it (T23)",
+   "northstar": "an independent judge panel reviews it (T23)",
    "evidence": "operator",
-   "operator": "The operator reads the agent's exported chapter and records the T23 review in the T23 ticket.",
-   "source": "#100 AC16; T23"
+   "operator": "The judge panel (.claude/workflows/ar-judge.js with model fable) reviews the agent's exported chapter by the T23 checklist and records the verdict in the T23 ticket; the release panel (.claude/workflows/ar-release.js) repeats the check in docs/release/<version>.md.",
+   "source": "#100 AC16; T23; operator decision 6 of 2026-10-20"
   }
  ]
 }

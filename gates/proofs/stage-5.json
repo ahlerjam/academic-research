@@ -3,7 +3,7 @@
  "milestone": "M5",
  "issue": 104,
  "outcome": "Whole-thesis drafting, designed from measured costs",
- "proof": "written design approved by the operator",
+ "proof": "written design approved by the judge panel",
  "contracts": [
   {
    "id": "S5-JOB-PAUSE-RESUME",
@@ -71,10 +71,10 @@
   },
   {
    "id": "S5-DESIGN-APPROVAL",
-   "northstar": "written design approved by the operator",
+   "northstar": "written design approved by the judge panel",
    "evidence": "operator",
-   "operator": "The operator approves the T45 design and records the approval in the T45 ticket.",
-   "source": "#104 context and AC17; T45"
+   "operator": "The judge panel (.claude/workflows/ar-judge.js with model fable) approves the T45 design and records the verdict in the T45 ticket; the release panel (.claude/workflows/ar-release.js) repeats the check in docs/release/<version>.md.",
+   "source": "#104 context and AC17; T45; operator decision 6 of 2026-10-20"
   }
  ]
 }

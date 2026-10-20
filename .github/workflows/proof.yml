@@ -1,4 +1,5 @@
 name: proof
+run-name: proof stage ${{ inputs.stage }}
 on:
   workflow_dispatch:
     inputs:
@@ -6,7 +7,7 @@ on:
         description: stage to prove (1, 2a, 2b, 3, 4 or 5)
         required: true
         type: choice
-        options: ['1', '2a', '2b', '3', '4', '5']
+        options: ["1", "2a", "2b", "3", "4", "5"]
 permissions:
   contents: read
 jobs:
