@@ -17,7 +17,10 @@ Decision: A source without DOI or ISBN is captured with a stored copy, and the c
 existence. A web page is fetched on the user's click; its extracted text, URL, retrieval time and
 sha256 are stored. A German federal law is taken from the gesetze-im-internet.de XML with the norm,
 its section and the date of the version. A print-only source gets an attached scan or photo of the
-cited pages. Anchors and the quote check run against the copy exactly as against a PDF (ADR-0014).
+cited pages. Anchors and the quote check run against the copy exactly as against a PDF (ADR-0014);
+a copy without machine-readable text (a scan, a photo, a scanned PDF or one with an unusable text
+layer) is quote-checked against the passage the user types, and a direct quote without that passage
+blocks the export (operator answer of 2026-10-20).
 Capture works through a form and through an MCP tool of the plugin; both produce the same record.
 Only for a print-only source without an attached copy is a quote "not checked": the export then
 asks once, lists every such quote, and the confirmation is written to the change log with time and
