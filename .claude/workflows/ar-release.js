@@ -203,7 +203,7 @@ ${file}
 FILE>>>
 Change no ADR and no file outside ${RELEASE_FILES.join(' and ')}.
 ${changelog.written ? 'Keep the CHANGELOG.md section drafted in this run.' : ''}
-Commit every changed file with the message "release ${version}: verdict ${verdict}" and the trailer \`Unit-Stage: release\`. Then run \`make check\` with its combined output redirected by \`>\` into ${EVIDENCE_LOG} and report its exit code and the sha256 of that log (\`shasum -a 256 ${EVIDENCE_LOG}\`), and count the lines starting with "verdict:" in the file (\`grep -c '^verdict:' ${VERDICT_FILE}\`). Touch nothing else.`,
+Commit every changed file with the message "release ${version}: verdict ${verdict}" and the trailer \`Unit-Stage: release\`. Then run \`make check\` with its combined output redirected by \`>\` into ${EVIDENCE_LOG} and report its exit code and the sha256 of that log (\`shasum -a 256 ${EVIDENCE_LOG}\`), and count the lines starting with "verdict:" in the file (\`grep -c '^verdict:' ${VERDICT_FILE}\`). Report changed_files as the lines of \`git show --name-only --format= HEAD\` (paths relative to the repository root), verbatim. Touch nothing else.`,
   { label: 'write verdict', model: 'sonnet', effort: 'low', schema: WRITE_SCHEMA })
 if (!written || written.make_check_exit !== 0 || written.verdict_lines !== 1) {
   return { status: 'blocked', reason: 'verdict file not written cleanly or make check red', evidence: { written, verdict }, actions: criticActions, follow_ups: [], pr_body: '' }

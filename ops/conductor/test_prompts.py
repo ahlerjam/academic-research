@@ -228,6 +228,7 @@ class Workflows(unittest.TestCase):
         self.assertIn("Change no ADR and no file outside ${RELEASE_FILES.join(' and ')}", write)
         self.assertIn("const RELEASE_FILES = [VERDICT_FILE, 'CHANGELOG.md']", code)
         self.assertIn("const VERDICT_FILE = `docs/release/${version}.md`", code)
+        self.assertIn("Report changed_files as the lines of \\`git show --name-only --format= HEAD\\`", write)
         guard = code[code.index("label: 'write verdict'"):code.index("const prBody")]
         self.assertIn("written.changed_files.every((f) => RELEASE_FILES.includes(f))", guard)
         self.assertIn("status: 'blocked'", guard)
