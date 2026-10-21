@@ -1,9 +1,21 @@
 {
+ "forecast": {
+  "days_to_next_milestone": null,
+  "days_to_v0_1": null,
+  "limit_stops": 0,
+  "merged_in_window": 0,
+  "remaining_next_milestone": 0,
+  "remaining_total": 0,
+  "units_per_day": 0.0,
+  "window_days": 7
+ },
+ "last_merged": null,
  "lease": {
   "acquired_at": 1792586126.1751075,
-  "beat_at": 1792586126.1751075,
+  "beat_at": 1792586165.864714,
   "holder": "lead-b89bef6292e1"
  },
+ "next_step": "clear-needs-operator",
  "notes": [
   {
    "at": 1792586126.1751075,
