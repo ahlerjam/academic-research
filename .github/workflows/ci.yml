@@ -3,10 +3,13 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   gates:
@@ -22,7 +25,56 @@ jobs:
       - run: npm install --global @ast-grep/cli@0.45.3
       - run: corepack enable
       - run: make setup
-      - run: make check-repo gates-selftest conductor-test
+      - name: Decide whether the selftest runs (an input of it changed, nightly, by hand, no base to compare)
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os, re, subprocess
+          # constraint: the selftest copies these besides the operator_only and ratchet globs (gates/lib/selftest.py
+          # sandbox) and links the installed tools, so a change here can change its verdict.
+          # constraint: gates/tests/test_make.py edits the text of packages/core/src/health/decideHealth.ts.
+          EXTRA = ["gates/**", ".gitignore", "decisions/**", ".node-version", "package.json", "pnpm-lock.yaml",
+                   "pnpm-workspace.yaml", "*/package.json", "packages/*/package.json", "*/pyproject.toml",
+                   "*/.python-version", "*/.node-version", "packages/core/src/health/**"]
+          def rx(glob):
+              out, i = "", 0
+              while i < len(glob):
+                  if glob.startswith("**/", i): out, i = out + "(?:.*/)?", i + 3
+                  elif glob.startswith("**", i): out, i = out + ".*", i + 2
+                  elif glob[i] == "*": out, i = out + "[^/]*", i + 1
+                  else: out, i = out + re.escape(glob[i]), i + 1
+              return re.compile(out + "$")
+          def git(*args):
+              return subprocess.run(["git", *args], capture_output=True, text=True)
+          def scope():
+              event, before = os.environ["EVENT"], os.environ.get("BEFORE", "")
+              if event == "pull_request":
+                  base = "HEAD^1"
+              elif event == "push" and before.strip("0"):
+                  base = before
+              else:
+                  return True, f"event {event}: full selftest"
+              shown = git("show", f"{base}:gates/controls.json")
+              diff = git("diff", "--name-only", "--no-renames", base, "HEAD")
+              if shown.returncode or diff.returncode:
+                  return True, f"no diff against {base}: full selftest"
+              controls = json.loads(shown.stdout)
+              globs = [rx(g) for g in controls.get("operator_only", []) + controls.get("ratchet", []) + EXTRA]
+              hits = sorted(f for f in diff.stdout.splitlines() if f and any(g.match(f) for g in globs))
+              if hits:
+                  return True, "selftest inputs changed: " + ", ".join(hits[:20])
+              return False, "no selftest input changed; the selftest verdict of the base stands"
+          full, why = scope()
+          print(why)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"selftest={'yes' if full else 'no'}\n")
+          PY
+      - run: make check-repo conductor-test
+      - if: steps.scope.outputs.selftest == 'yes'
+        run: make gates-selftest
   ts:
     runs-on: ${{ fromJSON(vars.RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 30
