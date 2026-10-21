@@ -1,0 +1,16 @@
+{
+ "lease": {
+  "acquired_at": 1792586126.1751075,
+  "beat_at": 1792586126.1751075,
+  "holder": "lead-b89bef6292e1"
+ },
+ "notes": [
+  {
+   "at": 1792586126.1751075,
+   "by": "lead-b89bef6292e1",
+   "text": "watchdog takeover"
+  }
+ ],
+ "schema": 1,
+ "units": {}
+}
