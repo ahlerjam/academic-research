@@ -33,6 +33,7 @@ CATCH_ALL_ROLES = ("api", "ui")
 KERNEL_ROLES = ("core", "flow")
 FILE_ROLES = ("adapter", "wiring")
 EDGE_ROLES = ("test", "migration")
+EDGE_NAMES = {"migration": (".sql",), "test": (".test.ts", ".spec.ts")}
 LANG_OF = {".ts": "typescript", ".tsx": "typescript", ".mts": "typescript", ".cts": "typescript", ".py": "python",
            ".kt": "kotlin", ".kts": "kotlin", ".go": "go", ".rs": "rust"}
 WILDCARDS = "*?["
@@ -310,7 +311,9 @@ def _new_globs(name: str, comp: object, comps: Dict[str, dict], entries: List[di
 
     Every new glob is in normal form. Role priority (gates/lib/roles.py) decides which role a path gets; the
     catalog decides whether that role is laxer. Test and migration may claim only paths outside the source
-    root (test also `*.test.ts`) and keep every rule and budget of the older globs they overlap; adapter and
+    root (test also `*.test.ts`) and keep every rule and budget of the older globs they overlap; a new migration
+    glob names `*.sql` files below the directory of an older migration glob of the component, a new test glob
+    names `*.test.ts` or `*.spec.ts` files or lies below the directory of an older test glob; adapter and
     wiring only single file names that no older glob of the component claims; core and flow only in a
     component that has the role; a role new to an existing component keeps every rule of that role elsewhere;
     core, flow, api and ui keep every rule id and budget of each lower-priority role whose older globs they
@@ -350,6 +353,12 @@ def _new_globs(name: str, comp: object, comps: Dict[str, dict], entries: List[di
                 if _overlap(full, root) and not (role == "test" and glob.endswith(".test.ts")):
                     out.append(f"{label} for role '{role}' lies inside the source root '{root}'; only paths outside it"
                                + (" or *.test.ts files" if role == "test" else "") + "; else op:kernel")
+                elif not _edge_place(role, glob, full, [posixpath.normpath(posixpath.join(root, str(g)))
+                                                        for g in old_roles.get(role, [])]):
+                    out.append(f"{label} for role '{role}' needs "
+                               + ("a *.sql name below the directory of an older migration glob" if role == "migration"
+                                  else "a *.test.ts or *.spec.ts name or a place below the directory of an older test glob")
+                               + f" of '{name}'; else op:kernel")
                 else:
                     out += [f"{label} for role '{role}' {why}; else op:kernel"
                             for why in _laxer(name, role, glob, root, old_roles, entries, budgets)]
@@ -364,6 +373,25 @@ def _new_globs(name: str, comp: object, comps: Dict[str, dict], entries: List[di
                 out += [f"{label} for role '{role}' {why}; else op:kernel"
                         for why in _laxer(name, role, glob, root, old_roles, entries, budgets)]
     return out
+
+
+def _glob_dir(full: str) -> str:
+    """Return the directory part of a glob before its first segment with a wildcard (its parent without one)."""
+    parts = full.split("/")
+    fixed = next((i for i, part in enumerate(parts) if any(c in part for c in WILDCARDS)), len(parts) - 1)
+    return "/".join(parts[:fixed])
+
+
+def _edge_place(role: str, glob: str, full: str, older: List[str]) -> bool:
+    """Return whether a new edge glob names the role's own files where the role already lives.
+
+    A migration glob needs both a `*.sql` name and a place below the directory of an older migration glob; a
+    test glob needs a `*.test.ts`/`*.spec.ts` name or such a place. A component without older globs of the
+    role has no such directory.
+    """
+    named = glob.endswith(EDGE_NAMES[role])
+    below = any(_glob_dir(old) and full.startswith(_glob_dir(old) + "/") for old in older)
+    return named and below if role == "migration" else named or below
 
 
 def _rule_ids(entries: List[dict], component: str, role: str) -> Set[str]:

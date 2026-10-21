@@ -161,6 +161,31 @@ class RolesPartialOrder(GuardCase):
         _dump(root, guard.ROLES, cfg)
         self.assertEqual(_whats(root, guard.ROLES), [])
 
+    def test_edge_globs_name_their_own_files_where_the_role_already_lives(self) -> None:
+        cases = [
+            ("component 'server' new glob '../lib/**/*.ts' for role 'migration' needs a *.sql name below the directory "
+             "of an older migration glob of 'server'; else op:kernel",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../lib/**/*.ts")),
+            ("component 'server' new glob '../lib/**/*.ts' for role 'test' needs a *.test.ts or *.spec.ts name or a "
+             "place below the directory of an older test glob of 'server'; else op:kernel",
+             lambda c: c["components"]["server"]["roles"]["test"].append("../lib/**/*.ts")),
+            ("component 'server' new glob '../migrations/x/*.ts' for role 'migration' needs a *.sql name",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../migrations/x/*.ts")),
+            ("component 'server' new glob '../db/*.sql' for role 'migration' needs a *.sql name below the directory",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../db/*.sql")),
+            ("component 'server' new glob '../tests/**/*.ts' for role 'test' needs a *.test.ts or *.spec.ts name",
+             lambda c: c["components"]["server"]["roles"]["test"].append("../tests/**/*.ts")),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["server"]["roles"]["test"] += ["../test/x/**/*.ts", "../bench/**/*.spec.ts",
+                                                         "../tools/**/*.test.ts"]
+        cfg["components"]["web"]["roles"]["test"].append("../e2e/x/**/*.ts")
+        cfg["components"]["server"]["roles"]["migration"].append("../migrations/2027/*.sql")
+        _dump(root, guard.ROLES, cfg)
+        self.assertEqual(_whats(root, guard.ROLES), [])
+
     def test_globs_in_normal_form_only(self) -> None:
         cases = [(f"component 'server' new glob '{glob}' is not in normal form",
                   lambda c, glob=glob: c["components"]["server"]["roles"]["adapter"].append(glob))
