@@ -220,6 +220,29 @@ class Workflows(unittest.TestCase):
         self.assertEqual(code.count("gh_ops.py dispatch-release --holder <id> --version"), 2)
         self.assertNotRegex(code, r"dispatch-release --version")
 
+    def test_the_release_commit_holds_only_the_verdict_and_the_changelog(self) -> None:
+        code = code_of(workflows()["ar-release.js"])
+        write = code[code.index("phase('Write')"):code.index("label: 'write verdict'")]
+        self.assertNotIn("status: accepted", write)
+        self.assertNotIn("make decisions", write)
+        self.assertIn("Change no ADR and no file outside ${RELEASE_FILES.join(' and ')}", write)
+        self.assertIn("const RELEASE_FILES = [VERDICT_FILE, 'CHANGELOG.md']", code)
+        self.assertIn("const VERDICT_FILE = `docs/release/${version}.md`", code)
+        guard = code[code.index("label: 'write verdict'"):code.index("const prBody")]
+        self.assertIn("written.changed_files.every((f) => RELEASE_FILES.includes(f))", guard)
+        self.assertIn("status: 'blocked'", guard)
+        self.assertLess(code.index("written.changed_files.every("), code.index("status: 'ready'"))
+
+    def test_an_accepted_adr_becomes_a_build_card_on_decisions(self) -> None:
+        code = code_of(workflows()["ar-release.js"])
+        start = code.index("const adrActions = accepted.map(")
+        card = code[start:code.index("return {", start)]
+        self.assertIn("verb: 'create-issue'", card)
+        self.assertIn('"kind":"build"', card)
+        self.assertIn('"paths":["decisions/**"]', card)
+        self.assertIn("labels: ['unit', 'kind:build', 'state:ready', 'slice:S9']", card)
+        self.assertIn("actions: criticActions.concat(holdActions, adrActions)", code)
+
     def test_ar_unit_and_ar_team_read_the_issue_by_rest(self) -> None:
         for name in ("ar-unit.js", "ar-team.js"):
             self.assertIn("gh api repos/${REPO}/issues/${issue}", code_of(workflows()[name]))
