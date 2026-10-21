@@ -229,6 +229,10 @@ SCRIPT_LIMIT = 262144
 SCRIPT_DEPTH = 3
 DYNAMIC = re.compile(r"[$`]")
 TOOL_DIR = re.compile(r"(?:^|/)(?:node_modules|\.venv)(?:/|$)")
+TOOL_MENTION = re.compile(r"(?:^|[\s'\"/=(,`])(?:[\w.-]+/)*(?:node_modules|\.venv)/")
+GH_TOP = {"issue", "pr", "api", "auth", "alias", "extension", "label", "release", "workflow", "run", "repo", "gist",
+          "project", "secret", "variable", "cache", "ruleset", "codespace", "ssh-key", "gpg-key", "org", "config"}
+GH_RULES = ("BASH-GH-MUTATION", "BASH-GH-API-MUTATION", "BASH-RELEASE-DIRECT", "BASH-ADMIN-MERGE")
 READ_ONLY = {"cat", "head", "tail", "grep", "egrep", "fgrep", "rg", "wc", "ls", "stat", "file", "sha256sum", "shasum",
              "md5sum", "diff", "cmp", "echo", "printf", "jq", "basename", "dirname", "realpath", "readlink", "test", "true"}
 GH_IN_PROGRAM = re.compile(r"(['\"`])gh\1|(?<![\w./-])gh\s+[a-z]|(?:api|uploads)\.github\.com")
@@ -302,6 +306,11 @@ def _gh_from_program(text: str) -> bool:
     return bool(GH_IN_PROGRAM.search(text) and SPAWN_HINT.search(text))
 
 
+def _writes_tool_dir(code: str) -> bool:
+    """Return whether program text looks like it writes and names a path under node_modules or .venv."""
+    return bool(WRITE_HINT.search(code) and TOOL_MENTION.search(code))
+
+
 def _opaque(seg: List[str]) -> bool:
     """Return whether a segment runs a program the guard cannot name: $CMD, xargs, parallel or find -exec with a writer."""
     if DYNAMIC.search(seg[0]) or any(DYNAMIC.search(t) for t in cmdnorm.write_targets(seg)):
@@ -339,7 +348,7 @@ def _mentions_control(tree: str, text: str) -> bool:
     return any(re.search(r"(?:^|[\s'\"/=(,])" + glob_regex(g) + r"(?:$|[\s'\";,)])", text) for g in _controls(tree))
 
 
-def _script_hits(tree: str, cwd: str, seg: List[str], depth: int) -> List[tuple]:
+def _script_hits(tree: str, cwd: str, seg: List[str], depth: int, alone: bool = True) -> List[tuple]:
     """Return BASH-CONTROL-WRITE hits for the script file an interpreter segment runs.
 
     A shell script is parsed like a typed command and blocks only when a control path is a write target; a
@@ -349,9 +358,15 @@ def _script_hits(tree: str, cwd: str, seg: List[str], depth: int) -> List[tuple]
     hits = []
     for script in cmdnorm.script_inputs(seg):
         own = _rel(tree, cwd, script)
-        if own is None or is_control_path(tree, own) or cmdnorm.noexec(seg):
+        if (own is not None and is_control_path(tree, own)) or cmdnorm.noexec(seg):
             continue
-        text = _read_small(os.path.join(cwd, script))
+        path = os.path.join(cwd, script)
+        if not os.path.isfile(path):
+            if not alone:
+                hits.append(("BASH-CONTROL-WRITE", f"{script} does not exist when the guard reads it; create the "
+                                                   "script in one command and run it in the next"))
+            continue
+        text = _read_small(path)
         if seg[0] in cmdnorm.SHELLS or seg[0] in cmdnorm.SOURCE:
             hits += _shell_text_hits(tree, cwd, text, depth + 1, script)
             continue
@@ -413,10 +428,17 @@ def _segment_hits(tree: str, cwd: str, segs: List[List[str]], depth: int, text: 
         if any(_inline_writes_control(tree, cwd, code) for code in cmdnorm.inline_code(seg)):
             hits.append(("BASH-CONTROL-WRITE", "inline code names an operator-only path outside a plain read; "
                                                "read it with the Read tool or deliver a patch instead"))
+        if DYNAMIC.search(seg[0]) and len(seg) > 1 and seg[1] in GH_TOP:
+            probe = "gh " + " ".join(seg[1:])
+            hits += [(rid, f"a dynamic program name with gh arguments: {message}")
+                     for rid, message in cmdnorm.match(probe, _bash_rules(tree)["rules"]) if rid in GH_RULES]
+        if any(_writes_tool_dir(code) for code in cmdnorm.inline_code(seg)):
+            hits.append(("BASH-CONTROL-WRITE", "inline code writes under node_modules or .venv; only make setup and "
+                                               "pnpm install fill them"))
         if any(_gh_from_program(code) for code in cmdnorm.inline_code(seg)):
             hits.append(("BASH-GH-MUTATION", "inline code runs gh or calls the GitHub API; run read-only gh from the "
                                              "shell, writes through ops/conductor/gh_ops.py"))
-        hits += _script_hits(tree, cwd, seg, depth)
+        hits += _script_hits(tree, cwd, seg, depth, len(segs) == 1)
     return hits
 
 
@@ -427,6 +449,9 @@ def _heredoc_hits(tree: str, command: str) -> List[tuple]:
     python = bool(fed) and fed.group(1).startswith("python")
     if fed and any(_names_control_path(tree, _python_code(body) if python else body) for body in bodies):
         return [("BASH-CONTROL-WRITE", "a heredoc names an operator-only path and writes; deliver a patch instead")]
+    if fed and fed.group(1) not in cmdnorm.SHELLS and any(_writes_tool_dir(body) for body in bodies):
+        return [("BASH-CONTROL-WRITE", "a heredoc program writes under node_modules or .venv; only make setup and "
+                                       "pnpm install fill them")]
     if fed and fed.group(1) not in cmdnorm.SHELLS and any(_gh_from_program(body) for body in bodies):
         return [("BASH-GH-MUTATION", "a heredoc program runs gh or calls the GitHub API; run read-only gh from the "
                                      "shell, writes through ops/conductor/gh_ops.py")]

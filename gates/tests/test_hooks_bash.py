@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -219,6 +220,17 @@ class OpaqueScripts(HookTree):
         for command in ("bash gh.sh", "bash bare.sh", "python3 gh.py"):
             proc = self.run_bash(command)
             self.assertEqual(proc.returncode, 2, f"{command}: {proc.stderr}")
+
+    def test_scripts_outside_the_tree_are_checked(self) -> None:
+        outside = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, outside, True)
+        bad, good = os.path.join(outside, "x.sh"), os.path.join(outside, "ok.sh")
+        support.write(outside, "x.sh", "gh api -X DELETE repos/o/r/labels/x\n")
+        support.write(outside, "x.py", "import subprocess\nsubprocess.run(['gh', 'issue', 'close', '7'])\n")
+        support.write(outside, "ok.sh", "echo hi\n")
+        for command in (f"bash {bad}", f"source {bad}", f"python3 {os.path.join(outside, 'x.py')}"):
+            self.assertEqual(self.bash(command), 2, command)
+        self.assertEqual(self.bash(f"bash {good}"), 0)
 
     def test_reading_scripts_still_pass(self) -> None:
         support.write(self.root, "ok.sh", "gh pr view 12\necho x | xargs grep y\ncat AGENTS.md\n")
