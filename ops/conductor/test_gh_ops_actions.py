@@ -170,6 +170,57 @@ class ApplyActions(Files):
         self.assertEqual(len(g.mutations()), before)
 
 
+class TrustedTargets(Files):
+    """close-issue and label act only on issues of trusted authors; inbox takes comments only; no new conductor issue."""
+
+    def test_close_and_label_on_an_outsider_issue_are_refused_and_send_nothing(self) -> None:
+        verbs = (("close-issue", "--reason", "completed", "--comment-file"), ("label", "--add", "state:building"),
+                 ("label", "--remove", "state:ready"))
+        for author in ("NONE", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", None):
+            for verb in verbs:
+                with self.subTest(author=author, verb=verb):
+                    g = world()
+                    g.set("issues/50", {"number": 50, "state": "open", "title": "x", "labels": [{"name": "unit"}],
+                                        "author_association": author})
+                    extra = [self.file("done")] if verb[0] == "close-issue" else []
+                    self.assertEqual(run(g, verb[0], "--holder", HOLDER, "--issue", "50", *verb[1:], *extra), 2)
+                    self.assertEqual(g.mutations(), [])
+        g = world()
+        self.assertEqual(run(g, "close-issue", "--holder", HOLDER, "--issue", "40", "--reason", "completed",
+                             "--comment-file", self.file("done")), 0)
+        self.assertEqual(run(g, "label", "--holder", HOLDER, "--issue", "41", "--add", "state:building"), 0)
+
+    def test_label_and_close_aimed_at_the_inbox_are_refused_before_anything_is_sent(self) -> None:
+        rows = [{"verb": "label", "inbox": True, "add": [name]} for name in ("unit", "kind:build", "kind:plan",
+                                                                               "state:ready", "state:blocked")]
+        rows.append({"verb": "close-issue", "inbox": True, "reason": "completed", "body": "done"})
+        for row in rows:
+            with self.subTest(row=row):
+                g = world()
+                first = {"verb": "create-issue", "ref": "c1", "title": "ok", "body": "ok", "labels": ["unit"]}
+                path = self.file(json.dumps(actions(first, row)), f"inbox-{row['verb']}-{len(row.get('add', []))}"
+                                 f"-{'-'.join(row.get('add', [])).replace(':', '-')}.json")
+                self.assertEqual(apply(g, path), 2)
+                self.assertEqual(g.mutations(), [])
+                self.assertFalse(os.path.exists(path + ".done.json"))
+
+    def test_no_created_issue_carries_conductor(self) -> None:
+        for labels in (["conductor"], ["unit", "conductor"]):
+            with self.subTest(labels=labels):
+                g = world()
+                path = self.file(json.dumps(actions(
+                    {"verb": "comment", "issue": 41, "body": "first"},
+                    {"verb": "create-issue", "ref": "c1", "title": "Operator-Inbox", "body": "x", "labels": labels})),
+                    f"conductor-{len(labels)}.json")
+                self.assertEqual(apply(g, path), 2)
+                self.assertEqual(g.mutations(), [])
+                argv = ["create-issue", "--holder", HOLDER, "--title", "Conductor status", "--body-file", self.file("x")]
+                for name in labels:
+                    argv += ["--label", name]
+                self.assertEqual(run(g, *argv), 2)
+                self.assertEqual(g.mutations(), [])
+
+
 class Inbox(Files):
     """The Operator-Inbox issue is found by its title among the lead's conductor issues or created once."""
 

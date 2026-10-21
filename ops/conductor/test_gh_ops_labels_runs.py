@@ -35,12 +35,14 @@ class Labels(unittest.TestCase):
 
     def test_absent_label_is_reported_not_failed(self) -> None:
         g = leased(FakeGitHub())
+        g.set("issues/3", {"number": 3, "state": "open", "labels": [], "author_association": "OWNER"})
         g.fail("DELETE", "issues/3/labels/state%3Aready", 404)
         self.assertEqual(run(g, "label", "--holder", HOLDER, "--issue", "3", "--add", "state:building",
                              "--remove", "state:ready"), 0)
 
     def test_server_error_on_removal_is_exit_1(self) -> None:
         g = leased(FakeGitHub())
+        g.set("issues/3", {"number": 3, "state": "open", "labels": [], "author_association": "OWNER"})
         g.fail("DELETE", "issues/3/labels/state%3Aready", 500)
         self.assertEqual(run(g, "label", "--holder", HOLDER, "--issue", "3", "--remove", "state:ready"), 1)
 

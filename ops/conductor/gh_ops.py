@@ -13,9 +13,11 @@ in its `actions` list: create-issue, comment, label and close-issue, validated a
 sent, in list order, with `{{ref}}` placeholders replaced by the numbers of issues created earlier in the
 same list. Progress is kept next to the action file, so a rerun after an error never files an action twice.
 A close or label action aimed at an existing issue number must name an unprotected unit, critic, hypothesis or
-slice issue written by OWNER, MEMBER or COLLABORATOR (checked by GET before anything is sent). The verb label
-makes the same check whenever it adds `unit`, `kind:*`, `slice:*`, `hypothesis`, `critic` or `state:ready`, so
-neither a pull request nor an outsider's issue becomes schedulable work.
+slice issue written by OWNER, MEMBER or COLLABORATOR (checked by GET before anything is sent); the target
+`inbox` is valid for comment only, and no created issue carries `conductor`. The verbs close-issue and label
+act only on issues and PRs written by OWNER, MEMBER or COLLABORATOR; label also makes the full target check
+whenever it adds `unit`, `kind:*`, `slice:*`, `hypothesis`, `critic` or `state:ready`, so neither a pull
+request nor an outsider's issue becomes schedulable work.
 
 Every verb except update-status-issue and ensure-labels takes `--holder` and runs only while progress.json on
 the state branch shows that holder's lease, so a lead whose lease was taken over cannot act any more.
@@ -138,6 +140,21 @@ def _label_change(add: Sequence[str], remove: Sequence[str], catalogue: Dict[str
     return add, remove
 
 
+def _create_labels(names: Sequence[str], catalogue: Dict[str, dict]) -> List[str]:
+    """Validate the labels of a new issue: known labels, never `conductor` (only gh_ops' own issues carry it)."""
+    labels = _labels(names, catalogue)
+    if "conductor" in labels:
+        raise Refused("the label conductor marks only the status and inbox issues gh_ops creates itself")
+    return labels
+
+
+def _require_trusted(issue: dict, number: int, where: str) -> None:
+    """Refuse an issue or PR that OWNER, MEMBER or COLLABORATOR did not write."""
+    if not state.trusted(issue):
+        raise Refused(f"{where}: #{number} was written by {issue.get('author_association')!r}, "
+                      f"not by {', '.join(state.TRUSTED_AUTHORS)}")
+
+
 def _issue(t: github.Transport, number: int) -> dict:
     """Read one issue or refuse when it does not exist."""
     data = github.get(t, f"repos/{t.repo}/issues/{number}")
@@ -167,9 +184,7 @@ def _check_action_target(t: github.Transport, cfg: dict, number: int, where: str
     why = _protected(issue, cfg)
     if why:
         raise Refused(f"{where}: #{number} stays with the operator: {why}")
-    if not state.trusted(issue):
-        raise Refused(f"{where}: #{number} was written by {issue.get('author_association')!r}, "
-                      f"not by {', '.join(state.TRUSTED_AUTHORS)}")
+    _require_trusted(issue, number, where)
     labels = state.label_names(issue)
     if not any(n in ACTION_TARGET_LABELS or n.startswith(ACTION_TARGET_PREFIXES) for n in labels):
         raise Refused(f"{where}: #{number} is no unit, critic or hypothesis issue")
@@ -221,6 +236,7 @@ def _do_close(t: github.Transport, cfg: dict, number: int, reason: str, text: st
     why = _protected(issue, cfg)
     if why:
         raise Refused(f"#{number} stays with the operator: {why}")
+    _require_trusted(issue, number, "close-issue")
     t.request("POST", f"repos/{t.repo}/issues/{number}/comments", {"body": text})
     t.request("PATCH", f"repos/{t.repo}/issues/{number}", {"state": "closed", "state_reason": reason})
     return {"issue": number, "closed": reason}
@@ -273,11 +289,13 @@ def enable_auto_merge(t: github.Transport, cfg: dict, a: argparse.Namespace) -> 
 
 
 def label(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
-    """Add or remove labels on an issue or PR; labels that schedule work need a trusted card as target."""
+    """Add or remove labels on a trusted author's issue or PR; labels that schedule work need a trusted card."""
     number = _number(a.issue, "--issue")
     add, remove = _label_change(a.add or [], a.remove or [], load_labels())
     if any(n in SCHEDULING_LABELS or n.startswith(SCHEDULING_PREFIXES) for n in add):
         _check_action_target(t, cfg, number, "label")
+    else:
+        _require_trusted(_issue(t, number), number, "label")
     return _do_label(t, number, add, remove)
 
 
@@ -291,7 +309,7 @@ def comment(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
 
 def create_issue(t: github.Transport, cfg: dict, a: argparse.Namespace) -> dict:
     """Create an issue with labels from labels.json."""
-    labels = _labels(a.label or [], load_labels())
+    labels = _create_labels(a.label or [], load_labels())
     return _do_create(t, _title(a.title), _body(a.body_file, cfg), labels)
 
 
@@ -333,7 +351,7 @@ def _placeholders(text: str, defined: Sequence[str], where: str) -> None:
 
 
 def _target(act: dict, defined: Sequence[str], where: str) -> dict:
-    """Validate the target of a non-create action: exactly one of issue, ref or inbox."""
+    """Validate the target of a non-create action: exactly one of issue, ref or inbox (inbox for comment only)."""
     keys = [k for k in ("issue", "ref", INBOX) if act.get(k) not in (None, False, "")]
     if len(keys) != 1:
         raise Refused(f"{where}: name exactly one target: issue, ref or inbox")
@@ -348,6 +366,8 @@ def _target(act: dict, defined: Sequence[str], where: str) -> dict:
         return {"ref": act["ref"]}
     if act[INBOX] is not True:
         raise Refused(f"{where}: inbox must be true")
+    if act.get("verb") != "comment":
+        raise Refused(f"{where}: the target inbox takes a comment only, never {act.get('verb')}")
     return {INBOX: True}
 
 
@@ -379,7 +399,7 @@ def plan_actions(data: object, cfg: dict, catalogue: Dict[str, dict]) -> List[di
             if not isinstance(labels, list):
                 raise Refused(f"{where}: labels must be a list")
             out.append({"verb": verb, "ref": ref, "title": title, "body": body,
-                        "labels": _labels([str(x) for x in labels], catalogue)})
+                        "labels": _create_labels([str(x) for x in labels], catalogue)})
             defined.append(ref)
             continue
         rec = dict(_target(act, defined, where), verb=verb, body=body)

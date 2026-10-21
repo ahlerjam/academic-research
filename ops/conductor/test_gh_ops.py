@@ -269,6 +269,7 @@ class Verbs(Files):
 
     def test_labels_from_the_catalogue_only(self) -> None:
         g = leased(FakeGitHub())
+        g.set("issues/3", issue_of(3, labels=()))
         lab = ("label", "--holder", HOLDER, "--issue", "3")
         self.assertEqual(run(g, *lab, "--add", "not-a-label"), 2)
         self.assertEqual(run(g, *lab, "--remove", "needs-operator"), 2)
@@ -291,7 +292,7 @@ class Verbs(Files):
         self.assertEqual(run(g, "close-issue", "--holder", HOLDER, "--issue", "4", "--reason", "completed",
                              "--comment-file", body + "x"), 2)
         self.assertEqual(g.mutations(), [])
-        g.set("issues/4", {"number": 4, "state": "open", "labels": []})
+        g.set("issues/4", {"number": 4, "state": "open", "labels": [], "author_association": "OWNER"})
         self.assertEqual(run(g, "close-issue", "--holder", HOLDER, "--issue", "4", "--reason", "not_planned",
                              "--comment-file", body), 0)
         self.assertEqual([c[0] for c in g.mutations()], ["POST", "PATCH"])
@@ -324,7 +325,8 @@ class Verbs(Files):
                 self.assertEqual(run(g, *close), 2)
                 self.assertEqual(g.mutations(), [])
         g = leased(FakeGitHub())
-        g.set("issues/7", {"number": 7, "state": "open", "title": "Release 0.1.0", "labels": []})
+        g.set("issues/7", {"number": 7, "state": "open", "title": "Release 0.1.0", "labels": [],
+                           "author_association": "OWNER"})
         self.assertEqual(run(g, *close), 0)
 
     def test_clear_needs_operator_names_the_charter_rule(self) -> None:
@@ -419,12 +421,22 @@ class LabelTargets(Files):
                     self.assertIn(("GET", f"repos/{REPO}/issues/7", None), g.calls)
                     self.assertEqual(g.mutations(), [("POST", f"repos/{REPO}/issues/7/labels", {"labels": ["state:ready"]})])
 
-    def test_other_labels_need_no_target_read(self) -> None:
+    def test_other_labels_need_a_trusted_author(self) -> None:
         g = leased(FakeGitHub())
+        g.set("issues/31", issue_of(31, labels=("state:building",), pull_request={}))
         self.assertEqual(run(g, "label", "--holder", HOLDER, "--issue", "31", "--add", "state:pr",
                              "--remove", "state:building"), 0)
-        self.assertNotIn(("GET", f"repos/{REPO}/issues/31", None), g.calls)
+        self.assertIn(("GET", f"repos/{REPO}/issues/31", None), g.calls)
         self.assertEqual(len(g.mutations()), 2)
+        for author in ("NONE", "CONTRIBUTOR", None):
+            with self.subTest(author=author):
+                g = leased(FakeGitHub())
+                g.set("issues/32", issue_of(32, labels=("state:building",), author=author))
+                self.assertEqual(run(g, "label", "--holder", HOLDER, "--issue", "32", "--add", "state:pr",
+                                     "--remove", "state:building"), 2)
+                self.assertEqual(g.mutations(), [])
+        self.assertEqual(run(leased(FakeGitHub()), "label", "--holder", HOLDER, "--issue", "33", "--add", "state:pr"), 2,
+                         "a missing issue is refused")
 
 
 class Release(unittest.TestCase):
