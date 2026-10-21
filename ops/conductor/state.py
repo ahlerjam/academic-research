@@ -9,9 +9,13 @@ recently merged pull requests into main with their check runs, the status issue,
 with the kill switch `conductor:pause`, legacy `needs-operator` tickets, the dispatched proof.yml and release.yml
 runs on main (read the same way release.yml reads them: newest completed run per run name), the head of main,
 `docs/autonomy/progress.json` on the state branch (lease, units the lease holder reports alive, usage-limit
-stops), CHANGELOG, the release verdict and the release tag. A `state:building` unit without a PR whose workflow
-the live lease holder has not reported within `orphan_after_s` is an orphan: the next step resumes it. Pure
-decisions sit at the top, the GitHub reads below.
+stops), CHANGELOG, the release verdict, the merged `claude/release-<version>` pull request and the release tag.
+A `state:building` unit without a PR whose workflow the live lease holder has not reported within
+`orphan_after_s` is an orphan: the next step resumes it. The repository is public: a unit issue, or a
+dependency read by number, whose author_association is not OWNER, MEMBER or COLLABORATOR is never scheduled
+(blocked with why `untrusted author`). The verdict counts only when its single `commit: <sha>` line names the
+commit the merged release PR was merged onto, that merge is the head of main and the PR changed only the
+verdict file and CHANGELOG. Pure decisions sit at the top, the GitHub reads below.
 """
 
 from __future__ import annotations
@@ -40,6 +44,8 @@ BLOCKING_LABELS = ("needs-operator", "state:parked", "state:stuck")
 ANTHROPIC_KEEP_LABEL = "op:external"
 PAUSE_LABEL = "conductor:pause"
 FUTURE_SLACK_S = 300.0
+TRUSTED_AUTHORS = ("OWNER", "MEMBER", "COLLABORATOR")
+SHA_RX = re.compile(r"[0-9a-f]{40}")
 
 
 # ---------------------------------------------------------------- pure decisions
@@ -179,6 +185,11 @@ def label_value(labels: Iterable[str], prefix: str) -> Optional[str]:
     return None
 
 
+def trusted(issue: dict) -> bool:
+    """Return whether an issue was written by the repository owner, a member or a collaborator."""
+    return issue.get("author_association") in TRUSTED_AUTHORS
+
+
 def make_unit(issue: dict, cfg: dict) -> dict:
     """Turn one unit issue into a unit record; labels win over the header for kind, slice and risk."""
     labels = label_names(issue)
@@ -195,6 +206,7 @@ def make_unit(issue: dict, cfg: dict) -> dict:
         "title": issue.get("title", ""),
         "open": issue.get("state") == "open",
         "done": issue.get("state") == "closed" and issue.get("state_reason") != "not_planned",
+        "trusted": trusted(issue),
         "labels": labels,
         "header_ok": header is not None,
         "kind": kind,
@@ -210,10 +222,12 @@ def make_unit(issue: dict, cfg: dict) -> dict:
 
 
 def dep_status(number: int, issues: Dict[int, dict]) -> str:
-    """Return done, open, dropped or missing for one dependency issue."""
+    """Return done, open, dropped, untrusted (author not OWNER, MEMBER or COLLABORATOR) or missing for one dependency."""
     issue = issues.get(number)
     if issue is None:
         return "missing"
+    if not trusted(issue):
+        return "untrusted"
     if issue.get("state") == "open":
         return "open"
     return "dropped" if issue.get("state_reason") == "not_planned" else "done"
@@ -408,13 +422,43 @@ def verdict_is_release(text: str) -> bool:
     return [line for line in (text or "").splitlines() if line.startswith("verdict:")] == ["verdict: release"]
 
 
-def release_checks(stages: Sequence[dict], changelog: Optional[str], verdict: Optional[str],
+def verdict_commit(text: str) -> Optional[str]:
+    """Return the sha of the only line starting with `commit:` when it is exactly `commit: <40 hex>`, else None."""
+    lines = [line for line in (text or "").splitlines() if line.startswith("commit:")]
+    if len(lines) != 1 or not re.fullmatch(r"commit: [0-9a-f]{40}", lines[0]):
+        return None
+    return lines[0][len("commit: "):]
+
+
+def release_pr_of(rows: Sequence[dict], version: str, repo: str) -> Optional[dict]:
+    """Return the newest merged pull request from this repository's branch `claude/release-<version>`, or None."""
+    mine = [p for p in rows if isinstance(p, dict) and p.get("merged_at")
+            and (p.get("head") or {}).get("ref") == f"claude/release-{version}"
+            and ((p.get("head") or {}).get("repo") or {}).get("full_name") == repo]
+    return max(mine, key=lambda p: str(p.get("merged_at")), default=None)
+
+
+def verdict_bound(judged: Optional[str], pr: Optional[dict], merge: Optional[dict], files: Sequence[str],
+                  main_sha: Optional[str], allowed: Sequence[str]) -> bool:
+    """Return whether the verdict is bound to the release merge: that merge is main's head, its other parent is
+    the judged commit, and the release PR changed only the allowed files (the verdict and CHANGELOG)."""
+    if not judged or not isinstance(pr, dict) or not isinstance(merge, dict) or not main_sha:
+        return False
+    parents = [str(p.get("sha")) for p in merge.get("parents", []) if isinstance(p, dict)]
+    head_sha = (pr.get("head") or {}).get("sha")
+    return (pr.get("merge_commit_sha") == main_sha and merge.get("sha") == main_sha and len(parents) == 2
+            and judged in parents and judged != head_sha and head_sha in parents
+            and bool(files) and all(f in allowed for f in files))
+
+
+def release_checks(stages: Sequence[dict], changelog: Optional[str], verdict: Optional[str], bound: bool,
                    dry_ok: bool, released: bool) -> dict:
     """Return every release condition with its state; release_ready is their AND (and false once released)."""
     checks = {
         "proofs_green": bool(stages) and all(s["green"] for s in stages),
         "changelog_entry": changelog_has(changelog or "", version_of(stages)),
         "judge_verdict": verdict_is_release(verdict or ""),
+        "verdict_bound": bound,
         "dry_run_green": dry_ok,
         "not_yet_released": not released,
     }
@@ -567,13 +611,30 @@ def _milestones(rows: Sequence[dict], cfg: dict, units: Sequence[dict]) -> List[
     return out
 
 
+def _verdict_bound(t: github.Transport, cfg: dict, verdict: Optional[str], closed: Sequence[dict],
+                   main_sha: Optional[str]) -> bool:
+    """Read the merged release PR, its merge commit and its files, and judge whether the verdict is bound to them."""
+    version = cfg["release_version"]
+    judged = verdict_commit(verdict or "")
+    found = release_pr_of(closed, version, t.repo)
+    pr = github.get(t, f"repos/{t.repo}/pulls/{int(found['number'])}") if judged and found else None
+    merge_sha = str(pr.get("merge_commit_sha") or "") if isinstance(pr, dict) else ""
+    merge = github.get(t, f"repos/{t.repo}/commits/{merge_sha}") if SHA_RX.fullmatch(merge_sha) else None
+    files = ([str(f.get("filename")) for f in github.get_all(t, f"repos/{t.repo}/pulls/{int(found['number'])}/files")]
+             if isinstance(merge, dict) and found else [])
+    allowed = (cfg["verdict_path"].format(version=version), cfg["changelog_path"])
+    return verdict_bound(judged, pr if isinstance(pr, dict) and pr.get("merged_at") else None,
+                         merge if isinstance(merge, dict) else None, files, main_sha, allowed)
+
+
 def compute(t: github.Transport, cfg: dict, now: float) -> dict:
     """Read GitHub and return the whole state the lead acts on."""
     repo, base = t.repo, cfg["base"]
     progress = read_progress(t, cfg)
     raw_units = [i for i in github.get_all(t, f"repos/{repo}/issues?state=all&labels=unit") if "pull_request" not in i]
     issues = {int(i["number"]): i for i in raw_units}
-    units = [make_unit(i, cfg) for i in raw_units]
+    every = [make_unit(i, cfg) for i in raw_units]
+    units = [u for u in every if u["trusted"]]
     for dep in sorted({d for u in units if u["open"] for d in u["deps"]} - set(issues)):
         found = github.get(t, f"repos/{repo}/issues/{dep}")
         if isinstance(found, dict):
@@ -584,7 +645,8 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
     prs = [_pr_record(t, p, cfg) for p in prs_raw]
     pr_units = {p["unit"] for p in prs if p["unit"]}
     merged_rows = t.request("GET", f"repos/{repo}/pulls?state=closed&base={base}&sort=updated&direction=desc&per_page=100&page=1")
-    merged = [p for p in (merged_rows if isinstance(merged_rows, list) else []) if p.get("merged_at")
+    closed = [p for p in (merged_rows if isinstance(merged_rows, list) else []) if isinstance(p, dict)]
+    merged = [p for p in closed if p.get("merged_at")
               and unit_of_branch(p.get("head", {}).get("ref", ""), cfg["unit_branch_prefix"])]
     status_issues = [i for i in github.get_all(t, f"repos/{repo}/issues?state=open&labels=conductor")
                      if i.get("title") == cfg["status_title"] and "pull_request" not in i]
@@ -596,7 +658,8 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
     open_units = [u for u in units if u["open"]]
     cycles = find_cycles(open_units)
     in_cycle = {n for c in cycles for n in c}
-    in_flight, ready, blocked, orphans = [], [], [], []
+    in_flight, ready, orphans = [], [], []
+    blocked = [dict(u, why="untrusted author", blocked_by=[]) for u in every if u["open"] and not u["trusted"]]
     for u in open_units:
         u["blocked_by"] = [{"issue": d, "status": dep_status(d, issues)} for d in u["deps"]
                            if dep_status(d, issues) != "done"]
@@ -613,6 +676,8 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
             blocked.append(dict(u, why="dependency cycle"))
         elif hit:
             blocked.append(dict(u, why="label " + hit[0]))
+        elif any(b["status"] == "untrusted" for b in u["blocked_by"]):
+            blocked.append(dict(u, why="untrusted author"))
         elif u["blocked_by"]:
             blocked.append(dict(u, why="dependencies"))
         else:
@@ -631,9 +696,10 @@ def compute(t: github.Transport, cfg: dict, now: float) -> dict:
     verdict = decode_content(github.get(t, f"repos/{repo}/contents/{verdict_path}?ref={base}"))
     head = github.get(t, f"repos/{repo}/commits/{base}")
     main_sha = str(head.get("sha")) if isinstance(head, dict) and head.get("sha") else None
+    bound = _verdict_bound(t, cfg, verdict, closed, main_sha)
     release_rows = dispatched_runs(t, cfg["release_workflow"], base)
     dry_ok = dry_run_green(release_rows, version, main_sha, cfg["release_workflow"], base)
-    release = release_checks(milestones, changelog, verdict, dry_ok, released)
+    release = release_checks(milestones, changelog, verdict, bound, dry_ok, released)
     release["version"] = version
     release["released"] = released
     release["main_sha"] = main_sha

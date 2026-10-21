@@ -44,7 +44,7 @@ git config core.hookspath /dev/null	block
 gh pr merge 12 --admin	block
 GATES_OFFLINE=1 make check	block
 export GATES_OFFLINE=1	block
-gh pr merge 12 --squash	allow
+gh pr merge 12 --squash	block
 git push origin claude/x	allow
 timeout 30 git push --force origin feat	block
 nice -n 5 git push --force origin feat	block
@@ -107,6 +107,79 @@ gh workflow run -R o/r 12345	block
 gh workflow run --repo o/r 12345	block
 gh workflow run proof.yml -f stage=1	allow
 claude --settings s.json -p x	block
+gh issue edit 5 --remove-label conductor:pause	block
+gh issue close 7	block
+gh issue comment 3 -b x	block
+gh issue delete 7 --yes	block
+gh issue develop 7	block
+gh pr create --title x --body y	block
+gh pr edit 5 --remove-label x	block
+gh pr review 12 --approve	block
+gh pr ready 12	block
+gh pr close 12	block
+gh auth token	block
+gh auth login	block
+gh alias set zz 'pr list'	block
+gh extension install x/y	block
+gh gist create x.txt	block
+gh project item-add 1 --url x	block
+gh --foo pr list	block
+gh -R a/b workflow run release.yml	block
+gh -R a/b pr merge 12 --admin	block
+gh --repo=a/b api -X DELETE repos/o/r/labels/x	block
+gh -R a/b label delete x --yes	block
+gh --hostname h.example pr merge 12	block
+python3 -c "import subprocess; subprocess.run(['gh','api','-X','DELETE','repos/o/r/labels/x'])"	block
+node -e "require('child_process').execSync('gh pr merge 12')"	block
+curl -X POST https://api.github.com/repos/o/r/issues -d x	block
+curl --data x https://api.github.com/repos/o/r/labels	block
+claude -p --bare x	block
+claude -p --setting-sources user x	block
+claude --mcp-config x.json -p x	block
+claude --strict-mcp-config -p x	block
+CLAUDE_CODE_SIMPLE=1 claude -p x	block
+git -c alias.zz='!rm gates/gate.py' zz	block
+git config alias.zz '!rm gates/gate.py'	block
+git config --global alias.zz '!true'	block
+python3 -c "import os; vars(os.path)['exists']=os.remove; os.path.exists('gates/gate.py')"	block
+node -e "const fs=require('fs'); fs['existsSync']=fs.unlinkSync; fs.existsSync('gates/gate.py')"	block
+node -e "const {existsSync} = {existsSync: require('fs').unlinkSync}; existsSync('gates/gate.py')"	block
+python3 -c "[open('gates/gate.py') for open in [__import__('os').remove]]"	block
+echo gates/gate.py | xargs rm	block
+echo gates/gate.py | parallel rm	block
+CMD=rm; $CMD gates/gate.py	block
+F=gates/gate.py; rm $F	block
+cp /tmp/x packages/web/node_modules/.bin/prettier	block
+echo x > .venv/bin/ruff	block
+gh pr view 12	allow
+gh pr checks 12 --required	allow
+gh pr diff 12	allow
+gh issue list --label unit	allow
+gh issue view 5	allow
+gh run view 123 --log-failed	allow
+gh auth status	allow
+gh -R o/r pr list	allow
+gh --version	allow
+curl -s https://api.github.com/repos/o/r/issues	allow
+git config --get alias.zz	allow
+echo x | xargs grep y	allow
+ls packages/web/node_modules/.bin	allow
+pnpm install --frozen-lockfile	allow
+claude --settings .claude/settings.json -p x	allow
+bash < in.sh	block
+bash -s < in.sh	block
+bash <(cat in.sh)	block
+source <(cat in.sh)	block
+cp in.sh run.sh && bash run.sh	block
+G=gh; $G issue close 7	block
+$(which gh) issue close 7	block
+GIT_CONFIG_COUNT=1 git status	block
+git filter-branch --tree-filter x	block
+python3 -c "open('packages/web/node_modules/.bin/prettier','w').write('x')"	block
+node -e "require('fs').writeFileSync('node_modules/.bin/prettier','x')"	block
+$G pr view 12	allow
+$PY script.py	allow
+node -e "console.log(require('fs').readdirSync('node_modules/.bin'))"	allow
 git branch origin/main HEAD	block
 git switch -c origin/main	block
 git checkout -b origin/main	block

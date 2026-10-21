@@ -11,6 +11,8 @@ from fake_github import FakeGitHub
 NOW = 1_800_000_000.0
 DAY = 86400.0
 MAIN_SHA = "a" * 40
+JUDGED = "c" * 40
+RELEASE_HEAD = "d" * 40
 
 
 def iso(epoch: float) -> str:
@@ -20,13 +22,13 @@ def iso(epoch: float) -> str:
 
 
 def unit(number: int, deps=(), paths=("packages/core/src/x/a.ts",), labels=(), state_="open", reason=None,
-         kind="build", slice_="S1", proof=(), tags=(), header=True) -> dict:
-    """Build a unit issue with a hidden header."""
+         kind="build", slice_="S1", proof=(), tags=(), header=True, author="OWNER") -> dict:
+    """Build a unit issue with a hidden header, written by the given author association."""
     head = {"kind": kind, "slice": slice_, "deps": list(deps), "paths": list(paths), "proof": list(proof),
             "risk": "low", "tags": list(tags)}
     body = (f"<!-- unit: {json.dumps(head)} -->\nOutcome." if header else "no header")
     return {"number": number, "title": f"unit {number}", "state": state_, "state_reason": reason, "body": body,
-            "labels": [{"name": "unit"}] + [{"name": n} for n in labels]}
+            "labels": [{"name": "unit"}] + [{"name": n} for n in labels], "author_association": author}
 
 
 def pr(number: int, head: str, sha: str, auto=False, mergeable=True, mstate="clean", merged_at=None) -> dict:
@@ -93,6 +95,14 @@ def dry_run(run_id: int = 200, conclusion="success", sha=MAIN_SHA, title="releas
             "head_sha": sha, "created_at": iso(NOW - 3600), "html_url": f"https://x/runs/{run_id}"}
 
 
+def release_pr(number: int = 60, head: str = "claude/release-0.1.0", repo: str = "ahlerjam/academic-research",
+               merge_sha: str = MAIN_SHA, merged: bool = True) -> dict:
+    """Build the merged release pull request as GET pulls/<n> answers it."""
+    return {"number": number, "state": "closed", "merged_at": iso(NOW - 7200) if merged else None,
+            "merge_commit_sha": merge_sha, "base": {"ref": "main"},
+            "head": {"ref": head, "sha": RELEASE_HEAD, "repo": {"full_name": repo}}}
+
+
 CFG = state.load_config()
 
 
@@ -111,7 +121,8 @@ class ReadyQueue(unittest.TestCase):
 
     def test_dependency_outside_the_unit_list_is_read_individually(self) -> None:
         g = world([unit(1, deps=[50])])
-        g.set("issues/50", {"number": 50, "state": "closed", "state_reason": "completed", "labels": []})
+        g.set("issues/50", {"number": 50, "state": "closed", "state_reason": "completed", "labels": [],
+                            "author_association": "MEMBER"})
         self.assertEqual(state.compute(g, CFG, NOW)["ready"], [1])
 
     def test_needs_operator_parked_stuck_and_missing_header_block(self) -> None:
@@ -138,6 +149,39 @@ class ReadyQueue(unittest.TestCase):
         g = world([unit(1, paths=["a/**"]), unit(2, deps=[1], paths=["b/**"]),
                    unit(7, labels=["critic", "sev:S1"], paths=["c/**"])])
         self.assertEqual(state.compute(g, CFG, NOW)["ready"][0], 7)
+
+
+class Authors(unittest.TestCase):
+    """Only unit issues of OWNER, MEMBER or COLLABORATOR are scheduled; deps read by number follow the same rule."""
+
+    def test_untrusted_unit_issues_are_blocked(self) -> None:
+        for author in ("NONE", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER", "MANNEQUIN", None):
+            with self.subTest(author=author):
+                g = world([unit(1, author=author, paths=["a/**"]), unit(2, author="MEMBER", paths=["b/**"]),
+                           unit(3, author="COLLABORATOR", paths=["c/**"])])
+                s = state.compute(g, CFG, NOW)
+                self.assertEqual(sorted(s["ready"]), [2, 3])
+                self.assertIn({"unit": 1, "why": "untrusted author", "blocked_by": []}, s["blocked"])
+                self.assertNotIn(1, [step.get("unit") for step in s["next"]])
+
+    def test_an_untrusted_building_unit_is_neither_in_flight_nor_resumed(self) -> None:
+        s = state.compute(world([unit(1, author="NONE", labels=["state:building"])], progress=live([1])), CFG, NOW)
+        self.assertEqual((s["in_flight"], s["orphans"], s["blocked"][0]["why"]), ([], [], "untrusted author"))
+
+    def test_untrusted_cards_count_for_no_milestone(self) -> None:
+        g = world([unit(1, author="NONE", proof=["S1-QUOTE-EXACT"], state_="closed", reason="completed")])
+        self.assertNotIn({"do": "dispatch-proof", "stage": "1"}, state.compute(g, CFG, NOW)["next"])
+
+    def test_an_untrusted_dependency_blocks(self) -> None:
+        g = world([unit(1, deps=[50]), unit(2, deps=[3], paths=["b/**"]),
+                   unit(3, author="NONE", state_="closed", reason="completed")])
+        g.set("issues/50", {"number": 50, "state": "closed", "state_reason": "completed", "labels": [],
+                            "author_association": "NONE"})
+        s = state.compute(g, CFG, NOW)
+        self.assertEqual(s["ready"], [])
+        why = {b["unit"]: b for b in s["blocked"]}
+        self.assertEqual(why[1], {"unit": 1, "why": "untrusted author", "blocked_by": [{"issue": 50, "status": "untrusted"}]})
+        self.assertEqual(why[2], {"unit": 2, "why": "untrusted author", "blocked_by": [{"issue": 3, "status": "untrusted"}]})
 
 
 class PathOverlap(unittest.TestCase):
@@ -315,18 +359,26 @@ def release_world(**over) -> FakeGitHub:
     proofs = [proof_run(100 + i, s) for i, s in enumerate(CFG["stages"])] + over.pop("extra_proofs", [])
     releases = over.pop("dry", [dry_run()])
     files = {"CHANGELOG.md": "# Changelog\n\n## [0.1.0] - 2026-11-30\n- first\n",
-             "docs/release/0.1.0.md": "# Release 0.1.0\n\nverdict: release\n"}
+             "docs/release/0.1.0.md": f"# Release 0.1.0\n\nverdict: release\ncommit: {JUDGED}\n"}
     files.update(over.pop("files", {}))
     for path in over.pop("drop_files", []):
         files.pop(path)
     units = [unit(1, state_="closed", reason="completed")] + over.pop("units", [])
-    return world(units, progress={"limit_stops": 0}, files=files,
-                 runs={"proof.yml": proofs, "release.yml": releases}, release=over.pop("release", None),
-                 main_sha=over.pop("main_sha", MAIN_SHA))
+    rel = over.pop("release_pr", release_pr())
+    parents = over.pop("merge_parents", [JUDGED, RELEASE_HEAD])
+    pr_files = over.pop("pr_files", ["docs/release/0.1.0.md", "CHANGELOG.md"])
+    g = world(units, merged=[rel] if rel else [], progress={"limit_stops": 0}, files=files,
+              runs={"proof.yml": proofs, "release.yml": releases}, release=over.pop("release", None),
+              main_sha=over.pop("main_sha", MAIN_SHA))
+    if rel:
+        g.set(f"pulls/{rel['number']}", rel)
+        g.set(f"commits/{rel['merge_commit_sha']}", {"sha": rel["merge_commit_sha"], "parents": [{"sha": p} for p in parents]})
+        g.set(f"pulls/{rel['number']}/files", [{"filename": f} for f in pr_files])
+    return g
 
 
 class Release(unittest.TestCase):
-    """release_ready is the AND of proofs, changelog, verdict, dry run of main's head and not-yet-released."""
+    """release_ready is the AND of proofs, changelog, verdict bound to the release merge, dry run of main's head and not-yet-released."""
 
     def test_all_conditions_hold(self) -> None:
         s = state.compute(release_world(), CFG, NOW)
@@ -337,9 +389,9 @@ class Release(unittest.TestCase):
         cases = {
             "changelog_entry": [{"files": {"CHANGELOG.md": "# Changelog\n## [0.0.9]\n"}},
                                 {"files": {"CHANGELOG.md": "# Changelog\n### 0.1.0\n"}}],
-            "judge_verdict": [{"files": {"docs/release/0.1.0.md": "verdict: fix\n"}},
-                              {"files": {"docs/release/0.1.0.md": "verdict: release\nverdict: hold\n"}},
-                              {"files": {"docs/release/0.1.0.md": "  verdict: release\n"}}],
+            "judge_verdict": [{"files": {"docs/release/0.1.0.md": f"verdict: fix\ncommit: {JUDGED}\n"}},
+                              {"files": {"docs/release/0.1.0.md": f"verdict: release\nverdict: hold\ncommit: {JUDGED}\n"}},
+                              {"files": {"docs/release/0.1.0.md": f"  verdict: release\ncommit: {JUDGED}\n"}}],
             "dry_run_green": [{"dry": [dry_run(conclusion="failure")]},
                               {"dry": [dry_run(sha="b" * 40)]},
                               {"dry": [dry_run(title="release 0.1.0 dry_run=false")]},
@@ -354,6 +406,32 @@ class Release(unittest.TestCase):
                     s = state.compute(release_world(**dict(over)), CFG, NOW)
                     self.assertFalse(s["release"]["release_ready"])
                     self.assertFalse(s["release"]["checks"][key])
+
+    def test_the_verdict_is_bound_to_the_judged_commit_and_the_release_merge(self) -> None:
+        cases = {
+            "no commit line": {"files": {"docs/release/0.1.0.md": "verdict: release\n"}},
+            "short commit": {"files": {"docs/release/0.1.0.md": "verdict: release\ncommit: abc\n"}},
+            "two commit lines": {"files": {"docs/release/0.1.0.md": f"verdict: release\ncommit: {JUDGED}\ncommit: {JUDGED}\n"}},
+            "another commit was judged": {"merge_parents": ["e" * 40, RELEASE_HEAD]},
+            "the judged commit is the branch head": {"merge_parents": ["e" * 40, JUDGED],
+                                                     "release_pr": dict(release_pr(), head={
+                                                         "ref": "claude/release-0.1.0", "sha": JUDGED,
+                                                         "repo": {"full_name": "ahlerjam/academic-research"}})},
+            "no merge commit": {"merge_parents": [JUDGED]},
+            "code merged after the release PR": {"release_pr": release_pr(merge_sha="f" * 40)},
+            "the release PR changed code": {"pr_files": ["docs/release/0.1.0.md", "packages/core/src/x.ts"]},
+            "the release PR changed nothing": {"pr_files": []},
+            "no release PR": {"release_pr": None},
+            "a fork's release branch": {"release_pr": release_pr(repo="someone/academic-research")},
+            "another branch": {"release_pr": release_pr(head="claude/unit-3-x")},
+            "another version": {"release_pr": release_pr(head="claude/release-0.1.0x")},
+            "not merged": {"release_pr": release_pr(merged=False)},
+        }
+        for why, over in cases.items():
+            with self.subTest(why=why):
+                s = state.compute(release_world(**dict(over)), CFG, NOW)
+                self.assertFalse(s["release"]["checks"]["verdict_bound"])
+                self.assertFalse(s["release"]["release_ready"])
 
     def test_missing_verdict_file_blocks(self) -> None:
         s = state.compute(release_world(drop_files=["docs/release/0.1.0.md"]), CFG, NOW)

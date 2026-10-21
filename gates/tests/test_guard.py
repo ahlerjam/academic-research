@@ -1,5 +1,5 @@
-"""Guard partial orders: roles.json and dispatch.json only grow, proof specs and lenses only gain lines,
-package tsconfigs follow the template; plus the prefilled roles and dispatch entries."""
+"""Guard partial orders: roles.json, dispatch.json and the quality bar only grow, proof specs, lenses and the
+dogfood scenario only gain lines, package tsconfigs follow the template; plus the prefilled roles and dispatch entries."""
 
 from __future__ import annotations
 
@@ -24,6 +24,12 @@ LENS = "docs/review/lenses/tests.md"
 PROOF_TEXT = ("import { expect, test } from '@playwright/test';\n\n"
               "test('S1-QUOTE-EXACT', async ({ page }) => {\n  await page.goto('/');\n"
               "  await expect(page).toHaveURL('/');\n});\n")
+BAR = {"note": "A value may only be tightened, never loosened.",
+       "budgets": [{"id": "cold-open-ms", "label": "cold open", "unit": "ms", "direction": "max", "threshold": 2000},
+                   {"id": "recall-at-10", "label": "recall@10", "unit": "ratio", "direction": "min", "threshold": 0.8}]}
+DOGFOOD_TEXT = "# Dogfood scenario\n\n1. Open the app.\n2. Export the PDF.\n"
+SH_C = ["sh", "-c", "echo pwned > gates/gate.py", "{file}"]
+PWN = ["sh", "-c", "echo pwned > PWNED; exit 0", "{file}"]
 
 
 def _json(root: str, rel: str) -> dict:
@@ -42,6 +48,11 @@ def _whats(root: str, rel: str) -> List[str]:
     return [f.what for f in guard.violations(root) if f.path == rel and f.rule == "GATES-RATCHET"]
 
 
+def _component(roles_map: dict, lang: str = "typescript", name: str = "newpkg") -> dict:
+    """Return a new component entry below packages/<name>."""
+    return {"lang": lang, "dir": f"packages/{name}", "root": f"packages/{name}/src", "roles": roles_map}
+
+
 class GuardCase(unittest.TestCase):
     """Create one committed tree per test and remove it afterwards."""
 
@@ -50,21 +61,29 @@ class GuardCase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, root, True)
         return root
 
+    def assert_each_red(self, root: str, rel: str, cases: list) -> None:
+        """Apply each change to a fresh copy of the JSON file and expect a message that starts with the given text."""
+        original = _json(root, rel)
+        for expected, change in cases:
+            with self.subTest(expected=expected):
+                data = copy.deepcopy(original)
+                change(data)
+                _dump(root, rel, data)
+                whats = _whats(root, rel)
+                self.assertTrue(any(w.startswith(expected) for w in whats), whats)
+
 
 class RolesPartialOrder(GuardCase):
-    """New components, roles, globs and tighter budgets pass; anything that weakens an existing entry is red."""
+    """New roles, globs and tighter budgets pass; anything that weakens an existing entry is red."""
 
     def test_additions_and_tightening_pass(self) -> None:
         root = self.tree()
         cfg = _json(root, guard.ROLES)
-        cfg["components"]["extra"] = {"lang": "typescript", "dir": "packages/extra", "root": "packages/extra/src",
-                                      "roles": {"test": ["../test/**/*.ts"], "ui": ["**/*.ts"],
-                                                "adapter": ["lib/api.ts", "lib/api.fake.ts"], "wiring": ["main.ts"]}}
         cfg["components"]["server"]["roles"]["wiring"].append("tools/run.ts")
         cfg["components"]["server"]["roles"]["adapter"].append("jobs/queue.ts")
         cfg["components"]["server"]["non_feature"].append("tools")
-        cfg["components"]["server"]["roles"].setdefault("core", []).append("rules/*.ts")
-        cfg["components"]["web"]["roles"]["test"].append("views/**/*.test.ts")
+        cfg["components"]["core"]["roles"]["core"].append("lib/**/*.ts")
+        cfg["components"]["core"]["roles"]["test"].append("../test/x/**/*.ts")
         cfg["components"]["web"]["roles"].setdefault("ui", []).append("panels/**/*.ts")
         cfg["budgets"]["core"]["function_lines"] = 30
         cfg["budgets"]["tool"] = {"function_lines": 20, "module_lines": 100}
@@ -111,7 +130,7 @@ class RolesPartialOrder(GuardCase):
              lambda c: c["components"]["web"]["roles"]["adapter"].append("views/panel.ts")),
             ("component 'server' new glob 'x/*.ts' for unknown role 'queue'",
              lambda c: c["components"]["server"]["roles"].update(queue=["x/*.ts"])),
-            ("new component 'lax' needs a role core, flow, api, ui with a '**/' glob",
+            ("new component 'lax' needs a role api, ui with a '**/' glob",
              lambda c: c["components"].update(lax={"lang": "typescript", "dir": "packages/lax", "root": "packages/lax/src",
                                                    "roles": {"test": ["../test/**/*.ts"], "ui": ["views/*.ts"]}})),
             ("component 'lax2' new glob '**/*.ts' for role 'adapter' needs one file name without wildcards",
@@ -119,24 +138,75 @@ class RolesPartialOrder(GuardCase):
                                                     "root": "packages/lax2/src",
                                                     "roles": {"ui": ["**/*.ts"], "adapter": ["**/*.ts"]}})),
         ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+
+    def test_edge_globs_stay_outside_the_source_root_and_keep_the_rules_they_take(self) -> None:
+        cases = [
+            ("component 'core' new glob '../**/*.logic.ts' for role 'test' lies inside the source root",
+             lambda c: c["components"]["core"]["roles"]["test"].append("../**/*.logic.ts")),
+            ("component 'web' new glob '../**/*.view.ts' for role 'test' lies inside the source root",
+             lambda c: c["components"]["web"]["roles"]["test"].append("../**/*.view.ts")),
+            ("component 'server' new glob '../**/*.q.ts' for role 'migration' lies inside the source root",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../**/*.q.ts")),
+            ("component 'core' new glob '**/*.test.ts' for role 'test' takes paths of role 'core' and drops",
+             lambda c: c["components"]["core"]["roles"]["test"].append("**/*.test.ts")),
+            ("component 'core' new glob '../../core/src/x.ts' is not in normal form",
+             lambda c: c["components"]["core"]["roles"]["test"].append("../../core/src/x.ts")),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
         root = self.tree()
-        original = _json(root, guard.ROLES)
-        for expected, change in cases:
-            with self.subTest(expected=expected):
-                cfg = copy.deepcopy(original)
-                change(cfg)
-                _dump(root, guard.ROLES, cfg)
-                whats = _whats(root, guard.ROLES)
-                self.assertTrue(any(w.startswith(expected) for w in whats), whats)
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["core"]["roles"]["test"].append("../test/x/**/*.ts")
+        cfg["components"]["server"]["roles"]["migration"].append("../migrations/x/*.sql")
+        _dump(root, guard.ROLES, cfg)
+        self.assertEqual(_whats(root, guard.ROLES), [])
+
+    def test_edge_globs_name_their_own_files_where_the_role_already_lives(self) -> None:
+        cases = [
+            ("component 'server' new glob '../lib/**/*.ts' for role 'migration' needs a *.sql name below the directory "
+             "of an older migration glob of 'server'; else op:kernel",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../lib/**/*.ts")),
+            ("component 'server' new glob '../lib/**/*.ts' for role 'test' needs a *.test.ts or *.spec.ts name or a "
+             "place below the directory of an older test glob of 'server'; else op:kernel",
+             lambda c: c["components"]["server"]["roles"]["test"].append("../lib/**/*.ts")),
+            ("component 'server' new glob '../migrations/x/*.ts' for role 'migration' needs a *.sql name",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../migrations/x/*.ts")),
+            ("component 'server' new glob '../db/*.sql' for role 'migration' needs a *.sql name below the directory",
+             lambda c: c["components"]["server"]["roles"]["migration"].append("../db/*.sql")),
+            ("component 'server' new glob '../tests/**/*.ts' for role 'test' needs a *.test.ts or *.spec.ts name",
+             lambda c: c["components"]["server"]["roles"]["test"].append("../tests/**/*.ts")),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["server"]["roles"]["test"] += ["../test/x/**/*.ts", "../bench/**/*.spec.ts",
+                                                         "../tools/**/*.test.ts"]
+        cfg["components"]["web"]["roles"]["test"].append("../e2e/x/**/*.ts")
+        cfg["components"]["server"]["roles"]["migration"].append("../migrations/2027/*.sql")
+        _dump(root, guard.ROLES, cfg)
+        self.assertEqual(_whats(root, guard.ROLES), [])
+
+    def test_globs_in_normal_form_only(self) -> None:
+        cases = [(f"component 'server' new glob '{glob}' is not in normal form",
+                  lambda c, glob=glob: c["components"]["server"]["roles"]["adapter"].append(glob))
+                 for glob in ("./feat/api.ts", "x/../feat/flow.ts", "feat//api.ts", "feat/", "feat/./api.ts")]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["server"]["roles"]["adapter"].append("./feat/api.ts")
+        _dump(root, guard.ROLES, cfg)
+        support.write(root, "packages/server/src/feat/api.ts", "export const api = 1;\n")
+        place =roles.place_of(root, "packages/server/src/feat/api.ts", roles.load(root))
+        self.assertEqual(place.role if place else None, "adapter", "the glob would have taken a future api file")
 
     def test_a_new_glob_that_takes_an_existing_file_is_red(self) -> None:
-        root = self.tree({"packages/web/src/x/thing.ts": "export const thing = 1;\n"})
+        root = self.tree({"packages/server/src/x/api.ts": "export const api = 1;\n"})
         cfg = _json(root, guard.ROLES)
-        cfg["components"]["web"]["roles"]["core"] = ["x/*.ts"]
+        cfg["components"]["server"]["roles"]["flow"].append("x/*.ts")
         _dump(root, guard.ROLES, cfg)
-        self.assertEqual(_whats(root, guard.ROLES), ["packages/web/src/x/thing.ts moves from web/ui to web/core; "
+        self.assertEqual(_whats(root, guard.ROLES), ["packages/server/src/x/api.ts moves from server/api to server/flow; "
                                                      "only additions are allowed against HEAD"])
-        cfg["components"]["web"]["roles"]["core"] = ["y/*.ts"]
+        cfg["components"]["server"]["roles"]["flow"][-1] = "y/*.ts"
         _dump(root, guard.ROLES, cfg)
         self.assertEqual(_whats(root, guard.ROLES), [])
 
@@ -150,6 +220,87 @@ class RolesPartialOrder(GuardCase):
         self.assertEqual(len(whats), 2, whats)
         self.assertTrue(any("'views2/**/*.ts' for role 'test'" in w for w in whats), whats)
         self.assertTrue(any("'newfeat/*.ts' for role 'adapter'" in w for w in whats), whats)
+
+    def test_a_new_open_role_glob_keeps_every_rule_of_the_role_it_outranks(self) -> None:
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["web"]["roles"]["core"] = ["view2/**/*.ts"]
+        _dump(root, guard.ROLES, cfg)
+        self.assertIn("component 'web' new glob 'view2/**/*.ts' for role 'core' takes paths of role 'ui' and drops "
+                      "TS-IO-ONLY-ADAPTER, TS-NO-CONSOLE, TS-NO-INNERHTML; else op:kernel; only additions are allowed "
+                      "against HEAD", _whats(root, guard.ROLES))
+        cfg["components"]["web"]["roles"].pop("core")
+        cfg["components"]["web"]["roles"]["ui"].append("view2/**/*.ts")
+        _dump(root, guard.ROLES, cfg)
+        self.assertEqual(_whats(root, guard.ROLES), [])
+
+    def test_rule_ids_and_budgets_both_count(self) -> None:
+        cases = [
+            ("component 'server' new glob 'rules/*.ts' for role 'core' takes paths of role 'flow' and drops "
+             "TS-IO-ONLY-ADAPTER, TS-NO-CONSOLE, TS-NO-DECISION-IN-FLOW, budget function_lines 30, budget module_lines 300",
+             lambda c: c["components"]["server"]["roles"].update(core=["rules/*.ts"])),
+            ("component 'web' new glob '**/*.html' for role 'api' takes paths of role 'ui' and drops TS-NO-INNERHTML",
+             lambda c: c["components"]["web"]["roles"].update(api=["**/*.html"])),
+            ("component 'plugin' new glob 'mcp' for role 'core' takes paths of role 'api'",
+             lambda c: c["components"]["plugin"]["roles"].update(core=["mcp"])),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+        root = self.tree()
+        cfg = _json(root, guard.ROLES)
+        cfg["components"]["server"]["roles"]["flow"].append("jobs/*.ts")
+        _dump(root, guard.ROLES, cfg)
+        self.assertEqual(_whats(root, guard.ROLES), [], "flow keeps every rule of api")
+
+    def test_core_and_flow_only_where_the_component_has_them(self) -> None:
+        cases = [
+            ("component 'server' new glob 'x/core/*.ts' for role 'core', which component 'server' does not have yet",
+             lambda c: c["components"]["server"]["roles"].update(core=["x/core/*.ts"])),
+            ("component 'web' new glob 'x/flow.ts' for role 'flow', which component 'web' does not have yet",
+             lambda c: c["components"]["web"]["roles"].update(flow=["x/flow.ts"])),
+            ("component 'web' new glob 'x/api.ts' for role 'api', new to 'web', would lose",
+             lambda c: c["components"]["web"]["roles"].update(api=["x/api.ts"])),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+
+    def test_new_components_hold_no_core_or_flow(self) -> None:
+        cases = [
+            (f"new component 'newpkg' role '{role}' would lose the component-bound rules of '{role}'; op:kernel",
+             lambda c, role=role: c["components"].update(newpkg=_component({role: ["**/*.ts"], "api": ["**/*.ts"]})))
+            for role in ("core", "flow")
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+
+    def test_new_components_keep_the_rules_of_each_role_elsewhere(self) -> None:
+        cases = [
+            ("new component 'newpkg' role 'ui' would lose TS-NO-INNERHTML",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.ts"]}))),
+            ("new component 'newpkg' role 'api' would lose TS-ADAPTER-NO-FEATURE, TS-BEHAVIOUR, TS-FEATURES-INDEPENDENT, "
+             "TS-LAYOUT",
+             lambda c: c["components"].update(newpkg=_component({"api": ["**/*.ts"]}))),
+            ("new component 'newpkg' role 'adapter' would lose",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.ts"], "adapter": ["lib/api.ts"]}))),
+            ("new component 'newpkg' lang 'python' must be the lang of an existing component and match every glob's "
+             "extension (not **/*.ts)",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.ts"]}, lang="python"))),
+            ("new component 'newpkg' lang 'kotlin' must be the lang of an existing component",
+             lambda c: c["components"].update(newpkg=_component({"ui": ["**/*.kt"]}, lang="kotlin"))),
+        ]
+        self.assert_each_red(self.tree(), guard.ROLES, cases)
+
+    def test_glob_overlap_follows_git_pathspecs(self) -> None:
+        pairs = [("packages/web/src/view2/**/*.ts", "packages/web/src/**/*.ts", True),
+                 ("packages/server/src/rules/*/*.ts", "packages/server/src/*/flow.ts", False),
+                 ("packages/server/src/rules/*.ts", "packages/server/src/*/flow.ts", True),
+                 ("gates", "gates/lib/**", True), ("gate*", "gates/lib/**", False),
+                 ("**/*.md", "AGENTS.md", True), ("packages/**/*.md", "**/.editorconfig", False),
+                 ("packages/[ab]*/x.ts", "packages/a/x.ts", True), ("**/*.sh", ".claude/hooks/**", True),
+                 ("scripts/run.sh", "**/.editorconfig", True), ("scripts/*.sh", "**/.editorconfig", False),
+                 ("packages/core/**/*.logic.ts", "packages/core/src", True),
+                 ("packages/core/test/x/**/*.ts", "packages/core/src", False)]
+        for left, right, want in pairs:
+            with self.subTest(left=left, right=right):
+                self.assertEqual(guard._overlap(left, right), want)
+                self.assertEqual(guard._overlap(right, left), want)
 
     def test_non_feature_only_for_new_directories_with_a_role_glob(self) -> None:
         root = self.tree({"packages/server/src/billing/flow.ts": "export const flow = 1;\n"})
@@ -171,14 +322,21 @@ class RolesPartialOrder(GuardCase):
 
 
 class DispatchPartialOrder(GuardCase):
-    """Entries may only be appended; existing entries stay byte-identical; mode only moves to strict."""
+    """Entries may only be appended and only reuse older argv lists; mode only moves to strict."""
 
     def test_appended_entry_passes(self) -> None:
         root = self.tree()
         data = _json(root, guard.DISPATCH)
+        prettier = data["entries"][1]
+        bash_n = next(e for e in data["entries"] if e.get("finding_exits"))
         data["entries"].append({"glob": "packages/**/*.txt", "tier": "s1", "check": [["@rules"]]})
+        data["entries"].append({"glob": "packages/**/*.md|scripts/**/*.md", "tier": "s0", "format": prettier["format"],
+                                "format_check": prettier["format_check"], "check": prettier["check"]})
+        data["entries"].append({"glob": "scripts/**/*.bash", "tier": "s0", "check": bash_n["check"],
+                                "finding_exits": bash_n["finding_exits"]})
         _dump(root, guard.DISPATCH, data)
         self.assertEqual(_whats(root, guard.DISPATCH), [])
+        self.assertEqual(guard.runnable_dispatch(root), (data["entries"], []))
 
     def test_weakening_is_red(self) -> None:
         cases = [
@@ -189,15 +347,127 @@ class DispatchPartialOrder(GuardCase):
             ("top-level key 'extra' added", lambda d: d.update(extra=1)),
             ("new entry 8 needs a string 'glob' and 'tier'", lambda d: d["entries"].append({"glob": "x/*.md"})),
         ]
-        root = self.tree()
-        original = _json(root, guard.DISPATCH)
-        for expected, change in cases:
-            with self.subTest(expected=expected):
-                data = copy.deepcopy(original)
-                change(data)
-                _dump(root, guard.DISPATCH, data)
-                whats = _whats(root, guard.DISPATCH)
-                self.assertTrue(any(w.startswith(expected) for w in whats), whats)
+        self.assert_each_red(self.tree(), guard.DISPATCH, cases)
+
+    def test_a_new_entry_runs_no_new_command(self) -> None:
+        def add(**entry: object):
+            return lambda d: d["entries"].append(dict({"glob": "packages/**/*.ts", "tier": "s0"}, **entry))
+
+        prettier_write = ["prettier", "--write", "--log-level", "warn", "{file}"]
+        cases = [
+            (f"new entry 8 'format' {json.dumps(SH_C)} is not taken from the same key", add(format=SH_C)),
+            (f"new entry 8 'format_check' {json.dumps(SH_C)} is not taken", add(format_check=SH_C)),
+            (f"new entry 8 'format_check' {json.dumps(prettier_write)} is not taken", add(format_check=prettier_write)),
+            (f"new entry 8 check {json.dumps(SH_C)} is neither an older check", add(check=[["@rules"], SH_C])),
+            ("new entry 8 check \"sh\" is neither an older check", add(check="sh")),
+            ("new entry 8 'cwd' \"component\" is not taken", add(cwd="component")),
+            ("new entry 8 'finding_exits' [0, 1, 2] is not taken", add(finding_exits=[0, 1, 2])),
+            ("new entry 8 'tier' \"s9\" is not taken", add(tier="s9")),
+            ("new entry 8 has unknown key 'env'", add(env={"PATH": "."})),
+        ]
+        self.assert_each_red(self.tree(), guard.DISPATCH, cases)
+
+    def test_a_new_entry_stays_off_operator_paths(self) -> None:
+        def glob(text: str):
+            return lambda d: d["entries"].append({"glob": text, "tier": "s1", "check": [["@rules"]]})
+
+        cases = [
+            ("new entry 8 glob part 'gates/lib/**' reaches operator-only '**/.editorconfig'", glob("gates/lib/**")),
+            ("new entry 8 glob part 'Makefile' reaches operator-only 'Makefile', '**/.editorconfig'", glob("packages/**/*.ts|Makefile")),
+            ("new entry 8 glob part 'gates' reaches operator-only", glob("gates")),
+            ("new entry 8 glob part '**/*.md' reaches operator-only 'AGENTS.md'", glob("**/*.md")),
+            ("new entry 8 glob part './ops/conductor/x.py' reaches operator-only '**/.editorconfig'",
+             glob("./ops/conductor/x.py")),
+            ("new entry 8 glob part 'packages/**/*.cjs' reaches operator-only '**/eslint.config.cjs'",
+             glob("packages/**/*.cjs")),
+            ("new entry 8 glob part '../x/*.ts' is empty, absolute, outside", glob("../x/*.ts")),
+            ("new entry 8 glob part '' is empty", glob("packages/**/*.ts|")),
+            ("new entry 8 glob part '/etc/*' is empty, absolute", glob("/etc/*")),
+        ]
+        self.assert_each_red(self.tree(), guard.DISPATCH, cases)
+
+    def test_the_hook_never_runs_a_rejected_entry(self) -> None:
+        root = self.tree({"packages/web/src/a.ts": "export const a = 1;\n"})
+        base = _json(root, guard.DISPATCH)
+        data = copy.deepcopy(base)
+        data["entries"].append({"glob": "packages/**/*.ts", "tier": "s0", "format": PWN, "check": [PWN]})
+        _dump(root, guard.DISPATCH, data)
+        self.assertTrue(_whats(root, guard.DISPATCH))
+        runnable, held = guard.runnable_dispatch(root)
+        self.assertEqual(runnable, base["entries"])
+        self.assertTrue(held and all("the hook runs only the entries of" in why for why in held), held)
+        self.assertNotIn(PWN, [e.get("format") for e in engine.dispatch_entries(root, "packages/web/src/a.ts", "s0")])
+        payload = {"tool_input": {"file_path": os.path.join(root, "packages/web/src/a.ts")}, "cwd": root}
+        result = support.gate(root, ["hook", "post-edit"], payload)
+        self.assertFalse(os.path.exists(os.path.join(root, "PWNED")), result.stderr)
+        self.assertFalse(os.path.exists(os.path.join(root, "packages/web/src/PWNED")), result.stderr)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("GATES-RATCHET", result.stderr)
+        batch = {"tool_calls": [{"tool_input": {"file_path": os.path.join(root, "packages/web/src/a.ts")}}], "cwd": root}
+        support.gate(root, ["hook", "post-batch"], batch)
+        self.assertFalse(os.path.exists(os.path.join(root, "PWNED")))
+
+
+class QualityBarOrder(GuardCase):
+    """Quality-bar budgets keep their ids and keys; max thresholds only fall, min thresholds only rise."""
+
+    def base(self) -> str:
+        return self.tree({guard.QUALITY_BAR: json.dumps(BAR, indent=1) + "\n", guard.DOGFOOD: DOGFOOD_TEXT})
+
+    def test_both_product_files_are_ratchet_paths(self) -> None:
+        root = self.base()
+        cfg = manifest.controls(root)
+        for rel in (guard.QUALITY_BAR, guard.DOGFOOD):
+            with self.subTest(rel=rel):
+                self.assertIn(rel, cfg["ratchet"])
+                self.assertFalse(hooks.is_control_path(root, rel))
+
+    def test_tightening_and_new_budgets_pass(self) -> None:
+        root = self.base()
+        bar = copy.deepcopy(BAR)
+        bar["budgets"][0]["threshold"] = 1500
+        bar["budgets"][1]["threshold"] = 0.9
+        bar["budgets"].append({"id": "export-ms", "label": "export", "unit": "ms", "direction": "max", "threshold": 30000})
+        _dump(root, guard.QUALITY_BAR, bar)
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT + "3. Restore a backup.\n")
+        self.assertEqual(_whats(root, guard.QUALITY_BAR) + _whats(root, guard.DOGFOOD), [])
+
+    def test_loosening_is_red(self) -> None:
+        def budget(i: int, **change: object):
+            return lambda b: b["budgets"][i].update(change)
+
+        cases = [
+            ("budget 'cold-open-ms' threshold 2000 -> 2001 loosens a 'max' bar", budget(0, threshold=2001)),
+            ("budget 'recall-at-10' threshold 0.8 -> 0.7 loosens a 'min' bar", budget(1, threshold=0.7)),
+            ("budget 'cold-open-ms' key 'direction' changed", budget(0, direction="min")),
+            ("budget 'cold-open-ms' key 'unit' changed", budget(0, unit="s")),
+            ("budget 'cold-open-ms' removed", lambda b: b["budgets"].pop(0)),
+            ("budget 'cold-open-ms' needs a string id", budget(0, threshold=float("nan"))),
+            ("budget 'cold-open-ms' needs a string id", budget(0, threshold=True)),
+            ("budget 'cold-open-ms' needs a string id", budget(0, threshold="1000")),
+            ("budget 'cold-open-ms' needs a string id", budget(0, direction="none")),
+            ("budget 'cold-open-ms' appears twice", lambda b: b["budgets"].append(dict(b["budgets"][0], threshold=9e9))),
+            ("'note' changed", lambda b: b.update(note="Loosen at will.")),
+            ("top-level key 'override' added", lambda b: b.update(override=True)),
+            ("'budgets' is no longer a list of objects", lambda b: b.update(budgets={"cold-open-ms": 1})),
+        ]
+        self.assert_each_red(self.base(), guard.QUALITY_BAR, cases)
+
+    def test_the_dogfood_scenario_only_grows_at_its_end(self) -> None:
+        root = self.base()
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT.replace("2. Export", "2. Skip the export.\n3. Export"))
+        self.assertEqual(_whats(root, guard.DOGFOOD), ["changed before its end against HEAD; only append at the end"])
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT.rstrip("\n") + " Slow machines may take 300 s.\n")
+        self.assertEqual(_whats(root, guard.DOGFOOD), ["changed before its end against HEAD; only append at the end"],
+                         "the last step was lengthened")
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT + "\n\n")
+        self.assertEqual(_whats(root, guard.DOGFOOD), [])
+        support.write(root, guard.DOGFOOD, DOGFOOD_TEXT.rstrip("\n"))
+        self.assertEqual(_whats(root, guard.DOGFOOD), [])
+        os.remove(os.path.join(root, guard.DOGFOOD))
+        os.remove(os.path.join(root, guard.QUALITY_BAR))
+        self.assertEqual(_whats(root, guard.DOGFOOD), ["deleted against HEAD; this path only grows"])
+        self.assertEqual(len(_whats(root, guard.QUALITY_BAR)), 1)
 
 
 class AddOnlyPaths(GuardCase):

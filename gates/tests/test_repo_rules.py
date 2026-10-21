@@ -13,7 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tests import support  # noqa: E402
 
-from lib import adr, cmdnorm, drift, engine, guard, hooks, manifest, migrations, stopgate, sync, tests_duty, tools  # noqa: E402
+from lib import adr, cmdnorm, docs_places, drift, engine, guard, hooks, manifest, migrations, repo, stopgate, sync  # noqa: E402
+from lib import tests_duty, tools  # noqa: E402
 from lib.findings import Finding  # noqa: E402
 
 PY_CFG = {"ignore": [], "budgets": {}, "components": {"c": {
@@ -251,6 +252,71 @@ class Migrations(unittest.TestCase):
             shutil.rmtree(root, ignore_errors=True)
 
 
+class DocsPlaces(unittest.TestCase):
+    """A markdown file new against origin's default branch is red outside the fixed places; old files stay free."""
+
+    GOOD = ("decisions/0099-new-decision.md", "docs/release/0.1.0.md", "docs/release/12.0.3.md", "docs/release/README.md",
+            "docs/review/lenses/performance.md", "docs/product/scenario-two.md", "docs/autonomy/notes.md",
+            "packages/web/README.md", "CHANGELOG.md", ".claude/agents/ar-new.md", ".claude/rules/web-ui.md",
+            "gates/proofs/README.md", "docs/spikes/spike-12.md", ".ar/test-change-request.md")
+    BAD = ("notes/plan.md", "NOTES.md", "docs/plan/new-plan.md", "docs/release/v0.1.0.md", "docs/release/0.1.md",
+           "docs/release/0.01.0.md", "decisions/new.md", "decisions/sub/0001-x.md", "docs/product/sub/x.md",
+           "docs/review/lenses/x/y.md", "packages/web/docs/README.md", "packages/README.md", "docs/spikes/memo.md",
+           ".claude/agents/sub/x.md", "ops/conductor/notes.md", "docs/autonomy/x/y.md")
+
+    def remote_tree(self) -> str:
+        """Return a committed tree with an old markdown file whose origin/main is its first commit."""
+        root = support.make_tree({"notes/old.md": "# Old\n", "docs/plan/old-plan.md": "# Plan\n"})
+        remote = tempfile.mkdtemp(prefix="gates-remote-")
+        self.addCleanup(shutil.rmtree, root, True)
+        self.addCleanup(shutil.rmtree, remote, True)
+        support.git(remote, "init", "-q", "--bare")
+        support.git(root, "remote", "add", "origin", remote)
+        support.git(root, "push", "-q", "origin", "HEAD:refs/heads/main")
+        support.git(root, "fetch", "-q", "origin")
+        return root
+
+    def test_new_files_outside_the_places_are_red_committed_or_not(self) -> None:
+        root = self.remote_tree()
+        for rel in self.BAD[:8]:
+            support.write(root, rel, "# x\n")
+        support.git(root, "add", "-A")
+        support.git(root, *support.GIT_ID, "commit", "-q", "-m", "docs")
+        for rel in self.BAD[8:]:
+            support.write(root, rel, "# x\n")
+        found = repo.rules(root, "DOCS-PLACES")
+        self.assertEqual(sorted(f.path for f in found), sorted(self.BAD))
+        self.assertEqual({f.rule for f in found}, {"DOCS-PLACES"})
+
+    def test_allowed_places_and_changed_old_files_are_green(self) -> None:
+        root = self.remote_tree()
+        for rel in self.GOOD:
+            support.write(root, rel, "# x\n")
+        support.write(root, "notes/old.md", "# Old\n\nMore text.\n")
+        support.write(root, "docs/plan/old-plan.md", "# Plan, rewritten\n")
+        self.assertEqual(docs_places.violations(root, "DOCS-PLACES"), [])
+        support.git(root, "add", "-A")
+        support.git(root, *support.GIT_ID, "commit", "-q", "-m", "docs")
+        self.assertEqual(docs_places.violations(root, "DOCS-PLACES"), [])
+
+    def test_without_remote_the_head_is_the_base(self) -> None:
+        root = support.make_tree({"notes/old.md": "# Old\n"})
+        self.addCleanup(shutil.rmtree, root, True)
+        support.write(root, "notes/new.md", "# New\n")
+        self.assertEqual([f.path for f in docs_places.violations(root, "DOCS-PLACES")], ["notes/new.md"])
+        os.remove(os.path.join(root, "notes/new.md"))
+        self.assertEqual(docs_places.violations(root, "DOCS-PLACES"), [])
+
+    def test_the_rule_is_wired_tagged_and_proven_here(self) -> None:
+        with open(os.path.join(support.SOURCE, "gates", "catalog.json"), encoding="utf-8") as handle:
+            entry = next(e for e in json.load(handle) if e["id"] == "DOCS-PLACES")
+        self.assertEqual((entry["carrier"], entry["carrier_ref"], entry["fixture"]),
+                         ("gate", "docs_places", "test:gates/tests/test_repo_rules.py"))
+        self.assertIn("docs_places", repo.REPO_REFS)
+        with open(os.path.join(support.SOURCE, "AGENTS.md"), encoding="utf-8") as handle:
+            self.assertIn("(gate: DOCS-PLACES)", handle.read())
+
+
 class Ratchet(unittest.TestCase):
     """With a ratchet, new rules pass and changed or deleted rules are red."""
 
@@ -332,7 +398,7 @@ class Normaliser(unittest.TestCase):
         self.assertEqual(cmdnorm.segments('git commit -m "x --force"'), [["git", "commit", "-m", "MESSAGE"]])
         self.assertEqual(cmdnorm.segments("cat <<EOF\nx\nEOF"), [["cat"]])
         self.assertEqual(cmdnorm.segments("timeout 30 sudo -u me git push -f"), [["git", "push", "-f"]])
-        self.assertEqual(cmdnorm.segments("xargs -n1 git status"), [["git", "status"]])
+        self.assertEqual(cmdnorm.segments("xargs -n1 git status"), [["git", "status", "$XARGS_STDIN"]])
 
     def test_write_targets(self) -> None:
         self.assertEqual(cmdnorm.write_targets(["echo", "x", ">", "AGENTS.md"]), ["AGENTS.md"])
