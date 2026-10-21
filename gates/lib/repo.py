@@ -1,15 +1,16 @@
-"""Repo-level rules: layout, feature imports, test duties, migrations, AGENTS.md, ADRs, suppression count."""
+"""Repo-level rules: layout, feature imports, test duties, migrations, AGENTS.md, ADRs, suppression count, doc places."""
 
 from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from . import adr, agents_md, catalog, drift, feature_imports, generated, layout, migrations, roles, suppress, sync, tests_duty
+from . import adr, agents_md, catalog, docs_places, drift, feature_imports, generated, layout, migrations, roles, suppress
+from . import sync, tests_duty
 from .findings import Finding
 
 REPO_REFS = ("layout", "feature_imports.cross", "feature_imports.adapter", "tests_duty.decide",
              "tests_duty.behaviour", "tests_duty.diff", "migrations.sql", "migrations.alembic",
-             "agents_md", "adr", "suppress.count", "generated.header")
+             "agents_md", "adr", "suppress.count", "generated.header", "docs_places")
 
 
 def _by_component(entries: List[dict], ref: str) -> Dict[str, str]:
@@ -50,6 +51,8 @@ def rules(tree: str, only: Optional[str] = None) -> List[Finding]:
         found += adr.violations(tree, rid)
     for rid in _by_component(entries, "suppress.count").values():
         found += suppress.violations(tree, rid)
+    for rid in _by_component(entries, "docs_places").values():
+        found += docs_places.violations(tree, rid)
     return found
 
 

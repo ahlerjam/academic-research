@@ -455,5 +455,18 @@
   "why": "a gate may only grow; changing or deleting one weakens it",
   "fix": "add a new rule with test, fixture and catalog entry instead of changing an existing one",
   "agents_md": "You may add a gate; never change or delete one."
+ },
+ {
+  "id": "DOCS-PLACES",
+  "component": "*",
+  "roles": "*",
+  "carrier": "gate",
+  "carrier_ref": "docs_places",
+  "fixture": "test:gates/tests/test_repo_rules.py",
+  "fixture_mode": "test",
+  "adr": null,
+  "why": "markdown files of agents spread through the repository unless every new one has a fixed place",
+  "fix": "put the text into an existing file or an allowed place (decisions/NNNN-*.md via make adr-new, docs/release/<version>.md, docs/review/lenses/, docs/product/, packages/<name>/README.md) or into the issue or PR",
+  "agents_md": "New markdown files only in the places DOCS-PLACES lists."
  }
 ]
