@@ -1,6 +1,7 @@
 ---
 paths:
   - "packages/server/src/adapters/*.ts"
+  - "packages/server/src/data/projectScoped.ts"
 ---
 
 # server / adapter

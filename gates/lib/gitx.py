@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Sequence
 
 
 ANCHOR = "refs/gates/baseline"
+REMOTE_PREFIX = "refs/remotes/origin/"
 DEFAULT_TIMEOUT = 30.0
 
 
@@ -82,12 +83,16 @@ def dirty(tree: str, deleted: bool = False) -> List[str]:
 
 
 def default_ref(tree: str) -> Optional[str]:
-    """Return origin's default branch as a ref, or None without a remote."""
-    proc = run(["git", "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"], cwd=tree)
-    if proc.returncode == 0 and proc.stdout.strip():
+    """Return origin's default branch as a full remote-tracking ref, or None without a remote.
+
+    The full name (refs/remotes/origin/<branch>) never resolves to a local branch or tag that an agent named
+    origin/<branch>; the short name would, because git prefers refs/tags/ and refs/heads/ over refs/remotes/.
+    """
+    proc = run(["git", "symbolic-ref", "--quiet", REMOTE_PREFIX + "HEAD"], cwd=tree)
+    if proc.returncode == 0 and proc.stdout.strip().startswith(REMOTE_PREFIX):
         return proc.stdout.strip()
-    for name in ("origin/main", "origin/master"):
-        if run(["git", "rev-parse", "--verify", "--quiet", name], cwd=tree).returncode == 0:
+    for name in (REMOTE_PREFIX + "main", REMOTE_PREFIX + "master"):
+        if run(["git", "rev-parse", "--verify", "--quiet", name + "^{commit}"], cwd=tree).returncode == 0:
             return name
     return None
 

@@ -1,0 +1,112 @@
+{
+ "stage": "1",
+ "milestone": "M1",
+ "issue": 100,
+ "outcome": "Write and compile one real chapter locally: structured editor, PDFs and BibTeX/RIS import, anchored citations (quote or paraphrase) with hover and quote check, LaTeX/PDF with template, trace check, versions and backup, install",
+ "proof": "an agent writes and exports a real chapter from CC-licensed sources and an independent judge panel reviews it (T23)",
+ "contracts": [
+  {
+   "id": "S1-QUOTE-EXACT",
+   "northstar": "a direct quote is additionally checked verbatim",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "The anchored direct quote altered by one character in the document is reported as not verbatim and the export is blocked.",
+   "source": "#100 AC3, AC6"
+  },
+  {
+   "id": "S1-HOVER-PAGE",
+   "northstar": "Hovering a citation shows the anchored passage with its printed page",
+   "evidence": "e2e",
+   "artefact": "png",
+   "negative": "A citation whose printed page is neither derived nor set by the user is reported and the export is blocked.",
+   "source": "#100 AC2, AC3, AC6"
+  },
+  {
+   "id": "S1-TRACE-BLOCKS",
+   "northstar": "what is not anchored is listed, and a broken trace blocks the export",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A stale anchor after a changed extraction and a cited source whose existence check was not run are both reported and the export is blocked.",
+   "source": "#100 AC4, AC5, AC6"
+  },
+  {
+   "id": "S1-PRINTONLY",
+   "northstar": "only a quote from a print-only source without a stored copy may pass, marked not checked, after a logged confirmation",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A quote from a print-only source without a stored copy and without a logged confirmation blocks the export.",
+   "source": "NORTHSTAR goal"
+  },
+  {
+   "id": "S1-IMPORT",
+   "northstar": "PDFs and BibTeX/RIS import",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A file named .pdf without the %PDF- header and a malformed BibTeX entry are rejected with a message and nothing enters the library.",
+   "source": "#100 AC2"
+  },
+  {
+   "id": "S1-EXPORT-BUNDLE",
+   "northstar": "generates LaTeX, PDF and docx through the university template",
+   "evidence": "e2e",
+   "artefact": "zip",
+   "negative": "An export requested while the trace check is red writes no PDF and no bundle and names the blocking findings.",
+   "source": "#100 AC2, AC7"
+  },
+  {
+   "id": "S1-DOCX-WORKING-COPY",
+   "northstar": "docx only through Pandoc from the generated LaTeX",
+   "evidence": "e2e",
+   "artefact": "docx",
+   "negative": "With Pandoc not installed the docx route answers 503 pandoc-unavailable and starts no other process.",
+   "source": "#100 AC17"
+  },
+  {
+   "id": "S1-NO-AI-MARKER",
+   "northstar": "no automatic marker reaches the thesis",
+   "evidence": "e2e",
+   "artefact": "pdf",
+   "negative": "A project whose metadata and change log carry a canary authorship marker exports a .tex and a PDF whose text and metadata do not contain the canary.",
+   "source": "#100 AC7, AC17"
+  },
+  {
+   "id": "S1-WISHLIST-OFFLINE",
+   "northstar": "puts everything else on a wishlist with links into the author's own library (DOI, link resolver, catalogue, interlibrary loan), configurable for any library",
+   "evidence": "e2e",
+   "artefact": "text",
+   "negative": "Building the wishlist links makes no network request, and an entry title holding a script tag is exported as text with no script element in the HTML.",
+   "source": "#100 AC8"
+  },
+  {
+   "id": "S1-BACKUP-ROUNDTRIP",
+   "northstar": "versions and backup",
+   "evidence": "e2e",
+   "artefact": "tex",
+   "negative": "The server killed with signal 9 in the middle of an editing session loses no acknowledged edit and the document opens after the restart.",
+   "source": "#100 AC9, AC10"
+  },
+  {
+   "id": "S1-INSTALL-CLEAN",
+   "northstar": "easy to install",
+   "evidence": "e2e",
+   "artefact": "pdf",
+   "negative": "Without any compile path (no Docker, no host TeX) the app names the missing compile path instead of failing silently and still produces the export bundle.",
+   "source": "#100 AC12; NORTHSTAR who it is for"
+  },
+  {
+   "id": "S1-AGENT-CHAPTER",
+   "northstar": "an agent writes and exports a real chapter from CC-licensed sources",
+   "evidence": "e2e",
+   "artefact": "pdf",
+   "negative": "The same chapter with one anchored quote changed by one word is blocked from export.",
+   "source": "#100 AC13; operator answer 13"
+  },
+  {
+   "id": "S1-T23-REVIEW",
+   "northstar": "an independent judge panel reviews it (T23)",
+   "evidence": "operator",
+   "operator": "The judge panel (.claude/workflows/ar-judge.js with model fable) reviews the agent's exported chapter by the T23 checklist and records the verdict in the T23 ticket; the release panel (.claude/workflows/ar-release.js) repeats the check in docs/release/<version>.md.",
+   "source": "#100 AC16; T23; operator decision 6 of 2026-10-20"
+  }
+ ]
+}

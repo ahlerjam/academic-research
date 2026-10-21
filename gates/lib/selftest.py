@@ -28,11 +28,13 @@ class Result(NamedTuple):
 
 
 def sandbox(tree: str) -> str:
-    """Copy the control files, gates and docs into a fresh git tree; symlink tool directories."""
+    """Copy the control and ratchet files, gates and docs into a fresh git tree; symlink tool directories."""
     root = tempfile.mkdtemp(prefix="gates-selftest-")
+    ratchet = list(manifest.controls(tree).get("ratchet", []))
     files = set(manifest.control_files(tree)) | set(gitx.ls(tree, ["gates/**", ".gitignore", "decisions/**",
                                                                     "*/package.json", "*/pyproject.toml",
-                                                                    "*/.python-version", "*/.node-version"]))
+                                                                    "*/.python-version", "*/.node-version"]
+                                                            + ratchet))
     files = {f for f in files if not f.startswith("gates/fixtures/")}
     for rel in sorted(files):
         dest = os.path.join(root, rel)

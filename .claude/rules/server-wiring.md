@@ -3,6 +3,8 @@ paths:
   - "packages/server/src/app.ts"
   - "packages/server/src/main.ts"
   - "packages/server/src/settings.ts"
+  - "packages/server/src/cli/measureRecall.ts"
+  - "packages/server/src/dev/ghostMeasure.ts"
 ---
 
 # server / wiring

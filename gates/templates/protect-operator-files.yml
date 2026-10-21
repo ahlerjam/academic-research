@@ -9,11 +9,9 @@ jobs:
   protect:
     runs-on: ${{ fromJSON(vars.RUNNER || '"ubuntu-latest"') }}
     steps:
-      - name: Control files only change by the operator
+      - name: Kernel paths are frozen for every author
         env:
           GH_TOKEN: ${{ github.token }}
-          OPERATOR_LOGIN: ${{ vars.OPERATOR_LOGIN }}
-          AUTHOR: ${{ github.event.pull_request.user.login }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           CONTROL_GLOBS: '__CONTROL_GLOBS__'
@@ -31,23 +29,21 @@ jobs:
                   elif glob[i] == "*": out, i = out + "[^/]*", i + 1
                   else: out, i = out + re.escape(glob[i]), i + 1
               return re.compile(out + "$")
-          operator = os.environ["OPERATOR_LOGIN"].strip()
-          if not operator:
-              sys.exit("repository variable OPERATOR_LOGIN is empty; set it, the check stays red until then")
           globs = [rx(g) for g in json.loads(os.environ["CONTROL_GLOBS"])]
+          if not globs:
+              sys.exit("no kernel globs embedded; the check stays red")
           control = lambda f: any(g.match(f) for g in globs)
           repo, pr = os.environ["REPO"], os.environ["PR"]
-          touched = [f for f in api(f"repos/{repo}/pulls/{pr}/files", ".[].filename") if control(f)]
-          problems = []
-          if touched and os.environ["AUTHOR"] != operator:
-              problems.append(f"{os.environ['AUTHOR']} changed control files: {', '.join(touched)}")
-          for sha in api(f"repos/{repo}/pulls/{pr}/commits", ".[].sha"):
-              message = "\n".join(api(f"repos/{repo}/commits/{sha}", ".commit.message"))
-              if re.search(r"(?im)^co-authored-by:.*(claude|noreply@anthropic\.com)", message):
-                  files = [f for f in api(f"repos/{repo}/commits/{sha}", ".files[].filename") if control(f)]
-                  if files:
-                      problems.append(f"agent commit {sha[:8]} changed control files: {', '.join(files)}")
-          if problems:
-              sys.exit("\n".join(problems))
-          print("control files untouched or changed by the operator")
+          rows = api(f"repos/{repo}/pulls/{pr}/files", '.[] | [.filename, (.previous_filename // "")] | @json')
+          listed = [json.loads(row) for row in rows]
+          changed = int(json.loads(api(f"repos/{repo}/pulls/{pr}", ".changed_files")[0]))
+          # constraint: the files endpoint lists at most 3000 files (GitHub REST docs), so a PR with more, or with
+          # more changed files than were listed, could hide a kernel path behind filler; fail closed.
+          if changed >= 3000 or changed > len(listed):
+              sys.exit(f"the PR changes {changed} files and {len(listed)} were listed; too many to check, the check stays red")
+          names = [name for pair in listed for name in pair if name]
+          touched = sorted({f for f in names if control(f)})
+          if touched:
+              sys.exit("kernel paths changed (the operator merges these with a bypass, never this check): " + ", ".join(touched))
+          print("no kernel path touched")
           PY

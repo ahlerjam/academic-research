@@ -59,6 +59,78 @@
     "warn",
     "{file}"
    ]
+  },
+  {
+   "glob": "packages/**/*.sql",
+   "tier": "s0",
+   "check": [
+    [
+     "@rules"
+    ]
+   ]
+  },
+  {
+   "glob": "**/*.sh",
+   "tier": "s0",
+   "check": [
+    [
+     "bash",
+     "-c",
+     "out=$(LC_ALL=C bash -n \"$1\" 2>&1); rc=$?; printf '%s\\n' \"$out\" | sed -E 's/^(.*): line ([0-9]+): /\\1:\\2: bash-syntax /'; exit $rc",
+     "bash-n",
+     "{file}"
+    ]
+   ],
+   "finding_exits": [
+    2
+   ]
+  },
+  {
+   "glob": "packages/**/*.mjs|scripts/**/*.mjs|deploy/**/*.mjs",
+   "tier": "s0",
+   "format": [
+    "prettier",
+    "--write",
+    "--log-level",
+    "warn",
+    "{file}"
+   ],
+   "format_check": [
+    "prettier",
+    "--check",
+    "--log-level",
+    "warn",
+    "{file}"
+   ],
+   "check": [
+    [
+     "eslint",
+     "--format",
+     "json",
+     "--max-warnings",
+     "0",
+     "--no-warn-ignored",
+     "{file}"
+    ]
+   ]
+  },
+  {
+   "glob": "packages/**/*.yml|packages/**/*.yaml|scripts/**/*.yml|scripts/**/*.yaml|deploy/**/*.yml|deploy/**/*.yaml",
+   "tier": "s0",
+   "format": [
+    "prettier",
+    "--write",
+    "--log-level",
+    "warn",
+    "{file}"
+   ],
+   "format_check": [
+    "prettier",
+    "--check",
+    "--log-level",
+    "warn",
+    "{file}"
+   ]
   }
  ]
 }

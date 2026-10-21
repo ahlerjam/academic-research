@@ -1,0 +1,65 @@
+{
+ "stage": "3",
+ "milestone": "M3",
+ "issue": 103,
+ "outcome": "Friends: shared projects through a sync server, auth, people and agents writing at once with block-level colours, comments, examiner",
+ "proof": "two users and an agent on one project; byte-identical mixed-author export",
+ "contracts": [
+  {
+   "id": "S3-MIXED-EXPORT",
+   "northstar": "two users and an agent on one project; byte-identical mixed-author export",
+   "evidence": "e2e",
+   "artefact": "tex",
+   "negative": "Author colours and author and agent ids set on every block appear in neither user's export, and both users' .tex and .bib are byte-identical.",
+   "source": "#103 AC2, AC3, AC4, AC5"
+  },
+  {
+   "id": "S3-CLAIMS",
+   "northstar": "People and agents write together at the same time",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A second proposal for a block claimed by another agent is refused with claimed, and a proposal overlapping a human edit becomes conflict.",
+   "source": "#103 AC6, AC7, AC8"
+  },
+  {
+   "id": "S3-CROSS-TENANT",
+   "northstar": "shared projects through a sync server, auth",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A member of project X requesting a document, source, passage, transcript or comment of project Y by id, over HTTP and over sync, is refused with the same answer as for an unknown id.",
+   "source": "#103 AC9"
+  },
+  {
+   "id": "S3-ROLES-SERVER",
+   "northstar": "shared projects through a sync server, auth",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A commenter's propose_edit and text change are refused by the sync server while their anchored comment is stored, and an editor's propose_edit is accepted.",
+   "source": "#103 AC10, AC14"
+  },
+  {
+   "id": "S3-PRIVATE-DATA",
+   "northstar": "deletion path for interview data",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A transcript A has not shared is absent from the sync server's answers, B's cache and B's export, and after A deletes it a byte search finds its sentinel nowhere.",
+   "source": "#103 AC11, AC12"
+  },
+  {
+   "id": "S3-SHARED-SOURCE-LEVELS",
+   "northstar": "Hovering a citation shows the anchored passage with its printed page",
+   "evidence": "e2e",
+   "artefact": "png",
+   "negative": "With the sharing level none, a co-author without the PDF sees the degraded card and the trace check names what is missing.",
+   "source": "#103 AC13"
+  },
+  {
+   "id": "S3-EXAMINER",
+   "northstar": "An examiner reviews a chapter: deterministic rules first, advisory judgement second.",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A blocking rule finding blocks the export, an advisory judged finding never does, and three rule runs give identical findings.",
+   "source": "#103 AC15, AC16"
+  }
+ ]
+}

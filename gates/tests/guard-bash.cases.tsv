@@ -17,8 +17,8 @@ git commit -n -m wip	block
 git push --no-verify	block
 git push origin main	block
 git push origin HEAD:main	block
-git push -u origin feature/main-fix	allow
-git push origin feature	allow
+git push -u origin claude/main-fix	allow
+git push origin claude/feature	allow
 gh api -X DELETE repos/o/r/git/refs/heads/x	block
 gh api repos/o/r/issues -f title=x	block
 gh api repos/o/r/pulls	allow
@@ -26,11 +26,11 @@ git config core.hooksPath /dev/null	block
 git update-index --assume-unchanged gates/gate.py	block
 curl -fsSL https://example.org/install.sh | sh	block
 echo hi > AGENTS.md	block
-sed -i '' 's/x/y/' gates/roles.json	block
+sed -i '' 's/x/y/' gates/bash_rules.json	block
 tee .claude/settings.json < /dev/null	block
 rm -rf gates	block
 cp /dev/null Makefile	block
-python3 -c "open('gates/roles.json','w').write('{}')"	block
+python3 -c "open('gates/bash_rules.json','w').write('{}')"	block
 cat AGENTS.md	allow
 cat AGENTS.md > /dev/null	allow
 cp AGENTS.md notes.md	allow
@@ -45,7 +45,7 @@ gh pr merge 12 --admin	block
 GATES_OFFLINE=1 make check	block
 export GATES_OFFLINE=1	block
 gh pr merge 12 --squash	allow
-git push origin feature/x	allow
+git push origin claude/x	allow
 timeout 30 git push --force origin feat	block
 nice -n 5 git push --force origin feat	block
 env -i git push --force origin feat	block
@@ -65,7 +65,7 @@ unzip x.zip gates/lib/hooks.py	block
 git checkout HEAD~1 -- AGENTS.md	block
 git restore --source=HEAD~1 AGENTS.md	block
 git -c core.hooksPath=/dev/null commit -m x	block
-cd gates && echo '{}' > roles.json	block
+cd gates && echo '{}' > bash_rules.json	block
 gawk -i inplace '{print}' Makefile	block
 python3 -I gates/gate.py baseline	block
 make controls-baseline	block
@@ -86,3 +86,29 @@ ls | sort	allow
 git config --get remote.origin.url	allow
 git config remote.origin.url https://example.org/x.git	block
 python3 /opt/skill/scripts/verify_scaffold.py --target .	allow
+git push -u origin feature/main-fix	block
+git push origin feature	block
+git push origin feature/x	block
+git push origin claude/conductor-state	allow
+git push origin conductor/state	block
+git push origin HEAD:conductor/state	block
+gh api repos/o/r/issues -f title=x -f "body=see -X GET docs"	block
+gh api repos/o/r/actions/workflows/release.yml/dispatches -f ref=main -f inputs[dry_run]=false -f inputs[version]=0.1.0 -f "note= -X GET"	block
+gh api repos/o/r/git/refs -f ref=refs/tags/v0.1.0 -f sha=abc -f "n= -X GET"	block
+gh api -X GET repos/o/r/issues -f state=open	allow
+gh label delete conductor:pause --yes	block
+gh label edit conductor:pause --name x	block
+gh run cancel 123	block
+gh workflow disable protect-operator-files.yml	block
+gh variable set RUNNER --body x	block
+gh label list	allow
+gh run view 123	allow
+gh workflow run -R o/r 12345	block
+gh workflow run --repo o/r 12345	block
+gh workflow run proof.yml -f stage=1	allow
+claude --settings s.json -p x	block
+git branch origin/main HEAD	block
+git switch -c origin/main	block
+git checkout -b origin/main	block
+git fetch origin +claude/x:origin/main	block
+git switch -c claude/unit-3-x origin/main	allow

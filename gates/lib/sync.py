@@ -19,7 +19,7 @@ WRAP = ('f="$CLAUDE_PROJECT_DIR/gates/gate.py"; if [ -f "$f" ] && command -v pyt
         'blocked as a precaution" >&2; exit 2; fi')
 SHORT = ('f="$CLAUDE_PROJECT_DIR/gates/gate.py"; [ -f "$f" ] && command -v python3 >/dev/null 2>&1 '
          '&& exec python3 -I "$f" hook {event}; exit 0')
-VERIFIED = ('p=$(cat); d="$CLAUDE_PROJECT_DIR"; f="$d/gates/gate.py"; '
+VERIFIED = ('p=$(cat); d="$CLAUDE_PROJECT_DIR"; f="$d/gates/gate.py"; {gone}'
             'if [ ! -f "$f" ] || ! command -v python3 >/dev/null 2>&1; '
             'then echo "[gates] gates/gate.py or python3 missing; blocked as a precaution" >&2; exit 2; fi; '
             'r=$(git -C "$d" rev-parse -q --verify "{ref}^{commit}" 2>/dev/null '
@@ -44,6 +44,12 @@ RELEASE = ('gd=$(git -C "$d" rev-parse --absolute-git-dir 2>/dev/null) && mkdir 
            'echo \'{"systemMessage": "gates: the gate code differs from the reference or has none and the agent '
            'stopped again without any change; stop released, the operator decides"}\'; exit 0; fi;; esac; '
            '[ -z "$t" ] || printf \'%s\' "$h" > "$gd/gates/wrapper-red-{event}"; ')
+# constraint: a project directory that no longer exists (renamed or deleted during the session) has no tree to
+# fingerprint, so RELEASE can never release; the second stop is released there instead of looping on exit 2.
+GONE = ('if [ -n "$d" ] && [ ! -e "$d" ]; then case "$p" in '
+        '*\'"stop_hook_active": true\'*|*\'"stop_hook_active":true\'*) '
+        'echo \'{"systemMessage": "gates: the project directory (CLAUDE_PROJECT_DIR) no longer exists; nothing was '
+        'verified; second stop released, the operator decides"}\'; exit 0;; esac; fi; ')
 FLOWKIT = ('p=$(cat); b="$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-blocker.sh"; '
            'if [ -x "$b" ]; then printf \'%s\' "$p" | "$b" || exit 2; '
            'else echo "[gates] flowkit blocker missing; blocked as a precaution" >&2; exit 2; fi; '
@@ -51,7 +57,7 @@ FLOWKIT = ('p=$(cat); b="$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-blocker.sh
            'then printf \'%s\' "$p" | python3 -I "$f" hook pre-bash; ' + RC + '; '
            'else echo "[gates] gates/gate.py or python3 missing; blocked as a precaution" >&2; exit 2; fi')
 FLOWKIT_BLOCKER = ".claude/hooks/pretooluse-blocker.sh"
-PRIVATE_READS = ["Read(**/.env)", "Read(**/.env.*)", "Read(**/*credentials*)", "Read(**/secrets*)"]
+PRIVATE_READS = ["Read(**/.env)", "Read(**/.env.*)", "Read(**/*.pem)", "Read(~/.ssh/**)", "Read(~/.config/gh/**)"]
 
 
 def _load(tree: str, rel: str) -> dict:
@@ -99,9 +105,9 @@ def sandbox(tree: str, project: dict) -> Dict[str, object]:
 
 def verified(event: str, default_branch: str) -> str:
     """Return the wrapper that checks gates/gate.py and gates/lib against the reference commit before it runs."""
-    release = RELEASE if event in ("stop", "subagent-stop") else ""
-    return (VERIFIED.replace("{release}", release).replace("{ref}", f"origin/{default_branch}")
-            .replace("{event}", event))
+    stop = event in ("stop", "subagent-stop")
+    return (VERIFIED.replace("{gone}", GONE if stop else "").replace("{release}", RELEASE if stop else "")
+            .replace("{ref}", f"refs/remotes/origin/{default_branch}").replace("{event}", event))
 
 
 def settings(tree: str) -> str:

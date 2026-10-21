@@ -26,15 +26,15 @@
       "roles": {
         "test": ["../test/**/*.ts"],
         "migration": ["../migrations/*.sql"],
-        "wiring": ["app.ts", "main.ts", "settings.ts"],
-        "adapter": ["adapters/*.ts"],
+        "wiring": ["app.ts", "main.ts", "settings.ts", "cli/measureRecall.ts", "dev/ghostMeasure.ts"],
+        "adapter": ["adapters/*.ts", "data/projectScoped.ts"],
         "flow": ["*/flow.ts"],
         "api": ["*/api.ts"]
       },
       "feature_layout": {
         "files": ["api.ts", "flow.ts"]
       },
-      "non_feature": ["adapters"],
+      "non_feature": ["adapters", "cli", "dev", "data"],
       "behaviour_test": "../test/{feature}.behaviour.test.ts",
       "fingerprint_files": ["package.json", "tsconfig.json"]
     },
@@ -49,6 +49,25 @@
         "ui": ["**/*.ts", "**/*.css"]
       },
       "fingerprint_files": ["package.json", "tsconfig.json", "index.html"]
+    },
+    "plugin": {
+      "lang": "typescript",
+      "dir": "packages/plugin",
+      "root": "packages/plugin/src",
+      "roles": {
+        "test": ["../test/**/*.ts"],
+        "wiring": ["index.ts", "mcp/main.ts", "mod/main.ts"],
+        "adapter": [
+          "mcp/client.ts",
+          "mcp/client.fake.ts",
+          "mod/host.ts",
+          "mod/host.fake.ts",
+          "shared/tokenFile.ts",
+          "shared/tokenFile.fake.ts"
+        ],
+        "api": ["mcp/tools.ts", "**/*.ts"]
+      },
+      "fingerprint_files": ["package.json", "tsconfig.json"]
     }
   },
   "budgets": {

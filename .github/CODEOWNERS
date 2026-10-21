@@ -11,6 +11,7 @@
 /.claude/agents/ @ahlerjam
 /.claude/commands/ @ahlerjam
 /.claude/hooks/ @ahlerjam
+/.claude/workflows/ @ahlerjam
 /.mcp.json @ahlerjam
 /.github/ @ahlerjam
 **/.editorconfig @ahlerjam
@@ -18,7 +19,6 @@
 /pnpm-workspace.yaml @ahlerjam
 /tsconfig.base.json @ahlerjam
 /tsconfig.json @ahlerjam
-/packages/*/tsconfig.json @ahlerjam
 /eslint.config.mjs @ahlerjam
 /.prettierrc.json @ahlerjam
 /.prettierignore @ahlerjam
@@ -32,9 +32,12 @@
 /gates/tests/ @ahlerjam
 /gates/facts/ @ahlerjam
 /gates/templates/ @ahlerjam
-/gates/roles.json @ahlerjam
-/gates/dispatch.json @ahlerjam
+/gates/proofs/ @ahlerjam
 /gates/bash_rules.json @ahlerjam
 /gates/project.json @ahlerjam
 /gates/sgconfig.yml @ahlerjam
 /gates/suppress-baseline.json @ahlerjam
+/ops/conductor/ @ahlerjam
+/docs/autonomy/charter.md @ahlerjam
+/docs/autonomy/lead-goal.md @ahlerjam
+/docs/autonomy/watchdog-routine.md @ahlerjam

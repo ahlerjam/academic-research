@@ -1,0 +1,12 @@
+{
+  "note": "Start values are the plan's judgement thresholds (plan section 7), not measurements. A value may only be tightened, never loosened.",
+  "budgets": [
+    { "id": "cold-open-ms", "label": "cold open to editable, 60-page document", "unit": "ms", "direction": "max", "threshold": 2000 },
+    { "id": "keystroke-paint-p95-ms", "label": "keystroke to paint, p95", "unit": "ms", "direction": "max", "threshold": 50 },
+    { "id": "hover-card-p95-ms", "label": "hover card after first load, p95", "unit": "ms", "direction": "max", "threshold": 100 },
+    { "id": "ghost-text-ttft-p50-ms", "label": "ghost text time to first token, p50", "unit": "ms", "direction": "max", "threshold": 1500 },
+    { "id": "export-pdf-ms", "label": "export of the dogfood chapter to PDF", "unit": "ms", "direction": "max", "threshold": 30000 },
+    { "id": "retrieval-recall-at-10", "label": "retrieval recall@10 on the 30-query gold set", "unit": "ratio", "direction": "min", "threshold": 0.8 },
+    { "id": "outgoing-hosts-without-click", "label": "hosts contacted without a user click", "unit": "count", "direction": "max", "threshold": 0 }
+  ]
+}

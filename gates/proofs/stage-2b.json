@@ -1,0 +1,81 @@
+{
+ "stage": "2b",
+ "milestone": "M2b",
+ "issue": 102,
+ "outcome": "Copilot through the Claude Code plugin: chat, autocomplete and agents in the web app, proposals with review and provenance, AI-usage annex",
+ "proof": "bridge test per supported Claude Code version; validator and injection fixtures; recall@10 >= 0.8; annex test",
+ "contracts": [
+  {
+   "id": "S2B-BRIDGE-CONTRACT",
+   "northstar": "bridge test per supported Claude Code version",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A bridge request without the token is refused and logged, and a version not on the supported list fails the step.",
+   "source": "#102 AC2, AC3, AC4, AC5; operator answer 45"
+  },
+  {
+   "id": "S2B-VALIDATOR",
+   "northstar": "Quotes, pages, numbers and cite keys are checked by code, never by a model",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "Every bad case of the adversarial set (cite key outside the library, number not backed by a passage, quote not verbatim, printed page neither derived nor set) is rejected with its expected rule id.",
+   "source": "#102 AC6"
+  },
+  {
+   "id": "S2B-INJECTION",
+   "northstar": "validator and injection fixtures",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "No injection fixture text from a PDF, a transcript or a search result is submitted as a prompt or causes a state change other than a proposal, a marked wishlist entry or a pending capture.",
+   "source": "#102 AC7"
+  },
+  {
+   "id": "S2B-RECALL-AT-10",
+   "northstar": "recall@10 >= 0.8",
+   "evidence": "e2e",
+   "artefact": "json",
+   "threshold": {"metric": "recall@10", "min": 0.8},
+   "negative": "A ranking with the gold sources removed from the top ten scores below 0.8 and the measurement reports it red.",
+   "source": "#102 AC8"
+  },
+  {
+   "id": "S2B-PROPOSAL-REVIEW",
+   "northstar": "every change they make is a reviewable proposal",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "Accept-all on proposals whose resulting document has a red trace check applies nothing, and a deletion over more than three blocks, a rawLatex change and an externally influenced deletion stay pending for a single review.",
+   "source": "#102 AC11"
+  },
+  {
+   "id": "S2B-ANNEX",
+   "northstar": "the author can export a disclosure annex",
+   "evidence": "e2e",
+   "artefact": "tex",
+   "negative": "Human edits, pending and stale proposals and drafts the validator rejected get no annex entry, and an export without the annex request holds no model id or agent id.",
+   "source": "#102 AC9, AC10"
+  },
+  {
+   "id": "S2B-JOB-PAUSE-RESUME",
+   "northstar": "up to autonomous work",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A job that reaches the usage threshold pauses, and after a server restart it resumes at the next step without running any step twice or duplicating a proposal.",
+   "source": "#102 AC12"
+  },
+  {
+   "id": "S2B-GHOST-TEXT",
+   "northstar": "autocomplete and agents beside the editor suggest the next sentence",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "Typing during the pause cancels the pending request and no ghost text appears.",
+   "source": "#102 AC13, AC14"
+  },
+  {
+   "id": "S2B-BRIDGE-REAL",
+   "northstar": "bridge test per supported Claude Code version",
+   "evidence": "operator",
+   "operator": "Before each release the lead session runs scripts/bridge/run-bridge-test-real.sh for the current and the previous stable Claude Code release under the operator's Claude Code login (docs/autonomy/charter.md section 3, real runs) and pastes the bridge-test V real lines into the release ticket; the release panel (.claude/workflows/ar-release.js) checks them. Whether that login reaches a nested claude process in the cloud VM is Nicht verifiziert; without the lines the panel holds the release.",
+   "source": "#102 AC3, AC17; operator answer 45; operator decisions 4 and 8 of 2026-10-20"
+  }
+ ]
+}

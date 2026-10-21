@@ -111,14 +111,14 @@ class SelfProtection(unittest.TestCase):
         shutil.rmtree(self.root, ignore_errors=True)
 
     def test_script_write_to_a_control_file_is_caught_at_stop(self) -> None:
-        with open(os.path.join(self.root, "gates", "roles.json"), "a", encoding="utf-8") as handle:
+        with open(os.path.join(self.root, "gates", "bash_rules.json"), "a", encoding="utf-8") as handle:
             handle.write("\n")
         result = support.gate(self.root, ["hook", "stop"], {"stop_hook_active": False, "cwd": self.root})
         self.assertEqual(result.returncode, 2)
         self.assertIn("GATES-CONTROLS", result.stderr)
 
     def test_unchanged_red_controls_release_loudly(self) -> None:
-        with open(os.path.join(self.root, "gates", "roles.json"), "a", encoding="utf-8") as handle:
+        with open(os.path.join(self.root, "gates", "bash_rules.json"), "a", encoding="utf-8") as handle:
             handle.write("\n")
         first = support.gate(self.root, ["hook", "stop"], {"stop_hook_active": False, "cwd": self.root})
         self.assertEqual(first.returncode, 2)
@@ -183,7 +183,7 @@ class SelfProtection(unittest.TestCase):
         self.assertEqual(support.gate(self.root, ["hook", "config-change"], payload).returncode, 0)
 
     def test_pre_write_blocks_control_paths_and_secret_literals(self) -> None:
-        control = {"tool_input": {"file_path": os.path.join(self.root, "gates", "roles.json"), "content": "{}"},
+        control = {"tool_input": {"file_path": os.path.join(self.root, "gates", "bash_rules.json"), "content": "{}"},
                    "cwd": self.root}
         self.assertEqual(support.gate(self.root, ["hook", "pre-write"], control).returncode, 2)
         literal = "API_" + "TOKEN = '" + "x" * 24 + "'"
@@ -332,7 +332,7 @@ class ScopeAndAnchor(unittest.TestCase):
 
     def test_deleting_a_control_file_is_red(self) -> None:
         self.push_base()
-        support.git(self.root, "rm", "-q", "gates/roles.json")
+        support.git(self.root, "rm", "-q", "gates/bash_rules.json")
         result = self.stop()
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("GATES-CONTROLS", result.stderr)
@@ -356,7 +356,7 @@ class ScopeAndAnchor(unittest.TestCase):
 
     def test_local_anchor_survives_a_rebaselined_commit(self) -> None:
         self.assertEqual(support.gate(self.root, ["anchor"]).returncode, 0)
-        with open(os.path.join(self.root, "gates", "roles.json"), "a", encoding="utf-8") as handle:
+        with open(os.path.join(self.root, "gates", "bash_rules.json"), "a", encoding="utf-8") as handle:
             handle.write("\n")
         support.gate(self.root, ["baseline"])
         support.git(self.root, "add", "-A")
@@ -439,15 +439,15 @@ class BashScripts(unittest.TestCase):
         return support.gate(self.root, ["hook", "pre-bash"], {"tool_input": {"command": command}, "cwd": self.root}).returncode
 
     def test_interpreter_heredoc_and_script(self) -> None:
-        body = "open('gates/roles.json', 'w').write('{}')"
+        body = "open('gates/bash_rules.json', 'w').write('{}')"
         self.assertEqual(self.bash("python3 - <<'EOF'\n" + body + "\nEOF"), 2)
         support.write(self.root, "tool.py", body + "\n")
         self.assertEqual(self.bash("python3 tool.py"), 2)
-        self.assertEqual(self.bash("cat > notes.txt <<'EOF'\nsee gates/roles.json\nEOF"), 0)
+        self.assertEqual(self.bash("cat > notes.txt <<'EOF'\nsee gates/bash_rules.json\nEOF"), 0)
         self.assertEqual(self.bash("cat > /tmp/n <<EOF\nx\nEOF\ngit push --force origin feature"), 2)
 
     def test_patch_on_a_control_path(self) -> None:
-        support.write(self.root, "p.patch", "--- a/gates/roles.json\n+++ b/gates/roles.json\n@@ -1 +1 @@\n-x\n+y\n")
+        support.write(self.root, "p.patch", "--- a/gates/bash_rules.json\n+++ b/gates/bash_rules.json\n@@ -1 +1 @@\n-x\n+y\n")
         self.assertEqual(self.bash("git apply p.patch"), 2)
 
 

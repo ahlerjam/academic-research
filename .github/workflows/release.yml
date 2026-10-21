@@ -1,0 +1,208 @@
+name: release
+run-name: release ${{ inputs.version }} dry_run=${{ inputs.dry_run }}
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: version to release, MAJOR.MINOR.PATCH without the v (e.g. 0.1.0)
+        required: true
+        type: string
+      dry_run:
+        description: verify and build only; false also tags and publishes (needs a green dry run of the same commit)
+        required: true
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ${{ fromJSON(vars.RUNNER_LARGE || '"ubuntu-latest"') }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Release conditions (read-only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          python3 -I - <<'RELEASE_CHECK'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          version = os.environ["VERSION"]
+          dry_run = os.environ["DRY_RUN"] == "true"
+          sha = os.environ["GITHUB_SHA"]
+          problems = []
+
+
+          def out(*cmd):
+              return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+          def runs(workflow, *extra):
+              fields = "databaseId,displayTitle,status,conclusion,headSha,createdAt,url"
+              return json.loads(out("gh", "run", "list", "--workflow", workflow, "--event", "workflow_dispatch",
+                                    "--limit", "200", "--json", fields, *extra))
+
+
+          def read(path):
+              try:
+                  with open(path, encoding="utf-8") as handle:
+                      return handle.read()
+              except OSError:
+                  return None
+
+
+          if os.environ["GITHUB_REF"] != "refs/heads/main":
+              problems.append(f"dispatched on {os.environ['GITHUB_REF']}; a release runs on refs/heads/main only")
+          semver = re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version)
+          if not semver:
+              problems.append(f"version {version!r} is not MAJOR.MINOR.PATCH")
+              version = "invalid"
+          else:
+              mine = tuple(int(part) for part in semver.groups())
+              tags = [re.fullmatch(r"v([0-9]+)\.([0-9]+)\.([0-9]+)", t) for t in out("git", "tag", "--list", "v*").split()]
+              known = [tuple(int(part) for part in m.groups()) for m in tags if m]
+              if known and mine <= max(known):
+                  problems.append(f"version {version} is not higher than the last tag v{'.'.join(map(str, max(known)))}")
+          changelog = read("CHANGELOG.md") or ""
+          if not re.search(rf"^## \[?v?{re.escape(version)}\]?(\s|$)", changelog, re.M):
+              problems.append(f"CHANGELOG.md has no section '## {version}' or '## [{version}]'")
+          verdict = read(f"docs/release/{version}.md")
+          if verdict is None:
+              problems.append(f"docs/release/{version}.md is missing (written by the workflow ar-release)")
+          elif [line for line in verdict.splitlines() if line.startswith("verdict:")] != ["verdict: release"]:
+              problems.append(f"docs/release/{version}.md needs exactly one verdict line and it must be 'verdict: release'")
+          proof_runs = runs("proof.yml", "--branch", "main")
+          for stage in ("1", "2a", "2b", "3", "4", "5"):
+              done = sorted((r for r in proof_runs if r["displayTitle"] == f"proof stage {stage}" and r["status"] == "completed"),
+                            key=lambda r: r["createdAt"], reverse=True)
+              if not done:
+                  problems.append(f"stage {stage}: no completed proof.yml run on main")
+              elif done[0]["conclusion"] != "success":
+                  problems.append(f"stage {stage}: the latest proof run {done[0]['url']} concluded {done[0]['conclusion']}")
+              elif subprocess.run(["git", "merge-base", "--is-ancestor", done[0]["headSha"], sha]).returncode != 0:
+                  problems.append(f"stage {stage}: the latest green proof run {done[0]['url']} is not on the history of {sha}")
+              else:
+                  print(f"PASS proof stage {stage}: {done[0]['url']}")
+          if not dry_run:
+              dry = [r for r in runs("release.yml", "--commit", sha)
+                     if r["displayTitle"] == f"release {version} dry_run=true" and r["conclusion"] == "success"
+                     and str(r["databaseId"]) != os.environ["GITHUB_RUN_ID"]]
+              if not dry:
+                  problems.append(f"dry_run=false needs a successful dry run of release {version} for commit {sha}")
+              else:
+                  print(f"PASS dry run: {dry[0]['url']}")
+          for problem in problems:
+              print(f"::error title=release::{problem}")
+          sys.exit(1 if problems else 0)
+          RELEASE_CHECK
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .node-version
+      - run: npm install --global @ast-grep/cli@0.45.3
+      - run: corepack enable
+      - run: make setup
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: make check gates-selftest
+      - name: Prove every stage against its contract
+        run: |
+          for stage in 1 2a 2b 3 4 5; do
+            make proof STAGE="$stage"
+            python3 -I gates/gate.py proof-verify --stage "$stage"
+          done
+  build:
+    needs: verify
+    runs-on: ${{ fromJSON(vars.RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 30
+    outputs:
+      sums: ${{ steps.sums.outputs.sums }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .node-version
+      - run: npm install --global @ast-grep/cli@0.45.3
+      - run: corepack enable
+      - run: make setup
+      - name: Build the archives twice; they must be byte-identical
+        run: |
+          make release-artifacts
+          cp release-out/SHA256SUMS "$RUNNER_TEMP/first.sums"
+          make release-artifacts
+          diff "$RUNNER_TEMP/first.sums" release-out/SHA256SUMS || { echo "::error title=release::two builds of the same commit differ; the archives must be reproducible (docs/release/README.md)"; exit 1; }
+      - id: sums
+        name: Record the archive checksums
+        run: |
+          { echo "## Release archives"; echo; echo '```'; cat release-out/SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          { echo 'sums<<SUMS_EOF'; cat release-out/SHA256SUMS; echo 'SUMS_EOF'; } >> "$GITHUB_OUTPUT"
+  publish:
+    needs: [verify, build]
+    if: ${{ !inputs.dry_run && github.ref == 'refs/heads/main' }}
+    runs-on: ${{ fromJSON(vars.RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .node-version
+      - run: npm install --global @ast-grep/cli@0.45.3
+      - run: corepack enable
+      - run: make setup
+      - name: Rebuild and match the verified build
+        env:
+          BUILD_SUMS: ${{ needs.build.outputs.sums }}
+        run: |
+          make release-artifacts
+          if [ "$(sed '/^$/d' <<<"$BUILD_SUMS")" != "$(sed '/^$/d' release-out/SHA256SUMS)" ]; then
+            echo "::error title=release::the rebuilt archives differ from the verified build"; exit 1
+          fi
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 -I - "$RUNNER_TEMP/notes.md" <<'NOTES'
+          import os
+          import re
+          import sys
+
+          version = os.environ["VERSION"]
+          with open("CHANGELOG.md", encoding="utf-8") as handle:
+              text = handle.read()
+          head = re.search(rf"^## \[?v?{re.escape(version)}\]?(\s.*)?$", text, re.M)
+          rest = text[head.end():]
+          stop = re.search(r"^## ", rest, re.M)
+          with open(sys.argv[1], "w", encoding="utf-8") as handle:
+              handle.write(rest[:stop.start() if stop else len(rest)].strip() + "\n")
+          NOTES
+      - name: Tag v<version> and publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          shopt -s nullglob
+          files=(release-out/*.tar.gz release-out/*.zip release-out/SHA256SUMS)
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${files[@]}"

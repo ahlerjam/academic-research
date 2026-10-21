@@ -38,6 +38,8 @@ importers:
 
   packages/core: {}
 
+  packages/plugin: {}
+
   packages/server:
     dependencies:
       '@academic-research/core':

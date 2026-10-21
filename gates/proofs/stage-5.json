@@ -1,0 +1,80 @@
+{
+ "stage": "5",
+ "milestone": "M5",
+ "issue": 104,
+ "outcome": "Whole-thesis drafting, designed from measured costs",
+ "proof": "written design approved by the judge panel",
+ "contracts": [
+  {
+   "id": "S5-JOB-PAUSE-RESUME",
+   "northstar": "Whole-thesis drafting, designed from measured costs",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "Usage reaching the threshold after step k pauses the job with step k+1 pending, and after a restart and the reset it resumes at step k+1 with no step run twice and no proposal duplicated.",
+   "source": "#104 AC2, AC3, AC4, AC5"
+  },
+  {
+   "id": "S5-CRASH-RETRY",
+   "northstar": "Whole-thesis drafting, designed from measured costs",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A server killed during a step retries that step after the restart, its proposals exist once and no half-written proposal is visible.",
+   "source": "#104 AC6"
+  },
+  {
+   "id": "S5-VALIDATOR-IN-JOB",
+   "northstar": "Quotes, pages, numbers and cite keys are checked by code, never by a model",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "Drafts with a cite key outside the library, an unbacked number, a fabricated quote and an underived printed page are rejected inside propose_edit and never stored as proposals.",
+   "source": "#104 AC7"
+  },
+  {
+   "id": "S5-ACCEPT-ALL-GATED",
+   "northstar": "every change they make is a reviewable proposal",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "Accept-all with a red trace check applies nothing, and a deletion over more than three blocks, a rawLatex change and an externally influenced deletion stay pending for a single review.",
+   "source": "#104 AC8, AC9"
+  },
+  {
+   "id": "S5-ANNEX-COMPLETE",
+   "northstar": "AI provenance is never silently lost",
+   "evidence": "e2e",
+   "artefact": "tex",
+   "negative": "A step whose drafts the validator all rejected has no annex entry, and the number of annex entries equals the job's applied or user-rejected proposals.",
+   "source": "#104 AC10, AC11"
+  },
+  {
+   "id": "S5-NO-AI-MARKER",
+   "northstar": "no automatic marker reaches the thesis",
+   "evidence": "e2e",
+   "artefact": "pdf",
+   "negative": "An export without the annex request holds no model id and no agent id in the .tex, the PDF text or the PDF metadata.",
+   "source": "#104 AC12"
+  },
+  {
+   "id": "S5-CLAIMS-PARALLEL",
+   "northstar": "People and agents write together at the same time",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "When two chapter jobs target one block, the second waits as blocked-by-claim and its proposal for the claimed block is refused with claimed.",
+   "source": "#104 AC13"
+  },
+  {
+   "id": "S5-APPROVAL-GATE",
+   "northstar": "every change they make is a reviewable proposal",
+   "evidence": "e2e",
+   "artefact": "json",
+   "negative": "A chapter that is not approved runs none of its steps, and an abort leaves the stored state and no applied change.",
+   "source": "#104 AC14"
+  },
+  {
+   "id": "S5-DESIGN-APPROVAL",
+   "northstar": "written design approved by the judge panel",
+   "evidence": "operator",
+   "operator": "The judge panel (.claude/workflows/ar-judge.js with model fable) approves the T45 design and records the verdict in the T45 ticket; the release panel (.claude/workflows/ar-release.js) repeats the check in docs/release/<version>.md.",
+   "source": "#104 context and AC17; T45; operator decision 6 of 2026-10-20"
+  }
+ ]
+}
