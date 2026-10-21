@@ -44,7 +44,7 @@ Whoever writes code does not write the tests that judge it. Whoever reviews does
 
 ## 7. Done
 
-A unit is done when it is merged with green CI (the job `gates` contains `make gates-selftest`). Evidence is exit codes, log hashes and run URLs that the lead collected itself with `gh api` GET calls and `shasum`. No self-report counts. The build is done when `release.yml` has published v0.1.0.
+A unit is done when it is merged with green CI (the job `gates` runs `make gates-selftest` whenever a change touches one of its inputs, and nightly on `main`). Evidence is exit codes, log hashes and run URLs that the lead collected itself with `gh api` GET calls and `shasum`. No self-report counts. The build is done when `release.yml` has published v0.1.0.
 
 ## 8. Runtime
 
