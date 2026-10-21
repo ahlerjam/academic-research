@@ -398,7 +398,7 @@ class Normaliser(unittest.TestCase):
         self.assertEqual(cmdnorm.segments('git commit -m "x --force"'), [["git", "commit", "-m", "MESSAGE"]])
         self.assertEqual(cmdnorm.segments("cat <<EOF\nx\nEOF"), [["cat"]])
         self.assertEqual(cmdnorm.segments("timeout 30 sudo -u me git push -f"), [["git", "push", "-f"]])
-        self.assertEqual(cmdnorm.segments("xargs -n1 git status"), [["git", "status"]])
+        self.assertEqual(cmdnorm.segments("xargs -n1 git status"), [["git", "status", "$XARGS_STDIN"]])
 
     def test_write_targets(self) -> None:
         self.assertEqual(cmdnorm.write_targets(["echo", "x", ">", "AGENTS.md"]), ["AGENTS.md"])

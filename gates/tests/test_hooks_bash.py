@@ -90,6 +90,11 @@ WRITES = (
     "echo x > gates/bash_rul*",
     "rm -rf .claude/*",
     "python3 -c \"import glob, os; [os.remove(p) for p in glob.glob('gates/*')]\"",
+    "python3 -c \"import os; vars(os.path)['exists']=os.remove; os.path.exists('AGENTS.md')\"",
+    "node -e \"const fs=require('fs'); fs['existsSync']=fs.unlinkSync; fs.existsSync('AGENTS.md')\"",
+    "echo AGENTS.md | xargs rm",
+    "CMD=rm; $CMD AGENTS.md",
+    "F=AGENTS.md; rm $F",
 )
 CLOUD_SETUP = """#!/bin/bash
 # constraint: setup script of the Claude Code cloud environment; runs before Claude Code starts and is cached when it stays under about 5 minutes.
@@ -195,6 +200,29 @@ class ShellScripts(HookTree):
 
     def test_kernel_script_is_not_scanned(self) -> None:
         self.assertEqual(self.bash("python3 -I gates/gate.py check-repo"), 0)
+
+
+class OpaqueScripts(HookTree):
+    """Scripts that run a program the guard cannot name, source a script or run gh are checked like typed commands."""
+
+    def test_dynamic_program_xargs_and_source_fail_closed(self) -> None:
+        support.write(self.root, "x.sh", "CMD=rm\n$CMD AGENTS.md\n")
+        support.write(self.root, "y.sh", "echo AGENTS.md | xargs rm\n")
+        support.write(self.root, "z.sh", "rm AGENTS.md\n")
+        for command in ("bash x.sh", "bash y.sh", "source z.sh", ". z.sh"):
+            self.assertEqual(self.bash(command), 2, command)
+
+    def test_gh_and_claude_rules_apply_inside_scripts(self) -> None:
+        support.write(self.root, "gh.sh", "gh issue edit 5 --remove-label conductor:pause\n")
+        support.write(self.root, "bare.sh", "claude -p --bare x\n")
+        support.write(self.root, "gh.py", "import subprocess\nsubprocess.run(['gh', 'pr', 'merge', '12'])\n")
+        for command in ("bash gh.sh", "bash bare.sh", "python3 gh.py"):
+            proc = self.run_bash(command)
+            self.assertEqual(proc.returncode, 2, f"{command}: {proc.stderr}")
+
+    def test_reading_scripts_still_pass(self) -> None:
+        support.write(self.root, "ok.sh", "gh pr view 12\necho x | xargs grep y\ncat AGENTS.md\n")
+        self.assertEqual(self.bash("bash ok.sh"), 0)
 
 
 class InterpreterScripts(HookTree):

@@ -9,9 +9,12 @@ from typing import List, Optional, Tuple
 
 OPERATORS = {";", "&&", "||", "|", "&", "\n", "|&", ";;", "(", ")"}
 GIT_GLOBAL_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+GH_GLOBAL_WITH_ARG = {"-R", "--repo", "--hostname"}
+GH_GLOBAL_ALONE = {"--version", "--help", "-h"}
 MESSAGE_FLAGS = {("git", "commit"): {"-m", "--message"}, ("git", "tag"): {"-m", "--message"},
                  ("gh", "pr"): {"-b", "--body", "-t", "--title"}, ("gh", "issue"): {"-b", "--body", "-t", "--title"}}
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+SOURCE = {"source", "."}
 KEYWORDS = {"if", "then", "else", "elif", "do", "while", "until", "!", "{", "}", "fi", "done", "esac"}
 MAX_DEPTH = 4
 WRAPPERS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-r", "-t", "-U", "-D"}, "doas": {"-u", "-C"},
@@ -147,6 +150,7 @@ def _unwrap(seg: List[str], depth: int) -> Optional[List[List[str]]]:
         return _unwrap(seg, depth)
     if seg[0] in WRAPPERS and len(seg) > 1:
         rest = _skip_wrapper(seg[0], seg[1:])
+        rest = rest + ["$XARGS_STDIN"] if seg[0] == "xargs" and rest else rest
         return _unwrap(rest, depth) if rest else []
     command_flag = [i for i, a in enumerate(seg) if i and re.fullmatch(r"-[a-zA-Z]*c[a-zA-Z]*", a)]
     if seg[0] in SHELLS and command_flag:
@@ -158,6 +162,8 @@ def _unwrap(seg: List[str], depth: int) -> Optional[List[List[str]]]:
         return segments(" ".join(raw(t) for t in seg[1:]), depth + 1)
     if seg[0] == "git":
         seg = _strip_git_globals(seg)
+    if seg[0] == "gh":
+        seg = _strip_gh_globals(seg)
     return [_mask_message(seg)]
 
 
@@ -196,6 +202,17 @@ def _strip_git_globals(seg: List[str]) -> List[str]:
         flag = seg[i].split("=", 1)[0]
         i += 2 if flag in GIT_GLOBAL_WITH_ARG and "=" not in seg[i] else 1
     return out + seg[i:]
+
+
+def _strip_gh_globals(seg: List[str]) -> List[str]:
+    """Remove -R/--repo/--hostname before the gh subcommand; any other leading flag stays (the allowlist blocks it)."""
+    i = 1
+    while i < len(seg) and seg[i].startswith("-") and seg[i] not in GH_GLOBAL_ALONE:
+        flag = seg[i].split("=", 1)[0]
+        if flag not in GH_GLOBAL_WITH_ARG and not re.fullmatch(r"-R\S+", seg[i]):
+            break
+        i += 2 if flag in GH_GLOBAL_WITH_ARG and "=" not in seg[i] else 1
+    return ["gh"] + seg[i:]
 
 
 def _mask_message(seg: List[str]) -> List[str]:
@@ -383,7 +400,14 @@ SHADOW = re.compile(
     rf"|\b(?:def|class|function|let|var|const)\s+(?:{CALLEES})\b|[{{,]\s*\w+\s*:\s*(?:{CALLEES})\s*[,}}]"
     rf"|[(,]\s*(?:{CALLEES})\s*[,)]"
     r"|builtins|globals\s*\(|locals\s*\(|setattr|__dict__|\bexec\b|\beval\b|\bcompile\s*\(|__import__|importlib"
-    r"|\bFunction\s*\(|\bvm\.|prototype|defineProperty|Reflect\.|Object\.assign|define_method|instance_eval|class_eval")
+    r"|\bFunction\s*\(|\bvm\.|prototype|defineProperty|Reflect\.|Object\.assign|define_method|instance_eval|class_eval"
+    r"|\]\s*(?:[-+*/%&|^@]|\*\*|//|<<|>>)?=(?!=)|\.\s*[A-Za-z_$][\w$]*\s*(?:[-+*/%&|^@]|\*\*|//|<<|>>)?=(?!=)"
+    r"|\bvars\s*\(|\.update\s*\(|__setattr__|setPrototypeOf|__proto__|\bwith\s*\(|\brequire\s*=(?!=)|\bModule\b|_load\b"
+    r"|\brequire\.cache|\bsys\.modules"
+    rf"|[{{,]\s*(?:{CALLEES}|{ATTRS}|existsSync|statSync|lstatSync|readFileSync|readFile)\s*[,}}:=]"
+    rf"|\blambda\b[^:\n]*\b(?:{CALLEES})\b|\bfor\b[^:\n]*\b(?:{CALLEES})\b[^:\n]*\bin\b|\bcase\b[^:\n]*\b(?:{CALLEES})\b"
+    rf"|(?<![\w.])(?:{CALLEES})\s*=>|\bimport\s+(?:\*\s+as\s+)?(?:{CALLEES})\s+from\s*['\"](?!(?:node:)?fs['\"])|\bimport\s*\{{"
+    rf"|\bfrom\s+(?!(?:pathlib|os|os\.path|io|codecs)\s)[\w.]+\s+import\b[^\n;]*\b(?:{CALLEES})\b")
 CANONICAL_REQUIRE = re.compile(r"\b(?:const|let|var)\s+fs\s*=\s*require\(\s*(['\"])(?:node:)?fs\1\s*\)")
 
 
@@ -393,7 +417,8 @@ def read_position(code: str, start: int, end: int) -> bool:
     Accepted: open(p) and open(p, 'r'/'rb', encoding=...), Path(p).read_text()/exists(), os.path.exists(p),
     readFileSync(p[, 'utf8']), existsSync(p), File.read(p). A file handle from open() counts only when the
     code never reaches the handle's path (.name, getattr, fileno, fdopen, /proc, /dev/fd). No read counts when
-    the code may rebind a read call (open = ..., import x as open, exec, eval, builtins, setattr and similar).
+    the code may rebind a read call (open = ..., import x as open, exec, eval, builtins, setattr and similar) or
+    assigns to any attribute or subscript (vars(m)[k] = f, fs[k] = f, x.y = f), because that can rebind it too.
     """
     quote = code[start - 1] if start > 0 else ""
     if quote not in ("'", '"', "`") or code[end:end + 1] != quote or (quote == "`" and "${" in code[start:end]):
@@ -447,7 +472,9 @@ def patch_inputs(seg: List[str]) -> List[str]:
 
 
 def script_inputs(seg: List[str]) -> List[str]:
-    """Return script files an interpreter runs (python3 tool.py, node x.js, bash x.sh)."""
+    """Return script files an interpreter runs (python3 tool.py, node x.js, bash x.sh, source x.sh, . x.sh)."""
+    if seg and seg[0] in SOURCE and len(seg) > 1:
+        return seg[1:2]
     if not seg or seg[0] not in INTERPRETERS or inline_code(seg) or any(a in seg for a in ("-c", "-e", "-m")):
         return []
     values = {"-o", "+o", "-O", "+O"} if seg[0] in SHELLS else set()
