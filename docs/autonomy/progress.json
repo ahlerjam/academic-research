@@ -12,7 +12,7 @@
  "last_merged": null,
  "lease": {
   "acquired_at": 1792586126.1751075,
-  "beat_at": 1792586165.864714,
+  "beat_at": 1792586210.8350453,
   "holder": "lead-b89bef6292e1"
  },
  "next_step": "clear-needs-operator",
@@ -21,6 +21,11 @@
    "at": 1792586126.1751075,
    "by": "lead-b89bef6292e1",
    "text": "watchdog takeover"
+  },
+  {
+   "at": 1792586210.8350453,
+   "by": "lead-b89bef6292e1",
+   "text": "watchdog lead stopped: auto-mode classifier denied bulk clear-needs-operator of 18 legacy tickets (12,25,30,31,35,37,41,48,49,89,93,94,99,101,102,103,107,108). Anthropic request filed as #131. No workflow runId open."
   }
  ],
  "schema": 1,
